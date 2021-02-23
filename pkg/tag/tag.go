@@ -13,8 +13,52 @@ type DicomTag struct {
 	Element uint16
 }
 
+//IsPrivate indicates if the input group is part of a private tag.
 func (tag DicomTag) IsPrivate () bool {
 	return util.IsUInt16Odd(tag.Group)
+}
+
+// Compare returns -1, 0, or 1 if t<other, t==other, t>other, respectively.
+// Tags are ordered first by Group, then by Element.
+func (tag DicomTag) Compare (other DicomTag) int {
+	if tag.Group < other.Group {
+		return -1
+	}
+	if tag.Group > other.Group {
+		return 1
+	}
+	if tag.Element < other.Element {
+		return -1
+	}
+	if tag.Element > other.Element {
+		return 1
+	}
+	return 0
+}
+
+// Equals returns true if this tag equals the provided tag.
+func (tag DicomTag) Equals(other DicomTag) bool {
+	return tag.Compare(other) == 0
+}
+
+// String returns a string of form "(0008,1234)", where 0x0008 is t.Group,
+// 0x1234 is t.Element.
+func (tag DicomTag) String() string {
+	return fmt.Sprintf("(%04x,%04x)", tag.Group, tag.Element)
+}
+
+// IsPrivate indicates if the input group is part of a private tag.
+func IsPrivate(tag DicomTag) bool {
+	return tag.Group%2 == 1
+}
+
+// DebugString returns a human-readable diagnostic string for the tag, in format
+// "(group, elem)[name]".
+func DebugString(tag DicomTag) string {
+	if tag.IsPrivate() {
+		return fmt.Sprintf("(%04x,%04x)[private]", tag.Group, tag.Element)
+	}
+	return fmt.Sprintf("(%04x,%04x)", tag.Group, tag.Element)
 }
 
 func Parse(s string) (DicomTag,error) {
