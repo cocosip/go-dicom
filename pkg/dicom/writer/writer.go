@@ -73,9 +73,9 @@ func WithoutPreamble() WriteOption {
 // WithExplicitLengthSequences configures the writer to use explicit lengths for sequences.
 // By default, sequences are written with undefined length (0xFFFFFFFF) and delimited by
 // Sequence Delimitation Items.
-func WithExplicitLengthSequences() WriteOption {
+func WithExplicitLengthSequences(explicitLengthSequences bool) WriteOption {
 	return func(c *writeConfig) {
-		c.explicitLengthSequences = true
+		c.explicitLengthSequences = explicitLengthSequences
 	}
 }
 
@@ -139,12 +139,14 @@ func New(ts *transfer.TransferSyntax, opts ...Option) *Writer {
 // Write writes a DICOM dataset to the writer.
 //
 // Basic usage (with defaults):
-//   writer.Write(w, ds)  // Uses Explicit VR Little Endian, auto-generates File Meta Info
+//
+//	writer.Write(w, ds)  // Uses Explicit VR Little Endian, auto-generates File Meta Info
 //
 // With options:
-//   writer.Write(w, ds, writer.WithTransferSyntax(ts))
-//   writer.Write(w, ds, writer.WithFileMetaInfo(fmi))
-//   writer.Write(w, ds, writer.WithoutPreamble())
+//
+//	writer.Write(w, ds, writer.WithTransferSyntax(ts))
+//	writer.Write(w, ds, writer.WithFileMetaInfo(fmi))
+//	writer.Write(w, ds, writer.WithoutPreamble())
 //
 // The structure written is:
 //   - Preamble (128 bytes) + DICM prefix (4 bytes) [default, can be disabled with WithoutPreamble()]
@@ -154,12 +156,12 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	// Apply options to configuration
 	config := &writeConfig{
 		transferSyntax:              transfer.ExplicitVRLittleEndian, // Default
-		fileMetaInfo:                nil,                              // Will be auto-generated
-		includePreamble:             true,                             // Default to including preamble
-		explicitLengthSequences:     false,                            // Default: use undefined length
-		explicitLengthSequenceItems: false,                            // Default: use undefined length
-		keepGroupLengths:            false,                            // Default: remove group lengths
-		largeObjectSize:             1024 * 1024,                      // Default: 1MB
+		fileMetaInfo:                nil,                             // Will be auto-generated
+		includePreamble:             true,                            // Default to including preamble
+		explicitLengthSequences:     false,                           // Default: use undefined length
+		explicitLengthSequenceItems: false,                           // Default: use undefined length
+		keepGroupLengths:            false,                           // Default: remove group lengths
+		largeObjectSize:             1024 * 1024,                     // Default: 1MB
 	}
 
 	for _, opt := range opts {
@@ -225,10 +227,12 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 // WriteFile writes a DICOM dataset to a file.
 //
 // Basic usage:
-//   writer.WriteFile("output.dcm", ds)
+//
+//	writer.WriteFile("output.dcm", ds)
 //
 // With options:
-//   writer.WriteFile("output.dcm", ds, writer.WithTransferSyntax(ts))
+//
+//	writer.WriteFile("output.dcm", ds, writer.WithTransferSyntax(ts))
 func WriteFile(path string, ds *dataset.Dataset, opts ...WriteOption) error {
 	file, err := os.Create(path)
 	if err != nil {

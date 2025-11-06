@@ -198,7 +198,7 @@ func main() {
     // Write with custom options
     err = writer.Write(file, ds,
         writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian),
-        writer.WithExplicitLengthSequences(),  // Use explicit lengths
+        writer.WithExplicitLengthSequences(true),  // Use explicit lengths
         writer.WithLargeObjectSize(1024*1024), // 1MB threshold
     )
     if err != nil {
