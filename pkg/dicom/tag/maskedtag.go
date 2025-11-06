@@ -193,9 +193,7 @@ func ParseMaskedTag(s string) (*MaskedTag, error) {
 
 	// Extract element
 	element := s[pos:]
-	if strings.HasSuffix(element, ")") {
-		element = element[:len(element)-1]
-	}
+	element = strings.TrimSuffix(element, ")")
 
 	return parseMaskedTagParts(group, element)
 }

@@ -266,9 +266,8 @@ func Parse(s string) (*Tag, error) {
 
 		// Extract creator string
 		creatorStr := s[pos:]
-		if strings.HasSuffix(creatorStr, ")") {
-			creatorStr = creatorStr[:len(creatorStr)-1]
-		}
+
+		creatorStr = strings.TrimSuffix(creatorStr, ")")
 
 		// TODO: Look up private creator in dictionary
 		// For now, create a simple private creator
