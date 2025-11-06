@@ -2,7 +2,7 @@
 
 基于 fo-dicom 的 Buffer 实现，go-dicom 需要实现以下 Buffer 类型：
 
-## 已完成的 Buffer (6/15) ✅
+## 已完成的 Buffer (7/15) ✅
 
 ### 1. ✅ MemoryByteBuffer
 **文件**: `memory.go`
@@ -34,11 +34,24 @@
 **用途**: 确保偶数长度（DICOM 要求）
 **参考**: `fo-dicom-code/IO/Buffer/EvenLengthBuffer.cs`
 
+### 7. ✅ BulkDataUriByteBuffer
+**文件**: `bulkdata.go`
+**用途**: 表示 DICOM JSON 中的 BulkDataURI
+**参考**: `fo-dicom-code/IO/Buffer/BulkDataUriByteBuffer.cs` 和 `IBulkDataUriByteBuffer.cs`
+**实现日期**: 2025-11-07
+**测试**: `bulkdata_test.go` (11 个测试用例，全部通过)
+
+**说明**:
+- 用于 DICOM JSON 序列化，引用外部数据 URI
+- 支持延迟加载（lazy loading）模式
+- 实现了完整的 ByteBuffer 接口
+- 已集成到 JSON 序列化/反序列化中
+
 ---
 
-## 待实现的 Buffer (9/15)
+## 待实现的 Buffer (8/15)
 
-### 7. ⏳ RangeByteBuffer
+### 8. ⏳ RangeByteBuffer
 **文件**: `range.go` (待创建)
 **用途**: 表示另一个 buffer 的子范围（offset + length）
 **参考**: `fo-dicom-code/IO/Buffer/RangeByteBuffer.cs`
@@ -49,7 +62,7 @@
 
 ---
 
-### 8. ⏳ FileByteBuffer
+### 9. ⏳ FileByteBuffer
 **文件**: `file.go` (待创建)
 **用途**: 基于文件的 buffer
 **参考**: `fo-dicom-code/IO/Buffer/FileByteBuffer.cs`
@@ -60,7 +73,7 @@
 
 ---
 
-### 9. ⏳ TempFileBuffer
+### 10. ⏳ TempFileBuffer
 **文件**: `tempfile.go` (待创建)
 **用途**: 基于临时文件的 buffer，用于大数据
 **参考**: `fo-dicom-code/IO/Buffer/TempFileBuffer.cs`
@@ -71,7 +84,7 @@
 
 ---
 
-### 10. ⏳ SwapByteBuffer
+### 11. ⏳ SwapByteBuffer
 **文件**: `swap.go` (待创建)
 **用途**: 字节交换包装器（不同于 endian 转换）
 **参考**: `fo-dicom-code/IO/Buffer/SwapByteBuffer.cs`
@@ -82,7 +95,7 @@
 
 ---
 
-### 11. ⏳ LazyByteBuffer
+### 12. ⏳ LazyByteBuffer
 **文件**: `lazy.go` (待创建)
 **用途**: 延迟加载的 buffer
 **参考**: `fo-dicom-code/IO/Buffer/LazyByteBuffer.cs`
@@ -90,17 +103,6 @@
 **预计工作量**: 0.5 天
 
 **说明**: 使用函数延迟创建实际的 buffer
-
----
-
-### 12. ⏳ BulkDataUriByteBuffer
-**文件**: `bulkdata.go` (待创建)
-**用途**: 表示 DICOM JSON 中的 BulkDataURI
-**参考**: `fo-dicom-code/IO/Buffer/BulkDataUriByteBuffer.cs`
-**优先级**: 低（JSON 序列化时需要）
-**预计工作量**: 0.5 天
-
-**说明**: 用于 DICOM JSON 序列化，引用外部数据
 
 ---
 
@@ -141,6 +143,7 @@
 - ✅ StreamByteBuffer
 - ✅ EndianByteBuffer
 - ✅ EvenLengthBuffer
+- ✅ BulkDataUriByteBuffer
 - ⏳ RangeByteBuffer
 
 ### 第二优先级（短期实现）
@@ -154,20 +157,23 @@
 - ⏳ LazyByteBuffer
 - ⏳ SwapByteBuffer
 
-### 第四优先级（低优先级）
-这些用于特殊场景：
-- ⏳ BulkDataUriByteBuffer（JSON 序列化时）
-
 ---
 
 ## 当前状态
 
-**已完成**: 6/15 (40%)
+**已完成**: 7/15 (47%)
 **核心功能**: ✅ 完成
 
-**下一步**: 实现 RangeByteBuffer
+**最新完成**: BulkDataUriByteBuffer (2025-11-07)
+- 实现了完整的 BulkDataUriByteBuffer 及测试
+- 已集成到 JSON 序列化/反序列化中
+- 支持所有相关 VR 类型（OB, OW, OD, OF, OL, OV, UN）
+- 11 个单元测试 + 7 个集成测试，全部通过
+
+**下一步**: 继续 JSON 序列化的其他功能
 
 **里程碑**:
 - Buffer 抽象层核心完成 ✅
-- 可以开始实现 DicomElement/DicomDataset
-- RangeByteBuffer 实现后，第三阶段基本完成
+- JSON 序列化基础完成 ✅
+- BulkDataURI 支持完成 ✅
+- DicomElement/DicomDataset 已实现 ✅

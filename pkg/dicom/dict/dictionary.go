@@ -9,10 +9,17 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
-// init registers the dictionary lookup function with the tag package.
+// init registers the dictionary lookup functions with the tag package.
 func init() {
 	tag.SetDictionaryLookup(func(t *tag.Tag) interface{} {
 		return Default().Lookup(t)
+	})
+	tag.SetKeywordLookup(func(keyword string) (*tag.Tag, error) {
+		t := Default().LookupKeyword(keyword)
+		if t == nil {
+			return nil, nil
+		}
+		return t, nil
 	})
 }
 

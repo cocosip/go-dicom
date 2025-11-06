@@ -323,3 +323,48 @@ func (t *Tag) DictionaryEntry() interface{} {
 	}
 	return globalDictionaryLookup(t)
 }
+
+// Uint32 returns the tag as a 32-bit unsigned integer.
+// This is an alias for ToUint32() for convenience.
+func (t *Tag) Uint32() uint32 {
+	return t.ToUint32()
+}
+
+// KeywordLookup is a function type for looking up tags by keyword.
+// This is used to avoid circular dependencies between tag and dict packages.
+type KeywordLookup func(keyword string) (*Tag, error)
+
+// globalKeywordLookup holds the function to lookup tags by keyword.
+// This is set by the dict package during initialization.
+var globalKeywordLookup KeywordLookup
+
+// SetKeywordLookup sets the global keyword lookup function.
+// This is called by the dict package to register the lookup function.
+func SetKeywordLookup(lookup KeywordLookup) {
+	globalKeywordLookup = lookup
+}
+
+// ParseKeyword parses a tag from its DICOM keyword.
+//
+// Examples:
+//   - "PatientName" -> (0010,0010)
+//   - "Rows" -> (0028,0010)
+//   - "PixelData" -> (7FE0,0010)
+//
+// Returns an error if the keyword is not found in the dictionary or if the
+// dictionary has not been initialized.
+func ParseKeyword(keyword string) (Tag, error) {
+	if globalKeywordLookup == nil {
+		return Tag{}, fmt.Errorf("keyword lookup not available (dictionary not initialized)")
+	}
+
+	t, err := globalKeywordLookup(keyword)
+	if err != nil {
+		return Tag{}, err
+	}
+	if t == nil {
+		return Tag{}, fmt.Errorf("keyword not found: %s", keyword)
+	}
+
+	return *t, nil
+}

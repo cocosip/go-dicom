@@ -452,21 +452,49 @@
 
 ---
 
-## 第七阶段：序列化和工具
+## 第七阶段：序列化和工具 ~
 
-### 7.1 JSON 序列化
+### 7.1 JSON 序列化 ✅
 **参考**: `fo-dicom-code/Serialization/JsonDicomConverter.cs` (~1400 lines)
+**包**: `pkg/dicom/serialization`
 
-- [ ] 实现 DICOM JSON 模型序列化
-- [ ] 实现 Dataset.ToJSON() 方法
-- [ ] 实现 Dataset.FromJSON() 方法
-- [ ] 支持 BulkDataURI
-- [ ] 编写单元测试
+- [x] 实现 DICOM JSON 模型序列化 (ToJSON)
+- [x] 实现 DICOM JSON 反序列化 (FromJSON)
+- [x] 实现序列化选项 (Options 模式)
+  - [x] WithWriteTagsAsKeywords (关键字作为 key)
+  - [x] WithWriteKeyword / WithWriteName (额外字段)
+  - [x] WithNumberSerializationMode (数字序列化模式)
+  - [x] WithIndent (格式化输出)
+  - [x] WithAutoValidate (反序列化验证)
+- [x] 支持所有 DICOM VR 类型
+  - [x] 字符串类型 (AE, CS, DA, LO, PN, UI 等)
+  - [x] 数值类型 (FL, FD, SL, SS, SV, UL, US, UV)
+  - [x] 数值字符串 (IS, DS)
+  - [x] 二进制类型 (OB, OW, InlineBinary)
+  - [x] 序列 (SQ)
+  - [x] PersonName (分组格式)
+  - [x] AttributeTag (AT)
+- [x] 特殊值处理
+  - [x] NaN, Infinity, -Infinity
+  - [x] null 值
+  - [x] 空元素
+- [x] 支持 BulkDataURI
+  - [x] 实现 BulkDataUriByteBuffer (pkg/io/buffer/bulkdata.go)
+  - [x] 在 JSON 序列化中集成 BulkDataURI 检测和输出
+  - [x] 在 JSON 反序列化中支持 BulkDataURI 解析
+  - [x] 支持所有相关 VR 类型 (OB, OW, OD, OF, OL, OV, UN)
+  - [x] 实现延迟加载（lazy loading）模式
+- [x] 编写单元测试
+  - [x] BulkDataUriByteBuffer 单元测试 (11 个测试用例)
+  - [x] JSON 序列化集成测试 (7 个测试用例)
+  - [x] 所有测试通过
 
-**依赖**: DicomDataset
-**预计工作量**: 4-5 天
+**依赖**: DicomDataset, DicomElement, DicomTag, DicomVR
+**实际工作量**: 2 天
+**状态**: ✅ 完整功能完成，所有测试通过
+**完成日期**: 2025-11-07
 
-### 8.2 XML 序列化 (可选)
+### 7.2 XML 序列化 (可选)
 **参考**: `fo-dicom-code/Serialization/DicomXML.cs`
 
 - [ ] 实现 DICOM XML 序列化
@@ -478,7 +506,7 @@
 **预计工作量**: 3-4 天
 **优先级**: 低 (可根据需求决定是否实现)
 
-### 8.3 DicomAnonymizer (可选)
+### 7.3 DicomAnonymizer (可选)
 **参考**: `fo-dicom-code/DicomAnonymizer.cs`
 
 - [ ] 实现匿名化规则
