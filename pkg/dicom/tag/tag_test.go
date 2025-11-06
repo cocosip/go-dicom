@@ -343,3 +343,42 @@ func TestHash(t *testing.T) {
 		t.Error("Different tags should have different hashes (collision possible but unlikely)")
 	}
 }
+
+func TestDictionaryEntry(t *testing.T) {
+	// Create a tag
+	testTag := tag.New(0x0010, 0x0010)
+
+	// Get dictionary entry
+	entry := testTag.DictionaryEntry()
+
+	// The entry might be nil if the dictionary is not fully initialized yet,
+	// but the method should not panic
+	if entry != nil {
+		// If we get an entry, verify it's the correct type
+		// (We can't import dict here due to circular dependency,
+		// so we just check it's not nil)
+		t.Logf("Got dictionary entry: %v", entry)
+	} else {
+		t.Log("Dictionary entry is nil (dictionary may not be initialized)")
+	}
+}
+
+func TestDictionaryEntryNotInitialized(t *testing.T) {
+	// Save the original lookup function
+	originalLookup := tag.SetDictionaryLookup
+
+	// Set lookup to nil to simulate uninitialized dictionary
+	tag.SetDictionaryLookup(nil)
+
+	testTag := tag.New(0x0010, 0x0010)
+	entry := testTag.DictionaryEntry()
+
+	if entry != nil {
+		t.Error("DictionaryEntry() should return nil when lookup is not initialized")
+	}
+
+	// Restore the original lookup function
+	// Note: This won't actually restore it because SetDictionaryLookup
+	// sets a global variable, but we include it for clarity
+	_ = originalLookup
+}

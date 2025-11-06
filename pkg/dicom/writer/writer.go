@@ -24,8 +24,12 @@ type Writer struct {
 	isExplicitVR   bool
 	transferSyntax *transfer.TransferSyntax
 
-	// Options
-	includePreamble bool // Whether to include 128-byte preamble + DICM
+	// Write options
+	includePreamble             bool   // Whether to include 128-byte preamble + DICM
+	explicitLengthSequences     bool   // Use explicit length for sequences
+	explicitLengthSequenceItems bool   // Use explicit length for sequence items
+	keepGroupLengths            bool   // Keep group length tags (0xGGGG,0x0000)
+	largeObjectSize             uint32 // Threshold for large objects
 }
 
 // WriteOption is a functional option for Write function.
@@ -33,9 +37,13 @@ type WriteOption func(*writeConfig)
 
 // writeConfig holds the configuration for a write operation.
 type writeConfig struct {
-	transferSyntax  *transfer.TransferSyntax
-	fileMetaInfo    *dataset.Dataset
-	includePreamble bool
+	transferSyntax              *transfer.TransferSyntax
+	fileMetaInfo                *dataset.Dataset
+	includePreamble             bool
+	explicitLengthSequences     bool   // Use explicit length for sequences (default: false, use undefined)
+	explicitLengthSequenceItems bool   // Use explicit length for sequence items (default: false, use undefined)
+	keepGroupLengths            bool   // Keep group length tags (0xGGGG,0x0000) (default: false)
+	largeObjectSize             uint32 // Threshold for large objects (default: 1MB)
 }
 
 // WithTransferSyntax specifies the transfer syntax to use.
@@ -59,6 +67,41 @@ func WithFileMetaInfo(fmi *dataset.Dataset) WriteOption {
 func WithoutPreamble() WriteOption {
 	return func(c *writeConfig) {
 		c.includePreamble = false
+	}
+}
+
+// WithExplicitLengthSequences configures the writer to use explicit lengths for sequences.
+// By default, sequences are written with undefined length (0xFFFFFFFF) and delimited by
+// Sequence Delimitation Items.
+func WithExplicitLengthSequences() WriteOption {
+	return func(c *writeConfig) {
+		c.explicitLengthSequences = true
+	}
+}
+
+// WithExplicitLengthSequenceItems configures the writer to use explicit lengths for sequence items.
+// By default, sequence items are written with undefined length (0xFFFFFFFF) and delimited by
+// Item Delimitation Items.
+func WithExplicitLengthSequenceItems() WriteOption {
+	return func(c *writeConfig) {
+		c.explicitLengthSequenceItems = true
+	}
+}
+
+// WithKeepGroupLengths configures the writer to keep group length tags (GGGG,0000).
+// By default, group length tags are removed as they are deprecated in DICOM.
+func WithKeepGroupLengths() WriteOption {
+	return func(c *writeConfig) {
+		c.keepGroupLengths = true
+	}
+}
+
+// WithLargeObjectSize sets the threshold for what constitutes a "large" object during writing.
+// This can be used for optimization purposes (e.g., streaming large pixel data).
+// Default is 1MB (1024*1024 bytes). Set to 0 to use the default.
+func WithLargeObjectSize(size uint32) WriteOption {
+	return func(c *writeConfig) {
+		c.largeObjectSize = size
 	}
 }
 
@@ -110,21 +153,34 @@ func New(ts *transfer.TransferSyntax, opts ...Option) *Writer {
 func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	// Apply options to configuration
 	config := &writeConfig{
-		transferSyntax:  transfer.ExplicitVRLittleEndian, // Default
-		fileMetaInfo:    nil,                              // Will be auto-generated
-		includePreamble: true,                             // Default to including preamble
+		transferSyntax:              transfer.ExplicitVRLittleEndian, // Default
+		fileMetaInfo:                nil,                              // Will be auto-generated
+		includePreamble:             true,                             // Default to including preamble
+		explicitLengthSequences:     false,                            // Default: use undefined length
+		explicitLengthSequenceItems: false,                            // Default: use undefined length
+		keepGroupLengths:            false,                            // Default: remove group lengths
+		largeObjectSize:             1024 * 1024,                      // Default: 1MB
 	}
 
 	for _, opt := range opts {
 		opt(config)
 	}
 
+	// If largeObjectSize is explicitly set to 0, use default
+	if config.largeObjectSize == 0 {
+		config.largeObjectSize = 1024 * 1024
+	}
+
 	// Create internal writer
 	writer := &Writer{
-		writer:          w,
-		transferSyntax:  config.transferSyntax,
-		isExplicitVR:    config.transferSyntax.IsExplicitVR(),
-		includePreamble: config.includePreamble,
+		writer:                      w,
+		transferSyntax:              config.transferSyntax,
+		isExplicitVR:                config.transferSyntax.IsExplicitVR(),
+		includePreamble:             config.includePreamble,
+		explicitLengthSequences:     config.explicitLengthSequences,
+		explicitLengthSequenceItems: config.explicitLengthSequenceItems,
+		keepGroupLengths:            config.keepGroupLengths,
+		largeObjectSize:             config.largeObjectSize,
 	}
 
 	// Set byte order based on transfer syntax
@@ -310,6 +366,12 @@ func (w *Writer) writeDataset(ds *dataset.Dataset) error {
 			continue
 		}
 
+		// Skip group length tags unless explicitly requested to keep them
+		// Group length tags have element number 0x0000
+		if !w.keepGroupLengths && elem.Tag().Element() == 0x0000 {
+			continue
+		}
+
 		if err := w.writeElement(elem); err != nil {
 			return err
 		}
@@ -408,7 +470,7 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 		return fmt.Errorf("failed to write sequence tag %s: %w", seq.Tag(), err)
 	}
 
-	// For sequences, we write VR (if explicit) and then use undefined length
+	// Write VR (if explicit)
 	if w.isExplicitVR {
 		if err := w.writeVR(vr.SQ); err != nil {
 			return fmt.Errorf("failed to write SQ VR: %w", err)
@@ -421,27 +483,59 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 		}
 	}
 
-	// Write undefined length
-	undefinedLength := uint32(0xFFFFFFFF)
-	if err := binary.Write(w.writer, w.byteOrder, undefinedLength); err != nil {
-		return err
-	}
-
-	// Write items
-	for i := 0; i < seq.Count(); i++ {
-		item := seq.GetItem(i)
-		if err := w.writeItem(item); err != nil {
-			return fmt.Errorf("failed to write item %d: %w", i, err)
+	// Choose between explicit and undefined length
+	if w.explicitLengthSequences {
+		// Write sequence with explicit length
+		// Need to write items to a buffer first to calculate length
+		itemsBuf := &bytes.Buffer{}
+		itemsWriter := &Writer{
+			writer:                      itemsBuf,
+			byteOrder:                   w.byteOrder,
+			isExplicitVR:                w.isExplicitVR,
+			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
+			keepGroupLengths:            w.keepGroupLengths,
 		}
-	}
 
-	// Write Sequence Delimitation Item (FFFE,E0DD)
-	delimTag := tag.New(0xFFFE, 0xE0DD)
-	if err := w.writeTag(delimTag); err != nil {
-		return err
-	}
-	if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
-		return err
+		for i := 0; i < seq.Count(); i++ {
+			item := seq.GetItem(i)
+			if err := itemsWriter.writeItem(item); err != nil {
+				return fmt.Errorf("failed to write item %d: %w", i, err)
+			}
+		}
+
+		// Write the explicit length
+		seqLength := uint32(itemsBuf.Len())
+		if err := binary.Write(w.writer, w.byteOrder, seqLength); err != nil {
+			return err
+		}
+
+		// Write the items data
+		if _, err := w.writer.Write(itemsBuf.Bytes()); err != nil {
+			return err
+		}
+	} else {
+		// Write undefined length
+		undefinedLength := uint32(0xFFFFFFFF)
+		if err := binary.Write(w.writer, w.byteOrder, undefinedLength); err != nil {
+			return err
+		}
+
+		// Write items
+		for i := 0; i < seq.Count(); i++ {
+			item := seq.GetItem(i)
+			if err := w.writeItem(item); err != nil {
+				return fmt.Errorf("failed to write item %d: %w", i, err)
+			}
+		}
+
+		// Write Sequence Delimitation Item (FFFE,E0DD)
+		delimTag := tag.New(0xFFFE, 0xE0DD)
+		if err := w.writeTag(delimTag); err != nil {
+			return err
+		}
+		if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -455,27 +549,61 @@ func (w *Writer) writeItem(item *dataset.Dataset) error {
 		return err
 	}
 
-	// Write undefined length for item
-	undefinedLength := uint32(0xFFFFFFFF)
-	if err := binary.Write(w.writer, w.byteOrder, undefinedLength); err != nil {
-		return err
-	}
+	// Choose between explicit and undefined length
+	if w.explicitLengthSequenceItems {
+		// Write item with explicit length
+		// Need to write elements to a buffer first to calculate length
+		elementsBuf := &bytes.Buffer{}
+		elementsWriter := &Writer{
+			writer:                      elementsBuf,
+			byteOrder:                   w.byteOrder,
+			isExplicitVR:                w.isExplicitVR,
+			explicitLengthSequences:     w.explicitLengthSequences,
+			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
+			keepGroupLengths:            w.keepGroupLengths,
+		}
 
-	// Write all elements in the item
-	elements := item.Elements()
-	for _, elem := range elements {
-		if err := w.writeElement(elem); err != nil {
+		// Write all elements in the item
+		elements := item.Elements()
+		for _, elem := range elements {
+			if err := elementsWriter.writeElement(elem); err != nil {
+				return err
+			}
+		}
+
+		// Write the explicit length
+		itemLength := uint32(elementsBuf.Len())
+		if err := binary.Write(w.writer, w.byteOrder, itemLength); err != nil {
 			return err
 		}
-	}
 
-	// Write Item Delimitation Item (FFFE,E00D)
-	delimTag := tag.New(0xFFFE, 0xE00D)
-	if err := w.writeTag(delimTag); err != nil {
-		return err
-	}
-	if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
-		return err
+		// Write the elements data
+		if _, err := w.writer.Write(elementsBuf.Bytes()); err != nil {
+			return err
+		}
+	} else {
+		// Write undefined length for item
+		undefinedLength := uint32(0xFFFFFFFF)
+		if err := binary.Write(w.writer, w.byteOrder, undefinedLength); err != nil {
+			return err
+		}
+
+		// Write all elements in the item
+		elements := item.Elements()
+		for _, elem := range elements {
+			if err := w.writeElement(elem); err != nil {
+				return err
+			}
+		}
+
+		// Write Item Delimitation Item (FFFE,E00D)
+		delimTag := tag.New(0xFFFE, 0xE00D)
+		if err := w.writeTag(delimTag); err != nil {
+			return err
+		}
+		if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
+			return err
+		}
 	}
 
 	return nil

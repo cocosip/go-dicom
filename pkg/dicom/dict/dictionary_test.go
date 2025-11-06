@@ -209,3 +209,67 @@ func TestNewPrivateDictionary(t *testing.T) {
 		t.Errorf("PrivateCreator().Creator() = %q, want %q", d.PrivateCreator().Creator(), "MYCOMPANY")
 	}
 }
+
+func TestDefaultDictionary(t *testing.T) {
+	// Get the default dictionary
+	d := dict.Default()
+	if d == nil {
+		t.Fatal("Default() returned nil")
+	}
+
+	// Should be the same instance on repeated calls
+	d2 := dict.Default()
+	if d != d2 {
+		t.Error("Default() should return the same instance")
+	}
+}
+
+func TestTagDictionaryEntryIntegration(t *testing.T) {
+	// First, add an entry to the default dictionary
+	testTag := tag.New(0x0010, 0x0010)
+	entry := dict.NewEntry(
+		testTag,
+		"Patient Name",
+		"PatientName",
+		vm.VM1,
+		false,
+		vr.PN,
+	)
+	dict.Default().Add(entry)
+
+	// Now use Tag.DictionaryEntry() method to look it up
+	dictEntry := testTag.DictionaryEntry()
+
+	if dictEntry == nil {
+		t.Fatal("Tag.DictionaryEntry() returned nil")
+	}
+
+	// Type assert to *dict.Entry
+	e, ok := dictEntry.(*dict.Entry)
+	if !ok {
+		t.Fatalf("Tag.DictionaryEntry() returned %T, want *dict.Entry", dictEntry)
+	}
+
+	if e.Name() != "Patient Name" {
+		t.Errorf("Entry.Name() = %q, want %q", e.Name(), "Patient Name")
+	}
+	if e.Keyword() != "PatientName" {
+		t.Errorf("Entry.Keyword() = %q, want %q", e.Keyword(), "PatientName")
+	}
+}
+
+func TestTagDictionaryEntryNotFound(t *testing.T) {
+	// Create a tag that's not in the dictionary
+	unknownTag := tag.New(0xEEEE, 0xEEEE)
+
+	dictEntry := unknownTag.DictionaryEntry()
+
+	// Should return nil for tags not in the dictionary
+	// Note: dictEntry might be a typed nil (*dict.Entry)(nil), so we need to check carefully
+	if dictEntry != nil {
+		// Try to type assert - if successful but nil, that's OK
+		if e, ok := dictEntry.(*dict.Entry); ok && e != nil {
+			t.Errorf("Tag.DictionaryEntry() for unknown tag returned %v, want nil", dictEntry)
+		}
+	}
+}

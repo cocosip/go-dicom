@@ -21,9 +21,9 @@ func TestReadPreamble(t *testing.T) {
 		buf.Write(make([]byte, 128)) // 128 zero bytes
 		buf.WriteString("DICM")      // DICM prefix
 
-		p := New()
-		p.reader = buf
-		if err := p.readPreamble(); err != nil {
+		ctx := newParseContext()
+		ctx.reader = buf
+		if err := ctx.readPreamble(); err != nil {
 			t.Errorf("readPreamble() error = %v", err)
 		}
 	})
@@ -33,9 +33,9 @@ func TestReadPreamble(t *testing.T) {
 		buf.Write(make([]byte, 128))
 		buf.WriteString("XXXX") // Invalid prefix
 
-		p := New()
-		p.reader = buf
-		if err := p.readPreamble(); err == nil {
+		ctx := newParseContext()
+		ctx.reader = buf
+		if err := ctx.readPreamble(); err == nil {
 			t.Error("readPreamble() should return error for invalid DICM prefix")
 		}
 	})
@@ -44,9 +44,9 @@ func TestReadPreamble(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
 		buf.Write(make([]byte, 50)) // Too short
 
-		p := New()
-		p.reader = buf
-		if err := p.readPreamble(); err == nil {
+		ctx := newParseContext()
+		ctx.reader = buf
+		if err := ctx.readPreamble(); err == nil {
 			t.Error("readPreamble() should return error for short preamble")
 		}
 	})
@@ -59,11 +59,11 @@ func TestReadTag(t *testing.T) {
 		binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
 		binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
 
-		p := New()
-		p.reader = buf
-		p.byteOrder = binary.LittleEndian
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.byteOrder = binary.LittleEndian
 
-		tag, err := p.readTag()
+		tag, err := ctx.readTag()
 		if err != nil {
 			t.Fatalf("readTag() error = %v", err)
 		}
@@ -81,11 +81,11 @@ func TestReadTag(t *testing.T) {
 		binary.Write(buf, binary.BigEndian, uint16(0x0002))
 		binary.Write(buf, binary.BigEndian, uint16(0x0010))
 
-		p := New()
-		p.reader = buf
-		p.byteOrder = binary.BigEndian
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.byteOrder = binary.BigEndian
 
-		tag, err := p.readTag()
+		tag, err := ctx.readTag()
 		if err != nil {
 			t.Fatalf("readTag() error = %v", err)
 		}
@@ -98,11 +98,11 @@ func TestReadTag(t *testing.T) {
 	t.Run("ReadTagEOF", func(t *testing.T) {
 		buf := bytes.NewBuffer([]byte{0x00}) // Too short
 
-		p := New()
-		p.reader = buf
-		p.byteOrder = binary.LittleEndian
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.byteOrder = binary.LittleEndian
 
-		_, err := p.readTag()
+		_, err := ctx.readTag()
 		if err == nil {
 			t.Error("readTag() should return error for EOF")
 		}
@@ -114,11 +114,11 @@ func TestReadVR(t *testing.T) {
 	t.Run("ExplicitVR", func(t *testing.T) {
 		buf := bytes.NewBuffer([]byte("PN"))
 
-		p := New()
-		p.reader = buf
-		p.isExplicitVR = true
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.isExplicitVR = true
 
-		vr, err := p.readVR(tag.PatientName)
+		vr, err := ctx.readVR(tag.PatientName)
 		if err != nil {
 			t.Fatalf("readVR() error = %v", err)
 		}
@@ -129,10 +129,10 @@ func TestReadVR(t *testing.T) {
 	})
 
 	t.Run("ImplicitVR", func(t *testing.T) {
-		p := New()
-		p.isExplicitVR = false
+		ctx := newParseContext()
+		ctx.isExplicitVR = false
 
-		vrResult, err := p.readVR(tag.PatientName)
+		vrResult, err := ctx.readVR(tag.PatientName)
 		if err != nil {
 			t.Fatalf("readVR() error = %v", err)
 		}
@@ -150,12 +150,12 @@ func TestReadLength(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
 		binary.Write(buf, binary.LittleEndian, uint16(100))
 
-		p := New()
-		p.reader = buf
-		p.byteOrder = binary.LittleEndian
-		p.isExplicitVR = true
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.byteOrder = binary.LittleEndian
+		ctx.isExplicitVR = true
 
-		length, err := p.readLength(vr.PN)
+		length, err := ctx.readLength(vr.PN)
 		if err != nil {
 			t.Fatalf("readLength() error = %v", err)
 		}
@@ -170,12 +170,12 @@ func TestReadLength(t *testing.T) {
 		binary.Write(buf, binary.LittleEndian, uint16(0)) // Reserved
 		binary.Write(buf, binary.LittleEndian, uint32(1000))
 
-		p := New()
-		p.reader = buf
-		p.byteOrder = binary.LittleEndian
-		p.isExplicitVR = true
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.byteOrder = binary.LittleEndian
+		ctx.isExplicitVR = true
 
-		length, err := p.readLength(vr.SQ)
+		length, err := ctx.readLength(vr.SQ)
 		if err != nil {
 			t.Fatalf("readLength() error = %v", err)
 		}
@@ -189,12 +189,12 @@ func TestReadLength(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
 		binary.Write(buf, binary.LittleEndian, uint32(2000))
 
-		p := New()
-		p.reader = buf
-		p.byteOrder = binary.LittleEndian
-		p.isExplicitVR = false
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.byteOrder = binary.LittleEndian
+		ctx.isExplicitVR = false
 
-		length, err := p.readLength(vr.PN)
+		length, err := ctx.readLength(vr.PN)
 		if err != nil {
 			t.Fatalf("readLength() error = %v", err)
 		}
@@ -209,12 +209,12 @@ func TestReadLength(t *testing.T) {
 		binary.Write(buf, binary.LittleEndian, uint16(0)) // Reserved
 		binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF))
 
-		p := New()
-		p.reader = buf
-		p.byteOrder = binary.LittleEndian
-		p.isExplicitVR = true
+		ctx := newParseContext()
+		ctx.reader = buf
+		ctx.byteOrder = binary.LittleEndian
+		ctx.isExplicitVR = true
 
-		length, err := p.readLength(vr.SQ)
+		length, err := ctx.readLength(vr.SQ)
 		if err != nil {
 			t.Fatalf("readLength() error = %v", err)
 		}
@@ -228,17 +228,17 @@ func TestReadLength(t *testing.T) {
 // TestParseWithOptions tests parser options
 func TestParseWithOptions(t *testing.T) {
 	t.Run("WithMaxElementSize", func(t *testing.T) {
-		p := New(WithMaxElementSize(1000))
-		if p.maxElementSize != 1000 {
-			t.Errorf("maxElementSize = %d, want 1000", p.maxElementSize)
+		ctx := newParseContext(WithMaxElementSize(1000))
+		if ctx.maxElementSize != 1000 {
+			t.Errorf("maxElementSize = %d, want 1000", ctx.maxElementSize)
 		}
 	})
 
 	t.Run("WithStopAtTag", func(t *testing.T) {
 		stopTag := tag.PixelData
-		p := New(WithStopAtTag(stopTag))
-		if p.stopAtTag != stopTag {
-			t.Errorf("stopAtTag = %v, want %v", p.stopAtTag, stopTag)
+		ctx := newParseContext(WithStopAtTag(stopTag))
+		if ctx.stopAtTag != stopTag {
+			t.Errorf("stopAtTag = %v, want %v", ctx.stopAtTag, stopTag)
 		}
 	})
 }

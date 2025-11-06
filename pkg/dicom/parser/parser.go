@@ -20,6 +20,65 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
+// ReadOption controls how large DICOM elements are read.
+type ReadOption int
+
+const (
+	// ReadDefault reads all tags normally.
+	ReadDefault ReadOption = iota
+
+	// ReadLargeOnDemand reads small tags immediately but keeps the stream open
+	// to read large tags on demand. The stream must stay open.
+	ReadLargeOnDemand
+
+	// SkipLargeTags skips reading large tags entirely. The stream can be closed.
+	SkipLargeTags
+
+	// ReadAll reads all tags completely so the stream can be closed.
+	ReadAll
+)
+
+// FileFormat represents the structure of a DICOM file.
+type FileFormat int
+
+const (
+	// FormatUnknown indicates the parser could not determine the file format.
+	FormatUnknown FileFormat = iota
+
+	// FormatDICOM3 is a valid DICOM file with preamble and file meta info.
+	FormatDICOM3
+
+	// FormatDICOM3NoPreamble is a DICOM file without preamble but with file meta info.
+	FormatDICOM3NoPreamble
+
+	// FormatDICOM3NoFileMetaInfo is a DICOM file without preamble or file meta info.
+	FormatDICOM3NoFileMetaInfo
+
+	// FormatACRNEMA1 is an ACR-NEMA 1.0 file.
+	FormatACRNEMA1
+
+	// FormatACRNEMA2 is an ACR-NEMA 2.0 file.
+	FormatACRNEMA2
+)
+
+// String returns the string representation of FileFormat.
+func (f FileFormat) String() string {
+	switch f {
+	case FormatDICOM3:
+		return "DICOM3"
+	case FormatDICOM3NoPreamble:
+		return "DICOM3NoPreamble"
+	case FormatDICOM3NoFileMetaInfo:
+		return "DICOM3NoFileMetaInfo"
+	case FormatACRNEMA1:
+		return "ACRNEMA1"
+	case FormatACRNEMA2:
+		return "ACRNEMA2"
+	default:
+		return "Unknown"
+	}
+}
+
 // ParseResult represents the result of parsing a DICOM file.
 //
 // It contains both the File Meta Information (Group 0002) and the main Dataset.
@@ -36,10 +95,18 @@ type ParseResult struct {
 
 	// TransferSyntax specifies how the dataset is encoded.
 	TransferSyntax *transfer.TransferSyntax
+
+	// Format indicates the detected DICOM file format.
+	Format FileFormat
+
+	// IsPartial indicates whether parsing ended prematurely
+	// (e.g., due to stop criterion or error recovery).
+	IsPartial bool
 }
 
-// Parser reads and parses DICOM files.
-type Parser struct {
+// parseContext holds the state during DICOM file parsing.
+// This is internal and not exposed to users.
+type parseContext struct {
 	reader         io.Reader
 	byteOrder      binary.ByteOrder
 	isExplicitVR   bool
@@ -50,62 +117,110 @@ type Parser struct {
 	// It's stored here to be used when reading the main dataset
 	firstDatasetTag *tag.Tag
 
-	// Options
-	maxElementSize uint32 // Maximum element size to read (0 = unlimited)
-	stopAtTag      *tag.Tag
+	// Configuration options
+	maxElementSize  uint32     // Maximum element size to read (0 = unlimited)
+	stopAtTag       *tag.Tag   // Stop parsing when this tag is reached
+	readOption      ReadOption // How to handle large elements
+	largeObjectSize uint32     // Size threshold for "large" objects (default 64KB)
+
+	// File format detection
+	detectedFormat FileFormat
+	isPartial      bool
 }
 
-// Option is a functional option for Parser.
-type Option func(*Parser)
+// Option is a functional option for configuring the parser.
+type Option func(*parseContext)
 
 // WithMaxElementSize sets the maximum element size to read.
+// Elements larger than this will cause an error.
 func WithMaxElementSize(size uint32) Option {
-	return func(p *Parser) {
-		p.maxElementSize = size
+	return func(ctx *parseContext) {
+		ctx.maxElementSize = size
 	}
 }
 
 // WithStopAtTag sets a tag to stop parsing at.
+// Parsing will stop when this tag is encountered.
 func WithStopAtTag(t *tag.Tag) Option {
-	return func(p *Parser) {
-		p.stopAtTag = t
+	return func(ctx *parseContext) {
+		ctx.stopAtTag = t
 	}
 }
 
 // WithDictionary sets the DICOM dictionary for implicit VR lookup.
+// Required when parsing files with Implicit VR transfer syntax.
 func WithDictionary(d *dict.Dictionary) Option {
-	return func(p *Parser) {
-		p.dictionary = d
+	return func(ctx *parseContext) {
+		ctx.dictionary = d
 	}
 }
 
-// New creates a new Parser with the given options.
-func New(opts ...Option) *Parser {
-	p := &Parser{
-		byteOrder:    binary.LittleEndian,
-		isExplicitVR: true,
+// WithReadOption sets how large elements should be handled during parsing.
+//
+// Options:
+//   - ReadDefault: Read all elements normally
+//   - ReadLargeOnDemand: Read large elements on demand (stream must stay open)
+//   - SkipLargeTags: Skip large elements entirely
+//   - ReadAll: Read all elements including large ones
+func WithReadOption(opt ReadOption) Option {
+	return func(ctx *parseContext) {
+		ctx.readOption = opt
+	}
+}
+
+// WithLargeObjectSize sets the threshold for what constitutes a "large" object.
+// Elements larger than this size are subject to the ReadOption behavior.
+// Default is 64KB (65536 bytes). Set to 0 to use the default.
+func WithLargeObjectSize(size uint32) Option {
+	return func(ctx *parseContext) {
+		ctx.largeObjectSize = size
+	}
+}
+
+// newParseContext creates a new parse context with the given options.
+func newParseContext(opts ...Option) *parseContext {
+	ctx := &parseContext{
+		byteOrder:       binary.LittleEndian,
+		isExplicitVR:    true,
+		readOption:      ReadDefault,
+		largeObjectSize: 65536, // Default 64KB
+		detectedFormat:  FormatUnknown,
 	}
 	for _, opt := range opts {
-		opt(p)
+		opt(ctx)
 	}
-	return p
+	// If largeObjectSize is explicitly set to 0, use default
+	if ctx.largeObjectSize == 0 {
+		ctx.largeObjectSize = 65536
+	}
+	return ctx
 }
 
 // Parse parses a DICOM file from the reader.
 // This is the main entry point for reading DICOM files.
 //
+// Usage:
+//
+//	result, err := parser.Parse(reader,
+//	    parser.WithReadOption(parser.SkipLargeTags),
+//	    parser.WithLargeObjectSize(128*1024),
+//	)
+//
 // Returns a ParseResult containing:
 //   - FileMetaInformation: Group 0002 elements
 //   - Dataset: Main DICOM data
 //   - TransferSyntax: How the dataset is encoded
+//   - Format: Detected file format
+//   - IsPartial: Whether parsing stopped early
 func Parse(r io.Reader, opts ...Option) (*ParseResult, error) {
-	p := New(opts...)
-	return p.Parse(r)
+	ctx := newParseContext(opts...)
+	return ctx.parse(r)
 }
 
-// Parse parses a DICOM file from the reader.
-func (p *Parser) Parse(r io.Reader) (*ParseResult, error) {
+// parse is the internal parsing implementation.
+func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 	p.reader = r
+	p.detectedFormat = FormatDICOM3 // Assume DICOM3 initially
 
 	// Read and validate preamble + DICM prefix
 	if err := p.readPreamble(); err != nil {
@@ -137,6 +252,8 @@ func (p *Parser) Parse(r io.Reader) (*ParseResult, error) {
 		FileMetaInformation: metaDS,
 		Dataset:             mainDS,
 		TransferSyntax:      p.transferSyntax,
+		Format:              p.detectedFormat,
+		IsPartial:           p.isPartial,
 	}, nil
 }
 
@@ -152,7 +269,7 @@ func ParseFile(path string, opts ...Option) (*ParseResult, error) {
 }
 
 // readPreamble reads and validates the 128-byte preamble and DICM prefix.
-func (p *Parser) readPreamble() error {
+func (p *parseContext) readPreamble() error {
 	// Read 128-byte preamble (usually all zeros, but can be anything)
 	preamble := make([]byte, 128)
 	if _, err := io.ReadFull(p.reader, preamble); err != nil {
@@ -173,7 +290,7 @@ func (p *Parser) readPreamble() error {
 }
 
 // readFileMetaInformation reads Group 0002 elements (File Meta Information).
-func (p *Parser) readFileMetaInformation() (*dataset.Dataset, error) {
+func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 	ds := dataset.New()
 
 	// Read elements until we leave Group 0002
@@ -234,7 +351,7 @@ func (p *Parser) readFileMetaInformation() (*dataset.Dataset, error) {
 }
 
 // setTransferSyntax sets the transfer syntax from File Meta Information.
-func (p *Parser) setTransferSyntax(metaDS *dataset.Dataset) error {
+func (p *parseContext) setTransferSyntax(metaDS *dataset.Dataset) error {
 	tsUID, exists := metaDS.GetString(tag.TransferSyntaxUID)
 	if !exists {
 		// Default to Explicit VR Little Endian
@@ -263,7 +380,7 @@ func (p *Parser) setTransferSyntax(metaDS *dataset.Dataset) error {
 }
 
 // readDataset reads a dataset (collection of elements).
-func (p *Parser) readDataset() (*dataset.Dataset, error) {
+func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	ds := dataset.New()
 
 	// Check if we have a saved tag from readFileMetaInformation
@@ -310,7 +427,7 @@ func (p *Parser) readDataset() (*dataset.Dataset, error) {
 }
 
 // readElement reads a single DICOM element.
-func (p *Parser) readElement() (element.Element, error) {
+func (p *parseContext) readElement() (element.Element, error) {
 	// Read tag (4 bytes: group + element)
 	t, err := p.readTag()
 	if err != nil {
@@ -339,7 +456,38 @@ func (p *Parser) readElement() (element.Element, error) {
 		return p.readSequence(t, length)
 	}
 
-	// Read value data
+	// Handle large objects based on ReadOption
+	isLarge := length > p.largeObjectSize
+
+	if isLarge {
+		switch p.readOption {
+		case SkipLargeTags:
+			// Skip the data entirely by discarding it
+			if _, err := io.CopyN(io.Discard, p.reader, int64(length)); err != nil {
+				return nil, fmt.Errorf("failed to skip large tag %s: %w", t, err)
+			}
+			// Return an empty element
+			buf := buffer.NewMemory([]byte{})
+			return p.createElement(t, vrValue, buf)
+
+		case ReadLargeOnDemand:
+			// TODO: Implement lazy loading
+			// For now, treat same as ReadAll
+			// This would require keeping the stream open and storing file position
+			fallthrough
+
+		case ReadAll, ReadDefault:
+			// Read the data normally
+			data := make([]byte, length)
+			if _, err := io.ReadFull(p.reader, data); err != nil {
+				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+			}
+			buf := buffer.NewMemory(data)
+			return p.createElement(t, vrValue, buf)
+		}
+	}
+
+	// Read value data normally for non-large elements
 	data := make([]byte, length)
 	if _, err := io.ReadFull(p.reader, data); err != nil {
 		return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
@@ -352,7 +500,7 @@ func (p *Parser) readElement() (element.Element, error) {
 
 // readElementWithTag reads a single DICOM element when the tag is already known.
 // This is used when we've already read the tag (e.g., in readFileMetaInformation).
-func (p *Parser) readElementWithTag(t *tag.Tag) (element.Element, error) {
+func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 	// Read VR (Value Representation)
 	vrValue, err := p.readVR(t)
 	if err != nil {
@@ -375,7 +523,36 @@ func (p *Parser) readElementWithTag(t *tag.Tag) (element.Element, error) {
 		return p.readSequence(t, length)
 	}
 
-	// Read value data
+	// Handle large objects based on ReadOption
+	isLarge := length > p.largeObjectSize
+
+	if isLarge {
+		switch p.readOption {
+		case SkipLargeTags:
+			// Skip the data entirely
+			if _, err := io.CopyN(io.Discard, p.reader, int64(length)); err != nil {
+				return nil, fmt.Errorf("failed to skip large tag %s: %w", t, err)
+			}
+			// Return an empty element
+			buf := buffer.NewMemory([]byte{})
+			return p.createElement(t, vrValue, buf)
+
+		case ReadLargeOnDemand:
+			// TODO: Implement lazy loading
+			fallthrough
+
+		case ReadAll, ReadDefault:
+			// Read the data normally
+			data := make([]byte, length)
+			if _, err := io.ReadFull(p.reader, data); err != nil {
+				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+			}
+			buf := buffer.NewMemory(data)
+			return p.createElement(t, vrValue, buf)
+		}
+	}
+
+	// Read value data normally for non-large elements
 	data := make([]byte, length)
 	if _, err := io.ReadFull(p.reader, data); err != nil {
 		return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
@@ -387,7 +564,7 @@ func (p *Parser) readElementWithTag(t *tag.Tag) (element.Element, error) {
 }
 
 // readTag reads a DICOM tag (4 bytes).
-func (p *Parser) readTag() (*tag.Tag, error) {
+func (p *parseContext) readTag() (*tag.Tag, error) {
 	var group, elem uint16
 
 	if err := binary.Read(p.reader, p.byteOrder, &group); err != nil {
@@ -401,7 +578,7 @@ func (p *Parser) readTag() (*tag.Tag, error) {
 }
 
 // readVR reads the Value Representation.
-func (p *Parser) readVR(t *tag.Tag) (*vr.VR, error) {
+func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 	if p.isExplicitVR {
 		// Read 2-byte VR code
 		vrBytes := make([]byte, 2)
@@ -428,7 +605,7 @@ func (p *Parser) readVR(t *tag.Tag) (*vr.VR, error) {
 }
 
 // readLength reads the value length field.
-func (p *Parser) readLength(v *vr.VR) (uint32, error) {
+func (p *parseContext) readLength(v *vr.VR) (uint32, error) {
 	if p.isExplicitVR {
 		// Check if VR has 16-bit or 32-bit length
 		if v.Is16bitLength() {
@@ -462,7 +639,7 @@ func (p *Parser) readLength(v *vr.VR) (uint32, error) {
 }
 
 // readSequence reads a sequence element (VR=SQ).
-func (p *Parser) readSequence(t *tag.Tag, length uint32) (*dataset.Sequence, error) {
+func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequence, error) {
 	seq := dataset.NewSequence(t)
 
 	// Handle undefined length (0xFFFFFFFF)
@@ -561,7 +738,7 @@ func (p *Parser) readSequence(t *tag.Tag, length uint32) (*dataset.Sequence, err
 }
 
 // readItemDataset reads a single item dataset within a sequence.
-func (p *Parser) readItemDataset(length uint32) (*dataset.Dataset, error) {
+func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) {
 	item := dataset.New()
 
 	if length == 0xFFFFFFFF {
@@ -632,7 +809,7 @@ func (p *Parser) readItemDataset(length uint32) (*dataset.Dataset, error) {
 }
 
 // createElement creates an element from tag, VR, and buffer.
-func (p *Parser) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) (element.Element, error) {
+func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) (element.Element, error) {
 	// Create appropriate element type based on VR code
 	vrCode := v.Code()
 	switch vrCode {

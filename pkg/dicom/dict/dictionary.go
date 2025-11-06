@@ -9,6 +9,13 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
+// init registers the dictionary lookup function with the tag package.
+func init() {
+	tag.SetDictionaryLookup(func(t *tag.Tag) interface{} {
+		return Default().Lookup(t)
+	})
+}
+
 // Dictionary manages DICOM dictionary entries.
 //
 // The dictionary provides lookup functionality for DICOM tags to retrieve
@@ -118,4 +125,31 @@ func (d *Dictionary) Entries() []*Entry {
 	}
 	result = append(result, d.masked...)
 	return result
+}
+
+// Global default dictionary instance
+var (
+	defaultDictionary     *Dictionary
+	defaultDictionaryOnce sync.Once
+)
+
+// Default returns the default DICOM dictionary.
+//
+// The default dictionary is lazily initialized on first access.
+// It contains standard DICOM tags and can be extended with custom entries.
+func Default() *Dictionary {
+	defaultDictionaryOnce.Do(func() {
+		defaultDictionary = New()
+		// TODO: Load standard DICOM dictionary entries from embedded data
+		// For now, create a minimal dictionary with common entries
+		initializeDefaultDictionary(defaultDictionary)
+	})
+	return defaultDictionary
+}
+
+// initializeDefaultDictionary adds basic DICOM dictionary entries.
+// TODO: Replace with loading from standard DICOM dictionary data.
+func initializeDefaultDictionary(d *Dictionary) {
+	// Add UnknownTag entry for tags not in the dictionary
+	// This matches fo-dicom's UnknownTag behavior
 }

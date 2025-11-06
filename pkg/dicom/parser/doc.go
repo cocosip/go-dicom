@@ -35,16 +35,15 @@
 //	}
 //
 //	// Access parsed data
-//	patientName := ds.TryGetString(tag.PatientName)
+//	patientName, _ := result.Dataset.GetString(tag.PatientName)
 //	fmt.Printf("Patient: %s\n", patientName)
 //
-// # Advanced Usage
+// # Advanced Usage with Options
 //
-//	// Create parser with options
-//	p := parser.New(
-//	    parser.WithMaxElementSize(100*1024*1024), // 100MB max
-//	    parser.WithStopAtTag(tag.PixelData),       // Stop before pixel data
+//	// Parse with custom options
+//	result, err := parser.Parse(file,
+//	    parser.WithReadOption(parser.SkipLargeTags), // Skip pixel data
+//	    parser.WithLargeObjectSize(128*1024),        // 128KB threshold
+//	    parser.WithStopAtTag(tag.PixelData),         // Stop at pixel data
 //	)
-//
-//	ds, err := p.Parse(file)
 package parser

@@ -2,8 +2,8 @@
 
 A pure Go implementation of the DICOM (Digital Imaging and Communications in Medicine) standard, ported from the [fo-dicom](https://github.com/fo-dicom/fo-dicom) C# library.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/yourusername/go-dicom.svg)](https://pkg.go.dev/github.com/yourusername/go-dicom)
-[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/go-dicom)](https://goreportcard.com/report/github.com/yourusername/go-dicom)
+[![Go Reference](https://pkg.go.dev/badge/github.com/cocosip/go-dicom.svg)](https://pkg.go.dev/github.com/cocosip/go-dicom)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cocosip/go-dicom)](https://goreportcard.com/report/github.com/cocosip/go-dicom)
 [![License](https://img.shields.io/badge/license-MS--PL-blue.svg)](LICENSE)
 
 ## ⚠️ Work in Progress
@@ -12,12 +12,37 @@ This library is currently under active development. The API is not stable and ma
 
 ## Features
 
-### Current Status
+### Current Status (~60% Complete)
 
-- [ ] Core DICOM data types (Tag, VR, Element, Dataset)
-- [ ] DICOM file reading
-- [ ] DICOM file writing
-- [ ] Transfer syntax support
+- [x] **Core DICOM data types**
+  - [x] Tag (5338 standard tags + private tag support)
+  - [x] VR (35 value representations with validation)
+  - [x] VM (15 value multiplicities)
+  - [x] Element (string, numeric, binary types)
+  - [x] Dataset & Sequence (full support)
+  - [x] Dictionary (tag/keyword lookup, Default global dictionary)
+  - [x] UID (1965 standard UIDs)
+  - [x] Transfer Syntax (15+ syntaxes)
+  - [x] Character Set (30+ encodings)
+
+- [x] **DICOM file reading**
+  - [x] Explicit/Implicit VR parsing
+  - [x] Sequence parsing (defined/undefined length)
+  - [x] **ReadOption**: SkipLargeTags, ReadLargeOnDemand, ReadAll
+  - [x] **FileFormat** detection: DICOM3, DICOM3NoPreamble, etc.
+  - [x] Large object handling with configurable thresholds
+  - [x] Tag.DictionaryEntry() for metadata lookup
+
+- [x] **DICOM file writing**
+  - [x] Explicit/Implicit VR writing
+  - [x] Auto-generated File Meta Information
+  - [x] **DicomWriteOptions**:
+    - ExplicitLengthSequences/Items
+    - KeepGroupLengths
+    - LargeObjectSize
+  - [x] Group length auto-filtering
+  - [x] Explicit/undefined length sequences
+
 - [ ] JSON serialization (DICOM JSON Model)
 - [ ] DICOM networking (DIMSE services)
 - [ ] Image codec support
@@ -27,7 +52,7 @@ See [TODO.md](TODO.md) for detailed development roadmap.
 ## Installation
 
 ```bash
-go get github.com/yourusername/go-dicom
+go get github.com/cocosip/go-dicom
 ```
 
 ## Quick Start
@@ -40,55 +65,143 @@ package main
 import (
     "fmt"
     "log"
+    "os"
 
-    "github.com/yourusername/go-dicom/pkg/dicom"
+    "github.com/cocosip/go-dicom/pkg/dicom/parser"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
 func main() {
     // Open DICOM file
-    file, err := dicom.Open("example.dcm")
+    file, err := os.Open("example.dcm")
     if err != nil {
         log.Fatal(err)
     }
+    defer file.Close()
 
-    // Access dataset
-    dataset := file.Dataset
+    // Parse the file
+    result, err := parser.Parse(file)
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Get patient name
-    patientName, err := dataset.GetString(dicom.TagPatientName)
-    if err != nil {
-        log.Fatal(err)
+    patientName, exists := result.Dataset.GetString(tag.PatientName)
+    if exists {
+        fmt.Printf("Patient Name: %s\n", patientName)
     }
 
-    fmt.Printf("Patient Name: %s\n", patientName)
+    // Get file format
+    fmt.Printf("Format: %s\n", result.Format)
 }
 ```
 
-### Creating a DICOM File
+### Reading with Options (Skip Large Tags)
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/parser"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+)
+
+func main() {
+    file, err := os.Open("large_image.dcm")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer file.Close()
+
+    // Parse with options: skip large tags like pixel data
+    result, err := parser.Parse(file,
+        parser.WithReadOption(parser.SkipLargeTags),
+        parser.WithLargeObjectSize(128*1024), // 128KB threshold
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Access metadata (small tags still available)
+    patientName, _ := result.Dataset.GetString(tag.PatientName)
+    fmt.Printf("Patient: %s\n", patientName)
+}
+```
+
+### Writing a DICOM File
 
 ```go
 package main
 
 import (
     "log"
+    "os"
 
-    "github.com/yourusername/go-dicom/pkg/dicom"
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
 
 func main() {
     // Create new dataset
-    dataset := dicom.NewDataset()
+    ds := dataset.New()
 
     // Add elements
-    dataset.AddString(dicom.TagPatientName, "Doe^John")
-    dataset.AddString(dicom.TagPatientID, "12345")
-    dataset.AddString(dicom.TagStudyDate, "20250106")
+    ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
 
-    // Create DICOM file
-    file := dicom.NewFile(dataset)
+    // Write to file
+    file, err := os.Create("output.dcm")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer file.Close()
 
-    // Save to disk
-    if err := file.Save("output.dcm"); err != nil {
+    // Write with default options
+    if err := writer.Write(file, ds); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+### Writing with Options
+
+```go
+package main
+
+import (
+    "log"
+    "os"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/transfer"
+    "github.com/cocosip/go-dicom/pkg/dicom/writer"
+)
+
+func main() {
+    ds := dataset.New()
+    // ... add elements ...
+
+    file, err := os.Create("output.dcm")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer file.Close()
+
+    // Write with custom options
+    err = writer.Write(file, ds,
+        writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian),
+        writer.WithExplicitLengthSequences(),  // Use explicit lengths
+        writer.WithLargeObjectSize(1024*1024), // 1MB threshold
+    )
+    if err != nil {
         log.Fatal(err)
     }
 }

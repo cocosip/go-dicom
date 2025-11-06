@@ -292,3 +292,34 @@ var (
 	// Unknown represents an unknown tag (FFFF,FFFF)
 	Unknown = New(0xFFFF, 0xFFFF)
 )
+
+// DictionaryEntryLookup is a function type for looking up dictionary entries.
+// This is used to avoid circular dependencies between tag and dict packages.
+type DictionaryEntryLookup func(*Tag) interface{}
+
+// globalDictionaryLookup holds the function to lookup dictionary entries.
+// This is set by the dict package during initialization.
+var globalDictionaryLookup DictionaryEntryLookup
+
+// SetDictionaryLookup sets the global dictionary lookup function.
+// This is called by the dict package to register the lookup function.
+func SetDictionaryLookup(lookup DictionaryEntryLookup) {
+	globalDictionaryLookup = lookup
+}
+
+// DictionaryEntry returns the dictionary entry for this tag.
+//
+// The dictionary entry contains metadata about the tag including its name,
+// keyword, value representation(s), value multiplicity, and retirement status.
+//
+// Returns nil if the tag is not found in the dictionary or if the dictionary
+// has not been initialized.
+//
+// Note: The returned interface{} should be type-asserted to *dict.Entry.
+// This design avoids circular dependencies between tag and dict packages.
+func (t *Tag) DictionaryEntry() interface{} {
+	if globalDictionaryLookup == nil {
+		return nil
+	}
+	return globalDictionaryLookup(t)
+}
