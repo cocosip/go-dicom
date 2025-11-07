@@ -154,16 +154,16 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 }
 
 // handleReleaseRequest processes an A-RELEASE-RQ PDU.
-// It calls the OnAssociationRelease handler (if set) and sends an A-RELEASE-RP response.
+// It calls the OnAssociationRelease callback (if set) and sends an A-RELEASE-RP response.
 func (s *Service) handleReleaseRequest(ctx context.Context) error {
-	// Get handlers
-	s.handlersMu.RLock()
-	handlers := s.handlers
-	s.handlersMu.RUnlock()
+	// Get release handler
+	s.callbacksMu.RLock()
+	releaseHandler := s.associationReleaseHandler
+	s.callbacksMu.RUnlock()
 
-	// Call OnAssociationRelease handler if set
-	if handlers != nil && handlers.OnAssociationRelease != nil {
-		if err := handlers.OnAssociationRelease(ctx); err != nil {
+	// Call OnAssociationRelease callback if set
+	if releaseHandler != nil {
+		if err := releaseHandler.OnAssociationRelease(ctx); err != nil {
 			// Handler rejected the release, send abort instead
 			return s.Abort(ctx, pdu.AbortSourceServiceUser, pdu.AbortReasonServiceUserNotSpecified)
 		}
@@ -178,15 +178,15 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 }
 
 // handleAbort processes an A-ABORT PDU.
-// It calls the OnAbort handler (if set) for notification.
+// It calls the OnAbort callback (if set) for notification.
 func (s *Service) handleAbort(ctx context.Context, abort *pdu.AAbort) {
-	// Get handlers
-	s.handlersMu.RLock()
-	handlers := s.handlers
-	s.handlersMu.RUnlock()
+	// Get lifecycle handler
+	s.callbacksMu.RLock()
+	lifecycleHandler := s.connectionLifecycleHandler
+	s.callbacksMu.RUnlock()
 
-	// Call OnAbort handler if set
-	if handlers != nil && handlers.OnAbort != nil {
-		handlers.OnAbort(ctx, abort)
+	// Call OnAbort callback if set
+	if lifecycleHandler != nil {
+		lifecycleHandler.OnAbort(ctx, abort.Source, abort.Reason)
 	}
 }

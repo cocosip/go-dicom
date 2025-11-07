@@ -8,8 +8,36 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
+
+// serviceResponder implements AssociationResponder and provides methods
+// for the negotiator to send association responses.
+type serviceResponder struct {
+	service *Service
+}
+
+// SendAccept sends an A-ASSOCIATE-AC (Association Accept) PDU.
+func (r *serviceResponder) SendAccept(ctx context.Context, assoc *association.Association) error {
+	// Convert Association to A-ASSOCIATE-AC PDU
+	ac := association.ToAAssociateAC(assoc)
+
+	// Send the PDU
+	if err := r.service.SendAssociationAccept(ctx, ac); err != nil {
+		return fmt.Errorf("failed to send A-ASSOCIATE-AC: %w", err)
+	}
+
+	// Store the association
+	r.service.SetAssociation(assoc)
+
+	return nil
+}
+
+// SendReject sends an A-ASSOCIATE-RJ (Association Reject) PDU.
+func (r *serviceResponder) SendReject(ctx context.Context, result, source, reason byte) error {
+	return r.service.SendAssociationReject(ctx, result, source, reason)
+}
 
 // serializeRawPDU converts a RawPDU to complete PDU bytes (header + data).
 func serializeRawPDU(rawPDU *pdu.RawPDU) []byte {
@@ -423,15 +451,30 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		return nil, fmt.Errorf("failed to decode A-ASSOCIATE-RQ: %w", err)
 	}
 
-	// Call OnAssociationRequest handler if set (server mode)
-	s.handlersMu.RLock()
-	handlers := s.handlers
-	s.handlersMu.RUnlock()
+	// Build Association from A-ASSOCIATE-RQ
+	assoc := association.FromAAssociateRQ(rq)
 
-	if handlers != nil && handlers.OnAssociationRequest != nil {
-		if err := handlers.OnAssociationRequest(ctx, rq); err != nil {
-			// Handler rejected the association
-			return nil, fmt.Errorf("association request rejected by handler: %w", err)
+	// Create responder for the negotiator
+	responder := &serviceResponder{
+		service: s,
+	}
+
+	// Call OnAssociationRequest callback if negotiator is set (server mode)
+	// The negotiator MUST call responder.SendAccept() or responder.SendReject()
+	s.callbacksMu.RLock()
+	negotiator := s.associationNegotiator
+	s.callbacksMu.RUnlock()
+
+	if negotiator != nil {
+		// Let the negotiator handle the request and send the response
+		if err := negotiator.OnAssociationRequest(ctx, assoc, responder); err != nil {
+			return nil, fmt.Errorf("association negotiation failed: %w", err)
+		}
+	} else {
+		// No negotiator - use default behavior: accept all contexts with first transfer syntax
+		defaultNegotiator := &DefaultAssociationNegotiator{}
+		if err := defaultNegotiator.OnAssociationRequest(ctx, assoc, responder); err != nil {
+			return nil, fmt.Errorf("default association negotiation failed: %w", err)
 		}
 	}
 

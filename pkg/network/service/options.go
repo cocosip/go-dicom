@@ -3,7 +3,12 @@
 
 package service
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/cocosip/go-dicom/pkg/network/dimse"
+)
 
 // ServiceOption configures a Service.
 type ServiceOption func(*serviceConfig)
@@ -37,6 +42,14 @@ type serviceConfig struct {
 	// recvQueueSize is the size of the receive queue channel.
 	// Default: 100
 	recvQueueSize int
+
+	// Lifecycle callbacks (optional)
+	associationNegotiator      AssociationNegotiator
+	associationReleaseHandler  AssociationReleaseHandler
+	connectionLifecycleHandler ConnectionLifecycleHandler
+
+	// DIMSE message handlers (optional)
+	handlers *Handlers
 }
 
 // defaultServiceConfig returns the default service configuration.
@@ -96,5 +109,87 @@ func WithSendQueueSize(size int) ServiceOption {
 func WithRecvQueueSize(size int) ServiceOption {
 	return func(c *serviceConfig) {
 		c.recvQueueSize = size
+	}
+}
+
+// WithAssociationNegotiator sets the association negotiator callback.
+// The negotiator controls which associations are accepted and how presentation contexts are negotiated.
+func WithAssociationNegotiator(negotiator AssociationNegotiator) ServiceOption {
+	return func(c *serviceConfig) {
+		c.associationNegotiator = negotiator
+	}
+}
+
+// WithAssociationReleaseHandler sets the association release handler callback.
+// The handler is called when an A-RELEASE-RQ is received.
+func WithAssociationReleaseHandler(handler AssociationReleaseHandler) ServiceOption {
+	return func(c *serviceConfig) {
+		c.associationReleaseHandler = handler
+	}
+}
+
+// WithConnectionLifecycleHandler sets the connection lifecycle handler callback.
+// The handler is called for connection lifecycle events (abort, close).
+func WithConnectionLifecycleHandler(handler ConnectionLifecycleHandler) ServiceOption {
+	return func(c *serviceConfig) {
+		c.connectionLifecycleHandler = handler
+	}
+}
+
+// WithHandlers sets the DIMSE message handlers.
+// The handlers process incoming DIMSE requests (C-ECHO, C-STORE, C-FIND, C-MOVE, C-GET).
+func WithHandlers(handlers *Handlers) ServiceOption {
+	return func(c *serviceConfig) {
+		c.handlers = handlers
+	}
+}
+
+// WithCEchoHandler sets the C-ECHO request handler.
+func WithCEchoHandler(handler func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)) ServiceOption {
+	return func(c *serviceConfig) {
+		if c.handlers == nil {
+			c.handlers = &Handlers{}
+		}
+		c.handlers.CEchoHandler = handler
+	}
+}
+
+// WithCStoreHandler sets the C-STORE request handler.
+func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)) ServiceOption {
+	return func(c *serviceConfig) {
+		if c.handlers == nil {
+			c.handlers = &Handlers{}
+		}
+		c.handlers.CStoreHandler = handler
+	}
+}
+
+// WithCFindHandler sets the C-FIND request handler.
+func WithCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) ServiceOption {
+	return func(c *serviceConfig) {
+		if c.handlers == nil {
+			c.handlers = &Handlers{}
+		}
+		c.handlers.CFindHandler = handler
+	}
+}
+
+// WithCMoveHandler sets the C-MOVE request handler.
+func WithCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)) ServiceOption {
+	return func(c *serviceConfig) {
+		if c.handlers == nil {
+			c.handlers = &Handlers{}
+		}
+		c.handlers.CMoveHandler = handler
+	}
+}
+
+// WithCGetHandler sets the C-GET request handler.
+func WithCGetHandler(handler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)) ServiceOption {
+	return func(c *serviceConfig) {
+		if c.handlers == nil {
+			c.handlers = &Handlers{}
+		}
+		c.handlers.CGetHandler = handler
 	}
 }

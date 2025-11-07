@@ -298,6 +298,82 @@ func (pc *PresentationContext) Reject(result byte) {
 	pc.AcceptedTransferSyntax = nil
 }
 
+// SetResult sets the result and optionally the accepted transfer syntax.
+// This is a convenience method similar to fo-dicom's SetResult.
+//
+// Example:
+//
+//	pc.SetResult(ResultAcceptance, transferSyntax)
+//	pc.SetResult(ResultAbstractSyntaxNotSupported, nil)
+func (pc *PresentationContext) SetResult(result byte, transferSyntax *transfer.TransferSyntax) {
+	pc.Result = result
+	if result == ResultAcceptance {
+		pc.AcceptedTransferSyntax = transferSyntax
+	} else {
+		pc.AcceptedTransferSyntax = nil
+	}
+}
+
+// AcceptTransferSyntaxes compares accepted transfer syntaxes against the proposed transfer syntaxes.
+// Returns true if a matching transfer syntax was found and accepted, false otherwise.
+//
+// This method is similar to fo-dicom's AcceptTransferSyntaxes method.
+// If scpPriority is false, transfer syntaxes are accepted in the order proposed by the SCU.
+// If scpPriority is true, transfer syntaxes are accepted in the order specified by acceptedTransferSyntaxes.
+//
+// Example:
+//
+//	// Accept in SCU-proposed order (prefer SCU's preference)
+//	if pc.AcceptTransferSyntaxes(false, ts1, ts2, ts3) {
+//	    // Accepted
+//	}
+//
+//	// Accept in SCP-specified order (prefer SCP's preference)
+//	if pc.AcceptTransferSyntaxes(true, ts1, ts2, ts3) {
+//	    // Accepted
+//	}
+func (pc *PresentationContext) AcceptTransferSyntaxes(scpPriority bool, acceptedTransferSyntaxes ...*transfer.TransferSyntax) bool {
+	// If already accepted, return true
+	if pc.Result == ResultAcceptance {
+		return true
+	}
+
+	if scpPriority {
+		// SCP decides priority - iterate through SCP's preferred order
+		for _, ts := range acceptedTransferSyntaxes {
+			if ts != nil && pc.HasTransferSyntax(ts) {
+				pc.SetResult(ResultAcceptance, ts)
+				return true
+			}
+		}
+	} else {
+		// SCU priority - iterate through proposed transfer syntaxes in order
+		for _, proposedTS := range pc.ProposedTransferSyntaxes {
+			for _, acceptedTS := range acceptedTransferSyntaxes {
+				if proposedTS.UID().UID() == acceptedTS.UID().UID() {
+					pc.SetResult(ResultAcceptance, acceptedTS)
+					return true
+				}
+			}
+		}
+	}
+
+	// No matching transfer syntax found
+	pc.SetResult(ResultTransferSyntaxesNotSupported, nil)
+	return false
+}
+
+// HasTransferSyntax checks if this presentation context has the specified transfer syntax
+// in its proposed transfer syntaxes.
+func (pc *PresentationContext) HasTransferSyntax(ts *transfer.TransferSyntax) bool {
+	for _, proposedTS := range pc.ProposedTransferSyntaxes {
+		if proposedTS.UID().UID() == ts.UID().UID() {
+			return true
+		}
+	}
+	return false
+}
+
 // IsAccepted returns true if this presentation context is accepted.
 func (pc *PresentationContext) IsAccepted() bool {
 	return pc.Result == ResultAcceptance
@@ -412,6 +488,82 @@ func NewAsynchronousOperationsWindow(maxInvoked, maxPerformed uint16) *Asynchron
 	}
 }
 
+// FromAAssociateRQ creates an Association from an A-ASSOCIATE-RQ PDU.
+// This is typically used by an SCP (server) after receiving a connection request from an SCU (client).
+// The returned Association will have all presentation contexts in "Proposed" state (Result=255).
+// The server should then negotiate these contexts (accept/reject) before sending A-ASSOCIATE-AC.
+func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
+	assoc := NewAssociation(rq.CallingAETitle, rq.CalledAETitle)
+	assoc.ProtocolVersion = rq.ProtocolVersion
+
+	// Set user information
+	if rq.UserInformation != nil {
+		assoc.MaxPDULength = rq.UserInformation.MaximumLength
+		assoc.ImplementationClassUID = rq.UserInformation.ImplementationClassUID
+		assoc.ImplementationVersionName = rq.UserInformation.ImplementationVersionName
+
+		// Asynchronous operations
+		if rq.UserInformation.AsynchronousOperations != nil {
+			assoc.AsynchronousOperations = &AsynchronousOperationsWindow{
+				MaxInvokedOperations:   rq.UserInformation.AsynchronousOperations.MaximumNumberOperationsInvoked,
+				MaxPerformedOperations: rq.UserInformation.AsynchronousOperations.MaximumNumberOperationsPerformed,
+			}
+		}
+
+		// Role selections
+		for _, rs := range rq.UserInformation.SCPSCURoleSelections {
+			assoc.AddRoleSelection(&RoleSelection{
+				SOPClassUID: rs.SOPClassUID,
+				SCURole:     rs.SCURole,
+				SCPRole:     rs.SCPRole,
+			})
+		}
+
+		// Extended negotiations
+		for _, en := range rq.UserInformation.ExtendedNegotiations {
+			assoc.AddExtendedNegotiation(&ExtendedNegotiation{
+				SOPClassUID:         en.SOPClassUID,
+				ServiceClassAppInfo: en.ServiceClassAppInfo,
+			})
+		}
+
+		// User identity
+		if rq.UserInformation.UserIdentity != nil {
+			assoc.UserIdentity = &UserIdentity{
+				Type:                      rq.UserInformation.UserIdentity.UserIdentityType,
+				PositiveResponseRequested: rq.UserInformation.UserIdentity.PositiveResponseRequested != 0,
+				PrimaryField:              rq.UserInformation.UserIdentity.PrimaryField,
+				SecondaryField:            rq.UserInformation.UserIdentity.SecondaryField,
+			}
+		}
+	}
+
+	// Convert presentation contexts (from RQ)
+	for _, pcRQ := range rq.PresentationContexts {
+		// Parse transfer syntaxes
+		transferSyntaxes := make([]*transfer.TransferSyntax, 0, len(pcRQ.TransferSyntaxes))
+		for _, tsUID := range pcRQ.TransferSyntaxes {
+			ts, err := transfer.Parse(tsUID)
+			if err != nil {
+				// Skip invalid transfer syntaxes
+				continue
+			}
+			transferSyntaxes = append(transferSyntaxes, ts)
+		}
+
+		pc := &PresentationContext{
+			ID:                       pcRQ.ID,
+			AbstractSyntax:           pcRQ.AbstractSyntax,
+			ProposedTransferSyntaxes: transferSyntaxes,
+			Result:                   255, // Proposed (not yet negotiated)
+		}
+
+		_ = assoc.AddPresentationContext(pc)
+	}
+
+	return assoc
+}
+
 // FromAAssociateAC creates an Association from an A-ASSOCIATE-AC PDU.
 // This is typically used by an SCU (client) after receiving acceptance from an SCP (server).
 func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
@@ -480,4 +632,137 @@ func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
 
 	assoc.IsEstablished = true
 	return assoc
+}
+
+// ToAAssociateAC converts an Association to an A-ASSOCIATE-AC PDU.
+// This is typically used by an SCP (server) to send the association acceptance response.
+// The Association should have been negotiated (presentation contexts accepted/rejected).
+func ToAAssociateAC(assoc *Association) *pdu.AAssociateAC {
+	ac := pdu.NewAAssociateAC()
+	ac.CallingAETitle = assoc.CallingAE
+	ac.CalledAETitle = assoc.CalledAE
+	ac.ProtocolVersion = assoc.ProtocolVersion
+
+	// Set user information
+	ac.UserInformation = &pdu.UserInformation{
+		MaximumLength:             assoc.MaxPDULength,
+		ImplementationClassUID:    assoc.ImplementationClassUID,
+		ImplementationVersionName: assoc.ImplementationVersionName,
+	}
+
+	// Asynchronous operations
+	if assoc.AsynchronousOperations != nil {
+		ac.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
+			MaximumNumberOperationsInvoked:   assoc.AsynchronousOperations.MaxInvokedOperations,
+			MaximumNumberOperationsPerformed: assoc.AsynchronousOperations.MaxPerformedOperations,
+		}
+	}
+
+	// Role selections
+	for _, rs := range assoc.RoleSelections {
+		ac.UserInformation.SCPSCURoleSelections = append(ac.UserInformation.SCPSCURoleSelections, pdu.SCPSCURoleSelection{
+			SOPClassUID: rs.SOPClassUID,
+			SCURole:     rs.SCURole,
+			SCPRole:     rs.SCPRole,
+		})
+	}
+
+	// Extended negotiations
+	for _, en := range assoc.ExtendedNegotiations {
+		ac.UserInformation.ExtendedNegotiations = append(ac.UserInformation.ExtendedNegotiations, pdu.ExtendedNegotiation{
+			SOPClassUID:         en.SOPClassUID,
+			ServiceClassAppInfo: en.ServiceClassAppInfo,
+		})
+	}
+
+	// User identity response (if applicable)
+	// Note: Server response is typically handled separately in user identity negotiation
+	// and is not included in A-ASSOCIATE-AC in the current implementation
+
+	// Convert presentation contexts
+	for _, pc := range assoc.PresentationContexts {
+		var transferSyntaxUID string
+		if pc.AcceptedTransferSyntax != nil {
+			transferSyntaxUID = pc.AcceptedTransferSyntax.UID().UID()
+		}
+
+		ac.PresentationContexts = append(ac.PresentationContexts, pdu.PresentationContextAC{
+			ID:             pc.ID,
+			Result:         pc.Result,
+			TransferSyntax: transferSyntaxUID,
+		})
+	}
+
+	return ac
+}
+
+// ToAAssociateRQ converts an Association back to an A-ASSOCIATE-RQ PDU.
+// This is useful for backward compatibility with deprecated APIs that expect the PDU format.
+// Note: This creates a new RQ from the Association's current state, which may differ from
+// the original request if the Association was modified after creation.
+func ToAAssociateRQ(assoc *Association) *pdu.AAssociateRQ {
+	rq := pdu.NewAAssociateRQ()
+	rq.CallingAETitle = assoc.CallingAE
+	rq.CalledAETitle = assoc.CalledAE
+	rq.ProtocolVersion = assoc.ProtocolVersion
+	rq.ApplicationContext = "1.2.840.10008.3.1.1.1" // DICOM Application Context
+
+	// Convert presentation contexts
+	for _, pc := range assoc.PresentationContexts {
+		transferSyntaxes := make([]string, len(pc.ProposedTransferSyntaxes))
+		for i, ts := range pc.ProposedTransferSyntaxes {
+			if ts != nil {
+				transferSyntaxes[i] = ts.UID().UID()
+			}
+		}
+		rq.PresentationContexts = append(rq.PresentationContexts, pdu.PresentationContextRQ{
+			ID:               pc.ID,
+			AbstractSyntax:   pc.AbstractSyntax,
+			TransferSyntaxes: transferSyntaxes,
+		})
+	}
+
+	// Set user information
+	rq.UserInformation = &pdu.UserInformation{
+		MaximumLength:             assoc.MaxPDULength,
+		ImplementationClassUID:    assoc.ImplementationClassUID,
+		ImplementationVersionName: assoc.ImplementationVersionName,
+	}
+
+	// Asynchronous operations
+	if assoc.AsynchronousOperations != nil {
+		rq.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
+			MaximumNumberOperationsInvoked:   assoc.AsynchronousOperations.MaxInvokedOperations,
+			MaximumNumberOperationsPerformed: assoc.AsynchronousOperations.MaxPerformedOperations,
+		}
+	}
+
+	// Role selections
+	for _, rs := range assoc.RoleSelections {
+		rq.UserInformation.SCPSCURoleSelections = append(rq.UserInformation.SCPSCURoleSelections, pdu.SCPSCURoleSelection{
+			SOPClassUID: rs.SOPClassUID,
+			SCURole:     rs.SCURole,
+			SCPRole:     rs.SCPRole,
+		})
+	}
+
+	// Extended negotiations
+	for _, en := range assoc.ExtendedNegotiations {
+		rq.UserInformation.ExtendedNegotiations = append(rq.UserInformation.ExtendedNegotiations, pdu.ExtendedNegotiation{
+			SOPClassUID:         en.SOPClassUID,
+			ServiceClassAppInfo: en.ServiceClassAppInfo,
+		})
+	}
+
+	// User identity
+	if assoc.UserIdentity != nil {
+		rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
+			UserIdentityType:          assoc.UserIdentity.Type,
+			PositiveResponseRequested: func() byte { if assoc.UserIdentity.PositiveResponseRequested { return 1 }; return 0 }(),
+			PrimaryField:              assoc.UserIdentity.PrimaryField,
+			SecondaryField:            assoc.UserIdentity.SecondaryField,
+		}
+	}
+
+	return rq
 }

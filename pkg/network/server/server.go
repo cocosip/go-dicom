@@ -18,6 +18,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
+//var _ service.AssociationResponder = (*associationReleaseAdapter)(nil)
+
 // Server represents a DICOM SCP (Service Class Provider) server.
 // It listens for incoming DICOM connections and handles DIMSE requests.
 //
@@ -48,8 +50,9 @@ type Server struct {
 	connections   map[string]*serverConnection
 	connectionsMu sync.RWMutex
 
-	// Request handlers
-	handlers *service.Handlers
+	// Service options to apply to each connection
+	serviceOptions []service.ServiceOption
+	optionsMu      sync.RWMutex
 
 	// Server state
 	running   bool
@@ -227,9 +230,9 @@ func New(opts ...ServerOption) *Server {
 	}
 
 	return &Server{
-		config:      config,
-		connections: make(map[string]*serverConnection),
-		handlers:    &service.Handlers{},
+		config:         config,
+		connections:    make(map[string]*serverConnection),
+		serviceOptions: make([]service.ServiceOption, 0),
 	}
 }
 
@@ -248,55 +251,112 @@ func (s *Server) GetConfig() *ServerConfig {
 
 // SetCEchoHandler sets the C-ECHO request handler.
 func (s *Server) SetCEchoHandler(handler func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)) {
-	s.handlers.CEchoHandler = handler
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithCEchoHandler(handler))
 }
 
 // SetCStoreHandler sets the C-STORE request handler.
 func (s *Server) SetCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)) {
-	s.handlers.CStoreHandler = handler
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithCStoreHandler(handler))
 }
 
 // SetCFindHandler sets the C-FIND request handler.
 func (s *Server) SetCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) {
-	s.handlers.CFindHandler = handler
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithCFindHandler(handler))
 }
 
 // SetCMoveHandler sets the C-MOVE request handler.
 func (s *Server) SetCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)) {
-	s.handlers.CMoveHandler = handler
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithCMoveHandler(handler))
 }
 
 // SetCGetHandler sets the C-GET request handler.
 func (s *Server) SetCGetHandler(handler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)) {
-	s.handlers.CGetHandler = handler
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithCGetHandler(handler))
 }
 
-// SetOnAssociationRequest sets the association request handler.
-// This handler is called when an A-ASSOCIATE-RQ is received and can be used for AE title validation.
-// Return nil to accept the association, or an error to reject it.
-func (s *Server) SetOnAssociationRequest(handler func(context.Context, *pdu.AAssociateRQ) error) {
-	s.handlers.OnAssociationRequest = handler
+// SetAssociationNegotiator sets the association negotiator for this server.
+// The negotiator controls which associations are accepted.
+func (s *Server) SetAssociationNegotiator(negotiator service.AssociationNegotiator) {
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	// Append new option (later options override earlier ones in Service.NewService)
+	s.serviceOptions = append(s.serviceOptions, service.WithAssociationNegotiator(negotiator))
 }
 
-// SetOnAssociationRelease sets the association release handler.
-// This handler is called when an A-RELEASE-RQ is received.
-// Return nil to accept the release, or an error to reject it (will send abort instead).
-func (s *Server) SetOnAssociationRelease(handler func(context.Context) error) {
-	s.handlers.OnAssociationRelease = handler
+// SetAssociationReleaseHandler sets the association release handler for this server.
+func (s *Server) SetAssociationReleaseHandler(handler service.AssociationReleaseHandler) {
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithAssociationReleaseHandler(handler))
 }
 
-// SetOnAbort sets the abort handler.
-// This handler is called when an A-ABORT is received or sent.
-// This is informational only and cannot prevent the abort.
-func (s *Server) SetOnAbort(handler func(context.Context, *pdu.AAbort)) {
-	s.handlers.OnAbort = handler
+// SetConnectionLifecycleHandler sets the connection lifecycle handler for this server.
+func (s *Server) SetConnectionLifecycleHandler(handler service.ConnectionLifecycleHandler) {
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithConnectionLifecycleHandler(handler))
 }
 
-// SetOnConnectionClosed sets the connection closed handler.
-// This handler is called when a connection is closed.
-// The error parameter indicates the reason for closure (may be nil for normal close).
-func (s *Server) SetOnConnectionClosed(handler func(context.Context, error)) {
-	s.handlers.OnConnectionClosed = handler
+// SetAssociationNegotiatorFunc is a convenience method that accepts a function and wraps it
+// as an AssociationNegotiator. This allows using a simple function instead of implementing the interface.
+//
+// Example:
+//
+//	server.SetAssociationNegotiatorFunc(func(ctx context.Context, assoc *association.Association, responder service.AssociationResponder) error {
+//	    // Validate and negotiate
+//	    for _, pc := range assoc.PresentationContexts {
+//	        if len(pc.ProposedTransferSyntaxes) > 0 {
+//	            pc.Accept(pc.ProposedTransferSyntaxes[0])
+//	        }
+//	    }
+//	    return responder.SendAccept(ctx, assoc)
+//	})
+func (s *Server) SetAssociationNegotiatorFunc(fn func(context.Context, *association.Association, service.AssociationResponder) error) {
+	s.SetAssociationNegotiator(service.FuncAssociationNegotiator(fn))
+}
+
+// SetAssociationReleaseHandlerFunc is a convenience method that accepts a function and wraps it
+// as an AssociationReleaseHandler.
+//
+// Example:
+//
+//	server.SetAssociationReleaseHandlerFunc(func(ctx context.Context) error {
+//	    // Perform cleanup
+//	    return nil // Accept release
+//	})
+func (s *Server) SetAssociationReleaseHandlerFunc(fn func(context.Context) error) {
+	s.SetAssociationReleaseHandler(service.FuncAssociationReleaseHandler(fn))
+}
+
+// SetConnectionLifecycleHandlerFuncs is a convenience method that accepts individual functions
+// for connection lifecycle events.
+//
+// Example:
+//
+//	server.SetConnectionLifecycleHandlerFuncs(
+//	    func(ctx context.Context, source, reason byte) {
+//	        log.Printf("Aborted: source=%d, reason=%d", source, reason)
+//	    },
+//	    func(ctx context.Context, err error) {
+//	        log.Printf("Closed: %v", err)
+//	    },
+//	)
+func (s *Server) SetConnectionLifecycleHandlerFuncs(onAbort func(context.Context, byte, byte), onConnectionClosed func(context.Context, error)) {
+	handler := &service.ConnectionLifecycleHandlerFuncs{
+		OnAbortFunc:            onAbort,
+		OnConnectionClosedFunc: onConnectionClosed,
+	}
+	s.SetConnectionLifecycleHandler(handler)
 }
 
 // IsRunning returns true if the server is running.
@@ -499,15 +559,20 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Create connection ID
 	connID := conn.RemoteAddr().String()
 
-	// Create service
-	svc := service.NewService(conn, nil,
+	// Build service options from server configuration
+	svcOpts := []service.ServiceOption{
 		service.WithMaxPDULength(s.config.MaxPDULength),
 		service.WithReadTimeout(s.config.AssociationTimeout),
 		service.WithWriteTimeout(s.config.AssociationTimeout),
-	)
+	}
 
-	// Set handlers after service creation
-	svc.SetHandlers(s.handlers)
+	// Add all configured service options (handlers, callbacks, etc.)
+	s.optionsMu.RLock()
+	svcOpts = append(svcOpts, s.serviceOptions...)
+	s.optionsMu.RUnlock()
+
+	// Create service with all options
+	svc := service.NewService(conn, nil, svcOpts...)
 
 	// Receive A-ASSOCIATE-RQ
 	assocCtx, cancel := context.WithTimeout(s.ctx, s.config.AssociationTimeout)

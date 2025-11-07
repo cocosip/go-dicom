@@ -12,7 +12,6 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
-	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
 // Service represents a DICOM network service.
@@ -50,9 +49,15 @@ type Service struct {
 	pendingRequests   map[uint16]*pendingRequest
 	pendingRequestsMu sync.RWMutex
 
-	// Message handlers (optional, for server mode)
+	// DIMSE message handlers (optional, for server mode)
 	handlers   *Handlers
 	handlersMu sync.RWMutex
+
+	// Lifecycle callbacks (optional)
+	associationNegotiator     AssociationNegotiator
+	associationReleaseHandler AssociationReleaseHandler
+	connectionLifecycleHandler ConnectionLifecycleHandler
+	callbacksMu               sync.RWMutex
 
 	// Context for goroutine lifecycle
 	ctx    context.Context
@@ -72,8 +77,14 @@ type pendingRequest struct {
 	cancelCh   chan struct{}
 }
 
-// Handlers contains optional message handlers for server mode.
+// Handlers contains optional DIMSE message handlers for server mode.
 // If a handler is nil, the service will send a default response.
+//
+// Note: Lifecycle callbacks (association negotiation, release, abort, connection close)
+// are now provided via separate interfaces:
+//   - AssociationNegotiator: for association request/accept callbacks
+//   - AssociationReleaseHandler: for release request callbacks
+//   - ConnectionLifecycleHandler: for abort and connection close callbacks
 type Handlers struct {
 	// CEchoHandler handles C-ECHO requests.
 	CEchoHandler func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)
@@ -92,23 +103,6 @@ type Handlers struct {
 	// CGetHandler handles C-GET requests.
 	// Returns multiple responses (Pending with progress + final Success/Failed).
 	CGetHandler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)
-
-	// OnAssociationRequest is called when an A-ASSOCIATE-RQ is received (server mode).
-	// Return nil to accept, or an error to reject with a specific reason.
-	// The handler can inspect/modify the association request before acceptance.
-	OnAssociationRequest func(context.Context, *pdu.AAssociateRQ) error
-
-	// OnAssociationRelease is called when an A-RELEASE-RQ is received.
-	// Return nil to accept release, or an error to handle it differently.
-	OnAssociationRelease func(context.Context) error
-
-	// OnAbort is called when an A-ABORT is received or sent.
-	// This is informational and cannot prevent the abort.
-	OnAbort func(context.Context, *pdu.AAbort)
-
-	// OnConnectionClosed is called when the connection is closed.
-	// This is informational and called after the connection is already closed.
-	OnConnectionClosed func(context.Context, error)
 
 	// Additional handlers for N-* operations can be added here
 }
@@ -140,17 +134,21 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...ServiceOp
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Service{
-		conn:            conn,
-		assoc:           assoc,
-		state:           StateIdle,
-		sendQueue:       make(chan *sendRequest, config.sendQueueSize),
-		recvQueue:       make(chan dimse.Message, config.recvQueueSize),
-		closeCh:         make(chan struct{}),
-		errCh:           make(chan error, 1),
-		config:          config,
-		pendingRequests: make(map[uint16]*pendingRequest),
-		ctx:             ctx,
-		cancel:          cancel,
+		conn:                       conn,
+		assoc:                      assoc,
+		state:                      StateIdle,
+		sendQueue:                  make(chan *sendRequest, config.sendQueueSize),
+		recvQueue:                  make(chan dimse.Message, config.recvQueueSize),
+		closeCh:                    make(chan struct{}),
+		errCh:                      make(chan error, 1),
+		config:                     config,
+		pendingRequests:            make(map[uint16]*pendingRequest),
+		ctx:                        ctx,
+		cancel:                     cancel,
+		handlers:                   config.handlers,
+		associationNegotiator:      config.associationNegotiator,
+		associationReleaseHandler:  config.associationReleaseHandler,
+		connectionLifecycleHandler: config.connectionLifecycleHandler,
 	}
 
 	return s
@@ -222,13 +220,13 @@ func (s *Service) Close() error {
 			err = s.conn.Close()
 		}
 
-		// Call OnConnectionClosed handler if set
-		s.handlersMu.RLock()
-		handlers := s.handlers
-		s.handlersMu.RUnlock()
+		// Call OnConnectionClosed callback if set
+		s.callbacksMu.RLock()
+		lifecycleHandler := s.connectionLifecycleHandler
+		s.callbacksMu.RUnlock()
 
-		if handlers != nil && handlers.OnConnectionClosed != nil {
-			handlers.OnConnectionClosed(s.ctx, err)
+		if lifecycleHandler != nil {
+			lifecycleHandler.OnConnectionClosed(s.ctx, err)
 		}
 	})
 	return err

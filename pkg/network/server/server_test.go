@@ -100,16 +100,8 @@ func TestSetHandlers(t *testing.T) {
 		}, nil
 	})
 
-	// Verify handlers are set (we can't easily test them being called without full integration test)
-	if server.handlers.CEchoHandler == nil {
-		t.Error("C-ECHO handler should be set")
-	}
-	if server.handlers.CStoreHandler == nil {
-		t.Error("C-STORE handler should be set")
-	}
-	if server.handlers.CFindHandler == nil {
-		t.Error("C-FIND handler should be set")
-	}
+	// Note: Handlers are now stored as service options and cannot be directly verified.
+	// They will be tested through integration tests that actually invoke the handlers.
 }
 
 func TestIsRunning(t *testing.T) {

@@ -206,7 +206,7 @@ func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest,
 	return nil
 }
 
-// SetHandlers sets the message handlers for this service.
+// SetHandlers sets the DIMSE message handlers for this service.
 // This should be called before starting the service.
 //
 // Example:
@@ -230,9 +230,69 @@ func (s *Service) SetHandlers(handlers *Handlers) {
 	s.handlers = handlers
 }
 
-// GetHandlers returns the current message handlers.
+// GetHandlers returns the current DIMSE message handlers.
 func (s *Service) GetHandlers() *Handlers {
 	s.handlersMu.RLock()
 	defer s.handlersMu.RUnlock()
 	return s.handlers
+}
+
+// SetAssociationNegotiator sets the association negotiation callbacks.
+// This is typically used in server mode to control which associations are accepted.
+//
+// Example:
+//
+//	negotiator := &MyNegotiator{}
+//	service.SetAssociationNegotiator(negotiator)
+func (s *Service) SetAssociationNegotiator(negotiator AssociationNegotiator) {
+	s.callbacksMu.Lock()
+	defer s.callbacksMu.Unlock()
+	s.associationNegotiator = negotiator
+}
+
+// GetAssociationNegotiator returns the current association negotiator.
+func (s *Service) GetAssociationNegotiator() AssociationNegotiator {
+	s.callbacksMu.RLock()
+	defer s.callbacksMu.RUnlock()
+	return s.associationNegotiator
+}
+
+// SetAssociationReleaseHandler sets the association release callback.
+// This is called when an A-RELEASE-RQ is received.
+//
+// Example:
+//
+//	handler := &MyReleaseHandler{}
+//	service.SetAssociationReleaseHandler(handler)
+func (s *Service) SetAssociationReleaseHandler(handler AssociationReleaseHandler) {
+	s.callbacksMu.Lock()
+	defer s.callbacksMu.Unlock()
+	s.associationReleaseHandler = handler
+}
+
+// GetAssociationReleaseHandler returns the current association release handler.
+func (s *Service) GetAssociationReleaseHandler() AssociationReleaseHandler {
+	s.callbacksMu.RLock()
+	defer s.callbacksMu.RUnlock()
+	return s.associationReleaseHandler
+}
+
+// SetConnectionLifecycleHandler sets the connection lifecycle callbacks.
+// This is used to monitor connection events (abort, close).
+//
+// Example:
+//
+//	handler := &MyLifecycleHandler{}
+//	service.SetConnectionLifecycleHandler(handler)
+func (s *Service) SetConnectionLifecycleHandler(handler ConnectionLifecycleHandler) {
+	s.callbacksMu.Lock()
+	defer s.callbacksMu.Unlock()
+	s.connectionLifecycleHandler = handler
+}
+
+// GetConnectionLifecycleHandler returns the current connection lifecycle handler.
+func (s *Service) GetConnectionLifecycleHandler() ConnectionLifecycleHandler {
+	s.callbacksMu.RLock()
+	defer s.callbacksMu.RUnlock()
+	return s.connectionLifecycleHandler
 }
