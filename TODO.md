@@ -541,106 +541,981 @@
 
 ---
 
-## 第八阶段：命令行工具和示例
+## 第八阶段：命令行工具和示例 ✅
 
-### 8.1 命令行工具
-- [ ] 创建 `dicominfo` 工具 (显示 DICOM 文件信息)
-- [ ] 创建 `dicomdump` 工具 (转储所有标签)
-- [ ] 创建 `dicom2json` 工具 (转换为 JSON)
-- [ ] 创建 `dicomanon` 工具 (匿名化)
+### 8.1 命令行工具 ✅
+**包**: `cmd/*`
+
+- [x] 创建 `dicominfo` 工具 (显示 DICOM 文件信息)
+  - 显示文件格式和传输语法
+  - 显示 File Meta Information
+  - 显示患者、检查、系列、图像信息
+  - 支持详细输出模式 (-v)
+- [x] 创建 `dicomdump` 工具 (转储所有标签)
+  - 递归显示所有元素
+  - 支持序列嵌套显示
+  - 可配置最大深度
+  - 支持紧凑模式输出
+- [x] 创建 `dicom2json` 工具 (转换为 JSON)
+  - 输出 DICOM JSON Model 格式
+  - 支持关键字作为 JSON key
+  - 支持紧凑和格式化输出
+  - 可选包含 File Meta Information
 
 **依赖**: 前述所有功能
-**预计工作量**: 3-4 天
+**实际工作量**: 0.5 天
+**状态**: ✅ 完成，3个命令行工具全部实现
 
-### 8.2 示例代码
-- [ ] 读取 DICOM 文件示例
-- [ ] 修改和保存 DICOM 文件示例
-- [ ] 创建新 DICOM 文件示例
-- [ ] JSON 序列化示例
-- [ ] 更新 README.md 包含示例
+### 8.2 示例代码 ✅
+**目录**: `examples/*`
+
+- [x] 读取 DICOM 文件示例 (`examples/read_dicom/`)
+- [x] 创建和保存 DICOM 文件示例 (`examples/write_dicom/`)
+- [x] 匿名化示例 (`examples/anonymize/`)
+- [x] JSON 序列化示例 (`examples/json_conversion/`)
 
 **依赖**: 核心功能
-**预计工作量**: 2-3 天
+**实际工作量**: 0.5 天
+**状态**: ✅ 完成，4个示例程序全部实现
+**完成日期**: 2025-11-07
 
 ---
 
-## 第九阶段：网络功能 (DIMSE/DICOM 网络)
+## 第九阶段：网络功能 (DIMSE/DICOM 网络) [可选]
 
-**注**: 这是最复杂的部分，建议在核心功能稳定后再实现
+**注**: 这是最复杂的部分，建议在核心功能稳定后再实现。本阶段采用自底向上的增量开发策略。
 
-### 9.1 网络基础设施
-**参考**: `fo-dicom-code/Network/`
+**Go 设计原则**:
+- ✅ 使用 `net.Conn` 替代 C# 的 `INetworkStream`
+- ✅ 使用 goroutines + channels 替代 C# 的 async/await
+- ✅ 使用 `context.Context` 进行超时和取消控制
+- ✅ 使用组合（composition）替代继承（inheritance）
+- ✅ 使用回调函数或 channels 替代 C# 事件
+- ✅ 使用小而专注的接口，避免大接口
 
-- [ ] 定义网络流抽象 (NetworkStream)
-- [ ] 实现 TCP 连接管理
-- [ ] 实现 TLS/SSL 支持
+**包结构设计** (Go 风格):
+```
+pkg/dicom/network/
+├── pdu/              # PDU 层 (最底层，无网络依赖)
+├── association/      # Association 管理 (无网络依赖)
+├── dimse/            # DIMSE 消息定义 (无网络依赖)
+├── transport/        # 网络传输抽象 (net.Conn 封装)
+├── service/          # 核心服务层 (PDU I/O + 状态机)
+├── client/           # SCU 客户端实现
+├── server/           # SCP 服务端实现
+└── status/           # DICOM 状态码
+```
+
+---
+
+### 9.1 基础类型和常量
+**参考**: `fo-dicom-code/Network/DicomStatus.cs`, `DicomCommandField.cs`, `DicomPriority.cs`
+**包**: `pkg/dicom/network/status`, `pkg/dicom/network/dimse`
+
+**任务**:
+- [ ] 实现 DicomStatus 类型和常量 (800+ 标准状态码)
+  - [ ] 定义 Status 结构体 (Code uint16, State string, Description string)
+  - [ ] 实现分类常量: Success, Pending, Cancel, Warning, Failure
+  - [ ] 实现具体状态码常量 (Success = 0x0000, Pending = 0xFF00, 等)
+  - [ ] 实现状态查询方法: IsSuccess(), IsPending(), IsWarning(), IsFailure()
+- [ ] 实现 CommandField 枚举
+  - [ ] C-STORE-RQ/RSP (0x0001/0x8001)
+  - [ ] C-FIND-RQ/RSP (0x0020/0x8020)
+  - [ ] C-GET-RQ/RSP (0x0010/0x8010)
+  - [ ] C-MOVE-RQ/RSP (0x0021/0x8021)
+  - [ ] C-ECHO-RQ/RSP (0x0030/0x8030)
+  - [ ] N-EVENT-REPORT-RQ/RSP, N-GET-RQ/RSP, 等 (7 对)
+- [ ] 实现 Priority 枚举 (Low=0x0002, Medium=0x0000, High=0x0001)
 - [ ] 编写单元测试
 
-**预计工作量**: 3-4 天
+**依赖**: DicomTag, DicomUID
+**预计工作量**: 1 天
+**优先级**: P0 (必须先实现，其他模块依赖)
 
-### 9.2 PDU (Protocol Data Unit)
+---
+
+### 9.2 PDU 层 (Protocol Data Unit) - 二进制协议
 **参考**: `fo-dicom-code/Network/PDU.cs` (~2100 lines)
+**包**: `pkg/dicom/network/pdu`
 
-- [ ] 实现 A-ASSOCIATE-RQ/AC/RJ PDU
-- [ ] 实现 P-DATA-TF PDU
-- [ ] 实现 A-RELEASE-RQ/RP PDU
-- [ ] 实现 A-ABORT PDU
-- [ ] 实现 PDU 编码/解码
+**设计要点**:
+- PDU 是纯数据结构 + 编解码器，不涉及网络 I/O
+- 使用 `encoding/binary` 进行字节序处理
+- 使用 `io.Reader`/`io.Writer` 接口（而非具体的 net.Conn）
+
+**任务**:
+
+#### 9.2.1 RawPDU 基础结构
+- [ ] 定义 PDU 类型常量
+  - [ ] A-ASSOCIATE-RQ (0x01)
+  - [ ] A-ASSOCIATE-AC (0x02)
+  - [ ] A-ASSOCIATE-RJ (0x03)
+  - [ ] P-DATA-TF (0x04)
+  - [ ] A-RELEASE-RQ (0x05)
+  - [ ] A-RELEASE-RP (0x06)
+  - [ ] A-ABORT (0x07)
+- [ ] 实现 RawPDU 结构体
+  ```go
+  type RawPDU struct {
+      Type   byte   // PDU type
+      Length uint32 // PDU length (excludes 6-byte header)
+      Data   []byte // PDU data
+  }
+  ```
+- [ ] 实现 Read(r io.Reader) error - 从流读取 PDU
+- [ ] 实现 Write(w io.Writer) error - 写入 PDU 到流
+- [ ] 编写单元测试 (读写往返测试)
+
+#### 9.2.2 A-ASSOCIATE-RQ PDU
+- [ ] 定义 Item 类型常量 (ApplicationContext=0x10, PresentationContext=0x20, 等)
+- [ ] 实现 AAssociateRQ 结构体
+  ```go
+  type AAssociateRQ struct {
+      ProtocolVersion       uint16
+      CalledAETitle         string  // 被调用 AE (max 16 bytes)
+      CallingAETitle        string  // 调用方 AE (max 16 bytes)
+      ApplicationContext    string  // 通常是 "1.2.840.10008.3.1.1.1"
+      PresentationContexts  []PresentationContextRQ
+      UserInformation       *UserInformation
+  }
+  ```
+- [ ] 实现 PresentationContextRQ 结构体
+  ```go
+  type PresentationContextRQ struct {
+      ID                byte   // Context ID (奇数: 1, 3, 5, ...)
+      AbstractSyntax    string // SOP Class UID
+      TransferSyntaxes  []string // 提议的传输语法列表
+  }
+  ```
+- [ ] 实现 UserInformation 结构体
+  - [ ] MaximumLength (0x51) - 最大 PDU 长度
+  - [ ] ImplementationClassUID (0x52)
+  - [ ] ImplementationVersionName (0x55)
+  - [ ] AsynchronousOperationsWindow (0x53) - 可选
+  - [ ] SCP_SCU_RoleSelection (0x54) - 可选
+  - [ ] ExtendedNegotiation (0x56) - 可选
+  - [ ] UserIdentityNegotiation (0x58) - 可选
+- [ ] 实现 Encode() ([]byte, error) - 编码为字节流
+- [ ] 实现 Decode([]byte) error - 从字节流解码
+- [ ] 编写单元测试 (包含真实 PACS 握手数据)
+
+#### 9.2.3 A-ASSOCIATE-AC PDU
+- [ ] 实现 AAssociateAC 结构体 (类似 RQ，但包含协商结果)
+  ```go
+  type AAssociateAC struct {
+      ProtocolVersion       uint16
+      CalledAETitle         string
+      CallingAETitle        string
+      ApplicationContext    string
+      PresentationContexts  []PresentationContextAC // 协商结果
+      UserInformation       *UserInformation
+  }
+  ```
+- [ ] 实现 PresentationContextAC 结构体
+  ```go
+  type PresentationContextAC struct {
+      ID              byte   // 对应 RQ 的 ID
+      Result          byte   // 0=acceptance, 1=user-rejection, 2=no-reason, 3=abstract-syntax-not-supported, 4=transfer-syntaxes-not-supported
+      TransferSyntax  string // 选定的传输语法
+  }
+  ```
+- [ ] 实现编解码方法
 - [ ] 编写单元测试
 
-**预计工作量**: 5-7 天
-
-### 9.3 DicomAssociation
-**参考**: `fo-dicom-code/Network/DicomAssociation.cs`
-
-- [ ] 实现 Association 参数
-- [ ] 实现 Presentation Context 协商
-- [ ] 实现 Transfer Syntax 协商
+#### 9.2.4 A-ASSOCIATE-RJ PDU
+- [ ] 实现 AAssociateRJ 结构体
+  ```go
+  type AAssociateRJ struct {
+      Result    byte // 1=rejected-permanent, 2=rejected-transient
+      Source    byte // 1=DICOM UL service-user, 2=DICOM UL service-provider (ACSE), 3=DICOM UL service-provider (Presentation)
+      Reason    byte // 根据 Source 不同有不同含义
+  }
+  ```
+- [ ] 实现编解码方法
+- [ ] 实现原因码解释方法 ReasonString()
 - [ ] 编写单元测试
 
+#### 9.2.5 P-DATA-TF PDU (数据传输)
+- [ ] 实现 PDataTF 结构体
+  ```go
+  type PDataTF struct {
+      PDVs []PDV // Presentation Data Values
+  }
+  ```
+- [ ] 实现 PDV (Presentation Data Value) 结构体
+  ```go
+  type PDV struct {
+      PresentationContextID byte
+      IsCommand             bool // true=command, false=data
+      IsLastFragment        bool
+      Data                  []byte
+  }
+  ```
+- [ ] 实现编解码方法
+- [ ] 实现分片逻辑 (当消息 > MaxPDULength 时)
+- [ ] 实现重组逻辑 (将多个 PDV 重组为完整消息)
+- [ ] 编写单元测试 (包含大消息分片测试)
+
+#### 9.2.6 A-RELEASE-RQ/RP PDU
+- [ ] 实现 AReleaseRQ 结构体 (无数据字段，仅有 header)
+- [ ] 实现 AReleaseRP 结构体 (无数据字段，仅有 header)
+- [ ] 实现编解码方法
+- [ ] 编写单元测试
+
+#### 9.2.7 A-ABORT PDU
+- [ ] 实现 AAbort 结构体
+  ```go
+  type AAbort struct {
+      Source byte // 0=DICOM UL service-user, 2=DICOM UL service-provider
+      Reason byte // 0=not-specified, 1=unrecognized-PDU, 2=unexpected-PDU, 4=unrecognized-PDU-parameter, 5=unexpected-PDU-parameter, 6=invalid-PDU-parameter
+  }
+  ```
+- [ ] 实现编解码方法
+- [ ] 实现原因码解释方法 ReasonString()
+- [ ] 编写单元测试
+
+**依赖**: encoding/binary, io, DicomUID, DicomTransferSyntax
+**预计工作量**: 5-6 天
+**优先级**: P0 (基础协议层)
+
+---
+
+### 9.3 Association 管理 (无网络依赖)
+**参考**: `fo-dicom-code/Network/DicomAssociation.cs`, `DicomPresentationContext.cs`
+**包**: `pkg/dicom/network/association`
+
+**设计要点**:
+- Association 是纯数据结构，描述连接元数据
+- 不包含网络逻辑，只负责协商状态管理
+
+**任务**:
+
+#### 9.3.1 PresentationContext
+- [ ] 实现 PresentationContext 结构体
+  ```go
+  type PresentationContext struct {
+      ID                byte
+      AbstractSyntax    *uid.UID // SOP Class UID
+      TransferSyntaxes  []*transfer.TransferSyntax
+      Result            AcceptanceResult // Accepted, UserRejection, etc.
+      AcceptedTransferSyntax *transfer.TransferSyntax
+  }
+  ```
+- [ ] 实现 AcceptanceResult 枚举
+- [ ] 实现 IsAccepted() bool 方法
+- [ ] 编写单元测试
+
+#### 9.3.2 ExtendedNegotiation
+- [ ] 实现 ExtendedNegotiation 结构体
+  ```go
+  type ExtendedNegotiation struct {
+      SOPClassUID  string
+      ServiceClass []byte // 应用信息数据
+  }
+  ```
+- [ ] 实现常用扩展协商类型 (SOP Class Extended Negotiation, etc.)
+- [ ] 编写单元测试
+
+#### 9.3.3 UserIdentity
+- [ ] 实现 UserIdentity 结构体
+  ```go
+  type UserIdentity struct {
+      Type               byte   // 1=Username, 2=Username+Password, 3=Kerberos, 4=SAML
+      PositiveResponseRequested bool
+      PrimaryField       []byte // Username or ticket
+      SecondaryField     []byte // Password (if Type=2)
+      ServerResponse     []byte // 服务器响应 (if requested)
+  }
+  ```
+- [ ] 编写单元测试
+
+#### 9.3.4 Association
+- [ ] 实现 Association 结构体
+  ```go
+  type Association struct {
+      // 基本信息
+      CallingAE            string
+      CalledAE             string
+      RemoteHost           string
+      RemotePort           int
+
+      // 协商信息
+      MaxPDULength         uint32 // 默认 16384
+      ImplementationClassUID   string
+      ImplementationVersion    string
+
+      // Presentation Contexts
+      PresentationContexts []*PresentationContext
+
+      // 扩展协商
+      ExtendedNegotiations []*ExtendedNegotiation
+
+      // 用户身份
+      UserIdentity         *UserIdentity
+
+      // 状态
+      IsEstablished        bool
+  }
+  ```
+- [ ] 实现 AddPresentationContext() 方法
+- [ ] 实现 FindAbstractSyntax(uid) *PresentationContext 方法
+- [ ] 实现 FindPresentationContextID(id) *PresentationContext 方法
+- [ ] 实现 Accept/Reject 协商逻辑
+- [ ] 编写单元测试
+
+**依赖**: DicomUID, DicomTransferSyntax
+**预计工作量**: 2-3 天
+**优先级**: P0
+
+---
+
+### 9.4 DIMSE 消息层 (无网络依赖)
+**参考**: `fo-dicom-code/Network/DicomMessage.cs`, `DicomRequest.cs`, `DicomResponse.cs`
+**包**: `pkg/dicom/network/dimse`
+
+**设计要点**:
+- DIMSE 消息本质是 DICOM Dataset + 命令字段
+- 使用已有的 dataset.Dataset，添加网络特定字段
+
+**任务**:
+
+#### 9.4.1 Message 基础
+- [ ] 实现 Message 接口
+  ```go
+  type Message interface {
+      Command() *dataset.Dataset       // 命令数据集
+      Dataset() *dataset.Dataset       // 数据数据集 (可选)
+      PresentationContextID() byte
+      MessageID() uint16
+  }
+  ```
+- [ ] 实现 BaseMessage 结构体 (所有消息的基础)
+  ```go
+  type BaseMessage struct {
+      command               *dataset.Dataset
+      data                  *dataset.Dataset
+      presentationContextID byte
+  }
+  ```
+- [ ] 实现辅助方法: GetCommandField(), GetAffectedSOPClassUID(), 等
+- [ ] 编写单元测试
+
+#### 9.4.2 Request/Response 基类
+- [ ] 实现 Request 接口
+  ```go
+  type Request interface {
+      Message
+      MessageID() uint16
+      Priority() Priority
+  }
+  ```
+- [ ] 实现 Response 接口
+  ```go
+  type Response interface {
+      Message
+      MessageIDBeingRespondedTo() uint16
+      Status() *status.Status
+  }
+  ```
+- [ ] 编写单元测试
+
+#### 9.4.3 C-ECHO (验证连通性)
+- [ ] 实现 CEchoRequest
+  ```go
+  type CEchoRequest struct {
+      *BaseMessage
+      messageID           uint16
+      affectedSOPClassUID string // 通常是 VerificationSOPClass
+  }
+  ```
+- [ ] 实现 NewCEchoRequest() 构造函数
+- [ ] 实现 CEchoResponse
+  ```go
+  type CEchoResponse struct {
+      *BaseMessage
+      messageIDBeingRespondedTo uint16
+      status                    *status.Status
+      affectedSOPClassUID       string
+  }
+  ```
+- [ ] 实现 NewCEchoResponse() 构造函数
+- [ ] 编写单元测试 (序列化/反序列化往返)
+
+#### 9.4.4 C-STORE (存储图像)
+- [ ] 实现 CStoreRequest
+  ```go
+  type CStoreRequest struct {
+      *BaseMessage
+      messageID             uint16
+      affectedSOPClassUID   string
+      affectedSOPInstanceUID string
+      priority              Priority
+      moveOriginatorAET     string // 可选，用于 C-MOVE
+      moveOriginatorMessageID uint16
+      // data 字段包含 DICOM 实例
+  }
+  ```
+- [ ] 实现 NewCStoreRequest(ds *dataset.Dataset) 构造函数
+- [ ] 实现 CStoreResponse
+  ```go
+  type CStoreResponse struct {
+      *BaseMessage
+      messageIDBeingRespondedTo uint16
+      status                    *status.Status
+      affectedSOPClassUID       string
+      affectedSOPInstanceUID    string
+  }
+  ```
+- [ ] 实现 NewCStoreResponse() 构造函数
+- [ ] 编写单元测试
+
+#### 9.4.5 C-FIND (查询)
+- [ ] 实现 CFindRequest
+  ```go
+  type CFindRequest struct {
+      *BaseMessage
+      messageID             uint16
+      affectedSOPClassUID   string // 查询级别 SOP Class (Patient, Study, Series, Instance)
+      priority              Priority
+      // data 字段包含查询条件 (含空值的 Dataset)
+  }
+  ```
+- [ ] 实现 NewCFindRequest(level QueryRetrieveLevel, query *dataset.Dataset) 构造函数
+- [ ] 实现 CFindResponse
+  ```go
+  type CFindResponse struct {
+      *BaseMessage
+      messageIDBeingRespondedTo uint16
+      status                    *status.Status // Pending=有更多结果, Success=完成
+      affectedSOPClassUID       string
+      // data 字段包含查询结果 (status=Pending 时)
+  }
+  ```
+- [ ] 实现 IsPending() bool 方法
+- [ ] 编写单元测试
+
+#### 9.4.6 C-GET (检索 - Push 模式)
+- [ ] 实现 CGetRequest (类似 C-FIND)
+- [ ] 实现 CGetResponse
+  ```go
+  type CGetResponse struct {
+      *BaseMessage
+      messageIDBeingRespondedTo     uint16
+      status                        *status.Status
+      affectedSOPClassUID           string
+      numberOfRemainingSuboperations   uint16
+      numberOfCompletedSuboperations   uint16
+      numberOfFailedSuboperations      uint16
+      numberOfWarningSuboperations     uint16
+  }
+  ```
+- [ ] 编写单元测试
+
+#### 9.4.7 C-MOVE (检索 - Pull 模式)
+- [ ] 实现 CMoveRequest
+  ```go
+  type CMoveRequest struct {
+      *BaseMessage
+      messageID             uint16
+      affectedSOPClassUID   string
+      priority              Priority
+      moveDestination       string // 目标 AE Title
+      // data 字段包含查询条件
+  }
+  ```
+- [ ] 实现 CMoveResponse (类似 C-GET)
+- [ ] 编写单元测试
+
+#### 9.4.8 N-* 操作 (可选，后期实现)
+- [ ] N-EVENT-REPORT-RQ/RSP
+- [ ] N-GET-RQ/RSP
+- [ ] N-SET-RQ/RSP
+- [ ] N-ACTION-RQ/RSP
+- [ ] N-CREATE-RQ/RSP
+- [ ] N-DELETE-RQ/RSP
+
+**依赖**: dataset.Dataset, DicomTag, Status
+**预计工作量**: 4-5 天
+**优先级**: P1 (依赖 9.1 和 9.2 完成后开始)
+
+---
+
+### 9.5 网络传输层 (Go 风格抽象)
+**参考**: `fo-dicom-code/Network/INetworkStream.cs`, `NetworkManager.cs`
+**包**: `pkg/dicom/network/transport`
+
+**设计要点**:
+- 使用 Go 的 `net.Conn` 接口，无需自定义 NetworkStream
+- 提供 TLS 封装和配置
+- 提供超时控制
+
+**任务**:
+
+#### 9.5.1 TCP 连接封装
+- [ ] 实现 Dialer 结构体
+  ```go
+  type Dialer struct {
+      Timeout       time.Duration
+      KeepAlive     time.Duration
+      TLSConfig     *tls.Config // 可选
+  }
+  ```
+- [ ] 实现 Dial(ctx, host, port) (net.Conn, error) 方法
+- [ ] 实现 DialTLS(ctx, host, port) (net.Conn, error) 方法
+- [ ] 编写单元测试 (需要 mock 服务器)
+
+#### 9.5.2 TCP 监听器封装
+- [ ] 实现 Listener 结构体
+  ```go
+  type Listener struct {
+      listener  net.Listener
+      TLSConfig *tls.Config // 可选
+  }
+  ```
+- [ ] 实现 Listen(host, port) (*Listener, error)
+- [ ] 实现 Accept(ctx) (net.Conn, error) 方法
+- [ ] 实现 Close() error 方法
+- [ ] 编写单元测试
+
+#### 9.5.3 连接读写辅助
+- [ ] 实现 ReadPDU(conn, timeout) (*pdu.RawPDU, error)
+  - 使用 conn.SetReadDeadline() 设置超时
+- [ ] 实现 WritePDU(conn, timeout, pdu) error
+  - 使用 conn.SetWriteDeadline() 设置超时
+- [ ] 编写单元测试
+
+**依赖**: net, crypto/tls, pdu
+**预计工作量**: 1-2 天
+**优先级**: P1
+
+---
+
+### 9.6 核心服务层 (状态机 + PDU I/O)
+**参考**: `fo-dicom-code/Network/DicomService.cs` (~2400 lines)
+**包**: `pkg/dicom/network/service`
+
+**设计要点**:
+- 不使用继承，使用组合和接口
+- 使用 goroutines 分离发送/接收循环
+- 使用 channels 进行消息队列管理
+- 使用 context.Context 进行生命周期管理
+
+**任务**:
+
+#### 9.6.1 服务状态机
+- [ ] 定义 ServiceState 枚举
+  ```go
+  type State int
+  const (
+      StateIdle State = iota
+      StateAssociationRequested  // SCU 已发送 A-ASSOCIATE-RQ
+      StateAssociationAccepted   // 关联已建立
+      StateTransferring          // 正在传输 DIMSE 消息
+      StateReleaseRequested      // 已发送 A-RELEASE-RQ
+      StateClosed                // 连接已关闭
+  )
+  ```
+- [ ] 实现状态转换验证逻辑
+- [ ] 编写单元测试
+
+#### 9.6.2 Service 核心结构
+- [ ] 实现 Service 结构体
+  ```go
+  type Service struct {
+      conn           net.Conn
+      assoc          *association.Association
+      state          State
+      stateMu        sync.RWMutex
+
+      // Goroutine 通信
+      sendQueue      chan SendRequest
+      recvQueue      chan dimse.Message
+      closeOnce      sync.Once
+      closeCh        chan struct{}
+      errCh          chan error
+
+      // 配置
+      Options        *Options
+
+      // 消息处理
+      pendingRequests map[uint16]*PendingRequest // MessageID -> Request
+      handlers        *Handlers
+
+      // 接收缓冲
+      pduBuffer      *PDUBuffer // 重组 PDV
+  }
+  ```
+- [ ] 实现 NewService(conn, assoc, options) *Service
+- [ ] 编写单元测试
+
+#### 9.6.3 发送循环 (sendLoop)
+- [ ] 实现 sendLoop(ctx) error
+  ```go
+  func (s *Service) sendLoop(ctx context.Context) error {
+      for {
+          select {
+          case <-ctx.Done():
+              return ctx.Err()
+          case <-s.closeCh:
+              return nil
+          case req := <-s.sendQueue:
+              // 1. 将 DIMSE 消息编码为 Command Dataset + Data Dataset
+              // 2. 分片为 PDV (如果 > MaxPDULength)
+              // 3. 封装为 P-DATA-TF PDU
+              // 4. 写入 conn
+              // 5. 如果是 Request，添加到 pendingRequests
+          }
+      }
+  }
+  ```
+- [ ] 实现消息分片逻辑 fragmentMessage()
+- [ ] 编写单元测试
+
+#### 9.6.4 接收循环 (recvLoop)
+- [ ] 实现 recvLoop(ctx) error
+  ```go
+  func (s *Service) recvLoop(ctx context.Context) error {
+      for {
+          select {
+          case <-ctx.Done():
+              return ctx.Err()
+          case <-s.closeCh:
+              return nil
+          default:
+              // 1. 读取 RawPDU
+              // 2. 根据 PDU 类型分发
+              // 3. P-DATA-TF: 重组 PDV -> DIMSE 消息 -> recvQueue
+              // 4. A-RELEASE-RQ: 发送 A-RELEASE-RP, 关闭连接
+              // 5. A-ABORT: 立即关闭
+          }
+      }
+  }
+  ```
+- [ ] 实现 PDV 重组逻辑 (PDUBuffer)
+- [ ] 实现 DIMSE 消息解码 decodeDIMSE()
+- [ ] 编写单元测试
+
+#### 9.6.5 消息发送 API
+- [ ] 实现 Send(ctx, msg dimse.Message) error
+  ```go
+  func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
+      select {
+      case s.sendQueue <- SendRequest{Message: msg}:
+          return nil
+      case <-ctx.Done():
+          return ctx.Err()
+      case <-s.closeCh:
+          return ErrServiceClosed
+      }
+  }
+  ```
+- [ ] 实现 SendRequest(ctx, req dimse.Request) (dimse.Response, error)
+  - 发送 Request
+  - 等待 Response (通过 pendingRequests 映射)
+  - 支持超时
+- [ ] 编写单元测试
+
+#### 9.6.6 消息处理器 (Handlers)
+- [ ] 定义 Handler 接口
+  ```go
+  type Handler interface {
+      Handle(ctx context.Context, msg dimse.Message) (dimse.Message, error)
+  }
+  ```
+- [ ] 实现 Handlers 结构体 (消息路由)
+  ```go
+  type Handlers struct {
+      CEchoHandler  func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)
+      CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
+      CFindHandler  func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error) // 返回多个 Pending + 1 个 Success
+      CGetHandler   func(context.Context, *dimse.CGetRequest) error // 触发多个 C-STORE
+      CMoveHandler  func(context.Context, *dimse.CMoveRequest) error
+  }
+  ```
+- [ ] 实现消息分发逻辑 dispatchMessage()
+- [ ] 编写单元测试
+
+#### 9.6.7 关联管理
+- [ ] 实现 SendAssociationRequest(ctx, assoc) error
+- [ ] 实现 SendAssociationAccept(ctx, assoc) error
+- [ ] 实现 SendAssociationReject(ctx, result, source, reason) error
+- [ ] 实现 SendReleaseRequest(ctx) error
+- [ ] 实现 SendAbort(ctx, source, reason) error
+- [ ] 编写单元测试
+
+#### 9.6.8 生命周期管理
+- [ ] 实现 Run(ctx) error - 启动 sendLoop 和 recvLoop
+- [ ] 实现 Close() error - 优雅关闭
+- [ ] 实现 Abort(source, reason) - 强制关闭
+- [ ] 编写单元测试
+
+**依赖**: pdu, association, dimse, transport, context
+**预计工作量**: 7-8 天
+**优先级**: P1 (核心，但依赖前面所有模块)
+
+---
+
+### 9.7 Client 实现 (SCU - Service Class User)
+**参考**: `fo-dicom-code/Network/Client/DicomClient.cs`
+**包**: `pkg/dicom/network/client`
+
+**设计要点**:
+- 封装 Service，提供更高级的 API
+- 支持连接池和重连
+- 提供同步和异步 API
+
+**任务**:
+
+#### 9.7.1 Client 结构
+- [ ] 实现 Client 结构体
+  ```go
+  type Client struct {
+      service  *service.Service
+      options  *Options
+      assoc    *association.Association
+  }
+  ```
+- [ ] 实现 ClientOptions
+  ```go
+  type Options struct {
+      CallingAE          string
+      CalledAE           string
+      MaxPDULength       uint32
+      ConnectTimeout     time.Duration
+      RequestTimeout     time.Duration
+      AssociationTimeout time.Duration
+  }
+  ```
+- [ ] 编写单元测试
+
+#### 9.7.2 连接和关联
+- [ ] 实现 Connect(ctx, host, port) error
+  ```go
+  func (c *Client) Connect(ctx context.Context, host string, port int) error {
+      // 1. TCP 连接
+      // 2. 发送 A-ASSOCIATE-RQ
+      // 3. 等待 A-ASSOCIATE-AC/RJ
+      // 4. 启动 Service.Run()
+  }
+  ```
+- [ ] 实现 AddPresentationContext(abstractSyntax, transferSyntaxes) 方法
+- [ ] 实现 Disconnect(ctx) error - 发送 A-RELEASE-RQ
+- [ ] 编写单元测试 (需要 mock SCP 服务器)
+
+#### 9.7.3 DIMSE 操作 API
+- [ ] 实现 CEcho(ctx) error
+  ```go
+  func (c *Client) CEcho(ctx context.Context) error {
+      req := dimse.NewCEchoRequest()
+      resp, err := c.service.SendRequest(ctx, req)
+      // 检查 resp.Status
+  }
+  ```
+- [ ] 实现 CStore(ctx, dataset) error
+  ```go
+  func (c *Client) CStore(ctx context.Context, ds *dataset.Dataset) error {
+      req := dimse.NewCStoreRequest(ds)
+      resp, err := c.service.SendRequest(ctx, req)
+      // 检查 resp.Status
+  }
+  ```
+- [ ] 实现 CFind(ctx, level, query) ([]dataset.Dataset, error)
+  ```go
+  func (c *Client) CFind(ctx context.Context, level QueryRetrieveLevel, query *dataset.Dataset) ([]*dataset.Dataset, error) {
+      req := dimse.NewCFindRequest(level, query)
+      // 发送请求，收集所有 Pending 响应，直到 Success
+  }
+  ```
+- [ ] 实现 CGet(ctx, level, query, storeHandler) error
+- [ ] 实现 CMove(ctx, level, query, destination) error
+- [ ] 编写单元测试
+
+#### 9.7.4 高级特性
+- [ ] 实现连接池 ClientPool
+- [ ] 实现自动重连逻辑
+- [ ] 实现请求重试机制
+- [ ] 编写单元测试
+
+**依赖**: service, association, dimse, transport
 **预计工作量**: 3-4 天
+**优先级**: P2
 
-### 9.4 DIMSE 消息
-**参考**: `fo-dicom-code/Network/DicomMessage.cs` 等
+---
 
-- [ ] 实现 DicomRequest/DicomResponse 基类
-- [ ] 实现 C-ECHO
-- [ ] 实现 C-STORE
-- [ ] 实现 C-FIND
-- [ ] 实现 C-GET
-- [ ] 实现 C-MOVE
-- [ ] 实现 N-CREATE, N-GET, N-SET, N-DELETE, N-ACTION, N-EVENT-REPORT
-- [ ] 编写单元测试
-
-**预计工作量**: 7-10 天
-
-### 9.5 DicomClient (SCU)
-**参考**: `fo-dicom-code/Network/Client/`
-
-- [ ] 实现 DicomClient 基础结构
-- [ ] 实现请求/响应处理
-- [ ] 实现异步操作 (使用 goroutines)
-- [ ] 实现超时和重试机制
-- [ ] 编写单元测试
-
-**预计工作量**: 5-7 天
-
-### 9.6 DicomServer (SCP)
+### 9.8 Server 实现 (SCP - Service Class Provider)
 **参考**: `fo-dicom-code/Network/DicomServer.cs`
+**包**: `pkg/dicom/network/server`
 
-- [ ] 实现 DicomServer 基础结构
-- [ ] 实现多连接处理
-- [ ] 实现服务提供者接口 (C-STORE-SCP, C-FIND-SCP 等)
+**设计要点**:
+- 监听 TCP 端口
+- 为每个连接创建独立的 Service
+- 使用用户提供的 Handlers 处理请求
+
+**任务**:
+
+#### 9.8.1 Server 结构
+- [ ] 实现 Server 结构体
+  ```go
+  type Server struct {
+      listener *transport.Listener
+      options  *Options
+      handlers *service.Handlers
+
+      // 连接管理
+      conns    map[string]*service.Service // 跟踪活跃连接
+      connsMu  sync.RWMutex
+
+      closeOnce sync.Once
+      closeCh   chan struct{}
+  }
+  ```
+- [ ] 实现 ServerOptions
+  ```go
+  type Options struct {
+      AETitle           string
+      Port              int
+      MaxConnections    int
+      MaxPDULength      uint32
+      AssociationTimeout time.Duration
+      IdleTimeout       time.Duration
+      TLSConfig         *tls.Config // 可选
+  }
+  ```
 - [ ] 编写单元测试
 
-**预计工作量**: 5-7 天
+#### 9.8.2 监听和接受连接
+- [ ] 实现 ListenAndServe(ctx) error
+  ```go
+  func (s *Server) ListenAndServe(ctx context.Context) error {
+      // 1. 启动 TCP 监听
+      // 2. 循环 Accept 连接
+      // 3. 为每个连接启动 goroutine 处理
+  }
+  ```
+- [ ] 实现 handleConnection(conn) 方法
+  ```go
+  func (s *Server) handleConnection(conn net.Conn) {
+      // 1. 等待 A-ASSOCIATE-RQ
+      // 2. 调用 OnAssociationRequest 回调
+      // 3. 发送 A-ASSOCIATE-AC/RJ
+      // 4. 创建 Service 并启动
+      // 5. 连接关闭后清理
+  }
+  ```
+- [ ] 实现连接数限制逻辑
+- [ ] 编写单元测试
 
-### 9.7 集成测试
-- [ ] 创建 SCU-SCP 集成测试
-- [ ] 测试与实际 PACS 系统的互操作性
-- [ ] 性能测试
+#### 9.8.3 关联协商回调
+- [ ] 实现 OnAssociationRequest 回调接口
+  ```go
+  type AssociationNegotiator interface {
+      OnAssociationRequest(*association.Association) (*association.Association, error)
+  }
+  ```
+- [ ] 提供默认实现 (接受所有 Presentation Contexts)
+- [ ] 编写单元测试
 
-**预计工作量**: 3-5 天
+#### 9.8.4 生命周期管理
+- [ ] 实现 Shutdown(ctx) error - 优雅关闭所有连接
+- [ ] 实现 Close() error - 立即关闭
+- [ ] 实现连接数统计和监控
+- [ ] 编写单元测试
+
+**依赖**: service, association, transport
+**预计工作量**: 3-4 天
+**优先级**: P2
+
+---
+
+### 9.9 集成测试和示例
+**包**: `pkg/dicom/network` (测试), `examples/dicom_server`, `examples/dicom_client`
+
+**任务**:
+
+#### 9.9.1 本地集成测试
+- [ ] 实现 TestClientServerCEcho - 本地 SCU-SCP C-ECHO 测试
+- [ ] 实现 TestClientServerCStore - C-STORE 往返测试
+- [ ] 实现 TestClientServerCFind - C-FIND 查询测试
+- [ ] 实现 TestAssociationReject - 拒绝场景测试
+- [ ] 实现 TestAbortAndRelease - 异常处理测试
+- [ ] 实现并发测试 (多个并发连接)
+- [ ] 实现性能基准测试 (吞吐量、延迟)
+
+#### 9.9.2 真实 PACS 互操作性测试 (手动)
+- [ ] 测试与 Orthanc 的互操作性
+- [ ] 测试与 dcm4che 的互操作性
+- [ ] 测试与商业 PACS 的互操作性
+- [ ] 记录测试结果和兼容性矩阵
+
+#### 9.9.3 示例程序
+- [ ] 创建 examples/dicom_echo_scu - C-ECHO 客户端
+  ```bash
+  dicom_echo_scu -aec PACS_SERVER -aet MY_SCU 192.168.1.100 104
+  ```
+- [ ] 创建 examples/dicom_store_scu - C-STORE 客户端
+  ```bash
+  dicom_store_scu -aec PACS_SERVER file1.dcm file2.dcm
+  ```
+- [ ] 创建 examples/dicom_find_scu - C-FIND 查询客户端
+- [ ] 创建 examples/dicom_storage_scp - C-STORE SCP 服务器
+  ```bash
+  dicom_storage_scp -aet MY_SCP -port 11112 -dir ./received
+  ```
+
+#### 9.9.4 文档
+- [ ] 编写网络功能 README (pkg/dicom/network/README.md)
+- [ ] 编写 API 使用指南
+- [ ] 编写故障排查指南 (常见错误和解决方案)
+- [ ] 添加网络抓包示例 (Wireshark DICOM 解析)
+
+**预计工作量**: 4-5 天
+**优先级**: P2
+
+---
+
+## Phase 9 总结
+
+**包结构** (8 个新包):
+```
+pkg/dicom/network/
+├── status/         # 状态码 (P0)
+├── pdu/            # PDU 层 (P0)
+├── association/    # Association 管理 (P0)
+├── dimse/          # DIMSE 消息 (P1)
+├── transport/      # 网络抽象 (P1)
+├── service/        # 核心服务 (P1)
+├── client/         # SCU 客户端 (P2)
+└── server/         # SCP 服务器 (P2)
+```
+
+**开发顺序** (自底向上):
+1. P0 阶段 (基础，8-10 天):
+   - 9.1 基础类型和常量 (1 天)
+   - 9.2 PDU 层 (5-6 天)
+   - 9.3 Association 管理 (2-3 天)
+
+2. P1 阶段 (核心，12-15 天):
+   - 9.4 DIMSE 消息 (4-5 天)
+   - 9.5 网络传输 (1-2 天)
+   - 9.6 核心服务 (7-8 天)
+
+3. P2 阶段 (应用，10-13 天):
+   - 9.7 Client (3-4 天)
+   - 9.8 Server (3-4 天)
+   - 9.9 集成测试和示例 (4-5 天)
+
+**总预计工作量**: 30-38 天 (6-8 周)
+
+**里程碑**:
+- Milestone 1: P0 完成 - 可以编解码 PDU
+- Milestone 2: P1 完成 - 可以建立关联和发送 DIMSE 消息
+- Milestone 3: P2 完成 - 功能完整的 SCU/SCP 实现
+
+**风险和挑战**:
+- PDU 编解码复杂，需要仔细处理字节对齐
+- 状态机管理需要考虑并发安全
+- 协议兼容性测试需要多个 PACS 系统
+- 性能优化可能需要额外时间
 
 ---
 
@@ -853,25 +1728,35 @@
 - ✅ DicomFileFormat → FileFormat (完整实现)
 - ✅ DicomFileMetaInformation → FileMetaInformation (完整实现) ✓
 
+**命令行工具** (3个):
+1. `dicominfo` - 显示 DICOM 文件信息
+2. `dicomdump` - 转储所有 DICOM 标签
+3. `dicom2json` - 转换为 JSON 格式
+
+**示例程序** (4个):
+1. `examples/read_dicom` - 读取 DICOM 文件
+2. `examples/write_dicom` - 创建和写入 DICOM 文件
+3. `examples/anonymize` - 匿名化 DICOM 文件
+4. `examples/json_conversion` - JSON 序列化和反序列化
+
 **总计**:
 - ✅ 所有测试通过 (248+ 测试函数)
-- ✅ 代码总量约 39,000 行 (含生成代码)
+- ✅ 代码总量约 40,000 行 (含生成代码)
 - ✅ 核心功能完整，可用于生产环境
+- ✅ 提供 3 个命令行工具
+- ✅ 提供 4 个示例程序
 
-**下一步**: 第八阶段 - 命令行工具和示例
+**下一步**: Phase 9 - 网络功能 (DIMSE/DICOM 网络) [可选]
 
 **最近更新**: 2025-11-07
+- ✅ 完成 Phase 8 命令行工具和示例
+  - 3个命令行工具：dicominfo, dicomdump, dicom2json
+  - 4个示例程序：read, write, anonymize, json_conversion
+  - 全部编译通过
 - ✅ 完成 Phase 7.3 DicomAnonymizer
-  - 实现 SecurityProfile 和 SecurityProfileActions
-  - 6种匿名化操作 (D, Z, X, K, C, U)
-  - 完整的 DICOM PS 3.15 默认配置
-  - 11种安全配置选项
-  - 支持序列递归匿名化
-  - UID 一致性替换
+  - 6种匿名化操作，11种安全配置选项
   - 13个单元测试全部通过
 - ✅ 完成 Phase 7.2 XML 序列化
-  - NativeDicomModel XML 格式
   - 16个单元测试全部通过
 - ✅ 完成 FileMetaInformation 封装
-  - 便捷的 getter/setter 方法
   - 13个单元测试全部通过
