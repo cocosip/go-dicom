@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
 // Service represents a DICOM network service.
@@ -82,6 +84,31 @@ type Handlers struct {
 	// CFindHandler handles C-FIND requests.
 	// Returns multiple responses (Pending + final Success/Failed).
 	CFindHandler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)
+
+	// CMoveHandler handles C-MOVE requests.
+	// Returns multiple responses (Pending with progress + final Success/Failed).
+	CMoveHandler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)
+
+	// CGetHandler handles C-GET requests.
+	// Returns multiple responses (Pending with progress + final Success/Failed).
+	CGetHandler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)
+
+	// OnAssociationRequest is called when an A-ASSOCIATE-RQ is received (server mode).
+	// Return nil to accept, or an error to reject with a specific reason.
+	// The handler can inspect/modify the association request before acceptance.
+	OnAssociationRequest func(context.Context, *pdu.AAssociateRQ) error
+
+	// OnAssociationRelease is called when an A-RELEASE-RQ is received.
+	// Return nil to accept release, or an error to handle it differently.
+	OnAssociationRelease func(context.Context) error
+
+	// OnAbort is called when an A-ABORT is received or sent.
+	// This is informational and cannot prevent the abort.
+	OnAbort func(context.Context, *pdu.AAbort)
+
+	// OnConnectionClosed is called when the connection is closed.
+	// This is informational and called after the connection is already closed.
+	OnConnectionClosed func(context.Context, error)
 
 	// Additional handlers for N-* operations can be added here
 }
@@ -194,6 +221,15 @@ func (s *Service) Close() error {
 		if s.conn != nil {
 			err = s.conn.Close()
 		}
+
+		// Call OnConnectionClosed handler if set
+		s.handlersMu.RLock()
+		handlers := s.handlers
+		s.handlersMu.RUnlock()
+
+		if handlers != nil && handlers.OnConnectionClosed != nil {
+			handlers.OnConnectionClosed(s.ctx, err)
+		}
 	})
 	return err
 }
@@ -223,4 +259,21 @@ func (s *Service) IsClosed() bool {
 // This context is cancelled when the service is closed.
 func (s *Service) Context() context.Context {
 	return s.ctx
+}
+
+// deadlineFromContext calculates a deadline from context and timeout duration.
+// If context has a deadline, returns the earlier of context deadline or timeout.
+// If context has no deadline, returns time.Now() + timeout.
+func deadlineFromContext(ctx context.Context, timeout time.Duration) time.Time {
+	if timeout <= 0 {
+		return time.Time{} // No deadline
+	}
+
+	deadline := time.Now().Add(timeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok {
+		if ctxDeadline.Before(deadline) {
+			return ctxDeadline
+		}
+	}
+	return deadline
 }

@@ -41,11 +41,35 @@ func (s *Service) recvLoop(ctx context.Context) error {
 				return fmt.Errorf("failed to read PDU: %w", err)
 			}
 
-			// Only process P-DATA-TF PDUs in recvLoop
-			// Other PDU types (A-ASSOCIATE, A-RELEASE, A-ABORT) are handled elsewhere
-			if rawPDU.Type != pdu.TypePDataTF {
-				// TODO: Handle other PDU types or pass to appropriate handler
+			// Handle different PDU types
+			switch rawPDU.Type {
+			case pdu.TypePDataTF:
+				// Process data transfer (handled below)
+
+			case pdu.TypeAReleaseRQ:
+				// Handle A-RELEASE-RQ
+				if err := s.handleReleaseRequest(ctx); err != nil {
+					return fmt.Errorf("failed to handle A-RELEASE-RQ: %w", err)
+				}
 				continue
+
+			case pdu.TypeAReleaseRP:
+				// Handle A-RELEASE-RP (response to our release request)
+				// Typically we just close the connection
+				return nil
+
+			case pdu.TypeAAbort:
+				// Handle A-ABORT
+				abort := &pdu.AAbort{}
+				if err := abort.Decode(rawPDU); err != nil {
+					return fmt.Errorf("failed to decode A-ABORT: %w", err)
+				}
+				s.handleAbort(ctx, abort)
+				return fmt.Errorf("received A-ABORT: source=%d, reason=%d", abort.Source, abort.Reason)
+
+			default:
+				// Unknown PDU type
+				return fmt.Errorf("unexpected PDU type in recvLoop: 0x%02X", rawPDU.Type)
 			}
 
 			// Parse PDVs from P-DATA-TF PDU
@@ -127,4 +151,42 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 	}
 
 	return nil
+}
+
+// handleReleaseRequest processes an A-RELEASE-RQ PDU.
+// It calls the OnAssociationRelease handler (if set) and sends an A-RELEASE-RP response.
+func (s *Service) handleReleaseRequest(ctx context.Context) error {
+	// Get handlers
+	s.handlersMu.RLock()
+	handlers := s.handlers
+	s.handlersMu.RUnlock()
+
+	// Call OnAssociationRelease handler if set
+	if handlers != nil && handlers.OnAssociationRelease != nil {
+		if err := handlers.OnAssociationRelease(ctx); err != nil {
+			// Handler rejected the release, send abort instead
+			return s.Abort(ctx, pdu.AbortSourceServiceUser, pdu.AbortReasonServiceUserNotSpecified)
+		}
+	}
+
+	// Send A-RELEASE-RP
+	if err := s.SendReleaseResponse(ctx); err != nil {
+		return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
+	}
+
+	return nil
+}
+
+// handleAbort processes an A-ABORT PDU.
+// It calls the OnAbort handler (if set) for notification.
+func (s *Service) handleAbort(ctx context.Context, abort *pdu.AAbort) {
+	// Get handlers
+	s.handlersMu.RLock()
+	handlers := s.handlers
+	s.handlersMu.RUnlock()
+
+	// Call OnAbort handler if set
+	if handlers != nil && handlers.OnAbort != nil {
+		handlers.OnAbort(ctx, abort)
+	}
 }

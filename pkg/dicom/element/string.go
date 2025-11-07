@@ -152,13 +152,24 @@ func (s *String) String() string {
 
 // Validate performs DICOM validation on the string element.
 func (s *String) Validate() error {
+	// Skip validation if disabled
+	if !vr.PerformValidation {
+		return nil
+	}
+
 	// Check maximum length based on VR
 	maxLen := s.vr.MaximumLength()
 	if maxLen > 0 && s.Length() > maxLen {
 		return fmt.Errorf("value length %d exceeds maximum %d for VR %s", s.Length(), maxLen, s.vr.Code())
 	}
 
-	// TODO: Add VR-specific validation (e.g., CS must be uppercase, UI must be valid UID format)
+	// Perform VR-specific validation on each value
+	values := s.GetValues()
+	for i, value := range values {
+		if err := s.vr.ValidateString(value); err != nil {
+			return fmt.Errorf("value[%d] validation failed for VR %s: %w", i, s.vr.Code(), err)
+		}
+	}
 
 	return nil
 }

@@ -846,18 +846,18 @@ pkg/network/
 
 ---
 
-### 9.4 DIMSE 消息层 (无网络依赖) ✅ (C-GET/C-MOVE 待实现)
+### 9.4 DIMSE 消息层 (无网络依赖) ✅
 **参考**: `fo-dicom-code/Network/DicomMessage.cs`, `DicomRequest.cs`, `DicomResponse.cs`
 **包**: `pkg/network/dimse`
-**实际工作量**: 3 天
-**状态**: ✅ 核心操作完成，所有测试通过 (102个测试用例 + 3个示例)
-**待实现**: C-GET, C-MOVE (可选，用于 PACS 检索场景)
+**实际工作量**: 4 天
+**状态**: ✅ 完成，所有测试通过 (122个测试用例 + 3个示例)
+**包括**: C-ECHO, C-STORE, C-FIND, C-GET, C-MOVE 和所有 N-* 操作
 
 **设计要点**:
 - DIMSE 消息本质是 DICOM Dataset + 命令字段
 - 使用已有的 dataset.Dataset，添加网络特定字段
 - MessageID 自动生成机制 (每个 Association 拥有独立的 MessageIDGenerator)
-- 已实现 C-ECHO, C-STORE, C-FIND 和所有 N-* 操作
+- 已实现 C-ECHO, C-STORE, C-FIND, C-GET, C-MOVE 和所有 N-* 操作
 
 **任务**:
 
@@ -922,37 +922,46 @@ pkg/network/
 
 **状态**: ✅ 完成
 
-#### 9.4.6 C-GET (检索 - Push 模式)
-- [ ] 实现 CGetRequest (类似 C-FIND)
-- [ ] 实现 CGetResponse
+#### 9.4.6 C-GET (检索 - Push 模式) ✅
+- [x] 实现 CGetRequest (支持 Patient Root 和 Study Root)
+- [x] 实现 CGetResponse
   ```go
   type CGetResponse struct {
-      *BaseMessage
-      messageIDBeingRespondedTo     uint16
-      status                        *status.Status
-      affectedSOPClassUID           string
-      numberOfRemainingSuboperations   uint16
-      numberOfCompletedSuboperations   uint16
-      numberOfFailedSuboperations      uint16
-      numberOfWarningSuboperations     uint16
+      *BaseResponse
+      statusCode                uint16
+      affectedSOPClassUID       string
+      messageIDBeingRespondedTo uint16
+      numberOfRemainingSubOperations uint16
+      numberOfCompletedSubOperations uint16
+      numberOfFailedSubOperations    uint16
+      numberOfWarningSubOperations   uint16
   }
   ```
-- [ ] 编写单元测试
+- [x] 实现 NewCGetRequest(), NewCGetRequestPatientRoot(), NewCGetRequestStudyRoot()
+- [x] 实现 NewCGetResponsePending(), NewCGetResponseSuccess()
+- [x] 实现 HasSubOperationCounts() 方法
+- [x] 编写单元测试 (10个测试用例)
 
-#### 9.4.7 C-MOVE (检索 - Pull 模式)
-- [ ] 实现 CMoveRequest
+**状态**: ✅ 完成，所有测试通过
+
+#### 9.4.7 C-MOVE (检索 - Pull 模式) ✅
+- [x] 实现 CMoveRequest
   ```go
   type CMoveRequest struct {
-      *BaseMessage
-      messageID             uint16
-      affectedSOPClassUID   string
-      priority              Priority
-      moveDestination       string // 目标 AE Title
-      // data 字段包含查询条件
+      *BaseRequest
+      affectedSOPClassUID  string
+      priority             uint16
+      moveDestination      string // 目标 AE Title
+      queryLevel           QueryRetrieveLevel
   }
   ```
-- [ ] 实现 CMoveResponse (类似 C-GET)
-- [ ] 编写单元测试
+- [x] 实现 CMoveResponse (类似 C-GET，包含子操作计数)
+- [x] 实现 NewCMoveRequest(), NewCMoveRequestPatientRoot(), NewCMoveRequestStudyRoot()
+- [x] 实现 NewCMoveResponsePending(), NewCMoveResponseSuccess()
+- [x] 实现 MoveDestination() 方法
+- [x] 编写单元测试 (10个测试用例)
+
+**状态**: ✅ 完成，所有测试通过
 
 #### 9.4.8 N-* 操作 ✅
 - [x] N-EVENT-REPORT-RQ/RSP
@@ -1059,7 +1068,7 @@ req.SetMessageID(123)
 
 ---
 
-### 9.6 核心服务层 (状态机 + PDU I/O)
+### 9.6 核心服务层 (状态机 + PDU I/O) ✅ **已完成**
 **参考**: `fo-dicom-code/Network/DicomService.cs` (~2400 lines)
 **包**: `pkg/network/service`
 
@@ -1068,6 +1077,12 @@ req.SetMessageID(123)
 - 使用 goroutines 分离发送/接收循环
 - 使用 channels 进行消息队列管理
 - 使用 context.Context 进行生命周期管理
+
+**完成状态**:
+- ✅ 8 个子任务全部完成 (9.6.1 - 9.6.8)
+- ✅ 105 个测试通过，3 个跳过（等待完整数据集解码实现）
+- ✅ 核心功能：状态机、发送/接收循环、消息处理、关联管理、生命周期管理全部实现
+- ✅ 代码行数：~2500+ lines (Go) vs ~2400 lines (C#)
 
 **任务**:
 
@@ -1143,56 +1158,132 @@ req.SetMessageID(123)
   - SendCEcho(ctx, req) - C-ECHO 请求并等待响应
   - SendCStore(ctx, req) - C-STORE 请求并等待响应
   - SendCFind(ctx, req) - C-FIND 请求并返回响应 channel
+  - SendCMove(ctx, req) - C-MOVE 请求并返回响应 channel
+  - SendCGet(ctx, req) - C-GET 请求并返回响应 channel
 - [x] 实现 SendWithTimeout(msg, timeout) 便捷方法
 - [x] 实现请求追踪
   - registerPendingRequest() - 注册待处理请求
   - unregisterPendingRequest() - 移除待处理请求
 - [x] 编写单元测试 (9 个测试全部通过)
 
-**文件**: `pkg/network/service/api.go` (323 lines)
+**文件**: `pkg/network/service/api.go` (494 lines)
 
 #### 9.6.6 消息处理器 (Handlers) ✅ **已完成**
-- [x] 实现 Handlers 结构体
+- [x] 实现 Handlers 结构体（已扩展支持所有 C-* 操作和生命周期事件）
   ```go
   type Handlers struct {
+      // DIMSE 操作处理器
       CEchoHandler  func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)
       CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
       CFindHandler  func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)
+      CMoveHandler  func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)
+      CGetHandler   func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)
+
+      // 生命周期事件处理器（类似 C# fo-dicom 的 IDicomServiceProvider）
+      OnAssociationRequest func(context.Context, *pdu.AAssociateRQ) error // AE Title 验证
+      OnAssociationRelease func(context.Context) error                     // 关联释放（可拒绝）
+      OnAbort              func(context.Context, *pdu.AAbort)              // 中止通知
+      OnConnectionClosed   func(context.Context, error)                    // 连接关闭通知
   }
   ```
-- [x] 实现消息分发逻辑
+- [x] 实现消息分发逻辑（已重构为基于 CommandField）
   - handleReceivedMessage() - 处理接收到的消息
   - handleResponse() - 路由响应到待处理请求
-  - handleRequest() - 分发请求到对应处理器
+  - handleRequest() - **使用 CommandField 分发**（替代类型断言）
+    ```go
+    // 重构前：使用类型断言 switch r := req.(type)
+    // 重构后：使用 DICOM 协议的 CommandField
+    cmdField := dimse.CommandField(req.CommandField())
+    switch cmdField {
+    case dimse.CommandCEchoRQ:
+        return s.handleCEchoRequest(ctx, req.(*dimse.CEchoRequest), handlers)
+    // ...
+    }
+    ```
 - [x] 实现默认处理器
   - C-ECHO: 总是返回成功
   - C-STORE: 返回成功（不实际存储）
   - C-FIND: 返回成功且无结果
+  - C-MOVE: 返回成功且无操作
+  - C-GET: 返回成功且无操作
+- [x] 实现生命周期事件处理
+  - handleReleaseRequest() - 处理 A-RELEASE-RQ，调用 OnAssociationRelease
+  - handleAbort() - 处理 A-ABORT，调用 OnAbort
+  - ReceiveAssociationRequest() - 调用 OnAssociationRequest 进行验证
+  - Close() - 调用 OnConnectionClosed 通知
 - [x] 实现消息工厂 (factory.go)
   - createMessageFromDatasets() - 从 datasets 创建 DIMSE 消息
-  - 支持 C-ECHO、C-STORE、C-FIND 请求和响应
+  - 支持 C-ECHO、C-STORE、C-FIND、C-MOVE、C-GET 请求和响应
 - [x] 集成到 recvLoop
   - processReceivedMessage() 调用消息工厂和处理器
-- [x] 编写单元测试 (8 个测试)
+  - 处理不同 PDU 类型：P-DATA-TF, A-RELEASE-RQ, A-RELEASE-RP, A-ABORT
+- [x] 编写单元测试 (12 个测试，全部通过)
+  - 8 个 DIMSE handler 测试（C-ECHO, C-STORE, C-FIND, C-MOVE, C-GET）
+  - 4 个新增测试（C-MOVE 和 C-GET 的默认/自定义 handler）
+
+**重要改进**:
+- ✅ 使用 CommandField 替代类型断言，更符合 DICOM 协议
+- ✅ 更好的错误信息："unsupported DIMSE command: C-ECHO-RQ (0x0030)"
+- ✅ 完整的生命周期事件支持，对标 C# fo-dicom 的 IDicomServiceProvider
 
 **文件**:
-- `pkg/network/service/handler.go` (176 lines)
+- `pkg/network/service/handler.go` (210+ lines)
 - `pkg/network/service/factory.go` (177 lines)
-- `pkg/network/service/handler_test.go` (223 lines)
+- `pkg/network/service/handler_test.go` (378 lines)
+- `pkg/network/service/recv.go` (193 lines) - 新增生命周期处理
 
-#### 9.6.7 关联管理
-- [ ] 实现 SendAssociationRequest(ctx, assoc) error
-- [ ] 实现 SendAssociationAccept(ctx, assoc) error
-- [ ] 实现 SendAssociationReject(ctx, result, source, reason) error
-- [ ] 实现 SendReleaseRequest(ctx) error
-- [ ] 实现 SendAbort(ctx, source, reason) error
-- [ ] 编写单元测试
+#### 9.6.7 关联管理 ✅ **已完成**
+- [x] 实现 SendAssociationRequest(ctx, req) error
+- [x] 实现 SendAssociationAccept(ctx, ac) error
+- [x] 实现 SendAssociationReject(ctx, result, source, reason) error
+- [x] 实现 SendReleaseRequest(ctx) error
+- [x] 实现 SendReleaseResponse(ctx) error
+- [x] 实现 SendAbort(ctx, source, reason) error
+- [x] 实现 ReceiveAssociationRequest(ctx) (*pdu.AAssociateRQ, error)
+- [x] 实现 ReceiveAssociationResponse(ctx) (*pdu.AAssociateAC, error)
+- [x] 实现 serializeRawPDU() 辅助函数 - 构造完整 PDU (header + body)
+- [x] 实现 deadlineFromContext() 辅助函数 - 超时管理
+- [x] 编写单元测试 (14 个测试全部通过)
+  - Send 操作测试 (6 个)
+  - Receive 操作测试 (3 个)
+  - 状态验证测试 (2 个)
+  - 错误场景测试 (2 个)
+  - deadlineFromContext 测试 (1 个)
 
-#### 9.6.8 生命周期管理
-- [ ] 实现 Run(ctx) error - 启动 sendLoop 和 recvLoop
-- [ ] 实现 Close() error - 优雅关闭
-- [ ] 实现 Abort(source, reason) - 强制关闭
-- [ ] 编写单元测试
+**关键技术点**:
+- PDU 结构: RawPDU.Data 只包含 body，写入网络时需要构造完整的 header+body
+- 状态转换: 每个操作都验证当前状态，成功后转换到新状态
+- 超时处理: 使用 context 和配置的 timeout，取较早的 deadline
+
+**文件**:
+- `pkg/network/service/association.go` (428 lines)
+- `pkg/network/service/association_test.go` (466 lines)
+
+#### 9.6.8 生命周期管理 ✅ **已完成**
+- [x] 实现 Run() error - 阻塞式启动，等待错误或关闭
+- [x] 实现 Start() error - 非阻塞式启动 sendLoop 和 recvLoop（从 send.go 迁移）
+- [x] 实现 Err() <-chan error - 返回错误通道（从 send.go 迁移）
+- [x] 实现 Abort(ctx, source, reason) error - 强制关闭（保持 Aborted 状态）
+- [x] 实现 GracefulRelease(ctx) error - 优雅释放（发送 A-RELEASE-RQ）
+- [x] 实现 WaitForClose() - 阻塞等待关闭完成
+- [x] 编写单元测试 (10 个测试全部通过)
+  - Run 基本功能测试
+  - 错误处理测试 (sendLoop/recvLoop 错误)
+  - Abort 功能和状态测试
+  - GracefulRelease 测试
+  - 并发调用测试
+
+**关键技术点**:
+- 两种启动模式: Start()非阻塞，Run()阻塞等待
+- Run() 内部调用 Start()，然后等待 errCh/closeCh/ctx.Done()
+- Abort() 不覆盖 Aborted 状态（直接操作资源，不调用 Close()）
+- 错误过滤: context.Canceled 被视为正常关闭
+
+**文件**:
+- `pkg/network/service/lifecycle.go` (181 lines)
+- `pkg/network/service/lifecycle_test.go` (308 lines)
+
+**测试覆盖**: 105 个测试通过，3 个跳过（等待完整数据集解码）
 
 **依赖**: pdu, association, dimse, transport, context
 **预计工作量**: 7-8 天
@@ -1200,19 +1291,21 @@ req.SetMessageID(123)
 
 ---
 
-### 9.7 Client 实现 (SCU - Service Class User)
+### 9.7 Client 实现 (SCU - Service Class User) ✅ **基础功能已完成**
 **参考**: `fo-dicom-code/Network/Client/DicomClient.cs`
 **包**: `pkg/network/client`
+**实际工作量**: 3 天
+**状态**: ✅ 基础 Client 功能完成，36 个测试全部通过
 
 **设计要点**:
 - 封装 Service，提供更高级的 API
-- 支持连接池和重连
+- 支持连接池和重连 (待实现)
 - 提供同步和异步 API
 
 **任务**:
 
-#### 9.7.1 Client 结构
-- [ ] 实现 Client 结构体
+#### 9.7.1 Client 结构 ✅
+- [x] 实现 Client 结构体
   ```go
   type Client struct {
       service  *service.Service
@@ -1287,14 +1380,37 @@ req.SetMessageID(123)
 
 ---
 
-### 9.8 Server 实现 (SCP - Service Class Provider)
+### 9.8 Server 实现 (SCP - Service Class Provider) ✅ **基础功能已完成**
 **参考**: `fo-dicom-code/Network/DicomServer.cs`
 **包**: `pkg/network/server`
+**状态**: ✅ 基础服务器已实现，包含完整的 handler 支持（7 个测试通过）
 
 **设计要点**:
 - 监听 TCP 端口
 - 为每个连接创建独立的 Service
 - 使用用户提供的 Handlers 处理请求
+- 完整的生命周期事件支持（对标 C# fo-dicom IDicomServiceProvider）
+
+**已完成功能**:
+- ✅ 服务器基础结构（Server, ServerConfig, serverConnection）
+- ✅ 配置选项（AETitle, Port, MaxPDULength, Timeouts, TLS, 连接限制）
+- ✅ 监听和连接管理（ListenAndServe, handleConnection, Shutdown）
+- ✅ 关联协商（validateAssociateRQ, buildAssociateAC）
+- ✅ **完整的 Handler Setter 方法**：
+  ```go
+  // DIMSE 操作 handlers
+  SetCEchoHandler(handler)
+  SetCStoreHandler(handler)
+  SetCFindHandler(handler)
+  SetCMoveHandler(handler)  // 新增
+  SetCGetHandler(handler)   // 新增
+
+  // 生命周期事件 handlers（新增）
+  SetOnAssociationRequest(handler)  // AE Title 验证
+  SetOnAssociationRelease(handler)  // 关联释放处理
+  SetOnAbort(handler)               // 中止通知
+  SetOnConnectionClosed(handler)    // 连接关闭通知
+  ```
 
 **任务**:
 

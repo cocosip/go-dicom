@@ -70,13 +70,13 @@ func TestEntryMatches(t *testing.T) {
 	}{
 		{
 			"exact match",
-			dict.NewEntry(tag.New(0x0010, 0x0010), "Patient Name", "PatientName", vm.VM1, false, vr.PN),
+			dict.NewEntry(tag.New(0x0010, 0x0010), "Patient's Name", "PatientName", vm.VM1, false, vr.PN),
 			tag.New(0x0010, 0x0010),
 			true,
 		},
 		{
 			"no match",
-			dict.NewEntry(tag.New(0x0010, 0x0010), "Patient Name", "PatientName", vm.VM1, false, vr.PN),
+			dict.NewEntry(tag.New(0x0010, 0x0010), "Patient's Name", "PatientName", vm.VM1, false, vr.PN),
 			tag.New(0x0010, 0x0020),
 			false,
 		},
@@ -188,7 +188,7 @@ func TestDictionaryEntries(t *testing.T) {
 	d := dict.New()
 
 	// Add some entries
-	d.Add(dict.NewEntry(tag.New(0x0010, 0x0010), "Patient Name", "PatientName", vm.VM1, false, vr.PN))
+	d.Add(dict.NewEntry(tag.New(0x0010, 0x0010), "Patient's Name", "PatientName", vm.VM1, false, vr.PN))
 	d.Add(dict.NewEntry(tag.New(0x0010, 0x0020), "Patient ID", "PatientID", vm.VM1, false, vr.LO))
 	d.Add(dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), "Group Length", "GroupLength", vm.VM1, false, vr.UL))
 
@@ -225,17 +225,8 @@ func TestDefaultDictionary(t *testing.T) {
 }
 
 func TestTagDictionaryEntryIntegration(t *testing.T) {
-	// First, add an entry to the default dictionary
+	// The default dictionary should already have PatientName entry loaded from generated data
 	testTag := tag.New(0x0010, 0x0010)
-	entry := dict.NewEntry(
-		testTag,
-		"Patient Name",
-		"PatientName",
-		vm.VM1,
-		false,
-		vr.PN,
-	)
-	dict.Default().Add(entry)
 
 	// Now use Tag.DictionaryEntry() method to look it up
 	dictEntry := testTag.DictionaryEntry()
@@ -250,8 +241,8 @@ func TestTagDictionaryEntryIntegration(t *testing.T) {
 		t.Fatalf("Tag.DictionaryEntry() returned %T, want *dict.Entry", dictEntry)
 	}
 
-	if e.Name() != "Patient Name" {
-		t.Errorf("Entry.Name() = %q, want %q", e.Name(), "Patient Name")
+	if e.Name() != "Patient's Name" {
+		t.Errorf("Entry.Name() = %q, want %q", e.Name(), "Patient's Name")
 	}
 	if e.Keyword() != "PatientName" {
 		t.Errorf("Entry.Keyword() = %q, want %q", e.Keyword(), "PatientName")
@@ -272,4 +263,190 @@ func TestTagDictionaryEntryNotFound(t *testing.T) {
 			t.Errorf("Tag.DictionaryEntry() for unknown tag returned %v, want nil", dictEntry)
 		}
 	}
+}
+
+func TestGetPrivateCreator(t *testing.T) {
+	d := dict.New()
+
+	// Get a private creator for the first time
+	pc1 := d.GetPrivateCreator("MYCOMPANY")
+	if pc1 == nil {
+		t.Fatal("GetPrivateCreator() returned nil")
+	}
+	if pc1.Creator() != "MYCOMPANY" {
+		t.Errorf("GetPrivateCreator().Creator() = %q, want %q", pc1.Creator(), "MYCOMPANY")
+	}
+
+	// Get the same private creator again - should return the same instance
+	pc2 := d.GetPrivateCreator("MYCOMPANY")
+	if pc1 != pc2 {
+		t.Error("GetPrivateCreator() should return the same instance for the same creator string")
+	}
+
+	// Get a different private creator - should return a different instance
+	pc3 := d.GetPrivateCreator("OTHERCOMPANY")
+	if pc1 == pc3 {
+		t.Error("GetPrivateCreator() should return different instances for different creator strings")
+	}
+	if pc3.Creator() != "OTHERCOMPANY" {
+		t.Errorf("GetPrivateCreator().Creator() = %q, want %q", pc3.Creator(), "OTHERCOMPANY")
+	}
+}
+
+func TestGetPrivateCreatorThreadSafety(t *testing.T) {
+	d := dict.New()
+
+	// Test concurrent access to GetPrivateCreator
+	const numGoroutines = 100
+	const creatorName = "CONCURRENT"
+
+	done := make(chan *tag.PrivateCreator, numGoroutines)
+
+	// Launch multiple goroutines that all try to get the same private creator
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			pc := d.GetPrivateCreator(creatorName)
+			done <- pc
+		}()
+	}
+
+	// Collect all results
+	var creators []*tag.PrivateCreator
+	for i := 0; i < numGoroutines; i++ {
+		creators = append(creators, <-done)
+	}
+
+	// All should be the same instance (pointer equality)
+	first := creators[0]
+	for i, pc := range creators {
+		if pc != first {
+			t.Errorf("Creator at index %d is different from first creator (not the same instance)", i)
+		}
+		if pc.Creator() != creatorName {
+			t.Errorf("Creator at index %d has name %q, want %q", i, pc.Creator(), creatorName)
+		}
+	}
+}
+
+func TestDefaultDictionaryGetPrivateCreator(t *testing.T) {
+	// Get private creator from default dictionary
+	pc1 := dict.Default().GetPrivateCreator("DEFAULTTEST")
+	if pc1 == nil {
+		t.Fatal("Default().GetPrivateCreator() returned nil")
+	}
+
+	// Should get the same instance again
+	pc2 := dict.Default().GetPrivateCreator("DEFAULTTEST")
+	if pc1 != pc2 {
+		t.Error("Default().GetPrivateCreator() should return the same instance for the same creator")
+	}
+}
+
+func TestDefaultDictionaryInitialization(t *testing.T) {
+	// Get the default dictionary
+	d := dict.Default()
+	if d == nil {
+		t.Fatal("Default() returned nil")
+	}
+
+	// Verify that standard DICOM tags are loaded
+	testCases := []struct {
+		name    string
+		tag     *tag.Tag
+		wantKW  string
+		wantName string
+	}{
+		{
+			"PatientName",
+			tag.New(0x0010, 0x0010),
+			"PatientName",
+			"Patient's Name",
+		},
+		{
+			"StudyInstanceUID",
+			tag.New(0x0020, 0x000D),
+			"StudyInstanceUID",
+			"Study Instance UID",
+		},
+		{
+			"Rows",
+			tag.New(0x0028, 0x0010),
+			"Rows",
+			"Rows",
+		},
+		{
+			"Columns",
+			tag.New(0x0028, 0x0011),
+			"Columns",
+			"Columns",
+		},
+		{
+			"PixelData",
+			tag.New(0x7FE0, 0x0010),
+			"PixelData",
+			"Pixel Data",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := d.Lookup(tc.tag)
+			if entry == nil {
+				t.Fatalf("Lookup(%s) returned nil, expected entry to be found", tc.tag)
+			}
+
+			if entry.Keyword() != tc.wantKW {
+				t.Errorf("Keyword() = %q, want %q", entry.Keyword(), tc.wantKW)
+			}
+
+			if entry.Name() != tc.wantName {
+				t.Errorf("Name() = %q, want %q", entry.Name(), tc.wantName)
+			}
+		})
+	}
+}
+
+func TestDefaultDictionaryKeywordLookup(t *testing.T) {
+	d := dict.Default()
+
+	testCases := []struct {
+		keyword     string
+		wantGroup   uint16
+		wantElement uint16
+	}{
+		{"PatientName", 0x0010, 0x0010},
+		{"StudyInstanceUID", 0x0020, 0x000D},
+		{"Rows", 0x0028, 0x0010},
+		{"Columns", 0x0028, 0x0011},
+		{"PixelData", 0x7FE0, 0x0010},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.keyword, func(t *testing.T) {
+			tag := d.LookupKeyword(tc.keyword)
+			if tag == nil {
+				t.Fatalf("LookupKeyword(%q) returned nil", tc.keyword)
+			}
+
+			if tag.Group() != tc.wantGroup {
+				t.Errorf("Group() = 0x%04X, want 0x%04X", tag.Group(), tc.wantGroup)
+			}
+
+			if tag.Element() != tc.wantElement {
+				t.Errorf("Element() = 0x%04X, want 0x%04X", tag.Element(), tc.wantElement)
+			}
+		})
+	}
+}
+
+func TestDefaultDictionarySize(t *testing.T) {
+	d := dict.Default()
+	entries := d.Entries()
+
+	// The DICOM dictionary should have thousands of entries
+	if len(entries) < 1000 {
+		t.Errorf("Entries() returned %d entries, expected at least 1000", len(entries))
+	}
+
+	t.Logf("Dictionary loaded with %d entries", len(entries))
 }

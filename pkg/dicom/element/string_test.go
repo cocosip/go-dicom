@@ -144,3 +144,163 @@ func TestStringElement_Validation(t *testing.T) {
 		t.Error("Validate() should return error for string exceeding max length")
 	}
 }
+
+// TestStringElement_VRValidation tests VR-specific validation
+func TestStringElement_VRValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		tag       *tag.Tag
+		vr        *vr.VR
+		values    []string
+		wantError bool
+		desc      string
+	}{
+		{
+			name:      "CS valid uppercase",
+			tag:       tag.Modality,
+			vr:        vr.CS,
+			values:    []string{"CT"},
+			wantError: false,
+			desc:      "CS should accept valid uppercase code",
+		},
+		{
+			name:      "CS invalid lowercase",
+			tag:       tag.Modality,
+			vr:        vr.CS,
+			values:    []string{"ct"},
+			wantError: true,
+			desc:      "CS should reject lowercase",
+		},
+		{
+			name:      "UI valid UID",
+			tag:       tag.SOPClassUID,
+			vr:        vr.UI,
+			values:    []string{"1.2.840.10008.5.1.4.1.1.2"},
+			wantError: false,
+			desc:      "UI should accept valid UID format",
+		},
+		{
+			name:      "UI invalid UID",
+			tag:       tag.SOPClassUID,
+			vr:        vr.UI,
+			values:    []string{"invalid.uid.format"},
+			wantError: true,
+			desc:      "UI should reject invalid UID format",
+		},
+		{
+			name:      "AE valid title",
+			tag:       tag.New(0x0002, 0x0016),
+			vr:        vr.AE,
+			values:    []string{"STORESCU"},
+			wantError: false,
+			desc:      "AE should accept valid AE title",
+		},
+		{
+			name:      "AE too long",
+			tag:       tag.New(0x0002, 0x0016),
+			vr:        vr.AE,
+			values:    []string{"THIS_IS_TOO_LONG_FOR_AE"},
+			wantError: true,
+			desc:      "AE should reject title exceeding 16 chars",
+		},
+		{
+			name:      "DA valid date",
+			tag:       tag.StudyDate,
+			vr:        vr.DA,
+			values:    []string{"20230515"},
+			wantError: false,
+			desc:      "DA should accept valid date format",
+		},
+		{
+			name:      "DA invalid date",
+			tag:       tag.StudyDate,
+			vr:        vr.DA,
+			values:    []string{"2023-05-15"},
+			wantError: true,
+			desc:      "DA should reject invalid date format",
+		},
+		{
+			name:      "TM valid time",
+			tag:       tag.StudyTime,
+			vr:        vr.TM,
+			values:    []string{"143052"},
+			wantError: false,
+			desc:      "TM should accept valid time format",
+		},
+		{
+			name:      "TM invalid time",
+			tag:       tag.StudyTime,
+			vr:        vr.TM,
+			values:    []string{"14:30:52"},
+			wantError: true,
+			desc:      "TM should reject invalid time format",
+		},
+		{
+			name:      "AS valid age",
+			tag:       tag.PatientAge,
+			vr:        vr.AS,
+			values:    []string{"045Y"},
+			wantError: false,
+			desc:      "AS should accept valid age string",
+		},
+		{
+			name:      "AS invalid age",
+			tag:       tag.PatientAge,
+			vr:        vr.AS,
+			values:    []string{"45"},
+			wantError: true,
+			desc:      "AS should reject invalid age format",
+		},
+		{
+			name:      "PN valid name",
+			tag:       tag.PatientName,
+			vr:        vr.PN,
+			values:    []string{"Doe^John"},
+			wantError: false,
+			desc:      "PN should accept valid person name",
+		},
+		{
+			name:      "Multiple values mixed validity",
+			tag:       tag.ImageType,
+			vr:        vr.CS,
+			values:    []string{"ORIGINAL", "primary"},
+			wantError: true,
+			desc:      "Should fail if any value is invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			elem := element.NewString(tt.tag, tt.vr, tt.values)
+			err := elem.Validate()
+
+			if tt.wantError && err == nil {
+				t.Errorf("Validate() error = nil, want error: %s", tt.desc)
+			}
+			if !tt.wantError && err != nil {
+				t.Errorf("Validate() error = %v, want nil: %s", err, tt.desc)
+			}
+		})
+	}
+}
+
+// TestStringElement_ValidationDisabled tests validation can be disabled
+func TestStringElement_ValidationDisabled(t *testing.T) {
+	// Save current state
+	oldValidation := vr.PerformValidation
+	defer func() {
+		vr.PerformValidation = oldValidation
+	}()
+
+	// Disable validation
+	vr.PerformValidation = false
+
+	// Create element with invalid value
+	elem := element.NewString(tag.Modality, vr.CS, []string{"invalid_lowercase"})
+
+	// Should not error when validation is disabled
+	err := elem.Validate()
+	if err != nil {
+		t.Errorf("Validate() error = %v, want nil when validation disabled", err)
+	}
+}

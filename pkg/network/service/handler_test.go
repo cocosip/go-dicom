@@ -273,3 +273,105 @@ func TestHandleResponse_UnknownMessageID(t *testing.T) {
 		t.Error("Expected error for unknown MessageID, got nil")
 	}
 }
+
+func TestHandleCMoveRequest_DefaultHandler(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer cancel()
+	defer service.Close()
+
+	identifier := dataset.New()
+	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	req.SetMessageID(1)
+
+	// Call with nil handlers - should use default
+	err := service.handleCMoveRequest(ctx, req, nil)
+	if err != nil {
+		t.Errorf("handleCMoveRequest with default handler failed: %v", err)
+	}
+}
+
+func TestHandleCMoveRequest_CustomHandler(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer cancel()
+	defer service.Close()
+
+	identifier := dataset.New()
+	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	req.SetMessageID(1)
+
+	// Custom handler that returns multiple responses
+	handlerCalled := false
+	handlers := &Handlers{
+		CMoveHandler: func(ctx context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
+			handlerCalled = true
+			// Return 2 pending + 1 success
+			return []*dimse.CMoveResponse{
+				dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 10, 0, 0, 0), // Pending
+				dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 0, 10, 0, 0), // Pending
+				dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID()),              // Success
+			}, nil
+		},
+	}
+
+	err := service.handleCMoveRequest(ctx, req, handlers)
+	if err != nil {
+		t.Errorf("handleCMoveRequest failed: %v", err)
+	}
+
+	if !handlerCalled {
+		t.Error("Custom handler was not called")
+	}
+}
+
+func TestHandleCGetRequest_DefaultHandler(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer cancel()
+	defer service.Close()
+
+	identifier := dataset.New()
+	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	req := dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, identifier)
+	req.SetMessageID(1)
+
+	// Call with nil handlers - should use default
+	err := service.handleCGetRequest(ctx, req, nil)
+	if err != nil {
+		t.Errorf("handleCGetRequest with default handler failed: %v", err)
+	}
+}
+
+func TestHandleCGetRequest_CustomHandler(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer cancel()
+	defer service.Close()
+
+	identifier := dataset.New()
+	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	req := dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, identifier)
+	req.SetMessageID(1)
+
+	// Custom handler that returns multiple responses
+	handlerCalled := false
+	handlers := &Handlers{
+		CGetHandler: func(ctx context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
+			handlerCalled = true
+			// Return 2 pending + 1 success
+			return []*dimse.CGetResponse{
+				dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 5, 0, 0, 0), // Pending
+				dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 0, 5, 0, 0), // Pending
+				dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID()),             // Success
+			}, nil
+		},
+	}
+
+	err := service.handleCGetRequest(ctx, req, handlers)
+	if err != nil {
+		t.Errorf("handleCGetRequest failed: %v", err)
+	}
+
+	if !handlerCalled {
+		t.Error("Custom handler was not called")
+	}
+}

@@ -21,6 +21,9 @@ func init() {
 		}
 		return t, nil
 	})
+	tag.SetPrivateCreatorLookup(func(creator string) *tag.PrivateCreator {
+		return Default().GetPrivateCreator(creator)
+	})
 }
 
 // Dictionary manages DICOM dictionary entries.
@@ -40,6 +43,9 @@ type Dictionary struct {
 	// privateCreator is set for private dictionaries
 	privateCreator *tag.PrivateCreator
 
+	// creators maintains a cache of private creators by creator string
+	creators map[string]*tag.PrivateCreator
+
 	mu sync.RWMutex
 }
 
@@ -49,6 +55,7 @@ func New() *Dictionary {
 		entries:  make(map[uint32]*Entry),
 		keywords: make(map[string]*tag.Tag),
 		masked:   make([]*Entry, 0),
+		creators: make(map[string]*tag.PrivateCreator),
 	}
 }
 
@@ -59,6 +66,7 @@ func NewPrivate(creator *tag.PrivateCreator) *Dictionary {
 		keywords:       make(map[string]*tag.Tag),
 		masked:         make([]*Entry, 0),
 		privateCreator: creator,
+		creators:       make(map[string]*tag.PrivateCreator),
 	}
 }
 
@@ -134,6 +142,37 @@ func (d *Dictionary) Entries() []*Entry {
 	return result
 }
 
+// GetPrivateCreator returns or creates a private creator for the given creator string.
+//
+// This method maintains a cache of private creators to ensure that the same
+// PrivateCreator instance is returned for identical creator strings.
+// This is important for proper equality comparison of tags with private creators.
+//
+// The method is thread-safe and handles concurrent access.
+func (d *Dictionary) GetPrivateCreator(creator string) *tag.PrivateCreator {
+	// Try to read from cache first (read lock)
+	d.mu.RLock()
+	if pc, ok := d.creators[creator]; ok {
+		d.mu.RUnlock()
+		return pc
+	}
+	d.mu.RUnlock()
+
+	// Not found, acquire write lock to add
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine might have added it)
+	if pc, ok := d.creators[creator]; ok {
+		return pc
+	}
+
+	// Create new private creator and cache it
+	pc := tag.NewPrivateCreator(creator)
+	d.creators[creator] = pc
+	return pc
+}
+
 // Global default dictionary instance
 var (
 	defaultDictionary     *Dictionary
@@ -147,16 +186,15 @@ var (
 func Default() *Dictionary {
 	defaultDictionaryOnce.Do(func() {
 		defaultDictionary = New()
-		// TODO: Load standard DICOM dictionary entries from embedded data
-		// For now, create a minimal dictionary with common entries
+		// Load all standard DICOM dictionary entries from generated data
 		initializeDefaultDictionary(defaultDictionary)
 	})
 	return defaultDictionary
 }
 
 // initializeDefaultDictionary adds basic DICOM dictionary entries.
-// TODO: Replace with loading from standard DICOM dictionary data.
+// This function loads all standard DICOM tags from the generated dictionary data.
 func initializeDefaultDictionary(d *Dictionary) {
-	// Add UnknownTag entry for tags not in the dictionary
-	// This matches fo-dicom's UnknownTag behavior
+	// Load all standard DICOM dictionary entries from generated data
+	loadStandardEntries(d)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
 // Association represents a DICOM association between two Application Entities.
@@ -409,4 +410,74 @@ func NewAsynchronousOperationsWindow(maxInvoked, maxPerformed uint16) *Asynchron
 		MaxInvokedOperations:   maxInvoked,
 		MaxPerformedOperations: maxPerformed,
 	}
+}
+
+// FromAAssociateAC creates an Association from an A-ASSOCIATE-AC PDU.
+// This is typically used by an SCU (client) after receiving acceptance from an SCP (server).
+func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
+	assoc := NewAssociation(ac.CallingAETitle, ac.CalledAETitle)
+	assoc.ProtocolVersion = ac.ProtocolVersion
+
+	// Set user information
+	if ac.UserInformation != nil {
+		assoc.MaxPDULength = ac.UserInformation.MaximumLength
+		assoc.ImplementationClassUID = ac.UserInformation.ImplementationClassUID
+		assoc.ImplementationVersionName = ac.UserInformation.ImplementationVersionName
+
+		// Asynchronous operations
+		if ac.UserInformation.AsynchronousOperations != nil {
+			assoc.AsynchronousOperations = &AsynchronousOperationsWindow{
+				MaxInvokedOperations:   ac.UserInformation.AsynchronousOperations.MaximumNumberOperationsInvoked,
+				MaxPerformedOperations: ac.UserInformation.AsynchronousOperations.MaximumNumberOperationsPerformed,
+			}
+		}
+
+		// Role selections
+		for _, rs := range ac.UserInformation.SCPSCURoleSelections {
+			assoc.AddRoleSelection(&RoleSelection{
+				SOPClassUID: rs.SOPClassUID,
+				SCURole:     rs.SCURole,
+				SCPRole:     rs.SCPRole,
+			})
+		}
+
+		// Extended negotiations
+		for _, en := range ac.UserInformation.ExtendedNegotiations {
+			assoc.AddExtendedNegotiation(&ExtendedNegotiation{
+				SOPClassUID:         en.SOPClassUID,
+				ServiceClassAppInfo: en.ServiceClassAppInfo,
+			})
+		}
+	}
+
+	// Convert presentation contexts
+	for _, pcAC := range ac.PresentationContexts {
+		var acceptedTS *transfer.TransferSyntax
+
+		// Only set transfer syntax if accepted
+		if pcAC.Result == pdu.ResultAcceptance && pcAC.TransferSyntax != "" {
+			ts, err := transfer.Parse(pcAC.TransferSyntax)
+			if err != nil {
+				// If we can't parse it, treat as rejected
+				pcAC.Result = pdu.ResultTransferSyntaxesNotSupported
+			} else {
+				acceptedTS = ts
+			}
+		}
+
+		pc := &PresentationContext{
+			ID:                     pcAC.ID,
+			AcceptedTransferSyntax: acceptedTS,
+			Result:                 pcAC.Result,
+		}
+
+		// Note: AbstractSyntax is not in A-ASSOCIATE-AC
+		// The SCU must remember the original abstract syntax from the RQ
+		// For now, we leave it empty as the client will need to map it
+
+		_ = assoc.AddPresentationContext(pc)
+	}
+
+	assoc.IsEstablished = true
+	return assoc
 }

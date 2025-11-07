@@ -136,6 +136,10 @@ type parseContext struct {
 	// File format detection
 	detectedFormat FileFormat
 	isPartial      bool
+
+	// For lazy loading support
+	seekableReader io.ReadSeeker // Set if reader is seekable (for lazy loading)
+	file           *os.File       // Set if reader is a file (for FileByteBuffer)
 }
 
 // Option is a functional option for configuring the parser.
@@ -231,6 +235,16 @@ func Parse(r io.Reader, opts ...Option) (*ParseResult, error) {
 func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 	p.reader = r
 	p.detectedFormat = FormatDICOM3 // Assume DICOM3 initially
+
+	// Check if reader supports seeking (for lazy loading)
+	if rs, ok := r.(io.ReadSeeker); ok {
+		p.seekableReader = rs
+	}
+
+	// Check if reader is an *os.File (for FileByteBuffer)
+	if f, ok := r.(*os.File); ok {
+		p.file = f
+	}
 
 	// Read and validate preamble + DICM prefix
 	if err := p.readPreamble(); err != nil {
@@ -484,10 +498,17 @@ func (p *parseContext) readElement() (element.Element, error) {
 			return p.createElement(t, vrValue, buf)
 
 		case ReadLargeOnDemand:
-			// TODO: Implement lazy loading
-			// For now, treat same as ReadAll
-			// This would require keeping the stream open and storing file position
-			fallthrough
+			// Implement lazy loading if possible
+			buf, err := p.createLazyBuffer(length)
+			if err != nil {
+				// If lazy loading not possible, fall back to reading all
+				data := make([]byte, length)
+				if _, err := io.ReadFull(p.reader, data); err != nil {
+					return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+				}
+				buf = buffer.NewMemory(data)
+			}
+			return p.createElement(t, vrValue, buf)
 
 		case ReadAll, ReadDefault:
 			// Read the data normally
@@ -551,8 +572,17 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 			return p.createElement(t, vrValue, buf)
 
 		case ReadLargeOnDemand:
-			// TODO: Implement lazy loading
-			fallthrough
+			// Implement lazy loading if possible
+			buf, err := p.createLazyBuffer(length)
+			if err != nil {
+				// If lazy loading not possible, fall back to reading all
+				data := make([]byte, length)
+				if _, err := io.ReadFull(p.reader, data); err != nil {
+					return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+				}
+				buf = buffer.NewMemory(data)
+			}
+			return p.createElement(t, vrValue, buf)
 
 		case ReadAll, ReadDefault:
 			// Read the data normally
@@ -855,4 +885,81 @@ func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer
 		// Default to Unknown
 		return element.NewUnknownFromBuffer(t, buf), nil
 	}
+}
+
+// createLazyBuffer creates a lazy-loading buffer for large elements.
+// Returns an error if lazy loading is not possible (reader is not seekable).
+//
+// Strategy:
+//   - If reader is *os.File: Use FileByteBuffer for efficient file-based access
+//   - If reader is io.ReadSeeker: Use LazyByteBuffer with a loader function
+//   - Otherwise: Return error (caller should fall back to reading all data)
+func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error) {
+	// Strategy 1: If we have a file, use FileByteBuffer
+	if p.file != nil {
+		// Get current position in file
+		currentPos, err := p.file.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current file position: %w", err)
+		}
+
+		// Create a FileByteBuffer for this range
+		fb, err := buffer.NewFile(p.file.Name(), uint32(currentPos), length)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create file buffer: %w", err)
+		}
+
+		// Skip past this data in the stream
+		if _, err := p.file.Seek(int64(length), io.SeekCurrent); err != nil {
+			return nil, fmt.Errorf("failed to skip data: %w", err)
+		}
+
+		return fb, nil
+	}
+
+	// Strategy 2: If we have a seekable reader, use LazyByteBuffer
+	if p.seekableReader != nil {
+		// Get current position
+		currentPos, err := p.seekableReader.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current position: %w", err)
+		}
+
+		// Create a loader function that will read the data when needed
+		loader := func() []byte {
+			// Save current position
+			savedPos, _ := p.seekableReader.Seek(0, io.SeekCurrent)
+
+			// Seek to the data position
+			if _, err := p.seekableReader.Seek(currentPos, io.SeekStart); err != nil {
+				return nil
+			}
+
+			// Read the data
+			data := make([]byte, length)
+			if _, err := io.ReadFull(p.seekableReader, data); err != nil {
+				return nil
+			}
+
+			// Restore position
+			p.seekableReader.Seek(savedPos, io.SeekStart)
+
+			return data
+		}
+
+		lb, err := buffer.NewLazy(loader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create lazy buffer: %w", err)
+		}
+
+		// Skip past this data in the stream
+		if _, err := p.seekableReader.Seek(int64(length), io.SeekCurrent); err != nil {
+			return nil, fmt.Errorf("failed to skip data: %w", err)
+		}
+
+		return lb, nil
+	}
+
+	// No seekable reader available
+	return nil, fmt.Errorf("lazy loading not supported for non-seekable readers")
 }

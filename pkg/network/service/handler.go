@@ -59,16 +59,21 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 	handlers := s.handlers
 	s.handlersMu.RUnlock()
 
-	// Dispatch based on message type
-	switch r := req.(type) {
-	case *dimse.CEchoRequest:
-		return s.handleCEchoRequest(ctx, r, handlers)
-	case *dimse.CStoreRequest:
-		return s.handleCStoreRequest(ctx, r, handlers)
-	case *dimse.CFindRequest:
-		return s.handleCFindRequest(ctx, r, handlers)
+	// Dispatch based on CommandField instead of type assertion
+	cmdField := dimse.CommandField(req.CommandField())
+	switch cmdField {
+	case dimse.CommandCEchoRQ:
+		return s.handleCEchoRequest(ctx, req.(*dimse.CEchoRequest), handlers)
+	case dimse.CommandCStoreRQ:
+		return s.handleCStoreRequest(ctx, req.(*dimse.CStoreRequest), handlers)
+	case dimse.CommandCFindRQ:
+		return s.handleCFindRequest(ctx, req.(*dimse.CFindRequest), handlers)
+	case dimse.CommandCMoveRQ:
+		return s.handleCMoveRequest(ctx, req.(*dimse.CMoveRequest), handlers)
+	case dimse.CommandCGetRQ:
+		return s.handleCGetRequest(ctx, req.(*dimse.CGetRequest), handlers)
 	default:
-		return fmt.Errorf("unsupported request type: %T", req)
+		return fmt.Errorf("unsupported DIMSE command: %s (0x%04X)", cmdField.String(), cmdField)
 	}
 }
 
@@ -137,6 +142,64 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 	for _, resp := range responses {
 		if err := s.Send(ctx, resp); err != nil {
 			return fmt.Errorf("failed to send C-FIND response: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// handleCMoveRequest handles a C-MOVE request.
+func (s *Service) handleCMoveRequest(ctx context.Context, req *dimse.CMoveRequest, handlers *Handlers) error {
+	var responses []*dimse.CMoveResponse
+
+	// Use custom handler if available
+	if handlers != nil && handlers.CMoveHandler != nil {
+		var err error
+		responses, err = handlers.CMoveHandler(ctx, req)
+		if err != nil {
+			// Handler returned error - send failure response
+			resp := dimse.NewCMoveResponseFromRequest(req, 0xA700) // Refused: Out of Resources
+			return s.Send(ctx, resp)
+		}
+	} else {
+		// Default handler - return success with no operations
+		resp := dimse.NewCMoveResponseFromRequest(req, 0x0000)
+		responses = []*dimse.CMoveResponse{resp}
+	}
+
+	// Send all responses (typically: pending updates + final success/failure)
+	for _, resp := range responses {
+		if err := s.Send(ctx, resp); err != nil {
+			return fmt.Errorf("failed to send C-MOVE response: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// handleCGetRequest handles a C-GET request.
+func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest, handlers *Handlers) error {
+	var responses []*dimse.CGetResponse
+
+	// Use custom handler if available
+	if handlers != nil && handlers.CGetHandler != nil {
+		var err error
+		responses, err = handlers.CGetHandler(ctx, req)
+		if err != nil {
+			// Handler returned error - send failure response
+			resp := dimse.NewCGetResponseFromRequest(req, 0xA700) // Refused: Out of Resources
+			return s.Send(ctx, resp)
+		}
+	} else {
+		// Default handler - return success with no operations
+		resp := dimse.NewCGetResponseFromRequest(req, 0x0000)
+		responses = []*dimse.CGetResponse{resp}
+	}
+
+	// Send all responses (typically: pending updates + final success/failure)
+	for _, resp := range responses {
+		if err := s.Send(ctx, resp); err != nil {
+			return fmt.Errorf("failed to send C-GET response: %w", err)
 		}
 	}
 

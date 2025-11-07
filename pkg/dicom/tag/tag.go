@@ -269,9 +269,13 @@ func Parse(s string) (*Tag, error) {
 
 		creatorStr = strings.TrimSuffix(creatorStr, ")")
 
-		// TODO: Look up private creator in dictionary
-		// For now, create a simple private creator
-		tag.privateCreator = NewPrivateCreator(creatorStr)
+		// Look up private creator in dictionary if available
+		if globalPrivateCreatorLookup != nil {
+			tag.privateCreator = globalPrivateCreatorLookup(creatorStr)
+		} else {
+			// Fallback: create a simple private creator if dictionary not initialized
+			tag.privateCreator = NewPrivateCreator(creatorStr)
+		}
 	}
 
 	return tag, nil
@@ -342,6 +346,20 @@ var globalKeywordLookup KeywordLookup
 // This is called by the dict package to register the lookup function.
 func SetKeywordLookup(lookup KeywordLookup) {
 	globalKeywordLookup = lookup
+}
+
+// PrivateCreatorLookup is a function type for looking up or creating private creators.
+// This is used to avoid circular dependencies between tag and dict packages.
+type PrivateCreatorLookup func(creator string) *PrivateCreator
+
+// globalPrivateCreatorLookup holds the function to lookup/create private creators.
+// This is set by the dict package during initialization.
+var globalPrivateCreatorLookup PrivateCreatorLookup
+
+// SetPrivateCreatorLookup sets the global private creator lookup function.
+// This is called by the dict package to register the lookup function.
+func SetPrivateCreatorLookup(lookup PrivateCreatorLookup) {
+	globalPrivateCreatorLookup = lookup
 }
 
 // ParseKeyword parses a tag from its DICOM keyword.

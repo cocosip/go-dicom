@@ -382,3 +382,41 @@ func TestDictionaryEntryNotInitialized(t *testing.T) {
 	// sets a global variable, but we include it for clarity
 	_ = originalLookup
 }
+
+func TestParsePrivateCreatorCaching(t *testing.T) {
+	// Note: This test verifies caching behavior when the dict package is imported.
+	// If dict package is not imported, private creators won't be cached (fallback behavior).
+
+	// Parse the same private tag twice
+	tag1, err := tag.Parse("(0029,1001:TESTCREATOR)")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	tag2, err := tag.Parse("(0029,1002:TESTCREATOR)")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Verify they have the correct creator string
+	if tag1.PrivateCreator().Creator() != "TESTCREATOR" {
+		t.Errorf("tag1 PrivateCreator().Creator() = %q, want \"TESTCREATOR\"", tag1.PrivateCreator().Creator())
+	}
+	if tag2.PrivateCreator().Creator() != "TESTCREATOR" {
+		t.Errorf("tag2 PrivateCreator().Creator() = %q, want \"TESTCREATOR\"", tag2.PrivateCreator().Creator())
+	}
+
+	// Parse a different private creator
+	tag3, err := tag.Parse("(0029,1003:OTHERCREATOR)")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	if tag3.PrivateCreator().Creator() != "OTHERCREATOR" {
+		t.Errorf("tag3 PrivateCreator().Creator() = %q, want \"OTHERCREATOR\"", tag3.PrivateCreator().Creator())
+	}
+
+	// Note: We don't test pointer equality here because the tag_test package
+	// doesn't import dict, so the globalPrivateCreatorLookup may not be set.
+	// The caching behavior is tested in dict/dictionary_test.go instead.
+}

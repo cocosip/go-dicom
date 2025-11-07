@@ -2,7 +2,7 @@
 
 基于 fo-dicom 的 Buffer 实现，go-dicom 需要实现以下 Buffer 类型：
 
-## 已完成的 Buffer (7/15) ✅
+## 已完成的 Buffer (12/15) ✅
 
 ### 1. ✅ MemoryByteBuffer
 **文件**: `memory.go`
@@ -47,64 +47,77 @@
 - 实现了完整的 ByteBuffer 接口
 - 已集成到 JSON 序列化/反序列化中
 
----
-
-## 待实现的 Buffer (8/15)
-
-### 8. ⏳ RangeByteBuffer
-**文件**: `range.go` (待创建)
+### 8. ✅ RangeByteBuffer
+**文件**: `range.go`
 **用途**: 表示另一个 buffer 的子范围（offset + length）
 **参考**: `fo-dicom-code/IO/Buffer/RangeByteBuffer.cs`
-**优先级**: 高
-**预计工作量**: 0.5 天
+**实现日期**: 2025-11-07
+**测试**: `range_test.go` (12 个测试用例，全部通过)
 
-**说明**: 用于高效地表示大 buffer 的一部分，无需复制数据
+**说明**:
+- 用于高效地表示大 buffer 的一部分，无需复制数据
+- 支持嵌套范围（一个范围的范围）
+- 在 DICOM 序列和像素数据帧处理中非常有用
+- 实现了分块写入以优化大数据处理
 
----
-
-### 9. ⏳ FileByteBuffer
-**文件**: `file.go` (待创建)
+### 9. ✅ FileByteBuffer
+**文件**: `file.go`
 **用途**: 基于文件的 buffer
 **参考**: `fo-dicom-code/IO/Buffer/FileByteBuffer.cs`
-**优先级**: 中
-**预计工作量**: 0.5 天
+**实现日期**: 2025-11-07
+**测试**: `file_test.go` (13 个测试用例，全部通过)
 
-**说明**: 类似 StreamByteBuffer，但专门针对文件进行优化
+**说明**:
+- 提供文件特定范围的高效访问，无需加载整个文件到内存
+- 支持分块读写（1MB chunks），适合大文件处理
+- 实现了 FilePath() 和 Position() 方法用于文件信息查询
+- 在读取大型 DICOM 文件时非常有用
 
 ---
 
-### 10. ⏳ TempFileBuffer
-**文件**: `tempfile.go` (待创建)
+### 10. ✅ TempFileBuffer
+**文件**: `tempfile.go`
 **用途**: 基于临时文件的 buffer，用于大数据
 **参考**: `fo-dicom-code/IO/Buffer/TempFileBuffer.cs`
-**优先级**: 中
-**预计工作量**: 0.5-1 天
+**实现日期**: 2025-11-07
+**测试**: `tempfile_test.go` (14 个测试用例，全部通过)
 
-**说明**: 当数据太大无法放入内存时，使用临时文件存储
+**说明**:
+- 当数据太大无法放入内存时，使用临时文件存储
+- 自动创建和管理临时文件
+- 提供 Close() 方法清理临时文件
+- 支持多次读取操作
 
----
-
-### 11. ⏳ SwapByteBuffer
-**文件**: `swap.go` (待创建)
+### 11. ✅ SwapByteBuffer
+**文件**: `swap.go`
 **用途**: 字节交换包装器（不同于 endian 转换）
 **参考**: `fo-dicom-code/IO/Buffer/SwapByteBuffer.cs`
-**优先级**: 低
-**预计工作量**: 0.5 天
+**实现日期**: 2025-11-07
+**测试**: `swap_test.go` (15 个测试用例，全部通过)
 
-**说明**: 用于特定的 GE 私有传输语法
+**说明**:
+- 用于特定的 GE 私有传输语法
+- 与 EndianByteBuffer 不同：SwapByteBuffer 总是交换字节，不考虑机器字节序
+- 支持不同的 unitSize (2, 4, 8 等)
+- 使用 endian.SwapBytes 进行高效的字节交换
 
----
-
-### 12. ⏳ LazyByteBuffer
-**文件**: `lazy.go` (待创建)
+### 12. ✅ LazyByteBuffer
+**文件**: `lazy.go`
 **用途**: 延迟加载的 buffer
 **参考**: `fo-dicom-code/IO/Buffer/LazyByteBuffer.cs`
-**优先级**: 低
-**预计工作量**: 0.5 天
+**实现日期**: 2025-11-07
+**测试**: `lazy_test.go` (14 个测试用例，全部通过)
 
-**说明**: 使用函数延迟创建实际的 buffer
+**说明**:
+- 使用函数延迟创建实际的 buffer
+- 数据只在首次访问时加载，然后缓存
+- 使用 sync.Once 确保线程安全且只加载一次
+- 提供 IsLoaded() 方法检查是否已加载
+- 适用于延迟昂贵的数据加载操作
 
 ---
+
+## 待实现的 Buffer (3/15)
 
 ### 13. ⏳ ByteBufferByteSource
 **文件**: `bytesource.go` (待创建)
@@ -144,33 +157,40 @@
 - ✅ EndianByteBuffer
 - ✅ EvenLengthBuffer
 - ✅ BulkDataUriByteBuffer
-- ⏳ RangeByteBuffer
+- ✅ RangeByteBuffer
 
 ### 第二优先级（短期实现）
 这些在文件 I/O 阶段需要：
-- ⏳ FileByteBuffer
-- ⏳ ByteBufferByteSource
-- ⏳ TempFileBuffer
+- ✅ FileByteBuffer
+- ⏳ ByteBufferByteSource (需要先实现 ByteSource 接口层)
+- ✅ TempFileBuffer
 
 ### 第三优先级（中期实现）
 这些用于高级功能：
-- ⏳ LazyByteBuffer
-- ⏳ SwapByteBuffer
+- ✅ LazyByteBuffer
+- ✅ SwapByteBuffer
 
 ---
 
 ## 当前状态
 
-**已完成**: 7/15 (47%)
+**已完成**: 12/15 (80%)
 **核心功能**: ✅ 完成
 
-**最新完成**: BulkDataUriByteBuffer (2025-11-07)
-- 实现了完整的 BulkDataUriByteBuffer 及测试
-- 已集成到 JSON 序列化/反序列化中
-- 支持所有相关 VR 类型（OB, OW, OD, OF, OL, OV, UN）
-- 11 个单元测试 + 7 个集成测试，全部通过
+**最新完成**: LazyByteBuffer (2025-11-07)
+- 实现了完整的 LazyByteBuffer 及测试
+- 使用函数延迟创建实际的 buffer，数据只在首次访问时加载
+- 使用 sync.Once 确保线程安全且只加载一次
+- 14 个单元测试，全部通过
 
-**下一步**: 继续 JSON 序列化的其他功能
+**本次会话完成的 Buffer**:
+1. RangeByteBuffer - 12 个测试，支持嵌套范围和分块写入
+2. FileByteBuffer - 13 个测试，文件范围高效访问
+3. TempFileBuffer - 14 个测试，临时文件存储大数据
+4. SwapByteBuffer - 15 个测试，字节交换用于 GE 私有语法
+5. LazyByteBuffer - 14 个测试，延迟加载数据
+
+**下一步**: 实现 ByteSource 接口层，然后完成 ByteBufferByteSource
 
 **里程碑**:
 - Buffer 抽象层核心完成 ✅
