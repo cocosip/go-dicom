@@ -86,6 +86,17 @@ func NewCEchoResponseSuccess(messageIDBeingRespondedTo uint16) *CEchoResponse {
 	return NewCEchoResponse(messageIDBeingRespondedTo, 0x0000)
 }
 
+// NewCEchoResponseFromRequest creates a C-ECHO-RSP message from the corresponding request.
+// This is a convenience function that automatically uses the request's MessageID.
+//
+// Example:
+//
+//	// When receiving a C-ECHO request
+//	resp := dimse.NewCEchoResponseFromRequest(req, 0x0000) // Success
+func NewCEchoResponseFromRequest(req *CEchoRequest, statusCode uint16) *CEchoResponse {
+	return NewCEchoResponse(req.MessageID(), statusCode)
+}
+
 // StatusCode returns the status code.
 func (r *CEchoResponse) StatusCode() uint16 {
 	return r.statusCode

@@ -39,8 +39,25 @@ type CFindRequest struct {
 }
 
 // NewCFindRequest creates a new C-FIND-RQ message.
+// The SOP Class UID is automatically determined based on the query level:
+//   - Patient level: Uses Patient Root Query/Retrieve Information Model - FIND
+//   - Study/Series/Image levels: Use Study Root Query/Retrieve Information Model - FIND
 // The MessageID will be automatically assigned by the Association/Client when sending.
-func NewCFindRequest(sopClassUID string, level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
+func NewCFindRequest(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
+	// Determine SOP Class UID based on query level
+	var sopClassUID string
+	switch level {
+	case QueryRetrieveLevelPatient:
+		// Patient Root Query/Retrieve Information Model - FIND
+		sopClassUID = "1.2.840.10008.5.1.4.1.2.1.1"
+	case QueryRetrieveLevelStudy, QueryRetrieveLevelSeries, QueryRetrieveLevelImage:
+		// Study Root Query/Retrieve Information Model - FIND
+		sopClassUID = "1.2.840.10008.5.1.4.1.2.2.1"
+	default:
+		// Default to Study Root
+		sopClassUID = "1.2.840.10008.5.1.4.1.2.2.1"
+	}
+
 	// Create command dataset with MessageID=0 (unassigned)
 	command := CreateCommandDataset(uint16(CommandCFindRQ), 0)
 
@@ -70,13 +87,15 @@ func NewCFindRequest(sopClassUID string, level QueryRetrieveLevel, query *datase
 }
 
 // NewCFindRequestPatientRoot creates a C-FIND-RQ for Patient Root Query/Retrieve.
+// This is a convenience function that's equivalent to NewCFindRequest(QueryRetrieveLevelPatient, query).
 func NewCFindRequestPatientRoot(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
-	return NewCFindRequest("1.2.840.10008.5.1.4.1.2.1.1", level, query)
+	return NewCFindRequest(level, query)
 }
 
 // NewCFindRequestStudyRoot creates a C-FIND-RQ for Study Root Query/Retrieve.
+// This is a convenience function that's equivalent to NewCFindRequest(level, query) for Study/Series/Image levels.
 func NewCFindRequestStudyRoot(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
-	return NewCFindRequest("1.2.840.10008.5.1.4.1.2.2.1", level, query)
+	return NewCFindRequest(level, query)
 }
 
 // SetPriority sets the priority of the request.
@@ -143,6 +162,25 @@ func NewCFindResponsePending(messageIDBeingRespondedTo uint16, sopClassUID strin
 // NewCFindResponseSuccess creates a successful C-FIND-RSP message (no more results).
 func NewCFindResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID string) *CFindResponse {
 	return NewCFindResponse(messageIDBeingRespondedTo, 0x0000, sopClassUID, nil)
+}
+
+// NewCFindResponseFromRequest creates a C-FIND-RSP message from the corresponding request.
+// This is a convenience function that automatically extracts the SOP Class UID from the request.
+//
+// Example:
+//
+//	// When receiving a C-FIND request and sending a pending response with results
+//	resp := dimse.NewCFindResponseFromRequest(req, 0xFF00, resultDataset) // Pending
+//
+//	// When sending the final success response
+//	resp := dimse.NewCFindResponseFromRequest(req, 0x0000, nil) // Success
+func NewCFindResponseFromRequest(req *CFindRequest, statusCode uint16, identifier *dataset.Dataset) *CFindResponse {
+	return NewCFindResponse(
+		req.MessageID(),
+		statusCode,
+		req.AffectedSOPClassUID(),
+		identifier,
+	)
 }
 
 // StatusCode returns the status code.

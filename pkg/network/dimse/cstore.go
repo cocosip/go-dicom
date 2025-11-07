@@ -130,6 +130,23 @@ func NewCStoreResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID, sop
 	return NewCStoreResponse(messageIDBeingRespondedTo, 0x0000, sopClassUID, sopInstanceUID)
 }
 
+// NewCStoreResponseFromRequest creates a C-STORE-RSP message from the corresponding request.
+// This is a convenience function that automatically extracts the SOP Class UID and SOP Instance UID
+// from the request.
+//
+// Example:
+//
+//	// When receiving a C-STORE request
+//	resp := dimse.NewCStoreResponseFromRequest(req, 0x0000) // Success
+func NewCStoreResponseFromRequest(req *CStoreRequest, statusCode uint16) *CStoreResponse {
+	return NewCStoreResponse(
+		req.MessageID(),
+		statusCode,
+		req.AffectedSOPClassUID(),
+		req.AffectedSOPInstanceUID(),
+	)
+}
+
 // StatusCode returns the status code.
 func (r *CStoreResponse) StatusCode() uint16 {
 	return r.statusCode

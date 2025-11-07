@@ -846,16 +846,18 @@ pkg/network/
 
 ---
 
-### 9.4 DIMSE 消息层 (无网络依赖) ✅
+### 9.4 DIMSE 消息层 (无网络依赖) ✅ (C-GET/C-MOVE 待实现)
 **参考**: `fo-dicom-code/Network/DicomMessage.cs`, `DicomRequest.cs`, `DicomResponse.cs`
 **包**: `pkg/network/dimse`
 **实际工作量**: 3 天
-**状态**: ✅ 完成，所有测试通过 (31个测试用例 + 3个示例)
+**状态**: ✅ 核心操作完成，所有测试通过 (102个测试用例 + 3个示例)
+**待实现**: C-GET, C-MOVE (可选，用于 PACS 检索场景)
 
 **设计要点**:
 - DIMSE 消息本质是 DICOM Dataset + 命令字段
 - 使用已有的 dataset.Dataset，添加网络特定字段
 - MessageID 自动生成机制 (每个 Association 拥有独立的 MessageIDGenerator)
+- 已实现 C-ECHO, C-STORE, C-FIND 和所有 N-* 操作
 
 **任务**:
 
@@ -1069,138 +1071,114 @@ req.SetMessageID(123)
 
 **任务**:
 
-#### 9.6.1 服务状态机
-- [ ] 定义 ServiceState 枚举
-  ```go
-  type State int
-  const (
-      StateIdle State = iota
-      StateAssociationRequested  // SCU 已发送 A-ASSOCIATE-RQ
-      StateAssociationAccepted   // 关联已建立
-      StateTransferring          // 正在传输 DIMSE 消息
-      StateReleaseRequested      // 已发送 A-RELEASE-RQ
-      StateClosed                // 连接已关闭
-  )
-  ```
-- [ ] 实现状态转换验证逻辑
-- [ ] 编写单元测试
+#### 9.6.1 服务状态机 ✅ **已完成**
+- [x] 定义 State 枚举 (7 种状态)
+- [x] 实现状态转换验证逻辑
+  - IsValidTransition() - 检查转换是否有效
+  - GetTransitionEvent() - 获取转换事件描述
+- [x] 实现状态查询方法
+  - CanSendDIMSE() / CanReceiveDIMSE()
+  - IsTerminal() / IsActive()
+- [x] 编写单元测试 (45 个测试全部通过)
 
-#### 9.6.2 Service 核心结构
-- [ ] 实现 Service 结构体
-  ```go
-  type Service struct {
-      conn           net.Conn
-      assoc          *association.Association
-      state          State
-      stateMu        sync.RWMutex
+**文件**: `pkg/network/service/state.go` (152 lines)
 
-      // Goroutine 通信
-      sendQueue      chan SendRequest
-      recvQueue      chan dimse.Message
-      closeOnce      sync.Once
-      closeCh        chan struct{}
-      errCh          chan error
+#### 9.6.2 Service 核心结构 ✅ **已完成**
+- [x] 实现 Service 结构体 (包含所有必要字段)
+- [x] 实现 NewService(conn, assoc, ...opts) *Service
+- [x] 实现配置选项模式
+  - WithMaxPDULength(), WithReadTimeout(), WithWriteTimeout()
+  - WithSendQueueSize(), WithRecvQueueSize()
+- [x] 实现基础方法
+  - Start() - 启动 sendLoop 和 recvLoop
+  - Close() - 优雅关闭
+  - GetState() / setState()
+  - SetAssociation() / GetAssociation()
+- [x] 编写单元测试 (12 个测试全部通过)
 
-      // 配置
-      Options        *Options
+**文件**:
+- `pkg/network/service/service.go` (200+ lines)
+- `pkg/network/service/service_test.go` (180+ lines)
 
-      // 消息处理
-      pendingRequests map[uint16]*PendingRequest // MessageID -> Request
-      handlers        *Handlers
+#### 9.6.3 发送循环 (sendLoop) ✅ **已完成**
+- [x] 实现 sendLoop(ctx) error - 完整的消息发送流程
+- [x] 实现 PDV 处理
+  - PDV 编码/解码
+  - FragmentData() - 数据分片逻辑 (支持大消息)
+  - CreatePDataTFPDU() / ParsePDataTFPDU()
+- [x] 实现 PDU 分组
+  - GroupPDVsIntoPDUs() - 将 PDVs 按 MaxPDULength 分组
+- [x] 实现消息编码
+  - EncodeDIMSEMessage() - 编码 command 和 data datasets
+- [x] 编写单元测试 (8 个测试全部通过)
 
-      // 接收缓冲
-      pduBuffer      *PDUBuffer // 重组 PDV
-  }
-  ```
-- [ ] 实现 NewService(conn, assoc, options) *Service
-- [ ] 编写单元测试
+**文件**:
+- `pkg/network/service/send.go` (230+ lines)
+- `pkg/network/service/pdv.go` (300+ lines)
+- `pkg/network/service/encoder.go` (110 lines)
 
-#### 9.6.3 发送循环 (sendLoop)
-- [ ] 实现 sendLoop(ctx) error
-  ```go
-  func (s *Service) sendLoop(ctx context.Context) error {
-      for {
-          select {
-          case <-ctx.Done():
-              return ctx.Err()
-          case <-s.closeCh:
-              return nil
-          case req := <-s.sendQueue:
-              // 1. 将 DIMSE 消息编码为 Command Dataset + Data Dataset
-              // 2. 分片为 PDV (如果 > MaxPDULength)
-              // 3. 封装为 P-DATA-TF PDU
-              // 4. 写入 conn
-              // 5. 如果是 Request，添加到 pendingRequests
-          }
-      }
-  }
-  ```
-- [ ] 实现消息分片逻辑 fragmentMessage()
-- [ ] 编写单元测试
+#### 9.6.4 接收循环 (recvLoop) ✅ **已完成**
+- [x] 实现 recvLoop(ctx) error - 完整的消息接收流程
+- [x] 实现 PDV 重组逻辑
+  - 跨 PDU 的 command/dataset 片段重组
+  - Presentation Context ID 验证
+  - IsLastFragment 标志处理
+- [x] 实现传输语法选择
+  - getTransferSyntaxForContext() - 根据 Context ID 获取传输语法
+- [x] 实现消息解码器框架
+  - DecodeDIMSEMessage() - 解码 command 和 data datasets
+  - decodeRawDataset() - 占位实现（标记为 TODO）
+- [x] 编写单元测试 (6 个测试，2 个跳过等待完整解码器实现)
 
-#### 9.6.4 接收循环 (recvLoop)
-- [ ] 实现 recvLoop(ctx) error
-  ```go
-  func (s *Service) recvLoop(ctx context.Context) error {
-      for {
-          select {
-          case <-ctx.Done():
-              return ctx.Err()
-          case <-s.closeCh:
-              return nil
-          default:
-              // 1. 读取 RawPDU
-              // 2. 根据 PDU 类型分发
-              // 3. P-DATA-TF: 重组 PDV -> DIMSE 消息 -> recvQueue
-              // 4. A-RELEASE-RQ: 发送 A-RELEASE-RP, 关闭连接
-              // 5. A-ABORT: 立即关闭
-          }
-      }
-  }
-  ```
-- [ ] 实现 PDV 重组逻辑 (PDUBuffer)
-- [ ] 实现 DIMSE 消息解码 decodeDIMSE()
-- [ ] 编写单元测试
+**文件**:
+- `pkg/network/service/recv.go` (130 lines)
+- `pkg/network/service/recv_test.go` (295 lines)
 
-#### 9.6.5 消息发送 API
-- [ ] 实现 Send(ctx, msg dimse.Message) error
-  ```go
-  func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
-      select {
-      case s.sendQueue <- SendRequest{Message: msg}:
-          return nil
-      case <-ctx.Done():
-          return ctx.Err()
-      case <-s.closeCh:
-          return ErrServiceClosed
-      }
-  }
-  ```
-- [ ] 实现 SendRequest(ctx, req dimse.Request) (dimse.Response, error)
-  - 发送 Request
-  - 等待 Response (通过 pendingRequests 映射)
-  - 支持超时
-- [ ] 编写单元测试
+#### 9.6.5 消息发送 API ✅ **已完成**
+- [x] 实现 Send(ctx, msg dimse.Message) error
+  - 支持 context 取消
+  - 状态检查
+  - 阻塞等待发送完成
+- [x] 实现便捷发送方法
+  - SendCEcho(ctx, req) - C-ECHO 请求并等待响应
+  - SendCStore(ctx, req) - C-STORE 请求并等待响应
+  - SendCFind(ctx, req) - C-FIND 请求并返回响应 channel
+- [x] 实现 SendWithTimeout(msg, timeout) 便捷方法
+- [x] 实现请求追踪
+  - registerPendingRequest() - 注册待处理请求
+  - unregisterPendingRequest() - 移除待处理请求
+- [x] 编写单元测试 (9 个测试全部通过)
 
-#### 9.6.6 消息处理器 (Handlers)
-- [ ] 定义 Handler 接口
-  ```go
-  type Handler interface {
-      Handle(ctx context.Context, msg dimse.Message) (dimse.Message, error)
-  }
-  ```
-- [ ] 实现 Handlers 结构体 (消息路由)
+**文件**: `pkg/network/service/api.go` (323 lines)
+
+#### 9.6.6 消息处理器 (Handlers) ✅ **已完成**
+- [x] 实现 Handlers 结构体
   ```go
   type Handlers struct {
       CEchoHandler  func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)
       CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
-      CFindHandler  func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error) // 返回多个 Pending + 1 个 Success
-      CGetHandler   func(context.Context, *dimse.CGetRequest) error // 触发多个 C-STORE
-      CMoveHandler  func(context.Context, *dimse.CMoveRequest) error
+      CFindHandler  func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)
   }
   ```
-- [ ] 实现消息分发逻辑 dispatchMessage()
-- [ ] 编写单元测试
+- [x] 实现消息分发逻辑
+  - handleReceivedMessage() - 处理接收到的消息
+  - handleResponse() - 路由响应到待处理请求
+  - handleRequest() - 分发请求到对应处理器
+- [x] 实现默认处理器
+  - C-ECHO: 总是返回成功
+  - C-STORE: 返回成功（不实际存储）
+  - C-FIND: 返回成功且无结果
+- [x] 实现消息工厂 (factory.go)
+  - createMessageFromDatasets() - 从 datasets 创建 DIMSE 消息
+  - 支持 C-ECHO、C-STORE、C-FIND 请求和响应
+- [x] 集成到 recvLoop
+  - processReceivedMessage() 调用消息工厂和处理器
+- [x] 编写单元测试 (8 个测试)
+
+**文件**:
+- `pkg/network/service/handler.go` (176 lines)
+- `pkg/network/service/factory.go` (177 lines)
+- `pkg/network/service/handler_test.go` (223 lines)
 
 #### 9.6.7 关联管理
 - [ ] 实现 SendAssociationRequest(ctx, assoc) error
