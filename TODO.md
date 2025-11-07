@@ -520,17 +520,24 @@
 **完成日期**: 2025-11-07
 **优先级**: 低 (FromXML 反序列化可根据需求决定是否实现)
 
-### 7.3 DicomAnonymizer (可选)
-**参考**: `fo-dicom-code/DicomAnonymizer.cs`
+### 7.3 DicomAnonymizer ✅
+**参考**: `fo-dicom-code/DicomAnonymizer.cs`, `DicomAnonymizerGenerated.cs`
+**包**: `pkg/dicom/anonymizer`
 
-- [ ] 实现匿名化规则
-- [ ] 实现常用匿名化操作
-- [ ] 支持自定义匿名化规则
-- [ ] 编写单元测试
+- [x] 实现匿名化规则 (SecurityProfile, SecurityProfileActions)
+- [x] 实现常用匿名化操作 (Remove, Replace, Clear, Blank, UID replacement)
+- [x] 支持自定义匿名化规则 (AddRule)
+- [x] 实现安全配置选项 (BasicProfile, RetainUIDs, RetainDeviceIdent 等)
+- [x] 实现默认 DICOM PS 3.15 配置文件
+- [x] 支持序列递归匿名化
+- [x] 支持自定义 PatientName 和 PatientID 替换
+- [x] 实现 UID 一致性替换 (ReplacedUIDs 映射)
+- [x] 编写单元测试 (13个测试函数，全部通过)
 
-**依赖**: DicomDataset
-**预计工作量**: 3-4 天
-**优先级**: 中
+**依赖**: DicomDataset, DicomElement
+**实际工作量**: 1 天
+**状态**: ✅ 完成，所有测试通过
+**完成日期**: 2025-11-07
 
 ---
 
@@ -812,7 +819,7 @@
   - Group length 自动过滤
   - 显式/未定义长度序列
 
-**已完成的包** (14个核心包):
+**已完成的包** (15个核心包):
 1. `pkg/dicom/vr` - Value Representation (35种标准VR)
 2. `pkg/dicom/vm` - Value Multiplicity (15种标准VM)
 3. `pkg/dicom/tag` - DICOM Tags (5338个标准Tag常量 + DictionaryEntry)
@@ -827,6 +834,7 @@
 12. `pkg/dicom/parser` - 文件解析 (完整 ReadOption 支持)
 13. `pkg/dicom/writer` - 文件写入 (完整 WriteOption 支持)
 14. `pkg/dicom/serialization` - JSON 和 XML 序列化
+15. `pkg/dicom/anonymizer` - DICOM 匿名化 (基于 DICOM PS 3.15)
 
 **功能对比 fo-dicom**:
 - ✅ DicomTag → Tag (完整实现 + DictionaryEntry)
@@ -846,24 +854,24 @@
 - ✅ DicomFileMetaInformation → FileMetaInformation (完整实现) ✓
 
 **总计**:
-- ✅ 所有测试通过 (235+ 测试函数)
-- ✅ 代码总量约 38,000 行 (含生成代码)
+- ✅ 所有测试通过 (248+ 测试函数)
+- ✅ 代码总量约 39,000 行 (含生成代码)
 - ✅ 核心功能完整，可用于生产环境
 
 **下一步**: 第八阶段 - 命令行工具和示例
 
 **最近更新**: 2025-11-07
+- ✅ 完成 Phase 7.3 DicomAnonymizer
+  - 实现 SecurityProfile 和 SecurityProfileActions
+  - 6种匿名化操作 (D, Z, X, K, C, U)
+  - 完整的 DICOM PS 3.15 默认配置
+  - 11种安全配置选项
+  - 支持序列递归匿名化
+  - UID 一致性替换
+  - 13个单元测试全部通过
 - ✅ 完成 Phase 7.2 XML 序列化
   - NativeDicomModel XML 格式
-  - 支持所有 DICOM 元素类型
-  - PersonName 结构化输出
-  - 二进制数据 base64 编码
   - 16个单元测试全部通过
 - ✅ 完成 FileMetaInformation 封装
   - 便捷的 getter/setter 方法
-  - 自动从主dataset创建
-  - 集成到 ParseResult
   - 13个单元测试全部通过
-- ✅ 修复 XML 序列化 VR 比较问题
-  - 使用 VR Code 常量而非硬编码字符串
-  - 更规范的代码结构
