@@ -44,7 +44,7 @@ func TestWriteWithDefaults(t *testing.T) {
 	}
 
 	// Verify Transfer Syntax UID was auto-generated
-	tsUID, exists := result.FileMetaInformation.GetString(tag.TransferSyntaxUID)
+	tsUID, exists := result.FileMetaInformation.TransferSyntaxUID()
 	if !exists {
 		t.Fatal("TransferSyntaxUID not found in auto-generated FileMetaInformation")
 	}
@@ -77,7 +77,7 @@ func TestWriteWithFileMetaInfo(t *testing.T) {
 	}
 
 	// Verify TransferSyntaxUID was added automatically
-	tsUID, exists := result.FileMetaInformation.GetString(tag.TransferSyntaxUID)
+	tsUID, exists := result.FileMetaInformation.TransferSyntaxUID()
 	if !exists {
 		t.Fatal("TransferSyntaxUID not found - should have been added automatically")
 	}

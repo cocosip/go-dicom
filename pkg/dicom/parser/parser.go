@@ -84,10 +84,11 @@ func (f FileFormat) String() string {
 // It contains both the File Meta Information (Group 0002) and the main Dataset.
 // This structure mimics fo-dicom's DicomFile concept.
 type ParseResult struct {
-	// FileMetaInformation contains Group 0002 elements.
+	// FileMetaInformation contains Group 0002 elements with convenience accessors.
 	// These elements describe the file format and transfer syntax.
 	// Always encoded as Explicit VR Little Endian.
-	FileMetaInformation *dataset.Dataset
+	// Use FileMetaInformationDataset() if you need raw dataset access.
+	FileMetaInformation *dataset.FileMetaInformation
 
 	// Dataset contains the main DICOM data elements.
 	// Encoding depends on the Transfer Syntax specified in FileMetaInformation.
@@ -102,6 +103,15 @@ type ParseResult struct {
 	// IsPartial indicates whether parsing ended prematurely
 	// (e.g., due to stop criterion or error recovery).
 	IsPartial bool
+}
+
+// FileMetaInformationDataset returns the underlying dataset of FileMetaInformation.
+// This is a convenience method for accessing the raw dataset.
+func (pr *ParseResult) FileMetaInformationDataset() *dataset.Dataset {
+	if pr.FileMetaInformation == nil {
+		return nil
+	}
+	return pr.FileMetaInformation.Dataset()
 }
 
 // parseContext holds the state during DICOM file parsing.
@@ -248,8 +258,11 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 		return nil, fmt.Errorf("failed to read dataset: %w", err)
 	}
 
+	// Wrap metaDS in FileMetaInformation for convenience
+	fmi := dataset.NewFileMetaInformationFromDataset(metaDS)
+
 	return &ParseResult{
-		FileMetaInformation: metaDS,
+		FileMetaInformation: fmi,
 		Dataset:             mainDS,
 		TransferSyntax:      p.transferSyntax,
 		Format:              p.detectedFormat,

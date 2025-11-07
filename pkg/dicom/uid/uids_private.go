@@ -248,3 +248,14 @@ func init() {
 	Register(PrivateSiemensCTMRVolumeStorage)
 	Register(PrivateTomTecAnnotationStorage)
 }
+
+// go-dicom implementation UIDs
+// These are used for identifying the go-dicom library implementation
+const (
+	// GoDicomImplementationClassUID is the implementation class UID for go-dicom
+	// Using a placeholder - in production, this should be a properly registered UID
+	GoDicomImplementationClassUID = "1.2.826.0.1.3680043.10.854"
+
+	// GoDicomImplementationVersionName is the version identifier for go-dicom
+	GoDicomImplementationVersionName = "GO-DICOM-0.1"
+)

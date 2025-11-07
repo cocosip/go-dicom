@@ -296,7 +296,7 @@ func TestParseMiniDICOM(t *testing.T) {
 	}
 
 	// Check for Transfer Syntax UID in meta info
-	tsUID, exists := result.FileMetaInformation.GetString(tag.TransferSyntaxUID)
+	tsUID, exists := result.FileMetaInformation.TransferSyntaxUID()
 	if !exists {
 		t.Error("FileMetaInformation should contain TransferSyntaxUID")
 	}

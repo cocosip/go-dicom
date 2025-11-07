@@ -39,7 +39,7 @@ func TestWriteThenRead(t *testing.T) {
 	}
 
 	// Verify file meta information
-	tsUID, exists := result.FileMetaInformation.GetString(tag.TransferSyntaxUID)
+	tsUID, exists := result.FileMetaInformation.TransferSyntaxUID()
 	if !exists {
 		t.Fatal("TransferSyntaxUID not found in FileMetaInformation")
 	}

@@ -106,3 +106,36 @@ func WithIndent(indent string) JSONOption {
 		c.indent = indent
 	}
 }
+
+// xmlConfig configures XML serialization behavior
+type xmlConfig struct {
+	// indent specifies the indentation string for pretty-printing.
+	// Empty string means no indentation (compact format).
+	// Common values: "" (compact), "  " (2 spaces), "\t" (tab)
+	indent string
+}
+
+// defaultXMLConfig returns the default configuration for DICOM XML serialization.
+// These options produce standard-compliant DICOM NativeDicomModel XML.
+func defaultXMLConfig() xmlConfig {
+	return xmlConfig{
+		indent: "  ", // Default to 2-space indentation for readability
+	}
+}
+
+// XMLOption is a functional option for configuring XML serialization
+type XMLOption func(*xmlConfig)
+
+// WithXMLIndent configures the indentation for XML pretty-printing
+func WithXMLIndent(indent string) XMLOption {
+	return func(c *xmlConfig) {
+		c.indent = indent
+	}
+}
+
+// WithXMLCompact disables indentation for compact XML output
+func WithXMLCompact(indent string) XMLOption {
+	return func(c *xmlConfig) {
+		c.indent = indent
+	}
+}
