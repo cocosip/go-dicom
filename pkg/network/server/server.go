@@ -26,13 +26,24 @@ import (
 // Example usage:
 //
 //	server := server.New(
-//	    server.WithAETitle("MY_SCP"),
 //	    server.WithPort(104),
 //	)
 //
 //	// Set handlers for DIMSE operations
 //	server.SetCEchoHandler(func(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 //	    return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+//	})
+//
+//	// Set custom association negotiator (optional, for AE validation, etc.)
+//	server.SetAssociationNegotiatorFunc(func(ctx context.Context, assoc *association.Association, responder service.AssociationResponder) error {
+//	    // Validate AE titles, presentation contexts, etc.
+//	    // For example, check CallingAE from database
+//	    for _, pc := range assoc.PresentationContexts {
+//	        if len(pc.ProposedTransferSyntaxes) > 0 {
+//	            pc.Accept(pc.ProposedTransferSyntaxes[0])
+//	        }
+//	    }
+//	    return responder.SendAccept(ctx, assoc)
 //	})
 //
 //	// Start the server
@@ -68,9 +79,6 @@ type Server struct {
 
 // ServerConfig contains configuration options for the DICOM server.
 type ServerConfig struct {
-	// AETitle is the Application Entity Title of this server (SCP)
-	AETitle string
-
 	// Port is the TCP port to listen on
 	// Default: 104 (standard DICOM port)
 	Port int
@@ -99,15 +107,6 @@ type ServerConfig struct {
 	// Default: "GO-DICOM-1.0"
 	ImplementationVersionName string
 
-	// AcceptedCallingAETitles limits which AE titles can connect
-	// If empty, all AE titles are accepted
-	AcceptedCallingAETitles []string
-
-	// StrictAECheck enables strict AE title checking
-	// If false, the CalledAETitle in A-ASSOCIATE-RQ is accepted regardless of value
-	// Default: false (accept any called AE title)
-	StrictAECheck bool
-
 	// MaxConnections limits the number of concurrent connections
 	// 0 means no limit
 	// Default: 0 (no limit)
@@ -119,13 +118,6 @@ type ServerConfig struct {
 
 // ServerOption is a function that modifies server configuration.
 type ServerOption func(*ServerConfig)
-
-// WithAETitle sets the AE title of the server.
-func WithAETitle(ae string) ServerOption {
-	return func(o *ServerConfig) {
-		o.AETitle = ae
-	}
-}
 
 // WithPort sets the listening port.
 func WithPort(port int) ServerOption {
@@ -176,24 +168,10 @@ func WithImplementationVersionName(name string) ServerOption {
 	}
 }
 
-// WithAcceptedCallingAETitles sets the list of accepted calling AE titles.
-func WithAcceptedCallingAETitles(aeTitles ...string) ServerOption {
-	return func(o *ServerConfig) {
-		o.AcceptedCallingAETitles = aeTitles
-	}
-}
-
 // WithMaxConnections sets the maximum number of concurrent connections.
 func WithMaxConnections(max int) ServerOption {
 	return func(o *ServerConfig) {
 		o.MaxConnections = max
-	}
-}
-
-// WithStrictAECheck enables strict AE title checking.
-func WithStrictAECheck(strict bool) ServerOption {
-	return func(o *ServerConfig) {
-		o.StrictAECheck = strict
 	}
 }
 
@@ -207,7 +185,6 @@ func WithTLSConfig(tlsConfig *tls.Config) ServerOption {
 // defaultServerConfig returns the default server configuration.
 func defaultServerConfig() *ServerConfig {
 	return &ServerConfig{
-		AETitle:                   "GO_DICOM_SCP",
 		Port:                      104,
 		MaxPDULength:              16384,
 		AcceptTimeout:             0, // No timeout
@@ -215,9 +192,7 @@ func defaultServerConfig() *ServerConfig {
 		RequestTimeout:            30 * time.Second,
 		ImplementationClassUID:    "1.2.826.0.1.3680043.10.854",
 		ImplementationVersionName: "GO-DICOM-1.0",
-		AcceptedCallingAETitles:   nil,   // Accept all
-		StrictAECheck:             false, // Don't check called AE title by default
-		MaxConnections:            0,     // No limit
+		MaxConnections:            0,   // No limit
 		TLSConfig:                 nil,
 	}
 }
@@ -382,69 +357,6 @@ func (s *Server) buildUserInformation() *pdu.UserInformation {
 	}
 }
 
-// validateAssociateRQ validates an A-ASSOCIATE-RQ request.
-// Returns an error if the request should be rejected.
-func (s *Server) validateAssociateRQ(rq *pdu.AAssociateRQ) error {
-	// Check if calling AE title is accepted (if whitelist is configured)
-	if len(s.config.AcceptedCallingAETitles) > 0 {
-		accepted := false
-		for _, ae := range s.config.AcceptedCallingAETitles {
-			if rq.CallingAETitle == ae {
-				accepted = true
-				break
-			}
-		}
-		if !accepted {
-			return fmt.Errorf("calling AE title '%s' not accepted", rq.CallingAETitle)
-		}
-	}
-
-	// Check if called AE title matches our AE title (only if StrictAECheck is enabled)
-	if s.config.StrictAECheck && rq.CalledAETitle != s.config.AETitle {
-		return fmt.Errorf("called AE title '%s' does not match server AE title '%s'", rq.CalledAETitle, s.config.AETitle)
-	}
-
-	// Check if we have at least one presentation context
-	if len(rq.PresentationContexts) == 0 {
-		return fmt.Errorf("no presentation contexts in A-ASSOCIATE-RQ")
-	}
-
-	return nil
-}
-
-// buildAssociateAC builds an A-ASSOCIATE-AC response.
-// It accepts all presentation contexts with the first proposed transfer syntax.
-// TODO: Implement proper negotiation based on supported SOP classes.
-func (s *Server) buildAssociateAC(rq *pdu.AAssociateRQ) *pdu.AAssociateAC {
-	ac := pdu.NewAAssociateAC()
-	ac.CalledAETitle = s.config.AETitle
-	ac.CallingAETitle = rq.CallingAETitle
-	ac.ApplicationContext = "1.2.840.10008.3.1.1.1" // DICOM Application Context
-
-	// Process presentation contexts
-	// For now, accept all contexts with the first transfer syntax
-	ac.PresentationContexts = make([]pdu.PresentationContextAC, len(rq.PresentationContexts))
-	for i, pcRQ := range rq.PresentationContexts {
-		pc := pdu.PresentationContextAC{
-			ID:     pcRQ.ID,
-			Result: pdu.ResultAcceptance,
-		}
-
-		// Accept first transfer syntax if available
-		if len(pcRQ.TransferSyntaxes) > 0 {
-			pc.TransferSyntax = pcRQ.TransferSyntaxes[0]
-		} else {
-			pc.Result = pdu.ResultAbstractSyntaxNotSupported
-		}
-
-		ac.PresentationContexts[i] = pc
-	}
-
-	ac.UserInformation = s.buildUserInformation()
-
-	return ac
-}
-
 // ListenAndServe starts the server and blocks until it's stopped or an error occurs.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	s.runningMu.Lock()
@@ -574,40 +486,29 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Create service with all options
 	svc := service.NewService(conn, nil, svcOpts...)
 
-	// Receive A-ASSOCIATE-RQ
+	// Receive A-ASSOCIATE-RQ and handle negotiation
+	// The service will call the AssociationNegotiator callback (if set by user), which will:
+	// - Validate the association (AE titles, presentation contexts, etc.)
+	// - Send A-ASSOCIATE-AC or A-ASSOCIATE-RJ
+	// - Set the association on the service if accepted
+	// If no negotiator is set, the service uses DefaultAssociationNegotiator which accepts
+	// all presentation contexts with their first proposed transfer syntax.
 	assocCtx, cancel := context.WithTimeout(s.ctx, s.config.AssociationTimeout)
 	defer cancel()
 
-	rq, err := svc.ReceiveAssociationRequest(assocCtx)
+	_, err := svc.ReceiveAssociationRequest(assocCtx)
 	if err != nil {
+		// Association was rejected or failed
 		return
 	}
 
-	// Validate A-ASSOCIATE-RQ
-	if err := s.validateAssociateRQ(rq); err != nil {
-		// Send A-ASSOCIATE-RJ
-		_ = svc.SendAssociationReject(assocCtx, pdu.ResultRejectedPermanent, pdu.SourceServiceUser, pdu.ReasonServiceUserCalledAETitleNotRecognized)
+	// Get the negotiated association from the service
+	// (it was set by the responder.SendAccept call in the negotiator)
+	assoc := svc.GetAssociation()
+	if assoc == nil {
+		// This shouldn't happen if ReceiveAssociationRequest succeeded
 		return
 	}
-
-	// Build and send A-ASSOCIATE-AC
-	ac := s.buildAssociateAC(rq)
-	if err := svc.SendAssociationAccept(assocCtx, ac); err != nil {
-		return
-	}
-
-	// Create association from accepted response
-	assoc := association.FromAAssociateAC(ac)
-
-	// Map abstract syntaxes from RQ to the accepted contexts in AC
-	for _, pcRQ := range rq.PresentationContexts {
-		pcAssoc := assoc.FindPresentationContextByID(pcRQ.ID)
-		if pcAssoc != nil {
-			pcAssoc.AbstractSyntax = pcRQ.AbstractSyntax
-		}
-	}
-
-	svc.SetAssociation(assoc)
 
 	// Register connection
 	serverConn := &serverConnection{

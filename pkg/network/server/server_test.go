@@ -20,9 +20,6 @@ func TestNew(t *testing.T) {
 
 	// Verify default configuration
 	config := server.GetConfig()
-	if config.AETitle != "GO_DICOM_SCP" {
-		t.Errorf("Expected AETitle 'GO_DICOM_SCP', got '%s'", config.AETitle)
-	}
 	if config.Port != 104 {
 		t.Errorf("Expected Port 104, got %d", config.Port)
 	}
@@ -39,21 +36,16 @@ func TestNew(t *testing.T) {
 
 func TestNewWithOptions(t *testing.T) {
 	server := New(
-		WithAETitle("MY_SCP"),
 		WithPort(11112),
 		WithMaxPDULength(32768),
 		WithAssociationTimeout(15*time.Second),
 		WithRequestTimeout(60*time.Second),
 		WithImplementationClassUID("1.2.3.4.5"),
 		WithImplementationVersionName("TEST-1.0"),
-		WithAcceptedCallingAETitles("SCU1", "SCU2"),
 		WithMaxConnections(10),
 	)
 
 	config := server.GetConfig()
-	if config.AETitle != "MY_SCP" {
-		t.Errorf("Expected AETitle 'MY_SCP', got '%s'", config.AETitle)
-	}
 	if config.Port != 11112 {
 		t.Errorf("Expected Port 11112, got %d", config.Port)
 	}
@@ -71,9 +63,6 @@ func TestNewWithOptions(t *testing.T) {
 	}
 	if config.ImplementationVersionName != "TEST-1.0" {
 		t.Errorf("Expected ImplementationVersionName 'TEST-1.0', got '%s'", config.ImplementationVersionName)
-	}
-	if len(config.AcceptedCallingAETitles) != 2 {
-		t.Errorf("Expected 2 accepted calling AE titles, got %d", len(config.AcceptedCallingAETitles))
 	}
 	if config.MaxConnections != 10 {
 		t.Errorf("Expected MaxConnections 10, got %d", config.MaxConnections)
