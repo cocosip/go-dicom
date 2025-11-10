@@ -7,7 +7,7 @@ linters:
   enable:
     - errcheck      # Check for unchecked errors
     - gosimple      # Simplify code suggestions
-    - govet         # Go vet checks
+    - govet         # Go vet checks (includes shadow checking)
     - ineffassign   # Detect ineffective assignments
     - staticcheck   # Static analysis
     - unused        # Check for unused code
@@ -22,12 +22,15 @@ linters:
     - gocyclo       # Cyclomatic complexity
     - dupl          # Duplicate code detection
     - gosec         # Security issues
-    - shadow        # Shadow variable detection
 
 linters-settings:
   errcheck:
     check-type-assertions: true
     check-blank: true
+
+  govet:
+    enable:
+      - shadow
 
   gocyclo:
     min-complexity: 15
