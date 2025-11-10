@@ -42,6 +42,7 @@ type CFindRequest struct {
 // The SOP Class UID is automatically determined based on the query level:
 //   - Patient level: Uses Patient Root Query/Retrieve Information Model - FIND
 //   - Study/Series/Image levels: Use Study Root Query/Retrieve Information Model - FIND
+//
 // The MessageID will be automatically assigned by the Association/Client when sending.
 func NewCFindRequest(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
 	// Determine SOP Class UID based on query level

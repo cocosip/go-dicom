@@ -60,5 +60,4 @@
 //   - DICOM Part 3: Information Object Definitions, Annex A (SR IOD)
 //   - fo-dicom StructuredReport package
 //   - https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_A.35.html
-//
 package sr

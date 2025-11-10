@@ -16,13 +16,14 @@ import (
 //
 // Design Note:
 // This implementation uses a two-phase approach (different from fo-dicom):
-//   Phase 1: Association negotiation (before recvLoop starts)
-//     - Client: Connect() → SendAssociationRequest → ReceiveAssociationResponse
-//     - Server: ReceiveAssociationRequest → SendAssociationAccept/Reject
-//   Phase 2: Data transfer (recvLoop running)
-//     - P-DATA-TF: DIMSE message exchange
-//     - A-RELEASE-RQ/RP: Association release
-//     - A-ABORT: Abnormal termination
+//
+//	Phase 1: Association negotiation (before recvLoop starts)
+//	  - Client: Connect() → SendAssociationRequest → ReceiveAssociationResponse
+//	  - Server: ReceiveAssociationRequest → SendAssociationAccept/Reject
+//	Phase 2: Data transfer (recvLoop running)
+//	  - P-DATA-TF: DIMSE message exchange
+//	  - A-RELEASE-RQ/RP: Association release
+//	  - A-ABORT: Abnormal termination
 //
 // PDU handling in recvLoop:
 //   - P-DATA-TF (0x04): Parse PDVs, reassemble and decode DIMSE messages ✓

@@ -47,5 +47,4 @@
 //  5. Implement MPR (Multi-Planar Reformation) with interpolation
 //  6. Add parallel processing for performance
 //  7. Comprehensive testing with various image orientations
-//
 package reconstruction

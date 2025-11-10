@@ -80,8 +80,9 @@ func (sp *SecurityProfile) LoadFromReader(reader io.Reader, options SecurityProf
 
 // defaultProfileCSV contains the de-identification map from DICOM PS 3.15
 // Columns: Tag (regex), BasicProfile, RetainSafePrivate, RetainUIDs, RetainDeviceIdent,
-//          RetainInstitutionIdent, RetainPatientChars, RetainLongFullDates,
-//          RetainLongModifDates, CleanDesc, CleanStructdCont, CleanGraph
+//
+//	RetainInstitutionIdent, RetainPatientChars, RetainLongFullDates,
+//	RetainLongModifDates, CleanDesc, CleanStructdCont, CleanGraph
 const defaultProfileCSV = `
 [0-9A-F]{3}[13579BDF],[0-9A-F]{4};X;C;;;;;;;;;
 50[0-9A-F]{2},[0-9A-F]{4};X;;;;;;;;;;C

@@ -18,8 +18,8 @@ import (
 //   - Length (4 bytes): Length of PDV data (including presentation context ID and header)
 //   - Presentation Context ID (1 byte)
 //   - Message Control Header (1 byte):
-//     - Bit 0: 0=More fragments follow, 1=Last fragment
-//     - Bit 1: 0=Data set, 1=Command
+//   - Bit 0: 0=More fragments follow, 1=Last fragment
+//   - Bit 1: 0=Data set, 1=Command
 //   - PDV Data (variable length)
 type PDV struct {
 	PresentationContextID byte

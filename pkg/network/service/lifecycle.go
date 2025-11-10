@@ -114,8 +114,8 @@ func (s *Service) Err() <-chan error {
 
 // Abort aborts the service with the specified reason.
 // This is a convenience method that:
-//   1. Sends an A-ABORT PDU if connection is available
-//   2. Closes the service (without changing Aborted state)
+//  1. Sends an A-ABORT PDU if connection is available
+//  2. Closes the service (without changing Aborted state)
 //
 // Parameters:
 //   - ctx: Context for the abort operation

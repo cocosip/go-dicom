@@ -117,9 +117,10 @@ func convertUUIDToInteger(u uuid.UUID) string {
 // based on an organization's root UID.
 //
 // Example:
-//   rootUID := "1.2.826.0.1.3680043.2.1343.1"
-//   instanceUID := GenerateFromRoot(rootUID, 12345)
-//   // Returns UID with value "1.2.826.0.1.3680043.2.1343.1.12345"
+//
+//	rootUID := "1.2.826.0.1.3680043.2.1343.1"
+//	instanceUID := GenerateFromRoot(rootUID, 12345)
+//	// Returns UID with value "1.2.826.0.1.3680043.2.1343.1.12345"
 func GenerateFromRoot(root string, suffix int64) *UID {
 	return Append(New(root, "Root UID", TypeUnknown, false), suffix)
 }

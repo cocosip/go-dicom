@@ -6,7 +6,8 @@ package lut
 // CompositeLUT chains multiple LUTs together into a pipeline.
 //
 // When transforming a value, it passes through each LUT in sequence:
-//   output = LUT_n(...LUT_2(LUT_1(input)))
+//
+//	output = LUT_n(...LUT_2(LUT_1(input)))
 //
 // This is commonly used to chain:
 // 1. ModalityRescaleLUT (stored values → modality values)

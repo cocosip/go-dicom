@@ -10,7 +10,8 @@ import (
 // ModalityRescaleLUT implements a modality LUT using Rescale Slope and Intercept.
 //
 // Transforms pixel values using the formula:
-//   output = input * RescaleSlope + RescaleIntercept
+//
+//	output = input * RescaleSlope + RescaleIntercept
 //
 // This is used to convert stored pixel values to modality-specific units
 // (e.g., Hounsfield Units for CT).

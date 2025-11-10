@@ -129,9 +129,10 @@ var RGBPhotometric = &PhotometricInterpretation{
 // is represented by both Cb and Cr values equal to half full scale.
 //
 // Conversion equations (for Bits Allocated = 8):
-//   Y  = +0.2990*R + 0.5870*G + 0.1140*B
-//   Cb = -0.1687*R - 0.3313*G + 0.5000*B + 128
-//   Cr = +0.5000*R - 0.4187*G - 0.0813*B + 128
+//
+//	Y  = +0.2990*R + 0.5870*G + 0.1140*B
+//	Cb = -0.1687*R - 0.3313*G + 0.5000*B + 128
+//	Cr = +0.5000*R - 0.4187*G - 0.0813*B + 128
 var YbrFull = &PhotometricInterpretation{
 	Value:       "YBR_FULL",
 	Description: "YBR Full",
@@ -161,9 +162,10 @@ var YbrFull422 = &PhotometricInterpretation{
 //   - Lack of color is represented by Cb and Cr equal to 128
 //
 // Conversion equations (for Bits Allocated = 8):
-//   Y  = +0.2568*R + 0.5041*G + 0.0979*B + 16
-//   Cb = -0.1482*R - 0.2910*G + 0.4392*B + 128
-//   Cr = +0.4392*R - 0.3678*G - 0.0714*B + 128
+//
+//	Y  = +0.2568*R + 0.5041*G + 0.0979*B + 16
+//	Cb = -0.1482*R - 0.2910*G + 0.4392*B + 128
+//	Cr = +0.4392*R - 0.3678*G - 0.0714*B + 128
 var YbrPartial422 = &PhotometricInterpretation{
 	Value:       "YBR_PARTIAL_422",
 	Description: "YBR Partial 4:2:2",
@@ -188,9 +190,10 @@ var YbrPartial420 = &PhotometricInterpretation{
 // YbrIct represents YBR with Irreversible Color Transformation (used in JPEG 2000).
 //
 // Conversion equations:
-//   Y  = +0.29900*R + 0.58700*G + 0.11400*B
-//   Cb = -0.16875*R - 0.33126*G + 0.50000*B
-//   Cr = +0.50000*R - 0.41869*G - 0.08131*B
+//
+//	Y  = +0.29900*R + 0.58700*G + 0.11400*B
+//	Cb = -0.16875*R - 0.33126*G + 0.50000*B
+//	Cr = +0.50000*R - 0.41869*G - 0.08131*B
 var YbrIct = &PhotometricInterpretation{
 	Value:       "YBR_ICT",
 	Description: "YBR Irreversible Color Transformation (JPEG 2000)",
@@ -203,14 +206,16 @@ var YbrIct = &PhotometricInterpretation{
 // YbrRct represents YBR with Reversible Color Transformation (used in JPEG 2000).
 //
 // Conversion equations:
-//   Y  = floor((R + 2*G + B) / 4)
-//   Cb = B - G
-//   Cr = R - G
+//
+//	Y  = floor((R + 2*G + B) / 4)
+//	Cb = B - G
+//	Cr = R - G
 //
 // Reverse conversion:
-//   R = Cr + G
-//   G = Y - floor((Cb + Cr) / 4)
-//   B = Cb + G
+//
+//	R = Cr + G
+//	G = Y - floor((Cb + Cr) / 4)
+//	B = Cb + G
 var YbrRct = &PhotometricInterpretation{
 	Value:       "YBR_RCT",
 	Description: "YBR Reversible Color Transformation (JPEG 2000)",
