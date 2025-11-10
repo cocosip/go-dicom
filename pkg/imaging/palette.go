@@ -20,6 +20,11 @@ func NewColor32(a, r, g, b uint8) Color32 {
 	return Color32{A: a, R: r, G: g, B: b}
 }
 
+// ToInt32 converts the Color32 to a packed int32 value (ARGB format)
+func (c Color32) ToInt32() int32 {
+	return int32(c.A)<<24 | int32(c.R)<<16 | int32(c.G)<<8 | int32(c.B)
+}
+
 // PaletteColorLUT represents a palette color lookup table
 type PaletteColorLUT struct {
 	// Size is the number of entries in the LUT (0 means 65536)
