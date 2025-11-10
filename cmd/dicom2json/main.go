@@ -62,7 +62,9 @@ func main() {
 		// Create combined dataset with both meta info and main dataset
 		combinedDS := result.FileMetaInformation.Dataset().Clone()
 		for _, elem := range result.Dataset.Elements() {
-			combinedDS.AddOrUpdate(elem)
+			if err := combinedDS.AddOrUpdate(elem); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to add element %s: %v\n", elem.Tag(), err)
+			}
 		}
 		jsonData, err = serialization.ToJSON(combinedDS, opts...)
 	} else {
@@ -76,7 +78,7 @@ func main() {
 
 	// Output
 	if *outputFile != "" {
-		err = os.WriteFile(*outputFile, jsonData, 0644)
+		err = os.WriteFile(*outputFile, jsonData, 0600)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Failed to write output file: %v\n", err)
 			os.Exit(1)

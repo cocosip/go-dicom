@@ -133,10 +133,25 @@ func dumpDataset(ds *dataset.Dataset, depth int, maxDepth int, showValues bool, 
 }
 
 func formatElementValue(elem element.Element, compact bool) string {
-	vr := elem.ValueRepresentation()
-	vrCode := vr.Code()
+	// Try string-based elements first
+	if val := tryFormatString(elem, compact); val != "" {
+		return val
+	}
 
-	// Handle string-based elements
+	// Try numeric elements
+	if val := tryFormatNumeric(elem, compact); val != "" {
+		return val
+	}
+
+	// For binary data, show size
+	if val := tryFormatBinary(elem); val != "" {
+		return val
+	}
+
+	return "(empty)"
+}
+
+func tryFormatString(elem element.Element, compact bool) string {
 	if strElem, ok := elem.(interface{ GetValue() (string, error) }); ok {
 		if val, err := strElem.GetValue(); err == nil {
 			if compact && len(val) > 60 {
@@ -145,8 +160,13 @@ func formatElementValue(elem element.Element, compact bool) string {
 			return val
 		}
 	}
+	return ""
+}
 
-	// Handle numeric elements
+func tryFormatNumeric(elem element.Element, compact bool) string {
+	vr := elem.ValueRepresentation()
+	vrCode := vr.Code()
+
 	switch vrCode {
 	case "US": // Unsigned Short
 		if usElem, ok := elem.(interface{ GetValues() ([]uint16, error) }); ok {
@@ -185,8 +205,10 @@ func formatElementValue(elem element.Element, compact bool) string {
 			}
 		}
 	}
+	return ""
+}
 
-	// For binary data, show size
+func tryFormatBinary(elem element.Element) string {
 	buf := elem.Buffer()
 	if buf != nil {
 		size := buf.Size()
@@ -194,8 +216,7 @@ func formatElementValue(elem element.Element, compact bool) string {
 			return fmt.Sprintf("(Binary data, %d bytes)", size)
 		}
 	}
-
-	return "(empty)"
+	return ""
 }
 
 func formatNumericArray[T any](vals []T, compact bool) string {

@@ -125,8 +125,8 @@ func (fmi *FileMetaInformation) Version() ([]byte, bool) {
 }
 
 // SetVersion sets the File Meta Information Version (0002,0001).
-func (fmi *FileMetaInformation) SetVersion(version []byte) {
-	fmi.dataset.Add(element.NewOtherByte(tag.FileMetaInformationVersion, version))
+func (fmi *FileMetaInformation) SetVersion(version []byte) error {
+	return fmi.dataset.AddOrUpdate(element.NewOtherByte(tag.FileMetaInformationVersion, version))
 }
 
 // MediaStorageSOPClassUID returns the Media Storage SOP Class UID (0002,0002).
@@ -135,8 +135,8 @@ func (fmi *FileMetaInformation) MediaStorageSOPClassUID() (string, bool) {
 }
 
 // SetMediaStorageSOPClassUID sets the Media Storage SOP Class UID (0002,0002).
-func (fmi *FileMetaInformation) SetMediaStorageSOPClassUID(uid string) {
-	fmi.dataset.Add(element.NewString(tag.MediaStorageSOPClassUID, vr.UI, []string{uid}))
+func (fmi *FileMetaInformation) SetMediaStorageSOPClassUID(uid string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.MediaStorageSOPClassUID, vr.UI, []string{uid}))
 }
 
 // MediaStorageSOPInstanceUID returns the Media Storage SOP Instance UID (0002,0003).
@@ -145,8 +145,8 @@ func (fmi *FileMetaInformation) MediaStorageSOPInstanceUID() (string, bool) {
 }
 
 // SetMediaStorageSOPInstanceUID sets the Media Storage SOP Instance UID (0002,0003).
-func (fmi *FileMetaInformation) SetMediaStorageSOPInstanceUID(uid string) {
-	fmi.dataset.Add(element.NewString(tag.MediaStorageSOPInstanceUID, vr.UI, []string{uid}))
+func (fmi *FileMetaInformation) SetMediaStorageSOPInstanceUID(uid string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.MediaStorageSOPInstanceUID, vr.UI, []string{uid}))
 }
 
 // TransferSyntaxUID returns the Transfer Syntax UID (0002,0010).
@@ -155,8 +155,8 @@ func (fmi *FileMetaInformation) TransferSyntaxUID() (string, bool) {
 }
 
 // SetTransferSyntaxUID sets the Transfer Syntax UID (0002,0010).
-func (fmi *FileMetaInformation) SetTransferSyntaxUID(uid string) {
-	fmi.dataset.Add(element.NewString(tag.TransferSyntaxUID, vr.UI, []string{uid}))
+func (fmi *FileMetaInformation) SetTransferSyntaxUID(uid string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.TransferSyntaxUID, vr.UI, []string{uid}))
 }
 
 // TransferSyntax returns the parsed TransferSyntax object.
@@ -173,8 +173,8 @@ func (fmi *FileMetaInformation) TransferSyntax() (*transfer.TransferSyntax, bool
 }
 
 // SetTransferSyntax sets the Transfer Syntax UID from a TransferSyntax object.
-func (fmi *FileMetaInformation) SetTransferSyntax(ts *transfer.TransferSyntax) {
-	fmi.SetTransferSyntaxUID(ts.UID().UID())
+func (fmi *FileMetaInformation) SetTransferSyntax(ts *transfer.TransferSyntax) error {
+	return fmi.SetTransferSyntaxUID(ts.UID().UID())
 }
 
 // ImplementationClassUID returns the Implementation Class UID (0002,0012).
@@ -183,8 +183,8 @@ func (fmi *FileMetaInformation) ImplementationClassUID() (string, bool) {
 }
 
 // SetImplementationClassUID sets the Implementation Class UID (0002,0012).
-func (fmi *FileMetaInformation) SetImplementationClassUID(uid string) {
-	fmi.dataset.Add(element.NewString(tag.ImplementationClassUID, vr.UI, []string{uid}))
+func (fmi *FileMetaInformation) SetImplementationClassUID(uid string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.ImplementationClassUID, vr.UI, []string{uid}))
 }
 
 // ImplementationVersionName returns the Implementation Version Name (0002,0013).
@@ -193,8 +193,8 @@ func (fmi *FileMetaInformation) ImplementationVersionName() (string, bool) {
 }
 
 // SetImplementationVersionName sets the Implementation Version Name (0002,0013).
-func (fmi *FileMetaInformation) SetImplementationVersionName(name string) {
-	fmi.dataset.Add(element.NewString(tag.ImplementationVersionName, vr.SH, []string{name}))
+func (fmi *FileMetaInformation) SetImplementationVersionName(name string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.ImplementationVersionName, vr.SH, []string{name}))
 }
 
 // SourceApplicationEntityTitle returns the Source Application Entity Title (0002,0016).
@@ -203,8 +203,8 @@ func (fmi *FileMetaInformation) SourceApplicationEntityTitle() (string, bool) {
 }
 
 // SetSourceApplicationEntityTitle sets the Source Application Entity Title (0002,0016).
-func (fmi *FileMetaInformation) SetSourceApplicationEntityTitle(aet string) {
-	fmi.dataset.Add(element.NewString(tag.SourceApplicationEntityTitle, vr.AE, []string{aet}))
+func (fmi *FileMetaInformation) SetSourceApplicationEntityTitle(aet string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.SourceApplicationEntityTitle, vr.AE, []string{aet}))
 }
 
 // SendingApplicationEntityTitle returns the Sending Application Entity Title (0002,0017).
@@ -213,8 +213,8 @@ func (fmi *FileMetaInformation) SendingApplicationEntityTitle() (string, bool) {
 }
 
 // SetSendingApplicationEntityTitle sets the Sending Application Entity Title (0002,0017).
-func (fmi *FileMetaInformation) SetSendingApplicationEntityTitle(aet string) {
-	fmi.dataset.Add(element.NewString(tag.SendingApplicationEntityTitle, vr.AE, []string{aet}))
+func (fmi *FileMetaInformation) SetSendingApplicationEntityTitle(aet string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.SendingApplicationEntityTitle, vr.AE, []string{aet}))
 }
 
 // ReceivingApplicationEntityTitle returns the Receiving Application Entity Title (0002,0018).
@@ -223,8 +223,8 @@ func (fmi *FileMetaInformation) ReceivingApplicationEntityTitle() (string, bool)
 }
 
 // SetReceivingApplicationEntityTitle sets the Receiving Application Entity Title (0002,0018).
-func (fmi *FileMetaInformation) SetReceivingApplicationEntityTitle(aet string) {
-	fmi.dataset.Add(element.NewString(tag.ReceivingApplicationEntityTitle, vr.AE, []string{aet}))
+func (fmi *FileMetaInformation) SetReceivingApplicationEntityTitle(aet string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.ReceivingApplicationEntityTitle, vr.AE, []string{aet}))
 }
 
 // PrivateInformationCreatorUID returns the Private Information Creator UID (0002,0100).
@@ -233,8 +233,8 @@ func (fmi *FileMetaInformation) PrivateInformationCreatorUID() (string, bool) {
 }
 
 // SetPrivateInformationCreatorUID sets the Private Information Creator UID (0002,0100).
-func (fmi *FileMetaInformation) SetPrivateInformationCreatorUID(uid string) {
-	fmi.dataset.Add(element.NewString(tag.PrivateInformationCreatorUID, vr.UI, []string{uid}))
+func (fmi *FileMetaInformation) SetPrivateInformationCreatorUID(uid string) error {
+	return fmi.dataset.AddOrUpdate(element.NewString(tag.PrivateInformationCreatorUID, vr.UI, []string{uid}))
 }
 
 // PrivateInformation returns the Private Information (0002,0102).
@@ -251,8 +251,8 @@ func (fmi *FileMetaInformation) PrivateInformation() ([]byte, bool) {
 }
 
 // SetPrivateInformation sets the Private Information (0002,0102).
-func (fmi *FileMetaInformation) SetPrivateInformation(data []byte) {
-	fmi.dataset.Add(element.NewOtherByte(tag.PrivateInformation, data))
+func (fmi *FileMetaInformation) SetPrivateInformation(data []byte) error {
+	return fmi.dataset.AddOrUpdate(element.NewOtherByte(tag.PrivateInformation, data))
 }
 
 // Validate checks if the FileMetaInformation contains all required elements.

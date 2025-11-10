@@ -153,7 +153,17 @@ func printFileMetaInfo(fmi *dataset.FileMetaInformation, verbose bool) {
 }
 
 func printMainDatasetInfo(ds *dataset.Dataset, verbose bool) {
-	// Patient information
+	printPatientInfo(ds)
+	printStudyInfo(ds)
+	printSeriesInfo(ds)
+	printImageInfo(ds)
+
+	if verbose {
+		printDeviceInfo(ds)
+	}
+}
+
+func printPatientInfo(ds *dataset.Dataset) {
 	if patientName, ok := ds.GetString(tag.PatientName); ok {
 		fmt.Printf("  Patient Name: %s\n", patientName)
 	}
@@ -166,8 +176,9 @@ func printMainDatasetInfo(ds *dataset.Dataset, verbose bool) {
 	if patientSex, ok := ds.GetString(tag.PatientSex); ok {
 		fmt.Printf("  Patient Sex: %s\n", patientSex)
 	}
+}
 
-	// Study information
+func printStudyInfo(ds *dataset.Dataset) {
 	fmt.Println()
 	if studyInstanceUID, ok := ds.GetString(tag.StudyInstanceUID); ok {
 		fmt.Printf("  Study Instance UID: %s\n", studyInstanceUID)
@@ -181,8 +192,9 @@ func printMainDatasetInfo(ds *dataset.Dataset, verbose bool) {
 	if studyDescription, ok := ds.GetString(tag.StudyDescription); ok {
 		fmt.Printf("  Study Description: %s\n", studyDescription)
 	}
+}
 
-	// Series information
+func printSeriesInfo(ds *dataset.Dataset) {
 	fmt.Println()
 	if seriesInstanceUID, ok := ds.GetString(tag.SeriesInstanceUID); ok {
 		fmt.Printf("  Series Instance UID: %s\n", seriesInstanceUID)
@@ -196,8 +208,9 @@ func printMainDatasetInfo(ds *dataset.Dataset, verbose bool) {
 	if modality, ok := ds.GetString(tag.Modality); ok {
 		fmt.Printf("  Modality: %s\n", modality)
 	}
+}
 
-	// Image information
+func printImageInfo(ds *dataset.Dataset) {
 	fmt.Println()
 	if sopClassUID, ok := ds.GetString(tag.SOPClassUID); ok {
 		fmt.Printf("  SOP Class UID: %s\n", sopClassUID)
@@ -215,17 +228,16 @@ func printMainDatasetInfo(ds *dataset.Dataset, verbose bool) {
 			fmt.Printf("  Image Size: %d x %d\n", columns, rows)
 		}
 	}
+}
 
-	if verbose {
-		// Additional information
-		if manufacturer, ok := ds.GetString(tag.Manufacturer); ok {
-			fmt.Printf("  Manufacturer: %s\n", manufacturer)
-		}
-		if manufacturerModelName, ok := ds.GetString(tag.ManufacturerModelName); ok {
-			fmt.Printf("  Manufacturer Model Name: %s\n", manufacturerModelName)
-		}
-		if stationName, ok := ds.GetString(tag.StationName); ok {
-			fmt.Printf("  Station Name: %s\n", stationName)
-		}
+func printDeviceInfo(ds *dataset.Dataset) {
+	if manufacturer, ok := ds.GetString(tag.Manufacturer); ok {
+		fmt.Printf("  Manufacturer: %s\n", manufacturer)
+	}
+	if manufacturerModelName, ok := ds.GetString(tag.ManufacturerModelName); ok {
+		fmt.Printf("  Manufacturer Model Name: %s\n", manufacturerModelName)
+	}
+	if stationName, ok := ds.GetString(tag.StationName); ok {
+		fmt.Printf("  Station Name: %s\n", stationName)
 	}
 }

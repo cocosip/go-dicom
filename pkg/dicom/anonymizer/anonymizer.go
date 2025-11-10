@@ -168,9 +168,13 @@ func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
 
 		// Handle special replacement fields
 		if elem.Tag().Equals(tag.PatientName) && a.Profile.PatientName != "" {
-			a.replaceString(ds, elem, a.Profile.PatientName)
+			if err := a.replaceString(ds, elem, a.Profile.PatientName); err != nil {
+				return fmt.Errorf("failed to replace patient name: %w", err)
+			}
 		} else if elem.Tag().Equals(tag.PatientID) && a.Profile.PatientID != "" {
-			a.replaceString(ds, elem, a.Profile.PatientID)
+			if err := a.replaceString(ds, elem, a.Profile.PatientID); err != nil {
+				return fmt.Errorf("failed to replace patient ID: %w", err)
+			}
 		}
 	}
 
@@ -200,16 +204,15 @@ func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, acti
 		if vrValue.Code() == vr.CodeUI {
 			return a.replaceUID(ds, elem)
 		} else if isStringVR(vrValue) {
-			a.replaceString(ds, elem, "ANONYMOUS")
-		} else {
-			a.blankItem(ds, elem, true)
+			return a.replaceString(ds, elem, "ANONYMOUS")
 		}
+		return a.blankItem(ds, elem, true)
 	case ActionK:
 		// Keep - do nothing
 	case ActionX:
 		// Remove - will be handled by caller
 	case ActionZ:
-		a.blankItem(ds, elem, false)
+		return a.blankItem(ds, elem, false)
 	default:
 		return fmt.Errorf("unknown action %v", action)
 	}
@@ -237,92 +240,83 @@ func (a *Anonymizer) replaceUID(ds *dataset.Dataset, elem element.Element) error
 	}
 
 	// Replace in dataset
-	ds.AddOrUpdate(element.NewString(elem.Tag(), vr.UI, []string{newUID}))
+	if err := ds.AddOrUpdate(element.NewString(elem.Tag(), vr.UI, []string{newUID})); err != nil {
+		return fmt.Errorf("failed to update UID element: %w", err)
+	}
 	return nil
 }
 
 // replaceString replaces a string element with a new value
-func (a *Anonymizer) replaceString(ds *dataset.Dataset, elem element.Element, newValue string) {
-	ds.AddOrUpdate(element.NewString(elem.Tag(), elem.ValueRepresentation(), []string{newValue}))
+func (a *Anonymizer) replaceString(ds *dataset.Dataset, elem element.Element, newValue string) error {
+	return ds.AddOrUpdate(element.NewString(elem.Tag(), elem.ValueRepresentation(), []string{newValue}))
 }
 
 // blankItem blanks an item to a value suitable for the element type
-func (a *Anonymizer) blankItem(ds *dataset.Dataset, elem element.Element, nonZeroLength bool) {
+func (a *Anonymizer) blankItem(ds *dataset.Dataset, elem element.Element, nonZeroLength bool) error {
 	t := elem.Tag()
 	vrValue := elem.ValueRepresentation()
 	vrCode := vrValue.Code()
 
 	// Sequence - replace with empty sequence
 	if vrCode == vr.CodeSQ {
-		ds.AddOrUpdate(dataset.NewSequence(t))
-		return
+		return ds.AddOrUpdate(dataset.NewSequence(t))
 	}
 
 	// String types - replace with empty string or dummy
 	if isStringVR(vrValue) {
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewString(t, vrValue, []string{""}))
-		} else {
-			ds.AddOrUpdate(element.NewString(t, vrValue, []string{}))
+			return ds.AddOrUpdate(element.NewString(t, vrValue, []string{""}))
 		}
-		return
+		return ds.AddOrUpdate(element.NewString(t, vrValue, []string{}))
 	}
 
 	// Binary types (OB, OW, OD, OF, OL, OV, UN) - replace with empty buffer
 	if vrCode == vr.CodeOB || vrCode == vr.CodeOW || vrCode == vr.CodeOD ||
 		vrCode == vr.CodeOF || vrCode == vr.CodeOL || vrCode == vr.CodeOV ||
 		vrCode == vr.CodeUN {
-		ds.AddOrUpdate(element.NewOtherByte(t, []byte{}))
-		return
+		return ds.AddOrUpdate(element.NewOtherByte(t, []byte{}))
 	}
 
 	// Numeric types - replace with zero value or empty array
 	switch vrCode {
 	case vr.CodeUS:
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewUnsignedShort(t, []uint16{0}))
-		} else {
-			ds.AddOrUpdate(element.NewUnsignedShort(t, []uint16{}))
+			return ds.AddOrUpdate(element.NewUnsignedShort(t, []uint16{0}))
 		}
+		return ds.AddOrUpdate(element.NewUnsignedShort(t, []uint16{}))
 	case vr.CodeUL:
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewUnsignedLong(t, []uint32{0}))
-		} else {
-			ds.AddOrUpdate(element.NewUnsignedLong(t, []uint32{}))
+			return ds.AddOrUpdate(element.NewUnsignedLong(t, []uint32{0}))
 		}
+		return ds.AddOrUpdate(element.NewUnsignedLong(t, []uint32{}))
 	case vr.CodeSS:
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewSignedShort(t, []int16{0}))
-		} else {
-			ds.AddOrUpdate(element.NewSignedShort(t, []int16{}))
+			return ds.AddOrUpdate(element.NewSignedShort(t, []int16{0}))
 		}
+		return ds.AddOrUpdate(element.NewSignedShort(t, []int16{}))
 	case vr.CodeSL:
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewSignedLong(t, []int32{0}))
-		} else {
-			ds.AddOrUpdate(element.NewSignedLong(t, []int32{}))
+			return ds.AddOrUpdate(element.NewSignedLong(t, []int32{0}))
 		}
+		return ds.AddOrUpdate(element.NewSignedLong(t, []int32{}))
 	case vr.CodeFL:
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewFloat(t, []float32{0}))
-		} else {
-			ds.AddOrUpdate(element.NewFloat(t, []float32{}))
+			return ds.AddOrUpdate(element.NewFloat(t, []float32{0}))
 		}
+		return ds.AddOrUpdate(element.NewFloat(t, []float32{}))
 	case vr.CodeFD:
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewDouble(t, []float64{0}))
-		} else {
-			ds.AddOrUpdate(element.NewDouble(t, []float64{}))
+			return ds.AddOrUpdate(element.NewDouble(t, []float64{0}))
 		}
+		return ds.AddOrUpdate(element.NewDouble(t, []float64{}))
 	case vr.CodeAT:
 		if nonZeroLength {
-			ds.AddOrUpdate(element.NewAttributeTag(t, []*tag.Tag{tag.Item}))
-		} else {
-			ds.AddOrUpdate(element.NewAttributeTag(t, []*tag.Tag{}))
+			return ds.AddOrUpdate(element.NewAttributeTag(t, []*tag.Tag{tag.Item}))
 		}
+		return ds.AddOrUpdate(element.NewAttributeTag(t, []*tag.Tag{}))
 	default:
 		// For other types, create empty buffer
-		ds.AddOrUpdate(element.NewOtherByte(t, []byte{}))
+		return ds.AddOrUpdate(element.NewOtherByte(t, []byte{}))
 	}
 }
 
