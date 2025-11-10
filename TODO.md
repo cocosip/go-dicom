@@ -212,15 +212,6 @@
 **包**: `pkg/io/buffer`
 
 - [x] 定义 ByteBuffer 接口
-  ```go
-  type ByteBuffer interface {
-      IsMemory() bool
-      Size() uint32
-      Data() []byte
-      GetByteRange(offset, count uint32, output []byte) error
-      WriteTo(w io.Writer) (int64, error)
-  }
-  ```
 - [x] 实现 MemoryByteBuffer (基于 []byte)
 - [x] 实现 EmptyBuffer (单例模式)
 - [x] 编写单元测试 (8个测试函数)
@@ -373,11 +364,11 @@
 ### 5.2 DicomUID
 **参考**: `fo-dicom-code/DicomUID.cs`
 
-- [ ] 定义 UID 结构体
-- [ ] 实现常用 UID 常量 (可先实现部分)
-- [ ] 实现 UID 验证
-- [ ] 实现 UID 生成器
-- [ ] 编写单元测试
+- [x] 定义 UID 结构体
+- [x] 实现常用 UID 常量 (可先实现部分)
+- [x] 实现 UID 验证
+- [x] 实现 UID 生成器
+- [x] 编写单元测试
 
 **依赖**: 无
 **预计工作量**: 1-2 天
@@ -662,14 +653,6 @@ pkg/network/
   - [x] A-RELEASE-RP (0x06)
   - [x] A-ABORT (0x07)
 - [x] 实现 RawPDU 结构体
-  ```go
-  type RawPDU struct {
-      Type     byte   // PDU type
-      Reserved byte   // Reserved (0x00)
-      Length   uint32 // PDU length (excludes 6-byte header)
-      Data     []byte // PDU data
-  }
-  ```
 - [x] 实现 Read(r io.Reader) error - 从流读取 PDU
 - [x] 实现 Write(w io.Writer) error - 写入 PDU 到流
 - [x] 实现辅助函数: NewRawPDU(), String(), TotalLength(), PDUTypeString()
@@ -685,24 +668,7 @@ pkg/network/
 #### 9.2.2 A-ASSOCIATE-RQ PDU ✅
 - [x] 定义 Item 类型常量 (ApplicationContext=0x10, PresentationContext=0x20, 等 - 15个)
 - [x] 实现 AAssociateRQ 结构体
-  ```go
-  type AAssociateRQ struct {
-      ProtocolVersion       uint16
-      CalledAETitle         string  // 被调用 AE (max 16 bytes)
-      CallingAETitle        string  // 调用方 AE (max 16 bytes)
-      ApplicationContext    string  // 通常是 "1.2.840.10008.3.1.1.1"
-      PresentationContexts  []PresentationContextRQ
-      UserInformation       *UserInformation
-  }
-  ```
 - [x] 实现 PresentationContextRQ 结构体
-  ```go
-  type PresentationContextRQ struct {
-      ID                byte   // Context ID (奇数: 1, 3, 5, ...)
-      AbstractSyntax    string // SOP Class UID
-      TransferSyntaxes  []string // 提议的传输语法列表
-  }
-  ```
 - [x] 实现 UserInformation 结构体
   - [x] MaximumLength (0x51) - 最大 PDU 长度
   - [x] ImplementationClassUID (0x52)
@@ -926,18 +892,6 @@ pkg/network/
 #### 9.4.6 C-GET (检索 - Push 模式) ✅
 - [x] 实现 CGetRequest (支持 Patient Root 和 Study Root)
 - [x] 实现 CGetResponse
-  ```go
-  type CGetResponse struct {
-      *BaseResponse
-      statusCode                uint16
-      affectedSOPClassUID       string
-      messageIDBeingRespondedTo uint16
-      numberOfRemainingSubOperations uint16
-      numberOfCompletedSubOperations uint16
-      numberOfFailedSubOperations    uint16
-      numberOfWarningSubOperations   uint16
-  }
-  ```
 - [x] 实现 NewCGetRequest(), NewCGetRequestPatientRoot(), NewCGetRequestStudyRoot()
 - [x] 实现 NewCGetResponsePending(), NewCGetResponseSuccess()
 - [x] 实现 HasSubOperationCounts() 方法
@@ -947,15 +901,6 @@ pkg/network/
 
 #### 9.4.7 C-MOVE (检索 - Pull 模式) ✅
 - [x] 实现 CMoveRequest
-  ```go
-  type CMoveRequest struct {
-      *BaseRequest
-      affectedSOPClassUID  string
-      priority             uint16
-      moveDestination      string // 目标 AE Title
-      queryLevel           QueryRetrieveLevel
-  }
-  ```
 - [x] 实现 CMoveResponse (类似 C-GET，包含子操作计数)
 - [x] 实现 NewCMoveRequest(), NewCMoveRequestPatientRoot(), NewCMoveRequestStudyRoot()
 - [x] 实现 NewCMoveResponsePending(), NewCMoveResponseSuccess()
@@ -978,27 +923,6 @@ pkg/network/
 **总测试数**: 102个测试用例 + 3个示例，全部通过
 
 **API 设计**:
-```go
-// C-* 操作 (用户代码)
-req := dimse.NewCEchoRequest()           // MessageID 默认为 0
-storeReq, _ := dimse.NewCStoreRequest(ds)
-findReq := dimse.NewCFindRequestPatientRoot(level, query)
-
-// N-* 操作
-eventReq := dimse.NewNEventReportRequest(sopClassUID, sopInstanceUID, eventTypeID, eventInfo)
-getReq := dimse.NewNGetRequest(sopClassUID, sopInstanceUID, attrList)
-setReq := dimse.NewNSetRequest(sopClassUID, sopInstanceUID, modList)
-actionReq := dimse.NewNActionRequest(sopClassUID, sopInstanceUID, actionTypeID, actionInfo)
-createReq := dimse.NewNCreateRequest(sopClassUID, "", attrList) // "" = server assigns UID
-deleteReq := dimse.NewNDeleteRequest(sopClassUID, sopInstanceUID)
-
-// Association 自动分配 MessageID
-msgID, _ := association.AssignMessageID(req)
-
-// 单元测试手动设置
-req.SetMessageID(123)
-```
-
 **实现文件**:
 - `pkg/network/dimse/message.go` (265 lines) - 基础消息接口和结构
 - `pkg/network/dimse/cecho.go` (104 lines) - C-ECHO 实现
@@ -1034,24 +958,12 @@ req.SetMessageID(123)
 
 #### 9.5.1 TCP 连接封装 ✅
 - [x] 实现 Dialer 结构体（使用 Options 模式）
-  ```go
-  type DialOption func(*dialConfig)
-  WithTimeout(timeout time.Duration) DialOption
-  WithKeepAlive(keepAlive time.Duration) DialOption
-  WithTLSConfig(config *tls.Config) DialOption
-  ```
 - [x] 实现 Dial(ctx, network, address, ...opts) (net.Conn, error) 方法
 - [x] 实现 DialTLS(ctx, network, address, ...opts) (net.Conn, error) 方法
 - [x] 编写单元测试（7个测试，1个跳过）
 
 #### 9.5.2 TCP 监听器封装 ✅
 - [x] 实现 Listener 结构体
-  ```go
-  type Listener struct {
-      listener  net.Listener
-      tlsConfig *tls.Config
-  }
-  ```
 - [x] 实现 Listen(network, address, ...opts) (*Listener, error)
 - [x] 实现 Accept(ctx) (net.Conn, error) 方法
 - [x] 实现 Close() error 方法
@@ -1181,36 +1093,10 @@ req.SetMessageID(123)
 
 #### 9.6.6 消息处理器 (Handlers) ✅ **已完成**
 - [x] 实现 Handlers 结构体（已扩展支持所有 C-* 操作和生命周期事件）
-  ```go
-  type Handlers struct {
-      // DIMSE 操作处理器
-      CEchoHandler  func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)
-      CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
-      CFindHandler  func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)
-      CMoveHandler  func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)
-      CGetHandler   func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)
-
-      // 生命周期事件处理器（类似 C# fo-dicom 的 IDicomServiceProvider）
-      OnAssociationRequest func(context.Context, *pdu.AAssociateRQ) error // AE Title 验证
-      OnAssociationRelease func(context.Context) error                     // 关联释放（可拒绝）
-      OnAbort              func(context.Context, *pdu.AAbort)              // 中止通知
-      OnConnectionClosed   func(context.Context, error)                    // 连接关闭通知
-  }
-  ```
 - [x] 实现消息分发逻辑（已重构为基于 CommandField）
   - handleReceivedMessage() - 处理接收到的消息
   - handleResponse() - 路由响应到待处理请求
   - handleRequest() - **使用 CommandField 分发**（替代类型断言）
-    ```go
-    // 重构前：使用类型断言 switch r := req.(type)
-    // 重构后：使用 DICOM 协议的 CommandField
-    cmdField := dimse.CommandField(req.CommandField())
-    switch cmdField {
-    case dimse.CommandCEchoRQ:
-        return s.handleCEchoRequest(ctx, req.(*dimse.CEchoRequest), handlers)
-    // ...
-    }
-    ```
 - [x] 实现默认处理器
   - C-ECHO: 总是返回成功
   - C-STORE: 返回成功（不实际存储）
@@ -1317,29 +1203,7 @@ req.SetMessageID(123)
 
 #### 9.7.1 Client 结构 ✅
 - [x] 实现 Client 结构体
-  ```go
-  type Client struct {
-      conn    net.Conn
-      service serviceInterface
-      assoc   *association.Association
-      config  *ClientConfig
-      presentationContexts []*pdu.PresentationContextRQ
-      connected bool
-  }
-  ```
 - [x] 实现 ClientConfig（使用 Options 模式）
-  ```go
-  type ClientConfig struct {
-      CallingAE                 string
-      CalledAE                  string
-      MaxPDULength              uint32
-      ConnectTimeout            time.Duration
-      RequestTimeout            time.Duration
-      AssociationTimeout        time.Duration
-      ImplementationClassUID    string
-      ImplementationVersionName string
-  }
-  ```
 - [x] 实现配置选项函数
   - WithCallingAE, WithCalledAE, WithMaxPDULength
   - WithConnectTimeout, WithRequestTimeout, WithAssociationTimeout
@@ -1433,36 +1297,7 @@ req.SetMessageID(123)
 
 #### 9.8.1 Server 结构 ✅
 - [x] 实现 Server 结构体
-  ```go
-  type Server struct {
-      config        *ServerConfig
-      listener      *transport.Listener
-      connections   map[string]*serverConnection
-      connectionsMu sync.RWMutex
-      serviceOptions []service.ServiceOption
-      running       bool
-      ctx           context.Context
-      cancel        context.CancelFunc
-      wg            sync.WaitGroup
-  }
-  ```
 - [x] 实现 ServerConfig（使用 Options 模式）
-  ```go
-  type ServerConfig struct {
-      AETitle                   string
-      Port                      int
-      MaxPDULength              uint32
-      AcceptTimeout             time.Duration
-      AssociationTimeout        time.Duration
-      RequestTimeout            time.Duration
-      ImplementationClassUID    string
-      ImplementationVersionName string
-      AcceptedCallingAETitles   []string
-      StrictAECheck             bool
-      MaxConnections            int
-      TLSConfig                 *tls.Config
-  }
-  ```
 - [x] 实现配置选项函数
   - WithAETitle, WithPort, WithMaxPDULength
   - WithAcceptTimeout, WithAssociationTimeout, WithRequestTimeout
@@ -1530,13 +1365,13 @@ req.SetMessageID(123)
 **任务**:
 
 #### 9.9.1 本地集成测试
-- [ ] 实现 TestClientServerCEcho - 本地 SCU-SCP C-ECHO 测试
-- [ ] 实现 TestClientServerCStore - C-STORE 往返测试
-- [ ] 实现 TestClientServerCFind - C-FIND 查询测试
-- [ ] 实现 TestAssociationReject - 拒绝场景测试
-- [ ] 实现 TestAbortAndRelease - 异常处理测试
-- [ ] 实现并发测试 (多个并发连接)
-- [ ] 实现性能基准测试 (吞吐量、延迟)
+- [x] 实现 TestClientServerCEcho - 本地 SCU-SCP C-ECHO 测试
+- [x] 实现 TestClientServerCStore - C-STORE 往返测试
+- [x] 实现 TestClientServerCFind - C-FIND 查询测试
+- [x] 实现 TestAssociationReject - 拒绝场景测试
+- [x] 实现 TestAbortAndRelease - 异常处理测试
+- [x] 实现并发测试 (多个并发连接)
+- [x] 实现性能基准测试 (吞吐量、延迟)
 
 #### 9.9.2 真实 PACS 互操作性测试 (手动)
 - [ ] 测试与 Orthanc 的互操作性

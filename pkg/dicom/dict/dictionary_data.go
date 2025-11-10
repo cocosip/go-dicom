@@ -42568,7 +42568,7 @@ func loadStandardEntries(d *Dictionary) {
 	d.Add(NewEntry(
 		tag.New(0x7FE0, 0x0001),
 		"Extended Offset Table", // ExtendedOffsetTable
-		"ExtendedOffsetTable",
+		"Extended",
 		vm.VM1,
 		false,
 		vr.OV,

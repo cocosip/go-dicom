@@ -317,3 +317,84 @@ func TestRoundTrip(t *testing.T) {
 		t.Error("Missing DICM prefix")
 	}
 }
+
+// Benchmark tests for Writer
+
+func BenchmarkWriteSmallDataset(b *testing.B) {
+	// Create a small dataset
+	ds := dataset.New()
+	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
+	ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf := &bytes.Buffer{}
+		_ = Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
+	}
+}
+
+func BenchmarkWriteMediumDataset(b *testing.B) {
+	// Create a medium dataset with 50 elements
+	ds := dataset.New()
+	for i := 0; i < 50; i++ {
+		t := tag.New(0x0010, uint16(i))
+		ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf := &bytes.Buffer{}
+		_ = Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
+	}
+}
+
+func BenchmarkWriteLargeDataset(b *testing.B) {
+	// Create a large dataset with 200 elements
+	ds := dataset.New()
+	for i := 0; i < 200; i++ {
+		t := tag.New(0x0010, uint16(i%256))
+		ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf := &bytes.Buffer{}
+		_ = Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
+	}
+}
+
+func BenchmarkWriteTag(b *testing.B) {
+	buf := &bytes.Buffer{}
+	w := New(transfer.ExplicitVRLittleEndian)
+	w.writer = buf
+	testTag := tag.New(0x0010, 0x0010)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		_ = w.writeTag(testTag)
+	}
+}
+
+func BenchmarkWriteElement(b *testing.B) {
+	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf := &bytes.Buffer{}
+		w := New(transfer.ExplicitVRLittleEndian)
+		w.writer = buf
+		_ = w.writeElement(elem)
+	}
+}
+
+func BenchmarkWritePreamble(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf := &bytes.Buffer{}
+		w := New(transfer.ExplicitVRLittleEndian)
+		w.writer = buf
+		_ = w.writePreamble()
+	}
+}

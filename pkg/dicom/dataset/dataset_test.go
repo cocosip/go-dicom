@@ -257,3 +257,124 @@ func TestDatasetFilter(t *testing.T) {
 		t.Error("Filtered dataset should not contain Rows (UnsignedShort)")
 	}
 }
+
+// Benchmark tests for Dataset operations
+
+func BenchmarkDatasetAdd(b *testing.B) {
+	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ds := dataset.New()
+		ds.Add(elem)
+	}
+}
+
+func BenchmarkDatasetAddOrUpdate(b *testing.B) {
+	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ds := dataset.New()
+		ds.AddOrUpdate(elem)
+	}
+}
+
+func BenchmarkDatasetGet(b *testing.B) {
+	ds := dataset.New()
+	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+	ds.Add(elem)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ds.Get(tag.PatientName)
+	}
+}
+
+func BenchmarkDatasetGetString(b *testing.B) {
+	ds := dataset.New()
+	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ds.GetString(tag.PatientName)
+	}
+}
+
+func BenchmarkDatasetContains(b *testing.B) {
+	ds := dataset.New()
+	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ds.Contains(tag.PatientName)
+	}
+}
+
+func BenchmarkDatasetElements(b *testing.B) {
+	ds := dataset.New()
+	// Add multiple elements
+	for i := 0; i < 100; i++ {
+		t := tag.New(0x0010, uint16(i))
+		ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
+	}
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ds.Elements()
+	}
+}
+
+func BenchmarkDatasetClone(b *testing.B) {
+	ds := dataset.New()
+	for i := 0; i < 50; i++ {
+		t := tag.New(0x0010, uint16(i))
+		ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
+	}
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ds.Clone()
+	}
+}
+
+func BenchmarkDatasetMerge(b *testing.B) {
+	ds1 := dataset.New()
+	ds2 := dataset.New()
+	
+	for i := 0; i < 25; i++ {
+		t := tag.New(0x0010, uint16(i))
+		ds1.Add(element.NewString(t, vr.LO, []string{"Value1"}))
+	}
+	
+	for i := 25; i < 50; i++ {
+		t := tag.New(0x0010, uint16(i))
+		ds2.Add(element.NewString(t, vr.LO, []string{"Value2"}))
+	}
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		merged := ds1.Clone()
+		merged.Merge(ds2, false)
+	}
+}
+
+func BenchmarkDatasetFilter(b *testing.B) {
+	ds := dataset.New()
+	for i := 0; i < 100; i++ {
+		t := tag.New(0x0010, uint16(i))
+		if i%2 == 0 {
+			ds.Add(element.NewString(t, vr.LO, []string{"String"}))
+		} else {
+			ds.Add(element.NewUnsignedShort(t, []uint16{uint16(i)}))
+		}
+	}
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ds.Filter(func(elem element.Element) bool {
+			_, ok := elem.(*element.String)
+			return ok
+		})
+	}
+}

@@ -4,7 +4,6 @@
 package writer
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -15,6 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 // Writer writes DICOM files.
@@ -290,7 +290,9 @@ func (w *Writer) writeFileMetaInformation(ds *dataset.Dataset) error {
 
 	// Calculate the length of all Group 0002 elements (excluding 0002,0000 itself)
 	// We need to write them to a temporary buffer first to calculate the length
-	tempBuf := &bytes.Buffer{}
+	tempBuf := buffer.GetBytesBuffer()
+	defer buffer.PutBytesBuffer(tempBuf)
+
 	tempWriter := &Writer{
 		writer:       tempBuf,
 		byteOrder:    binary.LittleEndian,
@@ -491,7 +493,9 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 	if w.explicitLengthSequences {
 		// Write sequence with explicit length
 		// Need to write items to a buffer first to calculate length
-		itemsBuf := &bytes.Buffer{}
+		itemsBuf := buffer.GetBytesBuffer()
+		defer buffer.PutBytesBuffer(itemsBuf)
+
 		itemsWriter := &Writer{
 			writer:                      itemsBuf,
 			byteOrder:                   w.byteOrder,
@@ -557,7 +561,9 @@ func (w *Writer) writeItem(item *dataset.Dataset) error {
 	if w.explicitLengthSequenceItems {
 		// Write item with explicit length
 		// Need to write elements to a buffer first to calculate length
-		elementsBuf := &bytes.Buffer{}
+		elementsBuf := buffer.GetBytesBuffer()
+		defer buffer.PutBytesBuffer(elementsBuf)
+
 		elementsWriter := &Writer{
 			writer:                      elementsBuf,
 			byteOrder:                   w.byteOrder,

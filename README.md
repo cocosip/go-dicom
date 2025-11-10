@@ -12,7 +12,7 @@ This library is currently under active development. The API is not stable and ma
 
 ## Features
 
-### Current Status (~60% Complete)
+### Current Status (~75% Complete)
 
 - [x] **Core DICOM data types**
   - [x] Tag (5338 standard tags + private tag support)
@@ -43,11 +43,63 @@ This library is currently under active development. The API is not stable and ma
   - [x] Group length auto-filtering
   - [x] Explicit/undefined length sequences
 
-- [ ] JSON serialization (DICOM JSON Model)
-- [ ] DICOM networking (DIMSE services)
-- [ ] Image codec support
+- [x] **JSON/XML Serialization**
+  - [x] DICOM JSON Model (Part 18)
+  - [x] Native XML format
+  - [x] Bulkdata handling
+  - [x] Pretty-print options
+
+- [x] **Anonymization**
+  - [x] Basic anonymization profile
+  - [x] Custom anonymization rules
+  - [x] Patient/Study/Series level anonymization
+
+- [x] **Imaging Support**
+  - [x] Pixel data handling
+  - [x] Color space conversion (YBR↔RGB)
+  - [x] Planar/Interleaved conversion
+  - [x] LUT (Lookup Table) operations
+  - [x] VOI windowing
+  - [x] Overlay data support
+  - [x] Palette color support
+
+- [x] **DICOM Print**
+  - [x] Film Session/Box management
+  - [x] Presentation LUT
+  - [x] Image Box handling
+
+- [x] **Structured Reports**
+  - [x] SR content items (TEXT, NUM, CODE, CONTAINER)
+  - [x] Hierarchical structure
+  - [x] Code items and measured values
+
+- [ ] **DICOM Networking** (Future)
+  - [ ] DIMSE services (C-ECHO, C-FIND, C-STORE, etc.)
+  - [ ] Association management
+  - [ ] SCP/SCU implementation
+
+- [ ] **Image Codecs** (Future)
+  - [ ] JPEG codec
+  - [ ] JPEG-LS codec
+  - [ ] JPEG 2000 codec
+  - [ ] RLE codec
 
 See [TODO.md](TODO.md) for detailed development roadmap.
+
+## Performance
+
+go-dicom is designed for high performance with minimal memory allocations. See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance metrics.
+
+**Key Performance Highlights:**
+- Dataset Get/Add operations: ~2-13 ns/op with zero allocations
+- Parser: ~1.4 μs/op for typical datasets
+- Writer: Scales linearly with dataset size (~1.2 μs for small datasets)
+- Zero-allocation endian swapping operations
+
+Run benchmarks yourself:
+```bash
+go test -bench=. -benchmem ./pkg/dicom/...
+```
 
 ## Installation
 

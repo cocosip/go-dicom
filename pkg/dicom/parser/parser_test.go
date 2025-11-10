@@ -498,3 +498,122 @@ func TestSequenceReading(t *testing.T) {
 		}
 	})
 }
+
+// Benchmark tests for Parser
+
+// createBenchmarkDICOMData creates test DICOM data for benchmarking
+func createBenchmarkDICOMData(numElements int) []byte {
+	buf := bytes.NewBuffer(nil)
+	
+	// Write preamble
+	buf.Write(make([]byte, 128))
+	buf.WriteString("DICM")
+	
+	// Write File Meta Information Group Length (0002,0000)
+	binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+	binary.Write(buf, binary.LittleEndian, uint16(0x0000))
+	buf.WriteString("UL")
+	binary.Write(buf, binary.LittleEndian, uint16(4))
+	binary.Write(buf, binary.LittleEndian, uint32(0))
+	
+	// Write Transfer Syntax UID (0002,0010) - Explicit VR Little Endian
+	binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+	binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+	buf.WriteString("UI")
+	tsUID := "1.2.840.10008.1.2.1"
+	binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
+	buf.WriteString(tsUID)
+	if len(tsUID)%2 != 0 {
+		buf.WriteByte(0)
+	}
+	
+	// Write some test elements
+	for i := 0; i < numElements; i++ {
+		// Write tag
+		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		binary.Write(buf, binary.LittleEndian, uint16(i))
+		
+		// Write VR (LO)
+		buf.WriteString("LO")
+		
+		// Write value
+		value := "TestValue"
+		binary.Write(buf, binary.LittleEndian, uint16(len(value)))
+		buf.WriteString(value)
+		if len(value)%2 != 0 {
+			buf.WriteByte(0)
+		}
+	}
+	
+	return buf.Bytes()
+}
+
+func BenchmarkParseSmallDataset(b *testing.B) {
+	data := createBenchmarkDICOMData(10)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reader := bytes.NewReader(data)
+		_, _ = Parse(reader)
+	}
+}
+
+func BenchmarkParseMediumDataset(b *testing.B) {
+	data := createBenchmarkDICOMData(100)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reader := bytes.NewReader(data)
+		_, _ = Parse(reader)
+	}
+}
+
+func BenchmarkParseLargeDataset(b *testing.B) {
+	data := createBenchmarkDICOMData(500)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reader := bytes.NewReader(data)
+		_, _ = Parse(reader)
+	}
+}
+
+func BenchmarkReadTag(b *testing.B) {
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < 1000; i++ {
+		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		binary.Write(buf, binary.LittleEndian, uint16(i))
+	}
+	data := buf.Bytes()
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ctx := newParseContext()
+		ctx.reader = bytes.NewReader(data)
+		ctx.byteOrder = binary.LittleEndian
+		ctx.readTag()
+	}
+}
+
+func BenchmarkReadElement(b *testing.B) {
+	// Create element data (PatientName with value "Doe^John")
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < 1000; i++ {
+		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		buf.WriteString("PN")
+		value := "Doe^John"
+		binary.Write(buf, binary.LittleEndian, uint16(len(value)))
+		buf.WriteString(value)
+	}
+	data := buf.Bytes()
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ctx := newParseContext()
+		ctx.reader = bytes.NewReader(data)
+		ctx.byteOrder = binary.LittleEndian
+		ctx.isExplicitVR = true
+		ctx.readElement()
+	}
+}
