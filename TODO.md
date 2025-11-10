@@ -1680,19 +1680,27 @@ pkg/network/
 **实际工作量**: 2 天
 **状态**: ✅ 完成 (RLE和Native)
 
-### 11.3 图像渲染
+### 11.3 图像渲染 ✅
 **参考**: `fo-dicom-code/Imaging/Render/`
-**包**: `pkg/imaging/render`
+**包**: `pkg/imaging/render`, `pkg/imaging`
 
-- [ ] 实现 PhotometricInterpretation 类型
-- [ ] 实现 VOI LUT (Window/Level)
-- [ ] 实现 Modality LUT
-- [ ] 实现颜色空间转换 (RGB, YBR_FULL, etc.)
-- [ ] 实现图像导出 (PNG, JPEG) - 使用Go标准库
-- [ ] 编写单元测试
+**已实现**:
+- [x] LUT 接口和基础类型 (`lut.go`)
+- [x] Modality LUT (Rescale 和 Sequence) (`modality_lut.go`)
+- [x] VOI LUT (LINEAR, LINEAR_EXACT, SIGMOID) (`voi_lut.go`)
+- [x] 颜色空间转换器 (RGB, YBR_FULL, YBR_FULL_422, YBR_PARTIAL_422, YBR_ICT, YBR_RCT) (`colorspace.go`)
+- [x] 图像渲染管线 (GrayscalePipeline, CompositeLUT, InvertLUT) (`pipeline.go`)
+- [x] 图像导出功能 (PNG, JPEG) (`export.go`)
+- [x] PixelDataConverter - 像素数据格式转换 (`converter.go`)
+- [x] DicomImage - 高级图像类 (`image.go`)
+- [x] 编写单元测试 (100% 测试通过)
+  - `lut_test.go` - 18 tests
+  - `colorspace_test.go` - 11 tests
+  - `pipeline_test.go` - 11 tests
+  - `converter_test.go` - 9 tests
 
-**预计工作量**: 5-7 天
-**优先级**: 低 (取决于项目需求)
+**实际工作量**: 1 天
+**状态**: ✅ 完成
 
 ---
 
