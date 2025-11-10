@@ -27,10 +27,8 @@ func (c *RLECodec) Name() string {
 }
 
 // TransferSyntax returns the RLE Lossless transfer syntax.
-// TODO: Return actual RLE Lossless transfer syntax once it's defined in transfer package.
 func (c *RLECodec) TransferSyntax() *transfer.TransferSyntax {
-	// RLE Lossless UID: 1.2.840.10008.1.2.5
-	return nil // TODO: implement when transfer syntax constants are available
+	return transfer.RLELossless
 }
 
 // Encode compresses pixel data using RLE compression.

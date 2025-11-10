@@ -31,7 +31,7 @@ func NewNativeCodec(ts *transfer.TransferSyntax, isBigEndian bool) *NativeCodec 
 // NewImplicitVRLittleEndianCodec creates a codec for Implicit VR Little Endian.
 func NewImplicitVRLittleEndianCodec() *NativeCodec {
 	return &NativeCodec{
-		transferSyntax: nil, // TODO: set when transfer syntax is available
+		transferSyntax: transfer.ImplicitVRLittleEndian,
 		isBigEndian:    false,
 	}
 }
@@ -39,7 +39,7 @@ func NewImplicitVRLittleEndianCodec() *NativeCodec {
 // NewExplicitVRLittleEndianCodec creates a codec for Explicit VR Little Endian.
 func NewExplicitVRLittleEndianCodec() *NativeCodec {
 	return &NativeCodec{
-		transferSyntax: nil, // TODO: set when transfer syntax is available
+		transferSyntax: transfer.ExplicitVRLittleEndian,
 		isBigEndian:    false,
 	}
 }
@@ -47,7 +47,7 @@ func NewExplicitVRLittleEndianCodec() *NativeCodec {
 // NewExplicitVRBigEndianCodec creates a codec for Explicit VR Big Endian.
 func NewExplicitVRBigEndianCodec() *NativeCodec {
 	return &NativeCodec{
-		transferSyntax: nil, // TODO: set when transfer syntax is available
+		transferSyntax: transfer.ExplicitVRBigEndian,
 		isBigEndian:    true,
 	}
 }

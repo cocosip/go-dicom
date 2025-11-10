@@ -433,3 +433,40 @@ func TestNativeCodec_ReadWriteUint32(t *testing.T) {
 		t.Errorf("BE read got 0x%08X, want 0x9ABCDEF0", val)
 	}
 }
+
+func TestNativeCodec_TransferSyntax(t *testing.T) {
+	tests := []struct {
+		name        string
+		codec       *NativeCodec
+		expectedUID string
+	}{
+		{
+			name:        "Implicit VR Little Endian",
+			codec:       NewImplicitVRLittleEndianCodec(),
+			expectedUID: "1.2.840.10008.1.2",
+		},
+		{
+			name:        "Explicit VR Little Endian",
+			codec:       NewExplicitVRLittleEndianCodec(),
+			expectedUID: "1.2.840.10008.1.2.1",
+		},
+		{
+			name:        "Explicit VR Big Endian",
+			codec:       NewExplicitVRBigEndianCodec(),
+			expectedUID: "1.2.840.10008.1.2.2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := tt.codec.TransferSyntax()
+			if ts == nil {
+				t.Fatal("TransferSyntax() returned nil")
+			}
+
+			if ts.UID().UID() != tt.expectedUID {
+				t.Errorf("UID = %s, want %s", ts.UID().UID(), tt.expectedUID)
+			}
+		})
+	}
+}

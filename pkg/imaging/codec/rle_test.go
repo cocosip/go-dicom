@@ -364,3 +364,26 @@ func TestBaseParameters(t *testing.T) {
 		t.Errorf("GetParameter(nonexistent) = %v, want nil", val)
 	}
 }
+
+func TestRLECodec_TransferSyntax(t *testing.T) {
+	codec := NewRLECodec()
+	ts := codec.TransferSyntax()
+
+	if ts == nil {
+		t.Fatal("TransferSyntax() returned nil")
+	}
+
+	// Check UID
+	if ts.UID().UID() != "1.2.840.10008.1.2.5" {
+		t.Errorf("UID = %s, want 1.2.840.10008.1.2.5", ts.UID().UID())
+	}
+
+	// Check properties
+	if !ts.IsExplicitVR() {
+		t.Error("RLE should use Explicit VR")
+	}
+
+	if !ts.IsEncapsulated() {
+		t.Error("RLE should be encapsulated")
+	}
+}

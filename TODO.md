@@ -338,36 +338,37 @@
 
 ---
 
-## 第五阶段：传输语法 (Transfer Syntax)
+## 第五阶段：传输语法 (Transfer Syntax) ✅
 
-### 5.1 DicomTransferSyntax
+### 5.1 DicomTransferSyntax ✅
 **参考**: `fo-dicom-code/DicomTransferSyntax.cs` (~920 lines)
+**包**: `pkg/dicom/transfer`
 
-- [ ] 定义 TransferSyntax 结构体
-  ```go
-  type TransferSyntax struct {
-      UID              UID
-      IsExplicitVR     bool
-      IsLittleEndian   bool
-      IsDeflated       bool
-      IsEncapsulated   bool
-      IsLossy          bool
-      // ...
-  }
-  ```
-- [ ] 定义常用传输语法常量
-  - [ ] ExplicitVRLittleEndian (默认)
-  - [ ] ImplicitVRLittleEndian
-  - [ ] ExplicitVRBigEndian
-  - [ ] JPEGBaseline
-  - [ ] JPEG2000Lossless
-  - [ ] RLELossless
-  - [ ] 等等...
-- [ ] 实现 TransferSyntax.Lookup(uid) 查找
-- [ ] 编写单元测试
+- [x] 定义 TransferSyntax 结构体
+- [x] 实现 Builder 模式用于构建传输语法
+- [x] 定义常用传输语法常量 (constants.go)
+  - [x] ImplicitVRLittleEndian
+  - [x] ExplicitVRLittleEndian
+  - [x] ExplicitVRBigEndian (Retired)
+  - [x] DeflatedExplicitVRLittleEndian
+  - [x] RLELossless
+  - [x] JPEGBaseline8Bit, JPEGExtended12Bit
+  - [x] JPEGLossless, JPEGLosslessSV1
+  - [x] JPEGLSLossless, JPEGLSNearLossless
+  - [x] JPEG2000Lossless, JPEG2000
+  - [x] JPEG2000Part2Lossless, JPEG2000Part2
+  - [x] MPEG2MainProfile, MPEG2HighProfile
+  - [x] MPEG4AVCH264HighProfile, MPEG4AVCH264BDCompatibleHighProfile
+  - [x] HTJ2KLossless, HTJ2KLosslessRPCL, HTJ2K
+  - [x] GEPrivateImplicitVRBigEndian
+- [x] 实现 TransferSyntax.Lookup(uid) 查找
+- [x] 实现全局注册表 (Register/Unregister/Query)
+- [x] 编写单元测试
+- [x] 集成到 imaging codec 包
 
-**依赖**: DicomUID
-**预计工作量**: 2-3 天
+**依赖**: DicomUID ✅
+**实际工作量**: 已完成（常量已在之前实现）
+**状态**: ✅ 完成
 
 ### 5.2 DicomUID
 **参考**: `fo-dicom-code/DicomUID.cs`
