@@ -11,7 +11,7 @@ import (
 func TestNewPDataTF(t *testing.T) {
 	pdata := NewPDataTF()
 	if pdata == nil {
-		t.Error("Expected non-nil P-DATA-TF")
+		t.Fatal("Expected non-nil P-DATA-TF")
 	}
 	if len(pdata.PDVs) != 0 {
 		t.Errorf("Expected 0 PDVs, got %d", len(pdata.PDVs))

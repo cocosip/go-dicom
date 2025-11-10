@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
@@ -50,132 +51,14 @@ func TestETIAMVideo(t *testing.T) {
 	t.Logf("✓ Successfully parsed ETIAM_video_002.dcm")
 	t.Logf("Dataset contains %d elements", result.Dataset.Count())
 
-	// Check SOP Class UID - should be a video-related class
-	if sopClassUID, exists := result.Dataset.GetString(tag.SOPClassUID); exists {
-		t.Logf("SOP Class UID: %s", sopClassUID)
-
-		// Video Endoscopic Image Storage: 1.2.840.10008.5.1.4.1.1.77.1.1.1
-		// Video Microscopic Image Storage: 1.2.840.10008.5.1.4.1.1.77.1.2.1
-		// Video Photographic Image Storage: 1.2.840.10008.5.1.4.1.1.77.1.4.1
-		if sopClassUID == "1.2.840.10008.5.1.4.1.1.77.1.1.1" {
-			t.Log("✓ Confirmed: Video Endoscopic Image Storage")
-		}
-	} else {
-		t.Error("SOP Class UID not found")
-	}
-
-	// Check Modality
-	if modality, exists := result.Dataset.GetString(tag.Modality); exists {
-		t.Logf("Modality: %s", modality)
-	}
-
-	// Check Transfer Syntax - video files typically use MPEG2 or MPEG4
-	if result.FileMetaInformation != nil {
-		if tsUID, exists := result.FileMetaInformation.TransferSyntaxUID(); exists {
-			t.Logf("Transfer Syntax UID: %s", tsUID)
-
-			// Common video transfer syntaxes:
-			// MPEG2 Main Profile @ Main Level: 1.2.840.10008.1.2.4.100
-			// MPEG2 Main Profile @ High Level: 1.2.840.10008.1.2.4.101
-			// MPEG4 AVC/H.264: 1.2.840.10008.1.2.4.102, 1.2.840.10008.1.2.4.103
-			switch tsUID {
-			case "1.2.840.10008.1.2.4.100":
-				t.Log("✓ Video format: MPEG2 Main Profile @ Main Level")
-			case "1.2.840.10008.1.2.4.101":
-				t.Log("✓ Video format: MPEG2 Main Profile @ High Level")
-			case "1.2.840.10008.1.2.4.102":
-				t.Log("✓ Video format: MPEG4 AVC/H.264 High Profile")
-			case "1.2.840.10008.1.2.4.103":
-				t.Log("✓ Video format: MPEG4 AVC/H.264 BD-compatible")
-			default:
-				t.Logf("Video format: Other (%s)", tsUID)
-			}
-		}
-	}
-
-	// Check for Pixel Data - video data is stored here
-	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-	if !exists {
-		t.Fatal("❌ PixelData tag not found - cannot get video data")
-	}
-
-	t.Logf("✓ PixelData element found")
-	t.Logf("  PixelData tag: %s", pixelDataElem.Tag())
-	t.Logf("  PixelData VR: %s", pixelDataElem.ValueRepresentation())
-	t.Logf("  PixelData type: %T", pixelDataElem)
-
-	// Check pixel data length
-	if pixelDataElem.Length() > 0 {
-		t.Logf("  PixelData length: %.2f MB", float64(pixelDataElem.Length())/(1024*1024))
-	} else {
-		t.Logf("  PixelData length: undefined (fragment sequence)")
-	}
-
-	// Video-specific attributes
-	t.Log("\nVideo-specific attributes:")
-
-	// Number of Frames
-	if numFrames, exists := result.Dataset.GetString(tag.NumberOfFrames); exists {
-		t.Logf("  Number of Frames: %s", numFrames)
-	} else {
-		t.Log("  Number of Frames: not specified (continuous video)")
-	}
-
-	// Frame Time (time between frames in milliseconds)
-	if frameTime, exists := result.Dataset.GetString(tag.FrameTime); exists {
-		t.Logf("  Frame Time: %s ms", frameTime)
-	}
-
-	// Recommended Display Frame Rate
-	if frameRate, exists := result.Dataset.GetString(tag.RecommendedDisplayFrameRate); exists {
-		t.Logf("  Recommended Display Frame Rate: %s fps", frameRate)
-	}
-
-	// Cine Rate
-	if cineRate, exists := result.Dataset.GetString(tag.CineRate); exists {
-		t.Logf("  Cine Rate: %s", cineRate)
-	}
-
-	// Image dimensions
-	if rows, err := result.Dataset.GetUInt16(tag.Rows, 0); err == nil {
-		t.Logf("  Rows: %d", rows)
-	}
-
-	if cols, err := result.Dataset.GetUInt16(tag.Columns, 0); err == nil {
-		t.Logf("  Columns: %d", cols)
-	}
-
-	// Samples per pixel (usually 3 for color video)
-	if samplesPerPixel, err := result.Dataset.GetUInt16(tag.SamplesPerPixel, 0); err == nil {
-		t.Logf("  Samples Per Pixel: %d", samplesPerPixel)
-		if samplesPerPixel == 3 {
-			t.Log("  ✓ Color video (RGB or YBR)")
-		}
-	}
-
-	// Photometric Interpretation
-	if photoInterp, exists := result.Dataset.GetString(tag.PhotometricInterpretation); exists {
-		t.Logf("  Photometric Interpretation: %s", photoInterp)
-	}
-
-	// Bits Allocated
-	if bitsAlloc, err := result.Dataset.GetUInt16(tag.BitsAllocated, 0); err == nil {
-		t.Logf("  Bits Allocated: %d", bitsAlloc)
-	}
-
-	// Patient and study information
-	t.Log("\nPatient/Study information:")
-	if patientName, exists := result.Dataset.GetString(tag.PatientName); exists {
-		t.Logf("  Patient Name: %s", patientName)
-	}
-
-	if studyDesc, exists := result.Dataset.GetString(tag.StudyDescription); exists {
-		t.Logf("  Study Description: %s", studyDesc)
-	}
-
-	if seriesDesc, exists := result.Dataset.GetString(tag.SeriesDescription); exists {
-		t.Logf("  Series Description: %s", seriesDesc)
-	}
+	// Check various video DICOM attributes
+	checkSOPClassUID(t, result.Dataset)
+	checkModality(t, result.Dataset)
+	checkVideoTransferSyntax(t, result.FileMetaInformation)
+	checkVideoPixelData(t, result.Dataset)
+	checkVideoAttributes(t, result.Dataset)
+	checkImageDimensions(t, result.Dataset)
+	checkPatientStudyInfo(t, result.Dataset)
 
 	t.Log("\n✓ Video DICOM file parsed successfully")
 	t.Log("✓ Pixel data (video stream) is accessible")
@@ -334,5 +217,133 @@ func BenchmarkVideoDICOMParsing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		reader := &fileReader{data: data, pos: 0}
 		_, _ = Parse(reader)
+	}
+}
+
+// checkSOPClassUID checks and logs the SOP Class UID
+func checkSOPClassUID(t *testing.T, ds *dataset.Dataset) {
+	if sopClassUID, exists := ds.GetString(tag.SOPClassUID); exists {
+		t.Logf("SOP Class UID: %s", sopClassUID)
+		if sopClassUID == "1.2.840.10008.5.1.4.1.1.77.1.1.1" {
+			t.Log("✓ Confirmed: Video Endoscopic Image Storage")
+		}
+	} else {
+		t.Error("SOP Class UID not found")
+	}
+}
+
+// checkModality checks and logs the modality
+func checkModality(t *testing.T, ds *dataset.Dataset) {
+	if modality, exists := ds.GetString(tag.Modality); exists {
+		t.Logf("Modality: %s", modality)
+	}
+}
+
+// checkVideoTransferSyntax checks and logs the transfer syntax
+func checkVideoTransferSyntax(t *testing.T, fmi *dataset.FileMetaInformation) {
+	if fmi == nil {
+		return
+	}
+
+	if tsUID, exists := fmi.TransferSyntaxUID(); exists {
+		t.Logf("Transfer Syntax UID: %s", tsUID)
+
+		switch tsUID {
+		case "1.2.840.10008.1.2.4.100":
+			t.Log("✓ Video format: MPEG2 Main Profile @ Main Level")
+		case "1.2.840.10008.1.2.4.101":
+			t.Log("✓ Video format: MPEG2 Main Profile @ High Level")
+		case "1.2.840.10008.1.2.4.102":
+			t.Log("✓ Video format: MPEG4 AVC/H.264 High Profile")
+		case "1.2.840.10008.1.2.4.103":
+			t.Log("✓ Video format: MPEG4 AVC/H.264 BD-compatible")
+		default:
+			t.Logf("Video format: Other (%s)", tsUID)
+		}
+	}
+}
+
+// checkVideoPixelData checks and logs pixel data information
+func checkVideoPixelData(t *testing.T, ds *dataset.Dataset) {
+	pixelDataElem, exists := ds.Get(tag.PixelData)
+	if !exists {
+		t.Fatal("❌ PixelData tag not found - cannot get video data")
+	}
+
+	t.Logf("✓ PixelData element found")
+	t.Logf("  PixelData tag: %s", pixelDataElem.Tag())
+	t.Logf("  PixelData VR: %s", pixelDataElem.ValueRepresentation())
+	t.Logf("  PixelData type: %T", pixelDataElem)
+
+	if pixelDataElem.Length() > 0 {
+		t.Logf("  PixelData length: %.2f MB", float64(pixelDataElem.Length())/(1024*1024))
+	} else {
+		t.Logf("  PixelData length: undefined (fragment sequence)")
+	}
+}
+
+// checkVideoAttributes checks and logs video-specific attributes
+func checkVideoAttributes(t *testing.T, ds *dataset.Dataset) {
+	t.Log("\nVideo-specific attributes:")
+
+	if numFrames, exists := ds.GetString(tag.NumberOfFrames); exists {
+		t.Logf("  Number of Frames: %s", numFrames)
+	} else {
+		t.Log("  Number of Frames: not specified (continuous video)")
+	}
+
+	if frameTime, exists := ds.GetString(tag.FrameTime); exists {
+		t.Logf("  Frame Time: %s ms", frameTime)
+	}
+
+	if frameRate, exists := ds.GetString(tag.RecommendedDisplayFrameRate); exists {
+		t.Logf("  Recommended Display Frame Rate: %s fps", frameRate)
+	}
+
+	if cineRate, exists := ds.GetString(tag.CineRate); exists {
+		t.Logf("  Cine Rate: %s", cineRate)
+	}
+}
+
+// checkImageDimensions checks and logs image dimensions
+func checkImageDimensions(t *testing.T, ds *dataset.Dataset) {
+	if rows, err := ds.GetUInt16(tag.Rows, 0); err == nil {
+		t.Logf("  Rows: %d", rows)
+	}
+
+	if cols, err := ds.GetUInt16(tag.Columns, 0); err == nil {
+		t.Logf("  Columns: %d", cols)
+	}
+
+	if samplesPerPixel, err := ds.GetUInt16(tag.SamplesPerPixel, 0); err == nil {
+		t.Logf("  Samples Per Pixel: %d", samplesPerPixel)
+		if samplesPerPixel == 3 {
+			t.Log("  ✓ Color video (RGB or YBR)")
+		}
+	}
+
+	if photoInterp, exists := ds.GetString(tag.PhotometricInterpretation); exists {
+		t.Logf("  Photometric Interpretation: %s", photoInterp)
+	}
+
+	if bitsAlloc, err := ds.GetUInt16(tag.BitsAllocated, 0); err == nil {
+		t.Logf("  Bits Allocated: %d", bitsAlloc)
+	}
+}
+
+// checkPatientStudyInfo checks and logs patient and study information
+func checkPatientStudyInfo(t *testing.T, ds *dataset.Dataset) {
+	t.Log("\nPatient/Study information:")
+
+	if patientName, exists := ds.GetString(tag.PatientName); exists {
+		t.Logf("  Patient Name: %s", patientName)
+	}
+
+	if studyDesc, exists := ds.GetString(tag.StudyDescription); exists {
+		t.Logf("  Study Description: %s", studyDesc)
+	}
+
+	if seriesDesc, exists := ds.GetString(tag.SeriesDescription); exists {
+		t.Logf("  Series Description: %s", seriesDesc)
 	}
 }

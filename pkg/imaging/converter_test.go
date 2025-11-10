@@ -86,11 +86,8 @@ func TestYBRFullToRGB(t *testing.T) {
 	result := converter.YBRFullToRGB(input)
 
 	// Check that results are in valid range
-	for i, v := range result {
-		if v < 0 || v > 255 {
-			t.Errorf("Pixel %d out of range: %d", i, v)
-		}
-	}
+	// Note: byte values are always in range [0, 255] by definition
+	_ = result // Verify result is not nil
 
 	// Black should stay close to black
 	if result[3] > 10 || result[4] > 10 || result[5] > 10 {
@@ -115,11 +112,8 @@ func TestRGBToYBRFull(t *testing.T) {
 	result := converter.RGBToYBRFull(input)
 
 	// Check that results are in valid range
-	for i, v := range result {
-		if v < 0 || v > 255 {
-			t.Errorf("Pixel %d out of range: %d", i, v)
-		}
-	}
+	// Note: byte values are always in range [0, 255] by definition
+	_ = result // Verify result is not nil
 
 	// Black: Y should be ~0, Cb/Cr should be ~128
 	if result[0] > 10 {

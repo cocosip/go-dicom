@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -218,7 +219,7 @@ func TestConnectWithoutPresentationContexts(t *testing.T) {
 
 	// Try to connect without adding presentation contexts
 	// Should fail immediately without attempting network connection
-	err := client.Connect(nil, "localhost", 104)
+	err := client.Connect(context.TODO(), "localhost", 104)
 	if err == nil {
 		t.Error("Expected error when connecting without presentation contexts")
 	}
@@ -233,7 +234,7 @@ func TestConnectAlreadyConnected(t *testing.T) {
 	client := New()
 	client.connected = true
 
-	err := client.Connect(nil, "localhost", 104)
+	err := client.Connect(context.TODO(), "localhost", 104)
 	if err == nil {
 		t.Error("Expected error when already connected")
 	}

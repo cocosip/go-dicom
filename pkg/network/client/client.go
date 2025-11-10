@@ -69,9 +69,6 @@ type Client struct {
 	// Presentation contexts to negotiate
 	presentationContexts []*pdu.PresentationContextRQ
 
-	// User information items
-	userInfo *pdu.UserInformation
-
 	// Connection state
 	connected bool
 }

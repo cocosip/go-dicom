@@ -121,7 +121,8 @@ func (p *PaletteColorLUT) ApplyToPixelData(pixelData []byte, bitsAllocated uint1
 	var pixelCount int
 	var rgbData []byte
 
-	if bitsAllocated == 8 {
+	switch bitsAllocated {
+	case 8:
 		// 8-bit pixels
 		pixelCount = len(pixelData)
 		rgbData = make([]byte, pixelCount*3)
@@ -133,7 +134,7 @@ func (p *PaletteColorLUT) ApplyToPixelData(pixelData []byte, bitsAllocated uint1
 			rgbData[i*3+1] = color.G
 			rgbData[i*3+2] = color.B
 		}
-	} else if bitsAllocated == 16 {
+	case 16:
 		// 16-bit pixels
 		pixelCount = len(pixelData) / 2
 		rgbData = make([]byte, pixelCount*3)
@@ -146,7 +147,7 @@ func (p *PaletteColorLUT) ApplyToPixelData(pixelData []byte, bitsAllocated uint1
 			rgbData[i*3+1] = color.G
 			rgbData[i*3+2] = color.B
 		}
-	} else {
+	default:
 		return nil, fmt.Errorf("unsupported bits allocated for palette color: %d", bitsAllocated)
 	}
 

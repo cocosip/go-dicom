@@ -75,7 +75,7 @@ func TestAssociation_FindPresentationContextByID(t *testing.T) {
 	// Find existing context
 	found := assoc.FindPresentationContextByID(1)
 	if found == nil {
-		t.Error("Expected to find context ID 1")
+		t.Fatal("Expected to find context ID 1")
 	}
 	if found.AbstractSyntax != "1.2.840.10008.5.1.4.1.1.2" {
 		t.Errorf("Wrong abstract syntax: %s", found.AbstractSyntax)
@@ -147,7 +147,7 @@ func TestAssociation_ExtendedNegotiation(t *testing.T) {
 	// Find existing
 	found := assoc.FindExtendedNegotiation("1.2.840.10008.5.1.4.1.1.2")
 	if found == nil {
-		t.Error("Expected to find extended negotiation")
+		t.Fatal("Expected to find extended negotiation")
 	}
 	if len(found.ServiceClassAppInfo) != 3 {
 		t.Errorf("Expected 3 bytes of app info, got %d", len(found.ServiceClassAppInfo))
@@ -172,7 +172,7 @@ func TestAssociation_RoleSelection(t *testing.T) {
 	// Find existing
 	found := assoc.FindRoleSelection("1.2.840.10008.5.1.4.1.1.2")
 	if found == nil {
-		t.Error("Expected to find role selection")
+		t.Fatal("Expected to find role selection")
 	}
 	if found.SCURole != 1 || found.SCPRole != 0 {
 		t.Errorf("Wrong role selection: SCU=%d, SCP=%d", found.SCURole, found.SCPRole)

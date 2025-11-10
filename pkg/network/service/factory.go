@@ -22,23 +22,23 @@ func createMessageFromDatasets(commandDS, dataDS *dataset.Dataset) (dimse.Messag
 	}
 
 	// Dispatch based on command type
-	switch uint16(commandField) {
+	switch dimse.CommandField(commandField) {
 	// C-ECHO
-	case uint16(dimse.CommandCEchoRQ):
+	case dimse.CommandCEchoRQ:
 		return createCEchoRequest(commandDS)
-	case uint16(dimse.CommandCEchoRSP):
+	case dimse.CommandCEchoRSP:
 		return createCEchoResponse(commandDS)
 
 	// C-STORE
-	case uint16(dimse.CommandCStoreRQ):
+	case dimse.CommandCStoreRQ:
 		return createCStoreRequest(commandDS, dataDS)
-	case uint16(dimse.CommandCStoreRSP):
+	case dimse.CommandCStoreRSP:
 		return createCStoreResponse(commandDS)
 
 	// C-FIND
-	case uint16(dimse.CommandCFindRQ):
+	case dimse.CommandCFindRQ:
 		return createCFindRequest(commandDS, dataDS)
-	case uint16(dimse.CommandCFindRSP):
+	case dimse.CommandCFindRSP:
 		return createCFindResponse(commandDS, dataDS)
 
 	default:

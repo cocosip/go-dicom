@@ -209,11 +209,12 @@ func (o *DicomOverlayData) ApplyToImage(imageData []byte, width, height int, sam
 	// Apply overlay with blending
 	for i := 0; i < width*height; i++ {
 		if unpacked[i] != 0 {
-			if samplesPerPixel == 1 {
+			switch samplesPerPixel {
+			case 1:
 				// Grayscale: blend with gray value
 				gray := (uint16(overlayColor.R) + uint16(overlayColor.G) + uint16(overlayColor.B)) / 3
 				result[i] = uint8(gray)
-			} else if samplesPerPixel == 3 {
+			case 3:
 				// RGB: apply overlay color with alpha blending
 				alpha := float64(overlayColor.A) / 255.0
 				idx := i * 3

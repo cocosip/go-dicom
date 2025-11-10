@@ -86,9 +86,10 @@ func (e *ImageExporter) ExportGrayscale(
 			pixelIndex := (y*width + x) * bytesPerPixel
 
 			var pixelValue float64
-			if bytesPerPixel == 1 {
+			switch bytesPerPixel {
+			case 1:
 				pixelValue = float64(pixelData[pixelIndex])
-			} else if bytesPerPixel == 2 {
+			case 2:
 				// 16-bit pixel
 				if isSigned {
 					pixelValue = float64(int16(pixelData[pixelIndex]) | int16(pixelData[pixelIndex+1])<<8)
@@ -101,7 +102,7 @@ func (e *ImageExporter) ExportGrayscale(
 			outputValue := lut.Transform(pixelValue)
 
 			// Clamp to 8-bit range
-			grayValue := uint8(clampUint8(outputValue))
+			grayValue := clampUint8(outputValue)
 
 			// Invert for MONOCHROME1
 			if isMonochrome1 {
@@ -197,13 +198,14 @@ func (e *ImageExporter) RenderFrame(
 	planarConfig int,
 	options *ExportOptions,
 ) error {
-	if samplesPerPixel == 1 {
+	switch samplesPerPixel {
+	case 1:
 		// Grayscale
 		return e.ExportGrayscale(writer, frameData, width, height, bitsAllocated, bitsStored, isSigned, photometric, options)
-	} else if samplesPerPixel == 3 {
+	case 3:
 		// RGB/YBR
 		return e.ExportRGB(writer, frameData, width, height, photometric, planarConfig, options)
-	} else {
+	default:
 		return fmt.Errorf("unsupported samples per pixel: %d", samplesPerPixel)
 	}
 }

@@ -419,10 +419,8 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 
 	for {
 		// Check stop condition
-		if p.stopAtTag != nil {
-			// We need to peek at the next tag
-			// For now, we'll read and check
-		}
+		// TODO: Implement stopAtTag functionality for early termination
+		_ = p.stopAtTag
 
 		var elem element.Element
 		var err error
@@ -747,12 +745,7 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 		p.reader = seqReader
 
 		// Read items until we've consumed all sequence data
-		for {
-			// Check if we've read all the data
-			if seqReader.Len() == 0 {
-				break
-			}
-
+		for seqReader.Len() > 0 {
 			itemTag, err := p.readTag()
 			if err == io.EOF {
 				break
@@ -838,12 +831,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 		p.reader = itemReader
 
 		// Read elements until we've consumed all item data
-		for {
-			// Check if we've read all the data
-			if itemReader.Len() == 0 {
-				break
-			}
-
+		for itemReader.Len() > 0 {
 			elem, err := p.readElement()
 			if err == io.EOF {
 				break

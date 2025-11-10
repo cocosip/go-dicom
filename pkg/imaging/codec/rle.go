@@ -38,7 +38,7 @@ func (c *RLECodec) Encode(src *PixelData, dst *PixelData, params Parameters) err
 	}
 
 	pixelCount := int(src.Width) * int(src.Height)
-	numberOfSegments := int(src.BytesAllocated()) * int(src.SamplesPerPixel)
+	numberOfSegments := src.BytesAllocated() * int(src.SamplesPerPixel)
 	frameSize := src.UncompressedFrameSize()
 
 	var result bytes.Buffer
@@ -56,20 +56,20 @@ func (c *RLECodec) Encode(src *PixelData, dst *PixelData, params Parameters) err
 		for s := 0; s < numberOfSegments; s++ {
 			encoder.NextSegment()
 
-			sample := s / int(src.BytesAllocated())
-			sabyte := s % int(src.BytesAllocated())
+			sample := s / src.BytesAllocated()
+			sabyte := s % src.BytesAllocated()
 
 			var pos, offset int
 
 			if src.IsInterleaved() {
-				pos = sample * int(src.BytesAllocated())
+				pos = sample * src.BytesAllocated()
 				offset = numberOfSegments
 			} else {
-				pos = sample * int(src.BytesAllocated()) * pixelCount
-				offset = int(src.BytesAllocated())
+				pos = sample * src.BytesAllocated() * pixelCount
+				offset = src.BytesAllocated()
 			}
 
-			pos += int(src.BytesAllocated()) - sabyte - 1
+			pos += src.BytesAllocated() - sabyte - 1
 
 			for p := 0; p < pixelCount; p++ {
 				if pos >= len(frameData) {
@@ -97,7 +97,7 @@ func (c *RLECodec) Decode(src *PixelData, dst *PixelData, params Parameters) err
 	}
 
 	pixelCount := int(src.Width) * int(src.Height)
-	numberOfSegments := int(src.BytesAllocated()) * int(src.SamplesPerPixel)
+	numberOfSegments := src.BytesAllocated() * int(src.SamplesPerPixel)
 
 	var result bytes.Buffer
 	dataOffset := 0
@@ -128,20 +128,20 @@ func (c *RLECodec) Decode(src *PixelData, dst *PixelData, params Parameters) err
 		}
 
 		for s := 0; s < numberOfSegments; s++ {
-			sample := s / int(dst.BytesAllocated())
-			sabyte := s % int(dst.BytesAllocated())
+			sample := s / dst.BytesAllocated()
+			sabyte := s % dst.BytesAllocated()
 
 			var pos, offset int
 
 			if dst.IsInterleaved() {
-				pos = sample * int(dst.BytesAllocated())
-				offset = int(dst.SamplesPerPixel) * int(dst.BytesAllocated())
+				pos = sample * dst.BytesAllocated()
+				offset = int(dst.SamplesPerPixel) * dst.BytesAllocated()
 			} else {
-				pos = sample * int(dst.BytesAllocated()) * pixelCount
-				offset = int(dst.BytesAllocated())
+				pos = sample * dst.BytesAllocated() * pixelCount
+				offset = dst.BytesAllocated()
 			}
 
-			pos += int(dst.BytesAllocated()) - sabyte - 1
+			pos += dst.BytesAllocated() - sabyte - 1
 
 			if err := decoder.DecodeSegment(s, frameData, pos, offset); err != nil {
 				return fmt.Errorf("failed to decode segment %d: %w", s, err)
@@ -329,21 +329,8 @@ func newRLEDecoder(data []byte) (*rleDecoder, int, error) {
 	}
 
 	// Calculate total bytes consumed for this frame
-	// The next frame (if any) starts after the last segment ends
-	bytesRead := len(data) // For now, assume entire data is one frame
-	if dec.NumberOfSegments > 0 {
-		lastOffset := dec.offsets[dec.NumberOfSegments-1]
-		// Find the end of the last segment
-		bytesRead = lastOffset
-		for i := lastOffset; i < len(data); i++ {
-			if i >= len(data) {
-				break
-			}
-			// RLE segments are variable length, estimate end
-			bytesRead = len(data) // Conservative: use all remaining data
-			break
-		}
-	}
+	// RLE segments are variable length, conservatively use all remaining data
+	bytesRead := len(data)
 
 	return dec, bytesRead, nil
 }

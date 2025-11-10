@@ -114,10 +114,10 @@ func (a *AAssociateAC) Encode() (*RawPDU, error) {
 	buf.Write([]byte{0x00, 0x00})
 
 	// Called AE Title (16 bytes, space-padded)
-	buf.Write(writeString(a.CalledAETitle, 16))
+	buf.Write(writeString(a.CalledAETitle))
 
 	// Calling AE Title (16 bytes, space-padded)
-	buf.Write(writeString(a.CallingAETitle, 16))
+	buf.Write(writeString(a.CallingAETitle))
 
 	// Reserved (32 bytes)
 	buf.Write(make([]byte, 32))

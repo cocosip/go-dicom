@@ -165,13 +165,13 @@ func parseVM(s string) (*VM, error) {
 
 	if len(parts) == 2 {
 		// Range: "1-2", "1-n", "2-2n", etc.
-		min, err := strconv.Atoi(parts[0])
+		minVal, err := strconv.Atoi(parts[0])
 		if err != nil {
 			return nil, fmt.Errorf("invalid minimum value '%s': %w", parts[0], err)
 		}
 
 		vm := &VM{
-			minimum:      min,
+			minimum:      minVal,
 			multiplicity: 1,
 		}
 
@@ -194,11 +194,11 @@ func parseVM(s string) (*VM, error) {
 			}
 		} else {
 			// Fixed maximum
-			max, err := strconv.Atoi(maxStr)
+			maxVal, err := strconv.Atoi(maxStr)
 			if err != nil {
 				return nil, fmt.Errorf("invalid maximum value '%s': %w", maxStr, err)
 			}
-			vm.maximum = max
+			vm.maximum = maxVal
 		}
 
 		return vm, nil

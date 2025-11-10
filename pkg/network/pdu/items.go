@@ -148,23 +148,9 @@ func writeItem(w io.Writer, itemType byte, data []byte) error {
 	return nil
 }
 
-// readString reads a fixed-length string, padding with spaces if necessary.
-// DICOM strings are space-padded to the specified length.
-func readString(data []byte, length int) string {
-	if len(data) < length {
-		// Pad with spaces
-		padded := make([]byte, length)
-		copy(padded, data)
-		for i := len(data); i < length; i++ {
-			padded[i] = ' '
-		}
-		return string(padded)
-	}
-	return string(data[:length])
-}
-
-// writeString writes a string, padding with spaces to the specified length.
-func writeString(s string, length int) []byte {
+// writeString writes a string, padding with spaces to 16 bytes (DICOM AE Title length).
+func writeString(s string) []byte {
+	const length = 16
 	result := make([]byte, length)
 	for i := 0; i < length; i++ {
 		if i < len(s) {

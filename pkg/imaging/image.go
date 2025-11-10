@@ -230,7 +230,8 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 	exporter := render.NewImageExporter(pipeline)
 
 	// Render based on samples per pixel
-	if img.pixelData.Info.SamplesPerPixel == 1 {
+	switch img.pixelData.Info.SamplesPerPixel {
+	case 1:
 		// Grayscale
 		isSigned := img.pixelData.Info.PixelRepresentation == SignedPixels
 		photometric := "MONOCHROME2"
@@ -249,7 +250,7 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 			photometric,
 			options,
 		)
-	} else if img.pixelData.Info.SamplesPerPixel == 3 {
+	case 3:
 		// RGB/YBR
 		photometric := "RGB"
 		if img.pixelData.Info.PhotometricInterpretation != nil {
@@ -265,9 +266,9 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 			int(img.pixelData.Info.PlanarConfiguration),
 			options,
 		)
+	default:
+		return fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Info.SamplesPerPixel)
 	}
-
-	return fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Info.SamplesPerPixel)
 }
 
 // RenderCurrentFrame renders the current frame to a writer

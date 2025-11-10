@@ -121,7 +121,6 @@ func TestRGBImageParsing(t *testing.T) {
 	if err != nil {
 		// Planar configuration might not be present
 		t.Logf("Planar Configuration: not specified (assuming 0 - interlaced)")
-		planarConfig = 0
 	} else {
 		t.Logf("Planar Configuration: %d", planarConfig)
 		if planarConfig == 0 {

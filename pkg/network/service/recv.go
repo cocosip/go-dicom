@@ -75,9 +75,7 @@ func (s *Service) recvLoop(ctx context.Context) error {
 			case pdu.TypeAReleaseRP:
 				// Handle A-RELEASE-RP (response to our release request)
 				// This means the peer accepted our release request
-				if err := s.handleReleaseResponse(ctx); err != nil {
-					return fmt.Errorf("failed to handle A-RELEASE-RP: %w", err)
-				}
+				s.handleReleaseResponse(ctx)
 				return nil
 
 			case pdu.TypeAAbort:
@@ -226,7 +224,7 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 // handleReleaseResponse processes an A-RELEASE-RP PDU.
 // This is received in response to our A-RELEASE-RQ, indicating the peer accepted the release.
 // We update the service state and notify the lifecycle handler.
-func (s *Service) handleReleaseResponse(ctx context.Context) error {
+func (s *Service) handleReleaseResponse(ctx context.Context) {
 	// Update state to closed
 	if err := s.setState(StateClosed); err != nil {
 		// State transition error, but continue with cleanup
@@ -242,8 +240,6 @@ func (s *Service) handleReleaseResponse(ctx context.Context) error {
 	if lifecycleHandler != nil {
 		lifecycleHandler.OnConnectionClosed(ctx, nil)
 	}
-
-	return nil
 }
 
 // handleAbort processes an A-ABORT PDU.

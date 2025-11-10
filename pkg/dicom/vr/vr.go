@@ -149,108 +149,13 @@ func ParseBytes(b []byte) (*VR, error) {
 		return nil, fmt.Errorf("VR byte slice must be at least 2 bytes, got %d", len(b))
 	}
 
-	// Optimized byte-based parsing using nested switch
-	switch b[0] {
-	case 'A':
-		switch b[1] {
-		case 'E':
-			return AE, nil
-		case 'S':
-			return AS, nil
-		case 'T':
-			return AT, nil
-		}
-	case 'C':
-		if b[1] == 'S' {
-			return CS, nil
-		}
-	case 'D':
-		switch b[1] {
-		case 'A':
-			return DA, nil
-		case 'S':
-			return DS, nil
-		case 'T':
-			return DT, nil
-		}
-	case 'F':
-		switch b[1] {
-		case 'D':
-			return FD, nil
-		case 'L':
-			return FL, nil
-		}
-	case 'I':
-		if b[1] == 'S' {
-			return IS, nil
-		}
-	case 'L':
-		switch b[1] {
-		case 'O':
-			return LO, nil
-		case 'T':
-			return LT, nil
-		}
-	case 'O':
-		switch b[1] {
-		case 'B':
-			return OB, nil
-		case 'D':
-			return OD, nil
-		case 'F':
-			return OF, nil
-		case 'L':
-			return OL, nil
-		case 'V':
-			return OV, nil
-		case 'W':
-			return OW, nil
-		}
-	case 'P':
-		if b[1] == 'N' {
-			return PN, nil
-		}
-	case 'S':
-		switch b[1] {
-		case 'H':
-			return SH, nil
-		case 'L':
-			return SL, nil
-		case 'Q':
-			return SQ, nil
-		case 'S':
-			return SS, nil
-		case 'T':
-			return ST, nil
-		case 'V':
-			return SV, nil
-		}
-	case 'T':
-		if b[1] == 'M' {
-			return TM, nil
-		}
-	case 'U':
-		switch b[1] {
-		case 'C':
-			return UC, nil
-		case 'I':
-			return UI, nil
-		case 'L':
-			return UL, nil
-		case 'N':
-			return UN, nil
-		case 'R':
-			return UR, nil
-		case 'S':
-			return US, nil
-		case 'T':
-			return UT, nil
-		case 'V':
-			return UV, nil
-		}
+	// Convert bytes to string and lookup in registry
+	code := string(b[0:2])
+	if vr, ok := registry[code]; ok {
+		return vr, nil
 	}
 
-	return nil, fmt.Errorf("unknown VR code: '%c%c'", b[0], b[1])
+	return nil, fmt.Errorf("unknown VR code: '%s'", code)
 }
 
 // TryParse attempts to parse a VR from its string code.

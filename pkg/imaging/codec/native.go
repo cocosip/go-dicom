@@ -73,7 +73,7 @@ func (c *NativeCodec) Encode(src *PixelData, dst *PixelData, params Parameters) 
 	}
 
 	// For uncompressed data, we need to handle byte swapping if necessary
-	bytesPerSample := int(src.BytesAllocated())
+	bytesPerSample := src.BytesAllocated()
 
 	// If single-byte samples, no swapping needed
 	if bytesPerSample == 1 {
@@ -112,7 +112,7 @@ func (c *NativeCodec) Decode(src *PixelData, dst *PixelData, params Parameters) 
 	}
 
 	// For uncompressed data, we need to handle byte swapping if necessary
-	bytesPerSample := int(src.BytesAllocated())
+	bytesPerSample := src.BytesAllocated()
 
 	// If single-byte samples, no swapping needed
 	if bytesPerSample == 1 {

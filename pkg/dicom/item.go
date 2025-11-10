@@ -5,8 +5,6 @@
 package dicom
 
 import (
-	"fmt"
-
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
@@ -40,19 +38,4 @@ func CompareItems(a, b Item) int {
 		return 1
 	}
 	return a.Tag().Compare(b.Tag())
-}
-
-// itemBase provides common functionality for DICOM items.
-type itemBase struct {
-	tag tag.Tag
-}
-
-// Tag returns the tag associated with this item.
-func (i *itemBase) Tag() tag.Tag {
-	return i.tag
-}
-
-// String returns a basic string representation.
-func (i *itemBase) String() string {
-	return fmt.Sprintf("Tag: %s", i.tag.String())
 }

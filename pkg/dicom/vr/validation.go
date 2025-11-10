@@ -11,6 +11,11 @@ import (
 	"unicode"
 )
 
+var (
+	// Pre-compiled regular expressions for performance
+	datePattern = regexp.MustCompile(`^\d{8}$`)
+)
+
 // ValidationError represents a VR validation error.
 type ValidationError struct {
 	Content string
@@ -108,8 +113,7 @@ func ValidateDA(content string) error {
 		}
 
 		// Check format: YYYYMMDD
-		matched, _ := regexp.MatchString(`^\d{8}$`, trimmed)
-		if !matched {
+		if !datePattern.MatchString(trimmed) {
 			return newValidationError("DA", content, "date does not match pattern YYYYMMDD")
 		}
 

@@ -13,7 +13,7 @@ import (
 )
 
 // TestElementInterface verifies that all element types implement the Element interface
-func TestElementInterface(t *testing.T) {
+func TestElementInterface(_ *testing.T) {
 	var _ element.Element = element.NewString(tag.PatientName, vr.PN, []string{"Test"})
 	var _ element.Element = element.NewUnsignedShort(tag.Rows, []uint16{512})
 	var _ element.Element = element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100})

@@ -214,7 +214,7 @@ func (w *xmlWriter) writePersonNameValue(elem element.Element) error {
 			for partIdx, part := range parts {
 				if part != "" && partIdx < len(partNames) {
 					w.writeIndent()
-					w.buf.WriteString(fmt.Sprintf("<%s>%s</%s>", partNames[partIdx], escapeXML(part), partNames[partIdx]))
+					fmt.Fprintf(w.buf, "<%s>%s</%s>", partNames[partIdx], escapeXML(part), partNames[partIdx])
 					if w.config.indent != "" {
 						w.buf.WriteString("\n")
 					}

@@ -117,7 +117,7 @@ func (w *jsonWriter) writeTagKey(elem element.Element) error {
 	} else {
 		// Write as hex tag (GGGGEEEE)
 		w.buf.WriteString(`"`)
-		w.buf.WriteString(fmt.Sprintf("%04X%04X", t.Group(), t.Element()))
+		fmt.Fprintf(w.buf, "%04X%04X", t.Group(), t.Element())
 		w.buf.WriteString(`"`)
 	}
 
@@ -133,97 +133,85 @@ func (w *jsonWriter) writeElement(elem element.Element) error {
 	w.buf.WriteString(elem.ValueRepresentation().Code())
 	w.buf.WriteString(`"`)
 
-	// Write value based on VR and concrete type
-	vrCode := elem.ValueRepresentation().Code()
-	switch vrCode {
-	case vr.CodeSQ:
-		if err := w.writeSequence(elem); err != nil {
-			return err
-		}
-	case vr.CodePN:
-		if err := w.writePersonName(elem); err != nil {
-			return err
-		}
-	case vr.CodeOB, vr.CodeOD, vr.CodeOF, vr.CodeOL, vr.CodeOV, vr.CodeOW, vr.CodeUN:
-		if err := w.writeOther(elem); err != nil {
-			return err
-		}
-	case vr.CodeFL:
-		if err := w.writeFloat32Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeFD:
-		if err := w.writeFloat64Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeIS, vr.CodeDS:
-		// IS and DS are string-based numeric types
-		if err := w.writeNumericStringArray(elem, vrCode); err != nil {
-			return err
-		}
-	case vr.CodeSL:
-		if err := w.writeInt32Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeSS:
-		if err := w.writeInt16Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeSV:
-		if err := w.writeInt64Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeUL:
-		if err := w.writeUint32Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeUS:
-		if err := w.writeUint16Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeUV:
-		if err := w.writeUint64Array(elem); err != nil {
-			return err
-		}
-	case vr.CodeAT:
-		if err := w.writeAttributeTag(elem); err != nil {
-			return err
-		}
-	default:
-		// All other string types
-		if err := w.writeStringArray(elem); err != nil {
-			return err
-		}
+	// Write value based on VR type
+	if err := w.writeValueByVR(elem); err != nil {
+		return err
 	}
 
 	// Write keyword and name if configured
-	if w.config.writeKeyword || w.config.writeName {
-		entryIface := elem.Tag().DictionaryEntry()
-		var entry *dict.Entry
-		if entryIface != nil {
-			entry, _ = entryIface.(*dict.Entry)
-		}
-
-		unknown := entry == nil ||
-			entry.Keyword() == "" ||
-			(entry.MaskTag() != nil && entry.MaskTag().Mask() != 0xffffffff)
-
-		if !unknown {
-			if w.config.writeKeyword {
-				w.buf.WriteString(`,"keyword":"`)
-				w.buf.WriteString(entry.Keyword())
-				w.buf.WriteString(`"`)
-			}
-			if w.config.writeName {
-				w.buf.WriteString(`,"name":"`)
-				w.buf.WriteString(entry.Name())
-				w.buf.WriteString(`"`)
-			}
-		}
-	}
+	w.writeKeywordAndName(elem)
 
 	w.buf.WriteString("}")
 	return nil
+}
+
+// writeValueByVR writes the element value based on its VR type
+func (w *jsonWriter) writeValueByVR(elem element.Element) error {
+	vrCode := elem.ValueRepresentation().Code()
+	switch vrCode {
+	case vr.CodeSQ:
+		return w.writeSequence(elem)
+	case vr.CodePN:
+		return w.writePersonName(elem)
+	case vr.CodeOB, vr.CodeOD, vr.CodeOF, vr.CodeOL, vr.CodeOV, vr.CodeOW, vr.CodeUN:
+		return w.writeOther(elem)
+	case vr.CodeFL:
+		return w.writeFloat32Array(elem)
+	case vr.CodeFD:
+		return w.writeFloat64Array(elem)
+	case vr.CodeIS, vr.CodeDS:
+		// IS and DS are string-based numeric types
+		return w.writeNumericStringArray(elem, vrCode)
+	case vr.CodeSL:
+		return w.writeInt32Array(elem)
+	case vr.CodeSS:
+		return w.writeInt16Array(elem)
+	case vr.CodeSV:
+		return w.writeInt64Array(elem)
+	case vr.CodeUL:
+		return w.writeUint32Array(elem)
+	case vr.CodeUS:
+		return w.writeUint16Array(elem)
+	case vr.CodeUV:
+		return w.writeUint64Array(elem)
+	case vr.CodeAT:
+		return w.writeAttributeTag(elem)
+	default:
+		// All other string types
+		return w.writeStringArray(elem)
+	}
+}
+
+// writeKeywordAndName writes keyword and name metadata if configured
+func (w *jsonWriter) writeKeywordAndName(elem element.Element) {
+	if !w.config.writeKeyword && !w.config.writeName {
+		return
+	}
+
+	entryIface := elem.Tag().DictionaryEntry()
+	var entry *dict.Entry
+	if entryIface != nil {
+		entry, _ = entryIface.(*dict.Entry)
+	}
+
+	unknown := entry == nil ||
+		entry.Keyword() == "" ||
+		(entry.MaskTag() != nil && entry.MaskTag().Mask() != 0xffffffff)
+
+	if unknown {
+		return
+	}
+
+	if w.config.writeKeyword {
+		w.buf.WriteString(`,"keyword":"`)
+		w.buf.WriteString(entry.Keyword())
+		w.buf.WriteString(`"`)
+	}
+	if w.config.writeName {
+		w.buf.WriteString(`,"name":"`)
+		w.buf.WriteString(entry.Name())
+		w.buf.WriteString(`"`)
+	}
 }
 
 // writeStringArray writes a string array value
@@ -517,10 +505,11 @@ func (w *jsonWriter) writeNumberOrString(val string) {
 	}
 
 	// Try to write as number
-	if w.config.numberSerializationMode == AsNumber {
+	switch w.config.numberSerializationMode {
+	case AsNumber:
 		// Must parse as number
 		w.buf.WriteString(val)
-	} else if w.config.numberSerializationMode == PreferablyAsNumber {
+	case PreferablyAsNumber:
 		// Try as number, fallback to string
 		if isValidNumber(val) {
 			w.buf.WriteString(val)
@@ -550,10 +539,11 @@ func fixDecimalString(val string) string {
 	}
 
 	negative := false
-	// Strip leading + sign
-	if val[0] == '+' {
+	// Strip leading + or - sign
+	switch val[0] {
+	case '+':
 		val = val[1:]
-	} else if val[0] == '-' {
+	case '-':
 		negative = true
 		val = val[1:]
 	}
@@ -602,7 +592,7 @@ func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
 				w.buf.WriteString("null")
 			} else {
 				w.buf.WriteString(`"`)
-				w.buf.WriteString(fmt.Sprintf("%08X", t.Uint32()))
+				fmt.Fprintf(w.buf, "%08X", t.Uint32())
 				w.buf.WriteString(`"`)
 			}
 		}

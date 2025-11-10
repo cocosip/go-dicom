@@ -4,7 +4,6 @@
 package parser
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -205,104 +204,7 @@ func TestSRContentSequenceDetails(t *testing.T) {
 			t.Logf("Item %d: nil", i)
 			continue
 		}
-
-		t.Logf("=== Content Item %d ===", i)
-
-		// Relationship Type (required)
-		if relType, exists := item.GetString(tag.RelationshipType); exists {
-			t.Logf("  Relationship Type: %s", relType)
-		}
-
-		// Value Type (required)
-		if valueType, exists := item.GetString(tag.ValueType); exists {
-			t.Logf("  Value Type: %s", valueType)
-
-			// Based on value type, extract different content
-			switch valueType {
-			case "TEXT":
-				if textValue, exists := item.GetString(tag.TextValue); exists {
-					t.Logf("  Text Value: %s", textValue)
-				}
-
-			case "CODE":
-				// Code sequence contains coded values
-				if codeSeqElem, exists := item.Get(tag.ConceptCodeSequence); exists {
-					if codeSeq, ok := codeSeqElem.(*dataset.Sequence); ok && codeSeq.Count() > 0 {
-						codeItem := codeSeq.GetItem(0)
-						if codeValue, exists := codeItem.GetString(tag.CodeValue); exists {
-							t.Logf("  Code Value: %s", codeValue)
-						}
-						if codeMeaning, exists := codeItem.GetString(tag.CodeMeaning); exists {
-							t.Logf("  Code Meaning: %s", codeMeaning)
-						}
-					}
-				}
-
-			case "NUM":
-				// Numeric value
-				if measuredValueSeqElem, exists := item.Get(tag.MeasuredValueSequence); exists {
-					if measuredSeq, ok := measuredValueSeqElem.(*dataset.Sequence); ok && measuredSeq.Count() > 0 {
-						measuredItem := measuredSeq.GetItem(0)
-						if numValue, exists := measuredItem.GetString(tag.NumericValue); exists {
-							t.Logf("  Numeric Value: %s", numValue)
-						}
-					}
-				}
-
-			case "DATETIME", "DATE", "TIME":
-				if dateTime, exists := item.GetString(tag.DateTime); exists {
-					t.Logf("  DateTime: %s", dateTime)
-				}
-				if date, exists := item.GetString(tag.Date); exists {
-					t.Logf("  Date: %s", date)
-				}
-				if time, exists := item.GetString(tag.Time); exists {
-					t.Logf("  Time: %s", time)
-				}
-
-			case "PNAME":
-				if personName, exists := item.GetString(tag.PersonName); exists {
-					t.Logf("  Person Name: %s", personName)
-				}
-
-			case "UIDREF":
-				if uidRef, exists := item.GetString(tag.UID); exists {
-					t.Logf("  UID Reference: %s", uidRef)
-				}
-
-			case "CONTAINER":
-				t.Log("  [Container - may have nested content]")
-				// Containers can have nested ContentSequence
-				if nestedSeqElem, exists := item.Get(tag.ContentSequence); exists {
-					if nestedSeq, ok := nestedSeqElem.(*dataset.Sequence); ok {
-						t.Logf("  Nested items: %d", nestedSeq.Count())
-					}
-				}
-
-			case "IMAGE":
-				// Reference to an image
-				if refSOPSeqElem, exists := item.Get(tag.ReferencedSOPSequence); exists {
-					if refSeq, ok := refSOPSeqElem.(*dataset.Sequence); ok && refSeq.Count() > 0 {
-						t.Logf("  Referenced Image: %d items", refSeq.Count())
-					}
-				}
-
-			default:
-				t.Logf("  [Other value type: %s]", valueType)
-			}
-		}
-
-		// Concept Name Code Sequence (describes what this item represents)
-		if conceptNameSeqElem, exists := item.Get(tag.ConceptNameCodeSequence); exists {
-			if conceptSeq, ok := conceptNameSeqElem.(*dataset.Sequence); ok && conceptSeq.Count() > 0 {
-				conceptItem := conceptSeq.GetItem(0)
-				if codeMeaning, exists := conceptItem.GetString(tag.CodeMeaning); exists {
-					t.Logf("  Concept Name: %s", codeMeaning)
-				}
-			}
-		}
-
-		t.Log("")
+		analyzeSRContentItem(t, i, item)
 	}
 
 	t.Logf("✓ Analyzed %d content items", contentSeq.Count())
@@ -509,21 +411,6 @@ func printSRTree(t *testing.T, ds *dataset.Dataset, level int) {
 	}
 }
 
-// Helper function to format SR content item
-func formatContentItem(item *dataset.Dataset) string {
-	var parts []string
-
-	if relType, exists := item.GetString(tag.RelationshipType); exists {
-		parts = append(parts, fmt.Sprintf("Rel:%s", relType))
-	}
-
-	if valueType, exists := item.GetString(tag.ValueType); exists {
-		parts = append(parts, fmt.Sprintf("Type:%s", valueType))
-	}
-
-	return fmt.Sprintf("{%s}", parts)
-}
-
 // BenchmarkSRParsing benchmarks parsing of SR DICOM files
 func BenchmarkSRParsing(b *testing.B) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data")
@@ -541,5 +428,135 @@ func BenchmarkSRParsing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		reader := &fileReader{data: data, pos: 0}
 		_, _ = Parse(reader)
+	}
+}
+
+// analyzeSRContentItem analyzes a single SR content item
+func analyzeSRContentItem(t *testing.T, index int, item *dataset.Dataset) {
+	t.Logf("=== Content Item %d ===", index)
+
+	// Relationship Type (required)
+	if relType, exists := item.GetString(tag.RelationshipType); exists {
+		t.Logf("  Relationship Type: %s", relType)
+	}
+
+	// Value Type (required)
+	if valueType, exists := item.GetString(tag.ValueType); exists {
+		t.Logf("  Value Type: %s", valueType)
+		logContentByValueType(t, item, valueType)
+	}
+
+	// Concept Name Code Sequence (describes what this item represents)
+	logConceptName(t, item)
+
+	t.Log("")
+}
+
+// logContentByValueType logs content based on value type
+func logContentByValueType(t *testing.T, item *dataset.Dataset, valueType string) {
+	switch valueType {
+	case "TEXT":
+		if textValue, exists := item.GetString(tag.TextValue); exists {
+			t.Logf("  Text Value: %s", textValue)
+		}
+
+	case "CODE":
+		logCodeSequence(t, item)
+
+	case "NUM":
+		logNumericValue(t, item)
+
+	case "DATETIME", "DATE", "TIME":
+		logDateTimeValues(t, item)
+
+	case "PNAME":
+		if personName, exists := item.GetString(tag.PersonName); exists {
+			t.Logf("  Person Name: %s", personName)
+		}
+
+	case "UIDREF":
+		if uidRef, exists := item.GetString(tag.UID); exists {
+			t.Logf("  UID Reference: %s", uidRef)
+		}
+
+	case "CONTAINER":
+		logContainerInfo(t, item)
+
+	case "IMAGE":
+		logImageReference(t, item)
+
+	default:
+		t.Logf("  [Other value type: %s]", valueType)
+	}
+}
+
+// logCodeSequence logs code sequence information
+func logCodeSequence(t *testing.T, item *dataset.Dataset) {
+	if codeSeqElem, exists := item.Get(tag.ConceptCodeSequence); exists {
+		if codeSeq, ok := codeSeqElem.(*dataset.Sequence); ok && codeSeq.Count() > 0 {
+			codeItem := codeSeq.GetItem(0)
+			if codeValue, exists := codeItem.GetString(tag.CodeValue); exists {
+				t.Logf("  Code Value: %s", codeValue)
+			}
+			if codeMeaning, exists := codeItem.GetString(tag.CodeMeaning); exists {
+				t.Logf("  Code Meaning: %s", codeMeaning)
+			}
+		}
+	}
+}
+
+// logNumericValue logs numeric value information
+func logNumericValue(t *testing.T, item *dataset.Dataset) {
+	if measuredValueSeqElem, exists := item.Get(tag.MeasuredValueSequence); exists {
+		if measuredSeq, ok := measuredValueSeqElem.(*dataset.Sequence); ok && measuredSeq.Count() > 0 {
+			measuredItem := measuredSeq.GetItem(0)
+			if numValue, exists := measuredItem.GetString(tag.NumericValue); exists {
+				t.Logf("  Numeric Value: %s", numValue)
+			}
+		}
+	}
+}
+
+// logDateTimeValues logs date/time values
+func logDateTimeValues(t *testing.T, item *dataset.Dataset) {
+	if dateTime, exists := item.GetString(tag.DateTime); exists {
+		t.Logf("  DateTime: %s", dateTime)
+	}
+	if date, exists := item.GetString(tag.Date); exists {
+		t.Logf("  Date: %s", date)
+	}
+	if time, exists := item.GetString(tag.Time); exists {
+		t.Logf("  Time: %s", time)
+	}
+}
+
+// logContainerInfo logs container information
+func logContainerInfo(t *testing.T, item *dataset.Dataset) {
+	t.Log("  [Container - may have nested content]")
+	if nestedSeqElem, exists := item.Get(tag.ContentSequence); exists {
+		if nestedSeq, ok := nestedSeqElem.(*dataset.Sequence); ok {
+			t.Logf("  Nested items: %d", nestedSeq.Count())
+		}
+	}
+}
+
+// logImageReference logs image reference information
+func logImageReference(t *testing.T, item *dataset.Dataset) {
+	if refSOPSeqElem, exists := item.Get(tag.ReferencedSOPSequence); exists {
+		if refSeq, ok := refSOPSeqElem.(*dataset.Sequence); ok && refSeq.Count() > 0 {
+			t.Logf("  Referenced Image: %d items", refSeq.Count())
+		}
+	}
+}
+
+// logConceptName logs concept name information
+func logConceptName(t *testing.T, item *dataset.Dataset) {
+	if conceptNameSeqElem, exists := item.Get(tag.ConceptNameCodeSequence); exists {
+		if conceptSeq, ok := conceptNameSeqElem.(*dataset.Sequence); ok && conceptSeq.Count() > 0 {
+			conceptItem := conceptSeq.GetItem(0)
+			if codeMeaning, exists := conceptItem.GetString(tag.CodeMeaning); exists {
+				t.Logf("  Concept Name: %s", codeMeaning)
+			}
+		}
 	}
 }

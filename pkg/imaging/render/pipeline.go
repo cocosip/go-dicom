@@ -20,7 +20,6 @@ type GrayscalePipeline struct {
 
 	modalityLUT      ModalityLUT
 	voiLUT           VOILUT
-	outputLUT        LUT
 	invertLUT        LUT
 	compositeLUT     LUT
 	windowWidth      float64
