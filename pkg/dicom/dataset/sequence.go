@@ -25,6 +25,7 @@ import (
 //	seq.AddItem(item1)
 var _ element.Element = (*Sequence)(nil)
 
+// Sequence represents a DICOM sequence element.
 type Sequence struct {
 	tag   *tag.Tag
 	items []*Dataset

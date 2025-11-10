@@ -95,7 +95,7 @@ type ParseResult struct {
 	Dataset *dataset.Dataset
 
 	// TransferSyntax specifies how the dataset is encoded.
-	TransferSyntax *transfer.TransferSyntax
+	TransferSyntax *transfer.Syntax
 
 	// Format indicates the detected DICOM file format.
 	Format FileFormat
@@ -120,7 +120,7 @@ type parseContext struct {
 	reader         io.Reader
 	byteOrder      binary.ByteOrder
 	isExplicitVR   bool
-	transferSyntax *transfer.TransferSyntax
+	transferSyntax *transfer.Syntax
 	dictionary     *dict.Dictionary
 
 	// firstDatasetTag is the first tag read that doesn't belong to Group 0002

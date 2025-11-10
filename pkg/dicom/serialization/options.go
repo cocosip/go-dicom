@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package serialization provides options for DICOM JSON serialization and deserialization and xml serialization.
 package serialization
 
 // NumberSerializationMode defines how DICOM numbers (IS, DS, SV, UV) should be serialized

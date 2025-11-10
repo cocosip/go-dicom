@@ -125,7 +125,7 @@ func TestServiceSetHandlers(t *testing.T) {
 
 	// Set handlers
 	handlers := &Handlers{
-		CEchoHandler: func(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+		CEchoHandler: func(_ context.Context, _ *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 			return nil, nil
 		},
 	}

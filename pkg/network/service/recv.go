@@ -114,7 +114,7 @@ func (s *Service) recvLoop(ctx context.Context) error {
 }
 
 // getTransferSyntaxForContext gets the transfer syntax for a presentation context ID.
-func (s *Service) getTransferSyntaxForContext(contextID byte) *transfer.TransferSyntax {
+func (s *Service) getTransferSyntaxForContext(contextID byte) *transfer.Syntax {
 	assoc := s.GetAssociation()
 	if assoc == nil {
 		return transfer.ExplicitVRLittleEndian // Default fallback
@@ -129,7 +129,7 @@ func (s *Service) getTransferSyntaxForContext(contextID byte) *transfer.Transfer
 }
 
 // processReceivedMessage decodes and dispatches a received DIMSE message.
-func (s *Service) processReceivedMessage(commandData, datasetData []byte, transferSyntax *transfer.TransferSyntax, contextID byte) error {
+func (s *Service) processReceivedMessage(commandData, datasetData []byte, transferSyntax *transfer.Syntax, _ byte) error {
 	// Decode command and data datasets
 	commandDS, dataDS, err := DecodeDIMSEMessage(commandData, datasetData, transferSyntax)
 	if err != nil {
@@ -226,10 +226,11 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 // We update the service state and notify the lifecycle handler.
 func (s *Service) handleReleaseResponse(ctx context.Context) {
 	// Update state to closed
-	if err := s.setState(StateClosed); err != nil {
-		// State transition error, but continue with cleanup
-		// (we may already be in a closing state)
-	}
+	//if err := s.setState(StateClosed); err != nil {
+	// State transition error, but continue with cleanup
+	// (we may already be in a closing state)
+	//}
+	s.setState(StateClosed)
 
 	// Get lifecycle handler
 	s.callbacksMu.RLock()

@@ -233,7 +233,7 @@ func (n *DefaultAssociationNegotiator) OnAssociationRequest(ctx context.Context,
 type DefaultAssociationReleaseHandler struct{}
 
 // OnAssociationRelease accepts all release requests.
-func (h *DefaultAssociationReleaseHandler) OnAssociationRelease(ctx context.Context) error {
+func (h *DefaultAssociationReleaseHandler) OnAssociationRelease(_ context.Context) error {
 	return nil // Accept all
 }
 
@@ -241,12 +241,12 @@ func (h *DefaultAssociationReleaseHandler) OnAssociationRelease(ctx context.Cont
 type DefaultConnectionLifecycleHandler struct{}
 
 // OnAbort does nothing (no-op).
-func (h *DefaultConnectionLifecycleHandler) OnAbort(ctx context.Context, source, reason byte) {
+func (h *DefaultConnectionLifecycleHandler) OnAbort(_ context.Context, _, _ byte) {
 	// No-op
 }
 
 // OnConnectionClosed does nothing (no-op).
-func (h *DefaultConnectionLifecycleHandler) OnConnectionClosed(ctx context.Context, err error) {
+func (h *DefaultConnectionLifecycleHandler) OnConnectionClosed(_ context.Context, _ error) {
 	// No-op
 }
 

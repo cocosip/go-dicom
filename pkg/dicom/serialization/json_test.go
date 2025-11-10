@@ -21,7 +21,7 @@ func TestToJSON_BulkDataURI(t *testing.T) {
 
 	// Create a BulkDataUriByteBuffer
 	uri := "http://example.com/dicom/pixeldata"
-	buf := buffer.NewBulkDataUri(uri)
+	buf := buffer.NewBulkDataURI(uri)
 
 	// Create OW element with BulkDataURI
 	pixelDataTag := tag.New(0x7FE0, 0x0010) // PixelData
@@ -74,7 +74,7 @@ func TestToJSON_BulkDataURI_WithData(t *testing.T) {
 
 	uri := "http://example.com/dicom/pixeldata"
 	data := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
-	buf := buffer.NewBulkDataUriWithData(uri, data)
+	buf := buffer.NewBulkDataURIWithData(uri, data)
 
 	pixelDataTag := tag.New(0x7FE0, 0x0010)
 	elem := element.NewOtherByteFromBuffer(pixelDataTag, buf)
@@ -131,19 +131,19 @@ func TestFromJSON_BulkDataURI(t *testing.T) {
 
 	// Verify buffer is BulkDataUriByteBuffer
 	buf := elem.Buffer()
-	bulkDataBuf, ok := buf.(*buffer.BulkDataUriByteBuffer)
+	bulkDataBuf, ok := buf.(*buffer.BulkDataURIByteBuffer)
 	if !ok {
 		t.Fatalf("Buffer is not BulkDataUriByteBuffer, got %T", buf)
 	}
 
 	// Verify URI
 	expectedURI := "http://example.com/dicom/pixeldata"
-	if bulkDataBuf.BulkDataUri() != expectedURI {
-		t.Errorf("BulkDataUri() = %s, want %s", bulkDataBuf.BulkDataUri(), expectedURI)
+	if bulkDataBuf.BulkDataURI() != expectedURI {
+		t.Errorf("BulkDataURI() = %s, want %s", bulkDataBuf.BulkDataURI(), expectedURI)
 	}
 
 	// Verify IsBulkDataUri
-	if !bulkDataBuf.IsBulkDataUri() {
+	if !bulkDataBuf.IsBulkDataURI() {
 		t.Error("IsBulkDataUri() = false, want true")
 	}
 
@@ -193,14 +193,14 @@ func TestFromJSON_BulkDataURI_AllVRTypes(t *testing.T) {
 			}
 
 			buf := elem.Buffer()
-			bulkDataBuf, ok := buf.(*buffer.BulkDataUriByteBuffer)
+			bulkDataBuf, ok := buf.(*buffer.BulkDataURIByteBuffer)
 			if !ok {
 				t.Fatalf("Buffer is not BulkDataUriByteBuffer, got %T", buf)
 			}
 
 			expectedURI := "http://example.com/data/bulk" + tt.vr
-			if bulkDataBuf.BulkDataUri() != expectedURI {
-				t.Errorf("BulkDataUri() = %s, want %s", bulkDataBuf.BulkDataUri(), expectedURI)
+			if bulkDataBuf.BulkDataURI() != expectedURI {
+				t.Errorf("BulkDataURI() = %s, want %s", bulkDataBuf.BulkDataURI(), expectedURI)
 			}
 		})
 	}
@@ -217,7 +217,7 @@ func TestJSON_BulkDataURI_Roundtrip(t *testing.T) {
 
 	// Add BulkDataURI element
 	uri := "http://example.com/dicom/waveform"
-	buf := buffer.NewBulkDataUri(uri)
+	buf := buffer.NewBulkDataURI(uri)
 	waveformTag := tag.New(0x5400, 0x1010) // WaveformData
 	ds1.Add(element.NewOtherWordFromBuffer(waveformTag, buf))
 
@@ -252,12 +252,12 @@ func TestJSON_BulkDataURI_Roundtrip(t *testing.T) {
 	if !found2 {
 		t.Fatal("WaveformData element not found after roundtrip")
 	}
-	bulkDataBuf, ok := elem2.Buffer().(*buffer.BulkDataUriByteBuffer)
+	bulkDataBuf, ok := elem2.Buffer().(*buffer.BulkDataURIByteBuffer)
 	if !ok {
 		t.Fatalf("WaveformData buffer is not BulkDataUriByteBuffer, got %T", elem2.Buffer())
 	}
-	if bulkDataBuf.BulkDataUri() != uri {
-		t.Errorf("BulkDataUri() = %s, want %s", bulkDataBuf.BulkDataUri(), uri)
+	if bulkDataBuf.BulkDataURI() != uri {
+		t.Errorf("BulkDataURI() = %s, want %s", bulkDataBuf.BulkDataURI(), uri)
 	}
 }
 
@@ -273,7 +273,7 @@ func TestToJSON_MixedBulkDataAndInline(t *testing.T) {
 	// Add BulkDataURI element
 	tag2 := tag.New(0x0009, 0x1002)
 	uri := "http://example.com/dicom/large"
-	buf2 := buffer.NewBulkDataUri(uri)
+	buf2 := buffer.NewBulkDataURI(uri)
 	ds.Add(element.NewOtherByteFromBuffer(tag2, buf2))
 
 	// Serialize to JSON
@@ -376,7 +376,7 @@ func TestBulkDataUriByteBuffer_SimulatedLazyLoad(t *testing.T) {
 		t.Fatal("PixelData element not found")
 	}
 
-	bulkDataBuf, ok := elem.Buffer().(*buffer.BulkDataUriByteBuffer)
+	bulkDataBuf, ok := elem.Buffer().(*buffer.BulkDataURIByteBuffer)
 	if !ok {
 		t.Fatalf("Buffer is not BulkDataUriByteBuffer")
 	}

@@ -71,14 +71,14 @@ func TestBitDepth_MinMaxValue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			min := tc.bd.MinimumValue()
-			max := tc.bd.MaximumValue()
+			minimumValue := tc.bd.MinimumValue()
+			maximumValue := tc.bd.MaximumValue()
 
-			if min != tc.expectMin {
-				t.Errorf("MinimumValue: expected %f, got %f", tc.expectMin, min)
+			if minimumValue != tc.expectMin {
+				t.Errorf("MinimumValue: expected %f, got %f", tc.expectMin, minimumValue)
 			}
-			if max != tc.expectMax {
-				t.Errorf("MaximumValue: expected %f, got %f", tc.expectMax, max)
+			if maximumValue != tc.expectMax {
+				t.Errorf("MaximumValue: expected %f, got %f", tc.expectMax, maximumValue)
 			}
 		})
 	}
@@ -249,12 +249,12 @@ func TestBitDepth_ExtendSign(t *testing.T) {
 
 func TestBitDepth_Range(t *testing.T) {
 	bd := NewBitDepth(16, 12, 11, true)
-	min, max := bd.Range()
+	minimumValue, maximumValue := bd.Range()
 
-	if min != -2048 {
-		t.Errorf("Range min: expected -2048, got %f", min)
+	if minimumValue != -2048 {
+		t.Errorf("Range min: expected -2048, got %f", minimumValue)
 	}
-	if max != 2047 {
-		t.Errorf("Range max: expected 2047, got %f", max)
+	if maximumValue != 2047 {
+		t.Errorf("Range max: expected 2047, got %f", maximumValue)
 	}
 }

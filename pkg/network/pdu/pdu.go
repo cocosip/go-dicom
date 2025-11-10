@@ -34,8 +34,8 @@ const (
 	TypeAAbort byte = 0x07
 )
 
-// PDUTypeString returns the string representation of a PDU type.
-func PDUTypeString(pduType byte) string {
+// TypeString returns the string representation of a PDU type.
+func TypeString(pduType byte) string {
 	switch pduType {
 	case TypeAAssociateRQ:
 		return "A-ASSOCIATE-RQ"
@@ -83,7 +83,7 @@ func NewRawPDU(pduType byte, data []byte) *RawPDU {
 
 // String returns a string representation of the PDU.
 func (p *RawPDU) String() string {
-	return fmt.Sprintf("%s (length=%d)", PDUTypeString(p.Type), p.Length)
+	return fmt.Sprintf("%s (length=%d)", TypeString(p.Type), p.Length)
 }
 
 // Read reads a RawPDU from an io.Reader.

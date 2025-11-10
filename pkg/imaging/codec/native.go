@@ -16,12 +16,12 @@ import (
 // - Explicit VR Little Endian
 // - Explicit VR Big Endian
 type NativeCodec struct {
-	transferSyntax *transfer.TransferSyntax
+	transferSyntax *transfer.Syntax
 	isBigEndian    bool
 }
 
 // NewNativeCodec creates a new Native (uncompressed) codec.
-func NewNativeCodec(ts *transfer.TransferSyntax, isBigEndian bool) *NativeCodec {
+func NewNativeCodec(ts *transfer.Syntax, isBigEndian bool) *NativeCodec {
 	return &NativeCodec{
 		transferSyntax: ts,
 		isBigEndian:    isBigEndian,
@@ -61,7 +61,7 @@ func (c *NativeCodec) Name() string {
 }
 
 // TransferSyntax returns the transfer syntax this codec handles.
-func (c *NativeCodec) TransferSyntax() *transfer.TransferSyntax {
+func (c *NativeCodec) TransferSyntax() *transfer.Syntax {
 	return c.transferSyntax
 }
 

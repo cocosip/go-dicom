@@ -21,7 +21,7 @@ import (
 //
 // The command dataset is always encoded in Implicit VR Little Endian.
 // The data dataset is encoded according to the transfer syntax.
-func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.TransferSyntax) (commandData, datasetData []byte, err error) {
+func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (commandData, datasetData []byte, err error) {
 	// Get command dataset
 	commandDS := msg.CommandDataset()
 	if commandDS == nil {
@@ -59,7 +59,7 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.TransferSynt
 
 // DecodeDIMSEMessage decodes command and data bytes into datasets.
 // This function parses raw DICOM datasets without file preamble or file meta information.
-func DecodeDIMSEMessage(commandData, datasetData []byte, transferSyntax *transfer.TransferSyntax) (*dataset.Dataset, *dataset.Dataset, error) {
+func DecodeDIMSEMessage(commandData, datasetData []byte, transferSyntax *transfer.Syntax) (*dataset.Dataset, *dataset.Dataset, error) {
 	// Decode command dataset (always Implicit VR Little Endian per DICOM standard)
 	commandDS, err := decodeRawDataset(commandData, transfer.ImplicitVRLittleEndian)
 	if err != nil {
@@ -89,7 +89,7 @@ func DecodeDIMSEMessage(commandData, datasetData []byte, transferSyntax *transfe
 // TODO: Implement full raw dataset parsing with proper element-by-element reading.
 // This will be completed in a future phase when we need to actually receive and parse messages.
 // For now, the recvLoop is functional but cannot fully decode received datasets.
-func decodeRawDataset(data []byte, ts *transfer.TransferSyntax) (*dataset.Dataset, error) {
+func decodeRawDataset(data []byte, ts *transfer.Syntax) (*dataset.Dataset, error) {
 	if len(data) == 0 {
 		return dataset.New(), nil
 	}

@@ -31,7 +31,7 @@ func (e *emptyBuffer) Data() []byte {
 }
 
 // GetByteRange returns an error if offset or count is non-zero.
-func (e *emptyBuffer) GetByteRange(offset, count uint32, output []byte) error {
+func (e *emptyBuffer) GetByteRange(offset, count uint32, _ []byte) error {
 	if offset != 0 || count != 0 {
 		return fmt.Errorf("offset and count must be 0 for empty buffer, got offset=%d count=%d", offset, count)
 	}

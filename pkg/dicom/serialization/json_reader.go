@@ -560,7 +560,7 @@ func (r *jsonReader) readBulkDataURI(t *tag.Tag, vrObj *vr.VR, data json.RawMess
 
 	// Create a BulkDataUri buffer with the URI
 	// The actual data will be loaded later when needed
-	buf := buffer.NewBulkDataUri(uri)
+	buf := buffer.NewBulkDataURI(uri)
 
 	// Create element based on VR
 	vrCode := vrObj.Code()

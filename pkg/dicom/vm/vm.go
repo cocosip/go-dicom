@@ -212,41 +212,41 @@ var (
 	// VM1 represents exactly 1 value
 	VM1 = MustParse("1")
 
-	// VM1_2 represents 1 to 2 values
-	VM1_2 = MustParse("1-2")
+	// VM12 represents 1 to 2 values
+	VM12 = MustParse("1-2")
 
-	// VM1_3 represents 1 to 3 values
-	VM1_3 = MustParse("1-3")
+	// VM13 represents 1 to 3 values
+	VM13 = MustParse("1-3")
 
-	// VM1_8 represents 1 to 8 values
-	VM1_8 = MustParse("1-8")
+	// VM18 represents 1 to 8 values
+	VM18 = MustParse("1-8")
 
-	// VM1_32 represents 1 to 32 values
-	VM1_32 = MustParse("1-32")
+	// VM132 represents 1 to 32 values
+	VM132 = MustParse("1-32")
 
-	// VM1_99 represents 1 to 99 values
-	VM1_99 = MustParse("1-99")
+	// VM199 represents 1 to 99 values
+	VM199 = MustParse("1-99")
 
-	// VM1_n represents 1 or more values (unlimited)
-	VM1_n = MustParse("1-n")
+	// VM1N represents 1 or more values (unlimited)
+	VM1N = MustParse("1-n")
 
 	// VM2 represents exactly 2 values
 	VM2 = MustParse("2")
 
-	// VM2_n represents 2 or more values (unlimited)
-	VM2_n = MustParse("2-n")
+	// VM2N represents 2 or more values (unlimited)
+	VM2N = MustParse("2-n")
 
-	// VM2_2n represents 2, 4, 6, 8, ... values (multiples of 2)
-	VM2_2n = MustParse("2-2n")
+	// VM22N represents 2, 4, 6, 8, ... values (multiples of 2)
+	VM22N = MustParse("2-2n")
 
 	// VM3 represents exactly 3 values
 	VM3 = MustParse("3")
 
-	// VM3_n represents 3 or more values (unlimited)
-	VM3_n = MustParse("3-n")
+	// VM3N represents 3 or more values (unlimited)
+	VM3N = MustParse("3-n")
 
-	// VM3_3n represents 3, 6, 9, 12, ... values (multiples of 3)
-	VM3_3n = MustParse("3-3n")
+	// VM33N represents 3, 6, 9, 12, ... values (multiples of 3)
+	VM33N = MustParse("3-3n")
 
 	// VM4 represents exactly 4 values
 	VM4 = MustParse("4")

@@ -73,9 +73,9 @@ func (m *mockConnForLifecycle) Close() error {
 
 func (m *mockConnForLifecycle) LocalAddr() net.Addr                { return nil }
 func (m *mockConnForLifecycle) RemoteAddr() net.Addr               { return nil }
-func (m *mockConnForLifecycle) SetDeadline(t time.Time) error      { return nil }
-func (m *mockConnForLifecycle) SetReadDeadline(t time.Time) error  { return nil }
-func (m *mockConnForLifecycle) SetWriteDeadline(t time.Time) error { return nil }
+func (m *mockConnForLifecycle) SetDeadline(_ time.Time) error      { return nil }
+func (m *mockConnForLifecycle) SetReadDeadline(_ time.Time) error  { return nil }
+func (m *mockConnForLifecycle) SetWriteDeadline(_ time.Time) error { return nil }
 
 func TestRun(t *testing.T) {
 	conn := &mockConnForLifecycle{
@@ -306,7 +306,7 @@ func TestRun_RecvLoopError(t *testing.T) {
 	}
 }
 
-func TestRun_MultipleCallsNotAllowed(t *testing.T) {
+func TestRun_MultipleCallsNotAllowed(_ *testing.T) {
 	conn := &mockConnForLifecycle{
 		blockRead: true,
 	}

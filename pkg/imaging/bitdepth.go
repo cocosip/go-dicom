@@ -117,6 +117,6 @@ func (b *BitDepth) ExtendSign(value uint32) int32 {
 }
 
 // Range returns the range of valid pixel values
-func (b *BitDepth) Range() (min, max float64) {
+func (b *BitDepth) Range() (minimumValue, maximumValue float64) {
 	return b.MinimumValue(), b.MaximumValue()
 }

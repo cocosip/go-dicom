@@ -124,14 +124,14 @@ var (
 // Common transfer syntax groups for convenience
 var (
 	// UncompressedTransferSyntaxes are transfer syntaxes without compression.
-	UncompressedTransferSyntaxes = []*TransferSyntax{
+	UncompressedTransferSyntaxes = []*Syntax{
 		ImplicitVRLittleEndian,
 		ExplicitVRLittleEndian,
 		ExplicitVRBigEndian,
 	}
 
 	// LosslessTransferSyntaxes are transfer syntaxes with lossless compression.
-	LosslessTransferSyntaxes = []*TransferSyntax{
+	LosslessTransferSyntaxes = []*Syntax{
 		JPEGLossless,
 		JPEGLosslessSV1,
 		JPEGLSLossless,
@@ -140,7 +140,7 @@ var (
 	}
 
 	// LossyTransferSyntaxes are transfer syntaxes with lossy compression.
-	LossyTransferSyntaxes = []*TransferSyntax{
+	LossyTransferSyntaxes = []*Syntax{
 		JPEGBaseline8Bit,
 		JPEGExtended12Bit,
 		JPEGLSNearLossless,
@@ -149,16 +149,16 @@ var (
 )
 
 // IsUncompressed returns true if the transfer syntax does not use compression.
-func IsUncompressed(ts *TransferSyntax) bool {
+func IsUncompressed(ts *Syntax) bool {
 	return !ts.IsEncapsulated() && !ts.IsDeflate()
 }
 
 // IsLosslessCompressed returns true if the transfer syntax uses lossless compression.
-func IsLosslessCompressed(ts *TransferSyntax) bool {
+func IsLosslessCompressed(ts *Syntax) bool {
 	return ts.IsEncapsulated() && !ts.IsLossy()
 }
 
 // IsLossyCompressed returns true if the transfer syntax uses lossy compression.
-func IsLossyCompressed(ts *TransferSyntax) bool {
+func IsLossyCompressed(ts *Syntax) bool {
 	return ts.IsEncapsulated() && ts.IsLossy()
 }

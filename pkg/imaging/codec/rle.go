@@ -27,12 +27,12 @@ func (c *RLECodec) Name() string {
 }
 
 // TransferSyntax returns the RLE Lossless transfer syntax.
-func (c *RLECodec) TransferSyntax() *transfer.TransferSyntax {
+func (c *RLECodec) TransferSyntax() *transfer.Syntax {
 	return transfer.RLELossless
 }
 
 // Encode compresses pixel data using RLE compression.
-func (c *RLECodec) Encode(src *PixelData, dst *PixelData, params Parameters) error {
+func (c *RLECodec) Encode(src *PixelData, dst *PixelData, _ Parameters) error {
 	if src == nil || dst == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
@@ -91,7 +91,7 @@ func (c *RLECodec) Encode(src *PixelData, dst *PixelData, params Parameters) err
 }
 
 // Decode decompresses RLE-compressed pixel data.
-func (c *RLECodec) Decode(src *PixelData, dst *PixelData, params Parameters) error {
+func (c *RLECodec) Decode(src *PixelData, dst *PixelData, _ Parameters) error {
 	if src == nil || dst == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
@@ -428,11 +428,4 @@ func (d *rleDecoder) decode(buffer []byte, start int, sampleOffset int, rleData 
 	}
 
 	return nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

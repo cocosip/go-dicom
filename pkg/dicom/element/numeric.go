@@ -38,14 +38,14 @@ func NewUnsignedShortWithEndian(t *tag.Tag, values []uint16, e endian.Endian) *U
 
 	buf := buffer.NewMemory(data)
 	return &UnsignedShort{
-		base: NewBase(t, vr.US, buf),
+		base: newBase(t, vr.US, buf),
 	}
 }
 
 // NewUnsignedShortFromBuffer creates a US element from an existing buffer.
 func NewUnsignedShortFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *UnsignedShort {
 	return &UnsignedShort{
-		base: NewBase(t, vr.US, buf),
+		base: newBase(t, vr.US, buf),
 	}
 }
 
@@ -112,14 +112,14 @@ func NewUnsignedLongWithEndian(t *tag.Tag, values []uint32, e endian.Endian) *Un
 
 	buf := buffer.NewMemory(data)
 	return &UnsignedLong{
-		base: NewBase(t, vr.UL, buf),
+		base: newBase(t, vr.UL, buf),
 	}
 }
 
 // NewUnsignedLongFromBuffer creates a UL element from an existing buffer.
 func NewUnsignedLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *UnsignedLong {
 	return &UnsignedLong{
-		base: NewBase(t, vr.UL, buf),
+		base: newBase(t, vr.UL, buf),
 	}
 }
 
@@ -185,14 +185,14 @@ func NewSignedShortWithEndian(t *tag.Tag, values []int16, e endian.Endian) *Sign
 
 	buf := buffer.NewMemory(data)
 	return &SignedShort{
-		base: NewBase(t, vr.SS, buf),
+		base: newBase(t, vr.SS, buf),
 	}
 }
 
 // NewSignedShortFromBuffer creates a SS element from an existing buffer.
 func NewSignedShortFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *SignedShort {
 	return &SignedShort{
-		base: NewBase(t, vr.SS, buf),
+		base: newBase(t, vr.SS, buf),
 	}
 }
 
@@ -258,14 +258,14 @@ func NewSignedLongWithEndian(t *tag.Tag, values []int32, e endian.Endian) *Signe
 
 	buf := buffer.NewMemory(data)
 	return &SignedLong{
-		base: NewBase(t, vr.SL, buf),
+		base: newBase(t, vr.SL, buf),
 	}
 }
 
 // NewSignedLongFromBuffer creates a SL element from an existing buffer.
 func NewSignedLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *SignedLong {
 	return &SignedLong{
-		base: NewBase(t, vr.SL, buf),
+		base: newBase(t, vr.SL, buf),
 	}
 }
 
@@ -332,14 +332,14 @@ func NewFloatWithEndian(t *tag.Tag, values []float32, e endian.Endian) *Float {
 
 	buf := buffer.NewMemory(data)
 	return &Float{
-		base: NewBase(t, vr.FL, buf),
+		base: newBase(t, vr.FL, buf),
 	}
 }
 
 // NewFloatFromBuffer creates a FL element from an existing buffer.
 func NewFloatFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *Float {
 	return &Float{
-		base: NewBase(t, vr.FL, buf),
+		base: newBase(t, vr.FL, buf),
 	}
 }
 
@@ -407,14 +407,14 @@ func NewDoubleWithEndian(t *tag.Tag, values []float64, e endian.Endian) *Double 
 
 	buf := buffer.NewMemory(data)
 	return &Double{
-		base: NewBase(t, vr.FD, buf),
+		base: newBase(t, vr.FD, buf),
 	}
 }
 
 // NewDoubleFromBuffer creates a FD element from an existing buffer.
 func NewDoubleFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *Double {
 	return &Double{
-		base: NewBase(t, vr.FD, buf),
+		base: newBase(t, vr.FD, buf),
 	}
 }
 
@@ -481,14 +481,14 @@ func NewSignedVeryLongWithEndian(t *tag.Tag, values []int64, e endian.Endian) *S
 
 	buf := buffer.NewMemory(data)
 	return &SignedVeryLong{
-		base: NewBase(t, vr.SV, buf),
+		base: newBase(t, vr.SV, buf),
 	}
 }
 
 // NewSignedVeryLongFromBuffer creates a SV element from an existing buffer.
 func NewSignedVeryLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *SignedVeryLong {
 	return &SignedVeryLong{
-		base: NewBase(t, vr.SV, buf),
+		base: newBase(t, vr.SV, buf),
 	}
 }
 
@@ -554,14 +554,14 @@ func NewUnsignedVeryLongWithEndian(t *tag.Tag, values []uint64, e endian.Endian)
 
 	buf := buffer.NewMemory(data)
 	return &UnsignedVeryLong{
-		base: NewBase(t, vr.UV, buf),
+		base: newBase(t, vr.UV, buf),
 	}
 }
 
 // NewUnsignedVeryLongFromBuffer creates a UV element from an existing buffer.
 func NewUnsignedVeryLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *UnsignedVeryLong {
 	return &UnsignedVeryLong{
-		base: NewBase(t, vr.UV, buf),
+		base: newBase(t, vr.UV, buf),
 	}
 }
 

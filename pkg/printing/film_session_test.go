@@ -213,7 +213,7 @@ func TestFilmSession_IsValid(t *testing.T) {
 		},
 		{
 			name: "invalid: no film boxes",
-			setup: func(fs *FilmSession) {
+			setup: func(_ *FilmSession) {
 				// Don't add any film boxes
 			},
 			expected: false,

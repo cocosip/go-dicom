@@ -16,20 +16,20 @@ import (
 // Transcoder handles transcoding of DICOM datasets between different transfer syntaxes.
 // It can compress, decompress, and convert pixel data formats.
 type Transcoder struct {
-	inputSyntax   *transfer.TransferSyntax
-	outputSyntax  *transfer.TransferSyntax
+	inputSyntax   *transfer.Syntax
+	outputSyntax  *transfer.Syntax
 	inputCodec    Codec
 	outputCodec   Codec
 	inputParams   Parameters
 	outputParams  Parameters
-	codecRegistry *CodecRegistry
+	codecRegistry *Registry
 }
 
 // TranscoderOption is a functional option for creating a Transcoder.
 type TranscoderOption func(*Transcoder)
 
 // NewTranscoder creates a new Transcoder.
-func NewTranscoder(inputSyntax, outputSyntax *transfer.TransferSyntax, opts ...TranscoderOption) *Transcoder {
+func NewTranscoder(inputSyntax, outputSyntax *transfer.Syntax, opts ...TranscoderOption) *Transcoder {
 	t := &Transcoder{
 		inputSyntax:   inputSyntax,
 		outputSyntax:  outputSyntax,
@@ -86,19 +86,19 @@ func WithOutputParameters(params Parameters) TranscoderOption {
 }
 
 // WithCodecRegistry sets a custom codec registry.
-func WithCodecRegistry(registry *CodecRegistry) TranscoderOption {
+func WithCodecRegistry(registry *Registry) TranscoderOption {
 	return func(t *Transcoder) {
 		t.codecRegistry = registry
 	}
 }
 
 // InputSyntax returns the input transfer syntax.
-func (t *Transcoder) InputSyntax() *transfer.TransferSyntax {
+func (t *Transcoder) InputSyntax() *transfer.Syntax {
 	return t.inputSyntax
 }
 
 // OutputSyntax returns the output transfer syntax.
-func (t *Transcoder) OutputSyntax() *transfer.TransferSyntax {
+func (t *Transcoder) OutputSyntax() *transfer.Syntax {
 	return t.outputSyntax
 }
 
@@ -229,7 +229,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 }
 
 // decode decompresses pixel data from a dataset.
-func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.TransferSyntax) (*dataset.Dataset, error) {
+func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.inputCodec == nil {
 		return nil, fmt.Errorf("no codec available for decoding %s", t.inputSyntax.UID().UID())
 	}
@@ -297,7 +297,7 @@ func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.TransferSynt
 }
 
 // encode compresses pixel data from a dataset.
-func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.TransferSyntax) (*dataset.Dataset, error) {
+func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.outputCodec == nil {
 		return nil, fmt.Errorf("no codec available for encoding to %s", outputTS.UID().UID())
 	}

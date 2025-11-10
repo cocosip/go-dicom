@@ -59,7 +59,7 @@ func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.E
 	buf := buffer.NewMemory(data)
 
 	return &String{
-		base:     NewBase(t, v, buf),
+		base:     newBase(t, v, buf),
 		encoding: enc,
 	}
 }
@@ -71,7 +71,7 @@ func NewStringFromBuffer(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer, enc encodi
 		enc = charset.Default
 	}
 	return &String{
-		base:     NewBase(t, v, buf),
+		base:     newBase(t, v, buf),
 		encoding: enc,
 	}
 }

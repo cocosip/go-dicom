@@ -10,21 +10,21 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 )
 
-// CodecRegistry manages codecs for different transfer syntaxes.
-type CodecRegistry struct {
+// Registry manages codecs for different transfer syntaxes.
+type Registry struct {
 	mu     sync.RWMutex
 	codecs map[string]Codec // key: transfer syntax UID
 }
 
 // NewCodecRegistry creates a new codec registry.
-func NewCodecRegistry() *CodecRegistry {
-	return &CodecRegistry{
+func NewCodecRegistry() *Registry {
+	return &Registry{
 		codecs: make(map[string]Codec),
 	}
 }
 
 // RegisterCodec registers a codec for a transfer syntax.
-func (r *CodecRegistry) RegisterCodec(ts *transfer.TransferSyntax, codec Codec) {
+func (r *Registry) RegisterCodec(ts *transfer.Syntax, codec Codec) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -33,7 +33,7 @@ func (r *CodecRegistry) RegisterCodec(ts *transfer.TransferSyntax, codec Codec) 
 
 // GetCodec retrieves a codec for a transfer syntax.
 // Returns the codec and true if found, nil and false otherwise.
-func (r *CodecRegistry) GetCodec(ts *transfer.TransferSyntax) (Codec, bool) {
+func (r *Registry) GetCodec(ts *transfer.Syntax) (Codec, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -42,7 +42,7 @@ func (r *CodecRegistry) GetCodec(ts *transfer.TransferSyntax) (Codec, bool) {
 }
 
 // HasCodec checks if a codec is registered for a transfer syntax.
-func (r *CodecRegistry) HasCodec(ts *transfer.TransferSyntax) bool {
+func (r *Registry) HasCodec(ts *transfer.Syntax) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -51,7 +51,7 @@ func (r *CodecRegistry) HasCodec(ts *transfer.TransferSyntax) bool {
 }
 
 // UnregisterCodec removes a codec from the registry.
-func (r *CodecRegistry) UnregisterCodec(ts *transfer.TransferSyntax) {
+func (r *Registry) UnregisterCodec(ts *transfer.Syntax) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -59,7 +59,7 @@ func (r *CodecRegistry) UnregisterCodec(ts *transfer.TransferSyntax) {
 }
 
 // ListCodecs returns a list of all registered transfer syntax UIDs.
-func (r *CodecRegistry) ListCodecs() []string {
+func (r *Registry) ListCodecs() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -72,12 +72,12 @@ func (r *CodecRegistry) ListCodecs() []string {
 
 // Global codec registry
 var (
-	globalRegistry     *CodecRegistry
+	globalRegistry     *Registry
 	globalRegistryOnce sync.Once
 )
 
 // GetGlobalRegistry returns the global codec registry singleton.
-func GetGlobalRegistry() *CodecRegistry {
+func GetGlobalRegistry() *Registry {
 	globalRegistryOnce.Do(func() {
 		globalRegistry = NewCodecRegistry()
 		// Register built-in codecs
@@ -87,7 +87,7 @@ func GetGlobalRegistry() *CodecRegistry {
 }
 
 // registerBuiltinCodecs registers the built-in codecs.
-func registerBuiltinCodecs(registry *CodecRegistry) {
+func registerBuiltinCodecs(registry *Registry) {
 	// Register Native codec for uncompressed transfer syntaxes
 
 	// Explicit VR Little Endian
@@ -111,11 +111,11 @@ func registerBuiltinCodecs(registry *CodecRegistry) {
 
 // TranscoderManager provides high-level transcoding operations.
 type TranscoderManager struct {
-	registry *CodecRegistry
+	registry *Registry
 }
 
 // NewTranscoderManager creates a new transcoder manager.
-func NewTranscoderManager(registry *CodecRegistry) *TranscoderManager {
+func NewTranscoderManager(registry *Registry) *TranscoderManager {
 	if registry == nil {
 		registry = GetGlobalRegistry()
 	}
@@ -127,7 +127,7 @@ func NewTranscoderManager(registry *CodecRegistry) *TranscoderManager {
 
 // CreateTranscoder creates a transcoder for converting between two transfer syntaxes.
 func (tm *TranscoderManager) CreateTranscoder(
-	inputTS, outputTS *transfer.TransferSyntax,
+	inputTS, outputTS *transfer.Syntax,
 	opts ...TranscoderOption,
 ) (*Transcoder, error) {
 	// Check if required codecs are available
@@ -147,7 +147,7 @@ func (tm *TranscoderManager) CreateTranscoder(
 }
 
 // CanTranscode checks if transcoding between two transfer syntaxes is supported.
-func (tm *TranscoderManager) CanTranscode(inputTS, outputTS *transfer.TransferSyntax) bool {
+func (tm *TranscoderManager) CanTranscode(inputTS, outputTS *transfer.Syntax) bool {
 	// Uncompressed to uncompressed is always supported
 	if !inputTS.IsEncapsulated() && !outputTS.IsEncapsulated() {
 		return true

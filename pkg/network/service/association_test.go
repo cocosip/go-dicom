@@ -20,13 +20,6 @@ type mockConn struct {
 	closed    bool
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // serializeRawPDUForTest converts a RawPDU to complete PDU bytes (header + data) for test mocking.
 func serializeRawPDUForTest(rawPDU *pdu.RawPDU) []byte {
 	pduBytes := make([]byte, 6+len(rawPDU.Data))
@@ -61,9 +54,9 @@ func (m *mockConn) Close() error {
 
 func (m *mockConn) LocalAddr() net.Addr                { return nil }
 func (m *mockConn) RemoteAddr() net.Addr               { return nil }
-func (m *mockConn) SetDeadline(t time.Time) error      { return nil }
-func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
-func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
+func (m *mockConn) SetDeadline(_ time.Time) error      { return nil }
+func (m *mockConn) SetReadDeadline(_ time.Time) error  { return nil }
+func (m *mockConn) SetWriteDeadline(_ time.Time) error { return nil }
 
 func TestSendAssociationRequest(t *testing.T) {
 	conn := &mockConn{}

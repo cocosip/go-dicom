@@ -1,6 +1,8 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package association provides DICOM association negotiation and management.
+// It handles the initial association request, response, and context negotiation.
 package association
 
 import (
@@ -182,7 +184,7 @@ func (a *Association) GetAcceptedPresentationContexts() []*PresentationContext {
 }
 
 // GetTransferSyntaxForAbstractSyntax returns the accepted transfer syntax for the given abstract syntax.
-func (a *Association) GetTransferSyntaxForAbstractSyntax(abstractSyntax string) *transfer.TransferSyntax {
+func (a *Association) GetTransferSyntaxForAbstractSyntax(abstractSyntax string) *transfer.Syntax {
 	pc := a.FindPresentationContextByAbstractSyntax(abstractSyntax)
 	if pc != nil && pc.AcceptedTransferSyntax != nil {
 		return pc.AcceptedTransferSyntax
@@ -191,14 +193,14 @@ func (a *Association) GetTransferSyntaxForAbstractSyntax(abstractSyntax string) 
 }
 
 // SetEstablished marks the association as established.
-func (a *Association) SetEstablished(established bool) {
+func (a *Association) SetEstablished(isEstablished bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.IsEstablished = established
+	a.IsEstablished = isEstablished
 }
 
-// String returns a human-readable representation of the association.
 // NextMessageID returns the next available MessageID for this association.
+// String returns a human-readable representation of the association.
 // This is thread-safe and can be called concurrently.
 func (a *Association) NextMessageID() uint16 {
 	return a.messageIDGen.Next()
@@ -235,10 +237,10 @@ type PresentationContext struct {
 	AbstractSyntax string
 
 	// ProposedTransferSyntaxes is the list of proposed transfer syntaxes (for A-ASSOCIATE-RQ)
-	ProposedTransferSyntaxes []*transfer.TransferSyntax
+	ProposedTransferSyntaxes []*transfer.Syntax
 
 	// AcceptedTransferSyntax is the accepted transfer syntax (for A-ASSOCIATE-AC)
-	AcceptedTransferSyntax *transfer.TransferSyntax
+	AcceptedTransferSyntax *transfer.Syntax
 
 	// Result indicates the acceptance status (for A-ASSOCIATE-AC)
 	// 0 = acceptance
@@ -259,7 +261,7 @@ const (
 )
 
 // NewPresentationContext creates a new presentation context for A-ASSOCIATE-RQ.
-func NewPresentationContext(id byte, abstractSyntax string, transferSyntaxes ...*transfer.TransferSyntax) *PresentationContext {
+func NewPresentationContext(id byte, abstractSyntax string, transferSyntaxes ...*transfer.Syntax) *PresentationContext {
 	return &PresentationContext{
 		ID:                       id,
 		AbstractSyntax:           abstractSyntax,
@@ -274,7 +276,7 @@ func NewPresentationContextFromUID(id byte, abstractSyntaxUID *uid.UID, transfer
 	abstractSyntax := abstractSyntaxUID.UID()
 
 	// Convert transfer syntax UIDs to TransferSyntax objects
-	transferSyntaxes := make([]*transfer.TransferSyntax, len(transferSyntaxUIDs))
+	transferSyntaxes := make([]*transfer.Syntax, len(transferSyntaxUIDs))
 	for i, tsUID := range transferSyntaxUIDs {
 		ts, err := transfer.Lookup(tsUID)
 		if err != nil {
@@ -287,7 +289,7 @@ func NewPresentationContextFromUID(id byte, abstractSyntaxUID *uid.UID, transfer
 }
 
 // Accept accepts this presentation context with the given transfer syntax.
-func (pc *PresentationContext) Accept(transferSyntax *transfer.TransferSyntax) {
+func (pc *PresentationContext) Accept(transferSyntax *transfer.Syntax) {
 	pc.Result = ResultAcceptance
 	pc.AcceptedTransferSyntax = transferSyntax
 }
@@ -305,7 +307,7 @@ func (pc *PresentationContext) Reject(result byte) {
 //
 //	pc.SetResult(ResultAcceptance, transferSyntax)
 //	pc.SetResult(ResultAbstractSyntaxNotSupported, nil)
-func (pc *PresentationContext) SetResult(result byte, transferSyntax *transfer.TransferSyntax) {
+func (pc *PresentationContext) SetResult(result byte, transferSyntax *transfer.Syntax) {
 	pc.Result = result
 	if result == ResultAcceptance {
 		pc.AcceptedTransferSyntax = transferSyntax
@@ -332,7 +334,7 @@ func (pc *PresentationContext) SetResult(result byte, transferSyntax *transfer.T
 //	if pc.AcceptTransferSyntaxes(true, ts1, ts2, ts3) {
 //	    // Accepted
 //	}
-func (pc *PresentationContext) AcceptTransferSyntaxes(scpPriority bool, acceptedTransferSyntaxes ...*transfer.TransferSyntax) bool {
+func (pc *PresentationContext) AcceptTransferSyntaxes(scpPriority bool, acceptedTransferSyntaxes ...*transfer.Syntax) bool {
 	// If already accepted, return true
 	if pc.Result == ResultAcceptance {
 		return true
@@ -365,7 +367,7 @@ func (pc *PresentationContext) AcceptTransferSyntaxes(scpPriority bool, accepted
 
 // HasTransferSyntax checks if this presentation context has the specified transfer syntax
 // in its proposed transfer syntaxes.
-func (pc *PresentationContext) HasTransferSyntax(ts *transfer.TransferSyntax) bool {
+func (pc *PresentationContext) HasTransferSyntax(ts *transfer.Syntax) bool {
 	for _, proposedTS := range pc.ProposedTransferSyntaxes {
 		if proposedTS.UID().UID() == ts.UID().UID() {
 			return true
@@ -541,7 +543,7 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
 	// Convert presentation contexts (from RQ)
 	for _, pcRQ := range rq.PresentationContexts {
 		// Parse transfer syntaxes
-		transferSyntaxes := make([]*transfer.TransferSyntax, 0, len(pcRQ.TransferSyntaxes))
+		transferSyntaxes := make([]*transfer.Syntax, 0, len(pcRQ.TransferSyntaxes))
 		for _, tsUID := range pcRQ.TransferSyntaxes {
 			ts, err := transfer.Parse(tsUID)
 			if err != nil {
@@ -604,7 +606,7 @@ func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
 
 	// Convert presentation contexts
 	for _, pcAC := range ac.PresentationContexts {
-		var acceptedTS *transfer.TransferSyntax
+		var acceptedTS *transfer.Syntax
 
 		// Only set transfer syntax if accepted
 		if pcAC.Result == pdu.ResultAcceptance && pcAC.TransferSyntax != "" {

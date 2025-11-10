@@ -62,7 +62,7 @@ func (e *ImageExporter) ExportGrayscale(
 	writer io.Writer,
 	pixelData []byte,
 	width, height int,
-	bitsAllocated, bitsStored int,
+	bitsAllocated, _ int,
 	isSigned bool,
 	photometric string,
 	options *ExportOptions,

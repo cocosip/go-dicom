@@ -1,6 +1,10 @@
 // Copyright (c) 2025 go-dicom authors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package lut provides Lookup Table implementations for DICOM imaging.
+// Lookup Tables (LUTs) are used to map input pixel values to output values
+// in DICOM imaging. They are commonly used for windowing, normalization,
+// and color mapping.
 package lut
 
 // LUT is the interface for all Lookup Table implementations.

@@ -19,14 +19,14 @@ type OtherByte struct {
 func NewOtherByte(t *tag.Tag, data []byte) *OtherByte {
 	buf := buffer.NewMemory(data)
 	return &OtherByte{
-		base: NewBase(t, vr.OB, buf),
+		base: newBase(t, vr.OB, buf),
 	}
 }
 
 // NewOtherByteFromBuffer creates an OB element from an existing buffer.
 func NewOtherByteFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherByte {
 	return &OtherByte{
-		base: NewBase(t, vr.OB, buf),
+		base: newBase(t, vr.OB, buf),
 	}
 }
 
@@ -53,14 +53,14 @@ type OtherWord struct {
 func NewOtherWord(t *tag.Tag, data []byte) *OtherWord {
 	buf := buffer.NewMemory(data)
 	return &OtherWord{
-		base: NewBase(t, vr.OW, buf),
+		base: newBase(t, vr.OW, buf),
 	}
 }
 
 // NewOtherWordFromBuffer creates an OW element from an existing buffer.
 func NewOtherWordFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherWord {
 	return &OtherWord{
-		base: NewBase(t, vr.OW, buf),
+		base: newBase(t, vr.OW, buf),
 	}
 }
 
@@ -87,14 +87,14 @@ type Unknown struct {
 func NewUnknown(t *tag.Tag, data []byte) *Unknown {
 	buf := buffer.NewMemory(data)
 	return &Unknown{
-		base: NewBase(t, vr.UN, buf),
+		base: newBase(t, vr.UN, buf),
 	}
 }
 
 // NewUnknownFromBuffer creates a UN element from an existing buffer.
 func NewUnknownFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *Unknown {
 	return &Unknown{
-		base: NewBase(t, vr.UN, buf),
+		base: newBase(t, vr.UN, buf),
 	}
 }
 
@@ -121,14 +121,14 @@ type OtherDouble struct {
 func NewOtherDouble(t *tag.Tag, data []byte) *OtherDouble {
 	buf := buffer.NewMemory(data)
 	return &OtherDouble{
-		base: NewBase(t, vr.OD, buf),
+		base: newBase(t, vr.OD, buf),
 	}
 }
 
 // NewOtherDoubleFromBuffer creates an OD element from an existing buffer.
 func NewOtherDoubleFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherDouble {
 	return &OtherDouble{
-		base: NewBase(t, vr.OD, buf),
+		base: newBase(t, vr.OD, buf),
 	}
 }
 
@@ -155,14 +155,14 @@ type OtherFloat struct {
 func NewOtherFloat(t *tag.Tag, data []byte) *OtherFloat {
 	buf := buffer.NewMemory(data)
 	return &OtherFloat{
-		base: NewBase(t, vr.OF, buf),
+		base: newBase(t, vr.OF, buf),
 	}
 }
 
 // NewOtherFloatFromBuffer creates an OF element from an existing buffer.
 func NewOtherFloatFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherFloat {
 	return &OtherFloat{
-		base: NewBase(t, vr.OF, buf),
+		base: newBase(t, vr.OF, buf),
 	}
 }
 
@@ -189,14 +189,14 @@ type OtherLong struct {
 func NewOtherLong(t *tag.Tag, data []byte) *OtherLong {
 	buf := buffer.NewMemory(data)
 	return &OtherLong{
-		base: NewBase(t, vr.OL, buf),
+		base: newBase(t, vr.OL, buf),
 	}
 }
 
 // NewOtherLongFromBuffer creates an OL element from an existing buffer.
 func NewOtherLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherLong {
 	return &OtherLong{
-		base: NewBase(t, vr.OL, buf),
+		base: newBase(t, vr.OL, buf),
 	}
 }
 
@@ -223,14 +223,14 @@ type OtherVeryLong struct {
 func NewOtherVeryLong(t *tag.Tag, data []byte) *OtherVeryLong {
 	buf := buffer.NewMemory(data)
 	return &OtherVeryLong{
-		base: NewBase(t, vr.OV, buf),
+		base: newBase(t, vr.OV, buf),
 	}
 }
 
 // NewOtherVeryLongFromBuffer creates an OV element from an existing buffer.
 func NewOtherVeryLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherVeryLong {
 	return &OtherVeryLong{
-		base: NewBase(t, vr.OV, buf),
+		base: newBase(t, vr.OV, buf),
 	}
 }
 

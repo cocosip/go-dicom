@@ -134,19 +134,19 @@ type mockServiceForDIMSE struct {
 }
 
 // Association management methods (not used in these tests)
-func (m *mockServiceForDIMSE) GetAssociation() *association.Association      { return nil }
-func (m *mockServiceForDIMSE) SetAssociation(assoc *association.Association) {}
-func (m *mockServiceForDIMSE) SendAssociationRequest(ctx context.Context, rq *pdu.AAssociateRQ) error {
+func (m *mockServiceForDIMSE) GetAssociation() *association.Association  { return nil }
+func (m *mockServiceForDIMSE) SetAssociation(_ *association.Association) {}
+func (m *mockServiceForDIMSE) SendAssociationRequest(_ context.Context, _ *pdu.AAssociateRQ) error {
 	return nil
 }
-func (m *mockServiceForDIMSE) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssociateAC, error) {
+func (m *mockServiceForDIMSE) ReceiveAssociationResponse(_ context.Context) (*pdu.AAssociateAC, error) {
 	return nil, nil
 }
-func (m *mockServiceForDIMSE) Start() error                                              { return nil }
-func (m *mockServiceForDIMSE) GracefulRelease(ctx context.Context) error                 { return nil }
-func (m *mockServiceForDIMSE) Abort(ctx context.Context, source byte, reason byte) error { return nil }
+func (m *mockServiceForDIMSE) Start() error                                  { return nil }
+func (m *mockServiceForDIMSE) GracefulRelease(_ context.Context) error       { return nil }
+func (m *mockServiceForDIMSE) Abort(_ context.Context, _ byte, _ byte) error { return nil }
 
-func (m *mockServiceForDIMSE) SendCEcho(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+func (m *mockServiceForDIMSE) SendCEcho(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 	// Simulate processing delay
 	time.Sleep(10 * time.Millisecond)
 
@@ -158,7 +158,7 @@ func (m *mockServiceForDIMSE) SendCEcho(ctx context.Context, req *dimse.CEchoReq
 	return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
 }
 
-func (m *mockServiceForDIMSE) SendCStore(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+func (m *mockServiceForDIMSE) SendCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
 	// Simulate processing delay
 	time.Sleep(10 * time.Millisecond)
 
@@ -170,7 +170,7 @@ func (m *mockServiceForDIMSE) SendCStore(ctx context.Context, req *dimse.CStoreR
 	return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
 }
 
-func (m *mockServiceForDIMSE) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error) {
+func (m *mockServiceForDIMSE) SendCFind(_ context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error) {
 	// Create response channel
 	respCh := make(chan *dimse.CFindResponse, 16)
 
@@ -381,7 +381,7 @@ func TestCFindWithCallback_Success(t *testing.T) {
 	defer cancel()
 
 	err := client.CFindWithCallback(ctx, dimse.QueryRetrieveLevelPatient, query,
-		func(result *dataset.Dataset) bool {
+		func(_ *dataset.Dataset) bool {
 			resultCount++
 			return true // Continue
 		})
@@ -422,7 +422,7 @@ func TestCFindWithCallback_StopEarly(t *testing.T) {
 	defer cancel()
 
 	err := client.CFindWithCallback(ctx, dimse.QueryRetrieveLevelPatient, query,
-		func(result *dataset.Dataset) bool {
+		func(_ *dataset.Dataset) bool {
 			resultCount++
 			return false // Stop after first result
 		})
@@ -616,7 +616,8 @@ func TestCMove_StopEarly(t *testing.T) {
 	err := client.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier,
 		func(remaining, completed, failed, warning uint16) bool {
 			progressCount++
-			t.Logf("C-MOVE progress: remaining=%d, completed=%d", remaining, completed)
+			t.Logf("C-MOVE progress: remaining=%d, completed=%d, failed=%d, warning=%d",
+				remaining, completed, failed, warning)
 			// Stop after first progress update
 			return false
 		})
@@ -703,7 +704,8 @@ func TestCGet_StopEarly(t *testing.T) {
 	err := client.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
 		func(remaining, completed, failed, warning uint16) bool {
 			progressCount++
-			t.Logf("C-GET progress: remaining=%d, completed=%d", remaining, completed)
+			t.Logf("C-GET progress: remaining=%d, completed=%d, failed=%d, warning=%d",
+				remaining, completed, failed, warning)
 			// Stop after first progress update
 			return false
 		})

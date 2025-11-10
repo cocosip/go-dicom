@@ -79,7 +79,7 @@ func TestNewMemoryPooled(t *testing.T) {
 		}
 	})
 
-	t.Run("ReleaseNil", func(t *testing.T) {
+	t.Run("ReleaseNil", func(_ *testing.T) {
 		// Should not panic
 		ReleaseMemoryBuffer(nil)
 	})
@@ -220,7 +220,7 @@ func TestBytesBufferPool(t *testing.T) {
 		PutBytesBuffer(buf2)
 	})
 
-	t.Run("PutNil", func(t *testing.T) {
+	t.Run("PutNil", func(_ *testing.T) {
 		// Should not panic
 		PutBytesBuffer(nil)
 	})

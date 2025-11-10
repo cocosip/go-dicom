@@ -129,7 +129,7 @@ func NewImageData( /* dataset *dicom.Dataset */ ) (*ImageData, error) {
 // NewVolumeData constructs a volume from multiple image slices
 //
 // TODO: Implement volume reconstruction algorithm
-func NewVolumeData(images []*ImageData) (*VolumeData, error) {
+func NewVolumeData(_ []*ImageData) (*VolumeData, error) {
 	// Placeholder
 	return nil, ErrNotImplemented
 }
@@ -137,7 +137,7 @@ func NewVolumeData(images []*ImageData) (*VolumeData, error) {
 // NewStack creates a reformatted stack from a volume
 //
 // TODO: Implement MPR (Multi-Planar Reformation)
-func NewStack(volume *VolumeData, stackType StackType, spacing, sliceDistance float64) (*Stack, error) {
+func NewStack(_ *VolumeData, _ StackType, _, _ float64) (*Stack, error) {
 	// Placeholder
 	return nil, ErrNotImplemented
 }

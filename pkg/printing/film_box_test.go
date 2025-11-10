@@ -144,7 +144,7 @@ func TestFilmBox_InitializeImageBoxes(t *testing.T) {
 						continue
 					}
 
-					if ib.ImageBoxPosition != uint16(i+1) {
+					if int(ib.ImageBoxPosition) != (i + 1) {
 						t.Errorf("Image box %d: expected position=%d, got %d", i, i+1, ib.ImageBoxPosition)
 					}
 
@@ -245,7 +245,7 @@ func TestFilmBox_IsValid(t *testing.T) {
 		},
 		{
 			name: "invalid: no image boxes",
-			setup: func(fb *FilmBox) {
+			setup: func(_ *FilmBox) {
 				// Don't initialize image boxes
 			},
 			expected: false,

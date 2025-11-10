@@ -19,14 +19,14 @@ import (
 // Default is the default DICOM encoding (ASCII/ISO-8859-1).
 var Default = charmap.ISO8859_1
 
-// CharsetInfo holds information about a DICOM character set.
-type CharsetInfo struct {
+// Info holds information about a DICOM character set.
+type Info struct {
 	Name     string
 	Encoding encoding.Encoding
 }
 
 // knownCharsets maps DICOM Specific Character Set values to Go encodings.
-var knownCharsets = map[string]*CharsetInfo{
+var knownCharsets = map[string]*Info{
 	// ISO 8859 Latin character sets
 	"ISO_IR 100": {"Latin-1 (Western European)", charmap.ISO8859_1},
 	"ISO_IR 101": {"Latin-2 (Central European)", charmap.ISO8859_2},
@@ -193,7 +193,7 @@ func KnownCharsets() []string {
 }
 
 // GetCharsetInfo returns information about a DICOM character set.
-func GetCharsetInfo(charset string) (*CharsetInfo, bool) {
+func GetCharsetInfo(charset string) (*Info, bool) {
 	charset = strings.TrimSpace(charset)
 	info, ok := knownCharsets[charset]
 	return info, ok

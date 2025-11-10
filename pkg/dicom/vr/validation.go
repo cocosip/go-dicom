@@ -362,14 +362,14 @@ func ValidateUI(content string) error {
 }
 
 // ValidateUR validates Universal Resource (UR) values.
-func ValidateUR(content string) error {
+func ValidateUR(_ string) error {
 	// Unlimited length, trailing spaces allowed
 	// This is a URL/URI, basic validation
 	return nil
 }
 
 // ValidateUT validates Unlimited Text (UT) values.
-func ValidateUT(content string) error {
+func ValidateUT(_ string) error {
 	// Unlimited length
 	return nil
 }

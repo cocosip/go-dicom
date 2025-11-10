@@ -23,20 +23,34 @@ const (
 type FilmSize string
 
 const (
-	FilmSize8INX10IN   FilmSize = "8INX10IN"
+	//FilmSize8INX10IN - 8 inches x 10 inches
+	FilmSize8INX10IN FilmSize = "8INX10IN"
+	//FilmSize8_5INX11IN - 8.5 inches x 11 inches
 	FilmSize8_5INX11IN FilmSize = "8_5INX11IN"
-	FilmSize10INX12IN  FilmSize = "10INX12IN"
-	FilmSize10INX14IN  FilmSize = "10INX14IN"
-	FilmSize11INX14IN  FilmSize = "11INX14IN"
-	FilmSize11INX17IN  FilmSize = "11INX17IN"
-	FilmSize14INX14IN  FilmSize = "14INX14IN"
-	FilmSize14INX17IN  FilmSize = "14INX17IN"
-	FilmSize24CMX24CM  FilmSize = "24CMX24CM"
-	FilmSize24CMX30CM  FilmSize = "24CMX30CM"
-	FilmSize24CMX36CM  FilmSize = "24CMX36CM"
-	FilmSize26CMX30CM  FilmSize = "26CMX30CM"
-	FilmSizeA4         FilmSize = "A4"
-	FilmSizeA3         FilmSize = "A3"
+	//FilmSize10INX12IN - 10 inches x 12 inches
+	FilmSize10INX12IN FilmSize = "10INX12IN"
+	//FilmSize10INX14IN - 10 inches x 14 inches
+	FilmSize10INX14IN FilmSize = "10INX14IN"
+	//FilmSize11INX14IN - 10 inches x 17 inches
+	FilmSize11INX14IN FilmSize = "11INX14IN"
+	//FilmSize11INX17IN - 11 inches x 17 inches
+	FilmSize11INX17IN FilmSize = "11INX17IN"
+	//FilmSize14INX14IN - 14 inches x 14 inches
+	FilmSize14INX14IN FilmSize = "14INX14IN"
+	//FilmSize14INX17IN - 14 inches x 17 inches
+	FilmSize14INX17IN FilmSize = "14INX17IN"
+	//FilmSize24CMX24CM - 24 cm x 24 cm
+	FilmSize24CMX24CM FilmSize = "24CMX24CM"
+	//FilmSize24CMX30CM - 24 cm x 30 cm
+	FilmSize24CMX30CM FilmSize = "24CMX30CM"
+	//FilmSize24CMX36CM - 24 cm x 36 cm
+	FilmSize24CMX36CM FilmSize = "24CMX36CM"
+	//FilmSize26CMX30CM - 26 cm x 30 cm
+	FilmSize26CMX30CM FilmSize = "26CMX30CM"
+	//FilmSizeA4 - A4 size film
+	FilmSizeA4 FilmSize = "A4"
+	//FilmSizeA3 - A3 size film
+	FilmSizeA3 FilmSize = "A3"
 )
 
 // MagnificationType represents the type of image magnification
@@ -67,7 +81,9 @@ const (
 type BorderDensity string
 
 const (
+	// BorderDensityBlack - black border
 	BorderDensityBlack BorderDensity = "BLACK"
+	// BorderDensityWhite - white border
 	BorderDensityWhite BorderDensity = "WHITE"
 )
 
@@ -75,7 +91,9 @@ const (
 type EmptyImageDensity string
 
 const (
+	// EmptyImageDensityBlack - black density
 	EmptyImageDensityBlack EmptyImageDensity = "BLACK"
+	// EmptyImageDensityWhite - white density
 	EmptyImageDensityWhite EmptyImageDensity = "WHITE"
 )
 
@@ -230,7 +248,7 @@ func (fb *FilmBox) InitializeImageBoxes() error {
 	}
 
 	fb.BasicImageBoxes = make([]*ImageBox, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		fb.BasicImageBoxes[i] = NewImageBox(fmt.Sprintf("%s.%d", fb.SOPInstanceUID, i+1), fb.filmSession != nil && fb.filmSession.IsColor)
 		fb.BasicImageBoxes[i].filmBox = fb
 		fb.BasicImageBoxes[i].ImageBoxPosition = uint16(i + 1)

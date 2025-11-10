@@ -14,7 +14,7 @@ type Codec interface {
 	Name() string
 
 	// TransferSyntax returns the transfer syntax this codec handles.
-	TransferSyntax() *transfer.TransferSyntax
+	TransferSyntax() *transfer.Syntax
 
 	// Encode encodes pixel data from source to destination with the given parameters.
 	Encode(src *PixelData, dst *PixelData, params Parameters) error

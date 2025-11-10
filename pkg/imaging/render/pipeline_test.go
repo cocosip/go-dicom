@@ -136,7 +136,7 @@ func TestGrayscalePipelineClearCache(t *testing.T) {
 	}
 }
 
-func TestGrayscalePipelineConcurrency(t *testing.T) {
+func TestGrayscalePipelineConcurrency(_ *testing.T) {
 	pipeline := NewGrayscalePipeline(1.0, 0, 128.0, 256.0, 0, 255, false)
 
 	// Test concurrent access
@@ -208,7 +208,7 @@ func TestCompositeLUTIsValid(t *testing.T) {
 	}
 }
 
-func TestCompositeLUTRecalculate(t *testing.T) {
+func TestCompositeLUTRecalculate(_ *testing.T) {
 	lut1 := NewModalityRescaleLUT(1.0, 0, 0, 100)
 	lut2 := NewLinearVOILUT(128, 256)
 	composite := NewCompositeLUT(lut1, lut2)

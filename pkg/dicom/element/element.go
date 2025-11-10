@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package element provides DICOM element types and interfaces.
 package element
 
 import (
@@ -10,6 +11,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
+
+var _ Element = (*base)(nil)
 
 // Element is the interface for all DICOM elements.
 //
@@ -47,8 +50,8 @@ type base struct {
 	buffer buffer.ByteBuffer
 }
 
-// NewBase creates a new base element with the given tag, VR, and buffer.
-func NewBase(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) *base {
+// newBase creates a new base element with the given tag, VR, and buffer.
+func newBase(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) *base {
 	if buf == nil {
 		buf = buffer.Empty
 	}
@@ -93,4 +96,10 @@ func (e *base) Validate() error {
 	// Check if VR matches the tag's expected VR
 	// (This would require dictionary lookup, which we'll add later)
 	return nil
+}
+
+// Count returns the number of values in this element.
+// For example, a multi-valued string element returns the number of strings.
+func (e *base) Count() int {
+	return 1
 }

@@ -1,6 +1,8 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package client provides a DICOM SCU (Service Class User) client implementation.
+// It supports association negotiation, DIMSE operations, and graceful release.
 package client
 
 import (
@@ -64,7 +66,7 @@ type Client struct {
 	assoc *association.Association
 
 	// Configuration options
-	config *ClientConfig
+	config *Config
 
 	// Presentation contexts to negotiate
 	presentationContexts []*pdu.PresentationContextRQ
@@ -73,8 +75,8 @@ type Client struct {
 	connected bool
 }
 
-// ClientConfig contains configuration options for the DICOM client.
-type ClientConfig struct {
+// Config contains configuration options for the DICOM client.
+type Config struct {
 	// CallingAE is the AE Title of this client (SCU)
 	CallingAE string
 
@@ -106,68 +108,68 @@ type ClientConfig struct {
 	ImplementationVersionName string
 }
 
-// ClientOption is a function that modifies client configuration.
-type ClientOption func(*ClientConfig)
+// Option is a function that modifies client configuration.
+type Option func(*Config)
 
 // WithCallingAE sets the calling AE title.
-func WithCallingAE(ae string) ClientOption {
-	return func(o *ClientConfig) {
+func WithCallingAE(ae string) Option {
+	return func(o *Config) {
 		o.CallingAE = ae
 	}
 }
 
 // WithCalledAE sets the called AE title.
-func WithCalledAE(ae string) ClientOption {
-	return func(o *ClientConfig) {
+func WithCalledAE(ae string) Option {
+	return func(o *Config) {
 		o.CalledAE = ae
 	}
 }
 
 // WithMaxPDULength sets the maximum PDU length.
-func WithMaxPDULength(length uint32) ClientOption {
-	return func(o *ClientConfig) {
+func WithMaxPDULength(length uint32) Option {
+	return func(o *Config) {
 		o.MaxPDULength = length
 	}
 }
 
 // WithConnectTimeout sets the connection timeout.
-func WithConnectTimeout(timeout time.Duration) ClientOption {
-	return func(o *ClientConfig) {
+func WithConnectTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
 		o.ConnectTimeout = timeout
 	}
 }
 
 // WithRequestTimeout sets the request timeout.
-func WithRequestTimeout(timeout time.Duration) ClientOption {
-	return func(o *ClientConfig) {
+func WithRequestTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
 		o.RequestTimeout = timeout
 	}
 }
 
 // WithAssociationTimeout sets the association timeout.
-func WithAssociationTimeout(timeout time.Duration) ClientOption {
-	return func(o *ClientConfig) {
+func WithAssociationTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
 		o.AssociationTimeout = timeout
 	}
 }
 
 // WithImplementationClassUID sets the implementation class UID.
-func WithImplementationClassUID(uid string) ClientOption {
-	return func(o *ClientConfig) {
+func WithImplementationClassUID(uid string) Option {
+	return func(o *Config) {
 		o.ImplementationClassUID = uid
 	}
 }
 
 // WithImplementationVersionName sets the implementation version name.
-func WithImplementationVersionName(name string) ClientOption {
-	return func(o *ClientConfig) {
+func WithImplementationVersionName(name string) Option {
+	return func(o *Config) {
 		o.ImplementationVersionName = name
 	}
 }
 
 // defaultClientConfig returns the default client configuration.
-func defaultClientConfig() *ClientConfig {
-	return &ClientConfig{
+func defaultClientConfig() *Config {
+	return &Config{
 		CallingAE:                 "GO_DICOM_SCU",
 		CalledAE:                  "ANY_SCP",
 		MaxPDULength:              16384,
@@ -180,7 +182,7 @@ func defaultClientConfig() *ClientConfig {
 }
 
 // New creates a new DICOM client with the specified options.
-func New(opts ...ClientOption) *Client {
+func New(opts ...Option) *Client {
 	config := defaultClientConfig()
 	for _, opt := range opts {
 		opt(config)
@@ -214,7 +216,7 @@ func (c *Client) AddPresentationContext(abstractSyntax string, transferSyntaxes 
 }
 
 // GetConfig returns the client configuration.
-func (c *Client) GetConfig() *ClientConfig {
+func (c *Client) GetConfig() *Config {
 	return c.config
 }
 
@@ -467,7 +469,7 @@ func (c *Client) Connect(ctx context.Context, host string, port int) error {
 //	client, err := client.Dial(ctx, "192.168.1.100", 104,
 //	    client.WithCallingAE("MY_SCU"),
 //	    client.WithCalledAE("REMOTE_SCP"))
-func Dial(ctx context.Context, host string, port int, opts ...ClientOption) (*Client, error) {
+func Dial(ctx context.Context, host string, port int, opts ...Option) (*Client, error) {
 	c := New(opts...)
 
 	// Add default verification context if no contexts specified

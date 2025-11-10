@@ -15,18 +15,31 @@ import (
 type Type int
 
 const (
+	// TypeTransferSyntax represents a transfer syntax UID
 	TypeTransferSyntax Type = iota
+	// TypeSOPClass represents a SOP class UID
 	TypeSOPClass
+	// TypeMetaSOPClass represents a meta SOP class UID
 	TypeMetaSOPClass
+	// TypeServiceClass represents a service user UID
 	TypeServiceClass
+	// TypeSOPInstance represents a SOP instance UID
 	TypeSOPInstance
+	// TypeApplicationContextName represents an application entity UID
 	TypeApplicationContextName
+	// TypeApplicationHostingModel represents an application hosting model UID
 	TypeApplicationHostingModel
+	// TypeCodingScheme represents a coding scheme UID
 	TypeCodingScheme
+	// TypeFrameOfReference represents a code meaning UID
 	TypeFrameOfReference
+	// TypeLDAP represents an LDAP UID
 	TypeLDAP
+	// TypeMappingResource represents a mapping resource UID
 	TypeMappingResource
+	// TypeContextGroupName represents a context group name UID
 	TypeContextGroupName
+	// TypeUnknown represents an unknown UID type
 	TypeUnknown
 )
 
@@ -34,15 +47,25 @@ const (
 type StorageCategory int
 
 const (
+	// StorageCategoryNone represents no specific storage category
 	StorageCategoryNone StorageCategory = iota
+	// StorageCategoryImage represents image storage
 	StorageCategoryImage
+	// StorageCategoryPresentationState represents a presentation state storage category
 	StorageCategoryPresentationState
+	// StorageCategoryStructuredReport represents a structured report storage category
 	StorageCategoryStructuredReport
+	// StorageCategoryWaveform represents a waveform storage category
 	StorageCategoryWaveform
+	// StorageCategoryDocument represents a document storage category
 	StorageCategoryDocument
+	// StorageCategoryRaw represents a raw data storage category
 	StorageCategoryRaw
+	// StorageCategoryOther represents other storage categories
 	StorageCategoryOther
+	// StorageCategoryPrivate represents private storage categories
 	StorageCategoryPrivate
+	// StorageCategoryVolume represents volume storage categories
 	StorageCategoryVolume
 )
 

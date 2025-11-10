@@ -58,7 +58,7 @@ func TestSetGetHandlers(t *testing.T) {
 
 	// Set handlers
 	handlers := &Handlers{
-		CEchoHandler: func(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+		CEchoHandler: func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 			return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
 		},
 	}
@@ -100,7 +100,7 @@ func TestHandleCEchoRequest_CustomHandler(t *testing.T) {
 	// Custom handler that returns success
 	handlerCalled := false
 	handlers := &Handlers{
-		CEchoHandler: func(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+		CEchoHandler: func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 			handlerCalled = true
 			return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
 		},
@@ -158,7 +158,7 @@ func TestHandleCStoreRequest_CustomHandler(t *testing.T) {
 	// Custom handler
 	handlerCalled := false
 	handlers := &Handlers{
-		CStoreHandler: func(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+		CStoreHandler: func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
 			handlerCalled = true
 			return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
 		},
@@ -202,7 +202,7 @@ func TestHandleCFindRequest_CustomHandler(t *testing.T) {
 	// Custom handler that returns multiple responses
 	handlerCalled := false
 	handlers := &Handlers{
-		CFindHandler: func(ctx context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
+		CFindHandler: func(_ context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
 			handlerCalled = true
 			// Return 2 pending + 1 success
 			return []*dimse.CFindResponse{
@@ -304,7 +304,7 @@ func TestHandleCMoveRequest_CustomHandler(t *testing.T) {
 	// Custom handler that returns multiple responses
 	handlerCalled := false
 	handlers := &Handlers{
-		CMoveHandler: func(ctx context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
+		CMoveHandler: func(_ context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
 			handlerCalled = true
 			// Return 2 pending + 1 success
 			return []*dimse.CMoveResponse{
@@ -355,7 +355,7 @@ func TestHandleCGetRequest_CustomHandler(t *testing.T) {
 	// Custom handler that returns multiple responses
 	handlerCalled := false
 	handlers := &Handlers{
-		CGetHandler: func(ctx context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
+		CGetHandler: func(_ context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
 			handlerCalled = true
 			// Return 2 pending + 1 success
 			return []*dimse.CGetResponse{

@@ -153,7 +153,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0000, 0x0901),
 		"Offending Element", // OffendingElement
 		"OffendingElement",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -201,7 +201,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0000, 0x1005),
 		"Attribute Identifier List", // AttributeIdentifierList
 		"AttributeIdentifierList",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -377,7 +377,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0000, 0x51B0),
 		"Overlays", // Overlays
 		"Overlays",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -569,7 +569,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0004, 0x1141),
 		"File-set Descriptor File ID", // FileSetDescriptorFileID
 		"FileSetDescriptorFileID",
-		vm.VM1_8,
+		vm.VM18,
 		false,
 		vr.CS,
 	))
@@ -657,7 +657,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0004, 0x1500),
 		"Referenced File ID", // ReferencedFileID
 		"ReferencedFileID",
-		vm.VM1_8,
+		vm.VM18,
 		false,
 		vr.CS,
 	))
@@ -697,7 +697,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0004, 0x151A),
 		"Referenced Related General SOP Class UID in File", // ReferencedRelatedGeneralSOPClassUIDInFile
 		"ReferencedRelatedGeneralSOPClassUIDInFile",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -729,7 +729,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0005),
 		"Specific Character Set", // SpecificCharacterSet
 		"SpecificCharacterSet",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -745,7 +745,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0008),
 		"Image Type", // ImageType
 		"ImageType",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.CS,
 	))
@@ -825,7 +825,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x001A),
 		"Related General SOP Class UID", // RelatedGeneralSOPClassUID
 		"RelatedGeneralSOPClassUID",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -1009,7 +1009,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0054),
 		"Retrieve AE Title", // RetrieveAETitle
 		"RetrieveAETitle",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AE,
 	))
@@ -1033,7 +1033,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0058),
 		"Failed SOP Instance UID List", // FailedSOPInstanceUIDList
 		"FailedSOPInstanceUIDList",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -1049,7 +1049,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0061),
 		"Modalities in Study", // ModalitiesInStudy
 		"ModalitiesInStudy",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -1057,7 +1057,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0062),
 		"SOP Classes in Study", // SOPClassesInStudy
 		"SOPClassesInStudy",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -1137,7 +1137,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0094),
 		"Referring Physician's Telephone Numbers", // ReferringPhysicianTelephoneNumbers
 		"ReferringPhysicianTelephoneNumbers",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -1153,7 +1153,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x009C),
 		"Consulting Physician's Name", // ConsultingPhysicianName
 		"ConsultingPhysicianName",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -1465,7 +1465,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0304),
 		"Nonidentifying Private Elements", // NonidentifyingPrivateElements
 		"NonidentifyingPrivateElements",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -1481,7 +1481,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0306),
 		"Identifying Private Elements", // IdentifyingPrivateElements
 		"IdentifyingPrivateElements",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -1505,7 +1505,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x0309),
 		"Private Data Element Value Multiplicity", // PrivateDataElementValueMultiplicity
 		"PrivateDataElementValueMultiplicity",
-		vm.VM1_3,
+		vm.VM13,
 		false,
 		vr.UL,
 	))
@@ -1521,7 +1521,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x030B),
 		"Private Data Element Number of Items", // PrivateDataElementNumberOfItems
 		"PrivateDataElementNumberOfItems",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.UL,
 	))
@@ -1689,7 +1689,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x040F),
 		"Extended Matching Mechanisms", // ExtendedMatchingMechanisms
 		"ExtendedMatchingMechanisms",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -1969,7 +1969,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1048),
 		"Physician(s) of Record", // PhysiciansOfRecord
 		"PhysiciansOfRecord",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -1985,7 +1985,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1050),
 		"Performing Physician's Name", // PerformingPhysicianName
 		"PerformingPhysicianName",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -2001,7 +2001,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1060),
 		"Name of Physician(s) Reading Study", // NameOfPhysiciansReadingStudy
 		"NameOfPhysiciansReadingStudy",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -2017,7 +2017,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1070),
 		"Operators' Name", // OperatorsName
 		"OperatorsName",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -2033,7 +2033,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1080),
 		"Admitting Diagnoses Description", // AdmittingDiagnosesDescription
 		"AdmittingDiagnosesDescription",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -2217,7 +2217,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x115A),
 		"SOP Classes Supported", // SOPClassesSupported
 		"SOPClassesSupported",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -2225,7 +2225,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1160),
 		"Referenced Frame Number", // ReferencedFrameNumber
 		"ReferencedFrameNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -2233,7 +2233,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1161),
 		"Simple Frame List", // SimpleFrameList
 		"SimpleFrameList",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -2241,7 +2241,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x1162),
 		"Calculated Frame List", // CalculatedFrameList
 		"CalculatedFrameList",
-		vm.VM3_3n,
+		vm.VM33N,
 		false,
 		vr.UL,
 	))
@@ -2465,7 +2465,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x2130),
 		"Event Elapsed Time(s)", // EventElapsedTimes
 		"EventElapsedTimes",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -2473,7 +2473,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x2132),
 		"Event Timer Name(s)", // EventTimerNames
 		"EventTimerNames",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -2705,7 +2705,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x3002),
 		"Available Transfer Syntax UID", // AvailableTransferSyntaxUID
 		"AvailableTransferSyntaxUID",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -2713,7 +2713,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0008, 0x3010),
 		"Irradiation Event UID", // IrradiationEventUID
 		"IrradiationEventUID",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -3089,7 +3089,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x0047),
 		"Sex Parameters for Clinical Use Category Reference", // SexParametersForClinicalUseCategoryReference
 		"SexParametersForClinicalUseCategoryReference",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UR,
 	))
@@ -3233,7 +3233,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x1000),
 		"Other Patient IDs", // OtherPatientIDs
 		"OtherPatientIDs",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -3241,7 +3241,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x1001),
 		"Other Patient Names", // OtherPatientNames
 		"OtherPatientNames",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -3329,7 +3329,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x1050),
 		"Insurance Plan Identification", // InsurancePlanIdentification
 		"InsurancePlanIdentification",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -3377,7 +3377,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x2000),
 		"Medical Alerts", // MedicalAlerts
 		"MedicalAlerts",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -3385,7 +3385,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x2110),
 		"Allergies", // Allergies
 		"Allergies",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -3409,7 +3409,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x2154),
 		"Patient's Telephone Numbers", // PatientTelephoneNumbers
 		"PatientTelephoneNumbers",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -3441,7 +3441,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0010, 0x2162),
 		"Ethnic Groups", // EthnicGroups
 		"EthnicGroups",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UC,
 	))
@@ -3769,7 +3769,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0012, 0x0063),
 		"De-identification Method", // DeidentificationMethod
 		"DeidentificationMethod",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -3897,7 +3897,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x0030),
 		"Material Thickness", // MaterialThickness
 		"MaterialThickness",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -3905,7 +3905,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x0032),
 		"Material Pipe Diameter", // MaterialPipeDiameter
 		"MaterialPipeDiameter",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -3913,7 +3913,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x0034),
 		"Material Isolation Diameter", // MaterialIsolationDiameter
 		"MaterialIsolationDiameter",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -3985,7 +3985,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x0100),
 		"Component Welder IDs", // ComponentWelderIDs
 		"ComponentWelderIDs",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -4041,7 +4041,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x0107),
 		"Other Approval Status", // OtherApprovalStatus
 		"OtherApprovalStatus",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -4049,7 +4049,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x0108),
 		"Other Secondary Approval Status", // OtherSecondaryApprovalStatus
 		"OtherSecondaryApprovalStatus",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -4209,7 +4209,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x201A),
 		"Indication Type", // IndicationType
 		"IndicationType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -4337,7 +4337,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x2226),
 		"Transform Order of Axes", // TransformOrderOfAxes
 		"TransformOrderOfAxes",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -4353,7 +4353,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x222A),
 		"Coordinate System Transform Rotation and Scale Matrix", // CoordinateSystemTransformRotationAndScaleMatrix
 		"CoordinateSystemTransformRotationAndScaleMatrix",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -4361,7 +4361,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x222C),
 		"Coordinate System Transform Translation Matrix", // CoordinateSystemTransformTranslationMatrix
 		"CoordinateSystemTransformTranslationMatrix",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -4817,7 +4817,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x4038),
 		"DAC Gain Points", // DACGainPoints
 		"DACGainPoints",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -4825,7 +4825,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x403A),
 		"DAC Time Points", // DACTimePoints
 		"DACTimePoints",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -4833,7 +4833,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x403C),
 		"DAC Amplitude", // DACAmplitude
 		"DACAmplitude",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -5001,7 +5001,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x407C),
 		"Calibration Time", // CalibrationTime
 		"CalibrationTime",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.TM,
 	))
@@ -5009,7 +5009,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x407E),
 		"Calibration Date", // CalibrationDate
 		"CalibrationDate",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DA,
 	))
@@ -5185,7 +5185,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x40A0),
 		"Image Quality Indicator Type", // ImageQualityIndicatorType
 		"ImageQualityIndicatorType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -5193,7 +5193,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x40A1),
 		"Image Quality Indicator Material", // ImageQualityIndicatorMaterial
 		"ImageQualityIndicatorMaterial",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -5201,7 +5201,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x40A2),
 		"Image Quality Indicator Size", // ImageQualityIndicatorSize
 		"ImageQualityIndicatorSize",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -5249,7 +5249,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x4106),
 		"Wave Dimension Values Sequence", // WaveDimensionValuesSequence
 		"WaveDimensionValuesSequence",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SQ,
 	))
@@ -5705,7 +5705,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x6011),
 		"Flash Frame Number", // FlashFrameNumber
 		"FlashFrameNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -5865,7 +5865,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x6025),
 		"Data Streaming Protocol", // DataStreamingProtocol
 		"DataStreamingProtocol",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.ST,
 	))
@@ -5905,7 +5905,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x602A),
 		"Lens Filter Cut-Off Wavelength", // LensFilterCutOffWavelength
 		"LensFilterCutOffWavelength",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -5969,7 +5969,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x6032),
 		"Size of Individual Turn", // SizeOfIndividualTurn
 		"SizeOfIndividualTurn",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -5977,7 +5977,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x6033),
 		"Distance Between Turns", // DistanceBetweenTurns
 		"DistanceBetweenTurns",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -6161,7 +6161,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x604A),
 		"Electromagnetic Classification of Inspection Surface", // ElectromagneticClassificationOfInspectionSurface
 		"ElectromagneticClassificationOfInspectionSurface",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -6185,7 +6185,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x604E),
 		"Moving Window Weights", // MovingWindowWeights
 		"MovingWindowWeights",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -6257,7 +6257,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x605A),
 		"Fitting Data Type", // FittingDataType
 		"FittingDataType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -6297,7 +6297,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0014, 0x605F),
 		"PolynomialCoefficients", // PolynomialCoefficients
 		"PolynomialCoefficients",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -6369,7 +6369,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0016, 0x0008),
 		"OECF Column Names", // OECFColumnNames
 		"OECFColumnNames",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UC,
 	))
@@ -6377,7 +6377,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0016, 0x0009),
 		"OECF Values", // OECFValues
 		"OECFValues",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -6401,7 +6401,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0016, 0x000C),
 		"Spatial Frequency Response Column Names", // SpatialFrequencyResponseColumnNames
 		"SpatialFrequencyResponseColumnNames",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UC,
 	))
@@ -6409,7 +6409,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0016, 0x000D),
 		"Spatial Frequency Response Values", // SpatialFrequencyResponseValues
 		"SpatialFrequencyResponseValues",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -6433,7 +6433,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0016, 0x0010),
 		"Color Filter Array Pattern Values", // ColorFilterArrayPatternValues
 		"ColorFilterArrayPatternValues",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -6705,7 +6705,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0016, 0x0036),
 		"Flash Energy", // FlashEnergy
 		"FlashEnergy",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.DS,
 	))
@@ -7177,7 +7177,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0016, 0x1004),
 		"Immersion Media", // ImmersionMedia
 		"ImmersionMedia",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -7233,7 +7233,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x0020),
 		"Scanning Sequence", // ScanningSequence
 		"ScanningSequence",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -7241,7 +7241,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x0021),
 		"Sequence Variant", // SequenceVariant
 		"SequenceVariant",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -7249,7 +7249,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x0022),
 		"Scan Options", // ScanOptions
 		"ScanOptions",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -7321,7 +7321,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x0030),
 		"Radionuclide", // Radionuclide
 		"Radionuclide",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -7345,7 +7345,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x0033),
 		"Energy Window Total Width", // EnergyWindowTotalWidth
 		"EnergyWindowTotalWidth",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.DS,
 	))
@@ -7537,7 +7537,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x0086),
 		"Echo Number(s)", // EchoNumbers
 		"EchoNumbers",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -7689,7 +7689,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x100B),
 		"Manufacturer's Device Class UID", // ManufacturerDeviceClassUID
 		"ManufacturerDeviceClassUID",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -7753,7 +7753,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1019),
 		"Secondary Capture Device Software Versions", // SecondaryCaptureDeviceSoftwareVersions
 		"SecondaryCaptureDeviceSoftwareVersions",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -7761,7 +7761,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x101A),
 		"Hardcopy Device Software Version", // HardcopyDeviceSoftwareVersion
 		"HardcopyDeviceSoftwareVersion",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -7777,7 +7777,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1020),
 		"Software Versions", // SoftwareVersions
 		"SoftwareVersions",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -7857,7 +7857,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1046),
 		"Contrast Flow Rate", // ContrastFlowRate
 		"ContrastFlowRate",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -7865,7 +7865,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1047),
 		"Contrast Flow Duration", // ContrastFlowDuration
 		"ContrastFlowDuration",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -7937,7 +7937,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1065),
 		"Frame Time Vector", // FrameTimeVector
 		"FrameTimeVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -8233,7 +8233,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1135),
 		"Table Vertical Increment", // TableVerticalIncrement
 		"TableVerticalIncrement",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -8241,7 +8241,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1136),
 		"Table Lateral Increment", // TableLateralIncrement
 		"TableLateralIncrement",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -8249,7 +8249,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1137),
 		"Table Longitudinal Increment", // TableLongitudinalIncrement
 		"TableLongitudinalIncrement",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -8289,7 +8289,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1142),
 		"Radial Position", // RadialPosition
 		"RadialPosition",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -8321,7 +8321,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1146),
 		"Rotation Offset", // RotationOffset
 		"RotationOffset",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.DS,
 	))
@@ -8337,7 +8337,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1149),
 		"Field of View Dimension(s)", // FieldOfViewDimensions
 		"FieldOfViewDimensions",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.IS,
 	))
@@ -8425,7 +8425,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1161),
 		"Type of Filters", // TypeOfFilters
 		"TypeOfFilters",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -8449,7 +8449,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1166),
 		"Grid", // Grid
 		"Grid",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -8481,7 +8481,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1182),
 		"Focal Distance", // FocalDistance
 		"FocalDistance",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.IS,
 	))
@@ -8489,7 +8489,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1183),
 		"X Focus Center", // XFocusCenter
 		"XFocusCenter",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.DS,
 	))
@@ -8497,7 +8497,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1184),
 		"Y Focus Center", // YFocusCenter
 		"YFocusCenter",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.DS,
 	))
@@ -8505,7 +8505,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1190),
 		"Focal Spot(s)", // FocalSpots
 		"FocalSpots",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -8705,7 +8705,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1200),
 		"Date of Last Calibration", // DateOfLastCalibration
 		"DateOfLastCalibration",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DA,
 	))
@@ -8713,7 +8713,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1201),
 		"Time of Last Calibration", // TimeOfLastCalibration
 		"TimeOfLastCalibration",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.TM,
 	))
@@ -8753,7 +8753,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1210),
 		"Convolution Kernel", // ConvolutionKernel
 		"ConvolutionKernel",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -8761,7 +8761,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1240),
 		"Upper/Lower Pixel Values", // UpperLowerPixelValues
 		"UpperLowerPixelValues",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.IS,
 	))
@@ -8849,7 +8849,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1301),
 		"Whole Body Technique", // WholeBodyTechnique
 		"WholeBodyTechnique",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -9081,7 +9081,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1520),
 		"Positioner Primary Angle Increment", // PositionerPrimaryAngleIncrement
 		"PositionerPrimaryAngleIncrement",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -9089,7 +9089,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1521),
 		"Positioner Secondary Angle Increment", // PositionerSecondaryAngleIncrement
 		"PositionerSecondaryAngleIncrement",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -9113,7 +9113,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1600),
 		"Shutter Shape", // ShutterShape
 		"ShutterShape",
-		vm.VM1_3,
+		vm.VM13,
 		false,
 		vr.CS,
 	))
@@ -9169,7 +9169,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1620),
 		"Vertices of the Polygonal Shutter", // VerticesOfThePolygonalShutter
 		"VerticesOfThePolygonalShutter",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.IS,
 	))
@@ -9273,7 +9273,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1700),
 		"Collimator Shape", // CollimatorShape
 		"CollimatorShape",
-		vm.VM1_3,
+		vm.VM13,
 		false,
 		vr.CS,
 	))
@@ -9329,7 +9329,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x1720),
 		"Vertices of the Polygonal Collimator", // VerticesOfThePolygonalCollimator
 		"VerticesOfThePolygonalCollimator",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.IS,
 	))
@@ -9369,7 +9369,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x2001),
 		"Page Number Vector", // PageNumberVector
 		"PageNumberVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -9377,7 +9377,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x2002),
 		"Frame Label Vector", // FrameLabelVector
 		"FrameLabelVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -9385,7 +9385,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x2003),
 		"Frame Primary Angle Vector", // FramePrimaryAngleVector
 		"FramePrimaryAngleVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -9393,7 +9393,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x2004),
 		"Frame Secondary Angle Vector", // FrameSecondaryAngleVector
 		"FrameSecondaryAngleVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -9401,7 +9401,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x2005),
 		"Slice Location Vector", // SliceLocationVector
 		"SliceLocationVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -9409,7 +9409,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x2006),
 		"Display Window Label Vector", // DisplayWindowLabelVector
 		"DisplayWindowLabelVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -9529,7 +9529,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x3105),
 		"Lesion Number", // LesionNumber
 		"LesionNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -9545,7 +9545,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x5000),
 		"Output Power", // OutputPower
 		"OutputPower",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -9553,7 +9553,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x5010),
 		"Transducer Data", // TransducerData
 		"TransducerData",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -10033,7 +10033,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x6052),
 		"Table of X Break Points", // TableOfXBreakPoints
 		"TableOfXBreakPoints",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -10041,7 +10041,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x6054),
 		"Table of Y Break Points", // TableOfYBreakPoints
 		"TableOfYBreakPoints",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -10057,7 +10057,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x6058),
 		"Table of Pixel Values", // TableOfPixelValues
 		"TableOfPixelValues",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -10065,7 +10065,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x605A),
 		"Table of Parameter Values", // TableOfParameterValues
 		"TableOfParameterValues",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -10073,7 +10073,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x6060),
 		"R Wave Time Vector", // RWaveTimeVector
 		"RWaveTimeVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -10233,7 +10233,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x7026),
 		"Detector Active Dimension(s)", // DetectorActiveDimensions
 		"DetectorActiveDimensions",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.DS,
 	))
@@ -10361,7 +10361,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x7050),
 		"Filter Material", // FilterMaterial
 		"FilterMaterial",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -10369,7 +10369,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x7052),
 		"Filter Thickness Minimum", // FilterThicknessMinimum
 		"FilterThicknessMinimum",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -10377,7 +10377,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x7054),
 		"Filter Thickness Maximum", // FilterThicknessMaximum
 		"FilterThicknessMaximum",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -10385,7 +10385,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x7056),
 		"Filter Beam Path Length Minimum", // FilterBeamPathLengthMinimum
 		"FilterBeamPathLengthMinimum",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -10393,7 +10393,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x7058),
 		"Filter Beam Path Length Maximum", // FilterBeamPathLengthMaximum
 		"FilterBeamPathLengthMaximum",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -10777,7 +10777,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9052),
 		"Spectral Width", // SpectralWidth
 		"SpectralWidth",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.FD,
 	))
@@ -10785,7 +10785,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9053),
 		"Chemical Shift Reference", // ChemicalShiftReference
 		"ChemicalShiftReference",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.FD,
 	))
@@ -10817,7 +10817,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9060),
 		"De-coupled Nucleus", // DecoupledNucleus
 		"DecoupledNucleus",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.CS,
 	))
@@ -10825,7 +10825,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9061),
 		"De-coupling Frequency", // DecouplingFrequency
 		"DecouplingFrequency",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.FD,
 	))
@@ -10841,7 +10841,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9063),
 		"De-coupling Chemical Shift Reference", // DecouplingChemicalShiftReference
 		"DecouplingChemicalShiftReference",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.FD,
 	))
@@ -10857,7 +10857,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9065),
 		"Time Domain Filtering", // TimeDomainFiltering
 		"TimeDomainFiltering",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.CS,
 	))
@@ -10865,7 +10865,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9066),
 		"Number of Zero Fills", // NumberOfZeroFills
 		"NumberOfZeroFills",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.US,
 	))
@@ -10945,7 +10945,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9079),
 		"Inversion Times", // InversionTimes
 		"InversionTimes",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -11073,7 +11073,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9098),
 		"Transmitter Frequency", // TransmitterFrequency
 		"TransmitterFrequency",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.FD,
 	))
@@ -11081,7 +11081,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9100),
 		"Resonant Nucleus", // ResonantNucleus
 		"ResonantNucleus",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.CS,
 	))
@@ -11913,7 +11913,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9323),
 		"Exposure Modulation Type", // ExposureModulationType
 		"ExposureModulationType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -12281,7 +12281,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9376),
 		"Referenced X-Ray Detector Index", // ReferencedXRayDetectorIndex
 		"ReferencedXRayDetectorIndex",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -12289,7 +12289,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9377),
 		"Referenced X-Ray Source Index", // ReferencedXRaySourceIndex
 		"ReferencedXRaySourceIndex",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -12297,7 +12297,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9378),
 		"Referenced Path Index", // ReferencedPathIndex
 		"ReferencedPathIndex",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -12529,7 +12529,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9428),
 		"Intensifier Active Dimension(s)", // IntensifierActiveDimensions
 		"IntensifierActiveDimensions",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.FL,
 	))
@@ -12633,7 +12633,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9442),
 		"Vertices of the Polygonal Exposure Control Sensing Region", // VerticesOfThePolygonalExposureControlSensingRegion
 		"VerticesOfThePolygonalExposureControlSensingRegion",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.SS,
 	))
@@ -12697,7 +12697,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9461),
 		"Field of View Dimension(s) in Float", // FieldOfViewDimensionsInFloat
 		"FieldOfViewDimensionsInFloat",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.FL,
 	))
@@ -13577,7 +13577,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9801),
 		"Depth(s) of Focus", // DepthsOfFocus
 		"DepthsOfFocus",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -13921,7 +13921,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9908),
 		"Potential Reasons for Procedure", // PotentialReasonsForProcedure
 		"PotentialReasonsForProcedure",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UC,
 	))
@@ -13937,7 +13937,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x990A),
 		"Potential Diagnostic Tasks", // PotentialDiagnosticTasks
 		"PotentialDiagnosticTasks",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UC,
 	))
@@ -14217,7 +14217,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9938),
 		"Source Acquisition Protocol Element Number", // SourceAcquisitionProtocolElementNumber
 		"SourceAcquisitionProtocolElementNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -14225,7 +14225,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x9939),
 		"Source Acquisition Beam Number", // SourceAcquisitionBeamNumber
 		"SourceAcquisitionBeamNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -14233,7 +14233,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0018, 0x993A),
 		"Source Reconstruction Protocol Element Number", // SourceReconstructionProtocolElementNumber
 		"SourceReconstructionProtocolElementNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -14561,7 +14561,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0020, 0x0080),
 		"Masking Image", // MaskingImage
 		"MaskingImage",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -14665,7 +14665,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0020, 0x1020),
 		"Reference", // Reference
 		"Reference",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -14697,7 +14697,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0020, 0x1070),
 		"Other Study Numbers", // OtherStudyNumbers
 		"OtherStudyNumbers",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.IS,
 	))
@@ -14753,7 +14753,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(0020,31xx)"),
 		"Source Image IDs", // SourceImageIDs
 		"SourceImageIDs",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -14817,7 +14817,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0020, 0x5000),
 		"Original Image Identification", // OriginalImageIdentification
 		"OriginalImageIdentification",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -14825,7 +14825,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0020, 0x5002),
 		"Original Image Identification Nomenclature", // OriginalImageIdentificationNomenclature
 		"OriginalImageIdentificationNomenclature",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -14929,7 +14929,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0020, 0x9157),
 		"Dimension Index Values", // DimensionIndexValues
 		"DimensionIndexValues",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -15313,7 +15313,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0020, 0x9518),
 		"Acquisition Index", // AcquisitionIndex
 		"AcquisitionIndex",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -15625,7 +15625,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0022, 0x0032),
 		"Reference Coordinates", // ReferenceCoordinates
 		"ReferenceCoordinates",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.FL,
 	))
@@ -16753,7 +16753,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0022, 0x1646),
 		"B-scan Cycle Time Vector", // BscanCycleTimeVector
 		"BscanCycleTimeVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -17641,7 +17641,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0009),
 		"Frame Increment Pointer", // FrameIncrementPointer
 		"FrameIncrementPointer",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -17649,7 +17649,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x000A),
 		"Frame Dimension Pointer", // FrameDimensionPointer
 		"FrameDimensionPointer",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -17729,7 +17729,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0050),
 		"Manipulated Image", // ManipulatedImage
 		"ManipulatedImage",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -17737,7 +17737,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0051),
 		"Corrected Image", // CorrectedImage
 		"CorrectedImage",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -17785,7 +17785,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0065),
 		"Compression Sequence", // CompressionSequence
 		"CompressionSequence",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -17793,7 +17793,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0066),
 		"Compression Step Pointers", // CompressionStepPointers
 		"CompressionStepPointers",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -17817,7 +17817,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0070),
 		"Perimeter Table", // PerimeterTable
 		"PerimeterTable",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -17849,7 +17849,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0082),
 		"Predictor Constants", // PredictorConstants
 		"PredictorConstants",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -18113,7 +18113,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0403),
 		"Sequence of Compressed Data", // SequenceOfCompressedData
 		"SequenceOfCompressedData",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -18121,7 +18121,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0404),
 		"Details of Coefficients", // DetailsOfCoefficients
 		"DetailsOfCoefficients",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -18145,7 +18145,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(0028,04x2)"),
 		"Coefficient Coding", // CoefficientCoding
 		"CoefficientCoding",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -18153,7 +18153,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(0028,04x3)"),
 		"Coefficient Coding Pointers", // CoefficientCodingPointers
 		"CoefficientCodingPointers",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -18169,7 +18169,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0701),
 		"Data Block Description", // DataBlockDescription
 		"DataBlockDescription",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -18177,7 +18177,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0702),
 		"Data Block", // DataBlock
 		"DataBlock",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -18201,7 +18201,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x0721),
 		"Zonal Map Location", // ZonalMapLocation
 		"ZonalMapLocation",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -18233,7 +18233,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(0028,08x0)"),
 		"Code Label", // CodeLabel
 		"CodeLabel",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -18249,7 +18249,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(0028,08x3)"),
 		"Code Table Location", // CodeTableLocation
 		"CodeTableLocation",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -18265,7 +18265,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(0028,08x8)"),
 		"Image Data Location", // ImageDataLocation
 		"ImageDataLocation",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -18305,7 +18305,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x1050),
 		"Window Center", // WindowCenter
 		"WindowCenter",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -18313,7 +18313,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x1051),
 		"Window Width", // WindowWidth
 		"WindowWidth",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -18345,7 +18345,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x1055),
 		"Window Center & Width Explanation", // WindowCenterWidthExplanation
 		"WindowCenterWidthExplanation",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -18449,7 +18449,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x1200),
 		"Gray Lookup Table Data", // GrayLookupTableData
 		"GrayLookupTableData",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US, vr.SS, vr.OW,
 	))
@@ -18753,7 +18753,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x2112),
 		"Lossy Image Compression Ratio", // LossyImageCompressionRatio
 		"LossyImageCompressionRatio",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -18761,7 +18761,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x2114),
 		"Lossy Image Compression Method", // LossyImageCompressionMethod
 		"LossyImageCompressionMethod",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -18809,7 +18809,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x3006),
 		"LUT Data", // LUTData
 		"LUTData",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US, vr.OW,
 	))
@@ -18857,7 +18857,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x6020),
 		"Frame Numbers of Interest (FOI)", // FrameNumbersOfInterest
 		"FrameNumbersOfInterest",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -18865,7 +18865,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x6022),
 		"Frame of Interest Description", // FrameOfInterestDescription
 		"FrameOfInterestDescription",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -18873,7 +18873,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x6023),
 		"Frame of Interest Type", // FrameOfInterestType
 		"FrameOfInterestType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -18881,7 +18881,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x6030),
 		"Mask Pointer(s)", // MaskPointers
 		"MaskPointers",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -18889,7 +18889,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x6040),
 		"R Wave Pointer", // RWavePointer
 		"RWavePointer",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -18913,7 +18913,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x6102),
 		"Applicable Frame Range", // ApplicableFrameRange
 		"ApplicableFrameRange",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.US,
 	))
@@ -18921,7 +18921,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x6110),
 		"Mask Frame Numbers", // MaskFrameNumbers
 		"MaskFrameNumbers",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -19113,7 +19113,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x7013),
 		"Measurement Functions", // MeasurementFunctions
 		"MeasurementFunctions",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -19265,7 +19265,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x7026),
 		"Measured Characteristics", // MeasuredCharacteristics
 		"MeasuredCharacteristics",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -19473,7 +19473,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x9446),
 		"Image Processing Applied", // ImageProcessingApplied
 		"ImageProcessingApplied",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -19521,7 +19521,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x9503),
 		"Vertices of the Region", // VerticesOfTheRegion
 		"VerticesOfTheRegion",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.SS,
 	))
@@ -19537,7 +19537,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x9506),
 		"Pixel Shift Frame Range", // PixelShiftFrameRange
 		"PixelShiftFrameRange",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.US,
 	))
@@ -19545,7 +19545,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x9507),
 		"LUT Frame Range", // LUTFrameRange
 		"LUTFrameRange",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.US,
 	))
@@ -19665,7 +19665,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0032, 0x1021),
 		"Scheduled Study Location AE Title", // ScheduledStudyLocationAETitle
 		"ScheduledStudyLocationAETitle",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AE,
 	))
@@ -20209,7 +20209,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x003A, 0x0205),
 		"Channel Status", // ChannelStatus
 		"ChannelStatus",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -20649,7 +20649,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0x0001),
 		"Scheduled Station AE Title", // ScheduledStationAETitle
 		"ScheduledStationAETitle",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AE,
 	))
@@ -20737,7 +20737,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0x0010),
 		"Scheduled Station Name", // ScheduledStationName
 		"ScheduledStationName",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -21049,7 +21049,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0x0303),
 		"Exposed Area", // ExposedArea
 		"ExposedArea",
-		vm.VM1_2,
+		vm.VM12,
 		false,
 		vr.US,
 	))
@@ -21529,7 +21529,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0x1010),
 		"Names of Intended Recipients of Results", // NamesOfIntendedRecipientsOfResults
 		"NamesOfIntendedRecipientsOfResults",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -21577,7 +21577,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0x1103),
 		"Person's Telephone Numbers", // PersonTelephoneNumbers
 		"PersonTelephoneNumbers",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -22105,7 +22105,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0x9212),
 		"Real World Value LUT Data", // RealWorldValueLUTData
 		"RealWorldValueLUTData",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -22313,7 +22313,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA057),
 		"Urgency or Priority Alerts (Trial)", // UrgencyOrPriorityAlertsTrial
 		"UrgencyOrPriorityAlertsTrial",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -22473,7 +22473,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA0B0),
 		"Referenced Waveform Channels", // ReferencedWaveformChannels
 		"ReferencedWaveformChannels",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.US,
 	))
@@ -22553,7 +22553,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA132),
 		"Referenced Sample Positions", // ReferencedSamplePositions
 		"ReferencedSamplePositions",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -22561,7 +22561,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA136),
 		"Referenced Frame Numbers", // ReferencedFrameNumbers
 		"ReferencedFrameNumbers",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -22569,7 +22569,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA138),
 		"Referenced Time Offsets", // ReferencedTimeOffsets
 		"ReferencedTimeOffsets",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -22577,7 +22577,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA13A),
 		"Referenced DateTime", // ReferencedDateTime
 		"ReferencedDateTime",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DT,
 	))
@@ -22593,7 +22593,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA161),
 		"Floating Point Value", // FloatingPointValue
 		"FloatingPointValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -22601,7 +22601,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA162),
 		"Rational Numerator Value", // RationalNumeratorValue
 		"RationalNumeratorValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SL,
 	))
@@ -22609,7 +22609,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA163),
 		"Rational Denominator Value", // RationalDenominatorValue
 		"RationalDenominatorValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -22753,7 +22753,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA29A),
 		"Pixel Coordinates Set (Trial)", // PixelCoordinatesSetTrial
 		"PixelCoordinatesSetTrial",
-		vm.VM2_2n,
+		vm.VM22N,
 		true,
 		vr.SL,
 	))
@@ -22785,7 +22785,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xA30A),
 		"Numeric Value", // NumericValue
 		"NumericValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -23321,7 +23321,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0040, 0xDB73),
 		"Referenced Content Item Identifier", // ReferencedContentItemIdentifier
 		"ReferencedContentItemIdentifier",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -23473,7 +23473,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0042, 0x0014),
 		"List of MIME Types", // ListOfMIMETypes
 		"ListOfMIMETypes",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -23529,7 +23529,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0044, 0x0008),
 		"Product Name", // ProductName
 		"ProductName",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -24217,7 +24217,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0046, 0x0208),
 		"Vertices of the Outline of Pupil", // VerticesOfTheOutlineOfPupil
 		"VerticesOfTheOutlineOfPupil",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.IS,
 	))
@@ -25057,7 +25057,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0010),
 		"Energy Window Vector", // EnergyWindowVector
 		"EnergyWindowVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25129,7 +25129,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0020),
 		"Detector Vector", // DetectorVector
 		"DetectorVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25153,7 +25153,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0030),
 		"Phase Vector", // PhaseVector
 		"PhaseVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25209,7 +25209,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0050),
 		"Rotation Vector", // RotationVector
 		"RotationVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25241,7 +25241,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0060),
 		"R-R Interval Vector", // RRIntervalVector
 		"RRIntervalVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25273,7 +25273,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0070),
 		"Time Slot Vector", // TimeSlotVector
 		"TimeSlotVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25305,7 +25305,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0080),
 		"Slice Vector", // SliceVector
 		"SliceVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25321,7 +25321,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0090),
 		"Angular View Vector", // AngularViewVector
 		"AngularViewVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25329,7 +25329,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0100),
 		"Time Slice Vector", // TimeSliceVector
 		"TimeSliceVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -25361,7 +25361,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x0210),
 		"Trigger Vector", // TriggerVector
 		"TriggerVector",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -25609,7 +25609,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x1220),
 		"Secondary Counts Type", // SecondaryCountsType
 		"SecondaryCountsType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -25633,7 +25633,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x1311),
 		"Secondary Counts Accumulated", // SecondaryCountsAccumulated
 		"SecondaryCountsAccumulated",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -25689,7 +25689,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0054, 0x1400),
 		"Counts Included", // CountsIncluded
 		"CountsIncluded",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -25753,7 +25753,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0060, 0x3020),
 		"Histogram Data", // HistogramData
 		"HistogramData",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -25825,7 +25825,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0062, 0x0009),
 		"Segment Algorithm Name", // SegmentAlgorithmName
 		"SegmentAlgorithmName",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -25841,7 +25841,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0062, 0x000B),
 		"Referenced Segment Number", // ReferencedSegmentNumber
 		"ReferencedSegmentNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -26193,7 +26193,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0066, 0x0020),
 		"Vector Accuracy", // VectorAccuracy
 		"VectorAccuracy",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -26769,7 +26769,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0068, 0x6350),
 		"Implant Template 3D Model Surface Number", // ImplantTemplate3DModelSurfaceNumber
 		"ImplantTemplate3DModelSurfaceNumber",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -27241,7 +27241,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x006A, 0x000E),
 		"Referenced Optical Path Identifier", // ReferencedOpticalPathIdentifier
 		"ReferencedOpticalPathIdentifier",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -27257,7 +27257,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x006A, 0x0010),
 		"Common Z Coordinate Value", // CommonZCoordinateValue
 		"CommonZCoordinateValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -27393,7 +27393,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0070, 0x0022),
 		"Graphic Data", // GraphicData
 		"GraphicData",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.FL,
 	))
@@ -28217,7 +28217,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0070, 0x1205),
 		"Cropping Specification Index", // CroppingSpecificationIndex
 		"CroppingSpecificationIndex",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -28273,7 +28273,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0070, 0x120C),
 		"Global Cropping Specification Index", // GlobalCroppingSpecificationIndex
 		"GlobalCroppingSpecificationIndex",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -28969,7 +28969,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0052),
 		"Selector Sequence Pointer", // SelectorSequencePointer
 		"SelectorSequencePointer",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -28977,7 +28977,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0054),
 		"Selector Sequence Pointer Private Creator", // SelectorSequencePointerPrivateCreator
 		"SelectorSequencePointerPrivateCreator",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -28993,7 +28993,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x005E),
 		"Selector AE Value", // SelectorAEValue
 		"SelectorAEValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AE,
 	))
@@ -29001,7 +29001,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x005F),
 		"Selector AS Value", // SelectorASValue
 		"SelectorASValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AS,
 	))
@@ -29009,7 +29009,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0060),
 		"Selector AT Value", // SelectorATValue
 		"SelectorATValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -29017,7 +29017,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0061),
 		"Selector DA Value", // SelectorDAValue
 		"SelectorDAValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DA,
 	))
@@ -29025,7 +29025,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0062),
 		"Selector CS Value", // SelectorCSValue
 		"SelectorCSValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -29033,7 +29033,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0063),
 		"Selector DT Value", // SelectorDTValue
 		"SelectorDTValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DT,
 	))
@@ -29041,7 +29041,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0064),
 		"Selector IS Value", // SelectorISValue
 		"SelectorISValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -29057,7 +29057,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0066),
 		"Selector LO Value", // SelectorLOValue
 		"SelectorLOValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -29089,7 +29089,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x006A),
 		"Selector PN Value", // SelectorPNValue
 		"SelectorPNValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.PN,
 	))
@@ -29097,7 +29097,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x006B),
 		"Selector TM Value", // SelectorTMValue
 		"SelectorTMValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.TM,
 	))
@@ -29105,7 +29105,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x006C),
 		"Selector SH Value", // SelectorSHValue
 		"SelectorSHValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SH,
 	))
@@ -29129,7 +29129,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x006F),
 		"Selector UC Value", // SelectorUCValue
 		"SelectorUCValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UC,
 	))
@@ -29153,7 +29153,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0072),
 		"Selector DS Value", // SelectorDSValue
 		"SelectorDSValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -29169,7 +29169,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0074),
 		"Selector FD Value", // SelectorFDValue
 		"SelectorFDValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -29185,7 +29185,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0076),
 		"Selector FL Value", // SelectorFLValue
 		"SelectorFLValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -29193,7 +29193,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0078),
 		"Selector UL Value", // SelectorULValue
 		"SelectorULValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UL,
 	))
@@ -29201,7 +29201,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x007A),
 		"Selector US Value", // SelectorUSValue
 		"SelectorUSValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -29209,7 +29209,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x007C),
 		"Selector SL Value", // SelectorSLValue
 		"SelectorSLValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SL,
 	))
@@ -29217,7 +29217,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x007E),
 		"Selector SS Value", // SelectorSSValue
 		"SelectorSSValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SS,
 	))
@@ -29225,7 +29225,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x007F),
 		"Selector UI Value", // SelectorUIValue
 		"SelectorUIValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -29249,7 +29249,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0082),
 		"Selector SV Value", // SelectorSVValue
 		"SelectorSVValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.SV,
 	))
@@ -29257,7 +29257,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0083),
 		"Selector UV Value", // SelectorUVValue
 		"SelectorUVValue",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UV,
 	))
@@ -29385,7 +29385,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0212),
 		"Display Set Scrolling Group", // DisplaySetScrollingGroup
 		"DisplaySetScrollingGroup",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.US,
 	))
@@ -29409,7 +29409,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0218),
 		"Reference Display Sets", // ReferenceDisplaySets
 		"ReferenceDisplaySets",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -29593,7 +29593,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0432),
 		"Synchronized Image Box List", // SynchronizedImageBoxList
 		"SynchronizedImageBoxList",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.US,
 	))
@@ -29649,7 +29649,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0072, 0x0520),
 		"3D Rendering Type", // ThreeDRenderingType
 		"ThreeDRenderingType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -30089,7 +30089,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0074, 0x1057),
 		"Selector Sequence Pointer Items", // SelectorSequencePointerItems
 		"SelectorSequencePointerItems",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -30729,7 +30729,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0080, 0x0006),
 		"Surface Point Presentation Value Data", // SurfacePointPresentationValueData
 		"SurfacePointPresentationValueData",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.US,
 	))
@@ -30737,7 +30737,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0080, 0x0007),
 		"Surface Point Color CIELab Value Data", // SurfacePointColorCIELabValueData
 		"SurfacePointColorCIELabValueData",
-		vm.VM3_3n,
+		vm.VM33N,
 		false,
 		vr.US,
 	))
@@ -31033,7 +31033,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0088, 0x0912),
 		"Topic Keywords", // TopicKeywords
 		"TopicKeywords",
-		vm.VM1_32,
+		vm.VM132,
 		true,
 		vr.LO,
 	))
@@ -31097,7 +31097,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0400, 0x0020),
 		"Data Elements Signed", // DataElementsSigned
 		"DataElementsSigned",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -31337,7 +31337,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(1010,xxxx)"),
 		"Zonal Map", // ZonalMap
 		"ZonalMap",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -31585,7 +31585,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x2010, 0x00A7),
 		"Other Magnification Types Available", // OtherMagnificationTypesAvailable
 		"OtherMagnificationTypesAvailable",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -31601,7 +31601,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x2010, 0x00A9),
 		"Other Smoothing Types Available", // OtherSmoothingTypesAvailable
 		"OtherSmoothingTypesAvailable",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -31833,7 +31833,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x2040, 0x0011),
 		"Referenced Overlay Plane Groups", // ReferencedOverlayPlaneGroups
 		"ReferencedOverlayPlaneGroups",
-		vm.VM1_99,
+		vm.VM199,
 		true,
 		vr.US,
 	))
@@ -32257,7 +32257,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x2200, 0x000E),
 		"Failure Attributes", // FailureAttributes
 		"FailureAttributes",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.AT,
 	))
@@ -32977,7 +32977,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3004, 0x000C),
 		"Grid Frame Offset Vector", // GridFrameOffsetVector
 		"GridFrameOffsetVector",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.DS,
 	))
@@ -33009,7 +33009,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3004, 0x0014),
 		"Tissue Heterogeneity Correction", // TissueHeterogeneityCorrection
 		"TissueHeterogeneityCorrection",
-		vm.VM1_3,
+		vm.VM13,
 		false,
 		vr.CS,
 	))
@@ -33073,7 +33073,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3004, 0x0058),
 		"DVH Data", // DVHData
 		"DVHData",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.DS,
 	))
@@ -33409,7 +33409,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3006, 0x0049),
 		"Attached Contours", // AttachedContours
 		"AttachedContours",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.IS,
 	))
@@ -33465,7 +33465,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3006, 0x0050),
 		"Contour Data", // ContourData
 		"ContourData",
-		vm.VM3_3n,
+		vm.VM33N,
 		false,
 		vr.DS,
 	))
@@ -33865,7 +33865,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3008, 0x0047),
 		"Scan Spot Metersets Delivered", // ScanSpotMetersetsDelivered
 		"ScanSpotMetersetsDelivered",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -34113,7 +34113,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3008, 0x00A4),
 		"Parallel RT Beam Delimiter Opening Extents", // ParallelRTBeamDelimiterOpeningExtents
 		"ParallelRTBeamDelimiterOpeningExtents",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.FD,
 	))
@@ -34505,7 +34505,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x0009),
 		"Treatment Protocols", // TreatmentProtocols
 		"TreatmentProtocols",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -34521,7 +34521,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x000B),
 		"Treatment Sites", // TreatmentSites
 		"TreatmentSites",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.LO,
 	))
@@ -35137,7 +35137,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x00BE),
 		"Leaf Position Boundaries", // LeafPositionBoundaries
 		"LeafPositionBoundaries",
-		vm.VM3_n,
+		vm.VM3N,
 		false,
 		vr.DS,
 	))
@@ -35217,7 +35217,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x00CC),
 		"Imaging Device-Specific Acquisition Parameters", // ImagingDeviceSpecificAcquisitionParameters
 		"ImagingDeviceSpecificAcquisitionParameters",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -35441,7 +35441,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x00EB),
 		"Compensator Transmission Data", // CompensatorTransmissionData
 		"CompensatorTransmissionData",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -35449,7 +35449,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x00EC),
 		"Compensator Thickness Data", // CompensatorThicknessData
 		"CompensatorThicknessData",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -35609,7 +35609,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x0106),
 		"Block Data", // BlockData
 		"BlockData",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.DS,
 	))
@@ -35729,7 +35729,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x011C),
 		"Leaf/Jaw Positions", // LeafJawPositions
 		"LeafJawPositions",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.DS,
 	))
@@ -36793,7 +36793,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x02E2),
 		"Source to Compensator Distance", // SourceToCompensatorDistance
 		"SourceToCompensatorDistance",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.DS,
 	))
@@ -36825,7 +36825,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x02E6),
 		"Isocenter to Compensator Distances", // IsocenterToCompensatorDistances
 		"IsocenterToCompensatorDistances",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -37265,7 +37265,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x038F),
 		"Scan Spot Time Offset", // ScanSpotTimeOffset
 		"ScanSpotTimeOffset",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -37281,7 +37281,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x0391),
 		"Scan Spot Prescribed Indices", // ScanSpotPrescribedIndices
 		"ScanSpotPrescribedIndices",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.IS,
 	))
@@ -37305,7 +37305,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x0394),
 		"Scan Spot Position Map", // ScanSpotPositionMap
 		"ScanSpotPositionMap",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -37321,7 +37321,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x0396),
 		"Scan Spot Meterset Weights", // ScanSpotMetersetWeights
 		"ScanSpotMetersetWeights",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -37337,7 +37337,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x0399),
 		"Scan Spot Sizes Delivered", // ScanSpotSizesDelivered
 		"ScanSpotSizesDelivered",
-		vm.VM2_2n,
+		vm.VM22N,
 		false,
 		vr.FL,
 	))
@@ -37353,7 +37353,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x039B),
 		"Scan Spot Gantry Angles", // ScanSpotGantryAngles
 		"ScanSpotGantryAngles",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -37361,7 +37361,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x039C),
 		"Scan Spot Patient Support Angles", // ScanSpotPatientSupportAngles
 		"ScanSpotPatientSupportAngles",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FL,
 	))
@@ -37953,7 +37953,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x061D),
 		"Dose Value Purpose", // DoseValuePurpose
 		"DoseValuePurpose",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -38297,7 +38297,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x0649),
 		"Parallel RT Beam Delimiter Boundaries", // ParallelRTBeamDelimiterBoundaries
 		"ParallelRTBeamDelimiterBoundaries",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.FD,
 	))
@@ -38305,7 +38305,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x064A),
 		"Parallel RT Beam Delimiter Positions", // ParallelRTBeamDelimiterPositions
 		"ParallelRTBeamDelimiterPositions",
-		vm.VM2_n,
+		vm.VM2N,
 		false,
 		vr.FD,
 	))
@@ -38345,7 +38345,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x300A, 0x064F),
 		"Parallel RT Beam Delimiter Leaf Mounting Side", // ParallelRTBeamDelimiterLeafMountingSide
 		"ParallelRTBeamDelimiterLeafMountingSide",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -40393,7 +40393,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3010, 0x0047),
 		"Teletherapy Radiation Type", // TeletherapyRadiationType
 		"TeletherapyRadiationType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -40401,7 +40401,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3010, 0x0048),
 		"Brachytherapy Source Type", // BrachytherapySourceType
 		"BrachytherapySourceType",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -40481,7 +40481,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3010, 0x0052),
 		"Pertinent SOP Classes in Study", // PertinentSOPClassesInStudy
 		"PertinentSOPClassesInStudy",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -40489,7 +40489,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3010, 0x0053),
 		"Pertinent SOP Classes in Series", // PertinentSOPClassesInSeries
 		"PertinentSOPClassesInSeries",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.UI,
 	))
@@ -40881,7 +40881,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3010, 0x0085),
 		"Intended Fraction Start Time", // IntendedFractionStartTime
 		"IntendedFractionStartTime",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.TM,
 	))
@@ -40993,7 +40993,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3010, 0x0099),
 		"Tomotherapeutic Leaf Open Durations", // TomotherapeuticLeafOpenDurations
 		"TomotherapeuticLeafOpenDurations",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -41001,7 +41001,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x3010, 0x009A),
 		"Tomotherapeutic Leaf Initial Closed Durations", // TomotherapeuticLeafInitialClosedDurations
 		"TomotherapeuticLeafInitialClosedDurations",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.FD,
 	))
@@ -41481,7 +41481,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x4010, 0x1021),
 		"Abort Reason", // AbortReason
 		"AbortReason",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.CS,
 	))
@@ -41537,7 +41537,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x4010, 0x1029),
 		"Threat Detection Algorithm and Version", // ThreatDetectionAlgorithmAndVersion
 		"ThreatDetectionAlgorithmAndVersion",
-		vm.VM1_n,
+		vm.VM1N,
 		false,
 		vr.LO,
 	))
@@ -41985,7 +41985,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0030)"),
 		"Axis Units", // AxisUnits
 		"AxisUnits",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.SH,
 	))
@@ -41993,7 +41993,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0040)"),
 		"Axis Labels", // AxisLabels
 		"AxisLabels",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.SH,
 	))
@@ -42009,7 +42009,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0104)"),
 		"Minimum Coordinate Value", // MinimumCoordinateValue
 		"MinimumCoordinateValue",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42017,7 +42017,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0105)"),
 		"Maximum Coordinate Value", // MaximumCoordinateValue
 		"MaximumCoordinateValue",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42025,7 +42025,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0106)"),
 		"Curve Range", // CurveRange
 		"CurveRange",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.SH,
 	))
@@ -42033,7 +42033,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0110)"),
 		"Curve Data Descriptor", // CurveDataDescriptor
 		"CurveDataDescriptor",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42041,7 +42041,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0112)"),
 		"Coordinate Start Value", // CoordinateStartValue
 		"CoordinateStartValue",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42049,7 +42049,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(50xx,0114)"),
 		"Coordinate Step Value", // CoordinateStepValue
 		"CoordinateStepValue",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42361,7 +42361,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(60xx,0066)"),
 		"Overlay Compression Step Pointers", // OverlayCompressionStepPointers
 		"OverlayCompressionStepPointers",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -42417,7 +42417,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(60xx,0800)"),
 		"Overlay Code Label", // OverlayCodeLabel
 		"OverlayCodeLabel",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.CS,
 	))
@@ -42433,7 +42433,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(60xx,0803)"),
 		"Overlay Code Table Location", // OverlayCodeTableLocation
 		"OverlayCodeTableLocation",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.AT,
 	))
@@ -42489,7 +42489,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(60xx,1200)"),
 		"Overlays - Gray", // OverlaysGray
 		"OverlaysGray",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42497,7 +42497,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(60xx,1201)"),
 		"Overlays - Red", // OverlaysRed
 		"OverlaysRed",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42505,7 +42505,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(60xx,1202)"),
 		"Overlays - Green", // OverlaysGreen
 		"OverlaysGreen",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))
@@ -42513,7 +42513,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.MustParseMaskedTag("(60xx,1203)"),
 		"Overlays - Blue", // OverlaysBlue
 		"OverlaysBlue",
-		vm.VM1_n,
+		vm.VM1N,
 		true,
 		vr.US,
 	))

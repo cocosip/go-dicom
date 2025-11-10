@@ -1,6 +1,8 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package server provides DICOM SCP (Service Class Provider) server functionality.
+// It handles incoming DICOM connections, negotiates associations, and processes DIMSE requests.
 package server
 
 import (
@@ -52,7 +54,7 @@ import (
 //	}
 type Server struct {
 	// Configuration
-	config *ServerConfig
+	config *Config
 
 	// Network listener
 	listener *transport.Listener
@@ -62,7 +64,7 @@ type Server struct {
 	connectionsMu sync.RWMutex
 
 	// Service options to apply to each connection
-	serviceOptions []service.ServiceOption
+	serviceOptions []service.Option
 	optionsMu      sync.RWMutex
 
 	// Server state
@@ -77,8 +79,8 @@ type Server struct {
 	wg sync.WaitGroup
 }
 
-// ServerConfig contains configuration options for the DICOM server.
-type ServerConfig struct {
+// Config contains configuration options for the DICOM server.
+type Config struct {
 	// Port is the TCP port to listen on
 	// Default: 104 (standard DICOM port)
 	Port int
@@ -116,75 +118,75 @@ type ServerConfig struct {
 	TLSConfig *tls.Config
 }
 
-// ServerOption is a function that modifies server configuration.
-type ServerOption func(*ServerConfig)
+// Option is a function that modifies server configuration.
+type Option func(*Config)
 
 // WithPort sets the listening port.
-func WithPort(port int) ServerOption {
-	return func(o *ServerConfig) {
+func WithPort(port int) Option {
+	return func(o *Config) {
 		o.Port = port
 	}
 }
 
 // WithMaxPDULength sets the maximum PDU length.
-func WithMaxPDULength(length uint32) ServerOption {
-	return func(o *ServerConfig) {
+func WithMaxPDULength(length uint32) Option {
+	return func(o *Config) {
 		o.MaxPDULength = length
 	}
 }
 
 // WithAcceptTimeout sets the accept timeout.
-func WithAcceptTimeout(timeout time.Duration) ServerOption {
-	return func(o *ServerConfig) {
+func WithAcceptTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
 		o.AcceptTimeout = timeout
 	}
 }
 
 // WithAssociationTimeout sets the association timeout.
-func WithAssociationTimeout(timeout time.Duration) ServerOption {
-	return func(o *ServerConfig) {
+func WithAssociationTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
 		o.AssociationTimeout = timeout
 	}
 }
 
 // WithRequestTimeout sets the request timeout.
-func WithRequestTimeout(timeout time.Duration) ServerOption {
-	return func(o *ServerConfig) {
+func WithRequestTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
 		o.RequestTimeout = timeout
 	}
 }
 
 // WithImplementationClassUID sets the implementation class UID.
-func WithImplementationClassUID(uid string) ServerOption {
-	return func(o *ServerConfig) {
+func WithImplementationClassUID(uid string) Option {
+	return func(o *Config) {
 		o.ImplementationClassUID = uid
 	}
 }
 
 // WithImplementationVersionName sets the implementation version name.
-func WithImplementationVersionName(name string) ServerOption {
-	return func(o *ServerConfig) {
+func WithImplementationVersionName(name string) Option {
+	return func(o *Config) {
 		o.ImplementationVersionName = name
 	}
 }
 
 // WithMaxConnections sets the maximum number of concurrent connections.
-func WithMaxConnections(max int) ServerOption {
-	return func(o *ServerConfig) {
-		o.MaxConnections = max
+func WithMaxConnections(maxConnections int) Option {
+	return func(o *Config) {
+		o.MaxConnections = maxConnections
 	}
 }
 
 // WithTLSConfig sets the TLS configuration for secure connections.
-func WithTLSConfig(tlsConfig *tls.Config) ServerOption {
-	return func(o *ServerConfig) {
+func WithTLSConfig(tlsConfig *tls.Config) Option {
+	return func(o *Config) {
 		o.TLSConfig = tlsConfig
 	}
 }
 
 // defaultServerConfig returns the default server configuration.
-func defaultServerConfig() *ServerConfig {
-	return &ServerConfig{
+func defaultServerConfig() *Config {
+	return &Config{
 		Port:                      104,
 		MaxPDULength:              16384,
 		AcceptTimeout:             0, // No timeout
@@ -198,7 +200,7 @@ func defaultServerConfig() *ServerConfig {
 }
 
 // New creates a new DICOM server with the specified options.
-func New(opts ...ServerOption) *Server {
+func New(opts ...Option) *Server {
 	config := defaultServerConfig()
 	for _, opt := range opts {
 		opt(config)
@@ -207,7 +209,7 @@ func New(opts ...ServerOption) *Server {
 	return &Server{
 		config:         config,
 		connections:    make(map[string]*serverConnection),
-		serviceOptions: make([]service.ServiceOption, 0),
+		serviceOptions: make([]service.Option, 0),
 	}
 }
 
@@ -220,7 +222,7 @@ type serverConnection struct {
 }
 
 // GetConfig returns the server configuration.
-func (s *Server) GetConfig() *ServerConfig {
+func (s *Server) GetConfig() *Config {
 	return s.config
 }
 
@@ -472,7 +474,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	connID := conn.RemoteAddr().String()
 
 	// Build service options from server configuration
-	svcOpts := []service.ServiceOption{
+	svcOpts := []service.Option{
 		service.WithMaxPDULength(s.config.MaxPDULength),
 		service.WithReadTimeout(s.config.AssociationTimeout),
 		service.WithWriteTimeout(s.config.AssociationTimeout),

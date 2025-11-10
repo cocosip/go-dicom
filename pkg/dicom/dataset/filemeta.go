@@ -70,7 +70,7 @@ func NewDefaultFileMetaInformation() *FileMetaInformation {
 // NewFileMetaInformationFromMainDataset creates FileMetaInformation from a main dataset.
 // It extracts SOPClassUID and SOPInstanceUID from the dataset and uses
 // the provided transfer syntax.
-func NewFileMetaInformationFromMainDataset(ds *Dataset, ts *transfer.TransferSyntax) (*FileMetaInformation, error) {
+func NewFileMetaInformationFromMainDataset(ds *Dataset, ts *transfer.Syntax) (*FileMetaInformation, error) {
 	fmi := NewDefaultFileMetaInformation()
 
 	// Extract SOP Class UID
@@ -160,7 +160,7 @@ func (fmi *FileMetaInformation) SetTransferSyntaxUID(uid string) error {
 }
 
 // TransferSyntax returns the parsed TransferSyntax object.
-func (fmi *FileMetaInformation) TransferSyntax() (*transfer.TransferSyntax, bool) {
+func (fmi *FileMetaInformation) TransferSyntax() (*transfer.Syntax, bool) {
 	tsUID, ok := fmi.TransferSyntaxUID()
 	if !ok {
 		return nil, false
@@ -173,7 +173,7 @@ func (fmi *FileMetaInformation) TransferSyntax() (*transfer.TransferSyntax, bool
 }
 
 // SetTransferSyntax sets the Transfer Syntax UID from a TransferSyntax object.
-func (fmi *FileMetaInformation) SetTransferSyntax(ts *transfer.TransferSyntax) error {
+func (fmi *FileMetaInformation) SetTransferSyntax(ts *transfer.Syntax) error {
 	return fmi.SetTransferSyntaxUID(ts.UID().UID())
 }
 

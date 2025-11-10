@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package anonymizer provides DICOM anonymizer.
 package anonymizer
 
 import (
@@ -19,16 +20,27 @@ import (
 type SecurityProfileOptions int
 
 const (
+	// BasicProfile - Basic profile options
 	BasicProfile SecurityProfileOptions = 1 << iota
+	// RetainSafePrivate - Retain private tags with safe VRs
 	RetainSafePrivate
+	// RetainUIDs - Retain UIDs
 	RetainUIDs
+	// RetainDeviceIdent - Retain device identifiers
 	RetainDeviceIdent
+	// RetainInstitutionIdent - Retain institution identifiers
 	RetainInstitutionIdent
+	// RetainPatientChars - Retain patient characters
 	RetainPatientChars
+	// RetainLongFullDates - Retain long full dates
 	RetainLongFullDates
+	// RetainLongModifDates - Retain long modification dates
 	RetainLongModifDates
+	// CleanDesc - Clean descriptions
 	CleanDesc
+	// CleanStructdCont - Clean structured content
 	CleanStructdCont
+	// CleanGraph - Clean graphs
 	CleanGraph
 )
 

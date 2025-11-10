@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package service provides DICOM Service Class User (SCU) and Service Class Provider (SCP) implementations.
 package service
 
 import (

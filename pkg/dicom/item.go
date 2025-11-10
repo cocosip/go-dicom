@@ -25,7 +25,7 @@ type Item interface {
 	String() string
 }
 
-// Compare compares two items by their tags.
+// CompareItems compares two items by their tags.
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
 func CompareItems(a, b Item) int {
 	if a == nil && b == nil {

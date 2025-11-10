@@ -69,21 +69,21 @@ func TestNewWithOptions(t *testing.T) {
 	}
 }
 
-func TestSetHandlers(t *testing.T) {
+func TestSetHandlers(_ *testing.T) {
 	server := New()
 
 	// Set C-ECHO handler
-	server.SetCEchoHandler(func(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+	server.SetCEchoHandler(func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 		return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
 	})
 
 	// Set C-STORE handler
-	server.SetCStoreHandler(func(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+	server.SetCStoreHandler(func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
 		return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
 	})
 
 	// Set C-FIND handler
-	server.SetCFindHandler(func(ctx context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
+	server.SetCFindHandler(func(_ context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
 		return []*dimse.CFindResponse{
 			dimse.NewCFindResponseFromRequest(req, 0x0000, nil),
 		}, nil

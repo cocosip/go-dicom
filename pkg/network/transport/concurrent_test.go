@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// TestDial_Concurrent tests concurrent dialing to a test server
 package transport
 
 import (
@@ -41,7 +42,7 @@ func TestDial_Concurrent(t *testing.T) {
 	errChan := make(chan error, numDials)
 
 	for i := 0; i < numDials; i++ {
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			conn, err := Dial(context.Background(), "tcp", addr)
@@ -194,7 +195,7 @@ func TestDialTLS_Concurrent(t *testing.T) {
 	}
 
 	for i := 0; i < numDials; i++ {
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			conn, err := DialTLS(context.Background(), "tcp", addr, WithTLSConfig(clientConfig))

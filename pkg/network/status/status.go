@@ -249,7 +249,7 @@ func LookupStatus(code uint16) *Status {
 		return NewStatus(code, StateCancel, "Cancel")
 	} else if code >= 0x0001 && code <= 0x00FF {
 		return NewStatus(code, StateWarning, "Warning")
-	} else {
-		return NewStatus(code, StateFailure, "Failure")
 	}
+	return NewStatus(code, StateFailure, "Failure")
+
 }

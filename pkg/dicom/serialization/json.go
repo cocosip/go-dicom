@@ -606,10 +606,10 @@ func (w *jsonWriter) writeOther(elem element.Element) error {
 	buf := elem.Buffer()
 
 	// Check if this is a BulkDataUri buffer
-	if bulkDataBuf, ok := buf.(*buffer.BulkDataUriByteBuffer); ok {
+	if bulkDataBuf, ok := buf.(*buffer.BulkDataURIByteBuffer); ok {
 		// Write as BulkDataURI
 		w.buf.WriteString(`,"BulkDataURI":"`)
-		w.buf.WriteString(bulkDataBuf.BulkDataUri())
+		w.buf.WriteString(bulkDataBuf.BulkDataURI())
 		w.buf.WriteString(`"`)
 		return nil
 	}

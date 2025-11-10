@@ -209,7 +209,7 @@ func TestImageBox_IsValid(t *testing.T) {
 	}{
 		{
 			name:     "valid image box",
-			setup:    func(ib *ImageBox) {},
+			setup:    func(_ *ImageBox) {},
 			expected: true,
 		},
 		{

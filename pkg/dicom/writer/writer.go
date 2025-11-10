@@ -22,7 +22,7 @@ type Writer struct {
 	writer         io.Writer
 	byteOrder      binary.ByteOrder
 	isExplicitVR   bool
-	transferSyntax *transfer.TransferSyntax
+	transferSyntax *transfer.Syntax
 
 	// Write options
 	includePreamble             bool   // Whether to include 128-byte preamble + DICM
@@ -37,7 +37,7 @@ type WriteOption func(*writeConfig)
 
 // writeConfig holds the configuration for a write operation.
 type writeConfig struct {
-	transferSyntax              *transfer.TransferSyntax
+	transferSyntax              *transfer.Syntax
 	fileMetaInfo                *dataset.Dataset
 	includePreamble             bool
 	explicitLengthSequences     bool   // Use explicit length for sequences (default: false, use undefined)
@@ -48,7 +48,7 @@ type writeConfig struct {
 
 // WithTransferSyntax specifies the transfer syntax to use.
 // If not specified, defaults to Explicit VR Little Endian.
-func WithTransferSyntax(ts *transfer.TransferSyntax) WriteOption {
+func WithTransferSyntax(ts *transfer.Syntax) WriteOption {
 	return func(c *writeConfig) {
 		c.transferSyntax = ts
 	}
@@ -110,7 +110,7 @@ type Option func(*Writer)
 
 // New creates a new Writer with the given transfer syntax and options.
 // If ts is nil, defaults to Explicit VR Little Endian.
-func New(ts *transfer.TransferSyntax, opts ...Option) *Writer {
+func New(ts *transfer.Syntax, opts ...Option) *Writer {
 	// Default to Explicit VR Little Endian if no transfer syntax specified
 	if ts == nil {
 		ts = transfer.ExplicitVRLittleEndian

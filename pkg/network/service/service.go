@@ -122,7 +122,7 @@ type Handlers struct {
 //	    service.WithMaxPDULength(32768),
 //	    service.WithReadTimeout(60*time.Second))
 //	defer service.Close()
-func NewService(conn net.Conn, assoc *association.Association, opts ...ServiceOption) *Service {
+func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *Service {
 	// Apply default config
 	config := defaultServiceConfig()
 

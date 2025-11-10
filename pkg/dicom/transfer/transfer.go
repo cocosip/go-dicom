@@ -12,13 +12,13 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 )
 
-// TransferSyntax represents a DICOM transfer syntax.
+// Syntax represents a DICOM transfer syntax.
 //
 // A transfer syntax defines how DICOM data is encoded, including:
 // - Value Representation (VR) encoding (Explicit or Implicit)
 // - Byte order (Little Endian or Big Endian)
 // - Compression (e.g., JPEG, JPEG 2000, RLE)
-type TransferSyntax struct {
+type Syntax struct {
 	uid                    *uid.UID
 	isRetired              bool
 	isExplicitVR           bool
@@ -32,13 +32,13 @@ type TransferSyntax struct {
 
 var (
 	// Global registry of transfer syntaxes
-	registry = make(map[string]*TransferSyntax)
+	registry = make(map[string]*Syntax)
 	mu       sync.RWMutex
 )
 
 // New creates a new TransferSyntax with the given UID.
-func New(u *uid.UID) *TransferSyntax {
-	return &TransferSyntax{
+func New(u *uid.UID) *Syntax {
+	return &Syntax{
 		uid:            u,
 		isRetired:      u.IsRetired(),
 		isExplicitVR:   false,
@@ -51,57 +51,57 @@ func New(u *uid.UID) *TransferSyntax {
 }
 
 // UID returns the unique identifier of the transfer syntax.
-func (ts *TransferSyntax) UID() *uid.UID {
+func (ts *Syntax) UID() *uid.UID {
 	return ts.uid
 }
 
 // IsRetired returns true if the transfer syntax is retired.
-func (ts *TransferSyntax) IsRetired() bool {
+func (ts *Syntax) IsRetired() bool {
 	return ts.isRetired
 }
 
 // IsExplicitVR returns true if the transfer syntax uses explicit VR.
-func (ts *TransferSyntax) IsExplicitVR() bool {
+func (ts *Syntax) IsExplicitVR() bool {
 	return ts.isExplicitVR
 }
 
 // IsEncapsulated returns true if the transfer syntax encapsulates pixel data.
-func (ts *TransferSyntax) IsEncapsulated() bool {
+func (ts *Syntax) IsEncapsulated() bool {
 	return ts.isEncapsulated
 }
 
 // IsLossy returns true if the transfer syntax uses lossy compression.
-func (ts *TransferSyntax) IsLossy() bool {
+func (ts *Syntax) IsLossy() bool {
 	return ts.isLossy
 }
 
 // LossyCompressionMethod returns the lossy compression method identifier.
-func (ts *TransferSyntax) LossyCompressionMethod() string {
+func (ts *Syntax) LossyCompressionMethod() string {
 	return ts.lossyCompressionMethod
 }
 
 // IsDeflate returns true if the transfer syntax uses deflate compression.
-func (ts *TransferSyntax) IsDeflate() bool {
+func (ts *Syntax) IsDeflate() bool {
 	return ts.isDeflate
 }
 
 // Endian returns the byte order of the transfer syntax.
-func (ts *TransferSyntax) Endian() endian.Endian {
+func (ts *Syntax) Endian() endian.Endian {
 	return ts.endian
 }
 
 // SwapPixelData returns true if pixel data requires byte swapping.
-func (ts *TransferSyntax) SwapPixelData() bool {
+func (ts *Syntax) SwapPixelData() bool {
 	return ts.swapPixelData
 }
 
 // String returns the name of the transfer syntax.
-func (ts *TransferSyntax) String() string {
+func (ts *Syntax) String() string {
 	return ts.uid.Name()
 }
 
 // Equals checks if two transfer syntaxes are equal.
-func (ts *TransferSyntax) Equals(other *TransferSyntax) bool {
+func (ts *Syntax) Equals(other *Syntax) bool {
 	if other == nil {
 		return false
 	}
@@ -109,7 +109,7 @@ func (ts *TransferSyntax) Equals(other *TransferSyntax) bool {
 }
 
 // Parse parses a transfer syntax UID string and returns the corresponding TransferSyntax.
-func Parse(uidString string) (*TransferSyntax, error) {
+func Parse(uidString string) (*Syntax, error) {
 	u := uid.Parse(uidString, "", uid.TypeTransferSyntax)
 	return Lookup(u)
 }
@@ -121,7 +121,7 @@ func Parse(uidString string) (*TransferSyntax, error) {
 // - Explicit VR
 // - Encapsulated
 // - Little Endian
-func Lookup(u *uid.UID) (*TransferSyntax, error) {
+func Lookup(u *uid.UID) (*Syntax, error) {
 	if u == nil {
 		return nil, fmt.Errorf("UID cannot be nil")
 	}
@@ -148,7 +148,7 @@ func Lookup(u *uid.UID) (*TransferSyntax, error) {
 }
 
 // Register registers a transfer syntax in the global registry.
-func Register(ts *TransferSyntax) {
+func Register(ts *Syntax) {
 	if ts == nil || ts.uid == nil {
 		return
 	}
@@ -175,7 +175,7 @@ func Unregister(u *uid.UID) bool {
 }
 
 // Query queries a transfer syntax by UID. Returns nil if not found.
-func Query(u *uid.UID) *TransferSyntax {
+func Query(u *uid.UID) *Syntax {
 	if u == nil {
 		return nil
 	}
@@ -186,11 +186,11 @@ func Query(u *uid.UID) *TransferSyntax {
 }
 
 // KnownEntries returns all registered transfer syntaxes.
-func KnownEntries() []*TransferSyntax {
+func KnownEntries() []*Syntax {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	entries := make([]*TransferSyntax, 0, len(registry))
+	entries := make([]*Syntax, 0, len(registry))
 	for _, ts := range registry {
 		entries = append(entries, ts)
 	}
@@ -199,7 +199,7 @@ func KnownEntries() []*TransferSyntax {
 
 // Builder is a helper for constructing TransferSyntax instances with custom properties.
 type Builder struct {
-	ts *TransferSyntax
+	ts *Syntax
 }
 
 // NewBuilder creates a new TransferSyntax builder.
@@ -253,7 +253,7 @@ func (b *Builder) SetSwapPixelData(swap bool) *Builder {
 }
 
 // Build returns the constructed TransferSyntax and registers it.
-func (b *Builder) Build() *TransferSyntax {
+func (b *Builder) Build() *Syntax {
 	Register(b.ts)
 	return b.ts
 }

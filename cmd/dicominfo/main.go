@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+// Package main provides a command-line tool for displaying information about DICOM files.
 package main
 
 import (

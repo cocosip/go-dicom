@@ -10,8 +10,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
 
-// ServiceOption configures a Service.
-type ServiceOption func(*serviceConfig)
+// Option configures a Service.
+type Option func(*serviceConfig)
 
 // serviceConfig contains configuration options for a DICOM service.
 type serviceConfig struct {
@@ -66,7 +66,7 @@ func defaultServiceConfig() *serviceConfig {
 
 // WithMaxPDULength sets the maximum PDU length.
 // Default: 16384 bytes (16 KB).
-func WithMaxPDULength(length uint32) ServiceOption {
+func WithMaxPDULength(length uint32) Option {
 	return func(c *serviceConfig) {
 		c.maxPDULength = length
 	}
@@ -74,7 +74,7 @@ func WithMaxPDULength(length uint32) ServiceOption {
 
 // WithReadTimeout sets the read timeout for PDU operations.
 // Default: 30 seconds. Set to 0 to disable timeout.
-func WithReadTimeout(timeout time.Duration) ServiceOption {
+func WithReadTimeout(timeout time.Duration) Option {
 	return func(c *serviceConfig) {
 		c.readTimeout = timeout
 	}
@@ -82,7 +82,7 @@ func WithReadTimeout(timeout time.Duration) ServiceOption {
 
 // WithWriteTimeout sets the write timeout for PDU operations.
 // Default: 30 seconds. Set to 0 to disable timeout.
-func WithWriteTimeout(timeout time.Duration) ServiceOption {
+func WithWriteTimeout(timeout time.Duration) Option {
 	return func(c *serviceConfig) {
 		c.writeTimeout = timeout
 	}
@@ -90,7 +90,7 @@ func WithWriteTimeout(timeout time.Duration) ServiceOption {
 
 // WithDIMSETimeout sets the timeout for DIMSE request/response operations.
 // Default: 60 seconds. Set to 0 to disable timeout.
-func WithDIMSETimeout(timeout time.Duration) ServiceOption {
+func WithDIMSETimeout(timeout time.Duration) Option {
 	return func(c *serviceConfig) {
 		c.dimseTimeout = timeout
 	}
@@ -98,7 +98,7 @@ func WithDIMSETimeout(timeout time.Duration) ServiceOption {
 
 // WithSendQueueSize sets the size of the send queue channel.
 // Default: 100.
-func WithSendQueueSize(size int) ServiceOption {
+func WithSendQueueSize(size int) Option {
 	return func(c *serviceConfig) {
 		c.sendQueueSize = size
 	}
@@ -106,7 +106,7 @@ func WithSendQueueSize(size int) ServiceOption {
 
 // WithRecvQueueSize sets the size of the receive queue channel.
 // Default: 100.
-func WithRecvQueueSize(size int) ServiceOption {
+func WithRecvQueueSize(size int) Option {
 	return func(c *serviceConfig) {
 		c.recvQueueSize = size
 	}
@@ -114,7 +114,7 @@ func WithRecvQueueSize(size int) ServiceOption {
 
 // WithAssociationNegotiator sets the association negotiator callback.
 // The negotiator controls which associations are accepted and how presentation contexts are negotiated.
-func WithAssociationNegotiator(negotiator AssociationNegotiator) ServiceOption {
+func WithAssociationNegotiator(negotiator AssociationNegotiator) Option {
 	return func(c *serviceConfig) {
 		c.associationNegotiator = negotiator
 	}
@@ -122,7 +122,7 @@ func WithAssociationNegotiator(negotiator AssociationNegotiator) ServiceOption {
 
 // WithAssociationReleaseHandler sets the association release handler callback.
 // The handler is called when an A-RELEASE-RQ is received.
-func WithAssociationReleaseHandler(handler AssociationReleaseHandler) ServiceOption {
+func WithAssociationReleaseHandler(handler AssociationReleaseHandler) Option {
 	return func(c *serviceConfig) {
 		c.associationReleaseHandler = handler
 	}
@@ -130,7 +130,7 @@ func WithAssociationReleaseHandler(handler AssociationReleaseHandler) ServiceOpt
 
 // WithConnectionLifecycleHandler sets the connection lifecycle handler callback.
 // The handler is called for connection lifecycle events (abort, close).
-func WithConnectionLifecycleHandler(handler ConnectionLifecycleHandler) ServiceOption {
+func WithConnectionLifecycleHandler(handler ConnectionLifecycleHandler) Option {
 	return func(c *serviceConfig) {
 		c.connectionLifecycleHandler = handler
 	}
@@ -138,14 +138,14 @@ func WithConnectionLifecycleHandler(handler ConnectionLifecycleHandler) ServiceO
 
 // WithHandlers sets the DIMSE message handlers.
 // The handlers process incoming DIMSE requests (C-ECHO, C-STORE, C-FIND, C-MOVE, C-GET).
-func WithHandlers(handlers *Handlers) ServiceOption {
+func WithHandlers(handlers *Handlers) Option {
 	return func(c *serviceConfig) {
 		c.handlers = handlers
 	}
 }
 
 // WithCEchoHandler sets the C-ECHO request handler.
-func WithCEchoHandler(handler func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)) ServiceOption {
+func WithCEchoHandler(handler func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error)) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}
@@ -155,7 +155,7 @@ func WithCEchoHandler(handler func(context.Context, *dimse.CEchoRequest) (*dimse
 }
 
 // WithCStoreHandler sets the C-STORE request handler.
-func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)) ServiceOption {
+func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}
@@ -165,7 +165,7 @@ func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dim
 }
 
 // WithCFindHandler sets the C-FIND request handler.
-func WithCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) ServiceOption {
+func WithCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}
@@ -175,7 +175,7 @@ func WithCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dim
 }
 
 // WithCMoveHandler sets the C-MOVE request handler.
-func WithCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)) ServiceOption {
+func WithCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}
@@ -185,7 +185,7 @@ func WithCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dim
 }
 
 // WithCGetHandler sets the C-GET request handler.
-func WithCGetHandler(handler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)) ServiceOption {
+func WithCGetHandler(handler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}

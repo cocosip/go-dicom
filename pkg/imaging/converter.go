@@ -63,7 +63,7 @@ func (c *PixelDataConverter) YBRFullToRGB(data []byte) []byte {
 }
 
 // YBRFull422ToRGB converts YBR_FULL_422 photometric interpretation pixels to RGB (4:2:2 subsampling)
-func (c *PixelDataConverter) YBRFull422ToRGB(data []byte, width int) []byte {
+func (c *PixelDataConverter) YBRFull422ToRGB(data []byte, _ int) []byte {
 	// YBR_FULL_422 format: Y0 Cb Y1 Cr for every 2 pixels
 	pixelCount := (len(data) * 2) / 4
 	newPixels := make([]byte, pixelCount*3)

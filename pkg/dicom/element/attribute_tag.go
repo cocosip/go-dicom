@@ -43,14 +43,14 @@ func NewAttributeTagWithEndian(t *tag.Tag, values []*tag.Tag, e endian.Endian) *
 
 	buf := buffer.NewMemory(data)
 	return &AttributeTag{
-		base: NewBase(t, vr.AT, buf),
+		base: newBase(t, vr.AT, buf),
 	}
 }
 
 // NewAttributeTagFromBuffer creates an AT element from an existing buffer.
 func NewAttributeTagFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *AttributeTag {
 	return &AttributeTag{
-		base: NewBase(t, vr.AT, buf),
+		base: newBase(t, vr.AT, buf),
 	}
 }
 
