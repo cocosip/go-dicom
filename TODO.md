@@ -1640,12 +1640,13 @@ pkg/network/
 
 ---
 
-## 第十一阶段：图像处理 (可选)
+## 第十一阶段：图像处理 (部分实现)
 
-**注**: 根据项目需求决定是否实现
+**注**: 根据项目需求决定是否实现，复杂编解码器暂缓
 
-### 11.1 DicomPixelData
+### 11.1 DicomPixelData ~
 **参考**: `fo-dicom-code/Imaging/DicomPixelData.cs`
+**包**: `pkg/imaging`
 
 - [ ] 实现像素数据提取
 - [ ] 支持多帧图像
@@ -1653,28 +1654,43 @@ pkg/network/
 - [ ] 编写单元测试
 
 **预计工作量**: 4-5 天
+**状态**: 进行中
 
-### 11.2 图像解码器
+### 11.2 图像解码器 ~
 **参考**: `fo-dicom-code/Imaging/Codec/`
+**包**: `pkg/imaging/codec`
 
-- [ ] 实现 RLE 解码器
-- [ ] 集成 JPEG 解码器 (可使用第三方库)
-- [ ] 集成 JPEG-LS 解码器
-- [ ] 集成 JPEG 2000 解码器
+**立即实现**:
+- [ ] 定义 Codec 接口 (TransferSyntaxCodec)
+- [ ] 实现 RLE 解码器 (DICOM标准 Annex G)
+- [ ] 实现 Native/Uncompressed 处理器
 - [ ] 编写单元测试
 
-**预计工作量**: 7-10 天
+**暂缓实现** (缺少Go库支持):
+- [-] 集成 JPEG 解码器 (需要 DICOM JPEG 库，标准库不兼容)
+- [-] 集成 JPEG-LS 解码器 (无成熟Go库)
+- [-] 集成 JPEG 2000 解码器 (无成熟Go库)
+
+**未来策略**:
+- 提供接口占位，允许用户自定义codec实现
+- 当Go生态出现相关库时再集成
+- 或考虑通过CGO调用C/C++库 (libjpeg, openjpeg等)
+
+**预计工作量**: 3-4 天 (仅RLE和接口)
 
 ### 11.3 图像渲染
 **参考**: `fo-dicom-code/Imaging/Render/`
+**包**: `pkg/imaging/render`
 
+- [ ] 实现 PhotometricInterpretation 类型
 - [ ] 实现 VOI LUT (Window/Level)
 - [ ] 实现 Modality LUT
-- [ ] 实现颜色空间转换
-- [ ] 实现图像导出 (PNG, JPEG)
+- [ ] 实现颜色空间转换 (RGB, YBR_FULL, etc.)
+- [ ] 实现图像导出 (PNG, JPEG) - 使用Go标准库
 - [ ] 编写单元测试
 
 **预计工作量**: 5-7 天
+**优先级**: 低 (取决于项目需求)
 
 ---
 
