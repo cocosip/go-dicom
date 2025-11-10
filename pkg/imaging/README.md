@@ -33,6 +33,59 @@ The `codec` subpackage (`pkg/imaging/codec/`) provides image compression and dec
 - **PixelData**: Lightweight pixel data structure for codec operations
 - **Parameters**: Codec-specific parameters interface
 
+### DicomPixelData
+
+**Implementation**: `pixeldata.go`
+
+The `DicomPixelData` type provides a high-level interface for managing DICOM pixel data:
+
+- **PixelDataInfo**: Metadata container for pixel data attributes
+  - Image dimensions (width, height)
+  - Bit depth (bits allocated/stored, high bit)
+  - Multi-frame support
+  - Photometric interpretation
+  - Validation and size calculation helpers
+
+- **DicomPixelData**: Main pixel data management class
+  - Frame-based storage
+  - Add/Get individual frames
+  - Codec integration (Encode/Decode methods)
+  - Conversion to/from codec.PixelData
+
+**Usage Example**:
+```go
+import "github.com/cocosip/go-dicom/pkg/imaging"
+
+// Create pixel data info
+info := &imaging.PixelDataInfo{
+    Width:                     512,
+    Height:                    512,
+    NumberOfFrames:            1,
+    BitsAllocated:             16,
+    BitsStored:                12,
+    HighBit:                   11,
+    SamplesPerPixel:           1,
+    PixelRepresentation:       imaging.UnsignedPixels,
+    PlanarConfiguration:       imaging.InterleavedPlanar,
+    PhotometricInterpretation: imaging.Monochrome2,
+}
+
+// Create pixel data
+pixelData, err := imaging.NewDicomPixelData(info)
+
+// Add frames
+frameBytes := make([]byte, info.UncompressedFrameSize())
+// ... fill frameBytes ...
+err = pixelData.AddFrame(frameBytes)
+
+// Encode with RLE
+rleCodec := codec.NewRLECodec()
+compressed, err := pixelData.Encode(rleCodec, nil)
+
+// Decode
+decompressed, err := compressed.Decode(rleCodec, nil)
+```
+
 ### Implemented Codecs
 
 #### RLE Lossless (Run-Length Encoding)
@@ -49,35 +102,36 @@ The RLE codec implements DICOM RLE Lossless compression (Transfer Syntax UID: 1.
 - ✅ Support for interleaved and planar configurations
 - ✅ Multi-frame support
 
+#### Native/Uncompressed
+
+**Implementation**: `codec/native.go`
+
+The Native codec handles uncompressed pixel data with various byte orders:
+
+**Features**:
+- ✅ Little Endian / Big Endian support
+- ✅ Byte swapping for multi-byte samples (16-bit, 32-bit, 64-bit)
+- ✅ Direct copy for single-byte samples
+- ✅ Read/Write helpers for uint16/uint32 with endianness
+- ✅ Utility function for endianness conversion
+
 **Usage Example**:
 ```go
 import "github.com/cocosip/go-dicom/pkg/imaging/codec"
 
-// Create codec
-rleCodec := codec.NewRLECodec()
+// Little Endian codec
+leCodec := codec.NewExplicitVRLittleEndianCodec()
 
-// Prepare source pixel data
-src := &codec.PixelData{
-    Data:                      pixelBytes,
-    Width:                     512,
-    Height:                    512,
-    NumberOfFrames:            1,
-    BitsAllocated:             8,
-    BitsStored:                8,
-    HighBit:                   7,
-    SamplesPerPixel:           1,
-    PixelRepresentation:       0, // unsigned
-    PlanarConfiguration:       0, // interleaved
-    PhotometricInterpretation: "MONOCHROME2",
-}
+// Big Endian codec
+beCodec := codec.NewExplicitVRBigEndianCodec()
 
-// Encode
-encoded := &codec.PixelData{ /* same metadata as src */ }
-err := rleCodec.Encode(src, encoded, nil)
+// Convert between endianness
+swapped, err := codec.ConvertEndianness(pixelBytes, 2) // 2 bytes per sample
 
-// Decode
-decoded := &codec.PixelData{ /* same metadata as src */ }
-err = rleCodec.Decode(encoded, decoded, nil)
+// Byte swapping during encode/decode
+params := codec.NewBaseParameters()
+params.SetParameter("swap_bytes", true)
+err = leCodec.Encode(src, dst, params)
 ```
 
 ### Deferred Codecs
@@ -138,7 +192,9 @@ Current test coverage:
 - ✅ ColorSpace: 100%
 - ✅ PhotometricInterpretation: 100%
 - ✅ PixelConfiguration: 100%
+- ✅ PixelDataInfo/DicomPixelData: 100%
 - ✅ RLE Codec: 100%
+- ✅ Native Codec: 100%
 
 ## Future Work
 

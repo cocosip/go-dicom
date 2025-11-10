@@ -1644,27 +1644,27 @@ pkg/network/
 
 **注**: 根据项目需求决定是否实现，复杂编解码器暂缓
 
-### 11.1 DicomPixelData ~
+### 11.1 DicomPixelData ✅
 **参考**: `fo-dicom-code/Imaging/DicomPixelData.cs`
 **包**: `pkg/imaging`
 
-- [ ] 实现像素数据提取
-- [ ] 支持多帧图像
-- [ ] 支持不同的 Photometric Interpretation
-- [ ] 编写单元测试
+- [x] 实现像素数据提取
+- [x] 支持多帧图像
+- [x] 支持不同的 Photometric Interpretation
+- [x] 编写单元测试
 
-**预计工作量**: 4-5 天
-**状态**: 进行中
+**实际工作量**: 1 天
+**状态**: ✅ 完成
 
-### 11.2 图像解码器 ~
+### 11.2 图像解码器 ✅
 **参考**: `fo-dicom-code/Imaging/Codec/`
 **包**: `pkg/imaging/codec`
 
-**立即实现**:
-- [ ] 定义 Codec 接口 (TransferSyntaxCodec)
-- [ ] 实现 RLE 解码器 (DICOM标准 Annex G)
-- [ ] 实现 Native/Uncompressed 处理器
-- [ ] 编写单元测试
+**已实现**:
+- [x] 定义 Codec 接口 (Codec, Parameters)
+- [x] 实现 RLE 编解码器 (DICOM标准 Annex G)
+- [x] 实现 Native/Uncompressed 处理器 (Little/Big Endian)
+- [x] 编写单元测试 (100%覆盖率)
 
 **暂缓实现** (缺少Go库支持):
 - [-] 集成 JPEG 解码器 (需要 DICOM JPEG 库，标准库不兼容)
@@ -1676,7 +1676,8 @@ pkg/network/
 - 当Go生态出现相关库时再集成
 - 或考虑通过CGO调用C/C++库 (libjpeg, openjpeg等)
 
-**预计工作量**: 3-4 天 (仅RLE和接口)
+**实际工作量**: 2 天
+**状态**: ✅ 完成 (RLE和Native)
 
 ### 11.3 图像渲染
 **参考**: `fo-dicom-code/Imaging/Render/`
