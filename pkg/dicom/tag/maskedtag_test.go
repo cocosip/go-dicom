@@ -88,10 +88,10 @@ func TestMaskedTagString(t *testing.T) {
 
 func TestMaskedTagIsMatch(t *testing.T) {
 	tests := []struct {
-		name       string
-		maskedTag  string
-		testTag    *tag.Tag
-		wantMatch  bool
+		name      string
+		maskedTag string
+		testTag   *tag.Tag
+		wantMatch bool
 	}{
 		{
 			"exact match no wildcards",
@@ -198,12 +198,12 @@ func TestMaskedTagIsMatch(t *testing.T) {
 
 func TestParseMaskedTag(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		wantG   uint16
-		wantE   uint16
+		name     string
+		input    string
+		wantG    uint16
+		wantE    uint16
 		wantMask uint32
-		wantErr bool
+		wantErr  bool
 	}{
 		{
 			"no wildcards",

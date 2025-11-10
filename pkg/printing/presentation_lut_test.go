@@ -78,7 +78,7 @@ func TestPresentationLUT_IsValid(t *testing.T) {
 		{
 			name: "invalid: LUT data size mismatch",
 			setup: func(lut *PresentationLUT) {
-				lutData := []uint16{0, 100} // Only 2 entries
+				lutData := []uint16{0, 100}   // Only 2 entries
 				lut.SetLUT(5, 0, 12, lutData) // Claims 5 entries
 			},
 			expected: false,

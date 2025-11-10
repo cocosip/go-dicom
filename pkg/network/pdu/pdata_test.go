@@ -229,9 +229,9 @@ func TestPDataTF_TotalDataSize(t *testing.T) {
 
 func TestPDataTF_GetCommandPDVs(t *testing.T) {
 	pdata := NewPDataTF()
-	pdata.AddPDV(NewPDV(1, true, false, []byte{0x01}))  // Command
-	pdata.AddPDV(NewPDV(1, true, true, []byte{0x02}))   // Command
-	pdata.AddPDV(NewPDV(1, false, true, []byte{0x03}))  // Data
+	pdata.AddPDV(NewPDV(1, true, false, []byte{0x01})) // Command
+	pdata.AddPDV(NewPDV(1, true, true, []byte{0x02}))  // Command
+	pdata.AddPDV(NewPDV(1, false, true, []byte{0x03})) // Data
 
 	commandPDVs := pdata.GetCommandPDVs()
 	if len(commandPDVs) != 2 {
@@ -381,8 +381,8 @@ func TestReassembleDataMixedContexts(t *testing.T) {
 func TestReassembleDataMixedTypes(t *testing.T) {
 	// Create PDVs with different types (command vs data)
 	pdvs := []PDV{
-		NewPDV(1, true, false, []byte{0x01, 0x02}),  // Command
-		NewPDV(1, false, true, []byte{0x03, 0x04}),  // Data
+		NewPDV(1, true, false, []byte{0x01, 0x02}), // Command
+		NewPDV(1, false, true, []byte{0x03, 0x04}), // Data
 	}
 
 	_, err := ReassembleData(pdvs)

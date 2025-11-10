@@ -155,7 +155,7 @@ func (v *VOILinearExactLUT) Transform(input float64) float64 {
 	}
 
 	// Exact linear transformation per DICOM spec
-	output := ((input - v.windowCenter) / v.windowWidth + 0.5) * v.outputRange
+	output := ((input-v.windowCenter)/v.windowWidth + 0.5) * v.outputRange
 	return math.Min(v.MaximumOutputValue(), math.Max(v.MinimumOutputValue(), output))
 }
 

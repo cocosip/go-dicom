@@ -30,14 +30,14 @@ type VOILUT interface {
 
 // baseVOILUT contains common fields and methods for all VOI LUT implementations
 type baseVOILUT struct {
-	windowCenter     float64
-	windowWidth      float64
+	windowCenter      float64
+	windowWidth       float64
 	windowCenterMin05 float64
-	windowWidthMin1  float64
-	windowWidthDiv2  float64
-	windowStart      int
-	windowEnd        int
-	outputRange      float64
+	windowWidthMin1   float64
+	windowWidthDiv2   float64
+	windowStart       int
+	windowEnd         int
+	outputRange       float64
 }
 
 // newBaseVOILUT creates a new base VOI LUT
@@ -115,7 +115,7 @@ func (v *LinearVOILUT) Transform(value float64) float64 {
 		return v.MaximumOutputValue()
 	}
 
-	result := (((value - v.windowCenterMin05) / v.windowWidthMin1) + 0.5) * v.outputRange + v.MinimumOutputValue()
+	result := (((value-v.windowCenterMin05)/v.windowWidthMin1)+0.5)*v.outputRange + v.MinimumOutputValue()
 	return math.Max(v.MinimumOutputValue(), math.Min(v.MaximumOutputValue(), result))
 }
 
@@ -140,7 +140,7 @@ func (v *LinearExactVOILUT) Transform(value float64) float64 {
 		return v.MaximumOutputValue()
 	}
 
-	result := ((value - v.windowCenter) / v.windowWidth + 0.5) * v.outputRange + v.MinimumOutputValue()
+	result := ((value-v.windowCenter)/v.windowWidth+0.5)*v.outputRange + v.MinimumOutputValue()
 	return math.Max(v.MinimumOutputValue(), math.Min(v.MaximumOutputValue(), result))
 }
 

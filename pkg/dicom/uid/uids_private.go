@@ -183,7 +183,6 @@ var (
 
 	// PrivateTomTecAnnotationStorage Private TomTec Annotation Storage
 	PrivateTomTecAnnotationStorage = New("1.2.276.0.48.5.1.4.1.1.7", "Private TomTec Annotation Storage", TypeSOPClass, false)
-
 )
 
 func init() {

@@ -197,7 +197,7 @@ func (c *NativeCodec) swap64(src, dst []byte) error {
 	for i := 0; i < len(src); i += 8 {
 		if i+7 >= len(src) {
 			return fmt.Errorf("incomplete 64-bit sample at offset %d", i)
-	}
+		}
 		dst[i] = src[i+7]
 		dst[i+1] = src[i+6]
 		dst[i+2] = src[i+5]

@@ -51,10 +51,10 @@ const (
 // A UID is a globally unique identifier that identifies various DICOM entities
 // such as transfer syntaxes, SOP classes, and instances.
 type UID struct {
-	uid      string
-	name     string
-	uidType  Type
-	retired  bool
+	uid     string
+	name    string
+	uidType Type
+	retired bool
 }
 
 var (

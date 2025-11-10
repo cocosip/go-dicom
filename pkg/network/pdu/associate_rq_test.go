@@ -371,7 +371,7 @@ func TestAAssociateRQ_DecodeInvalidPDUType(t *testing.T) {
 
 func TestAETitleSpacePadding(t *testing.T) {
 	rq := NewAAssociateRQ()
-	rq.CalledAETitle = "SHORT"   // Only 5 chars
+	rq.CalledAETitle = "SHORT"    // Only 5 chars
 	rq.CallingAETitle = "ANOTHER" // 7 chars
 
 	// Encode

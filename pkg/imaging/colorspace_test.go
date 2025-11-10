@@ -116,11 +116,11 @@ func TestColorSpace_Equals(t *testing.T) {
 
 func TestStandardColorSpaces(t *testing.T) {
 	tests := []struct {
-		name           string
-		cs             *ColorSpace
-		expectedName   string
-		expectedComps  int
-		firstCompName  string
+		name          string
+		cs            *ColorSpace
+		expectedName  string
+		expectedComps int
+		firstCompName string
 	}{
 		{
 			name:          "OneBit",

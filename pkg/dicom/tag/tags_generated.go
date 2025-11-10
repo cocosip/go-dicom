@@ -7673,7 +7673,7 @@ var (
 	// AnalogFilterCharacteristicsSequence (003A,0323) VR=SQ VM=1 Analog Filter Characteristics Sequence
 	AnalogFilterCharacteristicsSequence = New(0x003A, 0x0323)
 
-	// AnalogFilterRollOff (003A,0324) VR=DS VM=1 Analog Filter Roll Off 
+	// AnalogFilterRollOff (003A,0324) VR=DS VM=1 Analog Filter Roll Off
 	AnalogFilterRollOff = New(0x003A, 0x0324)
 
 	// AnalogFilterTypeCodeSequence (003A,0325) VR=SQ VM=1 Analog Filter Type Code Sequence
@@ -14673,7 +14673,7 @@ var (
 	// PatientTreatmentPreparationDeviceSequence (300A,078F) VR=SQ VM=1 Patient Treatment Preparation Device Sequence
 	PatientTreatmentPreparationDeviceSequence = New(0x300A, 0x078F)
 
-	// PatientTreatmentPreparationProcedureSequence (300A,0790) VR=SQ VM=1 Patient Treatment Preparation Procedure Sequence 
+	// PatientTreatmentPreparationProcedureSequence (300A,0790) VR=SQ VM=1 Patient Treatment Preparation Procedure Sequence
 	PatientTreatmentPreparationProcedureSequence = New(0x300A, 0x0790)
 
 	// PatientTreatmentPreparationProcedureCodeSequence (300A,0791) VR=SQ VM=1 Patient Treatment Preparation Procedure Code Sequence
@@ -15898,5 +15898,4 @@ var (
 
 	// CurrentFrameFunctionalGroupsSequence (0006,0001) VR=SQ VM=1 Current Frame Functional Groups Sequence
 	CurrentFrameFunctionalGroupsSequence = New(0x0006, 0x0001)
-
 )

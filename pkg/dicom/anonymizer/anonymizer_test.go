@@ -61,9 +61,9 @@ func TestSecurityProfileAddRule(t *testing.T) {
 
 func TestSecurityProfileFindAction(t *testing.T) {
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
-	_ = profile.AddRule("0010,0010", ActionX)   // PatientName - Remove
-	_ = profile.AddRule("0010,0020", ActionZ)   // PatientID - Zero
-	_ = profile.AddRule("0008,0018", ActionU)   // SOPInstanceUID - UID replacement
+	_ = profile.AddRule("0010,0010", ActionX) // PatientName - Remove
+	_ = profile.AddRule("0010,0020", ActionZ) // PatientID - Zero
+	_ = profile.AddRule("0008,0018", ActionU) // SOPInstanceUID - UID replacement
 
 	tests := []struct {
 		name         string
@@ -227,9 +227,9 @@ func TestAnonymizerSequence(t *testing.T) {
 	ds.Add(seq)
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
-	_ = profile.AddRule("0010,0010", ActionX)   // Remove PatientName
-	_ = profile.AddRule("0020,000D", ActionU)   // Replace StudyInstanceUID in sequence
-	_ = profile.AddRule("0008,1030", ActionC)   // Clean StudyDescription
+	_ = profile.AddRule("0010,0010", ActionX) // Remove PatientName
+	_ = profile.AddRule("0020,000D", ActionU) // Replace StudyInstanceUID in sequence
+	_ = profile.AddRule("0008,1030", ActionC) // Clean StudyDescription
 
 	anon := NewAnonymizer(profile)
 	err := anon.AnonymizeInPlace(ds)

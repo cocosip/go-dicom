@@ -123,7 +123,7 @@ func TestHandleCStoreRequest_DefaultHandler(t *testing.T) {
 
 	// Create dataset with required tags
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))       // CT Image Storage
+	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
 	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	req, err := dimse.NewCStoreRequest(ds)
@@ -146,7 +146,7 @@ func TestHandleCStoreRequest_CustomHandler(t *testing.T) {
 
 	// Create dataset with required tags
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))       // CT Image Storage
+	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
 	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	req, err := dimse.NewCStoreRequest(ds)

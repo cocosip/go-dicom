@@ -63,8 +63,8 @@ func TestRawPDU_String(t *testing.T) {
 
 func TestRawPDU_TotalLength(t *testing.T) {
 	tests := []struct {
-		name         string
-		dataLength   int
+		name          string
+		dataLength    int
 		expectedTotal uint32
 	}{
 		{"Empty data", 0, 6},

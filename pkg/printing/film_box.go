@@ -23,20 +23,20 @@ const (
 type FilmSize string
 
 const (
-	FilmSize8INX10IN    FilmSize = "8INX10IN"
-	FilmSize8_5INX11IN  FilmSize = "8_5INX11IN"
-	FilmSize10INX12IN   FilmSize = "10INX12IN"
-	FilmSize10INX14IN   FilmSize = "10INX14IN"
-	FilmSize11INX14IN   FilmSize = "11INX14IN"
-	FilmSize11INX17IN   FilmSize = "11INX17IN"
-	FilmSize14INX14IN   FilmSize = "14INX14IN"
-	FilmSize14INX17IN   FilmSize = "14INX17IN"
-	FilmSize24CMX24CM   FilmSize = "24CMX24CM"
-	FilmSize24CMX30CM   FilmSize = "24CMX30CM"
-	FilmSize24CMX36CM   FilmSize = "24CMX36CM"
-	FilmSize26CMX30CM   FilmSize = "26CMX30CM"
-	FilmSizeA4          FilmSize = "A4"
-	FilmSizeA3          FilmSize = "A3"
+	FilmSize8INX10IN   FilmSize = "8INX10IN"
+	FilmSize8_5INX11IN FilmSize = "8_5INX11IN"
+	FilmSize10INX12IN  FilmSize = "10INX12IN"
+	FilmSize10INX14IN  FilmSize = "10INX14IN"
+	FilmSize11INX14IN  FilmSize = "11INX14IN"
+	FilmSize11INX17IN  FilmSize = "11INX17IN"
+	FilmSize14INX14IN  FilmSize = "14INX14IN"
+	FilmSize14INX17IN  FilmSize = "14INX17IN"
+	FilmSize24CMX24CM  FilmSize = "24CMX24CM"
+	FilmSize24CMX30CM  FilmSize = "24CMX30CM"
+	FilmSize24CMX36CM  FilmSize = "24CMX36CM"
+	FilmSize26CMX30CM  FilmSize = "26CMX30CM"
+	FilmSizeA4         FilmSize = "A4"
+	FilmSizeA3         FilmSize = "A3"
 )
 
 // MagnificationType represents the type of image magnification

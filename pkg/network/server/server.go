@@ -192,7 +192,7 @@ func defaultServerConfig() *ServerConfig {
 		RequestTimeout:            30 * time.Second,
 		ImplementationClassUID:    "1.2.826.0.1.3680043.10.854",
 		ImplementationVersionName: "GO-DICOM-1.0",
-		MaxConnections:            0,   // No limit
+		MaxConnections:            0, // No limit
 		TLSConfig:                 nil,
 	}
 }

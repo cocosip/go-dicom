@@ -12,11 +12,11 @@ func TestRGBToYBRFull(t *testing.T) {
 	converter := NewColorSpaceConverter()
 
 	testCases := []struct {
-		r, g, b       uint8
-		expectedY     uint8
-		expectedCb    uint8
-		expectedCr    uint8
-		description   string
+		r, g, b     uint8
+		expectedY   uint8
+		expectedCb  uint8
+		expectedCr  uint8
+		description string
 	}{
 		{0, 0, 0, 0, 128, 128, "Black"},
 		{255, 255, 255, 255, 128, 128, "White"},
@@ -45,10 +45,10 @@ func TestYBRFullToRGB(t *testing.T) {
 	converter := NewColorSpaceConverter()
 
 	testCases := []struct {
-		y, cb, cr uint8
-		expectedR uint8
-		expectedG uint8
-		expectedB uint8
+		y, cb, cr   uint8
+		expectedR   uint8
+		expectedG   uint8
+		expectedB   uint8
 		description string
 	}{
 		{0, 128, 128, 0, 0, 0, "Black"},
@@ -106,8 +106,8 @@ func TestRGBToYBRFull422(t *testing.T) {
 	converter := NewColorSpaceConverter()
 
 	// Test with two pixels
-	r1, g1, b1 := uint8(255), uint8(0), uint8(0)   // Red
-	r2, g2, b2 := uint8(0), uint8(255), uint8(0)   // Green
+	r1, g1, b1 := uint8(255), uint8(0), uint8(0) // Red
+	r2, g2, b2 := uint8(0), uint8(255), uint8(0) // Green
 
 	y1, y2, cb, cr := converter.RGBToYBRFull422(r1, g1, b1, r2, g2, b2)
 

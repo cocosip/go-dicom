@@ -16,10 +16,10 @@ import (
 // C-MOVE is used to request that an SCP move DICOM instances to a specified destination.
 type CMoveRequest struct {
 	*BaseRequest
-	affectedSOPClassUID  string
-	priority             uint16
-	moveDestination      string
-	queryLevel           QueryRetrieveLevel
+	affectedSOPClassUID string
+	priority            uint16
+	moveDestination     string
+	queryLevel          QueryRetrieveLevel
 }
 
 // NewCMoveRequest creates a new C-MOVE-RQ message.

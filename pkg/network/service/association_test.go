@@ -443,7 +443,8 @@ func TestDeadlineFromContext(t *testing.T) {
 		{
 			name: "Context deadline earlier than timeout",
 			ctx: func() context.Context {
-				ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(100*time.Millisecond))
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Millisecond))
+				defer cancel()
 				return ctx
 			}(),
 			timeout:        1 * time.Second,

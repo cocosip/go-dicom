@@ -55,7 +55,7 @@ func TestParseImageDisplayFormat(t *testing.T) {
 		{"STANDARD\\3,3", 9, false},
 		{"STANDARD\\1,1", 1, false},
 		{"STANDARD\\4,2", 8, false},
-		{"STANDARD\\2", 0, true}, // Missing dimension
+		{"STANDARD\\2", 0, true},   // Missing dimension
 		{"STANDARD\\a,b", 0, true}, // Invalid numbers
 
 		// ROW format

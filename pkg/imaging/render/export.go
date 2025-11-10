@@ -14,7 +14,7 @@ import (
 
 // ImageExporter provides functionality to export DICOM images to standard formats
 type ImageExporter struct {
-	pipeline Pipeline
+	pipeline  Pipeline
 	converter *ColorSpaceConverter
 }
 

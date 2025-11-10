@@ -134,7 +134,7 @@ type mockServiceForDIMSE struct {
 }
 
 // Association management methods (not used in these tests)
-func (m *mockServiceForDIMSE) GetAssociation() *association.Association { return nil }
+func (m *mockServiceForDIMSE) GetAssociation() *association.Association      { return nil }
 func (m *mockServiceForDIMSE) SetAssociation(assoc *association.Association) {}
 func (m *mockServiceForDIMSE) SendAssociationRequest(ctx context.Context, rq *pdu.AAssociateRQ) error {
 	return nil
@@ -142,8 +142,8 @@ func (m *mockServiceForDIMSE) SendAssociationRequest(ctx context.Context, rq *pd
 func (m *mockServiceForDIMSE) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssociateAC, error) {
 	return nil, nil
 }
-func (m *mockServiceForDIMSE) Start() error                                         { return nil }
-func (m *mockServiceForDIMSE) GracefulRelease(ctx context.Context) error           { return nil }
+func (m *mockServiceForDIMSE) Start() error                                              { return nil }
+func (m *mockServiceForDIMSE) GracefulRelease(ctx context.Context) error                 { return nil }
 func (m *mockServiceForDIMSE) Abort(ctx context.Context, source byte, reason byte) error { return nil }
 
 func (m *mockServiceForDIMSE) SendCEcho(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
@@ -272,7 +272,7 @@ func TestCStore_Success(t *testing.T) {
 
 	// Create a valid dataset
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))       // CT Image Storage
+	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
 	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)

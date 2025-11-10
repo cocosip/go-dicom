@@ -493,7 +493,7 @@ var (
 	// EnhancedUSVolumeStorage Enhanced US Volume Storage
 	EnhancedUSVolumeStorage = New("1.2.840.10008.5.1.4.1.1.6.2", "Enhanced US Volume Storage", TypeSOPClass, false)
 
-	// PhotoacousticImageStorage Photoacoustic Image Storage 
+	// PhotoacousticImageStorage Photoacoustic Image Storage
 	PhotoacousticImageStorage = New("1.2.840.10008.5.1.4.1.1.6.3", "Photoacoustic Image Storage ", TypeSOPClass, false)
 
 	// SecondaryCaptureImageStorage Secondary Capture Image Storage
@@ -5724,7 +5724,6 @@ var (
 
 	// UltrasoundAttenuationImagingSite12036 Ultrasound Attenuation Imaging Site (12036)
 	UltrasoundAttenuationImagingSite12036 = New("1.2.840.10008.6.1.1549", "Ultrasound Attenuation Imaging Site (12036)", TypeContextGroupName, false)
-
 )
 
 func init() {

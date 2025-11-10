@@ -9,25 +9,25 @@ import (
 
 func TestNewFilmSession(t *testing.T) {
 	testCases := []struct {
-		name            string
-		sopClassUID     string
-		sopInstanceUID  string
-		isColor         bool
-		expectDefaults  bool
+		name           string
+		sopClassUID    string
+		sopInstanceUID string
+		isColor        bool
+		expectDefaults bool
 	}{
 		{
-			name:            "create grayscale session with UIDs",
-			sopClassUID:     "1.2.840.10008.5.1.1.1",
-			sopInstanceUID:  "1.2.3.4.5",
-			isColor:         false,
-			expectDefaults:  true,
+			name:           "create grayscale session with UIDs",
+			sopClassUID:    "1.2.840.10008.5.1.1.1",
+			sopInstanceUID: "1.2.3.4.5",
+			isColor:        false,
+			expectDefaults: true,
 		},
 		{
-			name:            "create color session with empty UIDs",
-			sopClassUID:     "",
-			sopInstanceUID:  "",
-			isColor:         true,
-			expectDefaults:  true,
+			name:           "create color session with empty UIDs",
+			sopClassUID:    "",
+			sopInstanceUID: "",
+			isColor:        true,
+			expectDefaults: true,
 		},
 	}
 

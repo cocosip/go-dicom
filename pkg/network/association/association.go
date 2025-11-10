@@ -30,7 +30,7 @@ type Association struct {
 	MaxPDULength    uint32 // Maximum PDU length (default 16384)
 
 	// Implementation identification
-	ImplementationClassUID   string // Implementation Class UID
+	ImplementationClassUID    string // Implementation Class UID
 	ImplementationVersionName string // Implementation Version Name (optional)
 
 	// Presentation Contexts
@@ -63,17 +63,17 @@ type Association struct {
 // NewAssociation creates a new Association with default values.
 func NewAssociation(callingAE, calledAE string) *Association {
 	return &Association{
-		CallingAE:                callingAE,
-		CalledAE:                 calledAE,
-		ProtocolVersion:          0x0001,
-		MaxPDULength:             16384, // 16KB default
-		ImplementationClassUID:   "1.2.826.0.1.3680043.8.498.1", // go-dicom implementation UID
+		CallingAE:                 callingAE,
+		CalledAE:                  calledAE,
+		ProtocolVersion:           0x0001,
+		MaxPDULength:              16384,                         // 16KB default
+		ImplementationClassUID:    "1.2.826.0.1.3680043.8.498.1", // go-dicom implementation UID
 		ImplementationVersionName: "go-dicom-1.0",
-		PresentationContexts:     make([]*PresentationContext, 0),
-		ExtendedNegotiations:     make([]*ExtendedNegotiation, 0),
-		RoleSelections:           make([]*RoleSelection, 0),
-		IsEstablished:            false,
-		messageIDGen:             dimse.NewMessageIDGenerator(), // One generator per association
+		PresentationContexts:      make([]*PresentationContext, 0),
+		ExtendedNegotiations:      make([]*ExtendedNegotiation, 0),
+		RoleSelections:            make([]*RoleSelection, 0),
+		IsEstablished:             false,
+		messageIDGen:              dimse.NewMessageIDGenerator(), // One generator per association
 	}
 }
 
@@ -757,10 +757,15 @@ func ToAAssociateRQ(assoc *Association) *pdu.AAssociateRQ {
 	// User identity
 	if assoc.UserIdentity != nil {
 		rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
-			UserIdentityType:          assoc.UserIdentity.Type,
-			PositiveResponseRequested: func() byte { if assoc.UserIdentity.PositiveResponseRequested { return 1 }; return 0 }(),
-			PrimaryField:              assoc.UserIdentity.PrimaryField,
-			SecondaryField:            assoc.UserIdentity.SecondaryField,
+			UserIdentityType: assoc.UserIdentity.Type,
+			PositiveResponseRequested: func() byte {
+				if assoc.UserIdentity.PositiveResponseRequested {
+					return 1
+				}
+				return 0
+			}(),
+			PrimaryField:   assoc.UserIdentity.PrimaryField,
+			SecondaryField: assoc.UserIdentity.SecondaryField,
 		}
 	}
 

@@ -369,7 +369,7 @@ func BenchmarkWriteTag(b *testing.B) {
 	w := New(transfer.ExplicitVRLittleEndian)
 	w.writer = buf
 	testTag := tag.New(0x0010, 0x0010)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
@@ -379,7 +379,7 @@ func BenchmarkWriteTag(b *testing.B) {
 
 func BenchmarkWriteElement(b *testing.B) {
 	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf := &bytes.Buffer{}

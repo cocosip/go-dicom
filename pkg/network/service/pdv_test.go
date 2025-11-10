@@ -82,11 +82,11 @@ func TestPDVDecode(t *testing.T) {
 
 func TestPDVEncodeDecodeRoundTrip(t *testing.T) {
 	tests := []struct {
-		name               string
-		presentationCtxID  byte
-		isCommand          bool
-		isLastFragment     bool
-		data               []byte
+		name              string
+		presentationCtxID byte
+		isCommand         bool
+		isLastFragment    bool
+		data              []byte
 	}{
 		{"Command Last", 1, true, true, []byte("command")},
 		{"Command Not Last", 1, true, false, []byte("command part 1")},
@@ -230,9 +230,9 @@ func TestParsePDataTFPDU(t *testing.T) {
 
 func TestFragmentData(t *testing.T) {
 	tests := []struct {
-		name         string
-		data         []byte
-		maxPDULength uint32
+		name          string
+		data          []byte
+		maxPDULength  uint32
 		wantFragments int
 	}{
 		{"Small data", []byte("small"), 16384, 1},

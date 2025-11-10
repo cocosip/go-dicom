@@ -25,7 +25,7 @@ func createFragmentSequenceDICOM() *bytes.Buffer {
 	// File Meta Information Group Length (0002,0000)
 	binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
 	binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
-	buf.WriteString("UL")                                   // VR
+	buf.WriteString("UL")                                  // VR
 	binary.Write(buf, binary.LittleEndian, uint16(4))      // Length
 	binary.Write(buf, binary.LittleEndian, uint32(0))      // Value (placeholder, will calculate later)
 
@@ -41,8 +41,8 @@ func createFragmentSequenceDICOM() *bytes.Buffer {
 	// PixelData tag (7FE0,0010)
 	binary.Write(buf, binary.LittleEndian, uint16(0x7FE0))
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010))
-	buf.WriteString("OB")                                     // VR
-	binary.Write(buf, binary.LittleEndian, uint16(0))        // Reserved
+	buf.WriteString("OB")                                      // VR
+	binary.Write(buf, binary.LittleEndian, uint16(0))          // Reserved
 	binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF)) // Undefined length
 
 	// Item 1: Offset Table (FFFE,E000) - empty in this test
@@ -101,7 +101,7 @@ func createFragmentSequenceWithOffsetTable() *bytes.Buffer {
 	// Item 1: Offset Table with 2 offsets
 	binary.Write(buf, binary.LittleEndian, uint16(0xFFFE))
 	binary.Write(buf, binary.LittleEndian, uint16(0xE000))
-	binary.Write(buf, binary.LittleEndian, uint32(8)) // Length = 8 (2 offsets * 4 bytes)
+	binary.Write(buf, binary.LittleEndian, uint32(8))  // Length = 8 (2 offsets * 4 bytes)
 	binary.Write(buf, binary.LittleEndian, uint32(0))  // Offset to frame 1
 	binary.Write(buf, binary.LittleEndian, uint32(16)) // Offset to frame 2
 

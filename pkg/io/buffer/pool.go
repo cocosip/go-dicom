@@ -81,7 +81,7 @@ func PutBuffer(buf []byte) {
 		defaultBufferPool.medium.Put(&buf)
 	case capacity <= 1048576:
 		defaultBufferPool.large.Put(&buf)
-	// else: don't pool very large buffers, let GC handle them
+		// else: don't pool very large buffers, let GC handle them
 	}
 }
 

@@ -81,16 +81,16 @@ func NewImageBox(sopInstanceUID string, isColor bool) *ImageBox {
 	}
 
 	return &ImageBox{
-		SOPClassUID:        sopClassUID,
-		SOPInstanceUID:     sopInstanceUID,
-		ImageBoxPosition:   1,
-		Polarity:           PolarityNormal,
-		MagnificationType:  MagnificationReplicate,
-		SmoothingType:      "",
-		RequestedImageSize: "",
+		SOPClassUID:                        sopClassUID,
+		SOPInstanceUID:                     sopInstanceUID,
+		ImageBoxPosition:                   1,
+		Polarity:                           PolarityNormal,
+		MagnificationType:                  MagnificationReplicate,
+		SmoothingType:                      "",
+		RequestedImageSize:                 "",
 		PreformattedGrayscaleImageSequence: nil,
 		PreformattedColorImageSequence:     nil,
-		IsColor:            isColor,
+		IsColor:                            isColor,
 	}
 }
 

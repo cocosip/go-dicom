@@ -15,13 +15,13 @@ import (
 // Each entry contains information about a DICOM tag including its name,
 // keyword, value representation(s), value multiplicity, and retirement status.
 type Entry struct {
-	tag                   *tag.Tag
-	maskTag               *tag.MaskedTag
-	name                  string
-	keyword               string
-	valueRepresentations  []*vr.VR
-	valueMultiplicity     *vm.VM
-	isRetired             bool
+	tag                  *tag.Tag
+	maskTag              *tag.MaskedTag
+	name                 string
+	keyword              string
+	valueRepresentations []*vr.VR
+	valueMultiplicity    *vm.VM
+	isRetired            bool
 }
 
 // NewEntry creates a new dictionary entry with a regular tag.

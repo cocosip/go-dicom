@@ -48,35 +48,35 @@ type AAssociateRJ struct {
 
 // Result codes for AAssociateRJ
 const (
-	ResultRejectedPermanent  byte = 1
-	ResultRejectedTransient  byte = 2
+	ResultRejectedPermanent byte = 1
+	ResultRejectedTransient byte = 2
 )
 
 // Source codes for AAssociateRJ
 const (
-	SourceServiceUser                     byte = 1
-	SourceServiceProviderACSE             byte = 2
-	SourceServiceProviderPresentation     byte = 3
+	SourceServiceUser                 byte = 1
+	SourceServiceProviderACSE         byte = 2
+	SourceServiceProviderPresentation byte = 3
 )
 
 // Reason codes when Source = 1 (service-user)
 const (
-	ReasonServiceUserNoReasonGiven                     byte = 1
-	ReasonServiceUserApplicationContextNotSupported    byte = 2
-	ReasonServiceUserCallingAETitleNotRecognized       byte = 3
-	ReasonServiceUserCalledAETitleNotRecognized        byte = 7
+	ReasonServiceUserNoReasonGiven                  byte = 1
+	ReasonServiceUserApplicationContextNotSupported byte = 2
+	ReasonServiceUserCallingAETitleNotRecognized    byte = 3
+	ReasonServiceUserCalledAETitleNotRecognized     byte = 7
 )
 
 // Reason codes when Source = 2 (service-provider, ACSE)
 const (
-	ReasonServiceProviderACSENoReasonGiven            byte = 1
+	ReasonServiceProviderACSENoReasonGiven               byte = 1
 	ReasonServiceProviderACSEProtocolVersionNotSupported byte = 2
 )
 
 // Reason codes when Source = 3 (service-provider, Presentation)
 const (
-	ReasonServiceProviderPresentationTemporaryCongestion  byte = 1
-	ReasonServiceProviderPresentationLocalLimitExceeded   byte = 2
+	ReasonServiceProviderPresentationTemporaryCongestion byte = 1
+	ReasonServiceProviderPresentationLocalLimitExceeded  byte = 2
 )
 
 // NewAAssociateRJ creates a new A-ASSOCIATE-RJ PDU.
@@ -91,7 +91,7 @@ func NewAAssociateRJ(result, source, reason byte) *AAssociateRJ {
 // Encode encodes the A-ASSOCIATE-RJ to a RawPDU.
 func (a *AAssociateRJ) Encode() (*RawPDU, error) {
 	data := make([]byte, 4)
-	data[0] = 0x00        // Reserved
+	data[0] = 0x00 // Reserved
 	data[1] = a.Result
 	data[2] = a.Source
 	data[3] = a.Reason

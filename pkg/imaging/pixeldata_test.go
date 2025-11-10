@@ -169,7 +169,7 @@ func TestPixelDataInfo_UncompressedFrameSize(t *testing.T) {
 				SamplesPerPixel:           1,
 				PhotometricInterpretation: Monochrome2,
 			},
-			expectedSize: (100*100 - 1) / 8 + 1, // 1,250 bytes
+			expectedSize: (100*100-1)/8 + 1, // 1,250 bytes
 		},
 	}
 
@@ -280,7 +280,7 @@ func TestDicomPixelData_MultiFrame(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		frameData := make([]byte, 64)
 		for j := range frameData {
-			frameData[j] = byte((i * 64 + j) % 256)
+			frameData[j] = byte((i*64 + j) % 256)
 		}
 		err = pd.AddFrame(frameData)
 		if err != nil {

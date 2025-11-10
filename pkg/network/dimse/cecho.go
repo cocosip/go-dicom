@@ -52,8 +52,8 @@ func (r *CEchoRequest) String() string {
 // CEchoResponse represents a C-ECHO-RSP message.
 type CEchoResponse struct {
 	*BaseResponse
-	statusCode              uint16
-	affectedSOPClassUID     string
+	statusCode                uint16
+	affectedSOPClassUID       string
 	messageIDBeingRespondedTo uint16
 }
 

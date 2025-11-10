@@ -333,7 +333,7 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 
 func TestAAssociateAC_AETitleSpacePadding(t *testing.T) {
 	ac := NewAAssociateAC()
-	ac.CalledAETitle = "SHORT"   // Only 5 chars
+	ac.CalledAETitle = "SHORT"    // Only 5 chars
 	ac.CallingAETitle = "ANOTHER" // 7 chars
 
 	// Encode

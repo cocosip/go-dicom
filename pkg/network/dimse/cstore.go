@@ -16,10 +16,10 @@ import (
 // C-STORE is used to store (send) DICOM instances.
 type CStoreRequest struct {
 	*BaseRequest
-	affectedSOPClassUID    string
-	affectedSOPInstanceUID string
-	priority               uint16
-	moveOriginatorAET      string
+	affectedSOPClassUID     string
+	affectedSOPInstanceUID  string
+	priority                uint16
+	moveOriginatorAET       string
 	moveOriginatorMessageID uint16
 }
 

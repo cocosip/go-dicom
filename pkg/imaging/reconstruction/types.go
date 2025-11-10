@@ -121,7 +121,7 @@ type DicomGenerator struct {
 // NewImageData creates a new ImageData from a DICOM dataset
 //
 // TODO: Implement when required dependencies are available
-func NewImageData(/* dataset *dicom.Dataset */) (*ImageData, error) {
+func NewImageData( /* dataset *dicom.Dataset */ ) (*ImageData, error) {
 	// Placeholder
 	return nil, ErrNotImplemented
 }
@@ -145,7 +145,7 @@ func NewStack(volume *VolumeData, stackType StackType, spacing, sliceDistance fl
 // NewDicomGenerator creates a DICOM generator
 //
 // TODO: Implement DICOM dataset generation
-func NewDicomGenerator(/* commonDataset *dicom.Dataset */) *DicomGenerator {
+func NewDicomGenerator( /* commonDataset *dicom.Dataset */ ) *DicomGenerator {
 	// Placeholder
 	return nil
 }

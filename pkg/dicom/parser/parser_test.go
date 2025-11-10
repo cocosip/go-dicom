@@ -254,22 +254,22 @@ func createMiniDICOM() *bytes.Buffer {
 	// File Meta Information Group Length (0002,0000) - UL, Explicit VR
 	binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
 	binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
-	buf.WriteString("UL")                                   // VR
+	buf.WriteString("UL")                                  // VR
 	binary.Write(buf, binary.LittleEndian, uint16(4))      // Length
 	binary.Write(buf, binary.LittleEndian, uint32(100))    // Value (placeholder)
 
 	// Transfer Syntax UID (0002,0010) - UI, Explicit VR
 	binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
-	buf.WriteString("UI")                                   // VR
-	tsUID := "1.2.840.10008.1.2.1"                          // Explicit VR Little Endian
+	buf.WriteString("UI")                                  // VR
+	tsUID := "1.2.840.10008.1.2.1"                         // Explicit VR Little Endian
 	binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 	buf.WriteString(tsUID)
 
 	// Patient Name (0010,0010) - PN, Explicit VR
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Group
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
-	buf.WriteString("PN")                                   // VR
+	buf.WriteString("PN")                                  // VR
 	name := "Doe^John"
 	binary.Write(buf, binary.LittleEndian, uint16(len(name)))
 	buf.WriteString(name)
@@ -376,10 +376,10 @@ func TestSequenceReading(t *testing.T) {
 		buf.WriteString(tsUID)
 
 		// Sequence element with undefined length (SQ)
-		binary.Write(buf, binary.LittleEndian, uint16(0x0008)) // Group
-		binary.Write(buf, binary.LittleEndian, uint16(0x1140)) // Element (Referenced Image Sequence)
-		buf.WriteString("SQ")                                   // VR
-		binary.Write(buf, binary.LittleEndian, uint16(0))      // Reserved
+		binary.Write(buf, binary.LittleEndian, uint16(0x0008))     // Group
+		binary.Write(buf, binary.LittleEndian, uint16(0x1140))     // Element (Referenced Image Sequence)
+		buf.WriteString("SQ")                                      // VR
+		binary.Write(buf, binary.LittleEndian, uint16(0))          // Reserved
 		binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF)) // Undefined length
 
 		// Item 1 (FFFE,E000) with defined length
@@ -504,18 +504,18 @@ func TestSequenceReading(t *testing.T) {
 // createBenchmarkDICOMData creates test DICOM data for benchmarking
 func createBenchmarkDICOMData(numElements int) []byte {
 	buf := bytes.NewBuffer(nil)
-	
+
 	// Write preamble
 	buf.Write(make([]byte, 128))
 	buf.WriteString("DICM")
-	
+
 	// Write File Meta Information Group Length (0002,0000)
 	binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 	binary.Write(buf, binary.LittleEndian, uint16(0x0000))
 	buf.WriteString("UL")
 	binary.Write(buf, binary.LittleEndian, uint16(4))
 	binary.Write(buf, binary.LittleEndian, uint32(0))
-	
+
 	// Write Transfer Syntax UID (0002,0010) - Explicit VR Little Endian
 	binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010))
@@ -526,16 +526,16 @@ func createBenchmarkDICOMData(numElements int) []byte {
 	if len(tsUID)%2 != 0 {
 		buf.WriteByte(0)
 	}
-	
+
 	// Write some test elements
 	for i := 0; i < numElements; i++ {
 		// Write tag
 		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		binary.Write(buf, binary.LittleEndian, uint16(i))
-		
+
 		// Write VR (LO)
 		buf.WriteString("LO")
-		
+
 		// Write value
 		value := "TestValue"
 		binary.Write(buf, binary.LittleEndian, uint16(len(value)))
@@ -544,7 +544,7 @@ func createBenchmarkDICOMData(numElements int) []byte {
 			buf.WriteByte(0)
 		}
 	}
-	
+
 	return buf.Bytes()
 }
 
@@ -585,7 +585,7 @@ func BenchmarkReadTag(b *testing.B) {
 		binary.Write(buf, binary.LittleEndian, uint16(i))
 	}
 	data := buf.Bytes()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ctx := newParseContext()
@@ -607,7 +607,7 @@ func BenchmarkReadElement(b *testing.B) {
 		buf.WriteString(value)
 	}
 	data := buf.Bytes()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ctx := newParseContext()

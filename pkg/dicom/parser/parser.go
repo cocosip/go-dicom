@@ -139,7 +139,7 @@ type parseContext struct {
 
 	// For lazy loading support
 	seekableReader io.ReadSeeker // Set if reader is seekable (for lazy loading)
-	file           *os.File       // Set if reader is a file (for FileByteBuffer)
+	file           *os.File      // Set if reader is a file (for FileByteBuffer)
 }
 
 // Option is a functional option for configuring the parser.

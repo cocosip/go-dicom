@@ -11,14 +11,14 @@ import (
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		name            string
-		input           string
-		wantMin         int
-		wantMax         int
-		wantMult        int
-		wantUnlimited   bool
-		wantStr         string
-		wantErr         bool
+		name          string
+		input         string
+		wantMin       int
+		wantMax       int
+		wantMult      int
+		wantUnlimited bool
+		wantStr       string
+		wantErr       bool
 	}{
 		{"single value", "1", 1, 1, 1, false, "1", false},
 		{"fixed range", "1-2", 1, 2, 1, false, "1-2", false},

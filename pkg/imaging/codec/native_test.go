@@ -10,18 +10,18 @@ import (
 
 func TestNativeCodec_Name(t *testing.T) {
 	tests := []struct {
-		name        string
-		codec       *NativeCodec
+		name         string
+		codec        *NativeCodec
 		expectedName string
 	}{
 		{
-			name:        "little endian",
-			codec:       NewExplicitVRLittleEndianCodec(),
+			name:         "little endian",
+			codec:        NewExplicitVRLittleEndianCodec(),
 			expectedName: "Native Little Endian",
 		},
 		{
-			name:        "big endian",
-			codec:       NewExplicitVRBigEndianCodec(),
+			name:         "big endian",
+			codec:        NewExplicitVRBigEndianCodec(),
 			expectedName: "Native Big Endian",
 		},
 	}
@@ -300,11 +300,11 @@ func TestNativeCodec_BigEndian(t *testing.T) {
 
 func TestConvertEndianness(t *testing.T) {
 	tests := []struct {
-		name            string
-		input           []byte
-		bytesPerSample  int
-		expected        []byte
-		expectErr       bool
+		name           string
+		input          []byte
+		bytesPerSample int
+		expected       []byte
+		expectErr      bool
 	}{
 		{
 			name:           "16-bit swap",

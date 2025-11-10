@@ -54,10 +54,10 @@ type Service struct {
 	handlersMu sync.RWMutex
 
 	// Lifecycle callbacks (optional)
-	associationNegotiator     AssociationNegotiator
-	associationReleaseHandler AssociationReleaseHandler
+	associationNegotiator      AssociationNegotiator
+	associationReleaseHandler  AssociationReleaseHandler
 	connectionLifecycleHandler ConnectionLifecycleHandler
-	callbacksMu               sync.RWMutex
+	callbacksMu                sync.RWMutex
 
 	// Context for goroutine lifecycle
 	ctx    context.Context

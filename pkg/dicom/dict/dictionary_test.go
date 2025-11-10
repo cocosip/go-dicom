@@ -351,9 +351,9 @@ func TestDefaultDictionaryInitialization(t *testing.T) {
 
 	// Verify that standard DICOM tags are loaded
 	testCases := []struct {
-		name    string
-		tag     *tag.Tag
-		wantKW  string
+		name     string
+		tag      *tag.Tag
+		wantKW   string
 		wantName string
 	}{
 		{

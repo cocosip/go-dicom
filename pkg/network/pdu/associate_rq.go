@@ -13,12 +13,12 @@ import (
 // AAssociateRQ represents an A-ASSOCIATE-RQ PDU.
 // This PDU is sent by the SCU to request an association with an SCP.
 type AAssociateRQ struct {
-	ProtocolVersion       uint16                   // Protocol version (always 0x0001)
-	CalledAETitle         string                   // Called AE Title (max 16 bytes)
-	CallingAETitle        string                   // Calling AE Title (max 16 bytes)
-	ApplicationContext    string                   // Application Context Name (UID)
-	PresentationContexts  []PresentationContextRQ  // Presentation contexts
-	UserInformation       *UserInformation         // User information
+	ProtocolVersion      uint16                  // Protocol version (always 0x0001)
+	CalledAETitle        string                  // Called AE Title (max 16 bytes)
+	CallingAETitle       string                  // Calling AE Title (max 16 bytes)
+	ApplicationContext   string                  // Application Context Name (UID)
+	PresentationContexts []PresentationContextRQ // Presentation contexts
+	UserInformation      *UserInformation        // User information
 }
 
 // PresentationContextRQ represents a Presentation Context item in A-ASSOCIATE-RQ.
@@ -30,13 +30,13 @@ type PresentationContextRQ struct {
 
 // UserInformation represents the User Information item.
 type UserInformation struct {
-	MaximumLength              uint32                        // Maximum PDU length (0 = unlimited)
-	ImplementationClassUID     string                        // Implementation Class UID
-	ImplementationVersionName  string                        // Implementation Version Name
-	AsynchronousOperations     *AsynchronousOperationsWindow // Optional: Async operations
-	SCPSCURoleSelections       []SCPSCURoleSelection         // Optional: Role selections
-	ExtendedNegotiations       []ExtendedNegotiation         // Optional: Extended negotiations
-	UserIdentity               *UserIdentityNegotiation      // Optional: User identity
+	MaximumLength             uint32                        // Maximum PDU length (0 = unlimited)
+	ImplementationClassUID    string                        // Implementation Class UID
+	ImplementationVersionName string                        // Implementation Version Name
+	AsynchronousOperations    *AsynchronousOperationsWindow // Optional: Async operations
+	SCPSCURoleSelections      []SCPSCURoleSelection         // Optional: Role selections
+	ExtendedNegotiations      []ExtendedNegotiation         // Optional: Extended negotiations
+	UserIdentity              *UserIdentityNegotiation      // Optional: User identity
 }
 
 // AsynchronousOperationsWindow represents async operations sub-item.
@@ -54,8 +54,8 @@ type SCPSCURoleSelection struct {
 
 // ExtendedNegotiation represents extended negotiation sub-item.
 type ExtendedNegotiation struct {
-	SOPClassUID          string
-	ServiceClassAppInfo  []byte // Application-specific information
+	SOPClassUID         string
+	ServiceClassAppInfo []byte // Application-specific information
 }
 
 // UserIdentityNegotiation represents user identity negotiation sub-item.
@@ -73,7 +73,7 @@ func NewAAssociateRQ() *AAssociateRQ {
 		ApplicationContext:   "1.2.840.10008.3.1.1.1", // Default Application Context
 		PresentationContexts: []PresentationContextRQ{},
 		UserInformation: &UserInformation{
-			MaximumLength:          16384, // Default 16KB
+			MaximumLength:          16384,                                // Default 16KB
 			ImplementationClassUID: "1.2.826.0.1.3680043.9.7278.1.0.0.0", // Placeholder
 		},
 	}

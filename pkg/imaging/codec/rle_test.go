@@ -176,8 +176,8 @@ func TestRLECodec_EncodeDecodeRGB(t *testing.T) {
 
 	// Fill with RGB pattern
 	for i := 0; i < len(pixelData); i += 3 {
-		pixelData[i] = byte((i / 3) % 256)   // R
-		pixelData[i+1] = byte((i/3 + 50) % 256) // G
+		pixelData[i] = byte((i / 3) % 256)       // R
+		pixelData[i+1] = byte((i/3 + 50) % 256)  // G
 		pixelData[i+2] = byte((i/3 + 100) % 256) // B
 	}
 

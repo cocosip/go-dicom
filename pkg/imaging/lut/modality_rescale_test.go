@@ -39,46 +39,46 @@ func TestNewModalityRescaleLUT(t *testing.T) {
 
 func TestModalityRescaleLUT_Transform(t *testing.T) {
 	testCases := []struct {
-		name       string
-		slope      float64
-		intercept  float64
-		input      float64
-		expected   float64
+		name      string
+		slope     float64
+		intercept float64
+		input     float64
+		expected  float64
 	}{
 		{
-			name:       "identity transform (slope=1, intercept=0)",
-			slope:      1.0,
-			intercept:  0.0,
-			input:      100.0,
-			expected:   100.0,
+			name:      "identity transform (slope=1, intercept=0)",
+			slope:     1.0,
+			intercept: 0.0,
+			input:     100.0,
+			expected:  100.0,
 		},
 		{
-			name:       "CT Hounsfield Units (typical)",
-			slope:      1.0,
-			intercept:  -1024.0,
-			input:      1024.0,
-			expected:   0.0, // Water
+			name:      "CT Hounsfield Units (typical)",
+			slope:     1.0,
+			intercept: -1024.0,
+			input:     1024.0,
+			expected:  0.0, // Water
 		},
 		{
-			name:       "positive slope and intercept",
-			slope:      2.0,
-			intercept:  10.0,
-			input:      50.0,
-			expected:   110.0, // 50 * 2 + 10
+			name:      "positive slope and intercept",
+			slope:     2.0,
+			intercept: 10.0,
+			input:     50.0,
+			expected:  110.0, // 50 * 2 + 10
 		},
 		{
-			name:       "negative intercept",
-			slope:      1.5,
-			intercept:  -100.0,
-			input:      200.0,
-			expected:   200.0, // 200 * 1.5 - 100
+			name:      "negative intercept",
+			slope:     1.5,
+			intercept: -100.0,
+			input:     200.0,
+			expected:  200.0, // 200 * 1.5 - 100
 		},
 		{
-			name:       "fractional slope",
-			slope:      0.5,
-			intercept:  0.0,
-			input:      100.0,
-			expected:   50.0,
+			name:      "fractional slope",
+			slope:     0.5,
+			intercept: 0.0,
+			input:     100.0,
+			expected:  50.0,
 		},
 	}
 

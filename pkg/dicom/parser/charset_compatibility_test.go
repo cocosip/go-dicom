@@ -175,7 +175,7 @@ func TestCharsetParseBasicInfo(t *testing.T) {
 
 	// Test a few specific files in detail
 	testFiles := []struct {
-		filename string
+		filename  string
 		checkTags []*tag.Tag
 	}{
 		{

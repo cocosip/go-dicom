@@ -12,9 +12,9 @@ import (
 // Test a few standard UIDs to ensure they were generated correctly
 func TestGeneratedUIDs(t *testing.T) {
 	tests := []struct {
-		name    string
-		uid     *uid.UID
-		wantUID string
+		name     string
+		uid      *uid.UID
+		wantUID  string
 		wantType uid.Type
 	}{
 		{

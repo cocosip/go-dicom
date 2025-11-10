@@ -14,7 +14,7 @@ import (
 
 // Test N-EVENT-REPORT
 func TestNewNEventReportRequest(t *testing.T) {
-	sopClassUID := "1.2.840.10008.5.1.1.40"  // Procedure Step SOP Class
+	sopClassUID := "1.2.840.10008.5.1.1.40" // Procedure Step SOP Class
 	sopInstanceUID := "1.2.3.4.5.6.7.8.9.10"
 	eventTypeID := uint16(1)
 

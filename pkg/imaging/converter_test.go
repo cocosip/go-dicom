@@ -79,7 +79,7 @@ func TestYBRFullToRGB(t *testing.T) {
 	// YBR_FULL test data (approximate grayscale values)
 	input := []byte{
 		128, 128, 128, // Neutral gray
-		0, 128, 128,   // Black
+		0, 128, 128, // Black
 		255, 128, 128, // White
 	}
 
@@ -107,7 +107,7 @@ func TestRGBToYBRFull(t *testing.T) {
 	converter := NewPixelDataConverter()
 
 	input := []byte{
-		0, 0, 0,       // Black
+		0, 0, 0, // Black
 		255, 255, 255, // White
 		128, 128, 128, // Gray
 	}

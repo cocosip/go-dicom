@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
+	"github.com/google/uuid"
 )
 
 func TestGenerateDerivedFromUUID(t *testing.T) {

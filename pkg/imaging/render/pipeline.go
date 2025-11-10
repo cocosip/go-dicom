@@ -18,17 +18,17 @@ type Pipeline interface {
 type GrayscalePipeline struct {
 	mu sync.RWMutex
 
-	modalityLUT    ModalityLUT
-	voiLUT         VOILUT
-	outputLUT      LUT
-	invertLUT      LUT
-	compositeLUT   LUT
-	windowWidth    float64
-	windowCenter   float64
-	invert         bool
-	minInputValue  float64
-	maxInputValue  float64
-	rescaleSlope   float64
+	modalityLUT      ModalityLUT
+	voiLUT           VOILUT
+	outputLUT        LUT
+	invertLUT        LUT
+	compositeLUT     LUT
+	windowWidth      float64
+	windowCenter     float64
+	invert           bool
+	minInputValue    float64
+	maxInputValue    float64
+	rescaleSlope     float64
 	rescaleIntercept float64
 }
 
@@ -156,7 +156,7 @@ func (p *GrayscalePipeline) buildPipeline() {
 
 // CompositeLUT chains multiple LUTs together
 type CompositeLUT struct {
-	luts []LUT
+	luts      []LUT
 	minOutput float64
 	maxOutput float64
 }

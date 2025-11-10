@@ -24,10 +24,10 @@ func TestNew(t *testing.T) {
 
 func TestFromUint32(t *testing.T) {
 	tests := []struct {
-		name    string
-		value   uint32
-		wantG   uint16
-		wantE   uint16
+		name  string
+		value uint32
+		wantG uint16
+		wantE uint16
 	}{
 		{"patient name", 0x00100010, 0x0010, 0x0010},
 		{"rows", 0x00280010, 0x0028, 0x0010},

@@ -9,23 +9,23 @@ type CommandField uint16
 // DIMSE-C command fields
 const (
 	// C-STORE
-	CommandCStoreRQ CommandField = 0x0001
+	CommandCStoreRQ  CommandField = 0x0001
 	CommandCStoreRSP CommandField = 0x8001
 
 	// C-GET
-	CommandCGetRQ CommandField = 0x0010
+	CommandCGetRQ  CommandField = 0x0010
 	CommandCGetRSP CommandField = 0x8010
 
 	// C-FIND
-	CommandCFindRQ CommandField = 0x0020
+	CommandCFindRQ  CommandField = 0x0020
 	CommandCFindRSP CommandField = 0x8020
 
 	// C-MOVE
-	CommandCMoveRQ CommandField = 0x0021
+	CommandCMoveRQ  CommandField = 0x0021
 	CommandCMoveRSP CommandField = 0x8021
 
 	// C-ECHO
-	CommandCEchoRQ CommandField = 0x0030
+	CommandCEchoRQ  CommandField = 0x0030
 	CommandCEchoRSP CommandField = 0x8030
 
 	// C-CANCEL
@@ -35,27 +35,27 @@ const (
 // DIMSE-N command fields
 const (
 	// N-EVENT-REPORT
-	CommandNEventReportRQ CommandField = 0x0100
+	CommandNEventReportRQ  CommandField = 0x0100
 	CommandNEventReportRSP CommandField = 0x8100
 
 	// N-GET
-	CommandNGetRQ CommandField = 0x0110
+	CommandNGetRQ  CommandField = 0x0110
 	CommandNGetRSP CommandField = 0x8110
 
 	// N-SET
-	CommandNSetRQ CommandField = 0x0120
+	CommandNSetRQ  CommandField = 0x0120
 	CommandNSetRSP CommandField = 0x8120
 
 	// N-ACTION
-	CommandNActionRQ CommandField = 0x0130
+	CommandNActionRQ  CommandField = 0x0130
 	CommandNActionRSP CommandField = 0x8130
 
 	// N-CREATE
-	CommandNCreateRQ CommandField = 0x0140
+	CommandNCreateRQ  CommandField = 0x0140
 	CommandNCreateRSP CommandField = 0x8140
 
 	// N-DELETE
-	CommandNDeleteRQ CommandField = 0x0150
+	CommandNDeleteRQ  CommandField = 0x0150
 	CommandNDeleteRSP CommandField = 0x8150
 )
 

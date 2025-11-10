@@ -65,11 +65,11 @@ func (m *ModalityRescaleLUT) Recalculate() {
 
 // ModalitySequenceLUT implements ModalityLUT using a LUT sequence
 type ModalitySequenceLUT struct {
-	lut            []float64
+	lut              []float64
 	firstValueMapped int
-	isSigned       bool
-	minOutputValue float64
-	maxOutputValue float64
+	isSigned         bool
+	minOutputValue   float64
+	maxOutputValue   float64
 }
 
 // NewModalitySequenceLUT creates a new ModalitySequenceLUT

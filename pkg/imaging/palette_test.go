@@ -68,7 +68,7 @@ func TestNewPaletteColorLUT_8bit(t *testing.T) {
 func TestNewPaletteColorLUT_16bit(t *testing.T) {
 	// Create 16-bit palette LUT with 8-bit entries
 	descriptor := []uint16{256, 0, 16} // size=256, firstMapped=0, bits=16
-	red := make([]byte, 512)    // 256 * 2 bytes
+	red := make([]byte, 512)           // 256 * 2 bytes
 	green := make([]byte, 512)
 	blue := make([]byte, 512)
 
@@ -146,10 +146,10 @@ func TestPaletteColorLUT_ApplyToPixelData_8bit(t *testing.T) {
 	}
 
 	expected := []byte{
-		255, 0, 0,     // Pixel 0: red
-		0, 255, 0,     // Pixel 1: green
+		255, 0, 0, // Pixel 0: red
+		0, 255, 0, // Pixel 1: green
 		128, 128, 255, // Pixel 2
-		64, 192, 255,  // Pixel 3
+		64, 192, 255, // Pixel 3
 	}
 
 	if len(rgbData) != len(expected) {
@@ -214,7 +214,7 @@ func TestPaletteColorLUT_InvalidDescriptor(t *testing.T) {
 
 func TestPaletteColorLUT_InvalidDataSize(t *testing.T) {
 	descriptor := []uint16{256, 0, 8}
-	red := make([]byte, 100)   // Wrong size
+	red := make([]byte, 100) // Wrong size
 	green := make([]byte, 256)
 	blue := make([]byte, 256)
 

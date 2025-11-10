@@ -63,11 +63,11 @@ type PresentationContextAC struct {
 
 // Result codes for PresentationContextAC
 const (
-	ResultAcceptance                    byte = 0
-	ResultUserRejection                 byte = 1
-	ResultNoReason                      byte = 2
-	ResultAbstractSyntaxNotSupported    byte = 3
-	ResultTransferSyntaxesNotSupported  byte = 4
+	ResultAcceptance                   byte = 0
+	ResultUserRejection                byte = 1
+	ResultNoReason                     byte = 2
+	ResultAbstractSyntaxNotSupported   byte = 3
+	ResultTransferSyntaxesNotSupported byte = 4
 )
 
 // ResultString returns the string representation of a result code.
@@ -95,7 +95,7 @@ func NewAAssociateAC() *AAssociateAC {
 		ApplicationContext:   "1.2.840.10008.3.1.1.1", // DICOM Application Context
 		PresentationContexts: make([]PresentationContextAC, 0),
 		UserInformation: &UserInformation{
-			MaximumLength:          16384, // Default 16KB
+			MaximumLength:          16384,                         // Default 16KB
 			ImplementationClassUID: "1.2.826.0.1.3680043.8.498.1", // go-dicom implementation UID
 		},
 	}

@@ -52,7 +52,7 @@ func (info *PixelDataInfo) BytesAllocated() int {
 // UncompressedFrameSize calculates the uncompressed size of a single frame in bytes.
 func (info *PixelDataInfo) UncompressedFrameSize() int {
 	if info.BitsAllocated == 1 {
-		return (int(info.Width)*int(info.Height) - 1) / 8 + 1
+		return (int(info.Width)*int(info.Height)-1)/8 + 1
 	}
 
 	// Handle special case for YBR_FULL_422 with uneven width

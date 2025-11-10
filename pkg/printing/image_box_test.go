@@ -257,11 +257,11 @@ func TestImageBox_IsValid(t *testing.T) {
 
 func TestImageBox_GetEffectiveMagnificationType(t *testing.T) {
 	testCases := []struct {
-		name               string
-		imageBoxMagnif     MagnificationType
-		filmBoxMagnif      MagnificationType
-		hasFilmBox         bool
-		expectedMagnif     MagnificationType
+		name           string
+		imageBoxMagnif MagnificationType
+		filmBoxMagnif  MagnificationType
+		hasFilmBox     bool
+		expectedMagnif MagnificationType
 	}{
 		{
 			name:           "image box has its own setting",

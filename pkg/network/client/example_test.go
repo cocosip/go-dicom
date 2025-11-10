@@ -104,7 +104,7 @@ func ExampleClient_CFind() {
 
 	// Create query dataset
 	query := dataset.New()
-	query.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN*"}))        // Wildcard search
+	query.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN*"}))       // Wildcard search
 	query.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20240101-20241231"})) // Date range
 	query.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{""}))           // Return value
 

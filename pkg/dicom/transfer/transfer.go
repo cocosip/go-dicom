@@ -19,15 +19,15 @@ import (
 // - Byte order (Little Endian or Big Endian)
 // - Compression (e.g., JPEG, JPEG 2000, RLE)
 type TransferSyntax struct {
-	uid                   *uid.UID
-	isRetired             bool
-	isExplicitVR          bool
-	isEncapsulated        bool
-	isLossy               bool
+	uid                    *uid.UID
+	isRetired              bool
+	isExplicitVR           bool
+	isEncapsulated         bool
+	isLossy                bool
 	lossyCompressionMethod string
-	isDeflate             bool
-	endian                endian.Endian
-	swapPixelData         bool
+	isDeflate              bool
+	endian                 endian.Endian
+	swapPixelData          bool
 }
 
 var (
@@ -39,14 +39,14 @@ var (
 // New creates a new TransferSyntax with the given UID.
 func New(u *uid.UID) *TransferSyntax {
 	return &TransferSyntax{
-		uid:           u,
-		isRetired:     u.IsRetired(),
-		isExplicitVR:  false,
+		uid:            u,
+		isRetired:      u.IsRetired(),
+		isExplicitVR:   false,
 		isEncapsulated: false,
-		isLossy:       false,
-		isDeflate:     false,
-		endian:        endian.Little,
-		swapPixelData: false,
+		isLossy:        false,
+		isDeflate:      false,
+		endian:         endian.Little,
+		swapPixelData:  false,
 	}
 }
 
