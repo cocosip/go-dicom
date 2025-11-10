@@ -6,6 +6,7 @@ package dataset
 import (
 	"fmt"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
@@ -22,6 +23,8 @@ import (
 //	item1 := dataset.New()
 //	item1.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
 //	seq.AddItem(item1)
+var _ element.Element = (*Sequence)(nil)
+
 type Sequence struct {
 	tag   *tag.Tag
 	items []*Dataset
