@@ -8,7 +8,7 @@ This directory contains GitHub Actions workflows for CI/CD.
 Runs on every push and pull request to main branches.
 
 **Jobs:**
-- **Test**: Runs tests on Ubuntu, Windows, and macOS with Go 1.21, 1.22, and 1.23
+- **Test**: Runs tests on Ubuntu, Windows, and macOS with Go 1.25
   - Runs tests with race detector
   - Generates coverage reports
   - Uploads coverage to Codecov
