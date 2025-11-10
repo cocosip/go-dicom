@@ -393,6 +393,14 @@ func (w *Writer) writeElement(elem element.Element) error {
 		return w.writeSequence(seq)
 	}
 
+	// Check if this is a fragment sequence (encapsulated pixel data)
+	if obf, ok := elem.(*element.OtherByteFragment); ok {
+		return w.writeFragmentSequence(obf.FragmentSequence)
+	}
+	if owf, ok := elem.(*element.OtherWordFragment); ok {
+		return w.writeFragmentSequence(owf.FragmentSequence)
+	}
+
 	// Write tag
 	if err := w.writeTag(elem.Tag()); err != nil {
 		return fmt.Errorf("failed to write tag %s: %w", elem.Tag(), err)
@@ -614,6 +622,94 @@ func (w *Writer) writeItem(item *dataset.Dataset) error {
 		if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// writeFragmentSequence writes a DICOM fragment sequence (encapsulated pixel data).
+// Fragment sequences are used for compressed image formats like JPEG, JPEG 2000, RLE, etc.
+//
+// Structure:
+// - Tag + VR + Undefined Length (FFFFFFFF)
+// - Item (FFFE,E000): Offset Table
+// - Items (FFFE,E000): Fragments
+// - Sequence Delimitation Item (FFFE,E0DD)
+func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
+	// Write tag
+	if err := w.writeTag(fs.Tag()); err != nil {
+		return fmt.Errorf("failed to write fragment sequence tag: %w", err)
+	}
+
+	// Write VR (if Explicit VR)
+	if w.isExplicitVR {
+		if err := w.writeVR(fs.ValueRepresentation()); err != nil {
+			return fmt.Errorf("failed to write fragment sequence VR: %w", err)
+		}
+
+		// For OB/OW with undefined length, write reserved bytes
+		reserved := make([]byte, 2)
+		if _, err := w.writer.Write(reserved); err != nil {
+			return fmt.Errorf("failed to write reserved bytes: %w", err)
+		}
+	}
+
+	// Write undefined length (0xFFFFFFFF)
+	if err := binary.Write(w.writer, w.byteOrder, uint32(0xFFFFFFFF)); err != nil {
+		return fmt.Errorf("failed to write undefined length: %w", err)
+	}
+
+	// Write Item for Offset Table (FFFE,E000)
+	itemTag := tag.New(0xFFFE, 0xE000)
+	if err := w.writeTag(itemTag); err != nil {
+		return fmt.Errorf("failed to write offset table item tag: %w", err)
+	}
+
+	// Write offset table
+	offsets := fs.OffsetTable()
+	offsetTableLength := uint32(len(offsets) * 4) // Each offset is 4 bytes
+	if err := binary.Write(w.writer, w.byteOrder, offsetTableLength); err != nil {
+		return fmt.Errorf("failed to write offset table length: %w", err)
+	}
+
+	// Write offset values
+	for _, offset := range offsets {
+		if err := binary.Write(w.writer, w.byteOrder, offset); err != nil {
+			return fmt.Errorf("failed to write offset value: %w", err)
+		}
+	}
+
+	// Write fragments
+	for i := 0; i < fs.FragmentCount(); i++ {
+		frag, err := fs.GetFragment(i)
+		if err != nil {
+			return fmt.Errorf("failed to get fragment %d: %w", i, err)
+		}
+
+		// Write Item tag (FFFE,E000)
+		if err := w.writeTag(itemTag); err != nil {
+			return fmt.Errorf("failed to write fragment item tag: %w", err)
+		}
+
+		// Write fragment length
+		fragData := frag.Data()
+		if err := binary.Write(w.writer, w.byteOrder, uint32(len(fragData))); err != nil {
+			return fmt.Errorf("failed to write fragment length: %w", err)
+		}
+
+		// Write fragment data
+		if _, err := w.writer.Write(fragData); err != nil {
+			return fmt.Errorf("failed to write fragment data: %w", err)
+		}
+	}
+
+	// Write Sequence Delimitation Item (FFFE,E0DD)
+	delimTag := tag.New(0xFFFE, 0xE0DD)
+	if err := w.writeTag(delimTag); err != nil {
+		return fmt.Errorf("failed to write sequence delimitation tag: %w", err)
+	}
+	if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
+		return fmt.Errorf("failed to write sequence delimitation length: %w", err)
 	}
 
 	return nil

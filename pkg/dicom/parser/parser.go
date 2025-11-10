@@ -474,13 +474,19 @@ func (p *parseContext) readElement() (element.Element, error) {
 	}
 
 	// Check max element size
-	if p.maxElementSize > 0 && length > p.maxElementSize {
+	if p.maxElementSize > 0 && length > p.maxElementSize && length != 0xFFFFFFFF {
 		return nil, fmt.Errorf("element size %d exceeds maximum %d for tag %s", length, p.maxElementSize, t)
 	}
 
 	// Handle special case: Sequence
 	if vrValue.Code() == vr.CodeSQ {
 		return p.readSequence(t, length)
+	}
+
+	// Handle special case: Fragment Sequence (encapsulated pixel data)
+	// Fragment sequences have OB or OW VR with undefined length (0xFFFFFFFF)
+	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF {
+		return p.readFragmentSequence(t, vrValue)
 	}
 
 	// Handle large objects based on ReadOption
@@ -548,13 +554,19 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 	}
 
 	// Check max element size
-	if p.maxElementSize > 0 && length > p.maxElementSize {
+	if p.maxElementSize > 0 && length > p.maxElementSize && length != 0xFFFFFFFF {
 		return nil, fmt.Errorf("element size %d exceeds maximum %d for tag %s", length, p.maxElementSize, t)
 	}
 
 	// Handle special case: Sequence
 	if vrValue.Code() == vr.CodeSQ {
 		return p.readSequence(t, length)
+	}
+
+	// Handle special case: Fragment Sequence (encapsulated pixel data)
+	// Fragment sequences have OB or OW VR with undefined length (0xFFFFFFFF)
+	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF {
+		return p.readFragmentSequence(t, vrValue)
 	}
 
 	// Handle large objects based on ReadOption
@@ -962,4 +974,105 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 
 	// No seekable reader available
 	return nil, fmt.Errorf("lazy loading not supported for non-seekable readers")
+}
+
+// readFragmentSequence reads a DICOM fragment sequence (encapsulated pixel data).
+// Fragment sequences are used for compressed image formats like JPEG, JPEG 2000, RLE, etc.
+//
+// Structure:
+// - First item (FFFE,E000): Offset Table (can be empty)
+// - Subsequent items: Compressed frame fragments
+// - End marker (FFFE,E0DD): Sequence Delimitation Item
+func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element.Element, error) {
+	var fs element.Element
+
+	// Create appropriate fragment sequence type based on VR
+	if vrValue.Code() == vr.CodeOB {
+		fs = element.NewOtherByteFragment(t)
+	} else if vrValue.Code() == vr.CodeOW {
+		fs = element.NewOtherWordFragment(t)
+	} else {
+		return nil, fmt.Errorf("invalid VR for fragment sequence: %v", vrValue)
+	}
+
+	// Get the underlying FragmentSequence
+	var fragSeq *element.FragmentSequence
+	switch v := fs.(type) {
+	case *element.OtherByteFragment:
+		fragSeq = v.FragmentSequence
+	case *element.OtherWordFragment:
+		fragSeq = v.FragmentSequence
+	default:
+		return nil, fmt.Errorf("unexpected fragment sequence type")
+	}
+
+	// Read fragments until we hit Sequence Delimitation Item (FFFE,E0DD)
+	isFirstItem := true
+
+	for {
+		// Read item tag (should be FFFE,E000 for item or FFFE,E0DD for delimitation)
+		itemTag, err := p.readTag()
+		if err != nil {
+			if err == io.EOF {
+				// EOF without proper delimitation - some files are like this
+				return fs, nil
+			}
+			return nil, fmt.Errorf("failed to read fragment item tag: %w", err)
+		}
+
+		// Check if this is Sequence Delimitation Item (FFFE,E0DD)
+		if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE0DD {
+			// Read and discard the length (should be 0)
+			var delimLength uint32
+			if err := binary.Read(p.reader, p.byteOrder, &delimLength); err != nil {
+				return nil, fmt.Errorf("failed to read sequence delimitation length: %w", err)
+			}
+			// End of fragment sequence
+			break
+		}
+
+		// Should be Item tag (FFFE,E000)
+		if itemTag.Group() != 0xFFFE || itemTag.Element() != 0xE000 {
+			return nil, fmt.Errorf("expected Item tag (FFFE,E000) in fragment sequence, got %s", itemTag)
+		}
+
+		// Read item length
+		var itemLength uint32
+		if err := binary.Read(p.reader, p.byteOrder, &itemLength); err != nil {
+			return nil, fmt.Errorf("failed to read fragment item length: %w", err)
+		}
+
+		// Read item data
+		itemData := make([]byte, itemLength)
+		if _, err := io.ReadFull(p.reader, itemData); err != nil {
+			return nil, fmt.Errorf("failed to read fragment item data: %w", err)
+		}
+
+		if isFirstItem {
+			// First item is the offset table
+			// Parse it as uint32 array if not empty
+			if itemLength > 0 {
+				if itemLength%4 != 0 {
+					return nil, fmt.Errorf("offset table length %d is not a multiple of 4", itemLength)
+				}
+
+				numOffsets := itemLength / 4
+				offsets := make([]uint32, numOffsets)
+
+				for i := uint32(0); i < numOffsets; i++ {
+					offset := p.byteOrder.Uint32(itemData[i*4 : (i+1)*4])
+					offsets[i] = offset
+				}
+
+				fragSeq.SetOffsetTable(offsets)
+			}
+			isFirstItem = false
+		} else {
+			// Subsequent items are fragments
+			fragBuf := buffer.NewMemory(itemData)
+			fragSeq.AddFragment(fragBuf)
+		}
+	}
+
+	return fs, nil
 }
