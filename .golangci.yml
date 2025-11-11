@@ -1,86 +1,41 @@
-version: 2
+version: "2"
 
 run:
-  timeout: 5m
+  timeout: 10m
   tests: true
   modules-download-mode: readonly
+  skip-dirs:
+    - vendor
+    - fo-dicom-code
+    - tools
 
 linters:
-  enable-all: false
   enable:
-    # Enabled by default
     - errcheck
     - govet
     - ineffassign
     - staticcheck
     - unused
-    # Additional linters
     - misspell
     - revive
     - unconvert
     - unparam
     - goconst
     - gocyclo
-    - dupl
-    
 
-linters-settings:
+settings:
   errcheck:
     check-type-assertions: true
     check-blank: true
-
   govet:
     enable-all: true
-
   gocyclo:
     min-complexity: 15
-
   revive:
     confidence: 0.8
-
   misspell:
     locale: US
 
-  dupl:
-    threshold: 100
-
-  
-
 issues:
-  exclude-use-default: false
-  max-issues-per-linter: 0
+  max-per-linter: 0
   max-same-issues: 0
-
-  exclude-dirs:
-    - vendor
-    - fo-dicom-code
-    - tools
-
-  exclude-files:
-    - ".*_generated\\.go$"
-    - ".*_test\\.go$"
-
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - revive
-        - gocyclo
-        - dupl
-        - errcheck
-      text: "dot imports"
-
-    - path: .*_generated\.go
-      linters:
-        - gocyclo
-        - dupl
-        - goconst
-
-    # Exclude errcheck from examples (示例代码可以省略错误检查)
-    - path: (examples|cmd)/
-      linters:
-        - errcheck
-
-    # Exclude dupl from all files (代码重复检查太严格)
-    - path: ".*"
-      linters:
-        - dupl
