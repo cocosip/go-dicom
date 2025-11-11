@@ -2,12 +2,6 @@ version: "2"
 
 run:
   timeout: 10m
-  tests: true
-  modules-download-mode: readonly
-  skip-dirs:
-    - vendor
-    - fo-dicom-code
-    - tools
 
 linters:
   enable:
@@ -22,20 +16,3 @@ linters:
     - unparam
     - goconst
     - gocyclo
-
-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  govet:
-    enable-all: true
-  gocyclo:
-    min-complexity: 15
-  revive:
-    confidence: 0.8
-  misspell:
-    locale: US
-
-issues:
-  max-per-linter: 0
-  max-same-issues: 0
