@@ -6,6 +6,7 @@ package parser
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -126,7 +127,7 @@ func TestCharsetCompatibility(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file %s: %v", filePath, err)
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -204,18 +205,23 @@ func TestCharsetParseBasicInfo(t *testing.T) {
 
 	for _, tf := range testFiles {
 		t.Run(tf.filename, func(t *testing.T) {
-			filePath := filepath.Join(testDataDir, tf.filename)
+            filePath := filepath.Join(testDataDir, tf.filename)
+            filePath = filepath.Clean(filePath)
+            if !strings.HasPrefix(filePath, filepath.Clean(testDataDir)+string(os.PathSeparator)) && filePath != filepath.Clean(testDataDir) {
+                t.Skipf("Invalid test file path: %s", filePath)
+                return
+            }
 
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				t.Skipf("Test file not found: %s", filePath)
 				return
 			}
 
-			file, err := os.Open(filePath)
-			if err != nil {
-				t.Fatalf("Failed to open file: %v", err)
-			}
-			defer file.Close()
+            file, err := os.Open(filePath)
+            if err != nil {
+                t.Fatalf("Failed to open file: %v", err)
+            }
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -262,7 +268,7 @@ func TestCharsetAllFilesParseSuccessfully(t *testing.T) {
 				failedCount++
 				return
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -319,7 +325,7 @@ func TestCharsetEncodingDetection(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {

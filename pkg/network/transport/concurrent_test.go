@@ -7,6 +7,7 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"net"
 	"sync"
 	"testing"
@@ -19,7 +20,7 @@ func TestDial_Concurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -30,7 +31,7 @@ func TestDial_Concurrent(t *testing.T) {
 			if err != nil {
 				return
 			}
-			conn.Close()
+            _ = conn.Close()
 		}
 	}()
 
@@ -50,7 +51,7 @@ func TestDial_Concurrent(t *testing.T) {
 				errChan <- err
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 
 			// Verify connection works
 			if conn == nil {
@@ -74,7 +75,7 @@ func TestListener_ConcurrentAccept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -99,7 +100,7 @@ func TestListener_ConcurrentAccept(t *testing.T) {
 				cancel()
 
 				if err == nil {
-					conn.Close()
+                    _ = conn.Close()
 					acceptedConns <- acceptorID
 				}
 			}
@@ -121,7 +122,7 @@ func TestListener_ConcurrentAccept(t *testing.T) {
 				t.Errorf("Client %d dial failed: %v", id, err)
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 
 			// Hold connection briefly
 			time.Sleep(10 * time.Millisecond)
@@ -135,7 +136,7 @@ func TestListener_ConcurrentAccept(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Close listener to stop acceptors
-	listener.Close()
+    _ = listener.Close()
 	acceptWg.Wait()
 
 	close(acceptedConns)
@@ -162,6 +163,7 @@ func TestDialTLS_Concurrent(t *testing.T) {
 
 	serverConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 
 	// Start a TLS listener
@@ -169,7 +171,7 @@ func TestDialTLS_Concurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -180,7 +182,7 @@ func TestDialTLS_Concurrent(t *testing.T) {
 			if err != nil {
 				return
 			}
-			conn.Close()
+            _ = conn.Close()
 		}
 	}()
 
@@ -190,8 +192,20 @@ func TestDialTLS_Concurrent(t *testing.T) {
 	wg.Add(numDials)
 
 	errChan := make(chan error, numDials)
+	// Build a Root CA pool from the generated cert
+	rootPool := x509.NewCertPool()
+	if len(cert.Certificate) == 0 {
+		t.Fatal("generated certificate missing DER data")
+	}
+	parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+	rootPool.AddCert(parsedCert)
 	clientConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		RootCAs:    rootPool,
+		MinVersion: tls.VersionTLS12,
+		ServerName: "localhost",
 	}
 
 	for i := 0; i < numDials; i++ {
@@ -203,7 +217,7 @@ func TestDialTLS_Concurrent(t *testing.T) {
 				errChan <- err
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 		}(i)
 	}
 
@@ -232,14 +246,14 @@ func TestListener_ConcurrentCloseAndAccept(t *testing.T) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
-			listener.Accept(ctx)
+            _, _ = listener.Accept(ctx)
 			// We expect this to fail after Close() is called
 		}()
 	}
 
 	// Close the listener after a short delay
 	time.Sleep(50 * time.Millisecond)
-	listener.Close()
+    _ = listener.Close()
 
 	// Wait for all acceptors to finish
 	wg.Wait()

@@ -28,7 +28,7 @@ func TestToJSON_BulkDataURI(t *testing.T) {
 	// Create OW element with BulkDataURI
 	pixelDataTag := tag.New(0x7FE0, 0x0010) // PixelData
 	elem := element.NewOtherWordFromBuffer(pixelDataTag, buf)
-	ds.Add(elem)
+    _ = ds.Add(elem)
 
 	// Serialize to JSON
 	jsonData, err := ToJSON(ds)
@@ -80,7 +80,7 @@ func TestToJSON_BulkDataURI_WithData(t *testing.T) {
 
 	pixelDataTag := tag.New(0x7FE0, 0x0010)
 	elem := element.NewOtherByteFromBuffer(pixelDataTag, buf)
-	ds.Add(elem)
+    _ = ds.Add(elem)
 
 	// Serialize to JSON - should still use BulkDataURI, not InlineBinary
 	jsonData, err := ToJSON(ds)
@@ -215,13 +215,13 @@ func TestJSON_BulkDataURI_Roundtrip(t *testing.T) {
 	// Add regular element
 	patientName := tag.New(0x0010, 0x0010)
 	pnVR, _ := vr.Parse(vr.CodePN)
-	ds1.Add(element.NewString(patientName, pnVR, []string{"Doe^John"}))
+    _ = ds1.Add(element.NewString(patientName, pnVR, []string{"Doe^John"}))
 
 	// Add BulkDataURI element
 	uri := "http://example.com/dicom/waveform"
 	buf := buffer.NewBulkDataURI(uri)
 	waveformTag := tag.New(0x5400, 0x1010) // WaveformData
-	ds1.Add(element.NewOtherWordFromBuffer(waveformTag, buf))
+    _ = ds1.Add(element.NewOtherWordFromBuffer(waveformTag, buf))
 
 	// Serialize to JSON
 	jsonData, err := ToJSON(ds1)
@@ -270,13 +270,13 @@ func TestToJSON_MixedBulkDataAndInline(t *testing.T) {
 	tag1 := tag.New(0x0009, 0x1001)
 	data1 := []byte{0xFF, 0xD8, 0xFF, 0xE0} // Small data, inline
 	buf1 := buffer.NewMemory(data1)
-	ds.Add(element.NewOtherByteFromBuffer(tag1, buf1))
+    _ = ds.Add(element.NewOtherByteFromBuffer(tag1, buf1))
 
 	// Add BulkDataURI element
 	tag2 := tag.New(0x0009, 0x1002)
 	uri := "http://example.com/dicom/large"
 	buf2 := buffer.NewBulkDataURI(uri)
-	ds.Add(element.NewOtherByteFromBuffer(tag2, buf2))
+    _ = ds.Add(element.NewOtherByteFromBuffer(tag2, buf2))
 
 	// Serialize to JSON
 	jsonData, err := ToJSON(ds)

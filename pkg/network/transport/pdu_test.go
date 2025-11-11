@@ -15,8 +15,8 @@ import (
 func TestReadWritePDU_Basic(t *testing.T) {
 	// Create a pair of connected pipes
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Test data
 	testPDU := &pdu.RawPDU{
@@ -47,9 +47,9 @@ func TestReadWritePDU_Basic(t *testing.T) {
 }
 
 func TestReadWritePDU_EmptyData(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// PDU with empty data
 	testPDU := &pdu.RawPDU{
@@ -77,9 +77,9 @@ func TestReadWritePDU_EmptyData(t *testing.T) {
 }
 
 func TestReadWritePDU_LargeData(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Large PDU (1 MB)
 	largeData := make([]byte, 1024*1024)
@@ -112,9 +112,9 @@ func TestReadWritePDU_LargeData(t *testing.T) {
 }
 
 func TestReadPDU_Timeout(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Don't write anything, just try to read with timeout
 	errChan := make(chan error, 1)
@@ -135,9 +135,9 @@ func TestReadPDU_Timeout(t *testing.T) {
 }
 
 func TestWritePDU_Timeout(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Fill up the pipe buffer to cause write to block
 	largeData := make([]byte, 10*1024*1024) // 10 MB
@@ -165,9 +165,9 @@ func TestWritePDU_Timeout(t *testing.T) {
 }
 
 func TestReadWritePDU_MultipleTypes(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Test different PDU types
 	testPDUs := []*pdu.RawPDU{
@@ -207,23 +207,23 @@ func TestReadWritePDU_MultipleTypes(t *testing.T) {
 }
 
 func TestReadPDU_ExcessiveLength(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Manually write a PDU with excessive length
 	go func() {
 		// Write PDU header with length > 100MB
-		header := make([]byte, 6)
-		header[0] = pdu.TypePDataTF
-		header[1] = 0
+        header := make([]byte, 6)
+        header[0] = pdu.TypePDataTF
+        header[1] = 0
 		// Set length to 200MB (exceeds limit)
 		length := uint32(200 * 1024 * 1024)
 		header[2] = byte(length >> 24)
 		header[3] = byte(length >> 16)
 		header[4] = byte(length >> 8)
 		header[5] = byte(length)
-		client.Write(header)
+        _, _ = client.Write(header)
 	}()
 
 	// Should fail with length validation error

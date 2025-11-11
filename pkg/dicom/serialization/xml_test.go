@@ -33,9 +33,9 @@ func TestToXML_EmptyDataset(t *testing.T) {
 }
 
 func TestToXML_StringElement(t *testing.T) {
-	ds := dataset.New()
-	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
-	ds.Add(elem)
+    ds := dataset.New()
+    elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -76,9 +76,9 @@ func TestToXML_StringElement(t *testing.T) {
 }
 
 func TestToXML_MultipleStringValues(t *testing.T) {
-	ds := dataset.New()
-	elem := element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY", "AXIAL"})
-	ds.Add(elem)
+    ds := dataset.New()
+    elem := element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY", "AXIAL"})
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -100,10 +100,10 @@ func TestToXML_MultipleStringValues(t *testing.T) {
 }
 
 func TestToXML_BinaryElement(t *testing.T) {
-	ds := dataset.New()
-	data := []byte{0x01, 0x02, 0x03, 0x04}
-	elem := element.NewOtherByte(tag.PixelData, data)
-	ds.Add(elem)
+    ds := dataset.New()
+    data := []byte{0x01, 0x02, 0x03, 0x04}
+    elem := element.NewOtherByte(tag.PixelData, data)
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -119,14 +119,14 @@ func TestToXML_BinaryElement(t *testing.T) {
 }
 
 func TestToXML_NumericElements(t *testing.T) {
-	ds := dataset.New()
+    ds := dataset.New()
 
-	// Add US element
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-	// Add UL element
-	ds.Add(element.NewUnsignedLong(tag.InstanceNumber, []uint32{1}))
-	// Add FL element
-	ds.Add(element.NewFloat(tag.RecommendedDisplayFrameRate, []float32{30.0}))
+    // Add US element
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+    // Add UL element
+    _ = ds.Add(element.NewUnsignedLong(tag.InstanceNumber, []uint32{1}))
+    // Add FL element
+    _ = ds.Add(element.NewFloat(tag.RecommendedDisplayFrameRate, []float32{30.0}))
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -149,15 +149,15 @@ func TestToXML_NumericElements(t *testing.T) {
 }
 
 func TestToXML_Sequence(t *testing.T) {
-	ds := dataset.New()
+    ds := dataset.New()
 
-	// Create a sequence with one item
-	seq := dataset.NewSequence(tag.ReferencedStudySequence)
-	item := dataset.New()
-	item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4"}))
-	seq.AddItem(item)
+    // Create a sequence with one item
+    seq := dataset.NewSequence(tag.ReferencedStudySequence)
+    item := dataset.New()
+    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4"}))
+    seq.AddItem(item)
 
-	ds.Add(seq)
+    _ = ds.Add(seq)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -190,21 +190,21 @@ func TestToXML_Sequence(t *testing.T) {
 }
 
 func TestToXML_NestedSequence(t *testing.T) {
-	ds := dataset.New()
+    ds := dataset.New()
 
 	// Create outer sequence
 	outerSeq := dataset.NewSequence(tag.ReferencedStudySequence)
 	outerItem := dataset.New()
 
-	// Create inner sequence
-	innerSeq := dataset.NewSequence(tag.ReferencedSeriesSequence)
-	innerItem := dataset.New()
-	innerItem.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
-	innerSeq.AddItem(innerItem)
+    // Create inner sequence
+    innerSeq := dataset.NewSequence(tag.ReferencedSeriesSequence)
+    innerItem := dataset.New()
+    _ = innerItem.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    innerSeq.AddItem(innerItem)
 
-	outerItem.Add(innerSeq)
-	outerSeq.AddItem(outerItem)
-	ds.Add(outerSeq)
+    _ = outerItem.Add(innerSeq)
+    outerSeq.AddItem(outerItem)
+    _ = ds.Add(outerSeq)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -226,10 +226,10 @@ func TestToXML_NestedSequence(t *testing.T) {
 }
 
 func TestToXML_XMLEscaping(t *testing.T) {
-	ds := dataset.New()
-	// Test XML special characters
-	elem := element.NewString(tag.PatientComments, vr.LT, []string{"Test <tag> & \"quotes\" 'single'"})
-	ds.Add(elem)
+    ds := dataset.New()
+    // Test XML special characters
+    elem := element.NewString(tag.PatientComments, vr.LT, []string{"Test <tag> & \"quotes\" 'single'"})
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -254,10 +254,10 @@ func TestToXML_XMLEscaping(t *testing.T) {
 }
 
 func TestToXML_PersonNameWithMultipleComponents(t *testing.T) {
-	ds := dataset.New()
-	// Test PersonName with prefix and suffix
-	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John^Michael^Dr.^Jr."})
-	ds.Add(elem)
+    ds := dataset.New()
+    // Test PersonName with prefix and suffix
+    elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John^Michael^Dr.^Jr."})
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -285,10 +285,10 @@ func TestToXML_PersonNameWithMultipleComponents(t *testing.T) {
 }
 
 func TestToXML_PersonNameWithIdeographic(t *testing.T) {
-	ds := dataset.New()
-	// Test PersonName with Ideographic component
-	elem := element.NewString(tag.PatientName, vr.PN, []string{"Yamada^Tarou=山田^太郎"})
-	ds.Add(elem)
+    ds := dataset.New()
+    // Test PersonName with Ideographic component
+    elem := element.NewString(tag.PatientName, vr.PN, []string{"Yamada^Tarou=山田^太郎"})
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -327,8 +327,8 @@ func TestToXML_PersonNameWithIdeographic(t *testing.T) {
 }
 
 func TestToXML_CompactFormat(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	xml, err := ToXML(ds, WithXMLCompact(""))
 	if err != nil {
@@ -344,8 +344,8 @@ func TestToXML_CompactFormat(t *testing.T) {
 }
 
 func TestToXML_CustomIndentation(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	xml, err := ToXML(ds, WithXMLIndent("\t"))
 	if err != nil {
@@ -363,8 +363,8 @@ func TestToXML_CustomIndentation(t *testing.T) {
 func TestToXML_EmptyBinaryElement(t *testing.T) {
 	ds := dataset.New()
 	// Create element with empty buffer
-	elem := element.NewOtherByte(tag.PixelData, []byte{})
-	ds.Add(elem)
+    elem := element.NewOtherByte(tag.PixelData, []byte{})
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -390,8 +390,8 @@ func TestToXML_PrivateTag(t *testing.T) {
 
 	// Create private tag
 	privateTag := tag.NewWithPrivateCreator(0x0009, 0x1001, privateCreator)
-	elem := element.NewString(privateTag, vr.LO, []string{"Private Value"})
-	ds.Add(elem)
+    elem := element.NewString(privateTag, vr.LO, []string{"Private Value"})
+    _ = ds.Add(elem)
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -413,10 +413,10 @@ func TestToXML_MultipleElements(t *testing.T) {
 	ds := dataset.New()
 
 	// Add multiple elements
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-	ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
 
 	xml, err := ToXML(ds)
 	if err != nil {
@@ -445,29 +445,29 @@ func TestToXML_ComplexDataset(t *testing.T) {
 	ds := dataset.New()
 
 	// String elements
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"TEST001"}))
-	ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"TEST001"}))
+    _ = ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	// Numeric elements
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{256}))
-	ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{256}))
-	ds.Add(element.NewFloat(tag.PixelSpacing, []float32{0.5, 0.5}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{256}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{256}))
+    _ = ds.Add(element.NewFloat(tag.PixelSpacing, []float32{0.5, 0.5}))
 
 	// Binary element
 	pixelData := make([]byte, 100)
 	for i := range pixelData {
 		pixelData[i] = byte(i)
 	}
-	ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+    _ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
 
 	// Sequence
 	seq := dataset.NewSequence(tag.ReferencedStudySequence)
 	item := dataset.New()
-	item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5.6"}))
-	item.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7"}))
+    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5.6"}))
+    _ = item.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7"}))
 	seq.AddItem(item)
-	ds.Add(seq)
+    _ = ds.Add(seq)
 
 	xml, err := ToXML(ds)
 	if err != nil {

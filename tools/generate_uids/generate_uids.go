@@ -6,11 +6,12 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"regexp"
-	"strings"
+    "bufio"
+    "fmt"
+    "os"
+    "path/filepath"
+    "regexp"
+    "strings"
 )
 
 func main() {
@@ -49,18 +50,24 @@ func run() error {
 }
 
 func processFile(inputFile, outputFile, category string) error {
-	// Open the C# file
-	file, err := os.Open(inputFile)
-	if err != nil {
-		return fmt.Errorf("failed to open %s: %w", inputFile, err)
-	}
-	defer func() { _ = file.Close() }()
+    // Resolve paths safely (tool operates within repo)
+    in := filepath.Clean(inputFile)
+    out := filepath.Clean(outputFile)
 
-	// Create output file
-	outFile, err := os.Create(outputFile)
-	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
-	}
+    // Open the C# file
+    // #nosec G304 -- input path is known within repository and cleaned
+    file, err := os.Open(in)
+    if err != nil {
+        return fmt.Errorf("failed to open %s: %w", in, err)
+    }
+    defer func() { _ = file.Close() }()
+
+    // Create output file
+    // #nosec G304 -- output path is known within repository and cleaned
+    outFile, err := os.Create(out)
+    if err != nil {
+        return fmt.Errorf("failed to create output file: %w", err)
+    }
 	defer func() { _ = outFile.Close() }()
 
 	writer := bufio.NewWriter(outFile)

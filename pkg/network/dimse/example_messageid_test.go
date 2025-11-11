@@ -26,9 +26,9 @@ func ExampleMessageIDGenerator() {
 	fmt.Printf("C-ECHO MessageID: %d\n", msgID)
 
 	// Create another request
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	storeReq, _ := dimse.NewCStoreRequest(ds)
 	msgID, _ = idGen.AssignMessageID(storeReq)
@@ -49,8 +49,8 @@ func ExampleMessageIDGenerator() {
 // Example showing manual MessageID specification (backward compatibility)
 func ExampleMessageIDGenerator_manual() {
 	// You can still specify MessageID manually if needed
-	echoReq := dimse.NewCEchoRequest()
-	echoReq.SetMessageID(100)
+    echoReq := dimse.NewCEchoRequest()
+    _ = echoReq.SetMessageID(100)
 	fmt.Printf("Manual MessageID: %d\n", echoReq.MessageID())
 
 	// Generator respects manually set MessageID
@@ -89,13 +89,13 @@ func ExampleMessageIDGenerator_clientUsage() {
 
 	// User creates requests without worrying about MessageID
 	echoReq := dimse.NewCEchoRequest()
-	send(client, echoReq)
+    _ = send(client, echoReq)
 
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
-	storeReq, _ := dimse.NewCStoreRequest(ds)
-	send(client, storeReq)
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    storeReq, _ := dimse.NewCStoreRequest(ds)
+    _ = send(client, storeReq)
 
 	// Output:
 	// Sending message with MessageID: 1

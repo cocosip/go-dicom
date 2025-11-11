@@ -17,7 +17,9 @@ import (
 func TestEncodeDIMSEMessage(t *testing.T) {
 	// Create a C-ECHO request
 	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+	if err := req.SetMessageID(1); err != nil {
+		t.Fatalf("SetMessageID failed: %v", err)
+	}
 
 	// Encode the message
 	commandData, datasetData, err := EncodeDIMSEMessage(req, transfer.ExplicitVRLittleEndian)
@@ -68,12 +70,12 @@ func TestEncodeDIMSEMessageWithDataset(t *testing.T) {
 func TestServiceStart(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
-	defer service.Close()
+	defer func() { _ = service.Close() }()
 
 	// Start service
 	err := service.Start()
@@ -85,7 +87,7 @@ func TestServiceStart(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Close service
-	service.Close()
+	_ = service.Close()
 
 	// Give goroutines time to stop
 	time.Sleep(50 * time.Millisecond)
@@ -93,20 +95,22 @@ func TestServiceStart(t *testing.T) {
 
 func TestSendMessage(t *testing.T) {
 	// Create a pipe connection
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create an association with a presentation context for C-ECHO
 	assoc := createTestAssociation()
 
 	// Create service with association
-	service := NewService(client, assoc)
-	defer service.Close()
+    service := NewService(client, assoc)
+    defer func() { _ = service.Close() }()
 
 	// Create a send request
-	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+    req := dimse.NewCEchoRequest()
+    if err := req.SetMessageID(1); err != nil {
+        t.Fatalf("SetMessageID failed: %v", err)
+    }
 
 	sendReq := &sendRequest{
 		message:  req,
@@ -140,13 +144,13 @@ func createTestAssociation() *association.Association {
 	pc := association.NewPresentationContext(1, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian)
 	pc.AcceptedTransferSyntax = transfer.ExplicitVRLittleEndian
 	pc.Result = association.ResultAcceptance
-	assoc.AddPresentationContext(pc)
+	_ = assoc.AddPresentationContext(pc)
 
 	// Add presentation context for CT Image Storage (for C-STORE tests)
 	pc2 := association.NewPresentationContext(3, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
 	pc2.AcceptedTransferSyntax = transfer.ExplicitVRLittleEndian
 	pc2.Result = association.ResultAcceptance
-	assoc.AddPresentationContext(pc2)
+	_ = assoc.AddPresentationContext(pc2)
 
 	assoc.SetEstablished(true)
 	return assoc
@@ -155,12 +159,12 @@ func createTestAssociation() *association.Association {
 func TestSendLoop_ContextCancellation(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service
-	service := NewService(client, nil)
-	defer service.Close()
+    service := NewService(client, nil)
+    defer func() { _ = service.Close() }()
 
 	// Create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -281,9 +285,9 @@ func TestGroupPDVsIntoPDUs(t *testing.T) {
 
 func TestSendLoop_ServiceClose(t *testing.T) {
 	// Create a pipe connection
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
@@ -297,8 +301,8 @@ func TestSendLoop_ServiceClose(t *testing.T) {
 	// Give loop time to start
 	time.Sleep(10 * time.Millisecond)
 
-	// Close service
-	service.Close()
+    // Close service
+    _ = service.Close()
 
 	// Wait for loop to exit
 	select {

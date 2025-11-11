@@ -95,7 +95,7 @@ func (s *SwapByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer cannot be nil")
 	}
 
-	if uint32(len(output)) < count {
+    if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 

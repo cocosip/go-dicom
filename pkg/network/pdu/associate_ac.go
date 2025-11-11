@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 )
 
 // AAssociateAC represents an A-ASSOCIATE-AC (Association Accept) PDU.
@@ -208,7 +209,10 @@ func (a *AAssociateAC) encodeUserInformation() ([]byte, error) {
 		var uiBuf bytes.Buffer
 
 		// Server response length (2 bytes)
-		serverResponseLen := uint16(len(ui.UserIdentity.PrimaryField))
+		if len(ui.UserIdentity.PrimaryField) > int(math.MaxUint16) {
+			return nil, fmt.Errorf("user identity response length too large: %d", len(ui.UserIdentity.PrimaryField))
+		}
+		serverResponseLen := uint16(len(ui.UserIdentity.PrimaryField)) // #nosec G115 -- bounded by check above
 		if err := binary.Write(&uiBuf, binary.BigEndian, serverResponseLen); err != nil {
 			return nil, fmt.Errorf("encoding user identity response length: %w", err)
 		}

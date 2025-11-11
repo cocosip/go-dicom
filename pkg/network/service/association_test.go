@@ -66,7 +66,7 @@ func (m *mockConn) SetWriteDeadline(_ time.Time) error { return nil }
 func TestSendAssociationRequest(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Verify initial state is Idle
 	if service.GetState() != StateIdle {
@@ -106,7 +106,7 @@ func TestSendAssociationRequest(t *testing.T) {
 func TestSendAssociationRequest_WrongState(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to something other than Idle
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -129,7 +129,7 @@ func TestSendAssociationRequest_WrongState(t *testing.T) {
 func TestSendAssociationAccept(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Create A-ASSOCIATE-AC with minimal required fields
 	ac := pdu.NewAAssociateAC()
@@ -164,7 +164,7 @@ func TestSendAssociationAccept(t *testing.T) {
 func TestSendAssociationReject(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	ctx := context.Background()
 	err := service.SendAssociationReject(ctx, 1, 1, 1)
@@ -191,7 +191,7 @@ func TestSendAssociationReject(t *testing.T) {
 func TestSendReleaseRequest(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to AssociationAccepted first
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -223,7 +223,7 @@ func TestSendReleaseRequest(t *testing.T) {
 func TestSendReleaseRequest_WrongState(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// State is Idle by default, which is not valid for release
 	ctx := context.Background()
@@ -236,7 +236,7 @@ func TestSendReleaseRequest_WrongState(t *testing.T) {
 func TestSendReleaseResponse(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	ctx := context.Background()
 	err := service.SendReleaseResponse(ctx)
@@ -263,7 +263,7 @@ func TestSendReleaseResponse(t *testing.T) {
 func TestSendAbort(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	ctx := context.Background()
 	err := service.SendAbort(ctx, 0, 0)
@@ -306,7 +306,7 @@ func TestReceiveAssociationResponse_Accept(t *testing.T) {
 	}
 
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to AssociationRequested
 	if err := service.setState(StateAssociationRequested); err != nil {
@@ -355,7 +355,7 @@ func TestReceiveAssociationResponse_Reject(t *testing.T) {
 	}
 
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to AssociationRequested
 	if err := service.setState(StateAssociationRequested); err != nil {
@@ -397,7 +397,7 @@ func TestReceiveAssociationRequest(t *testing.T) {
 	}
 
 	service := NewService(conn, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// State should be Idle (default)
 	ctx := context.Background()

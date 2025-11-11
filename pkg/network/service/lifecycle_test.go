@@ -85,8 +85,8 @@ func TestRun(t *testing.T) {
 	// Create a mock association
 	assoc := &association.Association{}
 
-	service := NewService(conn, assoc)
-	defer service.Close()
+    service := NewService(conn, assoc)
+    defer func() { _ = service.Close() }()
 
 	// Start service in goroutine
 	errCh := make(chan error, 1)
@@ -97,8 +97,8 @@ func TestRun(t *testing.T) {
 	// Give it time to start
 	time.Sleep(50 * time.Millisecond)
 
-	// Close the service
-	service.Close()
+    // Close the service
+    _ = service.Close()
 
 	// Wait for Run to finish
 	select {
@@ -114,10 +114,10 @@ func TestRun(t *testing.T) {
 
 func TestRun_AlreadyClosed(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-	service := NewService(conn, nil)
+    service := NewService(conn, nil)
 
 	// Close before running
-	service.Close()
+    _ = service.Close()
 
 	// Run should return immediately with error
 	err := service.Run()
@@ -128,7 +128,7 @@ func TestRun_AlreadyClosed(t *testing.T) {
 
 func TestAbort(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-	service := NewService(conn, nil)
+    service := NewService(conn, nil)
 
 	ctx := context.Background()
 	err := service.Abort(ctx, 0, 0)
@@ -154,8 +154,8 @@ func TestAbort(t *testing.T) {
 
 func TestGracefulRelease_Success(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-	service := NewService(conn, nil)
-	defer service.Close()
+    service := NewService(conn, nil)
+    defer func() { _ = service.Close() }()
 
 	// Set state to AssociationAccepted (required for release)
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -181,8 +181,8 @@ func TestGracefulRelease_Success(t *testing.T) {
 
 func TestGracefulRelease_WrongState(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-	service := NewService(conn, nil)
-	defer service.Close()
+    service := NewService(conn, nil)
+    defer func() { _ = service.Close() }()
 
 	// State is Idle, which doesn't allow release
 	ctx := context.Background()
@@ -209,8 +209,8 @@ func TestWaitForClose(t *testing.T) {
 	}()
 
 	// Close after a delay
-	time.Sleep(50 * time.Millisecond)
-	service.Close()
+    time.Sleep(50 * time.Millisecond)
+    _ = service.Close()
 
 	// WaitForClose should unblock
 	select {
@@ -223,8 +223,8 @@ func TestWaitForClose(t *testing.T) {
 
 func TestErr(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-	service := NewService(conn, nil)
-	defer service.Close()
+    service := NewService(conn, nil)
+    defer func() { _ = service.Close() }()
 
 	// Get error channel
 	errCh := service.Err()
@@ -248,23 +248,23 @@ func TestRun_SendLoopError(t *testing.T) {
 
 	// Create service with association
 	assoc := &association.Association{}
-	service := NewService(conn, assoc)
-	defer service.Close()
+    service := NewService(conn, assoc)
+    defer func() { _ = service.Close() }()
 
 	// Close connection immediately to cause write errors
-	conn.Close()
+    _ = conn.Close()
 
-	// Start service in goroutine
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- service.Run()
-	}()
+    // Start service in goroutine
+    errCh := make(chan error, 1)
+    go func() {
+        errCh <- service.Run()
+    }()
 
 	// Give it time to start and detect error
 	time.Sleep(50 * time.Millisecond)
 
 	// Close the service
-	service.Close()
+    _ = service.Close()
 
 	// Wait for Run to finish
 	select {
@@ -285,8 +285,8 @@ func TestRun_RecvLoopError(t *testing.T) {
 	}
 
 	assoc := &association.Association{}
-	service := NewService(conn, assoc)
-	defer service.Close()
+    service := NewService(conn, assoc)
+    defer func() { _ = service.Close() }()
 
 	// Start service in goroutine
 	errCh := make(chan error, 1)
@@ -313,22 +313,22 @@ func TestRun_MultipleCallsNotAllowed(_ *testing.T) {
 
 	assoc := &association.Association{}
 	service := NewService(conn, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Start first Run
-	go service.Run()
+    go func() { _ = service.Run() }()
 
 	// Give it time to start
 	time.Sleep(50 * time.Millisecond)
 
-	// Try to run again - should just start duplicate goroutines
-	// (This is allowed, though not recommended)
-	// The test just verifies it doesn't panic
-	go service.Run()
+    // Try to run again - should just start duplicate goroutines
+    // (This is allowed, though not recommended)
+    // The test just verifies it doesn't panic
+    go func() { _ = service.Run() }()
 
 	time.Sleep(50 * time.Millisecond)
 
-	// Close should stop all
-	service.Close()
-	service.WaitForClose()
+    // Close should stop all
+    _ = service.Close()
+    service.WaitForClose()
 }

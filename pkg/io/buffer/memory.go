@@ -39,7 +39,7 @@ func (m *MemoryByteBuffer) IsMemory() bool {
 
 // Size returns the size of the buffer in bytes.
 func (m *MemoryByteBuffer) Size() uint32 {
-	return uint32(len(m.data)) // #nosec G115 -- DICOM buffer size within uint32 range
+    return uint32(len(m.data)) //nolint:gosec // DICOM buffer size within uint32 range
 }
 
 // Data returns the underlying byte slice.
@@ -52,7 +52,7 @@ func (m *MemoryByteBuffer) GetByteRange(offset, count uint32, output []byte) err
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
-	if uint32(len(output)) < count { // #nosec G115 -- buffer size check
+    if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
 	if offset+count > m.Size() {

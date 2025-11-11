@@ -16,8 +16,8 @@ import (
 func TestNewService(t *testing.T) {
 	// Create a mock connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create service with default options
 	service := NewService(client, nil)
@@ -56,14 +56,14 @@ func TestNewService(t *testing.T) {
 		t.Error("closeCh should not be nil")
 	}
 
-	// Clean up
-	service.Close()
+    // Clean up
+    _ = service.Close()
 }
 
 func TestNewServiceWithCustomOptions(t *testing.T) {
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	service := NewService(client, nil,
 		WithMaxPDULength(32768),
@@ -72,7 +72,7 @@ func TestNewServiceWithCustomOptions(t *testing.T) {
 		WithDIMSETimeout(30*time.Second),
 		WithSendQueueSize(50),
 		WithRecvQueueSize(50))
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	if service.config.maxPDULength != 32768 {
 		t.Errorf("Expected maxPDULength 32768, got %d", service.config.maxPDULength)
@@ -92,12 +92,12 @@ func TestNewServiceWithCustomOptions(t *testing.T) {
 }
 
 func TestServiceSetGetAssociation(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	service := NewService(client, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Initially no association
 	if service.GetAssociation() != nil {
@@ -116,12 +116,12 @@ func TestServiceSetGetAssociation(t *testing.T) {
 }
 
 func TestServiceSetHandlers(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
-	service := NewService(client, nil)
-	defer service.Close()
+    service := NewService(client, nil)
+    defer func() { _ = service.Close() }()
 
 	// Set handlers
 	handlers := &Handlers{
@@ -138,12 +138,12 @@ func TestServiceSetHandlers(t *testing.T) {
 }
 
 func TestServiceGetState(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
-	service := NewService(client, nil)
-	defer service.Close()
+    service := NewService(client, nil)
+    defer func() { _ = service.Close() }()
 
 	// Initial state
 	if service.GetState() != StateIdle {
@@ -152,12 +152,12 @@ func TestServiceGetState(t *testing.T) {
 }
 
 func TestServiceSetState(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
-	service := NewService(client, nil)
-	defer service.Close()
+    service := NewService(client, nil)
+    defer func() { _ = service.Close() }()
 
 	// Valid transition: Idle -> AssociationRequested
 	err := service.setState(StateAssociationRequested)
@@ -182,8 +182,8 @@ func TestServiceSetState(t *testing.T) {
 }
 
 func TestServiceClose(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
 
 	service := NewService(client, nil)
 
@@ -225,7 +225,7 @@ func TestServiceClose(t *testing.T) {
 
 func TestServiceIsClosed(t *testing.T) {
 	server, client := net.Pipe()
-	defer server.Close()
+    defer func() { _ = server.Close() }()
 
 	service := NewService(client, nil)
 
@@ -233,7 +233,7 @@ func TestServiceIsClosed(t *testing.T) {
 		t.Error("Service should not be closed initially")
 	}
 
-	service.Close()
+    _ = service.Close()
 
 	if !service.IsClosed() {
 		t.Error("Service should be closed after Close()")
@@ -241,12 +241,12 @@ func TestServiceIsClosed(t *testing.T) {
 }
 
 func TestServiceContext(t *testing.T) {
-	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    server, client := net.Pipe()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
-	service := NewService(client, nil)
-	defer service.Close()
+    service := NewService(client, nil)
+    defer func() { _ = service.Close() }()
 
 	ctx := service.Context()
 	if ctx == nil {
@@ -262,7 +262,7 @@ func TestServiceContext(t *testing.T) {
 	}
 
 	// Close service
-	service.Close()
+    _ = service.Close()
 
 	// Context should be cancelled after close
 	select {

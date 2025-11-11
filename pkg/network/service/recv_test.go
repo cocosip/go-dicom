@@ -18,12 +18,12 @@ import (
 func TestRecvLoop_ContextCancellation(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create service
-	service := NewService(client, nil)
-	defer service.Close()
+    service := NewService(client, nil)
+    defer func() { _ = service.Close() }()
 
 	// Create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,7 +43,7 @@ func TestRecvLoop_ContextCancellation(t *testing.T) {
 	// Close the connection to unblock the read
 	// This simulates the real scenario where context cancellation
 	// leads to connection close
-	client.Close()
+    _ = client.Close()
 
 	// Wait for loop to exit
 	select {
@@ -60,8 +60,8 @@ func TestRecvLoop_ContextCancellation(t *testing.T) {
 func TestRecvLoop_ServiceClose(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
@@ -76,7 +76,7 @@ func TestRecvLoop_ServiceClose(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Close service (this closes the context and connection)
-	service.Close()
+    _ = service.Close()
 
 	// Wait for loop to exit
 	select {
@@ -96,7 +96,7 @@ func TestGetTransferSyntaxForContext(t *testing.T) {
 
 	// Create service
 	service := NewService(nil, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Test valid context ID
 	ts := service.getTransferSyntaxForContext(1)
@@ -112,7 +112,7 @@ func TestGetTransferSyntaxForContext(t *testing.T) {
 
 	// Test with nil association (should return default)
 	service2 := NewService(nil, nil)
-	defer service2.Close()
+    defer func() { _ = service2.Close() }()
 	ts = service2.getTransferSyntaxForContext(1)
 	if ts != transfer.ExplicitVRLittleEndian {
 		t.Errorf("Expected default ExplicitVRLittleEndian with nil association, got %v", ts)
@@ -124,27 +124,29 @@ func TestRecvLoop_ReceivePDataTF(t *testing.T) {
 
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create association
 	assoc := createTestAssociation()
 
 	// Create service with association
 	service := NewService(client, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Start receive loop
-	go func() {
-		service.recvLoop(service.ctx)
-	}()
+    go func() {
+        _ = service.recvLoop(service.ctx)
+    }()
 
 	// Give loop time to start
 	time.Sleep(10 * time.Millisecond)
 
 	// Create a test C-ECHO request
-	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+    req := dimse.NewCEchoRequest()
+    if err := req.SetMessageID(1); err != nil {
+        t.Fatalf("SetMessageID failed: %v", err)
+    }
 
 	// Encode the message
 	commandData, datasetData, err := EncodeDIMSEMessage(req, transfer.ExplicitVRLittleEndian)
@@ -185,12 +187,12 @@ func TestRecvLoop_ReceivePDataTF(t *testing.T) {
 func TestRecvLoop_NonPDataTFPDU(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Start receive loop
 	errCh := make(chan error, 1)
@@ -209,10 +211,10 @@ func TestRecvLoop_NonPDataTFPDU(t *testing.T) {
 	}
 
 	go func() {
-		transport.WritePDU(server, 5*time.Second, nonDataPDU)
+        _ = transport.WritePDU(server, 5*time.Second, nonDataPDU)
 		// Close server after sending to trigger loop exit
 		time.Sleep(50 * time.Millisecond)
-		server.Close()
+        _ = server.Close()
 	}()
 
 	// Wait for loop to exit or timeout
@@ -235,13 +237,13 @@ func TestRecvLoop_ContextIDChange(t *testing.T) {
 
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+    defer func() { _ = server.Close() }()
+    defer func() { _ = client.Close() }()
 
 	// Create service
 	assoc := createTestAssociation()
 	service := NewService(client, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Start receive loop
 	errCh := make(chan error, 1)
@@ -275,7 +277,7 @@ func TestRecvLoop_ContextIDChange(t *testing.T) {
 
 	// Send PDU
 	go func() {
-		transport.WritePDU(server, 5*time.Second, pduData)
+        _ = transport.WritePDU(server, 5*time.Second, pduData)
 	}()
 
 	// Wait for error

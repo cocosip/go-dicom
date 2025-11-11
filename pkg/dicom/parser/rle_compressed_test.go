@@ -17,7 +17,7 @@ func TestRLECompressedDICOM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open RLE test file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	// Get file info
 	fileInfo, err := file.Stat()
@@ -131,7 +131,7 @@ func TestRLEPixelDataAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -194,7 +194,7 @@ func TestRLEImageProperties(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -273,10 +273,10 @@ func BenchmarkRLEParsing(b *testing.B) {
 
 		_, err = Parse(file)
 		if err != nil {
-			file.Close()
+                        _ = file.Close()
 			b.Fatalf("Failed to parse: %v", err)
 		}
 
-		file.Close()
+                _ = file.Close()
 	}
 }

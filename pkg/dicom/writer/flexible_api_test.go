@@ -23,7 +23,7 @@ func TestWriteWithDefaults(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
 
 	// Write with defaults (no options)
 	if err := Write(buf, ds); err != nil {
@@ -65,7 +65,7 @@ func TestWriteWithFileMetaInfo(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
 
 	// Write with custom file meta info
 	if err := Write(buf, ds, WithFileMetaInfo(fileMetaInfo)); err != nil {
@@ -94,10 +94,10 @@ func TestWriteWithTransferSyntax(t *testing.T) {
 
 	// Create a dataset
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-	ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
 
 	// Write with explicit transfer syntax option
 	ts := transfer.ExplicitVRLittleEndian
@@ -135,7 +135,7 @@ func TestWriteWithoutPreambleOption(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"}))
 
 	// Write without preamble
 	if err := Write(buf, ds, WithoutPreamble()); err != nil {

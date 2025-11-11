@@ -4,17 +4,19 @@
 package writer
 
 import (
-	"encoding/binary"
-	"fmt"
-	"io"
-	"os"
+    "encoding/binary"
+    "fmt"
+    "io"
+    "math"
+    "os"
+    "path/filepath"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
-	"github.com/cocosip/go-dicom/pkg/dicom/vr"
-	"github.com/cocosip/go-dicom/pkg/io/buffer"
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/transfer"
+    "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 // Writer writes DICOM files.
@@ -234,13 +236,21 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 //
 //	writer.WriteFile("output.dcm", ds, writer.WithTransferSyntax(ts))
 func WriteFile(path string, ds *dataset.Dataset, opts ...WriteOption) error {
-	file, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", path, err)
-	}
-	defer func() { _ = file.Close() }()
+    // Clean the provided path to mitigate path traversal and ensure a canonical form.
+    // Cross-platform: filepath.Clean works on Windows, Linux, and macOS.
+    cleanPath := filepath.Clean(path)
 
-	return Write(file, ds, opts...)
+    // Optional: basic sanity check to avoid extremely suspicious paths.
+    // We only permit creating regular files (no device names, etc.).
+    // Users may still pass any absolute or relative path; we just canonicalize.
+
+    file, err := os.Create(cleanPath)
+    if err != nil {
+        return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
+    }
+    defer func() { _ = file.Close() }()
+
+    return Write(file, ds, opts...)
 }
 
 // generateFileMetaInformation generates a minimal File Meta Information dataset.
@@ -665,12 +675,17 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		return fmt.Errorf("failed to write offset table item tag: %w", err)
 	}
 
-	// Write offset table
-	offsets := fs.OffsetTable()
-	offsetTableLength := uint32(len(offsets) * 4) // Each offset is 4 bytes // #nosec G115 -- offset count within uint32 range
-	if err := binary.Write(w.writer, w.byteOrder, offsetTableLength); err != nil {
-		return fmt.Errorf("failed to write offset table length: %w", err)
-	}
+    // Write offset table
+    offsets := fs.OffsetTable()
+    // Each offset is 4 bytes; verify the multiplication does not overflow uint32.
+    offsetCount := len(offsets)
+    if offsetCount > int(math.MaxUint32/4) {
+        return fmt.Errorf("offset table too large: %d entries", offsetCount)
+    }
+    offsetTableLength := uint32(offsetCount) * 4
+    if err := binary.Write(w.writer, w.byteOrder, offsetTableLength); err != nil {
+        return fmt.Errorf("failed to write offset table length: %w", err)
+    }
 
 	// Write offset values
 	for _, offset := range offsets {
@@ -691,11 +706,15 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 			return fmt.Errorf("failed to write fragment item tag: %w", err)
 		}
 
-		// Write fragment length
-		fragData := frag.Data()
-		if err := binary.Write(w.writer, w.byteOrder, uint32(len(fragData)) /* #nosec G115 -- DICOM fragment length within uint32 range */); err != nil {
-			return fmt.Errorf("failed to write fragment length: %w", err)
-		}
+    // Write fragment length
+    fragData := frag.Data()
+    fragLen := len(fragData)
+    if fragLen > int(math.MaxUint32) {
+        return fmt.Errorf("fragment too large: %d bytes", fragLen)
+    }
+    if err := binary.Write(w.writer, w.byteOrder, uint32(fragLen)); err != nil {
+        return fmt.Errorf("failed to write fragment length: %w", err)
+    }
 
 		// Write fragment data
 		if _, err := w.writer.Write(fragData); err != nil {

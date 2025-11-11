@@ -6,6 +6,7 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"net"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func TestListen_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	if listener == nil {
 		t.Fatal("Expected non-nil listener")
@@ -30,12 +31,13 @@ func TestListen_Success(t *testing.T) {
 }
 
 func TestListener_Accept(t *testing.T) {
+	var err error
 	// Create a listener
 	listener, err := Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -44,9 +46,10 @@ func TestListener_Accept(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
+			t.Logf("Failed to connect from client: %v", err)
 			return
 		}
-		conn.Close()
+		_ = conn.Close()
 	}()
 
 	// Accept the connection
@@ -54,7 +57,7 @@ func TestListener_Accept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Accept failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if conn == nil {
 		t.Fatal("Expected non-nil connection")
@@ -67,7 +70,7 @@ func TestListener_AcceptContextCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	// Create a context that we'll cancel
 	ctx, cancel := context.WithCancel(context.Background())
@@ -112,6 +115,7 @@ func TestListenTLS_Success(t *testing.T) {
 
 	serverConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 
 	// Create a TLS listener
@@ -119,29 +123,41 @@ func TestListenTLS_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
 	// Connect from a TLS client in a goroutine
 	go func() {
 		time.Sleep(50 * time.Millisecond)
+		// Build a Root CA pool from the generated cert
+		rootPool := x509.NewCertPool()
+		if len(cert.Certificate) == 0 {
+			return
+		}
+		parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			return
+		}
+		rootPool.AddCert(parsedCert)
 		clientConfig := &tls.Config{
-			InsecureSkipVerify: true,
+			RootCAs:    rootPool,
+			MinVersion: tls.VersionTLS12,
+			ServerName: "localhost",
 		}
 		conn, err := tls.Dial("tcp", addr, clientConfig)
 		if err != nil {
 			return
 		}
-		conn.Close()
+		_ = conn.Close()
 	}()
 
 	// Accept the TLS connection
-	conn, err := listener.Accept(context.Background())
+    conn, err := listener.Accept(context.Background())
 	if err != nil {
 		t.Fatalf("Accept TLS failed: %v", err)
 	}
-	defer conn.Close()
+    defer func() { _ = conn.Close() }()
 
 	// Verify it's a TLS connection
 	if _, ok := conn.(*tls.Conn); !ok {
@@ -158,6 +174,7 @@ func TestListenTLS_HandshakeFailure(t *testing.T) {
 
 	serverConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 
 	// Create a TLS listener
@@ -165,7 +182,7 @@ func TestListenTLS_HandshakeFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TLS listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -176,7 +193,7 @@ func TestListenTLS_HandshakeFailure(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+        defer func() { _ = conn.Close() }()
 		// Just hold the connection for a bit
 		time.Sleep(200 * time.Millisecond)
 	}()
@@ -197,7 +214,7 @@ func TestListener_MultipleConnections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer listener.Close()
+    defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -212,17 +229,17 @@ func TestListener_MultipleConnections(t *testing.T) {
 			if err != nil {
 				return
 			}
-			defer conn.Close()
+            defer func() { _ = conn.Close() }()
 			time.Sleep(100 * time.Millisecond)
 		}(i)
 	}
 
 	// Accept multiple connections
 	for i := 0; i < numConns; i++ {
-		conn, err := listener.Accept(context.Background())
+        conn, err := listener.Accept(context.Background())
 		if err != nil {
 			t.Fatalf("Accept %d failed: %v", i, err)
 		}
-		conn.Close()
+        _ = conn.Close()
 	}
 }

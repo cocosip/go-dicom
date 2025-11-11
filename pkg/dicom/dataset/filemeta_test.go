@@ -59,7 +59,7 @@ func TestFileMetaInformationSetAndGet(t *testing.T) {
 
 	// Test MediaStorageSOPClassUID
 	testUID := "1.2.840.10008.5.1.4.1.1.2"
-	fmi.SetMediaStorageSOPClassUID(testUID)
+    _ = fmi.SetMediaStorageSOPClassUID(testUID)
 	retrievedUID, ok := fmi.MediaStorageSOPClassUID()
 	if !ok {
 		t.Error("MediaStorageSOPClassUID not retrieved")
@@ -69,7 +69,7 @@ func TestFileMetaInformationSetAndGet(t *testing.T) {
 
 	// Test MediaStorageSOPInstanceUID
 	testInstanceUID := "1.2.3.4.5"
-	fmi.SetMediaStorageSOPInstanceUID(testInstanceUID)
+    _ = fmi.SetMediaStorageSOPInstanceUID(testInstanceUID)
 	retrievedInstanceUID, ok := fmi.MediaStorageSOPInstanceUID()
 	if !ok {
 		t.Error("MediaStorageSOPInstanceUID not retrieved")
@@ -79,7 +79,7 @@ func TestFileMetaInformationSetAndGet(t *testing.T) {
 
 	// Test TransferSyntaxUID
 	testTSUID := transfer.ExplicitVRLittleEndian.UID().UID()
-	fmi.SetTransferSyntaxUID(testTSUID)
+    _ = fmi.SetTransferSyntaxUID(testTSUID)
 	retrievedTSUID, ok := fmi.TransferSyntaxUID()
 	if !ok {
 		t.Error("TransferSyntaxUID not retrieved")
@@ -90,7 +90,7 @@ func TestFileMetaInformationSetAndGet(t *testing.T) {
 
 func TestFileMetaInformationTransferSyntax(t *testing.T) {
 	fmi := NewFileMetaInformation()
-	fmi.SetTransferSyntax(transfer.ExplicitVRLittleEndian)
+    _ = fmi.SetTransferSyntax(transfer.ExplicitVRLittleEndian)
 
 	ts, ok := fmi.TransferSyntax()
 	if !ok {
@@ -108,7 +108,7 @@ func TestFileMetaInformationAETitles(t *testing.T) {
 
 	// Test SourceApplicationEntityTitle
 	sourceAET := "SOURCE_AET"
-	fmi.SetSourceApplicationEntityTitle(sourceAET)
+    _ = fmi.SetSourceApplicationEntityTitle(sourceAET)
 	retrieved, ok := fmi.SourceApplicationEntityTitle()
 	if !ok {
 		t.Error("SourceApplicationEntityTitle not retrieved")
@@ -118,7 +118,7 @@ func TestFileMetaInformationAETitles(t *testing.T) {
 
 	// Test SendingApplicationEntityTitle
 	sendingAET := "SENDING_AET"
-	fmi.SetSendingApplicationEntityTitle(sendingAET)
+    _ = fmi.SetSendingApplicationEntityTitle(sendingAET)
 	retrieved, ok = fmi.SendingApplicationEntityTitle()
 	if !ok {
 		t.Error("SendingApplicationEntityTitle not retrieved")
@@ -128,7 +128,7 @@ func TestFileMetaInformationAETitles(t *testing.T) {
 
 	// Test ReceivingApplicationEntityTitle
 	receivingAET := "RECV_AET"
-	fmi.SetReceivingApplicationEntityTitle(receivingAET)
+    _ = fmi.SetReceivingApplicationEntityTitle(receivingAET)
 	retrieved, ok = fmi.ReceivingApplicationEntityTitle()
 	if !ok {
 		t.Error("ReceivingApplicationEntityTitle not retrieved")
@@ -142,7 +142,7 @@ func TestFileMetaInformationPrivateInformation(t *testing.T) {
 
 	// Test PrivateInformationCreatorUID
 	privUID := "1.2.3.4.5.6"
-	fmi.SetPrivateInformationCreatorUID(privUID)
+    _ = fmi.SetPrivateInformationCreatorUID(privUID)
 	retrieved, ok := fmi.PrivateInformationCreatorUID()
 	if !ok {
 		t.Error("PrivateInformationCreatorUID not retrieved")
@@ -152,7 +152,7 @@ func TestFileMetaInformationPrivateInformation(t *testing.T) {
 
 	// Test PrivateInformation
 	privData := []byte{0x01, 0x02, 0x03, 0x04}
-	fmi.SetPrivateInformation(privData)
+    _ = fmi.SetPrivateInformation(privData)
 	retrievedData, ok := fmi.PrivateInformation()
 	if !ok {
 		t.Error("PrivateInformation not retrieved")
@@ -170,29 +170,29 @@ func TestFileMetaInformationPrivateInformation(t *testing.T) {
 
 func TestFileMetaInformationValidate(t *testing.T) {
 	// Test valid FileMetaInformation
-	fmi := NewDefaultFileMetaInformation()
-	fmi.SetMediaStorageSOPClassUID("1.2.840.10008.5.1.4.1.1.2")
-	fmi.SetMediaStorageSOPInstanceUID("1.2.3.4.5")
-	fmi.SetTransferSyntaxUID(transfer.ExplicitVRLittleEndian.UID().UID())
+    fmi := NewDefaultFileMetaInformation()
+    _ = fmi.SetMediaStorageSOPClassUID("1.2.840.10008.5.1.4.1.1.2")
+    _ = fmi.SetMediaStorageSOPInstanceUID("1.2.3.4.5")
+    _ = fmi.SetTransferSyntaxUID(transfer.ExplicitVRLittleEndian.UID().UID())
 
 	if err := fmi.Validate(); err != nil {
 		t.Errorf("Validate failed for valid FileMetaInformation: %v", err)
 	}
 
 	// Test missing required element
-	fmi2 := NewFileMetaInformation()
-	fmi2.SetVersion([]byte{0x00, 0x01})
+    fmi2 := NewFileMetaInformation()
+    _ = fmi2.SetVersion([]byte{0x00, 0x01})
 	if err := fmi2.Validate(); err == nil {
 		t.Error("Validate should fail for FileMetaInformation missing required elements")
 	}
 
 	// Test invalid group
-	fmi3 := NewDefaultFileMetaInformation()
-	fmi3.SetMediaStorageSOPClassUID("1.2.840.10008.5.1.4.1.1.2")
-	fmi3.SetMediaStorageSOPInstanceUID("1.2.3.4.5")
-	fmi3.SetTransferSyntaxUID(transfer.ExplicitVRLittleEndian.UID().UID())
+    fmi3 := NewDefaultFileMetaInformation()
+    _ = fmi3.SetMediaStorageSOPClassUID("1.2.840.10008.5.1.4.1.1.2")
+    _ = fmi3.SetMediaStorageSOPInstanceUID("1.2.3.4.5")
+    _ = fmi3.SetTransferSyntaxUID(transfer.ExplicitVRLittleEndian.UID().UID())
 	// Add element from wrong group
-	fmi3.dataset.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"}))
+    _ = fmi3.dataset.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"}))
 	if err := fmi3.Validate(); err == nil {
 		t.Error("Validate should fail for FileMetaInformation with non-0002 group tag")
 	}
@@ -201,9 +201,9 @@ func TestFileMetaInformationValidate(t *testing.T) {
 func TestNewFileMetaInformationFromMainDataset(t *testing.T) {
 	// Create main dataset
 	ds := New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
-	ds.Add(element.NewString(tag.SourceApplicationEntityTitle, vr.AE, []string{"SOURCE"}))
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    _ = ds.Add(element.NewString(tag.SourceApplicationEntityTitle, vr.AE, []string{"SOURCE"}))
 
 	// Create FileMetaInformation from dataset
 	fmi, err := NewFileMetaInformationFromMainDataset(ds, transfer.ExplicitVRLittleEndian)
@@ -246,8 +246,8 @@ func TestNewFileMetaInformationFromMainDataset(t *testing.T) {
 
 func TestNewFileMetaInformationFromMainDatasetMissingUID(t *testing.T) {
 	// Create main dataset without SOPClassUID
-	ds := New()
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    ds := New()
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	_, err := NewFileMetaInformationFromMainDataset(ds, transfer.ExplicitVRLittleEndian)
 	if err == nil {
@@ -255,8 +255,8 @@ func TestNewFileMetaInformationFromMainDatasetMissingUID(t *testing.T) {
 	}
 
 	// Create main dataset without SOPInstanceUID
-	ds2 := New()
-	ds2.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+    ds2 := New()
+    _ = ds2.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
 
 	_, err = NewFileMetaInformationFromMainDataset(ds2, transfer.ExplicitVRLittleEndian)
 	if err == nil {
@@ -275,8 +275,8 @@ func TestCreateDefaultSourceAET(t *testing.T) {
 }
 
 func TestFileMetaInformationDataset(t *testing.T) {
-	fmi := NewFileMetaInformation()
-	fmi.SetMediaStorageSOPClassUID("1.2.3")
+    fmi := NewFileMetaInformation()
+    _ = fmi.SetMediaStorageSOPClassUID("1.2.3")
 
 	ds := fmi.Dataset()
 	if ds == nil {

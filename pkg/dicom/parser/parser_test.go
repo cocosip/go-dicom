@@ -61,8 +61,8 @@ func TestReadPreamble(t *testing.T) {
 func TestReadTag(t *testing.T) {
 	t.Run("ReadValidTag", func(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
-		binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
-		binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
 
 		ctx := newParseContext()
 		ctx.reader = buf
@@ -83,8 +83,8 @@ func TestReadTag(t *testing.T) {
 
 	t.Run("ReadTagBigEndian", func(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
-		binary.Write(buf, binary.BigEndian, uint16(0x0002))
-		binary.Write(buf, binary.BigEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.BigEndian, uint16(0x0002))
+		_ = binary.Write(buf, binary.BigEndian, uint16(0x0010))
 
 		ctx := newParseContext()
 		ctx.reader = buf
@@ -153,7 +153,7 @@ func TestReadVR(t *testing.T) {
 func TestReadLength(t *testing.T) {
 	t.Run("ExplicitVR16BitLength", func(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
-		binary.Write(buf, binary.LittleEndian, uint16(100))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(100))
 
 		ctx := newParseContext()
 		ctx.reader = buf
@@ -172,8 +172,8 @@ func TestReadLength(t *testing.T) {
 
 	t.Run("ExplicitVR32BitLength", func(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
-		binary.Write(buf, binary.LittleEndian, uint16(0)) // Reserved
-		binary.Write(buf, binary.LittleEndian, uint32(1000))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0)) // Reserved
+		_ = binary.Write(buf, binary.LittleEndian, uint32(1000))
 
 		ctx := newParseContext()
 		ctx.reader = buf
@@ -192,7 +192,7 @@ func TestReadLength(t *testing.T) {
 
 	t.Run("ImplicitVR", func(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
-		binary.Write(buf, binary.LittleEndian, uint32(2000))
+		_ = binary.Write(buf, binary.LittleEndian, uint32(2000))
 
 		ctx := newParseContext()
 		ctx.reader = buf
@@ -211,8 +211,8 @@ func TestReadLength(t *testing.T) {
 
 	t.Run("UndefinedLength", func(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
-		binary.Write(buf, binary.LittleEndian, uint16(0)) // Reserved
-		binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0)) // Reserved
+		_ = binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF))
 
 		ctx := newParseContext()
 		ctx.reader = buf
@@ -257,26 +257,26 @@ func createMiniDICOM() *bytes.Buffer {
 	buf.WriteString("DICM")
 
 	// File Meta Information Group Length (0002,0000) - UL, Explicit VR
-	binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
-	binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
-	buf.WriteString("UL")                                  // VR
-	binary.Write(buf, binary.LittleEndian, uint16(4))      // Length
-	binary.Write(buf, binary.LittleEndian, uint32(100))    // Value (placeholder)
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
+	buf.WriteString("UL")                                      // VR
+	_ = binary.Write(buf, binary.LittleEndian, uint16(4))      // Length
+	_ = binary.Write(buf, binary.LittleEndian, uint32(100))    // Value (placeholder)
 
 	// Transfer Syntax UID (0002,0010) - UI, Explicit VR
-	binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
-	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
-	buf.WriteString("UI")                                  // VR
-	tsUID := testExplicitVRLittleLE                         // Explicit VR Little Endian
-	binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
+	buf.WriteString("UI")                                      // VR
+	tsUID := testExplicitVRLittleLE                            // Explicit VR Little Endian
+	_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 	buf.WriteString(tsUID)
 
 	// Patient Name (0010,0010) - PN, Explicit VR
-	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Group
-	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
-	buf.WriteString("PN")                                  // VR
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Group
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
+	buf.WriteString("PN")                                      // VR
 	name := testPatientName
-	binary.Write(buf, binary.LittleEndian, uint16(len(name)))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(len(name)))
 	buf.WriteString(name)
 
 	return buf
@@ -352,8 +352,8 @@ func TestParseInvalidFile(t *testing.T) {
 		buf.WriteString("DICM")
 
 		// Start of Group 0002 element, but incomplete (no VR or value)
-		binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
-		binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
+        _ = binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
+        _ = binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
 		// Missing VR and value - EOF will occur when trying to read VR
 
 		_, err := Parse(buf)
@@ -373,38 +373,38 @@ func TestSequenceReading(t *testing.T) {
 		buf.WriteString("DICM")
 
 		// Transfer Syntax UID (0002,0010) - required meta element
-		binary.Write(buf, binary.LittleEndian, uint16(0x0002))
-		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		buf.WriteString("UI")
 		tsUID := testExplicitVRLittleLE
-		binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 		buf.WriteString(tsUID)
 
 		// Sequence element with undefined length (SQ)
-		binary.Write(buf, binary.LittleEndian, uint16(0x0008))     // Group
-		binary.Write(buf, binary.LittleEndian, uint16(0x1140))     // Element (Referenced Image Sequence)
-		buf.WriteString("SQ")                                      // VR
-		binary.Write(buf, binary.LittleEndian, uint16(0))          // Reserved
-		binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF)) // Undefined length
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0008))     // Group
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x1140))     // Element (Referenced Image Sequence)
+		buf.WriteString("SQ")                                          // VR
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0))          // Reserved
+		_ = binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF)) // Undefined length
 
 		// Item 1 (FFFE,E000) with defined length
-		binary.Write(buf, binary.LittleEndian, uint16(0xFFFE))
-		binary.Write(buf, binary.LittleEndian, uint16(0xE000))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFE))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0xE000))
 		itemData := bytes.NewBuffer(nil)
 		// Add SOP Instance UID in item
-		binary.Write(itemData, binary.LittleEndian, uint16(0x0008))
-		binary.Write(itemData, binary.LittleEndian, uint16(0x1155))
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x0008))
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x1155))
 		itemData.WriteString("UI")
 		sopUID := "1.2.3.4"
-		binary.Write(itemData, binary.LittleEndian, uint16(len(sopUID)))
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(len(sopUID)))
 		itemData.WriteString(sopUID)
-		binary.Write(buf, binary.LittleEndian, uint32(itemData.Len()))
+		_ = binary.Write(buf, binary.LittleEndian, uint32(itemData.Len()))
 		buf.Write(itemData.Bytes())
 
 		// Sequence Delimitation Item (FFFE,E0DD)
-		binary.Write(buf, binary.LittleEndian, uint16(0xFFFE))
-		binary.Write(buf, binary.LittleEndian, uint16(0xE0DD))
-		binary.Write(buf, binary.LittleEndian, uint32(0))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFE))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0xE0DD))
+		_ = binary.Write(buf, binary.LittleEndian, uint32(0))
 
 		result, err := Parse(buf)
 		if err != nil {
@@ -435,36 +435,36 @@ func TestSequenceReading(t *testing.T) {
 		buf.WriteString("DICM")
 
 		// Transfer Syntax UID (0002,0010)
-		binary.Write(buf, binary.LittleEndian, uint16(0x0002))
-		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		buf.WriteString("UI")
 		tsUID := testExplicitVRLittleLE
-		binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 		buf.WriteString(tsUID)
 
 		// Build sequence data first to know its length
 		seqData := bytes.NewBuffer(nil)
 
 		// Item 1 (FFFE,E000) with defined length
-		binary.Write(seqData, binary.LittleEndian, uint16(0xFFFE))
-		binary.Write(seqData, binary.LittleEndian, uint16(0xE000))
+		_ = binary.Write(seqData, binary.LittleEndian, uint16(0xFFFE))
+		_ = binary.Write(seqData, binary.LittleEndian, uint16(0xE000))
 		itemData := bytes.NewBuffer(nil)
 		// Add SOP Instance UID in item
-		binary.Write(itemData, binary.LittleEndian, uint16(0x0008))
-		binary.Write(itemData, binary.LittleEndian, uint16(0x1155))
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x0008))
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x1155))
 		itemData.WriteString("UI")
 		sopUID := "1.2.3.4"
-		binary.Write(itemData, binary.LittleEndian, uint16(len(sopUID)))
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(len(sopUID)))
 		itemData.WriteString(sopUID)
-		binary.Write(seqData, binary.LittleEndian, uint32(itemData.Len()))
+		_ = binary.Write(seqData, binary.LittleEndian, uint32(itemData.Len()))
 		seqData.Write(itemData.Bytes())
 
 		// Now write sequence element with defined length
-		binary.Write(buf, binary.LittleEndian, uint16(0x0008))
-		binary.Write(buf, binary.LittleEndian, uint16(0x1140))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0008))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x1140))
 		buf.WriteString("SQ")
-		binary.Write(buf, binary.LittleEndian, uint16(0))
-		binary.Write(buf, binary.LittleEndian, uint32(seqData.Len()))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0))
+		_ = binary.Write(buf, binary.LittleEndian, uint32(seqData.Len()))
 		buf.Write(seqData.Bytes())
 
 		result, err := Parse(buf)
@@ -515,18 +515,18 @@ func createBenchmarkDICOMData(numElements int) []byte {
 	buf.WriteString("DICM")
 
 	// Write File Meta Information Group Length (0002,0000)
-	binary.Write(buf, binary.LittleEndian, uint16(0x0002))
-	binary.Write(buf, binary.LittleEndian, uint16(0x0000))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0000))
 	buf.WriteString("UL")
-	binary.Write(buf, binary.LittleEndian, uint16(4))
-	binary.Write(buf, binary.LittleEndian, uint32(0))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(4))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(0))
 
 	// Write Transfer Syntax UID (0002,0010) - Explicit VR Little Endian
-	binary.Write(buf, binary.LittleEndian, uint16(0x0002))
-	binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 	buf.WriteString("UI")
 	tsUID := testExplicitVRLittleLE
-	binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 	buf.WriteString(tsUID)
 	if len(tsUID)%2 != 0 {
 		buf.WriteByte(0)
@@ -535,15 +535,15 @@ func createBenchmarkDICOMData(numElements int) []byte {
 	// Write some test elements
 	for i := 0; i < numElements; i++ {
 		// Write tag
-		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
-		binary.Write(buf, binary.LittleEndian, uint16(i))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(i))
 
 		// Write VR (LO)
 		buf.WriteString("LO")
 
 		// Write value
 		value := "TestValue"
-		binary.Write(buf, binary.LittleEndian, uint16(len(value)))
+        _ = binary.Write(buf, binary.LittleEndian, uint16(len(value)))
 		buf.WriteString(value)
 		if len(value)%2 != 0 {
 			buf.WriteByte(0)
@@ -586,8 +586,8 @@ func BenchmarkParseLargeDataset(b *testing.B) {
 func BenchmarkReadTag(b *testing.B) {
 	buf := bytes.NewBuffer(nil)
 	for i := 0; i < 1000; i++ {
-		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
-		binary.Write(buf, binary.LittleEndian, uint16(i))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(i))
 	}
 	data := buf.Bytes()
 
@@ -596,7 +596,7 @@ func BenchmarkReadTag(b *testing.B) {
 		ctx := newParseContext()
 		ctx.reader = bytes.NewReader(data)
 		ctx.byteOrder = binary.LittleEndian
-		ctx.readTag()
+		_, _ = ctx.readTag()
 	}
 }
 
@@ -604,11 +604,11 @@ func BenchmarkReadElement(b *testing.B) {
 	// Create element data (PatientName with value "Doe^John")
 	buf := bytes.NewBuffer(nil)
 	for i := 0; i < 1000; i++ {
-		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
-		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		buf.WriteString("PN")
 		value := testPatientName
-		binary.Write(buf, binary.LittleEndian, uint16(len(value)))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(value)))
 		buf.WriteString(value)
 	}
 	data := buf.Bytes()
@@ -619,6 +619,6 @@ func BenchmarkReadElement(b *testing.B) {
 		ctx.reader = bytes.NewReader(data)
 		ctx.byteOrder = binary.LittleEndian
 		ctx.isExplicitVR = true
-		ctx.readElement()
+		_, _ = ctx.readElement()
 	}
 }

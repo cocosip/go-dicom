@@ -16,8 +16,8 @@ const testPatientName = "Doe^John"
 
 // TestDatasetGetString tests GetString accessor
 func TestDatasetGetString(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	str, exists := ds.GetString(tag.PatientName)
 	if !exists {
@@ -39,8 +39,8 @@ func TestDatasetGetString(t *testing.T) {
 
 // TestDatasetGetStrings tests GetStrings accessor
 func TestDatasetGetStrings(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY", "AXIAL"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY", "AXIAL"}))
 
 	strs, exists := ds.GetStrings(tag.ImageType)
 	if !exists {
@@ -56,8 +56,8 @@ func TestDatasetGetStrings(t *testing.T) {
 
 // TestDatasetGetUInt16 tests GetUInt16 accessor
 func TestDatasetGetUInt16(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512, 256}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512, 256}))
 
 	val, err := ds.GetUInt16(tag.Rows, 0)
 	if err != nil {
@@ -84,8 +84,8 @@ func TestDatasetGetUInt16(t *testing.T) {
 
 // TestDatasetGetUInt16s tests GetUInt16s accessor
 func TestDatasetGetUInt16s(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512, 256}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512, 256}))
 
 	vals, err := ds.GetUInt16s(tag.Rows)
 	if err != nil {
@@ -101,8 +101,8 @@ func TestDatasetGetUInt16s(t *testing.T) {
 
 // TestDatasetGetUInt32 tests GetUInt32 accessor
 func TestDatasetGetUInt32(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100}))
 
 	val, err := ds.GetUInt32(tag.FileMetaInformationGroupLength, 0)
 	if err != nil {
@@ -115,8 +115,8 @@ func TestDatasetGetUInt32(t *testing.T) {
 
 // TestDatasetGetInt16 tests GetInt16 accessor
 func TestDatasetGetInt16(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewSignedShort(tag.SmallestImagePixelValue, []int16{-100}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewSignedShort(tag.SmallestImagePixelValue, []int16{-100}))
 
 	val, err := ds.GetInt16(tag.SmallestImagePixelValue, 0)
 	if err != nil {
@@ -129,8 +129,8 @@ func TestDatasetGetInt16(t *testing.T) {
 
 // TestDatasetGetFloat32 tests GetFloat32 accessor
 func TestDatasetGetFloat32(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5}))
 
 	val, err := ds.GetFloat32(tag.ImagePositionPatient, 0)
 	if err != nil {
@@ -143,8 +143,8 @@ func TestDatasetGetFloat32(t *testing.T) {
 
 // TestDatasetGetFloat64 tests GetFloat64 accessor
 func TestDatasetGetFloat64(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewDouble(tag.RealWorldValueSlope, []float64{1.234567}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewDouble(tag.RealWorldValueSlope, []float64{1.234567}))
 
 	val, err := ds.GetFloat64(tag.RealWorldValueSlope, 0)
 	if err != nil {
@@ -157,10 +157,10 @@ func TestDatasetGetFloat64(t *testing.T) {
 
 // TestDatasetTryGetters tests Try* accessor methods
 func TestDatasetTryGetters(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-	ds.Add(element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+    _ = ds.Add(element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100}))
 
 	// TryGetString
 	str := ds.TryGetString(tag.PatientName)

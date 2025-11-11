@@ -23,8 +23,8 @@ func TestNewNEventReportRequest(t *testing.T) {
 	sopInstanceUID := testSOPInstanceUID
 	eventTypeID := uint16(1)
 
-	eventInfo := dataset.New()
-	eventInfo.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    eventInfo := dataset.New()
+    _ = eventInfo.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
 
 	req := NewNEventReportRequest(sopClassUID, sopInstanceUID, eventTypeID, eventInfo)
 
@@ -64,8 +64,8 @@ func TestNewNEventReportResponse(t *testing.T) {
 	sopInstanceUID := testSOPInstanceUID
 	eventTypeID := uint16(1)
 
-	eventReply := dataset.New()
-	eventReply.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    eventReply := dataset.New()
+    _ = eventReply.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	resp := NewNEventReportResponseSuccess(100, sopClassUID, sopInstanceUID, eventTypeID, eventReply)
 
@@ -145,9 +145,9 @@ func TestNewNGetResponse(t *testing.T) {
 	sopClassUID := testSOPClassUID
 	sopInstanceUID := testSOPInstanceUID
 
-	attrList := dataset.New()
-	attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
-	attrList.Add(element.NewString(tag.PatientID, vr.LO, []string{"123456"}))
+    attrList := dataset.New()
+    _ = attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    _ = attrList.Add(element.NewString(tag.PatientID, vr.LO, []string{"123456"}))
 
 	resp := NewNGetResponseSuccess(100, sopClassUID, sopInstanceUID, attrList)
 
@@ -177,8 +177,8 @@ func TestNewNSetRequest(t *testing.T) {
 	sopClassUID := testSOPClassUID
 	sopInstanceUID := testSOPInstanceUID
 
-	modList := dataset.New()
-	modList.Add(element.NewString(tag.PatientName, vr.PN, []string{"Updated^Patient"}))
+    modList := dataset.New()
+    _ = modList.Add(element.NewString(tag.PatientName, vr.PN, []string{"Updated^Patient"}))
 
 	req := NewNSetRequest(sopClassUID, sopInstanceUID, modList)
 
@@ -203,8 +203,8 @@ func TestNewNSetResponse(t *testing.T) {
 	sopClassUID := testSOPClassUID
 	sopInstanceUID := testSOPInstanceUID
 
-	attrList := dataset.New()
-	attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"Updated^Patient"}))
+    attrList := dataset.New()
+    _ = attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"Updated^Patient"}))
 
 	resp := NewNSetResponseSuccess(100, sopClassUID, sopInstanceUID, attrList)
 
@@ -235,8 +235,8 @@ func TestNewNActionRequest(t *testing.T) {
 	sopInstanceUID := testSOPInstanceUID
 	actionTypeID := uint16(1)
 
-	actionInfo := dataset.New()
-	actionInfo.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    actionInfo := dataset.New()
+    _ = actionInfo.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	req := NewNActionRequest(sopClassUID, sopInstanceUID, actionTypeID, actionInfo)
 
@@ -266,8 +266,8 @@ func TestNewNActionResponse(t *testing.T) {
 	sopInstanceUID := testSOPInstanceUID
 	actionTypeID := uint16(1)
 
-	actionReply := dataset.New()
-	actionReply.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    actionReply := dataset.New()
+    _ = actionReply.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	resp := NewNActionResponseSuccess(100, sopClassUID, sopInstanceUID, actionTypeID, actionReply)
 
@@ -297,8 +297,8 @@ func TestNewNCreateRequest(t *testing.T) {
 	sopClassUID := testSOPClassUID
 	sopInstanceUID := testSOPInstanceUID
 
-	attrList := dataset.New()
-	attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"New^Patient"}))
+    attrList := dataset.New()
+    _ = attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"New^Patient"}))
 
 	req := NewNCreateRequest(sopClassUID, sopInstanceUID, attrList)
 
@@ -326,8 +326,8 @@ func TestNewNCreateRequest(t *testing.T) {
 func TestNewNCreateRequestServerAssignedUID(t *testing.T) {
 	sopClassUID := testSOPClassUID
 
-	attrList := dataset.New()
-	attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"New^Patient"}))
+    attrList := dataset.New()
+    _ = attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"New^Patient"}))
 
 	// Empty instance UID - server should assign
 	req := NewNCreateRequest(sopClassUID, "", attrList)
@@ -341,8 +341,8 @@ func TestNewNCreateResponse(t *testing.T) {
 	sopClassUID := testSOPClassUID
 	sopInstanceUID := testSOPInstanceUID
 
-	attrList := dataset.New()
-	attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"New^Patient"}))
+    attrList := dataset.New()
+    _ = attrList.Add(element.NewString(tag.PatientName, vr.PN, []string{"New^Patient"}))
 
 	resp := NewNCreateResponseSuccess(100, sopClassUID, sopInstanceUID, attrList)
 

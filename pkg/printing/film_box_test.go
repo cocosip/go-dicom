@@ -192,8 +192,10 @@ func TestFilmBox_AddImageBox(t *testing.T) {
 }
 
 func TestFilmBox_GetImageBox(t *testing.T) {
-	fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
-	fb.InitializeImageBoxes()
+    fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+    if err := fb.InitializeImageBoxes(); err != nil {
+        t.Fatalf("InitializeImageBoxes error: %v", err)
+    }
 
 	// Test valid positions (1-based)
 	ib1 := fb.GetImageBox(1)
@@ -230,17 +232,21 @@ func TestFilmBox_IsValid(t *testing.T) {
 	}{
 		{
 			name: "valid film box",
-			setup: func(fb *FilmBox) {
-				fb.InitializeImageBoxes()
-			},
+            setup: func(fb *FilmBox) {
+                if err := fb.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
+            },
 			expected: true,
 		},
 		{
 			name: "invalid: empty image display format",
-			setup: func(fb *FilmBox) {
-				fb.ImageDisplayFormat = ""
-				fb.InitializeImageBoxes()
-			},
+            setup: func(fb *FilmBox) {
+                fb.ImageDisplayFormat = ""
+                if err := fb.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
+            },
 			expected: false,
 		},
 		{
@@ -252,13 +258,15 @@ func TestFilmBox_IsValid(t *testing.T) {
 		},
 		{
 			name: "invalid: image box is invalid",
-			setup: func(fb *FilmBox) {
-				fb.InitializeImageBoxes()
-				// Corrupt an image box
-				if len(fb.BasicImageBoxes) > 0 {
-					fb.BasicImageBoxes[0].SOPInstanceUID = ""
-				}
-			},
+            setup: func(fb *FilmBox) {
+                if err := fb.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
+            	// Corrupt an image box
+                if len(fb.BasicImageBoxes) > 0 {
+                    fb.BasicImageBoxes[0].SOPInstanceUID = ""
+                }
+            },
 			expected: false,
 		},
 	}
@@ -297,7 +305,9 @@ func TestFilmBox_ColorInheritance(t *testing.T) {
 	grayscaleFS := NewFilmSession("", "", false)
 	grayscaleFB := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
 	grayscaleFS.AddFilmBox(grayscaleFB)
-	grayscaleFB.InitializeImageBoxes()
+    if err := grayscaleFB.InitializeImageBoxes(); err != nil {
+        t.Fatalf("InitializeImageBoxes error: %v", err)
+    }
 
 	for _, ib := range grayscaleFB.BasicImageBoxes {
 		if ib.IsColor {
@@ -312,7 +322,9 @@ func TestFilmBox_ColorInheritance(t *testing.T) {
 	colorFS := NewFilmSession("", "", true)
 	colorFB := NewFilmBox("1.2.3.4.6", "STANDARD\\2,2")
 	colorFS.AddFilmBox(colorFB)
-	colorFB.InitializeImageBoxes()
+    if err := colorFB.InitializeImageBoxes(); err != nil {
+        t.Fatalf("InitializeImageBoxes error: %v", err)
+    }
 
 	for _, ib := range colorFB.BasicImageBoxes {
 		if !ib.IsColor {

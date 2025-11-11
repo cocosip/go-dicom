@@ -4,12 +4,13 @@
 package dataset_test
 
 import (
-	"testing"
+    "testing"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/dicom/testutil"
 )
 
 // TestDatasetBasics tests basic dataset operations
@@ -128,9 +129,9 @@ func TestDatasetMultipleElements(t *testing.T) {
 	ds := dataset.New()
 
 	// Add multiple elements
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 
 	if ds.Count() != 3 {
 		t.Errorf("Count() = %d, want 3", ds.Count())
@@ -153,8 +154,8 @@ func TestDatasetMultipleElements(t *testing.T) {
 // TestDatasetClear tests Clear method
 func TestDatasetClear(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
 
 	ds.Clear()
 
@@ -168,9 +169,9 @@ func TestDatasetClear(t *testing.T) {
 
 // TestDatasetClone tests Clone method
 func TestDatasetClone(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
 
 	clone := ds.Clone()
 
@@ -195,13 +196,13 @@ func TestDatasetClone(t *testing.T) {
 
 // TestDatasetMerge tests Merge method
 func TestDatasetMerge(t *testing.T) {
-	ds1 := dataset.New()
-	ds1.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds1.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
+    ds1 := dataset.New()
+    _ = ds1.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds1.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
 
-	ds2 := dataset.New()
-	ds2.Add(element.NewString(tag.PatientName, vr.PN, []string{"Smith^Jane"}))
-	ds2.Add(element.NewString(tag.StudyTime, vr.TM, []string{"120000"}))
+    ds2 := dataset.New()
+    _ = ds2.Add(element.NewString(tag.PatientName, vr.PN, []string{"Smith^Jane"}))
+    _ = ds2.Add(element.NewString(tag.StudyTime, vr.TM, []string{"120000"}))
 
 	t.Run("MergeWithoutOverwrite", func(t *testing.T) {
 		merged := ds1.Clone()
@@ -238,10 +239,10 @@ func TestDatasetMerge(t *testing.T) {
 
 // TestDatasetFilter tests Filter method
 func TestDatasetFilter(t *testing.T) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 
 	// Filter to keep only string elements
 	filtered := ds.Filter(func(elem element.Element) bool {
@@ -264,26 +265,26 @@ func BenchmarkDatasetAdd(b *testing.B) {
 	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ds := dataset.New()
-		ds.Add(elem)
-	}
+    for i := 0; i < b.N; i++ {
+        ds := dataset.New()
+        _ = ds.Add(elem)
+    }
 }
 
 func BenchmarkDatasetAddOrUpdate(b *testing.B) {
 	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ds := dataset.New()
-		ds.AddOrUpdate(elem)
-	}
+    for i := 0; i < b.N; i++ {
+        ds := dataset.New()
+        _ = ds.AddOrUpdate(elem)
+    }
 }
 
 func BenchmarkDatasetGet(b *testing.B) {
-	ds := dataset.New()
-	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
-	ds.Add(elem)
+    ds := dataset.New()
+    elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+    _ = ds.Add(elem)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -292,8 +293,8 @@ func BenchmarkDatasetGet(b *testing.B) {
 }
 
 func BenchmarkDatasetGetString(b *testing.B) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -302,8 +303,8 @@ func BenchmarkDatasetGetString(b *testing.B) {
 }
 
 func BenchmarkDatasetContains(b *testing.B) {
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -314,10 +315,10 @@ func BenchmarkDatasetContains(b *testing.B) {
 func BenchmarkDatasetElements(b *testing.B) {
 	ds := dataset.New()
 	// Add multiple elements
-	for i := 0; i < 100; i++ {
-		t := tag.New(0x0010, uint16(i))
-		ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
-	}
+    for i := 0; i < 100; i++ {
+        t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+        _ = ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
+    }
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -326,11 +327,11 @@ func BenchmarkDatasetElements(b *testing.B) {
 }
 
 func BenchmarkDatasetClone(b *testing.B) {
-	ds := dataset.New()
-	for i := 0; i < 50; i++ {
-		t := tag.New(0x0010, uint16(i))
-		ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
-	}
+    ds := dataset.New()
+    for i := 0; i < 50; i++ {
+        t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+        _ = ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
+    }
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -339,18 +340,18 @@ func BenchmarkDatasetClone(b *testing.B) {
 }
 
 func BenchmarkDatasetMerge(b *testing.B) {
-	ds1 := dataset.New()
-	ds2 := dataset.New()
+    ds1 := dataset.New()
+    ds2 := dataset.New()
 
-	for i := 0; i < 25; i++ {
-		t := tag.New(0x0010, uint16(i))
-		ds1.Add(element.NewString(t, vr.LO, []string{"Value1"}))
-	}
+    for i := 0; i < 25; i++ {
+        t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+        _ = ds1.Add(element.NewString(t, vr.LO, []string{"Value1"}))
+    }
 
-	for i := 25; i < 50; i++ {
-		t := tag.New(0x0010, uint16(i))
-		ds2.Add(element.NewString(t, vr.LO, []string{"Value2"}))
-	}
+    for i := 25; i < 50; i++ {
+        t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+        _ = ds2.Add(element.NewString(t, vr.LO, []string{"Value2"}))
+    }
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -361,14 +362,14 @@ func BenchmarkDatasetMerge(b *testing.B) {
 
 func BenchmarkDatasetFilter(b *testing.B) {
 	ds := dataset.New()
-	for i := 0; i < 100; i++ {
-		t := tag.New(0x0010, uint16(i))
-		if i%2 == 0 {
-			ds.Add(element.NewString(t, vr.LO, []string{"String"}))
-		} else {
-			ds.Add(element.NewUnsignedShort(t, []uint16{uint16(i)}))
-		}
-	}
+    for i := 0; i < 100; i++ {
+        t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+        if i%2 == 0 {
+            _ = ds.Add(element.NewString(t, vr.LO, []string{"String"}))
+        } else {
+            _ = ds.Add(element.NewUnsignedShort(t, []uint16{testutil.SafeUint16FromInt(i)}))
+        }
+    }
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

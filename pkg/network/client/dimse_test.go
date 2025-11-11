@@ -255,9 +255,9 @@ func TestCStore_Success(t *testing.T) {
 	client, _ := setupMockClient()
 
 	// Create a valid dataset
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -271,8 +271,8 @@ func TestCStore_Success(t *testing.T) {
 func TestCFind_Success_NoResults(t *testing.T) {
 	client, _ := setupMockClient()
 
-	query := dataset.New()
-	query.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
+    query := dataset.New()
+    _ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -293,17 +293,17 @@ func TestCFind_Success_MultipleResults(t *testing.T) {
 	// Setup mock responses
 
 	// Create mock identifiers
-	id1 := dataset.New()
-	id1.Add(element.NewString(tag.PatientID, vr.LO, []string{"P001"}))
-	id1.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
+    id1 := dataset.New()
+    _ = id1.Add(element.NewString(tag.PatientID, vr.LO, []string{"P001"}))
+    _ = id1.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
 
-	id2 := dataset.New()
-	id2.Add(element.NewString(tag.PatientID, vr.LO, []string{"P002"}))
-	id2.Add(element.NewString(tag.PatientName, vr.PN, []string{"SMITH^JANE"}))
+    id2 := dataset.New()
+    _ = id2.Add(element.NewString(tag.PatientID, vr.LO, []string{"P002"}))
+    _ = id2.Add(element.NewString(tag.PatientName, vr.PN, []string{"SMITH^JANE"}))
 
 	// Create mock request for response generation
-	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, dataset.New())
-	req.SetMessageID(1)
+    req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, dataset.New())
+    _ = req.SetMessageID(1)
 
 	mockService.findResponses = []*dimse.CFindResponse{
 		dimse.NewCFindResponseFromRequest(req, 0xFF00, id1), // Pending
@@ -311,8 +311,8 @@ func TestCFind_Success_MultipleResults(t *testing.T) {
 		dimse.NewCFindResponseFromRequest(req, 0x0000, nil), // Success
 	}
 
-	query := dataset.New()
-	query.Add(element.NewString(tag.PatientName, vr.PN, []string{"*"}))
+    query := dataset.New()
+    _ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"*"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -347,11 +347,11 @@ func TestCFindWithCallback_Success(t *testing.T) {
 
 	// Setup mock responses
 
-	id1 := dataset.New()
-	id1.Add(element.NewString(tag.PatientID, vr.LO, []string{"P001"}))
+    id1 := dataset.New()
+    _ = id1.Add(element.NewString(tag.PatientID, vr.LO, []string{"P001"}))
 
-	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, dataset.New())
-	req.SetMessageID(1)
+    req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, dataset.New())
+    _ = req.SetMessageID(1)
 
 	mockService.findResponses = []*dimse.CFindResponse{
 		dimse.NewCFindResponseFromRequest(req, 0xFF00, id1), // Pending
@@ -384,14 +384,14 @@ func TestCFindWithCallback_StopEarly(t *testing.T) {
 
 	// Setup mock responses with multiple results
 
-	id1 := dataset.New()
-	id1.Add(element.NewString(tag.PatientID, vr.LO, []string{"P001"}))
+    id1 := dataset.New()
+    _ = id1.Add(element.NewString(tag.PatientID, vr.LO, []string{"P001"}))
 
-	id2 := dataset.New()
-	id2.Add(element.NewString(tag.PatientID, vr.LO, []string{"P002"}))
+    id2 := dataset.New()
+    _ = id2.Add(element.NewString(tag.PatientID, vr.LO, []string{"P002"}))
 
-	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, dataset.New())
-	req.SetMessageID(1)
+    req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, dataset.New())
+    _ = req.SetMessageID(1)
 
 	mockService.findResponses = []*dimse.CFindResponse{
 		dimse.NewCFindResponseFromRequest(req, 0xFF00, id1), // Pending
@@ -423,9 +423,9 @@ func TestCFindWithCallback_StopEarly(t *testing.T) {
 func TestCStoreWithPriority_Success(t *testing.T) {
 	client, _ := setupMockClient()
 
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -441,13 +441,13 @@ func TestCStoreMultiple_Success(t *testing.T) {
 
 	// Create multiple datasets
 	datasets := make([]*dataset.Dataset, 3)
-	for i := 0; i < 3; i++ {
-		ds := dataset.New()
-		ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-		instanceUID := fmt.Sprintf("1.2.3.4.5.6.7.8.%d", i)
-		ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{instanceUID}))
-		datasets[i] = ds
-	}
+    for i := 0; i < 3; i++ {
+        ds := dataset.New()
+        _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+        instanceUID := fmt.Sprintf("1.2.3.4.5.6.7.8.%d", i)
+        _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{instanceUID}))
+        datasets[i] = ds
+    }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -481,9 +481,9 @@ func TestCStoreMultiple_Empty(t *testing.T) {
 func TestCStoreMultiple_NotConnected(t *testing.T) {
 	client := New()
 
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	ctx := context.Background()
 	_, err := client.CStoreMultiple(ctx, []*dataset.Dataset{ds})
@@ -512,8 +512,8 @@ func TestPing_Success(t *testing.T) {
 func TestCMove_Success(t *testing.T) {
 	client, _ := setupMockClient()
 
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -539,8 +539,8 @@ func TestCMove_Success(t *testing.T) {
 func TestCMove_NotConnected(t *testing.T) {
 	client := New()
 
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	ctx := context.Background()
 	err := client.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier, nil)
@@ -572,8 +572,8 @@ func TestCMove_NilIdentifier(t *testing.T) {
 func TestCMove_EmptyDestination(t *testing.T) {
 	client, _ := setupMockClient()
 
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	ctx := context.Background()
 	err := client.CMove(ctx, dimse.QueryRetrieveLevelStudy, "", identifier, nil)
@@ -590,8 +590,8 @@ func TestCMove_EmptyDestination(t *testing.T) {
 func TestCMove_StopEarly(t *testing.T) {
 	client, _ := setupMockClient()
 
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -618,8 +618,8 @@ func TestCMove_StopEarly(t *testing.T) {
 func TestCGet_Success(t *testing.T) {
 	client, _ := setupMockClient()
 
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -645,8 +645,8 @@ func TestCGet_Success(t *testing.T) {
 func TestCGet_NotConnected(t *testing.T) {
 	client := New()
 
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	ctx := context.Background()
 	err := client.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier, nil)
@@ -678,8 +678,8 @@ func TestCGet_NilIdentifier(t *testing.T) {
 func TestCGet_StopEarly(t *testing.T) {
 	client, _ := setupMockClient()
 
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

@@ -4,10 +4,11 @@
 package pdu
 
 import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"io"
+    "bytes"
+    "encoding/binary"
+    "fmt"
+    "io"
+    "math"
 )
 
 // AAssociateRQ represents an A-ASSOCIATE-RQ PDU.
@@ -195,7 +196,10 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 	for _, role := range ui.SCPSCURoleSelections {
 		var roleData bytes.Buffer
 		// SOP Class UID length (2 bytes)
-		_ = binary.Write(&roleData, binary.BigEndian, uint16(len(role.SOPClassUID)))
+        if len(role.SOPClassUID) > int(math.MaxUint16) {
+            return fmt.Errorf("SOPClassUID length too large: %d", len(role.SOPClassUID))
+        }
+        _ = binary.Write(&roleData, binary.BigEndian, uint16(len(role.SOPClassUID))) // #nosec G115 -- bounded by check above
 		// SOP Class UID
 		roleData.WriteString(role.SOPClassUID)
 		// SCU Role (1 byte)
@@ -212,7 +216,10 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 	for _, ext := range ui.ExtendedNegotiations {
 		var extData bytes.Buffer
 		// SOP Class UID length (2 bytes)
-		_ = binary.Write(&extData, binary.BigEndian, uint16(len(ext.SOPClassUID)))
+        if len(ext.SOPClassUID) > int(math.MaxUint16) {
+            return fmt.Errorf("ExtendedNegotiation SOPClassUID length too large: %d", len(ext.SOPClassUID))
+        }
+        _ = binary.Write(&extData, binary.BigEndian, uint16(len(ext.SOPClassUID))) // #nosec G115 -- bounded by check above
 		// SOP Class UID
 		extData.WriteString(ext.SOPClassUID)
 		// Service Class Application Information
@@ -231,11 +238,17 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 		// Positive Response Requested (1 byte)
 		idData.WriteByte(ui.UserIdentity.PositiveResponseRequested)
 		// Primary Field Length (2 bytes)
-		_ = binary.Write(&idData, binary.BigEndian, uint16(len(ui.UserIdentity.PrimaryField)))
+        if len(ui.UserIdentity.PrimaryField) > int(math.MaxUint16) {
+            return fmt.Errorf("PrimaryField length too large: %d", len(ui.UserIdentity.PrimaryField))
+        }
+        _ = binary.Write(&idData, binary.BigEndian, uint16(len(ui.UserIdentity.PrimaryField))) // #nosec G115 -- bounded by check above
 		// Primary Field
 		idData.Write(ui.UserIdentity.PrimaryField)
 		// Secondary Field Length (2 bytes)
-		_ = binary.Write(&idData, binary.BigEndian, uint16(len(ui.UserIdentity.SecondaryField)))
+        if len(ui.UserIdentity.SecondaryField) > int(math.MaxUint16) {
+            return fmt.Errorf("SecondaryField length too large: %d", len(ui.UserIdentity.SecondaryField))
+        }
+        _ = binary.Write(&idData, binary.BigEndian, uint16(len(ui.UserIdentity.SecondaryField))) // #nosec G115 -- bounded by check above
 		// Secondary Field (only if present)
 		if len(ui.UserIdentity.SecondaryField) > 0 {
 			idData.Write(ui.UserIdentity.SecondaryField)

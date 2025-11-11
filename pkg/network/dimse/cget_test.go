@@ -13,8 +13,8 @@ import (
 )
 
 func TestNewCGetRequest(t *testing.T) {
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
 
@@ -36,8 +36,8 @@ func TestNewCGetRequest(t *testing.T) {
 }
 
 func TestNewCGetRequestPatientRoot(t *testing.T) {
-	identifier := dataset.New()
-	identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	req := NewCGetRequestPatientRoot(QueryRetrieveLevelPatient, identifier)
 
@@ -119,8 +119,8 @@ func TestNewCGetResponseSuccess(t *testing.T) {
 
 func TestNewCGetResponseFromRequest(t *testing.T) {
 	identifier := dataset.New()
-	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
-	req.SetMessageID(456)
+    req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
+    _ = req.SetMessageID(456)
 
 	resp := NewCGetResponseFromRequest(req, 0x0000)
 
@@ -135,8 +135,8 @@ func TestNewCGetResponseFromRequest(t *testing.T) {
 
 func TestCGetRequest_String(t *testing.T) {
 	identifier := dataset.New()
-	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
-	req.SetMessageID(789)
+    req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
+    _ = req.SetMessageID(789)
 
 	str := req.String()
 	if str == "" {

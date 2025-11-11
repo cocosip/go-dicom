@@ -60,7 +60,7 @@ func (e *EvenLengthBuffer) GetByteRange(offset, count uint32, output []byte) err
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
-	if uint32(len(output)) < count { // #nosec G115 -- buffer size check
+    if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
 	if offset+count > e.Size() {

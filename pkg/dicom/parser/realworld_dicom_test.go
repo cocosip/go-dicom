@@ -49,7 +49,7 @@ func TestRealWorldDICOMFiles(t *testing.T) {
 				failedCount++
 				return
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -190,7 +190,7 @@ func TestSpecificRealWorldFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -228,7 +228,7 @@ func TestFragmentSequenceFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -269,7 +269,7 @@ func TestCompressedFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -312,7 +312,7 @@ func TestDICOMDIRFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {

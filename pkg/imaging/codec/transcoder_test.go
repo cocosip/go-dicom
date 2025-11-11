@@ -37,8 +37,8 @@ func TestNewTranscoder(t *testing.T) {
 func TestTranscoder_TranscodeNoPixelData(t *testing.T) {
 	// Create dataset without pixel data
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	transcoder := NewTranscoder(
 		transfer.ExplicitVRLittleEndian,
@@ -63,21 +63,21 @@ func TestTranscoder_TranscodeNoPixelData(t *testing.T) {
 func TestTranscoder_TranscodeUncompressedToUncompressed(t *testing.T) {
 	// Create dataset with uncompressed pixel data
 	ds := dataset.New()
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-	ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
-	ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
-	ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
-	ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
-	ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-	ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-	ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+    _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+    _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+    _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+    _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 	// Create simple pixel data (512x512 = 262144 bytes)
 	pixelData := make([]byte, 512*512)
 	for i := range pixelData {
 		pixelData[i] = byte(i % 256)
 	}
-	ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+    _ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
 
 	transcoder := NewTranscoder(
 		transfer.ExplicitVRLittleEndian,
@@ -103,20 +103,20 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 	t.Run("UncompressedSingleFrame", func(t *testing.T) {
 		// Create dataset with uncompressed pixel data
 		ds := dataset.New()
-		ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
-		ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
-		ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
-		ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
-		ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
-		ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-		ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-		ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+    _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+    _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+    _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+    _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 		pixelData := make([]byte, 10*10)
 		for i := range pixelData {
 			pixelData[i] = byte(i)
 		}
-		ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+    _ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
 
 		transcoder := NewTranscoder(
 			transfer.ExplicitVRLittleEndian,
@@ -135,17 +135,17 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 
 	t.Run("InvalidFrameIndex", func(t *testing.T) {
 		ds := dataset.New()
-		ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
-		ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
-		ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
-		ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
-		ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
-		ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-		ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-		ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+        _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
+        _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
+        _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+        _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+        _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+        _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+        _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+        _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 		pixelData := make([]byte, 10*10)
-		ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+        _ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
 
 		transcoder := NewTranscoder(
 			transfer.ExplicitVRLittleEndian,

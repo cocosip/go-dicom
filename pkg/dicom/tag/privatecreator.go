@@ -4,8 +4,8 @@
 package tag
 
 import (
-	"hash/fnv"
-	"strings"
+    "hash/fnv"
+    "strings"
 )
 
 // PrivateCreator represents a DICOM private creator identification.
@@ -53,7 +53,30 @@ func (pc *PrivateCreator) Equals(other *PrivateCreator) bool {
 
 // Hash returns a hash code for the private creator.
 func (pc *PrivateCreator) Hash() uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(pc.creator))
-	return h.Sum32()
+    h := fnv.New32a()
+    // Write returns an error we should check to satisfy linters and robustness.
+    // In practice, fnv.Hash's Write never returns an error, but we still handle it.
+    if _, err := h.Write([]byte(pc.creator)); err != nil {
+        // Fallback: compute FNV-1a manually if an unexpected error occurs.
+        return manualFNV32a(pc.creator)
+    }
+    return h.Sum32()
+}
+
+// manualFNV32a computes the FNV-1a 32-bit hash for a string.
+// Params:
+//   - s: input string to hash.
+// Returns:
+//   - uint32: the computed FNV-1a 32-bit hash value.
+// Description:
+//   Implements FNV-1a (32-bit) in pure Go for the unlikely case when fnv.New32a().Write fails.
+func manualFNV32a(s string) uint32 {
+    const offset32 uint32 = 2166136261
+    const prime32 uint32 = 16777619
+    hash := offset32
+    for i := 0; i < len(s); i++ {
+        hash ^= uint32(s[i])
+        hash *= prime32
+    }
+    return hash
 }

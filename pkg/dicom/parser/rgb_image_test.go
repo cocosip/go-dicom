@@ -39,7 +39,7 @@ func TestRGBImageParsing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	t.Log("Parsing TestPattern_RGB.dcm...")
 	result, err := Parse(file)
@@ -181,7 +181,7 @@ func TestRGBImageToImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -287,7 +287,7 @@ func TestRGBImageToPNG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -308,7 +308,7 @@ func TestRGBImageToPNG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create output file: %v", err)
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	err = png.Encode(outFile, img)
 	if err != nil {
@@ -330,7 +330,7 @@ func TestRGBImageToPNG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open PNG file: %v", err)
 	}
-	defer pngFile.Close()
+	defer func() { _ = pngFile.Close() }()
 
 	decodedImg, err := png.Decode(pngFile)
 	if err != nil {

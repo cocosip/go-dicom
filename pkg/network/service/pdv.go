@@ -4,10 +4,11 @@
 package service
 
 import (
-	"encoding/binary"
-	"fmt"
+    "encoding/binary"
+    "fmt"
+    "math"
 
-	"github.com/cocosip/go-dicom/pkg/network/pdu"
+    "github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
 // PDV (Presentation Data Value) represents a DICOM data fragment.
@@ -30,8 +31,13 @@ type PDV struct {
 
 // Encode encodes the PDV into bytes for transmission.
 func (p *PDV) Encode() []byte {
-	// Calculate total length (1 byte context ID + 1 byte header + data)
-	length := uint32(1 + 1 + len(p.Data))
+    // Calculate total length (1 byte context ID + 1 byte header + data)
+    total := 1 + 1 + len(p.Data)
+    if total > int(math.MaxUint32) {
+        // defensive: extremely unlikely in tests/typical usage
+        total = int(math.MaxUint32)
+    }
+    length := uint32(total) // #nosec G115 -- bounded above
 
 	// Create buffer
 	buf := make([]byte, 4+length)
@@ -60,15 +66,16 @@ func (p *PDV) Encode() []byte {
 
 // DecodePDV decodes a PDV from bytes.
 func DecodePDV(data []byte) (*PDV, error) {
-	if len(data) < 6 {
-		return nil, fmt.Errorf("PDV data too short: %d bytes", len(data))
-	}
+    if len(data) < 6 {
+        return nil, fmt.Errorf("PDV data too short: %d bytes", len(data))
+    }
 
-	// Read length
-	length := binary.BigEndian.Uint32(data[0:4])
-	if uint32(len(data)) < 4+length {
-		return nil, fmt.Errorf("PDV data incomplete: expected %d bytes, got %d", 4+length, len(data))
-	}
+    // Read length
+    length := binary.BigEndian.Uint32(data[0:4])
+    // Safe conversion: compare using int after bounds check
+    if len(data) < int(4+length) {
+        return nil, fmt.Errorf("PDV data incomplete: expected %d bytes, got %d", 4+length, len(data))
+    }
 
 	// Read presentation context ID
 	contextID := data[4]

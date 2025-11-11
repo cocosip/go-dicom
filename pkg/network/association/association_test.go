@@ -69,8 +69,8 @@ func TestAssociation_FindPresentationContextByID(t *testing.T) {
 	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian)
 
-	assoc.AddPresentationContext(pc1)
-	assoc.AddPresentationContext(pc3)
+    _ = assoc.AddPresentationContext(pc1)
+    _ = assoc.AddPresentationContext(pc3)
 
 	// Find existing context
 	found := assoc.FindPresentationContextByID(1)
@@ -97,8 +97,8 @@ func TestAssociation_FindPresentationContextByAbstractSyntax(t *testing.T) {
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ImplicitVRLittleEndian)
 	pc3.Reject(ResultAbstractSyntaxNotSupported)
 
-	assoc.AddPresentationContext(pc1)
-	assoc.AddPresentationContext(pc3)
+    _ = assoc.AddPresentationContext(pc1)
+    _ = assoc.AddPresentationContext(pc3)
 
 	// Find accepted context
 	found := assoc.FindPresentationContextByAbstractSyntax("1.2.840.10008.5.1.4.1.1.2")
@@ -125,9 +125,9 @@ func TestAssociation_GetAcceptedPresentationContexts(t *testing.T) {
 	pc5 := NewPresentationContext(5, "1.2.840.10008.5.1.4.1.1.4", transfer.ExplicitVRLittleEndian)
 	pc5.Accept(transfer.ExplicitVRLittleEndian)
 
-	assoc.AddPresentationContext(pc1)
-	assoc.AddPresentationContext(pc3)
-	assoc.AddPresentationContext(pc5)
+    _ = assoc.AddPresentationContext(pc1)
+    _ = assoc.AddPresentationContext(pc3)
+    _ = assoc.AddPresentationContext(pc5)
 
 	accepted := assoc.GetAcceptedPresentationContexts()
 	if len(accepted) != 2 {
@@ -212,8 +212,8 @@ func TestAssociation_String(t *testing.T) {
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ImplicitVRLittleEndian)
 	pc3.Reject(ResultUserRejection)
 
-	assoc.AddPresentationContext(pc1)
-	assoc.AddPresentationContext(pc3)
+    _ = assoc.AddPresentationContext(pc1)
+    _ = assoc.AddPresentationContext(pc3)
 
 	str := assoc.String()
 	expected := "Association[MY_SCU -> PACS_SERVER, 1/2 contexts accepted, MaxPDU=16384]"
@@ -303,7 +303,7 @@ func TestAssociation_GetTransferSyntaxForAbstractSyntax(t *testing.T) {
 	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
 	pc1.Accept(transfer.ExplicitVRLittleEndian)
 
-	assoc.AddPresentationContext(pc1)
+    _ = assoc.AddPresentationContext(pc1)
 
 	// Find transfer syntax for accepted context
 	ts := assoc.GetTransferSyntaxForAbstractSyntax("1.2.840.10008.5.1.4.1.1.2")

@@ -28,12 +28,13 @@ func testNumericElement[T comparable](t *testing.T, elem numericElement[T], valu
 		}
 	})
 
-	t.Run("Length", func(t *testing.T) {
-		want := uint32(len(values) * bytesPerValue)
-		if elem.Length() != want {
-			t.Errorf("Length() = %d, want %d", elem.Length(), want)
-		}
-	})
+    t.Run("Length", func(t *testing.T) {
+        // Conversion is safe: len(values)*bytesPerValue is tiny in tests.
+        want := uint32(len(values) * bytesPerValue) // #nosec G115 -- bounded test sizes
+        if elem.Length() != want {
+            t.Errorf("Length() = %d, want %d", elem.Length(), want)
+        }
+    })
 
 	t.Run("GetValue", func(t *testing.T) {
 		for i, want := range values {

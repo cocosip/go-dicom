@@ -131,10 +131,12 @@ func DialTLS(ctx context.Context, network, address string, opts ...DialOption) (
 	}
 
 	// Get TLS config (use default if not specified)
-	tlsConfig := config.tlsConfig
-	if tlsConfig == nil {
-		tlsConfig = &tls.Config{}
-	}
+    tlsConfig := config.tlsConfig
+    if tlsConfig == nil {
+        tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+    } else if tlsConfig.MinVersion == 0 {
+        tlsConfig.MinVersion = tls.VersionTLS12
+    }
 
 	// Wrap the connection with TLS
 	tlsConn := tls.Client(rawConn, tlsConfig)

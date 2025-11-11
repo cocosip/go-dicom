@@ -29,7 +29,7 @@ func TestHasFragmentSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -142,7 +142,7 @@ func TestMultiFrameFragmentSequences(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-			defer file.Close()
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -193,7 +193,7 @@ func TestFragmentSequenceStructure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {

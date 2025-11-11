@@ -18,7 +18,7 @@ func ExampleParse() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := parser.Parse(file)
 	if err != nil {
@@ -35,7 +35,7 @@ func ExampleParse_withOptions() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	// Parse with custom options:
 	// - Skip large tags (e.g., pixel data) to save memory
@@ -59,7 +59,7 @@ func ExampleParse_stopEarly() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	// Stop parsing when we reach pixel data
 	result, err := parser.Parse(file,

@@ -11,6 +11,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
@@ -23,16 +24,16 @@ func TestWriteReadSingleFrame(t *testing.T) {
 	ds := dataset.New()
 
 	// Add required File Meta Information elements
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
-	ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8"}))
-	ds.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7"}))
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+    _ = ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8"}))
+    _ = ds.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7"}))
 
 	// Add Patient/Study information
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"TEST001"}))
-	ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
-	ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"TEST001"}))
+    _ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
+    _ = ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
 
 	// Add image properties
 	rows := uint16(256)
@@ -42,22 +43,22 @@ func TestWriteReadSingleFrame(t *testing.T) {
 	highBit := uint16(15)
 	pixelRep := uint16(0) // unsigned
 
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
-	ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{cols}))
-	ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{bitsAllocated}))
-	ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{bitsStored}))
-	ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{highBit}))
-	ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{pixelRep}))
-	ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-	ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{cols}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{bitsAllocated}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{bitsStored}))
+    _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{highBit}))
+    _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{pixelRep}))
+    _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+    _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 	// Create pixel data - single frame 256x256x2 bytes = 131072 bytes
 	pixelDataSize := int(rows) * int(cols) * 2 // 2 bytes per pixel for 16-bit
 	pixelData := make([]byte, pixelDataSize)
 
-	// Fill with pattern data (gradient)
+	// Fill with pattern data (gradient) with explicit bounds check to satisfy gosec G115.
 	for i := 0; i < pixelDataSize/2; i++ {
-		value := uint16(i % 65536)
+		value := testutil.SafeUint16FromInt(i)
 		pixelData[i*2] = byte(value & 0xFF)
 		pixelData[i*2+1] = byte((value >> 8) & 0xFF)
 	}
@@ -66,7 +67,7 @@ func TestWriteReadSingleFrame(t *testing.T) {
 
 	// Add pixel data to dataset
 	pixelDataElement := element.NewOtherWord(tag.PixelData, pixelData)
-	ds.Add(pixelDataElement)
+    _ = ds.Add(pixelDataElement)
 
 	t.Logf("Dataset created with %d elements", ds.Count())
 
@@ -182,16 +183,16 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	ds := dataset.New()
 
 	// Add required File Meta Information elements
-	ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9.10"}))
-	ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8"}))
-	ds.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7"}))
+    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
+    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9.10"}))
+    _ = ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8"}))
+    _ = ds.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7"}))
 
 	// Add Patient/Study information
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"MultiFrame^Test"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"MULTI001"}))
-	ds.Add(element.NewString(tag.Modality, vr.CS, []string{"MR"}))
-	ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Multi-Frame Test Study"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"MultiFrame^Test"}))
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"MULTI001"}))
+    _ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"MR"}))
+    _ = ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Multi-Frame Test Study"}))
 
 	// Add image properties
 	rows := uint16(128)
@@ -201,18 +202,18 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	highBit := uint16(15)
 	pixelRep := uint16(0) // unsigned
 
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
-	ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{cols}))
-	ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{bitsAllocated}))
-	ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{bitsStored}))
-	ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{highBit}))
-	ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{pixelRep}))
-	ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-	ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
+    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{cols}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{bitsAllocated}))
+    _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{bitsStored}))
+    _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{highBit}))
+    _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{pixelRep}))
+    _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+    _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 	// Add NumberOfFrames - CRITICAL for multi-frame (use IS - Integer String)
 	numFramesStr := fmt.Sprintf("%d", numFrames)
-	ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{numFramesStr}))
+    _ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{numFramesStr}))
 	t.Logf("Added NumberOfFrames: %d", numFrames)
 
 	// Create pixel data - multi-frame: 10 frames of 128x128x2 bytes each
@@ -226,10 +227,14 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	// Fill each frame with different pattern
 	for frame := 0; frame < numFrames; frame++ {
 		frameOffset := frame * frameSize
-		baseValue := uint16(frame * 6000) // Different base value per frame
+		// Safe multiplication with bounds-check to avoid int->uint16 overflow
+		prod := int(uint32(frame) * 6000)
+		baseValue := testutil.SafeUint16FromInt(prod) // Different base value per frame
 
 		for i := 0; i < frameSize/2; i++ {
-			value := baseValue + uint16(i%1000)
+			// Safe addition with bounds-check
+			sum := int(baseValue) + (i % 1000)
+			value := testutil.SafeUint16FromInt(sum)
 			pixelData[frameOffset+i*2] = byte(value & 0xFF)
 			pixelData[frameOffset+i*2+1] = byte((value >> 8) & 0xFF)
 		}
@@ -239,24 +244,32 @@ func TestWriteReadMultiFrame(t *testing.T) {
 
 	// Add pixel data to dataset
 	pixelDataElement := element.NewOtherWord(tag.PixelData, pixelData)
-	ds.Add(pixelDataElement)
+    _ = ds.Add(pixelDataElement)
 
 	t.Logf("Dataset created with %d elements", ds.Count())
 
 	// Write to file (for inspection)
-	outputFile := filepath.Join(os.TempDir(), "test_multiframe_write.dcm")
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "test_multiframe_write.dcm")
+	// Clean and verify path is within temp dir to address gosec G304.
+	outputFile = filepath.Clean(outputFile)
+	if !strings.HasPrefix(outputFile, filepath.Clean(tmpDir)+string(os.PathSeparator)) && outputFile != filepath.Clean(tmpDir) {
+		t.Fatalf("invalid output path: %s", outputFile)
+	}
 	file, err := os.Create(outputFile)
 	if err != nil {
 		t.Fatalf("Failed to create output file: %v", err)
 	}
 
 	err = writer.Write(file, ds)
-	file.Close()
+	defer func() { _ = file.Close() }()
 	if err != nil {
 		t.Fatalf("Failed to write DICOM: %v", err)
 	}
-
-	fileInfo, _ := os.Stat(outputFile)
+	fileInfo, statErr := os.Stat(outputFile)
+	if statErr != nil {
+		t.Fatalf("Failed to stat output file: %v", statErr)
+	}
 	t.Logf("✓ Successfully wrote DICOM to file: %s (%d bytes)", outputFile, fileInfo.Size())
 
 	// Parse the written file
@@ -264,7 +277,7 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open written file: %v", err)
 	}
-	defer readFile.Close()
+	defer func() { _ = readFile.Close() }()
 
 	result, err := Parse(readFile)
 	if err != nil {
@@ -361,7 +374,7 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	}
 
 	// Clean up
-	os.Remove(outputFile)
+        _ = os.Remove(outputFile)
 
 	t.Log("\n✅ Multi-Frame Write/Read Cycle: SUCCESS")
 	t.Logf("✅ Verified: %d frames correctly written and parsed", numFrames)
@@ -379,26 +392,26 @@ func TestWriteReadVerifyFrameCount(t *testing.T) {
 			ds := dataset.New()
 
 			// Add minimal required elements
-			ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-			ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
-			ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
+            _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+            _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+            _ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
 
 			// Add image properties
 			rows := uint16(64)
 			cols := uint16(64)
 
-			ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
-			ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{cols}))
-			ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}))
-			ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{16}))
-			ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{15}))
-			ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-			ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-			ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+            _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
+            _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{cols}))
+            _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}))
+            _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{16}))
+            _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{15}))
+            _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+            _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+            _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 			if expectedFrames > 1 {
 				numFramesStr := fmt.Sprintf("%d", expectedFrames)
-				ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{numFramesStr}))
+                _ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{numFramesStr}))
 			}
 
 			// Create pixel data
@@ -407,7 +420,7 @@ func TestWriteReadVerifyFrameCount(t *testing.T) {
 			pixelData := make([]byte, totalSize)
 
 			pixelDataElement := element.NewOtherWord(tag.PixelData, pixelData)
-			ds.Add(pixelDataElement)
+            _ = ds.Add(pixelDataElement)
 
 			// Write and parse
 			var buf bytes.Buffer

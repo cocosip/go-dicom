@@ -16,13 +16,23 @@ import (
 
 // TestWriteThenRead tests writing a DICOM file and then reading it back
 func TestWriteThenRead(t *testing.T) {
-	// Create dataset with various element types
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-	ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
-	ds.Add(element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5}))
+    // Create dataset with various element types
+    ds := dataset.New()
+    if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
+        t.Fatalf("Add() error: %v", err)
+    }
+    if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {
+        t.Fatalf("Add() error: %v", err)
+    }
+    if err := ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512})); err != nil {
+        t.Fatalf("Add() error: %v", err)
+    }
+    if err := ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512})); err != nil {
+        t.Fatalf("Add() error: %v", err)
+    }
+    if err := ds.Add(element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5})); err != nil {
+        t.Fatalf("Add() error: %v", err)
+    }
 
 	// Write to buffer (using defaults)
 	buf := &bytes.Buffer{}
@@ -93,21 +103,31 @@ func TestWriteThenRead(t *testing.T) {
 // TestWriteThenReadWithSequence tests writing and reading a dataset with a sequence
 func TestWriteThenReadWithSequence(t *testing.T) {
 	// Create dataset with a sequence
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+    ds := dataset.New()
+    if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"})); err != nil {
+        t.Fatalf("Add() error: %v", err)
+    }
 
 	// Create a Referenced Image Sequence
 	seq := dataset.NewSequence(tag.New(0x0008, 0x1140))
-	item1 := dataset.New()
-	item1.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.4"}))
-	item1.Add(element.NewString(tag.New(0x0008, 0x1150), vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+    item1 := dataset.New()
+    if err := item1.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.4"})); err != nil {
+        t.Fatalf("Item.Add() error: %v", err)
+    }
+    if err := item1.Add(element.NewString(tag.New(0x0008, 0x1150), vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})); err != nil {
+        t.Fatalf("Item.Add() error: %v", err)
+    }
 	seq.AddItem(item1)
 
-	item2 := dataset.New()
-	item2.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.5"}))
+    item2 := dataset.New()
+    if err := item2.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.5"})); err != nil {
+        t.Fatalf("Item.Add() error: %v", err)
+    }
 	seq.AddItem(item2)
 
-	ds.Add(seq)
+    if err := ds.Add(seq); err != nil {
+        t.Fatalf("Add() error: %v", err)
+    }
 
 	// Write to buffer (using defaults)
 	buf := &bytes.Buffer{}

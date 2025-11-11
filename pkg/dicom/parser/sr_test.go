@@ -37,7 +37,7 @@ func TestStructuredReportParsing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	t.Log("Parsing test_SR.dcm (Structured Report)...")
 	result, err := Parse(file)
@@ -179,7 +179,7 @@ func TestSRContentSequenceDetails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -226,7 +226,7 @@ func TestSRContentExtraction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -270,7 +270,7 @@ func TestSRHierarchy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {

@@ -6,6 +6,7 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"net"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func TestDial_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	// Get the port assigned by the OS
 	addr := listener.Addr().String()
@@ -28,7 +29,7 @@ func TestDial_Success(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		// Just accept and close
 	}()
 
@@ -37,7 +38,7 @@ func TestDial_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if conn == nil {
 		t.Fatal("Expected non-nil connection")
@@ -57,7 +58,7 @@ func TestDial_ContextCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -83,13 +84,14 @@ func TestDialTLS_Success(t *testing.T) {
 	// Start a TLS test server
 	serverConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+    defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -99,10 +101,10 @@ func TestDialTLS_Success(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		tlsConn := tls.Server(conn, serverConfig)
-		defer tlsConn.Close()
+        defer func() { _ = tlsConn.Close() }()
 
 		// Perform handshake
 		if err := tlsConn.Handshake(); err != nil {
@@ -114,15 +116,28 @@ func TestDialTLS_Success(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Test dialing with TLS
+	// Build a Root CA pool from the generated self-signed certificate
+	rootPool := x509.NewCertPool()
+	if len(cert.Certificate) == 0 {
+		t.Fatal("generated certificate missing DER data")
+	}
+	parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+	rootPool.AddCert(parsedCert)
+
 	clientConfig := &tls.Config{
-		InsecureSkipVerify: true, // Skip verification for self-signed cert
+		RootCAs:    rootPool,
+		MinVersion: tls.VersionTLS12,
+		ServerName: "localhost",
 	}
 
 	conn, err := DialTLS(context.Background(), "tcp", addr, WithTLSConfig(clientConfig))
 	if err != nil {
 		t.Fatalf("DialTLS failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if conn == nil {
 		t.Fatal("Expected non-nil TLS connection")
@@ -140,7 +155,7 @@ func TestDialTLS_HandshakeFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+    defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -150,14 +165,15 @@ func TestDialTLS_HandshakeFailure(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+        defer func() { _ = conn.Close() }()
 		// Just accept and wait (no TLS handshake)
 		time.Sleep(200 * time.Millisecond)
 	}()
 
 	// Try to connect with TLS (should fail)
 	clientConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		MinVersion: tls.VersionTLS12,
+		ServerName: "localhost",
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -175,7 +191,7 @@ func TestDial_WithKeepAlive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+    defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -185,7 +201,7 @@ func TestDial_WithKeepAlive(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+                defer func() { _ = conn.Close() }()
 		time.Sleep(100 * time.Millisecond)
 	}()
 
@@ -194,7 +210,7 @@ func TestDial_WithKeepAlive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
-	defer conn.Close()
+    defer func() { _ = conn.Close() }()
 
 	// Verify it's a TCP connection
 	tcpConn, ok := conn.(*net.TCPConn)
@@ -218,13 +234,14 @@ func TestDialTLS_WithMultipleOptions(t *testing.T) {
 	// Start a TLS test server
 	serverConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+    defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -234,18 +251,31 @@ func TestDialTLS_WithMultipleOptions(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+    defer func() { _ = conn.Close() }()
 
 		tlsConn := tls.Server(conn, serverConfig)
-		defer tlsConn.Close()
-		tlsConn.Handshake()
+		defer func() { _ = tlsConn.Close() }()
+		_ = tlsConn.Handshake()
 	}()
 
 	time.Sleep(50 * time.Millisecond)
 
 	// Test with multiple options
+	// Build a Root CA pool from the generated certificate
+	rootPool := x509.NewCertPool()
+	if len(cert.Certificate) == 0 {
+		t.Fatal("generated certificate missing DER data")
+	}
+	parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+	rootPool.AddCert(parsedCert)
+
 	clientConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		RootCAs:    rootPool,
+		MinVersion: tls.VersionTLS12,
+		ServerName: "localhost",
 	}
 
 	conn, err := DialTLS(context.Background(), "tcp", addr,
@@ -255,5 +285,5 @@ func TestDialTLS_WithMultipleOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DialTLS with options failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 }

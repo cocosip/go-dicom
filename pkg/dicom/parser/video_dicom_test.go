@@ -4,19 +4,25 @@
 package parser
 
 import (
-	"os"
-	"path/filepath"
-	"testing"
+    "os"
+    "path/filepath"
+    "strings"
+    "testing"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
 // TestETIAMVideo tests the ETIAM_video_002.dcm video DICOM file
 func TestETIAMVideo(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data")
-	filePath := filepath.Join(testDataDir, "ETIAM_video_002.dcm")
+    filePath := filepath.Join(testDataDir, "ETIAM_video_002.dcm")
+    filePath = filepath.Clean(filePath)
+    if !strings.HasPrefix(filePath, filepath.Clean(testDataDir)+string(os.PathSeparator)) && filePath != filepath.Clean(testDataDir) {
+        t.Skipf("Invalid test file path: %s", filePath)
+        return
+    }
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -32,11 +38,11 @@ func TestETIAMVideo(t *testing.T) {
 	t.Logf("File size: %.2f MB", float64(fileInfo.Size())/(1024*1024))
 
 	// Open and parse the file
-	file, err := os.Open(filePath)
-	if err != nil {
-		t.Fatalf("Failed to open file: %v", err)
-	}
-	defer file.Close()
+    file, err := os.Open(filePath)
+    if err != nil {
+        t.Fatalf("Failed to open file: %v", err)
+    }
+    defer func() { _ = file.Close() }()
 
 	t.Log("Parsing ETIAM_video_002.dcm...")
 	result, err := Parse(file)
@@ -67,18 +73,23 @@ func TestETIAMVideo(t *testing.T) {
 // TestVideoDICOMPixelDataAccess specifically tests pixel data access
 func TestVideoDICOMPixelDataAccess(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data")
-	filePath := filepath.Join(testDataDir, "ETIAM_video_002.dcm")
+    filePath := filepath.Join(testDataDir, "ETIAM_video_002.dcm")
+    filePath = filepath.Clean(filePath)
+    if !strings.HasPrefix(filePath, filepath.Clean(testDataDir)+string(os.PathSeparator)) && filePath != filepath.Clean(testDataDir) {
+        t.Skipf("Invalid test file path: %s", filePath)
+        return
+    }
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		t.Skipf("Test file not found: %s", filePath)
 		return
 	}
 
-	file, err := os.Open(filePath)
-	if err != nil {
-		t.Fatalf("Failed to open file: %v", err)
-	}
-	defer file.Close()
+    file, err := os.Open(filePath)
+    if err != nil {
+        t.Fatalf("Failed to open file: %v", err)
+    }
+    defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -163,19 +174,24 @@ func TestVideoDICOMFormats(t *testing.T) {
 	successCount := 0
 	for _, filename := range videoFiles {
 		t.Run(filename, func(t *testing.T) {
-			filePath := filepath.Join(testDataDir, filename)
+            filePath := filepath.Join(testDataDir, filename)
+            filePath = filepath.Clean(filePath)
+            if !strings.HasPrefix(filePath, filepath.Clean(testDataDir)+string(os.PathSeparator)) && filePath != filepath.Clean(testDataDir) {
+                t.Skipf("Invalid test file path: %s", filePath)
+                return
+            }
 
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				t.Skipf("Test file not found: %s", filePath)
 				return
 			}
 
-			file, err := os.Open(filePath)
-			if err != nil {
-				t.Errorf("Failed to open %s: %v", filename, err)
-				return
-			}
-			defer file.Close()
+            file, err := os.Open(filePath)
+            if err != nil {
+                t.Errorf("Failed to open %s: %v", filename, err)
+                return
+            }
+            defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -205,11 +221,16 @@ func BenchmarkVideoDICOMParsing(b *testing.B) {
 	filePath := filepath.Join(testDataDir, "ETIAM_video_002.dcm")
 
 	// Read file content once
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		b.Skipf("Cannot read file: %v", err)
-		return
-	}
+    filePath = filepath.Clean(filePath)
+    if !strings.HasPrefix(filePath, filepath.Clean(testDataDir)+string(os.PathSeparator)) && filePath != filepath.Clean(testDataDir) {
+        b.Skipf("Invalid test file path: %s", filePath)
+        return
+    }
+    data, err := os.ReadFile(filePath)
+    if err != nil {
+        b.Skipf("Cannot read file: %v", err)
+        return
+    }
 
 	b.ResetTimer()
 	b.ReportAllocs()

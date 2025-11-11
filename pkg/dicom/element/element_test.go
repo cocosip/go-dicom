@@ -41,11 +41,13 @@ func TestBaseElement(t *testing.T) {
 		}
 	})
 
-	t.Run("Length", func(t *testing.T) {
-		if elem.Length() != uint32(len(data)) {
-			t.Errorf("Length() = %d, want %d", elem.Length(), len(data))
-		}
-	})
+    t.Run("Length", func(t *testing.T) {
+        // len(data) is small and within uint32 range; conversion is safe.
+        want := uint32(len(data)) // #nosec G115 -- test data size within uint32 range
+        if elem.Length() != want {
+            t.Errorf("Length() = %d, want %d", elem.Length(), want)
+        }
+    })
 
 	t.Run("Buffer", func(t *testing.T) {
 		if elem.Buffer() != buf {

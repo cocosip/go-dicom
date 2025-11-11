@@ -54,9 +54,11 @@ func createCEchoRequest(commandDS *dataset.Dataset) (*dimse.CEchoRequest, error)
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	req := dimse.NewCEchoRequest()
-	_ = req.SetMessageID(messageID)
-	return req, nil
+    req := dimse.NewCEchoRequest()
+    if err := req.SetMessageID(messageID); err != nil {
+        return nil, fmt.Errorf("failed to set MessageID: %w", err)
+    }
+    return req, nil
 }
 
 // createCEchoResponse creates a C-ECHO-RSP from datasets.
@@ -94,8 +96,10 @@ func createCStoreRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CStoreReque
 		return nil, fmt.Errorf("failed to create C-STORE request: %w", err)
 	}
 
-	_ = req.SetMessageID(messageID)
-	return req, nil
+    if err := req.SetMessageID(messageID); err != nil {
+        return nil, fmt.Errorf("failed to set MessageID: %w", err)
+    }
+    return req, nil
 }
 
 // createCStoreResponse creates a C-STORE-RSP from datasets.
@@ -147,9 +151,11 @@ func createCFindRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRequest
 	level := dimse.QueryRetrieveLevel(levelStr)
 
 	// Create request
-	req := dimse.NewCFindRequest(level, dataDS)
-	_ = req.SetMessageID(messageID)
-	return req, nil
+    req := dimse.NewCFindRequest(level, dataDS)
+    if err := req.SetMessageID(messageID); err != nil {
+        return nil, fmt.Errorf("failed to set MessageID: %w", err)
+    }
+    return req, nil
 }
 
 // createCFindResponse creates a C-FIND-RSP from datasets.

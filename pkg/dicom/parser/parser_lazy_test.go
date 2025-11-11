@@ -35,31 +35,31 @@ func TestCreateLazyBuffer_WithFile(t *testing.T) {
 
 	// Write preamble
 	preamble := make([]byte, 128)
-	f.Write(preamble)
-	f.WriteString("DICM")
+	_, _ = f.Write(preamble)
+	_, _ = f.WriteString("DICM")
 
 	// Write a large element
 	// Tag (0008,0018) - SOP Instance UID
-	binary.Write(f, binary.LittleEndian, uint16(0x0008))
-	binary.Write(f, binary.LittleEndian, uint16(0x0018))
+    _ = binary.Write(f, binary.LittleEndian, uint16(0x0008))
+    _ = binary.Write(f, binary.LittleEndian, uint16(0x0018))
 	// VR: UI
-	f.WriteString("UI")
+    _, _ = f.WriteString("UI")
 	// Length (16-bit for this VR)
-	binary.Write(f, binary.LittleEndian, uint16(len(testData)))
+    _ = binary.Write(f, binary.LittleEndian, uint16(len(testData)))
 	// Data
-	f.Write(testData)
+    _, _ = f.Write(testData)
 
-	f.Close()
+    _ = f.Close()
 
 	// Open file for parsing
-	file, err := os.Open(tmpFile)
-	if err != nil {
-		t.Fatalf("Failed to open temp file: %v", err)
-	}
-	defer file.Close()
+    file, err := os.Open(tmpFile)
+    if err != nil {
+        t.Fatalf("Failed to open temp file: %v", err)
+    }
+    defer func() { _ = file.Close() }()
 
 	// Skip preamble
-	file.Seek(132, io.SeekStart)
+    _, _ = file.Seek(132, io.SeekStart)
 
 	// Create parse context
 	ctx := newParseContext(
@@ -79,10 +79,10 @@ func TestCreateLazyBuffer_WithFile(t *testing.T) {
 	}
 
 	// Skip VR (2 bytes)
-	file.Seek(2, io.SeekCurrent)
+    _, _ = file.Seek(2, io.SeekCurrent)
 
 	// Skip length (2 bytes for UI VR)
-	file.Seek(2, io.SeekCurrent)
+    _, _ = file.Seek(2, io.SeekCurrent)
 
 	// Now we're at the data position
 	// Create lazy buffer
@@ -180,14 +180,14 @@ func TestCreateLazyBuffer_WithSeekableReader(t *testing.T) {
 func TestCreateLazyBuffer_NonSeekable(t *testing.T) {
 	// Create a non-seekable reader (io.Pipe)
 	pr, pw := io.Pipe()
-	defer pr.Close()
-	defer pw.Close()
+    defer func() { _ = pr.Close() }()
+    defer func() { _ = pw.Close() }()
 
 	// Write some data in the background
 	go func() {
 		testData := make([]byte, 100)
-		pw.Write(testData)
-		pw.Close()
+        _, _ = pw.Write(testData)
+        _ = pw.Close()
 	}()
 
 	// Create parse context
@@ -215,31 +215,31 @@ func TestReadLargeOnDemand_Integration(t *testing.T) {
 
 	// Write preamble
 	preamble := make([]byte, 128)
-	f.Write(preamble)
-	f.WriteString("DICM")
+    _, _ = f.Write(preamble)
+    _, _ = f.WriteString("DICM")
 
 	// Write File Meta Information Length (Group 0002)
 	// Tag (0002,0000) - File Meta Information Group Length
-	binary.Write(f, binary.LittleEndian, uint16(0x0002))
-	binary.Write(f, binary.LittleEndian, uint16(0x0000))
-	f.WriteString("UL") // VR
-	binary.Write(f, binary.LittleEndian, uint16(4))
-	binary.Write(f, binary.LittleEndian, uint32(0)) // Placeholder
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0000))
+	_, _ = f.WriteString("UL") // VR
+	_ = binary.Write(f, binary.LittleEndian, uint16(4))
+	_ = binary.Write(f, binary.LittleEndian, uint32(0)) // Placeholder
 
 	// Tag (0002,0010) - Transfer Syntax UID
-	binary.Write(f, binary.LittleEndian, uint16(0x0002))
-	binary.Write(f, binary.LittleEndian, uint16(0x0010))
-	f.WriteString("UI")
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
+	_, _ = f.WriteString("UI")
 	tsUID := "1.2.840.10008.1.2\x00" // Implicit VR Little Endian + null padding
-	binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
-	f.WriteString(tsUID)
+	_ = binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
+	_, _ = f.WriteString(tsUID)
 
 	// Update Group Length
 	endPos, _ := f.Seek(0, io.SeekCurrent)
 	groupLength := uint32(endPos - 132 - 12) // Total length minus preamble, DICM, and group length element itself
-	f.Seek(140, io.SeekStart)
-	binary.Write(f, binary.LittleEndian, groupLength)
-	f.Seek(0, io.SeekEnd)
+	_, _ = f.Seek(140, io.SeekStart)
+	_ = binary.Write(f, binary.LittleEndian, groupLength)
+	_, _ = f.Seek(0, io.SeekEnd)
 
 	// Write a large pixel data element (> 64KB)
 	largeData := make([]byte, 200*1024) // 200KB
@@ -248,19 +248,19 @@ func TestReadLargeOnDemand_Integration(t *testing.T) {
 	}
 
 	// Pixel Data tag (7FE0,0010) - using Implicit VR format now
-	binary.Write(f, binary.LittleEndian, uint16(0x7FE0))
-	binary.Write(f, binary.LittleEndian, uint16(0x0010))
-	binary.Write(f, binary.LittleEndian, uint32(len(largeData))) // 32-bit length for implicit VR
-	f.Write(largeData)
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x7FE0))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
+	_ = binary.Write(f, binary.LittleEndian, uint32(len(largeData))) // 32-bit length for implicit VR
+	_, _ = f.Write(largeData)
 
-	f.Close()
+    _ = f.Close()
 
 	// Parse with ReadLargeOnDemand
 	file, err := os.Open(tmpFile)
 	if err != nil {
 		t.Fatalf("Failed to open temp file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	result, err := Parse(file,
 		WithReadOption(ReadLargeOnDemand),
@@ -313,44 +313,44 @@ func TestReadOption_SkipVsLazy(t *testing.T) {
 
 	// Write preamble
 	preamble := make([]byte, 128)
-	f.Write(preamble)
-	f.WriteString("DICM")
+    _, _ = f.Write(preamble)
+    _, _ = f.WriteString("DICM")
 
 	// Write File Meta Information properly
 	// Tag (0002,0000) - File Meta Information Group Length
-	binary.Write(f, binary.LittleEndian, uint16(0x0002))
-	binary.Write(f, binary.LittleEndian, uint16(0x0000))
-	f.WriteString("UL")
-	binary.Write(f, binary.LittleEndian, uint16(4))
-	binary.Write(f, binary.LittleEndian, uint32(0)) // Placeholder
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0000))
+	_, _ = f.WriteString("UL")
+	_ = binary.Write(f, binary.LittleEndian, uint16(4))
+	_ = binary.Write(f, binary.LittleEndian, uint32(0)) // Placeholder
 
 	// Tag (0002,0010) - Transfer Syntax UID
-	binary.Write(f, binary.LittleEndian, uint16(0x0002))
-	binary.Write(f, binary.LittleEndian, uint16(0x0010))
-	f.WriteString("UI")
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
+	_, _ = f.WriteString("UI")
 	tsUID := "1.2.840.10008.1.2\x00" // Implicit VR Little Endian + null padding
-	binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
-	f.WriteString(tsUID)
+	_ = binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
+	_, _ = f.WriteString(tsUID)
 
 	// Update Group Length
 	endPos, _ := f.Seek(0, io.SeekCurrent)
 	groupLength := uint32(endPos - 132 - 12) // Total length minus preamble, DICM, and group length element itself
-	f.Seek(140, io.SeekStart)
-	binary.Write(f, binary.LittleEndian, groupLength)
-	f.Seek(0, io.SeekEnd)
+    _, _ = f.Seek(140, io.SeekStart)
+    _ = binary.Write(f, binary.LittleEndian, groupLength)
+    _, _ = f.Seek(0, io.SeekEnd)
 
 	// Large element - using Implicit VR format now (no VR string, 32-bit length)
-	binary.Write(f, binary.LittleEndian, uint16(0x0008))
-	binary.Write(f, binary.LittleEndian, uint16(0x0018))
-	binary.Write(f, binary.LittleEndian, uint32(len(largeData))) // 32-bit length for implicit VR
-	f.Write(largeData)
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0008))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0018))
+	_ = binary.Write(f, binary.LittleEndian, uint32(len(largeData))) // 32-bit length for implicit VR
+	_, _ = f.Write(largeData)
 
-	f.Close()
+	_ = f.Close()
 
 	// Test 1: Skip mode
 	t.Run("SkipLargeTags", func(t *testing.T) {
 		file, _ := os.Open(tmpFile)
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		result, err := Parse(file,
 			WithReadOption(SkipLargeTags),
@@ -375,7 +375,7 @@ func TestReadOption_SkipVsLazy(t *testing.T) {
 	// Test 2: Lazy mode
 	t.Run("ReadLargeOnDemand", func(t *testing.T) {
 		file, _ := os.Open(tmpFile)
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		result, err := Parse(file,
 			WithReadOption(ReadLargeOnDemand),

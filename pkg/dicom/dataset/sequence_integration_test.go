@@ -21,13 +21,13 @@ func TestAddSequenceToDataset(t *testing.T) {
 	seq := dataset.NewSequence(tag.ReferencedImageSequence)
 
 	// Create item datasets
-	item1 := dataset.New()
-	item1.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
-	item1.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.6"}))
+    item1 := dataset.New()
+    _ = item1.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    _ = item1.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.6"}))
 
-	item2 := dataset.New()
-	item2.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.7"}))
-	item2.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.8"}))
+    item2 := dataset.New()
+    _ = item2.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.7"}))
+    _ = item2.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.8"}))
 
 	// Add items to sequence
 	seq.AddItem(item1)
@@ -92,22 +92,22 @@ func TestDatasetWithMultipleSequences(t *testing.T) {
 	ds := dataset.New()
 
 	// Add regular elements
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	// Create and add first sequence
 	seq1 := dataset.NewSequence(tag.ReferencedStudySequence)
-	item1 := dataset.New()
-	item1.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
+    item1 := dataset.New()
+    _ = item1.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
 	seq1.AddItem(item1)
-	ds.Add(seq1)
+    _ = ds.Add(seq1)
 
 	// Create and add second sequence
 	seq2 := dataset.NewSequence(tag.ReferencedImageSequence)
-	item2 := dataset.New()
-	item2.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.4"}))
+    item2 := dataset.New()
+    _ = item2.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.4"}))
 	seq2.AddItem(item2)
-	ds.Add(seq2)
+    _ = ds.Add(seq2)
 
 	// Verify dataset structure
 	if ds.Count() != 4 {
@@ -143,13 +143,13 @@ func TestNestedSequences(t *testing.T) {
 	outerSeq := dataset.NewSequence(tag.ReferencedStudySequence)
 
 	// Create item with nested sequence
-	item := dataset.New()
-	item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
+    item := dataset.New()
+    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
 
 	// Create nested sequence
 	nestedSeq := dataset.NewSequence(tag.ReferencedImageSequence)
-	nestedItem := dataset.New()
-	nestedItem.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.4"}))
+    nestedItem := dataset.New()
+    _ = nestedItem.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.4"}))
 	nestedSeq.AddItem(nestedItem)
 
 	// Add nested sequence to item

@@ -4,9 +4,10 @@
 package printing
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
+    "fmt"
+    "math"
+    "strconv"
+    "strings"
 )
 
 // FilmOrientation represents the orientation of film
@@ -242,19 +243,23 @@ func ParseImageDisplayFormat(format string) (int, error) {
 
 // InitializeImageBoxes creates and initializes Image Boxes based on the Image Display Format
 func (fb *FilmBox) InitializeImageBoxes() error {
-	count, err := ParseImageDisplayFormat(fb.ImageDisplayFormat)
-	if err != nil {
-		return err
-	}
+    count, err := ParseImageDisplayFormat(fb.ImageDisplayFormat)
+    if err != nil {
+        return err
+    }
 
-	fb.BasicImageBoxes = make([]*ImageBox, count)
-	for i := range count {
-		fb.BasicImageBoxes[i] = NewImageBox(fmt.Sprintf("%s.%d", fb.SOPInstanceUID, i+1), fb.filmSession != nil && fb.filmSession.IsColor)
-		fb.BasicImageBoxes[i].filmBox = fb
-		fb.BasicImageBoxes[i].ImageBoxPosition = uint16(i + 1)
-	}
+    fb.BasicImageBoxes = make([]*ImageBox, count)
+    for i := 0; i < count; i++ {
+        fb.BasicImageBoxes[i] = NewImageBox(fmt.Sprintf("%s.%d", fb.SOPInstanceUID, i+1), fb.filmSession != nil && fb.filmSession.IsColor)
+        fb.BasicImageBoxes[i].filmBox = fb
+        pos := i + 1
+        if pos > int(math.MaxUint16) {
+            return fmt.Errorf("image box position overflow: %d", pos)
+        }
+        fb.BasicImageBoxes[i].ImageBoxPosition = uint16(pos) // #nosec G115 -- bounded by check above
+    }
 
-	return nil
+    return nil
 }
 
 // AddImageBox adds an Image Box to the Film Box

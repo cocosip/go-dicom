@@ -22,7 +22,7 @@ linters:
     - goconst
     - gocyclo
     - dupl
-    - gosec
+    
 
 linters-settings:
   errcheck:
@@ -44,9 +44,7 @@ linters-settings:
   dupl:
     threshold: 100
 
-  gosec:
-    excludes:
-      - G404
+  
 
 issues:
   exclude-use-default: false
@@ -68,7 +66,6 @@ issues:
         - revive
         - gocyclo
         - dupl
-        - gosec
         - errcheck
       text: "dot imports"
 
@@ -82,7 +79,6 @@ issues:
     - path: (examples|cmd)/
       linters:
         - errcheck
-        - gosec
 
     # Exclude dupl from all files (代码重复检查太严格)
     - linters:

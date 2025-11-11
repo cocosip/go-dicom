@@ -205,8 +205,10 @@ func TestFilmSession_IsValid(t *testing.T) {
 		{
 			name: "valid session with one film box",
 			setup: func(fs *FilmSession) {
-				fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
-				fb.InitializeImageBoxes()
+                fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+                if err := fb.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
 				fs.AddFilmBox(fb)
 			},
 			expected: true,
@@ -221,8 +223,10 @@ func TestFilmSession_IsValid(t *testing.T) {
 		{
 			name: "invalid: number of copies = 0",
 			setup: func(fs *FilmSession) {
-				fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
-				fb.InitializeImageBoxes()
+                fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+                if err := fb.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
 				fs.AddFilmBox(fb)
 				fs.NumberOfCopies = 0
 			},
@@ -230,12 +234,14 @@ func TestFilmSession_IsValid(t *testing.T) {
 		},
 		{
 			name: "invalid: number of copies < 0",
-			setup: func(fs *FilmSession) {
-				fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
-				fb.InitializeImageBoxes()
-				fs.AddFilmBox(fb)
-				fs.NumberOfCopies = -1
-			},
+            setup: func(fs *FilmSession) {
+                fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+                if err := fb.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
+                fs.AddFilmBox(fb)
+                fs.NumberOfCopies = -1
+            },
 			expected: false,
 		},
 		{
@@ -250,12 +256,16 @@ func TestFilmSession_IsValid(t *testing.T) {
 		{
 			name: "valid: multiple film boxes",
 			setup: func(fs *FilmSession) {
-				fb1 := NewFilmBox("1.2.3.4.5.1", "STANDARD\\2,2")
-				fb1.InitializeImageBoxes()
+                fb1 := NewFilmBox("1.2.3.4.5.1", "STANDARD\\2,2")
+                if err := fb1.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
 				fs.AddFilmBox(fb1)
 
-				fb2 := NewFilmBox("1.2.3.4.5.2", "STANDARD\\1,1")
-				fb2.InitializeImageBoxes()
+                fb2 := NewFilmBox("1.2.3.4.5.2", "STANDARD\\1,1")
+                if err := fb2.InitializeImageBoxes(); err != nil {
+                    t.Fatalf("InitializeImageBoxes error: %v", err)
+                }
 				fs.AddFilmBox(fb2)
 			},
 			expected: true,
@@ -291,7 +301,9 @@ func TestFilmSession_ColorSupport(t *testing.T) {
 	// Verify film boxes inherit color setting
 	fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
 	colorFS.AddFilmBox(fb)
-	fb.InitializeImageBoxes()
+    if err := fb.InitializeImageBoxes(); err != nil {
+        t.Fatalf("InitializeImageBoxes error: %v", err)
+    }
 
 	if len(fb.BasicImageBoxes) > 0 {
 		ib := fb.BasicImageBoxes[0]

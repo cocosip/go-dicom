@@ -16,18 +16,20 @@ import (
 func TestSend(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+        defer func() { _ = server.Close() }()
+        defer func() { _ = client.Close() }()
 
 	// Create association
 	assoc := createTestAssociation()
 
 	// Create service
 	service := NewService(client, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to allow DIMSE sending
-	service.setState(StateAssociationAccepted)
+        if err := service.setState(StateAssociationAccepted); err != nil {
+            t.Fatalf("setState failed: %v", err)
+        }
 
 	// Start service
 	if err := service.Start(); err != nil {
@@ -47,7 +49,9 @@ func TestSend(t *testing.T) {
 
 	// Create C-ECHO request
 	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+    if err := req.SetMessageID(1); err != nil {
+        t.Fatalf("SetMessageID failed: %v", err)
+    }
 
 	// Send message
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -62,18 +66,20 @@ func TestSend(t *testing.T) {
 func TestSend_ServiceClosed(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+        defer func() { _ = server.Close() }()
+        defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
 
 	// Close service before sending
-	service.Close()
+        _ = service.Close()
 
 	// Try to send message
 	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+    if err := req.SetMessageID(1); err != nil {
+        t.Fatalf("SetMessageID failed: %v", err)
+    }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -87,20 +93,24 @@ func TestSend_ServiceClosed(t *testing.T) {
 func TestSend_ContextCancellation(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+        defer func() { _ = server.Close() }()
+        defer func() { _ = client.Close() }()
 
 	// Create service (don't start it so send queue blocks)
 	assoc := createTestAssociation()
 	service := NewService(client, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to allow DIMSE sending
-	service.setState(StateAssociationAccepted)
+        if err := service.setState(StateAssociationAccepted); err != nil {
+            t.Fatalf("setState failed: %v", err)
+        }
 
 	// Create C-ECHO request
 	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+    if err := req.SetMessageID(1); err != nil {
+        t.Fatalf("SetMessageID failed: %v", err)
+    }
 
 	// Create context that's already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
@@ -116,18 +126,20 @@ func TestSend_ContextCancellation(t *testing.T) {
 func TestSendWithTimeout(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+        defer func() { _ = server.Close() }()
+        defer func() { _ = client.Close() }()
 
 	// Create association
 	assoc := createTestAssociation()
 
 	// Create service
 	service := NewService(client, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to allow DIMSE sending
-	service.setState(StateAssociationAccepted)
+        if err := service.setState(StateAssociationAccepted); err != nil {
+            t.Fatalf("setState failed: %v", err)
+        }
 
 	// Start service
 	if err := service.Start(); err != nil {
@@ -146,8 +158,10 @@ func TestSendWithTimeout(t *testing.T) {
 	}()
 
 	// Create C-ECHO request
-	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+    req := dimse.NewCEchoRequest()
+    if err := req.SetMessageID(1); err != nil {
+        t.Fatalf("SetMessageID failed: %v", err)
+    }
 
 	// Send message with timeout
 	err := service.SendWithTimeout(req, 1*time.Second)
@@ -158,7 +172,7 @@ func TestSendWithTimeout(t *testing.T) {
 
 func TestRegisterUnregisterPendingRequest(t *testing.T) {
 	service := NewService(nil, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Register a pending request
 	respCh := make(chan dimse.Response, 1)
@@ -192,20 +206,24 @@ func TestRegisterUnregisterPendingRequest(t *testing.T) {
 func TestSend_WrongState(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-	defer server.Close()
-	defer client.Close()
+        defer func() { _ = server.Close() }()
+        defer func() { _ = client.Close() }()
 
 	// Create service
 	assoc := createTestAssociation()
 	service := NewService(client, assoc)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// Set state to one that doesn't allow sending
-	service.setState(StateClosed)
+        if err := service.setState(StateClosed); err != nil {
+            t.Fatalf("setState failed: %v", err)
+        }
 
 	// Try to send message
 	req := dimse.NewCEchoRequest()
-	req.SetMessageID(1)
+        if err := req.SetMessageID(1); err != nil {
+            t.Fatalf("SetMessageID failed: %v", err)
+        }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -219,7 +237,7 @@ func TestSend_WrongState(t *testing.T) {
 func TestSendCEcho_NoAssociation(t *testing.T) {
 	// Create service without association
 	service := NewService(nil, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	req := dimse.NewCEchoRequest()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -234,7 +252,7 @@ func TestSendCEcho_NoAssociation(t *testing.T) {
 func TestSendCStore_NoAssociation(t *testing.T) {
 	// Create service without association
 	service := NewService(nil, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	// For this test, we just want to verify the "no association" error,
 	// so we can skip creating a full valid C-STORE request
@@ -251,7 +269,7 @@ func TestSendCStore_NoAssociation(t *testing.T) {
 func TestSendCFind_NoAssociation(t *testing.T) {
 	// Create service without association
 	service := NewService(nil, nil)
-	defer service.Close()
+    defer func() { _ = service.Close() }()
 
 	query := dataset.New()
 	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, query)

@@ -92,9 +92,9 @@ func TestSecurityProfileFindAction(t *testing.T) {
 
 func TestAnonymizerRemoveAction(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-	ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	_ = ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0010,0010", ActionX) // Remove PatientName
@@ -118,8 +118,8 @@ func TestAnonymizerRemoveAction(t *testing.T) {
 
 func TestAnonymizerReplaceString(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.InstitutionName, vr.LO, []string{"Test Hospital"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.InstitutionName, vr.LO, []string{"Test Hospital"}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0010,0010", ActionD) // Dummy value for PatientName
@@ -147,8 +147,8 @@ func TestAnonymizerReplaceUID(t *testing.T) {
 	ds := dataset.New()
 	sopInstanceUID := "1.2.3.4.5.6.7"
 	studyInstanceUID := "1.2.3.4.5.6.8"
-	ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID}))
-	ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyInstanceUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+	_ = ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyInstanceUID}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0008,0018", ActionU) // Replace SOPInstanceUID
@@ -176,7 +176,7 @@ func TestAnonymizerReplaceUID(t *testing.T) {
 
 	// Check UID consistency - same UID should get same replacement
 	ds2 := dataset.New()
-	ds2.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+	_ = ds2.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID}))
 
 	err = anon.AnonymizeInPlace(ds2)
 	if err != nil {
@@ -191,8 +191,8 @@ func TestAnonymizerReplaceUID(t *testing.T) {
 
 func TestAnonymizerBlankItemZero(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0010,0020", ActionZ) // Zero-length PatientID
@@ -215,16 +215,16 @@ func TestAnonymizerBlankItemZero(t *testing.T) {
 }
 
 func TestAnonymizerSequence(t *testing.T) {
-	// Create dataset with sequence
-	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    // Create dataset with sequence
+    ds := dataset.New()
+    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
 
 	seq := dataset.NewSequence(tag.ReferencedStudySequence)
-	item := dataset.New()
-	item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
-	item.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
+    item := dataset.New()
+    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+    _ = item.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
 	seq.AddItem(item)
-	ds.Add(seq)
+    _ = ds.Add(seq)
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0010,0010", ActionX) // Remove PatientName
@@ -274,8 +274,8 @@ func TestAnonymizerSequence(t *testing.T) {
 
 func TestAnonymizerCustomPatientInfo(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	profile := NewSecurityProfile(BasicProfile)
 	profile.PatientName = "ANONYMOUS^PATIENT"
@@ -302,8 +302,8 @@ func TestAnonymizerCustomPatientInfo(t *testing.T) {
 
 func TestAnonymizerClone(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-	ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0010,0010", ActionX) // Remove PatientName

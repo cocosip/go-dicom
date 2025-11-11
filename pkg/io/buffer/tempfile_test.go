@@ -18,7 +18,7 @@ func TestNewTempFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	if tb.Size() != uint32(len(testData)) {
 		t.Errorf("Size() = %d, want %d", tb.Size(), len(testData))
@@ -39,7 +39,7 @@ func TestNewTempFile_EmptyData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() with empty data unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	if tb.Size() != 0 {
 		t.Errorf("Size() = %d, want 0", tb.Size())
@@ -51,7 +51,7 @@ func TestNewTempFile_NilData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() with nil data unexpected error: %v", err)
 	}
-	defer tb.Close()
+            defer func() { _ = tb.Close() }()
 
 	if tb.Size() != 0 {
 		t.Errorf("Size() = %d, want 0", tb.Size())
@@ -64,7 +64,7 @@ func TestTempFileBuffer_IsMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	if tb.IsMemory() {
 		t.Error("IsMemory() = true, want false for temp file buffer")
@@ -94,7 +94,7 @@ func TestTempFileBuffer_Data(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewTempFile() unexpected error: %v", err)
 			}
-			defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 			data := tb.Data()
 			if !bytes.Equal(data, tt.data) {
@@ -114,7 +114,7 @@ func TestTempFileBuffer_GetByteRange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	tests := []struct {
 		name      string
@@ -190,7 +190,7 @@ func TestTempFileBuffer_GetByteRange_Errors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	t.Run("nil output", func(t *testing.T) {
 		err := tb.GetByteRange(0, 3, nil)
@@ -218,7 +218,7 @@ func TestTempFileBuffer_WriteTo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	var buf bytes.Buffer
 	n, err := tb.WriteTo(&buf)
@@ -240,7 +240,7 @@ func TestTempFileBuffer_WriteTo_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	var buf bytes.Buffer
 	n, err := tb.WriteTo(&buf)
@@ -263,7 +263,7 @@ func TestTempFileBuffer_WriteTo_NilWriter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	_, err = tb.WriteTo(nil)
 	if err == nil {
@@ -282,7 +282,7 @@ func TestTempFileBuffer_WriteTo_LargeData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	var buf bytes.Buffer
 	n, err := tb.WriteTo(&buf)
@@ -335,7 +335,7 @@ func TestTempFileBuffer_MultipleReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTempFile() unexpected error: %v", err)
 	}
-	defer tb.Close()
+    defer func() { _ = tb.Close() }()
 
 	// First read
 	data1 := tb.Data()
