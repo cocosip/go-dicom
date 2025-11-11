@@ -243,9 +243,9 @@ func TestFilmBox_IsValid(t *testing.T) {
 			name: "invalid: empty image display format",
             setup: func(fb *FilmBox) {
                 fb.ImageDisplayFormat = ""
-                if err := fb.InitializeImageBoxes(); err != nil {
-                    t.Fatalf("InitializeImageBoxes error: %v", err)
-                }
+                // InitializeImageBoxes will fail with empty format, which is expected
+                // Just try to initialize, ignore the error as we're testing IsValid()
+                _ = fb.InitializeImageBoxes()
             },
 			expected: false,
 		},
