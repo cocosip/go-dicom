@@ -15,6 +15,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const dicmPrefix = "DICM"
+
 // TestWritePreamble tests preamble writing
 func TestWritePreamble(t *testing.T) {
 	buf := &bytes.Buffer{}
@@ -32,9 +34,9 @@ func TestWritePreamble(t *testing.T) {
 
 	// Check DICM prefix
 	data := buf.Bytes()
-	dicmPrefix := string(data[128:132])
-	if dicmPrefix != "DICM" {
-		t.Errorf("DICM prefix = %q, want %q", dicmPrefix, "DICM")
+	actualPrefix := string(data[128:132])
+	if actualPrefix != dicmPrefix {
+		t.Errorf("DICM prefix = %q, want %q", actualPrefix, dicmPrefix)
 	}
 }
 
@@ -219,9 +221,9 @@ func TestWriteSimpleDataset(t *testing.T) {
 		t.Error("Output too short to contain preamble")
 	}
 
-	dicmPrefix := string(data[128:132])
-	if dicmPrefix != "DICM" {
-		t.Errorf("DICM prefix = %q, want %q", dicmPrefix, "DICM")
+	actualPrefix := string(data[128:132])
+	if actualPrefix != dicmPrefix {
+		t.Errorf("DICM prefix = %q, want %q", actualPrefix, dicmPrefix)
 	}
 }
 
@@ -240,7 +242,7 @@ func TestWriteWithoutPreamble(t *testing.T) {
 	data := buf.Bytes()
 	if len(data) >= 132 {
 		dicmCheck := string(data[128:132])
-		if dicmCheck == "DICM" {
+		if dicmCheck == dicmPrefix {
 			t.Error("Should not contain DICM prefix when WithoutPreamble is used")
 		}
 	}
@@ -313,7 +315,7 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	// Should have DICM
-	if string(data[128:132]) != "DICM" {
+	if string(data[128:132]) != dicmPrefix {
 		t.Error("Missing DICM prefix")
 	}
 }

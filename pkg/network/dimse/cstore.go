@@ -41,14 +41,14 @@ func NewCStoreRequest(dicomData *dataset.Dataset) (*CStoreRequest, error) {
 	command := CreateCommandDataset(uint16(CommandCStoreRQ), 0)
 
 	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
-	command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
 
 	// Priority (optional, default to medium)
-	command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
+	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
 
 	// CommandDataSetType - dataset is present
-	command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 
 	return &CStoreRequest{
 		BaseRequest:            NewBaseRequest(command, dicomData),
@@ -61,7 +61,7 @@ func NewCStoreRequest(dicomData *dataset.Dataset) (*CStoreRequest, error) {
 // SetPriority sets the priority of the request.
 func (r *CStoreRequest) SetPriority(priority uint16) {
 	r.priority = priority
-	r.command.AddOrUpdate(element.NewUnsignedShort(tag.Priority, []uint16{priority}))
+	_ = r.command.AddOrUpdate(element.NewUnsignedShort(tag.Priority, []uint16{priority}))
 }
 
 // SetMoveOriginator sets the move originator AET and message ID (for C-MOVE sub-operations).
@@ -69,8 +69,8 @@ func (r *CStoreRequest) SetMoveOriginator(aet string, messageID uint16) {
 	r.moveOriginatorAET = aet
 	r.moveOriginatorMessageID = messageID
 
-	r.command.Add(element.NewString(tag.MoveOriginatorApplicationEntityTitle, vr.AE, []string{aet}))
-	r.command.Add(element.NewUnsignedShort(tag.MoveOriginatorMessageID, []uint16{messageID}))
+	_ = r.command.Add(element.NewString(tag.MoveOriginatorApplicationEntityTitle, vr.AE, []string{aet}))
+	_ = r.command.Add(element.NewUnsignedShort(tag.MoveOriginatorMessageID, []uint16{messageID}))
 }
 
 // AffectedSOPClassUID returns the affected SOP Class UID.
@@ -104,17 +104,17 @@ func NewCStoreResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopC
 	command := CreateCommandDataset(uint16(CommandCStoreRSP), 0)
 
 	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
-	command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
 
 	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType - no dataset in response
-	command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CStoreResponse{
 		BaseResponse:              NewBaseResponse(command, nil),

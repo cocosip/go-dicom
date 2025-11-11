@@ -29,10 +29,10 @@ func NewReferencedSOP(instanceUID, classUID string) *ReferencedSOP {
 	ds := dataset.New()
 
 	// Add Referenced SOP Instance UID (0008,1155) VR=UI
-	ds.AddOrUpdate(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{instanceUID}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{instanceUID}))
 
 	// Add Referenced SOP Class UID (0008,1150) VR=UI
-	ds.AddOrUpdate(element.NewString(tag.ReferencedSOPClassUID, vr.UI, []string{classUID}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ReferencedSOPClassUID, vr.UI, []string{classUID}))
 
 	return &ReferencedSOP{dataset: ds}
 }

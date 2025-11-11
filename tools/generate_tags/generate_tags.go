@@ -19,26 +19,40 @@ func main() {
 	}
 }
 
+// mustWrite wraps writer operations and panics on error (for code generation)
+func mustWrite(writer *bufio.Writer, s string) {
+	if _, err := writer.WriteString(s); err != nil {
+		panic(fmt.Sprintf("failed to write output: %v", err))
+	}
+}
+
+// mustFlush wraps writer.Flush and panics on error (for code generation)
+func mustFlush(writer *bufio.Writer) {
+	if err := writer.Flush(); err != nil {
+		panic(fmt.Sprintf("failed to flush output: %v", err))
+	}
+}
+
 func run() error {
 	// Open the C# file
 	file, err := os.Open("fo-dicom-code/DicomTagGenerated.cs")
 	if err != nil {
 		return fmt.Errorf("failed to open DicomTagGenerated.cs: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Create output file
 	outFile, err := os.Create("pkg/dicom/tag/tags_generated.go")
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	writer := bufio.NewWriter(outFile)
-	defer writer.Flush()
+	defer mustFlush(writer)
 
 	// Write header
-	writer.WriteString(`// Copyright (c) 2025 go-dicom contributors.
+	mustWrite(writer, `// Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
 // Code generated from DicomTagGenerated.cs. DO NOT EDIT.
@@ -84,9 +98,9 @@ var (
 
 			// Write Go constant
 			if currentComment != "" {
-				writer.WriteString(fmt.Sprintf("\t// %s %s\n", tagName, currentComment))
+				mustWrite(writer, fmt.Sprintf("\t// %s %s\n", tagName, currentComment))
 			}
-			writer.WriteString(fmt.Sprintf("\t%s = New(0x%s, 0x%s)\n\n", tagName, group, element))
+			mustWrite(writer, fmt.Sprintf("\t%s = New(0x%s, 0x%s)\n\n", tagName, group, element))
 
 			tagCount++
 			currentComment = ""
@@ -98,7 +112,7 @@ var (
 	}
 
 	// Write footer
-	writer.WriteString(")\n")
+	mustWrite(writer, ")\n")
 
 	fmt.Printf("Generated %d tag constants\n", tagCount)
 	return nil

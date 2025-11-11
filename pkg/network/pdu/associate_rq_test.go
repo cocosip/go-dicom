@@ -8,6 +8,11 @@ import (
 	"testing"
 )
 
+const (
+	testCTImageStorageUID = "1.2.840.10008.5.1.4.1.1.2"
+	// testServerAETitle and testClientAETitle are defined in associate_ac_test.go
+)
+
 func TestNewAAssociateRQ(t *testing.T) {
 	rq := NewAAssociateRQ()
 
@@ -38,7 +43,7 @@ func TestAAssociateRQ_EncodeDecodeBasic(t *testing.T) {
 	rq.PresentationContexts = []PresentationContextRQ{
 		{
 			ID:             1,
-			AbstractSyntax: "1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
+			AbstractSyntax: testCTImageStorageUID, // CT Image Storage
 			TransferSyntaxes: []string{
 				"1.2.840.10008.1.2.1", // Explicit VR Little Endian
 				"1.2.840.10008.1.2",   // Implicit VR Little Endian
@@ -88,7 +93,7 @@ func TestAAssociateRQ_EncodeDecodeBasic(t *testing.T) {
 		t.Errorf("PresentationContext ID mismatch: expected 1, got %d", pc.ID)
 	}
 
-	if pc.AbstractSyntax != "1.2.840.10008.5.1.4.1.1.2" {
+	if pc.AbstractSyntax != testCTImageStorageUID {
 		t.Errorf("AbstractSyntax mismatch: expected 1.2.840.10008.5.1.4.1.1.2, got %s", pc.AbstractSyntax)
 	}
 
@@ -114,7 +119,7 @@ func TestAAssociateRQ_EncodeDecodeMultiplePresentationContexts(t *testing.T) {
 	rq.PresentationContexts = []PresentationContextRQ{
 		{
 			ID:             1,
-			AbstractSyntax: "1.2.840.10008.5.1.4.1.1.2",
+			AbstractSyntax: testCTImageStorageUID,
 			TransferSyntaxes: []string{
 				"1.2.840.10008.1.2.1",
 			},
@@ -169,8 +174,8 @@ func TestAAssociateRQ_EncodeDecodeMultiplePresentationContexts(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithUserIdentity(t *testing.T) {
 	rq := NewAAssociateRQ()
-	rq.CalledAETitle = "SERVER"
-	rq.CallingAETitle = "CLIENT"
+	rq.CalledAETitle = testServerAETitle
+	rq.CallingAETitle = testClientAETitle
 
 	// Add user identity (username only)
 	rq.UserInformation.UserIdentity = &UserIdentityNegotiation{
@@ -212,8 +217,8 @@ func TestAAssociateRQ_EncodeDecodeWithUserIdentity(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithUsernamePassword(t *testing.T) {
 	rq := NewAAssociateRQ()
-	rq.CalledAETitle = "SERVER"
-	rq.CallingAETitle = "CLIENT"
+	rq.CalledAETitle = testServerAETitle
+	rq.CallingAETitle = testClientAETitle
 
 	// Add user identity (username + password)
 	rq.UserInformation.UserIdentity = &UserIdentityNegotiation{
@@ -255,13 +260,13 @@ func TestAAssociateRQ_EncodeDecodeWithUsernamePassword(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithExtendedNegotiation(t *testing.T) {
 	rq := NewAAssociateRQ()
-	rq.CalledAETitle = "SERVER"
-	rq.CallingAETitle = "CLIENT"
+	rq.CalledAETitle = testServerAETitle
+	rq.CallingAETitle = testClientAETitle
 
 	// Add extended negotiation
 	rq.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{
 		{
-			SOPClassUID:         "1.2.840.10008.5.1.4.1.1.2",
+			SOPClassUID: testCTImageStorageUID,
 			ServiceClassAppInfo: []byte{0x01, 0x02, 0x03},
 		},
 	}
@@ -283,7 +288,7 @@ func TestAAssociateRQ_EncodeDecodeWithExtendedNegotiation(t *testing.T) {
 	}
 
 	ext := decoded.UserInformation.ExtendedNegotiations[0]
-	if ext.SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" {
+	if ext.SOPClassUID != testCTImageStorageUID {
 		t.Errorf("SOPClassUID mismatch")
 	}
 
@@ -294,13 +299,13 @@ func TestAAssociateRQ_EncodeDecodeWithExtendedNegotiation(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithRoleSelection(t *testing.T) {
 	rq := NewAAssociateRQ()
-	rq.CalledAETitle = "SERVER"
-	rq.CallingAETitle = "CLIENT"
+	rq.CalledAETitle = testServerAETitle
+	rq.CallingAETitle = testClientAETitle
 
 	// Add role selection
 	rq.UserInformation.SCPSCURoleSelections = []SCPSCURoleSelection{
 		{
-			SOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+			SOPClassUID: testCTImageStorageUID,
 			SCURole:     1, // Support SCU
 			SCPRole:     0, // No SCP support
 		},
@@ -323,7 +328,7 @@ func TestAAssociateRQ_EncodeDecodeWithRoleSelection(t *testing.T) {
 	}
 
 	role := decoded.UserInformation.SCPSCURoleSelections[0]
-	if role.SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" {
+	if role.SOPClassUID != testCTImageStorageUID {
 		t.Errorf("SOPClassUID mismatch")
 	}
 
@@ -338,8 +343,8 @@ func TestAAssociateRQ_EncodeDecodeWithRoleSelection(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithImplementationVersion(t *testing.T) {
 	rq := NewAAssociateRQ()
-	rq.CalledAETitle = "SERVER"
-	rq.CallingAETitle = "CLIENT"
+	rq.CalledAETitle = testServerAETitle
+	rq.CallingAETitle = testClientAETitle
 	rq.UserInformation.ImplementationVersionName = "GO_DICOM_1_0"
 
 	// Encode and decode

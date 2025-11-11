@@ -59,7 +59,7 @@ func NewTempFile(data []byte) (*TempFileBuffer, error) {
 
 	return &TempFileBuffer{
 		file:     tmpFile,
-		size:     uint32(len(data)),
+		size:     uint32(len(data)), // #nosec G115 -- DICOM buffer size within uint32 range
 		filePath: tmpFile.Name(),
 	}, nil
 }
@@ -96,7 +96,7 @@ func (t *TempFileBuffer) Data() []byte {
 		return nil
 	}
 
-	if uint32(n) != t.size {
+	if uint32(n) != t.size { // #nosec G115 -- bytes read check
 		return nil
 	}
 
@@ -116,7 +116,7 @@ func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer cannot be nil")
 	}
 
-	if uint32(len(output)) < count {
+	if uint32(len(output)) < count { // #nosec G115 -- buffer size check
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 
@@ -140,7 +140,7 @@ func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("failed to read from temporary file: %w", err)
 	}
 
-	if uint32(n) != count {
+	if uint32(n) != count { // #nosec G115 -- bytes read check
 		return fmt.Errorf("read %d bytes, expected %d", n, count)
 	}
 

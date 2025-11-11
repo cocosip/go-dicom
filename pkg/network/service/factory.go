@@ -55,7 +55,7 @@ func createCEchoRequest(commandDS *dataset.Dataset) (*dimse.CEchoRequest, error)
 	}
 
 	req := dimse.NewCEchoRequest()
-	req.SetMessageID(messageID)
+	_ = req.SetMessageID(messageID)
 	return req, nil
 }
 
@@ -94,7 +94,7 @@ func createCStoreRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CStoreReque
 		return nil, fmt.Errorf("failed to create C-STORE request: %w", err)
 	}
 
-	req.SetMessageID(messageID)
+	_ = req.SetMessageID(messageID)
 	return req, nil
 }
 
@@ -148,7 +148,7 @@ func createCFindRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRequest
 
 	// Create request
 	req := dimse.NewCFindRequest(level, dataDS)
-	req.SetMessageID(messageID)
+	_ = req.SetMessageID(messageID)
 	return req, nil
 }
 

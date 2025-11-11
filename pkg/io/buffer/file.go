@@ -37,7 +37,7 @@ func NewFile(filePath string, position, size uint32) (*FileByteBuffer, error) {
 		return nil, fmt.Errorf("cannot access file: %w", err)
 	}
 
-	fileSize := uint32(info.Size())
+	fileSize := uint32(info.Size()) // #nosec G115 -- file size for DICOM buffer
 	if position > fileSize {
 		return nil, fmt.Errorf("position %d exceeds file size %d", position, fileSize)
 	}
@@ -99,7 +99,7 @@ func (f *FileByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer cannot be nil")
 	}
 
-	if uint32(len(output)) < count {
+	if uint32(len(output)) < count { // #nosec G115 -- buffer size check
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 

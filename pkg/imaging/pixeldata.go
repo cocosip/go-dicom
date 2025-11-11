@@ -9,6 +9,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 )
 
+const ybrFull422 = "YBR_FULL_422"
+
 // PixelDataInfo contains metadata about DICOM pixel data.
 type PixelDataInfo struct {
 	// Image dimensions
@@ -59,14 +61,14 @@ func (info *PixelDataInfo) UncompressedFrameSize() int {
 	actualWidth := int(info.Width)
 	if actualWidth%2 != 0 &&
 		info.PhotometricInterpretation != nil &&
-		(info.PhotometricInterpretation.Value == "YBR_FULL_422" ||
+		(info.PhotometricInterpretation.Value == ybrFull422 ||
 			info.PhotometricInterpretation.Value == "YBR_PARTIAL_422" ||
 			info.PhotometricInterpretation.Value == "YBR_PARTIAL_420") {
 		actualWidth++
 	}
 
 	// Handle YBR_FULL_422 special case for uncompressed data
-	if info.PhotometricInterpretation != nil && info.PhotometricInterpretation.Value == "YBR_FULL_422" {
+	if info.PhotometricInterpretation != nil && info.PhotometricInterpretation.Value == ybrFull422 {
 		// For uncompressed transfer syntaxes, chrominance channels are downsampled
 		return info.BytesAllocated() * 2 * actualWidth * int(info.Height)
 	}

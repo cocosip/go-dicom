@@ -91,12 +91,12 @@ func Dial(ctx context.Context, network, address string, opts ...DialOption) (net
 	// Enable TCP keep-alive if it's a TCP connection
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		if err := tcpConn.SetKeepAlive(true); err != nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil, fmt.Errorf("failed to set keep-alive: %w", err)
 		}
 		if config.keepAlive > 0 {
 			if err := tcpConn.SetKeepAlivePeriod(config.keepAlive); err != nil {
-				conn.Close()
+				_ = conn.Close()
 				return nil, fmt.Errorf("failed to set keep-alive period: %w", err)
 			}
 		}
@@ -147,11 +147,11 @@ func DialTLS(ctx context.Context, network, address string, opts ...DialOption) (
 
 	select {
 	case <-ctx.Done():
-		tlsConn.Close()
+		_ = tlsConn.Close()
 		return nil, fmt.Errorf("TLS handshake cancelled: %w", ctx.Err())
 	case err := <-errChan:
 		if err != nil {
-			tlsConn.Close()
+			_ = tlsConn.Close()
 			return nil, fmt.Errorf("TLS handshake failed: %w", err)
 		}
 	}

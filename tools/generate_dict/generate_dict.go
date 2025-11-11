@@ -36,13 +36,20 @@ func main() {
 	}
 }
 
+// mustFprintf wraps fmt.Fprintf and panics on error (for code generation)
+func mustFprintf(w io.Writer, format string, args ...interface{}) {
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		panic(fmt.Sprintf("failed to write output: %v", err))
+	}
+}
+
 func run() error {
 	// Open the XML dictionary file
 	file, err := os.Open("fo-dicom-code/Dictionaries/DICOM Dictionary.xml")
 	if err != nil {
 		return fmt.Errorf("failed to open DICOM Dictionary.xml: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Read all XML data
 	data, err := io.ReadAll(file)
@@ -61,10 +68,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	// Write header
-	fmt.Fprintf(outFile, `// Copyright (c) 2025 go-dicom contributors.
+	mustFprintf(outFile, `// Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
 // Code generated from DICOM Dictionary.xml. DO NOT EDIT.
@@ -144,31 +151,31 @@ func loadStandardEntries(d *Dictionary) {
 		if maskedTags[t.Keyword] {
 			// Generate masked tag entry
 			maskPattern := fmt.Sprintf("(%s,%s)", t.Group, t.Element)
-			fmt.Fprintf(outFile, "\td.Add(NewEntryWithMask(\n")
-			fmt.Fprintf(outFile, "\t\ttag.MustParseMaskedTag(%q),\n", maskPattern)
-			fmt.Fprintf(outFile, "\t\t%q, // %s\n", name, t.Keyword)
-			fmt.Fprintf(outFile, "\t\t%q,\n", t.Keyword)
-			fmt.Fprintf(outFile, "\t\t%s,\n", vmCode)
-			fmt.Fprintf(outFile, "\t\t%v,\n", retired)
-			fmt.Fprintf(outFile, "\t\t%s,\n", vrCode)
-			fmt.Fprintf(outFile, "\t))\n")
+			mustFprintf(outFile, "\td.Add(NewEntryWithMask(\n")
+			mustFprintf(outFile, "\t\ttag.MustParseMaskedTag(%q),\n", maskPattern)
+			mustFprintf(outFile, "\t\t%q, // %s\n", name, t.Keyword)
+			mustFprintf(outFile, "\t\t%q,\n", t.Keyword)
+			mustFprintf(outFile, "\t\t%s,\n", vmCode)
+			mustFprintf(outFile, "\t\t%v,\n", retired)
+			mustFprintf(outFile, "\t\t%s,\n", vrCode)
+			mustFprintf(outFile, "\t))\n")
 		} else {
 			// Generate normal tag entry
-			fmt.Fprintf(outFile, "\td.Add(NewEntry(\n")
-			fmt.Fprintf(outFile, "\t\ttag.New(0x%s, 0x%s),\n", t.Group, t.Element)
-			fmt.Fprintf(outFile, "\t\t%q, // %s\n", name, t.Keyword)
-			fmt.Fprintf(outFile, "\t\t%q,\n", t.Keyword)
-			fmt.Fprintf(outFile, "\t\t%s,\n", vmCode)
-			fmt.Fprintf(outFile, "\t\t%v,\n", retired)
-			fmt.Fprintf(outFile, "\t\t%s,\n", vrCode)
-			fmt.Fprintf(outFile, "\t))\n")
+			mustFprintf(outFile, "\td.Add(NewEntry(\n")
+			mustFprintf(outFile, "\t\ttag.New(0x%s, 0x%s),\n", t.Group, t.Element)
+			mustFprintf(outFile, "\t\t%q, // %s\n", name, t.Keyword)
+			mustFprintf(outFile, "\t\t%q,\n", t.Keyword)
+			mustFprintf(outFile, "\t\t%s,\n", vmCode)
+			mustFprintf(outFile, "\t\t%v,\n", retired)
+			mustFprintf(outFile, "\t\t%s,\n", vrCode)
+			mustFprintf(outFile, "\t))\n")
 		}
 
 		count++
 	}
 
 	// Write footer
-	fmt.Fprintf(outFile, "}\n")
+	mustFprintf(outFile, "}\n")
 
 	fmt.Printf("Generated %d dictionary entries\n", count)
 	return nil

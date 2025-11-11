@@ -61,7 +61,7 @@ func (u *UnsignedShort) GetValue(index int) (uint16, error) {
 	}
 
 	data := make([]byte, 2)
-	offset := uint32(index * 2)
+	offset := uint32(index * 2) // #nosec G115 -- index is range-checked above
 	if err := u.buffer.GetByteRange(offset, 2, data); err != nil {
 		return 0, err
 	}
@@ -135,7 +135,7 @@ func (u *UnsignedLong) GetValue(index int) (uint32, error) {
 	}
 
 	data := make([]byte, 4)
-	offset := uint32(index * 4)
+	offset := uint32(index * 4) // #nosec G115 -- index is range-checked above
 	if err := u.buffer.GetByteRange(offset, 4, data); err != nil {
 		return 0, err
 	}
@@ -177,9 +177,9 @@ func NewSignedShortWithEndian(t *tag.Tag, values []int16, e endian.Endian) *Sign
 	data := make([]byte, len(values)*2)
 	for i, v := range values {
 		if e == endian.Little {
-			binary.LittleEndian.PutUint16(data[i*2:], uint16(v))
+			binary.LittleEndian.PutUint16(data[i*2:], uint16(v)) // #nosec G115 -- safe bit pattern conversion
 		} else {
-			binary.BigEndian.PutUint16(data[i*2:], uint16(v))
+			binary.BigEndian.PutUint16(data[i*2:], uint16(v)) // #nosec G115 -- safe bit pattern conversion
 		}
 	}
 
@@ -208,12 +208,12 @@ func (s *SignedShort) GetValue(index int) (int16, error) {
 	}
 
 	data := make([]byte, 2)
-	offset := uint32(index * 2)
+	offset := uint32(index * 2) // #nosec G115 -- index is range-checked above
 	if err := s.buffer.GetByteRange(offset, 2, data); err != nil {
 		return 0, err
 	}
 
-	return int16(binary.LittleEndian.Uint16(data)), nil
+	return int16(binary.LittleEndian.Uint16(data)), nil // #nosec G115 -- safe bit pattern conversion
 }
 
 // GetValues returns all values as a slice.
@@ -250,9 +250,9 @@ func NewSignedLongWithEndian(t *tag.Tag, values []int32, e endian.Endian) *Signe
 	data := make([]byte, len(values)*4)
 	for i, v := range values {
 		if e == endian.Little {
-			binary.LittleEndian.PutUint32(data[i*4:], uint32(v))
+			binary.LittleEndian.PutUint32(data[i*4:], uint32(v)) // #nosec G115 -- safe bit pattern conversion
 		} else {
-			binary.BigEndian.PutUint32(data[i*4:], uint32(v))
+			binary.BigEndian.PutUint32(data[i*4:], uint32(v)) // #nosec G115 -- safe bit pattern conversion
 		}
 	}
 
@@ -281,12 +281,12 @@ func (s *SignedLong) GetValue(index int) (int32, error) {
 	}
 
 	data := make([]byte, 4)
-	offset := uint32(index * 4)
+	offset := uint32(index * 4) // #nosec G115 -- index is range-checked above
 	if err := s.buffer.GetByteRange(offset, 4, data); err != nil {
 		return 0, err
 	}
 
-	return int32(binary.LittleEndian.Uint32(data)), nil
+	return int32(binary.LittleEndian.Uint32(data)), nil // #nosec G115 -- safe bit pattern conversion
 }
 
 // GetValues returns all values as a slice.
@@ -355,7 +355,7 @@ func (f *Float) GetValue(index int) (float32, error) {
 	}
 
 	data := make([]byte, 4)
-	offset := uint32(index * 4)
+	offset := uint32(index * 4) // #nosec G115 -- index is range-checked above
 	if err := f.buffer.GetByteRange(offset, 4, data); err != nil {
 		return 0, err
 	}
@@ -430,7 +430,7 @@ func (d *Double) GetValue(index int) (float64, error) {
 	}
 
 	data := make([]byte, 8)
-	offset := uint32(index * 8)
+	offset := uint32(index * 8) // #nosec G115 -- index is range-checked above
 	if err := d.buffer.GetByteRange(offset, 8, data); err != nil {
 		return 0, err
 	}
@@ -473,9 +473,9 @@ func NewSignedVeryLongWithEndian(t *tag.Tag, values []int64, e endian.Endian) *S
 	data := make([]byte, len(values)*8)
 	for i, v := range values {
 		if e == endian.Little {
-			binary.LittleEndian.PutUint64(data[i*8:], uint64(v))
+			binary.LittleEndian.PutUint64(data[i*8:], uint64(v)) // #nosec G115 -- safe bit pattern conversion
 		} else {
-			binary.BigEndian.PutUint64(data[i*8:], uint64(v))
+			binary.BigEndian.PutUint64(data[i*8:], uint64(v)) // #nosec G115 -- safe bit pattern conversion
 		}
 	}
 
@@ -504,12 +504,12 @@ func (s *SignedVeryLong) GetValue(index int) (int64, error) {
 	}
 
 	data := make([]byte, 8)
-	offset := uint32(index * 8)
+	offset := uint32(index * 8) // #nosec G115 -- index is range-checked above
 	if err := s.buffer.GetByteRange(offset, 8, data); err != nil {
 		return 0, err
 	}
 
-	return int64(binary.LittleEndian.Uint64(data)), nil
+	return int64(binary.LittleEndian.Uint64(data)), nil // #nosec G115 -- safe bit pattern conversion
 }
 
 // GetValues returns all values as a slice.
@@ -577,7 +577,7 @@ func (u *UnsignedVeryLong) GetValue(index int) (uint64, error) {
 	}
 
 	data := make([]byte, 8)
-	offset := uint32(index * 8)
+	offset := uint32(index * 8) // #nosec G115 -- index is range-checked above
 	if err := u.buffer.GetByteRange(offset, 8, data); err != nil {
 		return 0, err
 	}

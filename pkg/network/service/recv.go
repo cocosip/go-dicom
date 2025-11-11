@@ -230,7 +230,7 @@ func (s *Service) handleReleaseResponse(ctx context.Context) {
 	// State transition error, but continue with cleanup
 	// (we may already be in a closing state)
 	//}
-	s.setState(StateClosed)
+	_ = s.setState(StateClosed)
 
 	// Get lifecycle handler
 	s.callbacksMu.RLock()

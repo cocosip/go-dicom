@@ -11,9 +11,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const testPatientName = "Doe^John"
+
 // TestStringElement_Single tests single-valued string elements
 func TestStringElement_Single(t *testing.T) {
-	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+	elem := element.NewString(tag.PatientName, vr.PN, []string{testPatientName})
 
 	t.Run("Count", func(t *testing.T) {
 		if elem.Count() != 1 {
@@ -23,7 +25,7 @@ func TestStringElement_Single(t *testing.T) {
 
 	t.Run("GetString", func(t *testing.T) {
 		got := elem.GetString()
-		want := "Doe^John"
+		want := testPatientName
 		if got != want {
 			t.Errorf("GetString() = %q, want %q", got, want)
 		}
@@ -31,7 +33,7 @@ func TestStringElement_Single(t *testing.T) {
 
 	t.Run("GetValue", func(t *testing.T) {
 		got := elem.GetValue(0)
-		want := "Doe^John"
+		want := testPatientName
 		if got != want {
 			t.Errorf("GetValue(0) = %q, want %q", got, want)
 		}
@@ -42,8 +44,8 @@ func TestStringElement_Single(t *testing.T) {
 		if len(values) != 1 {
 			t.Errorf("len(GetValues()) = %d, want 1", len(values))
 		}
-		if values[0] != "Doe^John" {
-			t.Errorf("GetValues()[0] = %q, want %q", values[0], "Doe^John")
+		if values[0] != testPatientName {
+			t.Errorf("GetValues()[0] = %q, want %q", values[0], testPatientName)
 		}
 	})
 }

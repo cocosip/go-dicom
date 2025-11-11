@@ -158,71 +158,24 @@ func TestAAbort_SourceString(t *testing.T) {
 }
 
 func TestAAbort_ReasonString(t *testing.T) {
-	tests := []struct {
+	// Test cases for A-ABORT PDU reason strings - A-ABORT is used for abnormal termination of associations
+	testReasonStrings(t, []struct {
 		name     string
 		source   byte
 		reason   byte
 		expected string
 	}{
-		{
-			name:     "Service user - not specified",
-			source:   AbortSourceServiceUser,
-			reason:   AbortReasonServiceUserNotSpecified,
-			expected: "reason-not-specified",
-		},
-		{
-			name:     "Service provider - not specified",
-			source:   AbortSourceServiceProvider,
-			reason:   AbortReasonServiceProviderNotSpecified,
-			expected: "reason-not-specified",
-		},
-		{
-			name:     "Service provider - unrecognized PDU",
-			source:   AbortSourceServiceProvider,
-			reason:   AbortReasonServiceProviderUnrecognizedPDU,
-			expected: "unrecognized-PDU",
-		},
-		{
-			name:     "Service provider - unexpected PDU",
-			source:   AbortSourceServiceProvider,
-			reason:   AbortReasonServiceProviderUnexpectedPDU,
-			expected: "unexpected-PDU",
-		},
-		{
-			name:     "Service provider - unrecognized PDU parameter",
-			source:   AbortSourceServiceProvider,
-			reason:   AbortReasonServiceProviderUnrecognizedPDUParam,
-			expected: "unrecognized-PDU-parameter",
-		},
-		{
-			name:     "Service provider - unexpected PDU parameter",
-			source:   AbortSourceServiceProvider,
-			reason:   AbortReasonServiceProviderUnexpectedPDUParam,
-			expected: "unexpected-PDU-parameter",
-		},
-		{
-			name:     "Service provider - invalid PDU parameter",
-			source:   AbortSourceServiceProvider,
-			reason:   AbortReasonServiceProviderInvalidPDUParam,
-			expected: "invalid-PDU-parameter",
-		},
-		{
-			name:     "Unknown source and reason",
-			source:   0xFF,
-			reason:   0xFF,
-			expected: "unknown(0xFF)",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			abort := &AAbort{Source: tt.source, Reason: tt.reason}
-			result := abort.ReasonString()
-			if result != tt.expected {
-				t.Errorf("ReasonString: expected %s, got %s", tt.expected, result)
-			}
-		})
-	}
+		{"Service user - not specified", AbortSourceServiceUser, AbortReasonServiceUserNotSpecified, "reason-not-specified"},
+		{"Service provider - not specified", AbortSourceServiceProvider, AbortReasonServiceProviderNotSpecified, "reason-not-specified"},
+		{"Service provider - unrecognized PDU", AbortSourceServiceProvider, AbortReasonServiceProviderUnrecognizedPDU, "unrecognized-PDU"},
+		{"Service provider - unexpected PDU", AbortSourceServiceProvider, AbortReasonServiceProviderUnexpectedPDU, "unexpected-PDU"},
+		{"Service provider - unrecognized PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderUnrecognizedPDUParam, "unrecognized-PDU-parameter"},
+		{"Service provider - unexpected PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderUnexpectedPDUParam, "unexpected-PDU-parameter"},
+		{"Service provider - invalid PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderInvalidPDUParam, "invalid-PDU-parameter"},
+		{"Unknown source and reason", 0xFF, 0xFF, "unknown(0xFF)"},
+	}, func(source, reason byte) reasonStringer {
+		return &AAbort{Source: source, Reason: reason}
+	})
 }
 
 func TestAAbort_String(t *testing.T) {

@@ -48,22 +48,22 @@ func NewCMoveRequest(level QueryRetrieveLevel, moveDestination string, identifie
 	command := CreateCommandDataset(uint16(CommandCMoveRQ), 0)
 
 	// Set affected SOP Class UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
 
 	// Priority (optional, default to medium)
-	command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
+	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
 
 	// Move Destination AE Title
-	command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{moveDestination}))
+	_ = command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{moveDestination}))
 
 	// CommandDataSetType - dataset is present (identifier)
-	command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 
 	// Add QueryRetrieveLevel to the identifier dataset if not already present
 	if identifier != nil {
 		_, exists := identifier.Get(tag.QueryRetrieveLevel)
 		if !exists {
-			identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
+			_ = identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
 		}
 	}
 
@@ -99,7 +99,7 @@ func (r *CMoveRequest) Priority() uint16 {
 // SetPriority sets the priority of the request.
 func (r *CMoveRequest) SetPriority(priority uint16) {
 	r.priority = priority
-	r.command.AddOrUpdate(element.NewUnsignedShort(tag.Priority, []uint16{priority}))
+	_ = r.command.AddOrUpdate(element.NewUnsignedShort(tag.Priority, []uint16{priority}))
 }
 
 // MoveDestination returns the move destination AE title.
@@ -153,18 +153,18 @@ func NewCMoveResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 	command := CreateCommandDataset(uint16(CommandCMoveRSP), 0)
 
 	// Set message ID being responded to
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Set affected SOP Class UID (optional but recommended)
 	if sopClassUID != "" {
-		command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+		_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
 	}
 
 	// Set status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType - no dataset
-	command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CMoveResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
@@ -181,10 +181,10 @@ func NewCMoveResponsePending(messageIDBeingRespondedTo uint16, sopClassUID strin
 	resp := NewCMoveResponse(messageIDBeingRespondedTo, 0xFF00, sopClassUID)
 
 	// Add sub-operation counters
-	resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfRemainingSuboperations, []uint16{remaining}))
-	resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfCompletedSuboperations, []uint16{completed}))
-	resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfFailedSuboperations, []uint16{failed}))
-	resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfWarningSuboperations, []uint16{warning}))
+	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfRemainingSuboperations, []uint16{remaining}))
+	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfCompletedSuboperations, []uint16{completed}))
+	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfFailedSuboperations, []uint16{failed}))
+	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfWarningSuboperations, []uint16{warning}))
 
 	resp.numberOfRemainingSubOperations = remaining
 	resp.numberOfCompletedSubOperations = completed

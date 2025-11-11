@@ -12,17 +12,19 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const testPatientName = "Doe^John"
+
 // TestDatasetGetString tests GetString accessor
 func TestDatasetGetString(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	str, exists := ds.GetString(tag.PatientName)
 	if !exists {
 		t.Fatal("GetString() should find existing element")
 	}
-	if str != "Doe^John" {
-		t.Errorf("GetString() = %q, want %q", str, "Doe^John")
+	if str != testPatientName {
+		t.Errorf("GetString() = %q, want %q", str, testPatientName)
 	}
 
 	// Non-existing tag
@@ -156,14 +158,14 @@ func TestDatasetGetFloat64(t *testing.T) {
 // TestDatasetTryGetters tests Try* accessor methods
 func TestDatasetTryGetters(t *testing.T) {
 	ds := dataset.New()
-	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 	ds.Add(element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100}))
 
 	// TryGetString
 	str := ds.TryGetString(tag.PatientName)
-	if str != "Doe^John" {
-		t.Errorf("TryGetString() = %q, want %q", str, "Doe^John")
+	if str != testPatientName {
+		t.Errorf("TryGetString() = %q, want %q", str, testPatientName)
 	}
 
 	// TryGetString for non-existing tag

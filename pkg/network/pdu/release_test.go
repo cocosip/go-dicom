@@ -1,10 +1,12 @@
-// Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
-
 package pdu
 
 import (
 	"testing"
+)
+
+const (
+	testReleaseRQStr = "A-RELEASE-RQ"
+	testReleaseRPStr = "A-RELEASE-RP"
 )
 
 func TestNewAReleaseRQ(t *testing.T) {
@@ -61,7 +63,7 @@ func TestAReleaseRQ_DecodeInvalidLength(t *testing.T) {
 
 func TestAReleaseRQ_String(t *testing.T) {
 	rq := NewAReleaseRQ()
-	if rq.String() != "A-RELEASE-RQ" {
+	if rq.String() != testReleaseRQStr {
 		t.Errorf("Expected 'A-RELEASE-RQ', got %s", rq.String())
 	}
 }
@@ -120,7 +122,7 @@ func TestAReleaseRP_DecodeInvalidLength(t *testing.T) {
 
 func TestAReleaseRP_String(t *testing.T) {
 	rp := NewAReleaseRP()
-	if rp.String() != "A-RELEASE-RP" {
+	if rp.String() != testReleaseRPStr {
 		t.Errorf("Expected 'A-RELEASE-RP', got %s", rp.String())
 	}
 }

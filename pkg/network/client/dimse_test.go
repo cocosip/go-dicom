@@ -18,6 +18,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
+const errNotConnected = "client not connected"
+
 func TestCEcho_NotConnected(t *testing.T) {
 	client := New()
 
@@ -27,7 +29,7 @@ func TestCEcho_NotConnected(t *testing.T) {
 		t.Error("Expected error when not connected")
 	}
 
-	expectedMsg := "client not connected"
+	expectedMsg := errNotConnected
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -43,7 +45,7 @@ func TestCStore_NotConnected(t *testing.T) {
 		t.Error("Expected error when not connected")
 	}
 
-	expectedMsg := "client not connected"
+	expectedMsg := errNotConnected
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -75,7 +77,7 @@ func TestCFind_NotConnected(t *testing.T) {
 		t.Error("Expected error when not connected")
 	}
 
-	expectedMsg := "client not connected"
+	expectedMsg := errNotConnected
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -194,56 +196,38 @@ func (m *mockServiceForDIMSE) SendCFind(_ context.Context, req *dimse.CFindReque
 	return respCh, nil
 }
 
-func (m *mockServiceForDIMSE) SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error) {
-	// Create response channel
-	respCh := make(chan *dimse.CMoveResponse, 16)
-
-	// Simulate async responses with sub-operation progress
+func (m *mockServiceForDIMSE) SendCMove(_ context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error) {
+	ch := make(chan *dimse.CMoveResponse, 16)
 	go func() {
-		defer close(respCh)
+		defer close(ch)
+		msgID, sopClass := req.MessageID(), req.AffectedSOPClassUID()
 		time.Sleep(10 * time.Millisecond)
-
-		// Simulate pending response with progress
-		respCh <- dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 5, 0, 0, 0)
+		ch <- dimse.NewCMoveResponsePending(msgID, sopClass, 5, 0, 0, 0) // 5 remaining
 		time.Sleep(5 * time.Millisecond)
-
-		respCh <- dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 3, 2, 0, 0)
+		ch <- dimse.NewCMoveResponsePending(msgID, sopClass, 3, 2, 0, 0) // 3 remaining, 2 completed
 		time.Sleep(5 * time.Millisecond)
-
-		respCh <- dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 0, 5, 0, 0)
+		ch <- dimse.NewCMoveResponsePending(msgID, sopClass, 0, 5, 0, 0) // All 5 completed
 		time.Sleep(5 * time.Millisecond)
-
-		// Final success response
-		respCh <- dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
+		ch <- dimse.NewCMoveResponseSuccess(msgID, sopClass)
 	}()
-
-	return respCh, nil
+	return ch, nil
 }
 
-func (m *mockServiceForDIMSE) SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error) {
-	// Create response channel
-	respCh := make(chan *dimse.CGetResponse, 16)
-
-	// Simulate async responses with sub-operation progress
+func (m *mockServiceForDIMSE) SendCGet(_ context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error) {
+	ch := make(chan *dimse.CGetResponse, 16)
 	go func() {
-		defer close(respCh)
+		defer close(ch)
+		msgID, sopClass := req.MessageID(), req.AffectedSOPClassUID()
 		time.Sleep(10 * time.Millisecond)
-
-		// Simulate pending response with progress
-		respCh <- dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 3, 0, 0, 0)
+		ch <- dimse.NewCGetResponsePending(msgID, sopClass, 3, 0, 0, 0) // 3 remaining
 		time.Sleep(5 * time.Millisecond)
-
-		respCh <- dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 1, 2, 0, 0)
+		ch <- dimse.NewCGetResponsePending(msgID, sopClass, 1, 2, 0, 0) // 1 remaining, 2 completed
 		time.Sleep(5 * time.Millisecond)
-
-		respCh <- dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 0, 3, 0, 0)
+		ch <- dimse.NewCGetResponsePending(msgID, sopClass, 0, 3, 0, 0) // All 3 completed
 		time.Sleep(5 * time.Millisecond)
-
-		// Final success response
-		respCh <- dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
+		ch <- dimse.NewCGetResponseSuccess(msgID, sopClass)
 	}()
-
-	return respCh, nil
+	return ch, nil
 }
 
 func setupMockClient() (*Client, *mockServiceForDIMSE) {
@@ -507,7 +491,7 @@ func TestCStoreMultiple_NotConnected(t *testing.T) {
 		t.Error("Expected error when not connected")
 	}
 
-	expectedMsg := "client not connected"
+	expectedMsg := errNotConnected
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -564,7 +548,7 @@ func TestCMove_NotConnected(t *testing.T) {
 		t.Error("Expected error when not connected")
 	}
 
-	expectedMsg := "client not connected"
+	expectedMsg := errNotConnected
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -670,7 +654,7 @@ func TestCGet_NotConnected(t *testing.T) {
 		t.Error("Expected error when not connected")
 	}
 
-	expectedMsg := "client not connected"
+	expectedMsg := errNotConnected
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}

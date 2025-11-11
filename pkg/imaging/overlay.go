@@ -7,6 +7,8 @@ import (
 	"fmt"
 )
 
+const unknownStr = "Unknown"
+
 // OverlayType represents DICOM overlay types
 type OverlayType int
 
@@ -25,7 +27,7 @@ func (t OverlayType) String() string {
 	case OverlayROI:
 		return "ROI"
 	default:
-		return "Unknown"
+		return unknownStr
 	}
 }
 
@@ -213,7 +215,7 @@ func (o *DicomOverlayData) ApplyToImage(imageData []byte, width, height int, sam
 			case 1:
 				// Grayscale: blend with gray value
 				gray := (uint16(overlayColor.R) + uint16(overlayColor.G) + uint16(overlayColor.B)) / 3
-				result[i] = uint8(gray)
+				result[i] = uint8(gray) // #nosec G115 -- gray value within uint8 range after division
 			case 3:
 				// RGB: apply overlay color with alpha blending
 				alpha := float64(overlayColor.A) / 255.0
@@ -233,7 +235,7 @@ func (o *DicomOverlayData) ApplyToImage(imageData []byte, width, height int, sam
 func OverlayGroupNumbers() []uint16 {
 	groups := make([]uint16, 128) // (0x60FF - 0x6000) / 2 + 1 = 128
 	for i := 0; i < 128; i++ {
-		groups[i] = uint16(0x6000 + i*2)
+		groups[i] = uint16(0x6000 + i*2) // #nosec G115 -- loop bound ensures result within uint16 range
 	}
 	return groups
 }

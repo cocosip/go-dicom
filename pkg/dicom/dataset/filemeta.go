@@ -61,9 +61,9 @@ func NewFileMetaInformationFromDataset(ds *Dataset) *FileMetaInformation {
 // and TransferSyntaxUID before writing the file.
 func NewDefaultFileMetaInformation() *FileMetaInformation {
 	fmi := NewFileMetaInformation()
-	fmi.SetVersion([]byte{0x00, 0x01})
-	fmi.SetImplementationClassUID(uid.GoDicomImplementationClassUID)
-	fmi.SetImplementationVersionName(uid.GoDicomImplementationVersionName)
+	_ = fmi.SetVersion([]byte{0x00, 0x01})
+	_ = fmi.SetImplementationClassUID(uid.GoDicomImplementationClassUID)
+	_ = fmi.SetImplementationVersionName(uid.GoDicomImplementationVersionName)
 	return fmi
 }
 
@@ -78,27 +78,33 @@ func NewFileMetaInformationFromMainDataset(ds *Dataset, ts *transfer.Syntax) (*F
 	if !ok {
 		return nil, fmt.Errorf("SOPClassUID not found in dataset")
 	}
-	fmi.SetMediaStorageSOPClassUID(sopClassUID)
+	if err := fmi.SetMediaStorageSOPClassUID(sopClassUID); err != nil {
+		return nil, fmt.Errorf("failed to set media storage SOP class UID: %w", err)
+	}
 
 	// Extract SOP Instance UID
 	sopInstanceUID, ok := ds.GetString(tag.SOPInstanceUID)
 	if !ok {
 		return nil, fmt.Errorf("SOPInstanceUID not found in dataset")
 	}
-	fmi.SetMediaStorageSOPInstanceUID(sopInstanceUID)
+	if err := fmi.SetMediaStorageSOPInstanceUID(sopInstanceUID); err != nil {
+		return nil, fmt.Errorf("failed to set media storage SOP instance UID: %w", err)
+	}
 
 	// Set transfer syntax
-	fmi.SetTransferSyntaxUID(ts.UID().UID())
+	if err := fmi.SetTransferSyntaxUID(ts.UID().UID()); err != nil {
+		return nil, fmt.Errorf("failed to set transfer syntax UID: %w", err)
+	}
 
 	// Try to get optional AE titles
 	if sourceAET, ok := ds.GetString(tag.SourceApplicationEntityTitle); ok {
-		fmi.SetSourceApplicationEntityTitle(sourceAET)
+		_ = fmi.SetSourceApplicationEntityTitle(sourceAET)
 	}
 	if sendingAET, ok := ds.GetString(tag.SendingApplicationEntityTitle); ok {
-		fmi.SetSendingApplicationEntityTitle(sendingAET)
+		_ = fmi.SetSendingApplicationEntityTitle(sendingAET)
 	}
 	if receivingAET, ok := ds.GetString(tag.ReceivingApplicationEntityTitle); ok {
-		fmi.SetReceivingApplicationEntityTitle(receivingAET)
+		_ = fmi.SetReceivingApplicationEntityTitle(receivingAET)
 	}
 
 	return fmi, nil

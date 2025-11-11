@@ -290,7 +290,7 @@ func ParseFile(path string, opts ...Option) (*ParseResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return Parse(file, opts...)
 }
@@ -371,7 +371,9 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 			return nil, err
 		}
 
-		ds.Add(elem)
+		if err := ds.Add(elem); err != nil {
+			return nil, fmt.Errorf("failed to add element %s to dataset: %w", t, err)
+		}
 	}
 
 	return ds, nil
@@ -445,10 +447,60 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 			break
 		}
 
-		ds.Add(elem)
+		if err := ds.Add(elem); err != nil {
+			return nil, fmt.Errorf("failed to add element to dataset: %w", err)
+		}
 	}
 
 	return ds, nil
+}
+
+// readElementData handles reading element data based on size and read options.
+// This is a common helper to avoid code duplication between readElement and readElementWithTag.
+func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buffer.ByteBuffer, error) {
+	// Handle large objects based on ReadOption
+	isLarge := length > p.largeObjectSize
+
+	if isLarge {
+		switch p.readOption {
+		case SkipLargeTags:
+			// Skip the data entirely by discarding it
+			if _, err := io.CopyN(io.Discard, p.reader, int64(length)); err != nil {
+				return nil, fmt.Errorf("failed to skip large tag %s: %w", t, err)
+			}
+			// Return an empty buffer
+			return buffer.NewMemory([]byte{}), nil
+
+		case ReadLargeOnDemand:
+			// Implement lazy loading if possible
+			buf, err := p.createLazyBuffer(length)
+			if err != nil {
+				// If lazy loading not possible, fall back to reading all
+				data := make([]byte, length)
+				if _, err := io.ReadFull(p.reader, data); err != nil {
+					return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+				}
+				buf = buffer.NewMemory(data)
+			}
+			return buf, nil
+
+		case ReadAll, ReadDefault:
+			// Read the data normally
+			data := make([]byte, length)
+			if _, err := io.ReadFull(p.reader, data); err != nil {
+				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+			}
+			return buffer.NewMemory(data), nil
+		}
+	}
+
+	// Read value data normally for non-large elements
+	data := make([]byte, length)
+	if _, err := io.ReadFull(p.reader, data); err != nil {
+		return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+	}
+
+	return buffer.NewMemory(data), nil
 }
 
 // readElement reads a single DICOM element.
@@ -487,52 +539,13 @@ func (p *parseContext) readElement() (element.Element, error) {
 		return p.readFragmentSequence(t, vrValue)
 	}
 
-	// Handle large objects based on ReadOption
-	isLarge := length > p.largeObjectSize
-
-	if isLarge {
-		switch p.readOption {
-		case SkipLargeTags:
-			// Skip the data entirely by discarding it
-			if _, err := io.CopyN(io.Discard, p.reader, int64(length)); err != nil {
-				return nil, fmt.Errorf("failed to skip large tag %s: %w", t, err)
-			}
-			// Return an empty element
-			buf := buffer.NewMemory([]byte{})
-			return p.createElement(t, vrValue, buf)
-
-		case ReadLargeOnDemand:
-			// Implement lazy loading if possible
-			buf, err := p.createLazyBuffer(length)
-			if err != nil {
-				// If lazy loading not possible, fall back to reading all
-				data := make([]byte, length)
-				if _, err := io.ReadFull(p.reader, data); err != nil {
-					return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
-				}
-				buf = buffer.NewMemory(data)
-			}
-			return p.createElement(t, vrValue, buf)
-
-		case ReadAll, ReadDefault:
-			// Read the data normally
-			data := make([]byte, length)
-			if _, err := io.ReadFull(p.reader, data); err != nil {
-				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
-			}
-			buf := buffer.NewMemory(data)
-			return p.createElement(t, vrValue, buf)
-		}
-	}
-
-	// Read value data normally for non-large elements
-	data := make([]byte, length)
-	if _, err := io.ReadFull(p.reader, data); err != nil {
-		return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+	// Read element data
+	buf, err := p.readElementData(t, vrValue, length)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create element based on VR
-	buf := buffer.NewMemory(data)
 	return p.createElement(t, vrValue, buf)
 }
 
@@ -567,52 +580,13 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 		return p.readFragmentSequence(t, vrValue)
 	}
 
-	// Handle large objects based on ReadOption
-	isLarge := length > p.largeObjectSize
-
-	if isLarge {
-		switch p.readOption {
-		case SkipLargeTags:
-			// Skip the data entirely
-			if _, err := io.CopyN(io.Discard, p.reader, int64(length)); err != nil {
-				return nil, fmt.Errorf("failed to skip large tag %s: %w", t, err)
-			}
-			// Return an empty element
-			buf := buffer.NewMemory([]byte{})
-			return p.createElement(t, vrValue, buf)
-
-		case ReadLargeOnDemand:
-			// Implement lazy loading if possible
-			buf, err := p.createLazyBuffer(length)
-			if err != nil {
-				// If lazy loading not possible, fall back to reading all
-				data := make([]byte, length)
-				if _, err := io.ReadFull(p.reader, data); err != nil {
-					return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
-				}
-				buf = buffer.NewMemory(data)
-			}
-			return p.createElement(t, vrValue, buf)
-
-		case ReadAll, ReadDefault:
-			// Read the data normally
-			data := make([]byte, length)
-			if _, err := io.ReadFull(p.reader, data); err != nil {
-				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
-			}
-			buf := buffer.NewMemory(data)
-			return p.createElement(t, vrValue, buf)
-		}
-	}
-
-	// Read value data normally for non-large elements
-	data := make([]byte, length)
-	if _, err := io.ReadFull(p.reader, data); err != nil {
-		return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+	// Read element data
+	buf, err := p.readElementData(t, vrValue, length)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create element based on VR
-	buf := buffer.NewMemory(data)
 	return p.createElement(t, vrValue, buf)
 }
 
@@ -708,7 +682,7 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 			if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE0DD {
 				// Read and discard length
 				var delimitLength uint32
-				binary.Read(p.reader, p.byteOrder, &delimitLength)
+				_ = binary.Read(p.reader, p.byteOrder, &delimitLength)
 				break
 			}
 
@@ -805,7 +779,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 			if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE00D {
 				// Read and discard the length (should be 0)
 				var delimitLength uint32
-				binary.Read(p.reader, p.byteOrder, &delimitLength)
+				_ = binary.Read(p.reader, p.byteOrder, &delimitLength)
 				break
 			}
 
@@ -815,7 +789,9 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 				return nil, err
 			}
 
-			item.Add(elem)
+			if err := item.Add(elem); err != nil {
+				return nil, fmt.Errorf("failed to add element to item: %w", err)
+			}
 		}
 	} else {
 		// Defined length item
@@ -841,7 +817,10 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 				return nil, err
 			}
 
-			item.Add(elem)
+			if err := item.Add(elem); err != nil {
+				p.reader = originalReader
+				return nil, fmt.Errorf("failed to add element to item: %w", err)
+			}
 		}
 
 		// Restore original reader
@@ -942,7 +921,7 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 			}
 
 			// Restore position
-			p.seekableReader.Seek(savedPos, io.SeekStart)
+			_, _ = p.seekableReader.Seek(savedPos, io.SeekStart)
 
 			return data
 		}

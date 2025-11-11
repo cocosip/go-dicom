@@ -271,17 +271,17 @@ func CreateCommandDataset(commandField uint16, messageID uint16) *dataset.Datase
 
 	// CommandGroupLength will be calculated during encoding
 	// We'll add a placeholder for now
-	ds.Add(element.NewUnsignedLong(tag.CommandGroupLength, []uint32{0}))
+	_ = ds.Add(element.NewUnsignedLong(tag.CommandGroupLength, []uint32{0}))
 
 	// AffectedSOPClassUID - will be set by specific message types
 	// CommandField
-	ds.Add(element.NewUnsignedShort(tag.CommandField, []uint16{commandField}))
+	_ = ds.Add(element.NewUnsignedShort(tag.CommandField, []uint16{commandField}))
 
 	// MessageID
-	ds.Add(element.NewUnsignedShort(tag.MessageID, []uint16{messageID}))
+	_ = ds.Add(element.NewUnsignedShort(tag.MessageID, []uint16{messageID}))
 
 	// CommandDataSetType - 0x0101 means no dataset present
-	ds.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = ds.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return ds
 }

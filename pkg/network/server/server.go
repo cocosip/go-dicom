@@ -390,7 +390,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
 
-	defer s.listener.Close()
+	defer func() { _ = s.listener.Close() }()
 
 	// Accept connections loop
 	for {
@@ -468,7 +468,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // handleConnection handles a single client connection.
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Create connection ID
 	connID := conn.RemoteAddr().String()

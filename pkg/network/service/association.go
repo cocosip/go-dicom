@@ -52,95 +52,48 @@ func serializeRawPDU(rawPDU *pdu.RawPDU) []byte {
 	return pduBytes
 }
 
-// SendAssociationRequest sends an A-ASSOCIATE-RQ PDU to request an association.
-// This is typically called by a client (SCU) to initiate a DICOM association.
-//
-// The method:
-// 1. Validates the current state (must be Idle)
-// 2. Encodes the association request PDU
-// 3. Writes it to the connection
-// 4. Transitions to AssociationRequested state
-func (s *Service) SendAssociationRequest(ctx context.Context, req *pdu.AAssociateRQ) error {
-	// Check if service is closed
+// pduEncoder is an interface for PDUs that can be encoded.
+type pduEncoder interface {
+	Encode() (*pdu.RawPDU, error)
+}
+
+// sendAssociationPDU is a helper that sends an association-related PDU and transitions state.
+func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pduName string, newState State) error {
 	if s.IsClosed() {
 		return ErrServiceClosed
 	}
-
-	// Validate state - must be Idle to send association request
 	currentState := s.GetState()
 	if currentState != StateIdle {
-		return fmt.Errorf("cannot send A-ASSOCIATE-RQ in state %s (must be Idle)", currentState)
+		return fmt.Errorf("cannot send %s in state %s", pduName, currentState)
 	}
-
-	// Encode PDU
-	rawPDU, err := req.Encode()
+	rawPDU, err := pduData.Encode()
 	if err != nil {
-		return fmt.Errorf("failed to encode A-ASSOCIATE-RQ: %w", err)
+		return fmt.Errorf("failed to encode %s: %w", pduName, err)
 	}
-
-	// Write to connection with timeout
 	if s.config.writeTimeout > 0 {
-		// Set write deadline if configured
 		if err := s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout)); err != nil {
 			return fmt.Errorf("failed to set write deadline: %w", err)
 		}
 	}
-
 	if _, err := s.conn.Write(serializeRawPDU(rawPDU)); err != nil {
-		return fmt.Errorf("failed to write A-ASSOCIATE-RQ: %w", err)
+		return fmt.Errorf("failed to write %s: %w", pduName, err)
 	}
-
-	// Transition to AssociationRequested state
-	if err := s.setState(StateAssociationRequested); err != nil {
+	if err := s.setState(newState); err != nil {
 		return fmt.Errorf("failed to transition state: %w", err)
 	}
-
 	return nil
+}
+
+// SendAssociationRequest sends an A-ASSOCIATE-RQ PDU to request an association.
+// This is typically called by a client (SCU) to initiate a DICOM association.
+func (s *Service) SendAssociationRequest(ctx context.Context, req *pdu.AAssociateRQ) error {
+	return s.sendAssociationPDU(ctx, req, "A-ASSOCIATE-RQ", StateAssociationRequested)
 }
 
 // SendAssociationAccept sends an A-ASSOCIATE-AC PDU to accept an association.
 // This is typically called by a server (SCP) in response to an A-ASSOCIATE-RQ.
-//
-// The method:
-// 1. Validates the current state (should be Idle after receiving RQ)
-// 2. Encodes the association accept PDU
-// 3. Writes it to the connection
-// 4. Transitions to AssociationAccepted state
 func (s *Service) SendAssociationAccept(ctx context.Context, ac *pdu.AAssociateAC) error {
-	// Check if service is closed
-	if s.IsClosed() {
-		return ErrServiceClosed
-	}
-
-	// Validate state - typically Idle after receiving RQ
-	currentState := s.GetState()
-	if currentState != StateIdle {
-		return fmt.Errorf("cannot send A-ASSOCIATE-AC in state %s", currentState)
-	}
-
-	// Encode PDU
-	rawPDU, err := ac.Encode()
-	if err != nil {
-		return fmt.Errorf("failed to encode A-ASSOCIATE-AC: %w", err)
-	}
-
-	// Write to connection with timeout
-	if s.config.writeTimeout > 0 {
-		if err := s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout)); err != nil {
-			return fmt.Errorf("failed to set write deadline: %w", err)
-		}
-	}
-
-	if _, err := s.conn.Write(serializeRawPDU(rawPDU)); err != nil {
-		return fmt.Errorf("failed to write A-ASSOCIATE-AC: %w", err)
-	}
-
-	// Transition to AssociationAccepted state
-	if err := s.setState(StateAssociationAccepted); err != nil {
-		return fmt.Errorf("failed to transition state: %w", err)
-	}
-
-	return nil
+	return s.sendAssociationPDU(ctx, ac, "A-ASSOCIATE-AC", StateAssociationAccepted)
 }
 
 // SendAssociationReject sends an A-ASSOCIATE-RJ PDU to reject an association.

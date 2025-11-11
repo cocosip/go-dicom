@@ -31,10 +31,10 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 	}
 
 	// Set value type to CONTAINER (0040,A040) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeContainer)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeContainer)}))
 
 	// Set continuity to SEPARATE (typical for SR root) (0040,A050) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(ContinuitySeparate)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(ContinuitySeparate)}))
 
 	// Note: RelationshipType is intentionally NOT set for the root element
 
@@ -46,7 +46,7 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 		}
 
 		seq := dataset.NewSequenceWithItems(tag.ContentSequence, datasets)
-		ds.AddOrUpdate(seq)
+		_ = ds.AddOrUpdate(seq)
 	}
 
 	contentItem := NewContentItemFromDataset(ds)
@@ -71,7 +71,7 @@ func (sr *StructuredReport) Add(item *ContentItem) error {
 	if err != nil {
 		// Create new sequence with this item
 		seq = dataset.NewSequenceWithItems(tag.ContentSequence, []*dataset.Dataset{item.Dataset()})
-		sr.dataset.AddOrUpdate(seq)
+		_ = sr.dataset.AddOrUpdate(seq)
 	} else {
 		// Append to existing sequence
 		seq.AddItem(item.Dataset())

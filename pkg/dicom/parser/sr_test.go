@@ -12,6 +12,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
+const textValueType = "TEXT"
+
 // TestStructuredReportParsing tests parsing of Structured Report DICOM files
 func TestStructuredReportParsing(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data")
@@ -315,7 +317,7 @@ func extractSRContent(ds *dataset.Dataset) []map[string]string {
 
 			// Extract value based on type
 			switch valueType {
-			case "TEXT":
+			case textValueType:
 				if textValue, exists := item.GetString(tag.TextValue); exists {
 					itemData["Value"] = textValue
 				}
@@ -398,7 +400,7 @@ func printSRTree(t *testing.T, ds *dataset.Dataset, level int) {
 		t.Logf("%s[%s] %s: %s", indent, relType, valueType, conceptName)
 
 		// Get value if TEXT
-		if valueType == "TEXT" {
+		if valueType == textValueType {
 			if textValue, exists := item.GetString(tag.TextValue); exists {
 				t.Logf("%s  → %s", indent, textValue)
 			}
@@ -455,7 +457,7 @@ func analyzeSRContentItem(t *testing.T, index int, item *dataset.Dataset) {
 // logContentByValueType logs content based on value type
 func logContentByValueType(t *testing.T, item *dataset.Dataset, valueType string) {
 	switch valueType {
-	case "TEXT":
+	case textValueType:
 		if textValue, exists := item.GetString(tag.TextValue); exists {
 			t.Logf("  Text Value: %s", textValue)
 		}

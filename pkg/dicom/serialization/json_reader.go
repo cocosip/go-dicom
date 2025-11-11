@@ -60,7 +60,9 @@ func (r *jsonReader) readDataset(data []byte) (*dataset.Dataset, error) {
 		}
 
 		if elem != nil {
-			ds.Add(elem)
+			if err := ds.Add(elem); err != nil {
+				return nil, fmt.Errorf("failed to add element %s: %w", tagStr, err)
+			}
 		}
 	}
 
@@ -337,6 +339,44 @@ func (r *jsonReader) readInt32Array(t *tag.Tag, data json.RawMessage) (element.E
 	return element.NewSignedLong(t, values), nil
 }
 
+// parseInt64FromJSON parses an int64 from JSON, handling both number and string representations.
+func parseInt64FromJSON(raw json.RawMessage, index int) (int64, error) {
+	// Try as number first, then as string
+	var num int64
+	if err := json.Unmarshal(raw, &num); err == nil {
+		return num, nil
+	}
+
+	var str string
+	if err := json.Unmarshal(raw, &str); err != nil {
+		return 0, fmt.Errorf("invalid int64 at index %d", index)
+	}
+	val, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid int64 string at index %d: %s", index, str)
+	}
+	return val, nil
+}
+
+// parseUint64FromJSON parses a uint64 from JSON, handling both number and string representations.
+func parseUint64FromJSON(raw json.RawMessage, index int) (uint64, error) {
+	// Try as number first, then as string
+	var num uint64
+	if err := json.Unmarshal(raw, &num); err == nil {
+		return num, nil
+	}
+
+	var str string
+	if err := json.Unmarshal(raw, &str); err != nil {
+		return 0, fmt.Errorf("invalid uint64 at index %d", index)
+	}
+	val, err := strconv.ParseUint(str, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid uint64 string at index %d: %s", index, str)
+	}
+	return val, nil
+}
+
 // readInt64Array reads an int64 array (SV)
 func (r *jsonReader) readInt64Array(t *tag.Tag, data json.RawMessage) (element.Element, error) {
 	var rawValues []json.RawMessage
@@ -346,21 +386,11 @@ func (r *jsonReader) readInt64Array(t *tag.Tag, data json.RawMessage) (element.E
 
 	values := make([]int64, len(rawValues))
 	for i, raw := range rawValues {
-		// Try as number first, then as string
-		var num int64
-		if err := json.Unmarshal(raw, &num); err == nil {
-			values[i] = num
-		} else {
-			var str string
-			if err := json.Unmarshal(raw, &str); err != nil {
-				return nil, fmt.Errorf("invalid int64 at index %d", i)
-			}
-			val, err := strconv.ParseInt(str, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid int64 string at index %d: %s", i, str)
-			}
-			values[i] = val
+		val, err := parseInt64FromJSON(raw, i)
+		if err != nil {
+			return nil, err
 		}
+		values[i] = val
 	}
 
 	return element.NewSignedVeryLong(t, values), nil
@@ -393,21 +423,11 @@ func (r *jsonReader) readUint64Array(t *tag.Tag, data json.RawMessage) (element.
 
 	values := make([]uint64, len(rawValues))
 	for i, raw := range rawValues {
-		// Try as number first, then as string
-		var num uint64
-		if err := json.Unmarshal(raw, &num); err == nil {
-			values[i] = num
-		} else {
-			var str string
-			if err := json.Unmarshal(raw, &str); err != nil {
-				return nil, fmt.Errorf("invalid uint64 at index %d", i)
-			}
-			val, err := strconv.ParseUint(str, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid uint64 string at index %d: %s", i, str)
-			}
-			values[i] = val
+		val, err := parseUint64FromJSON(raw, i)
+		if err != nil {
+			return nil, err
 		}
+		values[i] = val
 	}
 
 	return element.NewUnsignedVeryLong(t, values), nil

@@ -102,42 +102,7 @@ func (s *Service) SendWithTimeout(msg dimse.Message, timeout time.Duration) erro
 //	    log.Println("C-ECHO successful")
 //	}
 func (s *Service) SendCEcho(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
-	// Get association to assign message ID
-	assoc := s.GetAssociation()
-	if assoc == nil {
-		return nil, fmt.Errorf("no association available")
-	}
-
-	// Assign message ID from association
-	msgID, err := assoc.AssignMessageID(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to assign message ID: %w", err)
-	}
-
-	// Register pending request to receive response
-	respCh := make(chan dimse.Response, 1)
-	s.registerPendingRequest(msgID, req, respCh)
-	defer s.unregisterPendingRequest(msgID)
-
-	// Send request
-	if err := s.Send(ctx, req); err != nil {
-		return nil, err
-	}
-
-	// Wait for response
-	select {
-	case respMsg := <-respCh:
-		// Type assert to CEchoResponse
-		resp, ok := respMsg.(*dimse.CEchoResponse)
-		if !ok {
-			return nil, fmt.Errorf("unexpected response type: %T", respMsg)
-		}
-		return resp, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-s.closeCh:
-		return nil, ErrServiceClosed
-	}
+	return sendSimpleRequest[*dimse.CEchoRequest, *dimse.CEchoResponse](ctx, s, req)
 }
 
 // SendCStore sends a C-STORE request to store a DICOM dataset.
@@ -160,42 +125,7 @@ func (s *Service) SendCEcho(ctx context.Context, req *dimse.CEchoRequest) (*dims
 //	    log.Println("C-STORE successful")
 //	}
 func (s *Service) SendCStore(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
-	// Get association to assign message ID
-	assoc := s.GetAssociation()
-	if assoc == nil {
-		return nil, fmt.Errorf("no association available")
-	}
-
-	// Assign message ID from association
-	msgID, err := assoc.AssignMessageID(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to assign message ID: %w", err)
-	}
-
-	// Register pending request to receive response
-	respCh := make(chan dimse.Response, 1)
-	s.registerPendingRequest(msgID, req, respCh)
-	defer s.unregisterPendingRequest(msgID)
-
-	// Send request
-	if err := s.Send(ctx, req); err != nil {
-		return nil, err
-	}
-
-	// Wait for response
-	select {
-	case respMsg := <-respCh:
-		// Type assert to CStoreResponse
-		resp, ok := respMsg.(*dimse.CStoreResponse)
-		if !ok {
-			return nil, fmt.Errorf("unexpected response type: %T", respMsg)
-		}
-		return resp, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-s.closeCh:
-		return nil, ErrServiceClosed
-	}
+	return sendSimpleRequest[*dimse.CStoreRequest, *dimse.CStoreResponse](ctx, s, req)
 }
 
 // registerPendingRequest registers a pending request to receive its response.
@@ -219,6 +149,105 @@ func (s *Service) unregisterPendingRequest(messageID uint16) {
 		close(pending.cancelCh)
 		delete(s.pendingRequests, messageID)
 	}
+}
+
+// sendSimpleRequest is a generic helper for sending simple request-response DIMSE operations (C-ECHO, C-STORE).
+// It handles message ID assignment, response waiting, and type assertion.
+func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
+	ctx context.Context,
+	s *Service,
+	req Req,
+) (Resp, error) {
+	var zero Resp
+	assoc := s.GetAssociation()
+	if assoc == nil {
+		return zero, fmt.Errorf("no association available")
+	}
+	msgID, err := assoc.AssignMessageID(req)
+	if err != nil {
+		return zero, fmt.Errorf("failed to assign message ID: %w", err)
+	}
+	respCh := make(chan dimse.Response, 1)
+	s.registerPendingRequest(msgID, req, respCh)
+	defer s.unregisterPendingRequest(msgID)
+	if err := s.Send(ctx, req); err != nil {
+		return zero, err
+	}
+	select {
+	case respMsg := <-respCh:
+		resp, ok := respMsg.(Resp)
+		if !ok {
+			return zero, fmt.Errorf("unexpected response type: %T", respMsg)
+		}
+		return resp, nil
+	case <-ctx.Done():
+		return zero, ctx.Err()
+	case <-s.closeCh:
+		return zero, ErrServiceClosed
+	}
+}
+
+// pendingResponse is an interface for DIMSE responses that can be pending or final.
+type pendingResponse interface {
+	dimse.Response
+	IsPending() bool
+}
+
+// sendRequestWithProgress is a generic helper for sending requests that return progressive responses (C-FIND, C-GET, C-MOVE).
+// It handles message ID assignment, response collection, and channel management.
+func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
+	ctx context.Context,
+	s *Service,
+	req Req,
+	errMsg string,
+) (<-chan Resp, error) {
+	assoc := s.GetAssociation()
+	if assoc == nil {
+		return nil, fmt.Errorf("no association available")
+	}
+	msgID, err := assoc.AssignMessageID(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign message ID: %w", err)
+	}
+	resultCh := make(chan Resp, 10)
+	respCh := make(chan dimse.Response, 10)
+	s.registerPendingRequest(msgID, req, respCh)
+	go func() {
+		defer close(resultCh)
+		defer s.unregisterPendingRequest(msgID)
+		for {
+			select {
+			case respMsg, ok := <-respCh:
+				if !ok {
+					return
+				}
+				resp, ok := respMsg.(Resp)
+				if !ok {
+					return
+				}
+				select {
+				case resultCh <- resp:
+				case <-ctx.Done():
+					return
+				case <-s.closeCh:
+					return
+				}
+				if !resp.IsPending() {
+					return
+				}
+			case <-ctx.Done():
+				return
+			case <-s.closeCh:
+				return
+			}
+		}
+	}()
+	if err := s.Send(ctx, req); err != nil {
+		s.unregisterPendingRequest(msgID)
+		close(resultCh)
+		return nil, fmt.Errorf("%s: %w", errMsg, err)
+	}
+	return resultCh, nil
 }
 
 // SendCFind sends a C-FIND request to query for DICOM objects.
@@ -329,76 +358,7 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 //   - 0xA900: Identifier does not match SOP Class
 //   - 0xC000: Unable to process
 func (s *Service) SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error) {
-	// Get association and assign message ID
-	assoc := s.GetAssociation()
-	if assoc == nil {
-		return nil, fmt.Errorf("no association available")
-	}
-
-	msgID, err := assoc.AssignMessageID(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to assign message ID: %w", err)
-	}
-
-	// Create result channel with buffer to prevent blocking
-	resultCh := make(chan *dimse.CMoveResponse, 10)
-
-	// Create channel for receiving raw responses
-	respCh := make(chan dimse.Response, 10)
-
-	// Register pending request
-	s.registerPendingRequest(msgID, req, respCh)
-
-	// Start goroutine to handle responses
-	go func() {
-		defer close(resultCh)
-		defer s.unregisterPendingRequest(msgID)
-
-		for {
-			select {
-			case respMsg, ok := <-respCh:
-				if !ok {
-					// Response channel closed
-					return
-				}
-
-				// Type assert to C-MOVE response
-				resp, ok := respMsg.(*dimse.CMoveResponse)
-				if !ok {
-					// Unexpected response type, close and return
-					return
-				}
-
-				// Send response to result channel
-				select {
-				case resultCh <- resp:
-				case <-ctx.Done():
-					return
-				case <-s.closeCh:
-					return
-				}
-
-				// If this is the final response (not pending), we're done
-				if !resp.IsPending() {
-					return
-				}
-
-			case <-ctx.Done():
-				return
-			case <-s.closeCh:
-				return
-			}
-		}
-	}()
-
-	// Send the request
-	if err := s.Send(ctx, req); err != nil {
-		s.unregisterPendingRequest(msgID)
-		close(resultCh)
-		return nil, fmt.Errorf("failed to send C-MOVE request: %w", err)
-	}
-
-	return resultCh, nil
+	return sendRequestWithProgress[*dimse.CMoveRequest, *dimse.CMoveResponse](ctx, s, req, "failed to send C-MOVE request")
 }
 
 // SendCGet sends a C-GET request and returns a channel that will receive responses.
@@ -422,74 +382,5 @@ func (s *Service) SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-cha
 //   - 0xA900: Identifier does not match SOP Class
 //   - 0xC000: Unable to process
 func (s *Service) SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error) {
-	// Get association and assign message ID
-	assoc := s.GetAssociation()
-	if assoc == nil {
-		return nil, fmt.Errorf("no association available")
-	}
-
-	msgID, err := assoc.AssignMessageID(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to assign message ID: %w", err)
-	}
-
-	// Create result channel with buffer to prevent blocking
-	resultCh := make(chan *dimse.CGetResponse, 10)
-
-	// Create channel for receiving raw responses
-	respCh := make(chan dimse.Response, 10)
-
-	// Register pending request
-	s.registerPendingRequest(msgID, req, respCh)
-
-	// Start goroutine to handle responses
-	go func() {
-		defer close(resultCh)
-		defer s.unregisterPendingRequest(msgID)
-
-		for {
-			select {
-			case respMsg, ok := <-respCh:
-				if !ok {
-					// Response channel closed
-					return
-				}
-
-				// Type assert to C-GET response
-				resp, ok := respMsg.(*dimse.CGetResponse)
-				if !ok {
-					// Unexpected response type, close and return
-					return
-				}
-
-				// Send response to result channel
-				select {
-				case resultCh <- resp:
-				case <-ctx.Done():
-					return
-				case <-s.closeCh:
-					return
-				}
-
-				// If this is the final response (not pending), we're done
-				if !resp.IsPending() {
-					return
-				}
-
-			case <-ctx.Done():
-				return
-			case <-s.closeCh:
-				return
-			}
-		}
-	}()
-
-	// Send the request
-	if err := s.Send(ctx, req); err != nil {
-		s.unregisterPendingRequest(msgID)
-		close(resultCh)
-		return nil, fmt.Errorf("failed to send C-GET request: %w", err)
-	}
-
-	return resultCh, nil
+	return sendRequestWithProgress[*dimse.CGetRequest, *dimse.CGetResponse](ctx, s, req, "failed to send C-GET request")
 }

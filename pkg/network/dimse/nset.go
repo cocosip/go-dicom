@@ -36,14 +36,14 @@ func NewNSetRequest(
 	command := CreateCommandDataset(uint16(CommandNSetRQ), 0)
 
 	// Set requested SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.RequestedSOPClassUID, vr.UI, []string{requestedSOPClassUID}))
-	command.Add(element.NewString(tag.RequestedSOPInstanceUID, vr.UI, []string{requestedSOPInstanceUID}))
+	_ = command.Add(element.NewString(tag.RequestedSOPClassUID, vr.UI, []string{requestedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.RequestedSOPInstanceUID, vr.UI, []string{requestedSOPInstanceUID}))
 
 	// CommandDataSetType - dataset present (modification list)
 	if modificationList != nil {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &NSetRequest{
@@ -102,26 +102,8 @@ func NewNSetResponse(
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NSetResponse {
-	// Create command dataset
-	command := CreateCommandDataset(uint16(CommandNSetRSP), 0)
-
-	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
-	command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
-
-	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
-
-	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
-
-	// CommandDataSetType
-	if attributeList != nil && statusCode == 0x0000 {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
-	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
-	}
-
+	command := createNResponseCommand(uint16(CommandNSetRSP), messageIDBeingRespondedTo,
+		statusCode, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
 	return &NSetResponse{
 		BaseResponse:              NewBaseResponse(command, attributeList),
 		statusCode:                statusCode,

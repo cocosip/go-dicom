@@ -12,6 +12,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const testStudyRootMoveUID = "1.2.840.10008.5.1.4.1.2.2.2"
+
 func TestNewCMoveRequest(t *testing.T) {
 	identifier := dataset.New()
 	identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
@@ -22,7 +24,7 @@ func TestNewCMoveRequest(t *testing.T) {
 		t.Fatal("NewCMoveRequest returned nil")
 	}
 
-	if req.AffectedSOPClassUID() != "1.2.840.10008.5.1.4.1.2.2.2" {
+	if req.AffectedSOPClassUID() != testStudyRootMoveUID {
 		t.Errorf("Expected SOP Class UID '1.2.840.10008.5.1.4.1.2.2.2', got '%s'", req.AffectedSOPClassUID())
 	}
 
@@ -62,7 +64,7 @@ func TestCMoveRequest_SetPriority(t *testing.T) {
 }
 
 func TestNewCMoveResponse(t *testing.T) {
-	resp := NewCMoveResponse(123, 0x0000, "1.2.840.10008.5.1.4.1.2.2.2")
+	resp := NewCMoveResponse(123, 0x0000, testStudyRootMoveUID)
 
 	if resp == nil {
 		t.Fatal("NewCMoveResponse returned nil")
@@ -76,13 +78,13 @@ func TestNewCMoveResponse(t *testing.T) {
 		t.Errorf("Expected message ID 123, got %d", resp.MessageIDBeingRespondedTo())
 	}
 
-	if resp.AffectedSOPClassUID() != "1.2.840.10008.5.1.4.1.2.2.2" {
+	if resp.AffectedSOPClassUID() != testStudyRootMoveUID {
 		t.Errorf("Expected SOP Class UID '1.2.840.10008.5.1.4.1.2.2.2', got '%s'", resp.AffectedSOPClassUID())
 	}
 }
 
 func TestNewCMoveResponsePending(t *testing.T) {
-	resp := NewCMoveResponsePending(123, "1.2.840.10008.5.1.4.1.2.2.2", 10, 5, 1, 2)
+	resp := NewCMoveResponsePending(123, testStudyRootMoveUID, 10, 5, 1, 2)
 
 	if resp.StatusCode() != 0xFF00 {
 		t.Errorf("Expected status code 0xFF00, got 0x%04X", resp.StatusCode())
@@ -110,7 +112,7 @@ func TestNewCMoveResponsePending(t *testing.T) {
 }
 
 func TestNewCMoveResponseSuccess(t *testing.T) {
-	resp := NewCMoveResponseSuccess(123, "1.2.840.10008.5.1.4.1.2.2.2")
+	resp := NewCMoveResponseSuccess(123, testStudyRootMoveUID)
 
 	if resp.StatusCode() != 0x0000 {
 		t.Errorf("Expected status code 0x0000, got 0x%04X", resp.StatusCode())
@@ -157,7 +159,7 @@ func TestCMoveRequest_String(t *testing.T) {
 }
 
 func TestCMoveResponse_String(t *testing.T) {
-	resp := NewCMoveResponsePending(123, "1.2.840.10008.5.1.4.1.2.2.2", 10, 5, 1, 2)
+	resp := NewCMoveResponsePending(123, testStudyRootMoveUID, 10, 5, 1, 2)
 
 	str := resp.String()
 	if str == "" {

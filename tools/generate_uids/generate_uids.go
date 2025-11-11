@@ -20,6 +20,20 @@ func main() {
 	}
 }
 
+// mustWrite wraps writer operations and panics on error (for code generation)
+func mustWrite(writer *bufio.Writer, s string) {
+	if _, err := writer.WriteString(s); err != nil {
+		panic(fmt.Sprintf("failed to write output: %v", err))
+	}
+}
+
+// mustFlush wraps writer.Flush and panics on error (for code generation)
+func mustFlush(writer *bufio.Writer) {
+	if err := writer.Flush(); err != nil {
+		panic(fmt.Sprintf("failed to flush output: %v", err))
+	}
+}
+
 func run() error {
 	// Process standard UIDs
 	if err := processFile("fo-dicom-code/DicomUIDGenerated.cs", "pkg/dicom/uid/uids_generated.go", "Standard"); err != nil {
@@ -40,17 +54,17 @@ func processFile(inputFile, outputFile, category string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %w", inputFile, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Create output file
 	outFile, err := os.Create(outputFile)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	writer := bufio.NewWriter(outFile)
-	defer writer.Flush()
+	defer mustFlush(writer)
 
 	// Determine source file name for header comment
 	sourceFile := "DicomUIDGenerated.cs"
@@ -59,7 +73,7 @@ func processFile(inputFile, outputFile, category string) error {
 	}
 
 	// Write header
-	writer.WriteString(fmt.Sprintf(`// Copyright (c) 2025 go-dicom contributors.
+	mustWrite(writer, fmt.Sprintf(`// Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
 // Code generated from %s. DO NOT EDIT.
@@ -96,8 +110,8 @@ var (
 			name = strings.ReplaceAll(name, `"`, `\"`)
 
 			// Write UID constant
-			writer.WriteString(fmt.Sprintf("\t// %s %s\n", varName, name))
-			writer.WriteString(fmt.Sprintf("\t%s = New(\"%s\", \"%s\", %s, %v)\n\n",
+			mustWrite(writer, fmt.Sprintf("\t// %s %s\n", varName, name))
+			mustWrite(writer, fmt.Sprintf("\t%s = New(\"%s\", \"%s\", %s, %v)\n\n",
 				varName, uidValue, name, goType, retired))
 
 			uidCount++
@@ -109,22 +123,22 @@ var (
 	}
 
 	// Write footer
-	writer.WriteString(")\n\n")
-	writer.WriteString("func init() {\n")
-	writer.WriteString(fmt.Sprintf("\t// Register all %s UIDs\n", strings.ToLower(category)))
+	mustWrite(writer, ")\n\n")
+	mustWrite(writer, "func init() {\n")
+	mustWrite(writer, fmt.Sprintf("\t// Register all %s UIDs\n", strings.ToLower(category)))
 
 	// Re-read file to generate registration code
-	file.Seek(0, 0)
+	_, _ = file.Seek(0, 0) // Ignore seek errors in code generator
 	scanner = bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if matches := uidRegex.FindStringSubmatch(line); matches != nil {
 			varName := matches[1]
-			writer.WriteString(fmt.Sprintf("\tRegister(%s)\n", varName))
+			mustWrite(writer, fmt.Sprintf("\tRegister(%s)\n", varName))
 		}
 	}
 
-	writer.WriteString("}\n")
+	mustWrite(writer, "}\n")
 
 	fmt.Printf("Generated %d %s UID constants in %s\n", uidCount, category, outputFile)
 	return nil

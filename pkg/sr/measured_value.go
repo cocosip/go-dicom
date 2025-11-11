@@ -29,12 +29,12 @@ func NewMeasuredValue(value float64, units *CodeItem) *MeasuredValue {
 	// Add numeric value (0040,A30A) VR=DS
 	// Use the embedded String from DecimalString to satisfy Element interface
 	dsElem := element.NewDecimalStringFromFloat(tag.NumericValue, []float64{value})
-	ds.AddOrUpdate(dsElem.String)
+	_ = ds.AddOrUpdate(dsElem.String)
 
 	// Add measurement units code sequence (0040,08EA) VR=SQ
 	if units != nil {
 		seq := dataset.NewSequenceWithItems(tag.MeasurementUnitsCodeSequence, []*dataset.Dataset{units.Dataset()})
-		ds.AddOrUpdate(seq)
+		_ = ds.AddOrUpdate(seq)
 	}
 
 	return &MeasuredValue{dataset: ds}

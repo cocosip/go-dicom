@@ -34,13 +34,13 @@ func NewContentItemText(code *CodeItem, relationship Relationship, text string) 
 	}
 
 	// Set value type (0040,A040) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeText)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeText)}))
 
 	// Set relationship type (0040,A010) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
 
 	// Set text value (0040,A160) VR=UT
-	ds.AddOrUpdate(element.NewString(tag.TextValue, vr.UT, []string{text}))
+	_ = ds.AddOrUpdate(element.NewString(tag.TextValue, vr.UT, []string{text}))
 
 	return &ContentItem{dataset: ds}, nil
 }
@@ -55,15 +55,15 @@ func NewContentItemCode(code *CodeItem, relationship Relationship, value *CodeIt
 	}
 
 	// Set value type (0040,A040) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeCode)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeCode)}))
 
 	// Set relationship type (0040,A010) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
 
 	// Set concept code sequence (0040,A168) VR=SQ
 	if value != nil {
 		seq := dataset.NewSequenceWithItems(tag.ConceptCodeSequence, []*dataset.Dataset{value.Dataset()})
-		ds.AddOrUpdate(seq)
+		_ = ds.AddOrUpdate(seq)
 	}
 
 	return &ContentItem{dataset: ds}, nil
@@ -79,15 +79,15 @@ func NewContentItemNumeric(code *CodeItem, relationship Relationship, value *Mea
 	}
 
 	// Set value type (0040,A040) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeNumeric)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeNumeric)}))
 
 	// Set relationship type (0040,A010) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
 
 	// Set measured value sequence (0040,A300) VR=SQ
 	if value != nil {
 		seq := dataset.NewSequenceWithItems(tag.MeasuredValueSequence, []*dataset.Dataset{value.Dataset()})
-		ds.AddOrUpdate(seq)
+		_ = ds.AddOrUpdate(seq)
 	}
 
 	return &ContentItem{dataset: ds}, nil
@@ -103,14 +103,14 @@ func NewContentItemContainer(code *CodeItem, relationship Relationship, continui
 	}
 
 	// Set value type (0040,A040) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeContainer)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(ValueTypeContainer)}))
 
 	// Set relationship type (0040,A010) VR=CS
-	ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
+	_ = ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
 
 	// Set continuity (0040,A050) VR=CS
 	if continuity != ContinuityNone {
-		ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(continuity)}))
+		_ = ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(continuity)}))
 	}
 
 	// Add content sequence (0040,A730) VR=SQ
@@ -121,7 +121,7 @@ func NewContentItemContainer(code *CodeItem, relationship Relationship, continui
 		}
 
 		seq := dataset.NewSequenceWithItems(tag.ContentSequence, datasets)
-		ds.AddOrUpdate(seq)
+		_ = ds.AddOrUpdate(seq)
 	}
 
 	return &ContentItem{dataset: ds}, nil
@@ -260,7 +260,7 @@ func setConceptNameCode(ds *dataset.Dataset, code *CodeItem) error {
 
 	// Set concept name code sequence (0040,A043) VR=SQ
 	seq := dataset.NewSequenceWithItems(tag.ConceptNameCodeSequence, []*dataset.Dataset{code.Dataset()})
-	ds.AddOrUpdate(seq)
+	_ = ds.AddOrUpdate(seq)
 
 	return nil
 }

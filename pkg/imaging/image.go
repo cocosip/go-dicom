@@ -13,6 +13,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 )
 
+const monochrome2 = "MONOCHROME2"
+
 // DicomImage represents a DICOM image with rendering capabilities
 type DicomImage struct {
 	mu sync.RWMutex
@@ -69,7 +71,7 @@ func (img *DicomImage) IsGrayscale() bool {
 	if pi == nil {
 		return true // Default to grayscale
 	}
-	return pi.Value == "MONOCHROME1" || pi.Value == "MONOCHROME2"
+	return pi.Value == "MONOCHROME1" || pi.Value == monochrome2
 }
 
 // CurrentFrame returns the current frame index
@@ -235,7 +237,7 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 	case 1:
 		// Grayscale
 		isSigned := img.pixelData.Info.PixelRepresentation == SignedPixels
-		photometric := "MONOCHROME2"
+		photometric := monochrome2
 		if img.pixelData.Info.PhotometricInterpretation != nil {
 			photometric = img.pixelData.Info.PhotometricInterpretation.Value
 		}

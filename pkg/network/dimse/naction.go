@@ -39,17 +39,17 @@ func NewNActionRequest(
 	command := CreateCommandDataset(uint16(CommandNActionRQ), 0)
 
 	// Set requested SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.RequestedSOPClassUID, vr.UI, []string{requestedSOPClassUID}))
-	command.Add(element.NewString(tag.RequestedSOPInstanceUID, vr.UI, []string{requestedSOPInstanceUID}))
+	_ = command.Add(element.NewString(tag.RequestedSOPClassUID, vr.UI, []string{requestedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.RequestedSOPInstanceUID, vr.UI, []string{requestedSOPInstanceUID}))
 
 	// Set action type ID
-	command.Add(element.NewUnsignedShort(tag.ActionTypeID, []uint16{actionTypeID}))
+	_ = command.Add(element.NewUnsignedShort(tag.ActionTypeID, []uint16{actionTypeID}))
 
 	// CommandDataSetType
 	if actionInformation != nil {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &NActionRequest{
@@ -100,6 +100,34 @@ type NActionResponse struct {
 	messageIDBeingRespondedTo uint16
 }
 
+// createNOperationResponseCommand creates a command dataset for N-operation responses (N-ACTION, N-EVENT-REPORT).
+// This helper reduces code duplication across similar N-operation response types.
+func createNOperationResponseCommand(
+	commandType uint16,
+	messageIDBeingRespondedTo uint16,
+	statusCode uint16,
+	affectedSOPClassUID string,
+	affectedSOPInstanceUID string,
+	typeIDTag *tag.Tag,
+	typeIDValue uint16,
+	dataPresent bool,
+) *dataset.Dataset {
+	command := CreateCommandDataset(commandType, 0)
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
+	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	if typeIDValue != 0 && typeIDTag != nil {
+		_ = command.Add(element.NewUnsignedShort(typeIDTag, []uint16{typeIDValue}))
+	}
+	if dataPresent {
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	} else {
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	}
+	return command
+}
+
 // NewNActionResponse creates a new N-ACTION-RSP message.
 //
 // Parameters:
@@ -117,30 +145,16 @@ func NewNActionResponse(
 	actionTypeID uint16,
 	actionReply *dataset.Dataset,
 ) *NActionResponse {
-	// Create command dataset
-	command := CreateCommandDataset(uint16(CommandNActionRSP), 0)
-
-	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
-	command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
-
-	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
-
-	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
-
-	// Action type ID
-	if actionTypeID != 0 {
-		command.Add(element.NewUnsignedShort(tag.ActionTypeID, []uint16{actionTypeID}))
-	}
-
-	// CommandDataSetType
-	if actionReply != nil {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
-	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
-	}
+	command := createNOperationResponseCommand(
+		uint16(CommandNActionRSP),
+		messageIDBeingRespondedTo,
+		statusCode,
+		affectedSOPClassUID,
+		affectedSOPInstanceUID,
+		tag.ActionTypeID,
+		actionTypeID,
+		actionReply != nil,
+	)
 
 	return &NActionResponse{
 		BaseResponse:              NewBaseResponse(command, actionReply),

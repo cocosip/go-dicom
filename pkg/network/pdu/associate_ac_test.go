@@ -8,6 +8,15 @@ import (
 	"testing"
 )
 
+const (
+	testServerAETitle      = "SERVER"
+	testClientAETitle      = "CLIENT"
+	testImplVersionName    = "GO_DICOM_1_0"
+	testShortAETitle       = "SHORT"
+	testAnotherAETitle     = "ANOTHER"
+	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
+)
+
 func TestNewAAssociateAC(t *testing.T) {
 	ac := NewAAssociateAC()
 
@@ -39,7 +48,7 @@ func TestAAssociateAC_EncodeDecodeBasic(t *testing.T) {
 		{
 			ID:             1,
 			Result:         ResultAcceptance,
-			TransferSyntax: "1.2.840.10008.1.2.1", // Explicit VR Little Endian
+			TransferSyntax: testExplicitVRLittleLE, // Explicit VR Little Endian
 		},
 	}
 
@@ -89,7 +98,7 @@ func TestAAssociateAC_EncodeDecodeBasic(t *testing.T) {
 		t.Errorf("PresentationContext Result mismatch: expected %d, got %d", ResultAcceptance, pc.Result)
 	}
 
-	if pc.TransferSyntax != "1.2.840.10008.1.2.1" {
+	if pc.TransferSyntax != testExplicitVRLittleLE {
 		t.Errorf("TransferSyntax mismatch: expected 1.2.840.10008.1.2.1, got %s", pc.TransferSyntax)
 	}
 
@@ -108,7 +117,7 @@ func TestAAssociateAC_EncodeDecodeMultiplePresentationContexts(t *testing.T) {
 		{
 			ID:             1,
 			Result:         ResultAcceptance,
-			TransferSyntax: "1.2.840.10008.1.2.1",
+			TransferSyntax: testExplicitVRLittleLE,
 		},
 		{
 			ID:     3,
@@ -141,7 +150,7 @@ func TestAAssociateAC_EncodeDecodeMultiplePresentationContexts(t *testing.T) {
 	if decoded.PresentationContexts[0].Result != ResultAcceptance {
 		t.Errorf("Context 0: expected acceptance")
 	}
-	if decoded.PresentationContexts[0].TransferSyntax != "1.2.840.10008.1.2.1" {
+	if decoded.PresentationContexts[0].TransferSyntax != testExplicitVRLittleLE {
 		t.Errorf("Context 0: wrong transfer syntax")
 	}
 
@@ -177,9 +186,9 @@ func TestAAssociateAC_ResultString(t *testing.T) {
 
 func TestAAssociateAC_EncodeDecodeWithImplementationVersion(t *testing.T) {
 	ac := NewAAssociateAC()
-	ac.CalledAETitle = "SERVER"
-	ac.CallingAETitle = "CLIENT"
-	ac.UserInformation.ImplementationVersionName = "GO_DICOM_1_0"
+	ac.CalledAETitle = testServerAETitle
+	ac.CallingAETitle = testClientAETitle
+	ac.UserInformation.ImplementationVersionName = testImplVersionName
 
 	// Encode and decode
 	pdu, err := ac.Encode()
@@ -193,15 +202,15 @@ func TestAAssociateAC_EncodeDecodeWithImplementationVersion(t *testing.T) {
 	}
 
 	// Verify
-	if decoded.UserInformation.ImplementationVersionName != "GO_DICOM_1_0" {
+	if decoded.UserInformation.ImplementationVersionName != testImplVersionName {
 		t.Errorf("ImplementationVersionName mismatch: expected GO_DICOM_1_0, got %s", decoded.UserInformation.ImplementationVersionName)
 	}
 }
 
 func TestAAssociateAC_EncodeDecodeWithUserIdentityResponse(t *testing.T) {
 	ac := NewAAssociateAC()
-	ac.CalledAETitle = "SERVER"
-	ac.CallingAETitle = "CLIENT"
+	ac.CalledAETitle = testServerAETitle
+	ac.CallingAETitle = testClientAETitle
 
 	// Add user identity response (e.g., Kerberos token)
 	ac.UserInformation.UserIdentity = &UserIdentityNegotiation{
@@ -257,7 +266,7 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 			ID:             1,
 			AbstractSyntax: "1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
 			TransferSyntaxes: []string{
-				"1.2.840.10008.1.2.1", // Explicit VR Little Endian
+				testExplicitVRLittleLE, // Explicit VR Little Endian
 				"1.2.840.10008.1.2",   // Implicit VR Little Endian
 			},
 		},
@@ -281,7 +290,7 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 		{
 			ID:             1,
 			Result:         ResultAcceptance,
-			TransferSyntax: "1.2.840.10008.1.2.1", // Choose first transfer syntax
+			TransferSyntax: testExplicitVRLittleLE, // Choose first transfer syntax
 		},
 		{
 			ID:     3,
@@ -314,7 +323,7 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 	if accepted.Result != ResultAcceptance {
 		t.Errorf("Expected acceptance, got result %d", accepted.Result)
 	}
-	if accepted.TransferSyntax != "1.2.840.10008.1.2.1" {
+	if accepted.TransferSyntax != testExplicitVRLittleLE {
 		t.Errorf("Wrong transfer syntax: %s", accepted.TransferSyntax)
 	}
 
@@ -333,8 +342,8 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 
 func TestAAssociateAC_AETitleSpacePadding(t *testing.T) {
 	ac := NewAAssociateAC()
-	ac.CalledAETitle = "SHORT"    // Only 5 chars
-	ac.CallingAETitle = "ANOTHER" // 7 chars
+	ac.CalledAETitle = testShortAETitle    // Only 5 chars
+	ac.CallingAETitle = testAnotherAETitle // 7 chars
 
 	// Encode
 	pdu, err := ac.Encode()
@@ -349,11 +358,11 @@ func TestAAssociateAC_AETitleSpacePadding(t *testing.T) {
 	}
 
 	// Verify no extra spaces
-	if decoded.CalledAETitle != "SHORT" {
+	if decoded.CalledAETitle != testShortAETitle {
 		t.Errorf("CalledAETitle should trim spaces: expected 'SHORT', got '%s'", decoded.CalledAETitle)
 	}
 
-	if decoded.CallingAETitle != "ANOTHER" {
+	if decoded.CallingAETitle != testAnotherAETitle {
 		t.Errorf("CallingAETitle should trim spaces: expected 'ANOTHER', got '%s'", decoded.CallingAETitle)
 	}
 }
@@ -361,8 +370,8 @@ func TestAAssociateAC_AETitleSpacePadding(t *testing.T) {
 func TestAAssociateAC_AllRejectionReasons(t *testing.T) {
 	// Test all possible rejection reasons
 	ac := NewAAssociateAC()
-	ac.CalledAETitle = "SERVER"
-	ac.CallingAETitle = "CLIENT"
+	ac.CalledAETitle = testServerAETitle
+	ac.CallingAETitle = testClientAETitle
 
 	ac.PresentationContexts = []PresentationContextAC{
 		{ID: 1, Result: ResultUserRejection},

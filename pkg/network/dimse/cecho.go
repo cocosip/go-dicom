@@ -25,10 +25,10 @@ func NewCEchoRequest() *CEchoRequest {
 	command := CreateCommandDataset(uint16(CommandCEchoRQ), 0)
 
 	// Set affected SOP Class UID to Verification SOP Class
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{"1.2.840.10008.1.1"}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{"1.2.840.10008.1.1"}))
 
 	// Priority (optional, default to medium)
-	command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
+	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
 
 	// CommandDataSetType is already set to 0x0101 (no dataset)
 
@@ -63,13 +63,13 @@ func NewCEchoResponse(messageIDBeingRespondedTo uint16, statusCode uint16) *CEch
 	command := CreateCommandDataset(uint16(CommandCEchoRSP), 0) // Response doesn't have its own MessageID
 
 	// Set affected SOP Class UID to Verification SOP Class
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{"1.2.840.10008.1.1"}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{"1.2.840.10008.1.1"}))
 
 	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType is already set to 0x0101 (no dataset)
 

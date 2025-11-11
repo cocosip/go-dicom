@@ -53,8 +53,8 @@ func NewWithPrivateCreator(group, element uint16, privateCreator *PrivateCreator
 // The upper 16 bits represent the group, and the lower 16 bits represent the element.
 func FromUint32(value uint32) *Tag {
 	return &Tag{
-		group:   uint16((value >> 16) & 0xFFFF),
-		element: uint16(value & 0xFFFF),
+		group:   uint16((value >> 16) & 0xFFFF), // #nosec G115 -- masked to 16 bits
+		element: uint16(value & 0xFFFF),         // #nosec G115 -- masked to 16 bits
 	}
 }
 

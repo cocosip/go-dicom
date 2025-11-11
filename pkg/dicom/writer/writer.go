@@ -199,7 +199,7 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	} else {
 		// Ensure TransferSyntaxUID is present in the provided fileMetaInfo
 		if _, exists := fileMetaInfo.Get(tag.TransferSyntaxUID); !exists {
-			fileMetaInfo.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
+			_ = fileMetaInfo.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
 				[]string{config.transferSyntax.UID().String()}))
 		}
 	}
@@ -238,7 +238,7 @@ func WriteFile(path string, ds *dataset.Dataset, opts ...WriteOption) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return Write(file, ds, opts...)
 }
@@ -248,7 +248,7 @@ func (w *Writer) generateFileMetaInformation() *dataset.Dataset {
 	fileMetaInfo := dataset.New()
 
 	// Add required Transfer Syntax UID (0002,0010)
-	fileMetaInfo.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
+	_ = fileMetaInfo.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
 		[]string{w.transferSyntax.UID().String()}))
 
 	// Note: FileMetaInformationGroupLength (0002,0000) will be calculated
@@ -338,7 +338,7 @@ func (w *Writer) writeFileMetaInformation(ds *dataset.Dataset) error {
 	// Note: According to DICOM standard, FileMetaInformationGroupLength contains
 	// the number of bytes following this element up to and including the last
 	// File Meta Information Group element (i.e., excluding the Group Length element itself)
-	groupLength := uint32(tempBuf.Len())
+	groupLength := uint32(tempBuf.Len()) // #nosec G115 -- DICOM group length within uint32 range
 	if err := binary.Write(w.writer, w.byteOrder, groupLength); err != nil {
 		w.byteOrder = savedByteOrder
 		w.isExplicitVR = savedIsExplicitVR
@@ -418,7 +418,7 @@ func (w *Writer) writeElement(elem element.Element) error {
 	valueBytes := elem.Buffer().Data()
 
 	// Write length
-	if err := w.writeLength(elemVR, uint32(len(valueBytes))); err != nil {
+	if err := w.writeLength(elemVR, uint32(len(valueBytes)) /* #nosec G115 -- DICOM value length within uint32 range */); err != nil {
 		return fmt.Errorf("failed to write length for tag %s: %w", elem.Tag(), err)
 	}
 
@@ -520,7 +520,7 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 		}
 
 		// Write the explicit length
-		seqLength := uint32(itemsBuf.Len())
+		seqLength := uint32(itemsBuf.Len()) // #nosec G115 -- DICOM sequence length within uint32 range
 		if err := binary.Write(w.writer, w.byteOrder, seqLength); err != nil {
 			return err
 		}
@@ -590,7 +590,7 @@ func (w *Writer) writeItem(item *dataset.Dataset) error {
 		}
 
 		// Write the explicit length
-		itemLength := uint32(elementsBuf.Len())
+		itemLength := uint32(elementsBuf.Len()) // #nosec G115 -- DICOM item length within uint32 range
 		if err := binary.Write(w.writer, w.byteOrder, itemLength); err != nil {
 			return err
 		}
@@ -667,7 +667,7 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 
 	// Write offset table
 	offsets := fs.OffsetTable()
-	offsetTableLength := uint32(len(offsets) * 4) // Each offset is 4 bytes
+	offsetTableLength := uint32(len(offsets) * 4) // Each offset is 4 bytes // #nosec G115 -- offset count within uint32 range
 	if err := binary.Write(w.writer, w.byteOrder, offsetTableLength); err != nil {
 		return fmt.Errorf("failed to write offset table length: %w", err)
 	}
@@ -693,7 +693,7 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 
 		// Write fragment length
 		fragData := frag.Data()
-		if err := binary.Write(w.writer, w.byteOrder, uint32(len(fragData))); err != nil {
+		if err := binary.Write(w.writer, w.byteOrder, uint32(len(fragData)) /* #nosec G115 -- DICOM fragment length within uint32 range */); err != nil {
 			return fmt.Errorf("failed to write fragment length: %w", err)
 		}
 

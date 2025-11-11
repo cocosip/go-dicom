@@ -188,6 +188,12 @@ golangci-lint run
 go vet ./...
 ```
 
+**IMPORTANT: All code must comply with golangci-lint standards.**
+- Run `golangci-lint run` before committing any code
+- Fix all linter warnings and errors
+- The project uses a configured `.golangci.yml` file with specific rules
+- Code that doesn't pass golangci-lint checks should not be committed
+
 ## Key Implementation Notes
 
 ### DICOM Tag Structure

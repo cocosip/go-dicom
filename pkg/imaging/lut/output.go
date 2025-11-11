@@ -39,7 +39,7 @@ func NewOutputLUT(colorMap [256]imaging.Color32) *OutputLUT {
 func NewGrayscaleOutputLUT() *OutputLUT {
 	var colorMap [256]imaging.Color32
 	for i := 0; i < 256; i++ {
-		gray := uint8(i)
+		gray := uint8(i) // #nosec G115 -- loop bound ensures i < 256
 		colorMap[i] = imaging.Color32{
 			A: 255,
 			R: gray,

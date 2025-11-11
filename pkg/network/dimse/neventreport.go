@@ -39,17 +39,17 @@ func NewNEventReportRequest(
 	command := CreateCommandDataset(uint16(CommandNEventReportRQ), 0)
 
 	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
-	command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 
 	// Set event type ID
-	command.Add(element.NewUnsignedShort(tag.EventTypeID, []uint16{eventTypeID}))
+	_ = command.Add(element.NewUnsignedShort(tag.EventTypeID, []uint16{eventTypeID}))
 
 	// CommandDataSetType
 	if eventInformation != nil {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &NEventReportRequest{
@@ -117,30 +117,16 @@ func NewNEventReportResponse(
 	eventTypeID uint16,
 	eventReply *dataset.Dataset,
 ) *NEventReportResponse {
-	// Create command dataset
-	command := CreateCommandDataset(uint16(CommandNEventReportRSP), 0)
-
-	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
-	command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
-
-	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
-
-	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
-
-	// Event type ID
-	if eventTypeID != 0 {
-		command.Add(element.NewUnsignedShort(tag.EventTypeID, []uint16{eventTypeID}))
-	}
-
-	// CommandDataSetType
-	if eventReply != nil {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
-	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
-	}
+	command := createNOperationResponseCommand(
+		uint16(CommandNEventReportRSP),
+		messageIDBeingRespondedTo,
+		statusCode,
+		affectedSOPClassUID,
+		affectedSOPInstanceUID,
+		tag.EventTypeID,
+		eventTypeID,
+		eventReply != nil,
+	)
 
 	return &NEventReportResponse{
 		BaseResponse:              NewBaseResponse(command, eventReply),

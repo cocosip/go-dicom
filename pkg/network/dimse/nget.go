@@ -37,16 +37,16 @@ func NewNGetRequest(
 	command := CreateCommandDataset(uint16(CommandNGetRQ), 0)
 
 	// Set requested SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.RequestedSOPClassUID, vr.UI, []string{requestedSOPClassUID}))
-	command.Add(element.NewString(tag.RequestedSOPInstanceUID, vr.UI, []string{requestedSOPInstanceUID}))
+	_ = command.Add(element.NewString(tag.RequestedSOPClassUID, vr.UI, []string{requestedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.RequestedSOPInstanceUID, vr.UI, []string{requestedSOPInstanceUID}))
 
 	// Set attribute identifier list if provided
 	if len(attributeIdentifierList) > 0 {
-		command.Add(element.NewAttributeTag(tag.AttributeIdentifierList, attributeIdentifierList))
+		_ = command.Add(element.NewAttributeTag(tag.AttributeIdentifierList, attributeIdentifierList))
 	}
 
 	// CommandDataSetType - no dataset in request
-	command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &NGetRequest{
 		BaseRequest:             NewBaseRequest(command, nil),
@@ -106,26 +106,8 @@ func NewNGetResponse(
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NGetResponse {
-	// Create command dataset
-	command := CreateCommandDataset(uint16(CommandNGetRSP), 0)
-
-	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
-	command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
-
-	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
-
-	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
-
-	// CommandDataSetType
-	if attributeList != nil && statusCode == 0x0000 {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
-	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
-	}
-
+	command := createNResponseCommand(uint16(CommandNGetRSP), messageIDBeingRespondedTo,
+		statusCode, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
 	return &NGetResponse{
 		BaseResponse:              NewBaseResponse(command, attributeList),
 		statusCode:                statusCode,
@@ -175,4 +157,27 @@ func (r *NGetResponse) String() string {
 	}
 	return fmt.Sprintf("N-GET-RSP [MessageID=%d, Status=%s (0x%04X), %s]",
 		r.MessageIDBeingRespondedTo(), st.State, r.statusCode, hasData)
+}
+
+// createNResponse is a helper function to create N-GET-RSP or N-SET-RSP command datasets.
+// This eliminates code duplication between NewNGetResponse and NewNSetResponse.
+func createNResponseCommand(
+	commandType uint16,
+	messageIDBeingRespondedTo uint16,
+	statusCode uint16,
+	affectedSOPClassUID string,
+	affectedSOPInstanceUID string,
+	attributeList *dataset.Dataset,
+) *dataset.Dataset {
+	command := CreateCommandDataset(commandType, 0)
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
+	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	if attributeList != nil && statusCode == 0x0000 {
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	} else {
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	}
+	return command
 }

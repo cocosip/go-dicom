@@ -159,71 +159,24 @@ func TestAAssociateRJ_SourceString(t *testing.T) {
 }
 
 func TestAAssociateRJ_ReasonString(t *testing.T) {
-	tests := []struct {
+	// Test cases for A-ASSOCIATE-RJ PDU reason strings - A-ASSOCIATE-RJ is used to reject association requests
+	testReasonStrings(t, []struct {
 		name     string
 		source   byte
 		reason   byte
 		expected string
 	}{
-		{
-			name:     "Service user - no reason",
-			source:   SourceServiceUser,
-			reason:   ReasonServiceUserNoReasonGiven,
-			expected: "no-reason-given",
-		},
-		{
-			name:     "Service user - application context not supported",
-			source:   SourceServiceUser,
-			reason:   ReasonServiceUserApplicationContextNotSupported,
-			expected: "application-context-name-not-supported",
-		},
-		{
-			name:     "Service user - calling AE not recognized",
-			source:   SourceServiceUser,
-			reason:   ReasonServiceUserCallingAETitleNotRecognized,
-			expected: "calling-AE-title-not-recognized",
-		},
-		{
-			name:     "Service user - called AE not recognized",
-			source:   SourceServiceUser,
-			reason:   ReasonServiceUserCalledAETitleNotRecognized,
-			expected: "called-AE-title-not-recognized",
-		},
-		{
-			name:     "Service provider ACSE - protocol version not supported",
-			source:   SourceServiceProviderACSE,
-			reason:   ReasonServiceProviderACSEProtocolVersionNotSupported,
-			expected: "protocol-version-not-supported",
-		},
-		{
-			name:     "Service provider Presentation - temporary congestion",
-			source:   SourceServiceProviderPresentation,
-			reason:   ReasonServiceProviderPresentationTemporaryCongestion,
-			expected: "temporary-congestion",
-		},
-		{
-			name:     "Service provider Presentation - local limit exceeded",
-			source:   SourceServiceProviderPresentation,
-			reason:   ReasonServiceProviderPresentationLocalLimitExceeded,
-			expected: "local-limit-exceeded",
-		},
-		{
-			name:     "Unknown source and reason",
-			source:   0xFF,
-			reason:   0xFF,
-			expected: "unknown(0xFF)",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rj := &AAssociateRJ{Source: tt.source, Reason: tt.reason}
-			result := rj.ReasonString()
-			if result != tt.expected {
-				t.Errorf("ReasonString: expected %s, got %s", tt.expected, result)
-			}
-		})
-	}
+		{"Service user - no reason", SourceServiceUser, ReasonServiceUserNoReasonGiven, "no-reason-given"},
+		{"Service user - application context not supported", SourceServiceUser, ReasonServiceUserApplicationContextNotSupported, "application-context-name-not-supported"},
+		{"Service user - calling AE not recognized", SourceServiceUser, ReasonServiceUserCallingAETitleNotRecognized, "calling-AE-title-not-recognized"},
+		{"Service user - called AE not recognized", SourceServiceUser, ReasonServiceUserCalledAETitleNotRecognized, "called-AE-title-not-recognized"},
+		{"Service provider ACSE - protocol version not supported", SourceServiceProviderACSE, ReasonServiceProviderACSEProtocolVersionNotSupported, "protocol-version-not-supported"},
+		{"Service provider Presentation - temporary congestion", SourceServiceProviderPresentation, ReasonServiceProviderPresentationTemporaryCongestion, "temporary-congestion"},
+		{"Service provider Presentation - local limit exceeded", SourceServiceProviderPresentation, ReasonServiceProviderPresentationLocalLimitExceeded, "local-limit-exceeded"},
+		{"Unknown source and reason", 0xFF, 0xFF, "unknown(0xFF)"},
+	}, func(source, reason byte) reasonStringer {
+		return &AAssociateRJ{Source: source, Reason: reason}
+	})
 }
 
 func TestAAssociateRJ_String(t *testing.T) {

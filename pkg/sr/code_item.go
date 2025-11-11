@@ -35,17 +35,17 @@ func NewCodeItemWithVersion(value, scheme, meaning, version string) *CodeItem {
 	ds := dataset.New()
 
 	// Add code value (0008,0100) VR=SH
-	ds.AddOrUpdate(element.NewString(tag.CodeValue, vr.SH, []string{value}))
+	_ = ds.AddOrUpdate(element.NewString(tag.CodeValue, vr.SH, []string{value}))
 
 	// Add coding scheme designator (0008,0102) VR=SH
-	ds.AddOrUpdate(element.NewString(tag.CodingSchemeDesignator, vr.SH, []string{scheme}))
+	_ = ds.AddOrUpdate(element.NewString(tag.CodingSchemeDesignator, vr.SH, []string{scheme}))
 
 	// Add code meaning (0008,0104) VR=LO
-	ds.AddOrUpdate(element.NewString(tag.CodeMeaning, vr.LO, []string{meaning}))
+	_ = ds.AddOrUpdate(element.NewString(tag.CodeMeaning, vr.LO, []string{meaning}))
 
 	// Add coding scheme version if provided (0008,0103) VR=SH
 	if version != "" {
-		ds.AddOrUpdate(element.NewString(tag.CodingSchemeVersion, vr.SH, []string{version}))
+		_ = ds.AddOrUpdate(element.NewString(tag.CodingSchemeVersion, vr.SH, []string{version}))
 	}
 
 	return &CodeItem{dataset: ds}

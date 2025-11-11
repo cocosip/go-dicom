@@ -42,7 +42,7 @@ func ReadPDU(conn net.Conn, timeout time.Duration) (*pdu.RawPDU, error) {
 			return nil, fmt.Errorf("failed to set read deadline: %w", err)
 		}
 		// Clear deadline after reading
-		defer conn.SetReadDeadline(time.Time{})
+		defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 	}
 
 	// Read PDU header (6 bytes)
@@ -100,7 +100,7 @@ func WritePDU(conn net.Conn, timeout time.Duration, p *pdu.RawPDU) error {
 			return fmt.Errorf("failed to set write deadline: %w", err)
 		}
 		// Clear deadline after writing
-		defer conn.SetWriteDeadline(time.Time{})
+		defer func() { _ = conn.SetWriteDeadline(time.Time{}) }()
 	}
 
 	// Encode PDU header

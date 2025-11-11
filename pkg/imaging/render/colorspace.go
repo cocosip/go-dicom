@@ -55,8 +55,8 @@ func (c *ColorSpaceConverter) RGBToYBRFull422(r1, g1, b1, r2, g2, b2 uint8) (y1,
 	// Average the chroma values
 	y1 = y1Val
 	y2 = y2Val
-	cb = uint8((int(cb1) + int(cb2)) / 2)
-	cr = uint8((int(cr1) + int(cr2)) / 2)
+	cb = uint8((int(cb1) + int(cb2)) / 2) // #nosec G115 -- averaging stays in uint8 range
+	cr = uint8((int(cr1) + int(cr2)) / 2) // #nosec G115 -- averaging stays in uint8 range
 	return
 }
 

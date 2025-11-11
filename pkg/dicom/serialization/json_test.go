@@ -15,12 +15,14 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
+const testBulkDataURI = "http://example.com/dicom/pixeldata"
+
 func TestToJSON_BulkDataURI(t *testing.T) {
 	// Create dataset with BulkDataURI element
 	ds := dataset.New()
 
 	// Create a BulkDataUriByteBuffer
-	uri := "http://example.com/dicom/pixeldata"
+	uri := testBulkDataURI
 	buf := buffer.NewBulkDataURI(uri)
 
 	// Create OW element with BulkDataURI
@@ -72,7 +74,7 @@ func TestToJSON_BulkDataURI_WithData(t *testing.T) {
 	// Create dataset with BulkDataURI element that has data loaded
 	ds := dataset.New()
 
-	uri := "http://example.com/dicom/pixeldata"
+	uri := testBulkDataURI
 	data := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
 	buf := buffer.NewBulkDataURIWithData(uri, data)
 

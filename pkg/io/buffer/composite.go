@@ -66,7 +66,7 @@ func (c *CompositeByteBuffer) Data() []byte {
 	for _, buf := range c.buffers {
 		bufData := buf.Data()
 		copy(data[offset:], bufData)
-		offset += uint32(len(bufData))
+		offset += uint32(len(bufData)) // #nosec G115 -- buffer size within uint32 range
 	}
 	return data
 }
@@ -77,7 +77,7 @@ func (c *CompositeByteBuffer) GetByteRange(offset, count uint32, output []byte) 
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
-	if uint32(len(output)) < count {
+	if uint32(len(output)) < count { // #nosec G115 -- buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
 	if offset+count > c.Size() {

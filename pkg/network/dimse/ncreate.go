@@ -12,6 +12,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const (
+	noAttributesMsg   = "no attributes"
+	withAttributesMsg = "with attributes"
+)
+
 // NCreateRequest represents an N-CREATE-RQ message.
 // N-CREATE is used to request the creation of a new managed SOP Instance.
 type NCreateRequest struct {
@@ -36,18 +41,18 @@ func NewNCreateRequest(
 	command := CreateCommandDataset(uint16(CommandNCreateRQ), 0)
 
 	// Set affected SOP Class UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
 
 	// Set affected SOP Instance UID if provided
 	if affectedSOPInstanceUID != "" {
-		command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
+		_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 	}
 
 	// CommandDataSetType
 	if attributeList != nil {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &NCreateRequest{
@@ -79,9 +84,9 @@ func (r *NCreateRequest) String() string {
 	if r.affectedSOPInstanceUID != "" {
 		instanceInfo = fmt.Sprintf("UID=%s", r.affectedSOPInstanceUID)
 	}
-	hasAttrs := "no attributes"
+	hasAttrs := noAttributesMsg
 	if r.HasAttributeList() {
-		hasAttrs = "with attributes"
+		hasAttrs = withAttributesMsg
 	}
 	return fmt.Sprintf("N-CREATE-RQ [MessageID=%d, SOP Class=%s, %s, %s]",
 		r.MessageID(), r.affectedSOPClassUID, instanceInfo, hasAttrs)
@@ -115,22 +120,22 @@ func NewNCreateResponse(
 	command := CreateCommandDataset(uint16(CommandNCreateRSP), 0)
 
 	// Set affected SOP Class UID and Instance UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
 	if affectedSOPInstanceUID != "" {
-		command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
+		_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 	}
 
 	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType
 	if attributeList != nil && statusCode == 0x0000 {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &NCreateResponse{
@@ -176,9 +181,9 @@ func (r *NCreateResponse) HasAttributeList() bool {
 // String returns a human-readable representation.
 func (r *NCreateResponse) String() string {
 	st := r.Status()
-	hasData := "no attributes"
+	hasData := noAttributesMsg
 	if r.HasAttributeList() {
-		hasData = "with attributes"
+		hasData = withAttributesMsg
 	}
 	return fmt.Sprintf("N-CREATE-RSP [MessageID=%d, Status=%s (0x%04X), SOP Instance=%s, %s]",
 		r.MessageIDBeingRespondedTo(), st.State, r.statusCode, r.affectedSOPInstanceUID, hasData)

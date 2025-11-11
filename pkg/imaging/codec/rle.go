@@ -172,9 +172,9 @@ func newRLEEncoder() *rleEncoder {
 	}
 
 	// Write header (will be rewritten later)
-	binary.Write(&enc.buffer, binary.LittleEndian, uint32(enc.count))
+	_ = binary.Write(&enc.buffer, binary.LittleEndian, uint32(enc.count))
 	for i := 0; i < 15; i++ {
-		binary.Write(&enc.buffer, binary.LittleEndian, enc.offsets[i])
+		_ = binary.Write(&enc.buffer, binary.LittleEndian, enc.offsets[i])
 	}
 
 	return enc
@@ -288,9 +288,9 @@ func (e *rleEncoder) GetBuffer() []byte {
 	// Rewrite header
 	result := e.buffer.Bytes()
 	buf := bytes.NewBuffer(result[:0])
-	binary.Write(buf, binary.LittleEndian, uint32(e.count))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(e.count))
 	for i := 0; i < 15; i++ {
-		binary.Write(buf, binary.LittleEndian, e.offsets[i])
+		_ = binary.Write(buf, binary.LittleEndian, e.offsets[i])
 	}
 
 	return result

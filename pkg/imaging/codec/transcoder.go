@@ -288,9 +288,9 @@ func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	// Add uncompressed pixel data
 	// Use appropriate element type based on bits allocated
 	if dstPixelData.BitsAllocated <= 8 {
-		newDS.Add(element.NewOtherByte(tag.PixelData, dstPixelData.Data))
+		_ = newDS.Add(element.NewOtherByte(tag.PixelData, dstPixelData.Data))
 	} else {
-		newDS.Add(element.NewOtherWord(tag.PixelData, dstPixelData.Data))
+		_ = newDS.Add(element.NewOtherWord(tag.PixelData, dstPixelData.Data))
 	}
 
 	return newDS, nil
@@ -338,7 +338,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	// This is simplified - in reality, we need to split into proper frames
 	obf := element.NewOtherByteFragment(tag.PixelData)
 	obf.AddFragment(buffer.NewMemory(dstPixelData.Data))
-	newDS.Add(obf)
+	_ = newDS.Add(obf)
 
 	return newDS, nil
 }

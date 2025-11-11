@@ -12,6 +12,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
+const (
+	testCalledAE  = "CALLED_AE"
+	testCallingAE = "CALLING_AE"
+)
+
 // mockConn is a mock net.Conn for testing
 type mockConn struct {
 	readData  []byte
@@ -71,8 +76,8 @@ func TestSendAssociationRequest(t *testing.T) {
 	// Create A-ASSOCIATE-RQ
 	rq := &pdu.AAssociateRQ{
 		ProtocolVersion:    1,
-		CalledAETitle:      "CALLED_AE",
-		CallingAETitle:     "CALLING_AE",
+		CalledAETitle: testCalledAE,
+		CallingAETitle: testCallingAE,
 		ApplicationContext: "1.2.840.10008.3.1.1.1",
 	}
 
@@ -110,8 +115,8 @@ func TestSendAssociationRequest_WrongState(t *testing.T) {
 
 	rq := &pdu.AAssociateRQ{
 		ProtocolVersion: 1,
-		CalledAETitle:   "CALLED_AE",
-		CallingAETitle:  "CALLING_AE",
+		CalledAETitle: testCalledAE,
+		CallingAETitle: testCallingAE,
 	}
 
 	ctx := context.Background()
@@ -128,8 +133,8 @@ func TestSendAssociationAccept(t *testing.T) {
 
 	// Create A-ASSOCIATE-AC with minimal required fields
 	ac := pdu.NewAAssociateAC()
-	ac.CalledAETitle = "CALLED_AE"
-	ac.CallingAETitle = "CALLING_AE"
+	ac.CalledAETitle = testCalledAE
+	ac.CallingAETitle = testCallingAE
 
 	ctx := context.Background()
 	err := service.SendAssociationAccept(ctx, ac)
@@ -285,8 +290,8 @@ func TestSendAbort(t *testing.T) {
 func TestReceiveAssociationResponse_Accept(t *testing.T) {
 	// Create a valid A-ASSOCIATE-AC PDU
 	ac := pdu.NewAAssociateAC()
-	ac.CalledAETitle = "CALLED_AE"
-	ac.CallingAETitle = "CALLING_AE"
+	ac.CalledAETitle = testCalledAE
+	ac.CallingAETitle = testCallingAE
 
 	rawPDU, err := ac.Encode()
 	if err != nil {
@@ -376,8 +381,8 @@ func TestReceiveAssociationResponse_Reject(t *testing.T) {
 func TestReceiveAssociationRequest(t *testing.T) {
 	// Create a valid A-ASSOCIATE-RQ PDU
 	rq := pdu.NewAAssociateRQ()
-	rq.CalledAETitle = "CALLED_AE"
-	rq.CallingAETitle = "CALLING_AE"
+	rq.CalledAETitle = testCalledAE
+	rq.CallingAETitle = testCallingAE
 
 	rawPDU, err := rq.Encode()
 	if err != nil {

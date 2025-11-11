@@ -105,7 +105,7 @@ func (l *Listener) Accept(ctx context.Context) (net.Conn, error) {
 		go func() {
 			res := <-resultChan
 			if res.conn != nil {
-				res.conn.Close()
+				_ = res.conn.Close()
 			}
 		}()
 		return nil, fmt.Errorf("accept cancelled: %w", ctx.Err())
@@ -126,11 +126,11 @@ func (l *Listener) Accept(ctx context.Context) (net.Conn, error) {
 
 			select {
 			case <-ctx.Done():
-				tlsConn.Close()
+				_ = tlsConn.Close()
 				return nil, fmt.Errorf("TLS handshake cancelled: %w", ctx.Err())
 			case err := <-errChan:
 				if err != nil {
-					tlsConn.Close()
+					_ = tlsConn.Close()
 					return nil, fmt.Errorf("TLS handshake failed: %w", err)
 				}
 			}

@@ -9,11 +9,13 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 )
 
-func TestNew(t *testing.T) {
-	u := uid.New("1.2.840.10008.1.2", "Implicit VR Little Endian", uid.TypeTransferSyntax, false)
+const testImplicitVRLittleLE = "1.2.840.10008.1.2"
 
-	if u.UID() != "1.2.840.10008.1.2" {
-		t.Errorf("UID() = %q, want %q", u.UID(), "1.2.840.10008.1.2")
+func TestNew(t *testing.T) {
+	u := uid.New(testImplicitVRLittleLE, "Implicit VR Little Endian", uid.TypeTransferSyntax, false)
+
+	if u.UID() != testImplicitVRLittleLE {
+		t.Errorf("UID() = %q, want %q", u.UID(), testImplicitVRLittleLE)
 	}
 	if u.Name() != "Implicit VR Little Endian" {
 		t.Errorf("Name() = %q, want %q", u.Name(), "Implicit VR Little Endian")

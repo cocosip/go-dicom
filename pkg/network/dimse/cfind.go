@@ -29,6 +29,39 @@ const (
 	QueryRetrieveLevelImage QueryRetrieveLevel = "IMAGE"
 )
 
+// sopClassUIDForLevel returns the appropriate SOP Class UID for a given query/retrieve level.
+// The uids parameter should contain [patientRootUID, studyRootUID].
+func sopClassUIDForLevel(level QueryRetrieveLevel, uids [2]string) string {
+	switch level {
+	case QueryRetrieveLevelPatient:
+		return uids[0] // Patient Root
+	case QueryRetrieveLevelStudy, QueryRetrieveLevelSeries, QueryRetrieveLevelImage:
+		return uids[1] // Study Root
+	default:
+		return uids[1] // Default to Study Root
+	}
+}
+
+// createQueryRetrieveRequest is a helper to create C-FIND/C-GET/C-MOVE request command datasets.
+// This eliminates code duplication across NewCFindRequest, NewCGetRequest, and NewCMoveRequest.
+func createQueryRetrieveRequest(
+	commandType uint16,
+	sopClassUID string,
+	level QueryRetrieveLevel,
+	data *dataset.Dataset,
+) *dataset.Dataset {
+	command := CreateCommandDataset(commandType, 0)
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
+	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	if data != nil {
+		if _, exists := data.Get(tag.QueryRetrieveLevel); !exists {
+			_ = data.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
+		}
+	}
+	return command
+}
+
 // CFindRequest represents a C-FIND-RQ message.
 // C-FIND is used to query DICOM archives.
 type CFindRequest struct {
@@ -45,40 +78,12 @@ type CFindRequest struct {
 //
 // The MessageID will be automatically assigned by the Association/Client when sending.
 func NewCFindRequest(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
-	// Determine SOP Class UID based on query level
-	var sopClassUID string
-	switch level {
-	case QueryRetrieveLevelPatient:
-		// Patient Root Query/Retrieve Information Model - FIND
-		sopClassUID = "1.2.840.10008.5.1.4.1.2.1.1"
-	case QueryRetrieveLevelStudy, QueryRetrieveLevelSeries, QueryRetrieveLevelImage:
-		// Study Root Query/Retrieve Information Model - FIND
-		sopClassUID = "1.2.840.10008.5.1.4.1.2.2.1"
-	default:
-		// Default to Study Root
-		sopClassUID = "1.2.840.10008.5.1.4.1.2.2.1"
-	}
-
-	// Create command dataset with MessageID=0 (unassigned)
-	command := CreateCommandDataset(uint16(CommandCFindRQ), 0)
-
-	// Set affected SOP Class UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
-
-	// Priority (optional, default to medium)
-	command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
-
-	// CommandDataSetType - dataset is present (query identifier)
-	command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
-
-	// Add QueryRetrieveLevel to the query dataset if not already present
-	if query != nil {
-		_, exists := query.Get(tag.QueryRetrieveLevel)
-		if !exists {
-			query.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
-		}
-	}
-
+	// Patient Root vs Study Root UIDs for FIND
+	sopClassUID := sopClassUIDForLevel(level, [2]string{
+		"1.2.840.10008.5.1.4.1.2.1.1", // Patient Root FIND
+		"1.2.840.10008.5.1.4.1.2.2.1", // Study Root FIND
+	})
+	command := createQueryRetrieveRequest(uint16(CommandCFindRQ), sopClassUID, level, query)
 	return &CFindRequest{
 		BaseRequest:         NewBaseRequest(command, query),
 		affectedSOPClassUID: sopClassUID,
@@ -102,7 +107,7 @@ func NewCFindRequestStudyRoot(level QueryRetrieveLevel, query *dataset.Dataset) 
 // SetPriority sets the priority of the request.
 func (r *CFindRequest) SetPriority(priority uint16) {
 	r.priority = priority
-	r.command.AddOrUpdate(element.NewUnsignedShort(tag.Priority, []uint16{priority}))
+	_ = r.command.AddOrUpdate(element.NewUnsignedShort(tag.Priority, []uint16{priority}))
 }
 
 // QueryLevel returns the query/retrieve level.
@@ -130,21 +135,21 @@ func NewCFindResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 	command := CreateCommandDataset(uint16(CommandCFindRSP), 0)
 
 	// Set affected SOP Class UID
-	command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
 
 	// MessageIDBeingRespondedTo
-	command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType
 	if identifier != nil && statusCode == 0xFF00 {
 		// Pending response with identifier
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
 		// Final response or no identifier
-		command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &CFindResponse{

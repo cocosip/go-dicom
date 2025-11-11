@@ -15,6 +15,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
+
 // TestWriteWithDefaults tests writing with default options
 func TestWriteWithDefaults(t *testing.T) {
 	buf := &bytes.Buffer{}
@@ -48,8 +50,8 @@ func TestWriteWithDefaults(t *testing.T) {
 	if !exists {
 		t.Fatal("TransferSyntaxUID not found in auto-generated FileMetaInformation")
 	}
-	if tsUID != "1.2.840.10008.1.2.1" { // Explicit VR Little Endian
-		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, "1.2.840.10008.1.2.1")
+	if tsUID != testExplicitVRLittleLE { // Explicit VR Little Endian
+		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, testExplicitVRLittleLE)
 	}
 }
 
@@ -81,8 +83,8 @@ func TestWriteWithFileMetaInfo(t *testing.T) {
 	if !exists {
 		t.Fatal("TransferSyntaxUID not found - should have been added automatically")
 	}
-	if tsUID != "1.2.840.10008.1.2.1" {
-		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, "1.2.840.10008.1.2.1")
+	if tsUID != testExplicitVRLittleLE {
+		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, testExplicitVRLittleLE)
 	}
 }
 

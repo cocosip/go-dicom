@@ -31,7 +31,7 @@ func New() *Dataset {
 func NewWithElements(elements []element.Element) *Dataset {
 	ds := New()
 	for _, elem := range elements {
-		ds.Add(elem)
+		_ = ds.Add(elem) // Ignore errors in constructor for convenience
 	}
 	return ds
 }

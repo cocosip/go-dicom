@@ -13,6 +13,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const (
+	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
+	testPatientName        = "Doe^John"
+)
+
 // TestReadPreamble tests preamble reading
 func TestReadPreamble(t *testing.T) {
 	t.Run("ValidPreamble", func(t *testing.T) {
@@ -262,7 +267,7 @@ func createMiniDICOM() *bytes.Buffer {
 	binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
 	buf.WriteString("UI")                                  // VR
-	tsUID := "1.2.840.10008.1.2.1"                         // Explicit VR Little Endian
+	tsUID := testExplicitVRLittleLE                         // Explicit VR Little Endian
 	binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 	buf.WriteString(tsUID)
 
@@ -270,7 +275,7 @@ func createMiniDICOM() *bytes.Buffer {
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Group
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010)) // Element
 	buf.WriteString("PN")                                  // VR
-	name := "Doe^John"
+	name := testPatientName
 	binary.Write(buf, binary.LittleEndian, uint16(len(name)))
 	buf.WriteString(name)
 
@@ -300,8 +305,8 @@ func TestParseMiniDICOM(t *testing.T) {
 	if !exists {
 		t.Error("FileMetaInformation should contain TransferSyntaxUID")
 	}
-	if tsUID != "1.2.840.10008.1.2.1" {
-		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, "1.2.840.10008.1.2.1")
+	if tsUID != testExplicitVRLittleLE {
+		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, testExplicitVRLittleLE)
 	}
 
 	// Check Dataset
@@ -314,7 +319,7 @@ func TestParseMiniDICOM(t *testing.T) {
 	if !exists {
 		t.Error("Dataset should contain PatientName")
 	}
-	if name != "Doe^John" {
+	if name != testPatientName {
 		t.Errorf("PatientName = %q, want %q", name, "Doe^John")
 	}
 }
@@ -371,7 +376,7 @@ func TestSequenceReading(t *testing.T) {
 		binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		buf.WriteString("UI")
-		tsUID := "1.2.840.10008.1.2.1"
+		tsUID := testExplicitVRLittleLE
 		binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 		buf.WriteString(tsUID)
 
@@ -433,7 +438,7 @@ func TestSequenceReading(t *testing.T) {
 		binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		buf.WriteString("UI")
-		tsUID := "1.2.840.10008.1.2.1"
+		tsUID := testExplicitVRLittleLE
 		binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 		buf.WriteString(tsUID)
 
@@ -520,7 +525,7 @@ func createBenchmarkDICOMData(numElements int) []byte {
 	binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 	binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 	buf.WriteString("UI")
-	tsUID := "1.2.840.10008.1.2.1"
+	tsUID := testExplicitVRLittleLE
 	binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 	buf.WriteString(tsUID)
 	if len(tsUID)%2 != 0 {
@@ -602,7 +607,7 @@ func BenchmarkReadElement(b *testing.B) {
 		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 		buf.WriteString("PN")
-		value := "Doe^John"
+		value := testPatientName
 		binary.Write(buf, binary.LittleEndian, uint16(len(value)))
 		buf.WriteString(value)
 	}

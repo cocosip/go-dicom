@@ -90,17 +90,17 @@ func SwapUint64(value uint64) uint64 {
 
 // SwapInt16 swaps the byte order of an int16 value.
 func SwapInt16(value int16) int16 {
-	return int16(SwapUint16(uint16(value)))
+	return int16(SwapUint16(uint16(value))) // #nosec G115 -- safe bit pattern conversion
 }
 
 // SwapInt32 swaps the byte order of an int32 value.
 func SwapInt32(value int32) int32 {
-	return int32(SwapUint32(uint32(value)))
+	return int32(SwapUint32(uint32(value))) // #nosec G115 -- safe bit pattern conversion
 }
 
 // SwapInt64 swaps the byte order of an int64 value.
 func SwapInt64(value int64) int64 {
-	return int64(SwapUint64(uint64(value)))
+	return int64(SwapUint64(uint64(value))) // #nosec G115 -- safe bit pattern conversion
 }
 
 // SwapBytes swaps bytes in a byte slice in groups of bytesToSwap bytes.

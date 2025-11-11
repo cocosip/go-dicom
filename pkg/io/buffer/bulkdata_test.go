@@ -8,8 +8,10 @@ import (
 	"testing"
 )
 
+const testBulkDataURI = "http://example.com/data/pixeldata"
+
 func TestNewBulkDataUri(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	buf := NewBulkDataURI(uri)
 
 	if buf == nil {
@@ -34,7 +36,7 @@ func TestNewBulkDataUri(t *testing.T) {
 }
 
 func TestNewBulkDataUriWithData(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	data := []byte{0x01, 0x02, 0x03, 0x04, 0x05}
 	buf := NewBulkDataURIWithData(uri, data)
 
@@ -61,7 +63,7 @@ func TestNewBulkDataUriWithData(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_SetData(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	buf := NewBulkDataURI(uri)
 
 	// Initially no data
@@ -88,7 +90,7 @@ func TestBulkDataUriByteBuffer_SetData(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_DataBeforeSet(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	buf := NewBulkDataURI(uri)
 
 	// Data() should return empty slice before SetData
@@ -102,7 +104,7 @@ func TestBulkDataUriByteBuffer_DataBeforeSet(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_GetByteRange(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	data := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09}
 	buf := NewBulkDataURIWithData(uri, data)
 
@@ -155,7 +157,7 @@ func TestBulkDataUriByteBuffer_GetByteRange(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_GetByteRangeErrors(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	data := []byte{0x00, 0x01, 0x02, 0x03, 0x04}
 	buf := NewBulkDataURIWithData(uri, data)
 
@@ -205,7 +207,7 @@ func TestBulkDataUriByteBuffer_GetByteRangeErrors(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_GetByteRangeBeforeSetData(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	buf := NewBulkDataURI(uri)
 
 	output := make([]byte, 3)
@@ -221,7 +223,7 @@ func TestBulkDataUriByteBuffer_GetByteRangeBeforeSetData(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_WriteTo(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	data := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE}
 	buf := NewBulkDataURIWithData(uri, data)
 
@@ -242,7 +244,7 @@ func TestBulkDataUriByteBuffer_WriteTo(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_WriteToBeforeSetData(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	buf := NewBulkDataURI(uri)
 
 	var output bytes.Buffer
@@ -263,7 +265,7 @@ func TestBulkDataUriByteBuffer_WriteToBeforeSetData(t *testing.T) {
 }
 
 func TestBulkDataUriByteBuffer_IsBulkDataUri(t *testing.T) {
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 
 	// Test without data
 	buf1 := NewBulkDataURI(uri)
@@ -288,7 +290,7 @@ func TestBulkDataUriByteBuffer_IsBulkDataUri(t *testing.T) {
 
 func TestBulkDataUriByteBuffer_LazyLoading(t *testing.T) {
 	// This test simulates the lazy loading pattern
-	uri := "http://example.com/data/pixeldata"
+	uri := testBulkDataURI
 	buf := NewBulkDataURI(uri)
 
 	// Initially no data
