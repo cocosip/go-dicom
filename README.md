@@ -95,16 +95,16 @@ This library is currently under active development. The API is not stable and ma
   - [x] Code items and measured values
   - [x] Relationship types (CONTAINS, HAS OBS CONTEXT, etc.)
 
-- [ ] **DICOM Networking** (Future)
-  - [ ] DIMSE services (C-ECHO, C-FIND, C-STORE, etc.)
-  - [ ] Association management
-  - [ ] SCP/SCU implementation
+- [x] **DICOM Networking** (Future)
+  - [x] DIMSE services (C-ECHO, C-FIND, C-STORE, etc.)
+  - [x] Association management
+  - [x] SCP/SCU implementation
 
-- [ ] **Image Codecs** (Future - Decompression)
-  - [ ] JPEG codec
-  - [ ] JPEG-LS codec
+- [] **Image Codecs** (Future - Decompression)
+  - [x] JPEG codec
+  - [x] JPEG-LS codec
   - [ ] JPEG 2000 codec
-  - [ ] RLE codec
+  - [x] RLE codec
 
 See [TODO.md](TODO.md) for detailed development roadmap.
 
