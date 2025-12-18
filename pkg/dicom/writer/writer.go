@@ -206,6 +206,22 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		}
 	}
 
+	// Ensure MediaStorageSOPClassUID and MediaStorageSOPInstanceUID are present
+	// These should be copied from the main dataset if available
+	if _, exists := fileMetaInfo.Get(tag.MediaStorageSOPClassUID); !exists {
+		if sopClassUID, ok := ds.GetString(tag.SOPClassUID); ok {
+			_ = fileMetaInfo.Add(element.NewString(tag.MediaStorageSOPClassUID, vr.UI,
+				[]string{sopClassUID}))
+		}
+	}
+
+	if _, exists := fileMetaInfo.Get(tag.MediaStorageSOPInstanceUID); !exists {
+		if sopInstanceUID, ok := ds.GetString(tag.SOPInstanceUID); ok {
+			_ = fileMetaInfo.Add(element.NewString(tag.MediaStorageSOPInstanceUID, vr.UI,
+				[]string{sopInstanceUID}))
+		}
+	}
+
 	// Write preamble if requested
 	if writer.includePreamble {
 		if err := writer.writePreamble(); err != nil {
@@ -257,9 +273,22 @@ func WriteFile(path string, ds *dataset.Dataset, opts ...WriteOption) error {
 func (w *Writer) generateFileMetaInformation() *dataset.Dataset {
 	fileMetaInfo := dataset.New()
 
+	// Add required FileMetaInformationVersion (0002,0001)
+	// Value should be 0x00 0x01 according to DICOM standard
+	_ = fileMetaInfo.Add(element.NewOtherByte(tag.FileMetaInformationVersion, []byte{0x00, 0x01}))
+
 	// Add required Transfer Syntax UID (0002,0010)
 	_ = fileMetaInfo.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
 		[]string{w.transferSyntax.UID().String()}))
+
+	// Add required Implementation Class UID (0002,0012)
+	// Using a unique UID for this implementation
+	_ = fileMetaInfo.Add(element.NewString(tag.ImplementationClassUID, vr.UI,
+		[]string{"1.2.826.0.1.3680043.10.1142"}))
+
+	// Add Implementation Version Name (0002,0013) - optional but recommended
+	_ = fileMetaInfo.Add(element.NewString(tag.ImplementationVersionName, vr.SH,
+		[]string{"GO-DICOM_1.0"}))
 
 	// Note: FileMetaInformationGroupLength (0002,0000) will be calculated
 	// automatically in writeFileMetaInformation()
