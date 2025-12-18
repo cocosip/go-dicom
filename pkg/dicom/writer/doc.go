@@ -13,32 +13,40 @@
 //
 // # Basic Usage
 //
-//	// Create datasets
-//	fileMetaInfo := dataset.New()
-//	fileMetaInfo.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
-//	    []string{"1.2.840.10008.1.2.1"}))
-//
 //	ds := dataset.New()
 //	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
 //	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 //
-//	// Write to file
+//	// Write to file (simplest form)
+//	err := writer.WriteFile("output.dcm", ds)
+//
+// # With Options
+//
+//	err := writer.WriteFile("output.dcm", ds,
+//	    writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian),
+//	    writer.WithImplementationClassUID("1.2.840.12345.1"),
+//	    writer.WithImplementationVersionName("MyApp_1.0"))
+//
+// # Advanced Usage
+//
+//	// Write to stream
 //	file, err := os.Create("output.dcm")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
 //	defer file.Close()
 //
-//	ts := transfer.ExplicitVRLittleEndian
-//	err = writer.Write(file, fileMetaInfo, ds, ts)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
+//	err = writer.Write(file, ds,
+//	    writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian))
 //
-// # Advanced Usage
+//	// Write without preamble (for network transmission)
+//	err := writer.Write(w, ds, writer.WithoutPreamble())
 //
-//	// Write without preamble (for dataset-only output)
-//	err := writer.Write(w, fileMetaInfo, ds, ts, writer.WithoutPreamble())
+//	// Custom File Meta Information
+//	fileMetaInfo := dataset.New()
+//	fileMetaInfo.Add(element.NewString(tag.SourceApplicationEntityTitle, vr.AE,
+//	    []string{"MY_WORKSTATION"}))
+//	err := writer.Write(w, ds, writer.WithFileMetaInfo(fileMetaInfo))
 //
 // # Transfer Syntax
 //
@@ -46,4 +54,27 @@
 //   - Explicit VR vs Implicit VR encoding
 //   - Little Endian vs Big Endian byte order
 //   - File Meta Information (always Explicit VR Little Endian)
+//
+// # Implementation Information (RECOMMENDED APPROACH)
+//
+// Configure implementation information globally at application startup:
+//
+//	func main() {
+//	    // Set once at startup
+//	    writer.SetDefaultImplementationClassUID("1.2.840.12345.1.2.3")
+//	    writer.SetDefaultImplementationVersionName("MyDicomApp_2.1.0")
+//
+//	    // Now all files automatically use these settings
+//	    writer.WriteFile("file1.dcm", ds1)
+//	    writer.WriteFile("file2.dcm", ds2)
+//	    // etc...
+//	}
+//
+// You can also override on a per-file basis if needed (rare):
+//
+//	writer.WriteFile("special.dcm", ds,
+//	    writer.WithImplementationClassUID("1.2.840.99999.1"))
+//
+// This is useful for identifying files created by your application and for
+// compliance with your organization's UID scheme.
 package writer

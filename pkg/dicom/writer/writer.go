@@ -10,6 +10,7 @@ import (
     "math"
     "os"
     "path/filepath"
+    "sync"
 
     "github.com/cocosip/go-dicom/pkg/dicom/dataset"
     "github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -18,6 +19,66 @@ import (
     "github.com/cocosip/go-dicom/pkg/dicom/vr"
     "github.com/cocosip/go-dicom/pkg/io/buffer"
 )
+
+// Global configuration for DICOM implementation identification.
+// These values are used by default for all DICOM files written by this package.
+// They can be customized at application startup using SetDefaultImplementationClassUID()
+// and SetDefaultImplementationVersionName().
+var (
+	globalConfig = struct {
+		mu                        sync.RWMutex
+		implementationClassUID    string
+		implementationVersionName string
+	}{
+		implementationClassUID:    "1.2.826.0.1.3680043.10.1142", // Default UID
+		implementationVersionName: "GO-DICOM_1.0",                 // Default version
+	}
+)
+
+// SetDefaultImplementationClassUID sets the global default Implementation Class UID.
+// This UID uniquely identifies your DICOM implementation and should be registered
+// with your organization's UID root.
+//
+// This setting affects all DICOM files written by this package unless overridden
+// by WithImplementationClassUID option.
+//
+// Typical usage at application startup:
+//
+//	writer.SetDefaultImplementationClassUID("1.2.840.12345.1.2.3")
+func SetDefaultImplementationClassUID(uid string) {
+	globalConfig.mu.Lock()
+	defer globalConfig.mu.Unlock()
+	globalConfig.implementationClassUID = uid
+}
+
+// SetDefaultImplementationVersionName sets the global default Implementation Version Name.
+// This identifies the version of your DICOM implementation (e.g., "MyApp_2.1.0").
+//
+// This setting affects all DICOM files written by this package unless overridden
+// by WithImplementationVersionName option.
+//
+// Typical usage at application startup:
+//
+//	writer.SetDefaultImplementationVersionName("MyDicomApp_2.1.0")
+func SetDefaultImplementationVersionName(name string) {
+	globalConfig.mu.Lock()
+	defer globalConfig.mu.Unlock()
+	globalConfig.implementationVersionName = name
+}
+
+// GetDefaultImplementationClassUID returns the current global default Implementation Class UID.
+func GetDefaultImplementationClassUID() string {
+	globalConfig.mu.RLock()
+	defer globalConfig.mu.RUnlock()
+	return globalConfig.implementationClassUID
+}
+
+// GetDefaultImplementationVersionName returns the current global default Implementation Version Name.
+func GetDefaultImplementationVersionName() string {
+	globalConfig.mu.RLock()
+	defer globalConfig.mu.RUnlock()
+	return globalConfig.implementationVersionName
+}
 
 // Writer writes DICOM files.
 type Writer struct {
@@ -32,6 +93,8 @@ type Writer struct {
 	explicitLengthSequenceItems bool   // Use explicit length for sequence items
 	keepGroupLengths            bool   // Keep group length tags (0xGGGG,0x0000)
 	largeObjectSize             uint32 // Threshold for large objects
+	implementationClassUID      string // Implementation Class UID for File Meta Information
+	implementationVersionName   string // Implementation Version Name for File Meta Information
 }
 
 // WriteOption is a functional option for Write function.
@@ -46,6 +109,8 @@ type writeConfig struct {
 	explicitLengthSequenceItems bool   // Use explicit length for sequence items (default: false, use undefined)
 	keepGroupLengths            bool   // Keep group length tags (0xGGGG,0x0000) (default: false)
 	largeObjectSize             uint32 // Threshold for large objects (default: 1MB)
+	implementationClassUID      string // Implementation Class UID (default: auto-generated)
+	implementationVersionName   string // Implementation Version Name (default: GO-DICOM_1.0)
 }
 
 // WithTransferSyntax specifies the transfer syntax to use.
@@ -107,6 +172,28 @@ func WithLargeObjectSize(size uint32) WriteOption {
 	}
 }
 
+// WithImplementationClassUID sets the Implementation Class UID (0002,0012) for this specific write operation.
+// This overrides the global default set by SetDefaultImplementationClassUID().
+//
+// Use this option when you need to write a file with a different implementation UID
+// than your application's default (rare cases).
+func WithImplementationClassUID(uid string) WriteOption {
+	return func(c *writeConfig) {
+		c.implementationClassUID = uid
+	}
+}
+
+// WithImplementationVersionName sets the Implementation Version Name (0002,0013) for this specific write operation.
+// This overrides the global default set by SetDefaultImplementationVersionName().
+//
+// Use this option when you need to write a file with a different version name
+// than your application's default (rare cases).
+func WithImplementationVersionName(name string) WriteOption {
+	return func(c *writeConfig) {
+		c.implementationVersionName = name
+	}
+}
+
 // Option is a functional option for Writer (internal use).
 type Option func(*Writer)
 
@@ -156,14 +243,17 @@ func New(ts *transfer.Syntax, opts ...Option) *Writer {
 //   - Dataset (encoding depends on Transfer Syntax)
 func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	// Apply options to configuration
+	// Use global defaults initially
 	config := &writeConfig{
-		transferSyntax:              transfer.ExplicitVRLittleEndian, // Default
-		fileMetaInfo:                nil,                             // Will be auto-generated
-		includePreamble:             true,                            // Default to including preamble
-		explicitLengthSequences:     false,                           // Default: use undefined length
-		explicitLengthSequenceItems: false,                           // Default: use undefined length
-		keepGroupLengths:            false,                           // Default: remove group lengths
-		largeObjectSize:             1024 * 1024,                     // Default: 1MB
+		transferSyntax:              transfer.ExplicitVRLittleEndian,          // Default
+		fileMetaInfo:                nil,                                      // Will be auto-generated
+		includePreamble:             true,                                     // Default to including preamble
+		explicitLengthSequences:     false,                                    // Default: use undefined length
+		explicitLengthSequenceItems: false,                                    // Default: use undefined length
+		keepGroupLengths:            false,                                    // Default: remove group lengths
+		largeObjectSize:             1024 * 1024,                              // Default: 1MB
+		implementationClassUID:      GetDefaultImplementationClassUID(),       // Use global default
+		implementationVersionName:   GetDefaultImplementationVersionName(),    // Use global default
 	}
 
 	for _, opt := range opts {
@@ -186,6 +276,10 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		keepGroupLengths:            config.keepGroupLengths,
 		largeObjectSize:             config.largeObjectSize,
 	}
+
+	// Store implementation info in writer for use in generateFileMetaInformation
+	writer.implementationClassUID = config.implementationClassUID
+	writer.implementationVersionName = config.implementationVersionName
 
 	// Set byte order based on transfer syntax
 	if config.transferSyntax.Endian() == 1 { // Big endian
@@ -282,13 +376,22 @@ func (w *Writer) generateFileMetaInformation() *dataset.Dataset {
 		[]string{w.transferSyntax.UID().String()}))
 
 	// Add required Implementation Class UID (0002,0012)
-	// Using a unique UID for this implementation
+	// Use configured value or default
+	implClassUID := w.implementationClassUID
+	if implClassUID == "" {
+		implClassUID = "1.2.826.0.1.3680043.10.1142" // Default UID
+	}
 	_ = fileMetaInfo.Add(element.NewString(tag.ImplementationClassUID, vr.UI,
-		[]string{"1.2.826.0.1.3680043.10.1142"}))
+		[]string{implClassUID}))
 
 	// Add Implementation Version Name (0002,0013) - optional but recommended
+	// Use configured value or default
+	implVersionName := w.implementationVersionName
+	if implVersionName == "" {
+		implVersionName = "GO-DICOM_1.0" // Default version
+	}
 	_ = fileMetaInfo.Add(element.NewString(tag.ImplementationVersionName, vr.SH,
-		[]string{"GO-DICOM_1.0"}))
+		[]string{implVersionName}))
 
 	// Note: FileMetaInformationGroupLength (0002,0000) will be calculated
 	// automatically in writeFileMetaInformation()
