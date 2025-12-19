@@ -7,6 +7,9 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 )
 
@@ -406,6 +409,596 @@ func TestDicomPixelData_EncodeDecodeNative(t *testing.T) {
 
 	if !bytes.Equal(originalData, decodedData) {
 		t.Error("Decoded data does not match original")
+	}
+}
+
+func TestDicomPixelData_EnsureInterleaved(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     2,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           3,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       PlanarPlanar,
+		PhotometricInterpretation: RGBPhotometric,
+	}
+
+	// Planar: R-plane [1 4], G-plane [2 5], B-plane [3 6]
+	data := []byte{1, 4, 2, 5, 3, 6}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if err := pd.EnsureInterleaved(); err != nil {
+		t.Fatalf("EnsureInterleaved() error = %v", err)
+	}
+
+	if pd.Info.PlanarConfiguration != InterleavedPlanar {
+		t.Fatalf("PlanarConfiguration not updated, got %d", pd.Info.PlanarConfiguration)
+	}
+
+	got := pd.GetAllFrames()
+	expected := []byte{1, 2, 3, 4, 5, 6}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("interleaved data mismatch, got %v want %v", got, expected)
+	}
+}
+
+func TestDicomPixelData_ConvertMonochrome1ToMonochrome2(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     2,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome1,
+	}
+
+	data := []byte{0x10, 0x20}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if err := pd.ConvertMonochrome1ToMonochrome2(); err != nil {
+		t.Fatalf("ConvertMonochrome1ToMonochrome2() error = %v", err)
+	}
+
+	if pd.Info.PhotometricInterpretation != Monochrome2 {
+		t.Fatalf("PhotometricInterpretation not updated, got %v", pd.Info.PhotometricInterpretation)
+	}
+
+	got := pd.GetAllFrames()
+	expected := []byte{0xEF, 0xDF} // 0xFF-0x10, 0xFF-0x20
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("mono inversion mismatch, got %v want %v", got, expected)
+	}
+}
+
+func TestDicomPixelData_ToElement_EncapsulatedBOT(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     1,
+		Height:                    1,
+		NumberOfFrames:            2,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+		Encapsulated:              true,
+		VRCode:                    "OB",
+	}
+
+	pd, err := NewDicomPixelData(info)
+	if err != nil {
+		t.Fatalf("NewDicomPixelData() error = %v", err)
+	}
+
+	pd.frames = [][]byte{{0xAA}, {0xBB}}
+
+	elem, err := pd.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+
+	obf, ok := elem.(*element.OtherByteFragment)
+	if !ok {
+		t.Fatalf("expected OtherByteFragment, got %T", elem)
+	}
+
+	if obf.FragmentCount() != 2 {
+		t.Fatalf("expected 2 fragments, got %d", obf.FragmentCount())
+	}
+
+	if len(obf.OffsetTable()) != 2 || obf.OffsetTable()[0] != 0 || obf.OffsetTable()[1] != 1 {
+		t.Fatalf("unexpected BOT: %v", obf.OffsetTable())
+	}
+}
+
+func TestDicomPixelData_MinMaxIgnorePadding(t *testing.T) {
+	padding := int32(0)
+	info := &PixelDataInfo{
+		Width:                     3,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+		PixelPaddingValue:         &padding,
+	}
+
+	data := []byte{0, 5, 10}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	min, max, err := pd.MinMax(true)
+	if err != nil {
+		t.Fatalf("MinMax(ignorePadding=true) error = %v", err)
+	}
+	if min != 5 || max != 10 {
+		t.Fatalf("expected min=5 max=10, got min=%v max=%v", min, max)
+	}
+
+	minAll, maxAll, err := pd.MinMax(false)
+	if err != nil {
+		t.Fatalf("MinMax(ignorePadding=false) error = %v", err)
+	}
+	if minAll != 0 || maxAll != 10 {
+		t.Fatalf("expected min=0 max=10, got min=%v max=%v", minAll, maxAll)
+	}
+}
+
+func TestDicomPixelData_ConvertYBRFullToRGB(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     2,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           3,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: YbrFull,
+	}
+
+	// Two pixels: (Y,Cb,Cr) = (16,128,128) and (50,128,128) -> RGB roughly (16,16,16) and (50,50,50)
+	data := []byte{16, 128, 128, 50, 128, 128}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if err := pd.ConvertYBRToRGB(); err != nil {
+		t.Fatalf("ConvertYBRToRGB() error = %v", err)
+	}
+
+	if pd.Info.PhotometricInterpretation != RGBPhotometric {
+		t.Fatalf("PhotometricInterpretation not updated, got %v", pd.Info.PhotometricInterpretation)
+	}
+
+	got := pd.GetAllFrames()
+	// allow small deviation; here we check exact values for the simple case
+	expected := []byte{16, 16, 16, 50, 50, 50}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("YBR_FULL->RGB mismatch, got %v want %v", got, expected)
+	}
+}
+
+func TestDicomPixelData_ConvertYBRFull422ToRGB(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     2,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           3,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: YbrFull422,
+	}
+
+	// Two pixels packed: Y1=16, Y2=50, Cb=128, Cr=128
+	data := []byte{16, 50, 128, 128}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if err := pd.ConvertYBRToRGB(); err != nil {
+		t.Fatalf("ConvertYBRToRGB() error = %v", err)
+	}
+
+	if pd.Info.PhotometricInterpretation != RGBPhotometric {
+		t.Fatalf("PhotometricInterpretation not updated, got %v", pd.Info.PhotometricInterpretation)
+	}
+
+	got := pd.GetAllFrames()
+	expected := []byte{16, 16, 16, 50, 50, 50}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("YBR_FULL_422->RGB mismatch, got %v want %v", got, expected)
+	}
+}
+
+func TestCreatePixelData_PaletteToRGB(t *testing.T) {
+	// Palette with 2 entries: index 0 -> black, 1 -> red(255,0,0)
+	ds := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{2}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, nil, []string{"PALETTE COLOR"}),
+		// descriptors: number of entries=2, first=0, bits=8
+		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		// data: R=[0,255], G=[0,0], B=[0,0]
+		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
+		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+		// pixel data: indices [0,1]
+		element.NewOtherByte(tag.PixelData, []byte{0, 1}),
+	})
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+
+	if pd.Info.PhotometricInterpretation != RGBPhotometric {
+		t.Fatalf("expected photometric RGB, got %v", pd.Info.PhotometricInterpretation)
+	}
+	if pd.Info.SamplesPerPixel != 3 {
+		t.Fatalf("expected SPP=3, got %d", pd.Info.SamplesPerPixel)
+	}
+
+	data := pd.GetAllFrames()
+	expected := []byte{0, 0, 0, 255, 0, 0}
+	if !bytes.Equal(data, expected) {
+		t.Fatalf("palette -> RGB data mismatch, got %v want %v", data, expected)
+	}
+}
+
+func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
+	// Use segmented LUT: two segments, values 0 and 255
+	ds := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{2}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, nil, []string{"PALETTE COLOR"}),
+		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		// segmented data: segment type 0, count=1 (2 values), values 0,255 => desc=0x0001
+		element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, []byte{0x01, 0x00, 0x00, 0x00, 0xFF, 0x00}),
+		element.NewOtherWord(tag.SegmentedGreenPaletteColorLookupTableData, []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00}),
+		element.NewOtherWord(tag.SegmentedBluePaletteColorLookupTableData, []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00}),
+		element.NewOtherByte(tag.PixelData, []byte{0, 1}),
+	})
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+	if pd.Info.PhotometricInterpretation != RGBPhotometric {
+		t.Fatalf("expected photometric RGB, got %v", pd.Info.PhotometricInterpretation)
+	}
+	data := pd.GetAllFrames()
+	expected := []byte{0, 0, 0, 255, 0, 0}
+	if !bytes.Equal(data, expected) {
+		t.Fatalf("segmented palette -> RGB mismatch, got %v want %v", data, expected)
+	}
+}
+
+func TestDicomPixelData_ConvertYBRPartial422ToRGB(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     2,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           3,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: YbrPartial422,
+	}
+
+	// Two pixels packed: Y1=16, Y2=50, Cb=128, Cr=128 (limited range)
+	data := []byte{16, 50, 128, 128}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if err := pd.ConvertYBRToRGB(); err != nil {
+		t.Fatalf("ConvertYBRToRGB() error = %v", err)
+	}
+
+	if pd.Info.PhotometricInterpretation != RGBPhotometric {
+		t.Fatalf("PhotometricInterpretation not updated, got %v", pd.Info.PhotometricInterpretation)
+	}
+
+	got := pd.GetAllFrames()
+	// Expected approximate values: first pixel near 0, second near 39
+	if got[0] > 5 || got[1] > 5 || got[2] > 5 {
+		t.Fatalf("first pixel not near black: %v", got[:3])
+	}
+	if got[3] < 35 || got[3] > 45 || got[4] < 35 || got[4] > 45 || got[5] < 35 || got[5] > 45 {
+		t.Fatalf("second pixel not near gray: %v", got[3:6])
+	}
+}
+
+func TestDicomPixelData_ConvertYBRICTToRGB(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     1,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           3,
+		PixelRepresentation:       SignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: YbrIct,
+	}
+
+	// Y=50, Cb=0, Cr=0 should map to roughly RGB(50,50,50)
+	data := []byte{50, 0, 0}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if err := pd.ConvertYBRToRGB(); err != nil {
+		t.Fatalf("ConvertYBRToRGB() error = %v", err)
+	}
+
+	got := pd.GetAllFrames()
+	if got[0] < 48 || got[0] > 52 || got[1] < 48 || got[1] > 52 || got[2] < 48 || got[2] > 52 {
+		t.Fatalf("YBR_ICT->RGB not near expected 50s: %v", got)
+	}
+}
+
+func TestDicomPixelData_ConvertYBRRCTToRGB(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     1,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             16,
+		BitsStored:                16,
+		HighBit:                   15,
+		SamplesPerPixel:           3,
+		PixelRepresentation:       SignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: YbrRct,
+	}
+
+	// From R=100,G=110,B=120 -> Y=floor((R+2G+B)/4)=110, Cb=B-G=10, Cr=R-G=-10
+	y := int16(110)
+	cb := int16(10)
+	cr := int16(-10)
+	data := []byte{
+		byte(y & 0xFF), byte((y >> 8) & 0xFF),
+		byte(cb & 0xFF), byte((cb >> 8) & 0xFF),
+		byte(cr & 0xFF), byte((cr >> 8) & 0xFF),
+	}
+
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if err := pd.ConvertYBRToRGB(); err != nil {
+		t.Fatalf("ConvertYBRToRGB() error = %v", err)
+	}
+
+	got := pd.GetAllFrames()
+	if len(got) < 6 {
+		t.Fatalf("expected 6 bytes, got %d", len(got))
+	}
+	r := int16(got[0]) | int16(got[1])<<8
+	g := int16(got[2]) | int16(got[3])<<8
+	b := int16(got[4]) | int16(got[5])<<8
+	if r != 100 || g != 110 || b != 120 {
+		t.Fatalf("YBR_RCT->RGB mismatch: got R=%d G=%d B=%d", r, g, b)
+	}
+}
+
+func TestDicomPixelData_VOILUTSequence(t *testing.T) {
+	// Build dataset with LUT Descriptor [3 entries, first=0, bits=8], LUT data [0,128,255]
+	ds := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{3}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, nil, []string{"MONOCHROME2"}),
+	})
+
+	// VOI LUT Sequence with one item
+	lutItem := dataset.New()
+	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
+	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{0, 128, 255}))
+	voiSeq := dataset.NewSequence(tag.VOILUTSequence)
+	voiSeq.AddItem(lutItem)
+	_ = ds.Add(voiSeq)
+
+	// PixelData: 0,1,2
+	_ = ds.Add(element.NewOtherByte(tag.PixelData, []byte{0, 1, 2}))
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+
+	out, err := pd.WindowOrLUTTo8bit(ds, 0, 0, false)
+	if err != nil {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+	}
+	got := out[0]
+	expected := []byte{0, 128, 255}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("VOI LUT mapping mismatch, got %v want %v", got, expected)
+	}
+}
+
+func TestDicomPixelData_WindowTo8bit(t *testing.T) {
+	info := &PixelDataInfo{
+		Width:                     3,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             16,
+		BitsStored:                16,
+		HighBit:                   15,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       SignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+	}
+
+	// values: -1000, 0, 1000
+	data := []byte{
+		0x18, 0xFC, // -1000
+		0x00, 0x00, // 0
+		0xE8, 0x03, // 1000
+	}
+
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	frames, err := pd.WindowTo8bit(0, 2000, false)
+	if err != nil {
+		t.Fatalf("WindowTo8bit() error = %v", err)
+	}
+	if len(frames) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(frames))
+	}
+
+	got := frames[0]
+	if len(got) != 3 {
+		t.Fatalf("expected 3 samples, got %d", len(got))
+	}
+
+	if got[0] != 0 {
+		t.Fatalf("expected first sample 0, got %d", got[0])
+	}
+	// middle should be around mid-gray
+	if got[1] < 125 || got[1] > 130 {
+		t.Fatalf("expected mid sample ~127, got %d", got[1])
+	}
+	if got[2] != 255 {
+		t.Fatalf("expected last sample 255, got %d", got[2])
+	}
+}
+
+func TestDicomPixelData_WindowTo8bit_Padding(t *testing.T) {
+	padding := int32(0)
+	info := &PixelDataInfo{
+		Width:                     3,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+		PixelPaddingValue:         &padding,
+	}
+
+	data := []byte{0, 10, 20} // first is padding
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	frames, err := pd.WindowTo8bit(10, 10, true)
+	if err != nil {
+		t.Fatalf("WindowTo8bit() error = %v", err)
+	}
+	out := frames[0]
+	if out[0] != 0 {
+		t.Fatalf("padding sample expected 0, got %d", out[0])
+	}
+	if out[1] < 140 || out[1] > 142 {
+		t.Fatalf("first real sample expected ~141, got %d", out[1])
+	}
+	if out[2] != 255 {
+		t.Fatalf("second real sample expected 255, got %d", out[2])
+	}
+}
+
+func TestDicomPixelData_MaskPadding(t *testing.T) {
+	padding := int32(5)
+	info := &PixelDataInfo{
+		Width:                     3,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+		PixelPaddingValue:         &padding,
+	}
+
+	data := []byte{5, 10, 5}
+	pd, err := NewDicomPixelDataFromBytes(info, data)
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	frames, masks, err := pd.MaskPadding()
+	if err != nil {
+		t.Fatalf("MaskPadding() error = %v", err)
+	}
+	if len(frames) != 1 || len(masks) != 1 {
+		t.Fatalf("expected 1 frame/mask, got %d/%d", len(frames), len(masks))
+	}
+	out := frames[0]
+	mask := masks[0]
+
+	expected := []byte{0, 10, 0}
+	if !bytes.Equal(out, expected) {
+		t.Fatalf("masked data mismatch, got %v want %v", out, expected)
+	}
+	if len(mask) != 3 || mask[0] != true || mask[1] != false || mask[2] != true {
+		t.Fatalf("mask mismatch: %v", mask)
 	}
 }
 

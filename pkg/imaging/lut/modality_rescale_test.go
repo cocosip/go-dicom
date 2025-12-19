@@ -6,19 +6,10 @@ package lut
 import (
 	"math"
 	"testing"
-
-	"github.com/cocosip/go-dicom/pkg/imaging"
 )
 
 func TestNewModalityRescaleLUT(t *testing.T) {
-	bitDepth := &imaging.BitDepth{
-		BitsAllocated: 16,
-		BitsStored:    12,
-		HighBit:       11,
-		IsSigned:      false,
-	}
-
-	lut := NewModalityRescaleLUT(1.0, 0.0, bitDepth)
+	lut := NewModalityRescaleLUT(1.0, 0.0, 0, 4095)
 
 	if lut == nil {
 		t.Fatal("NewModalityRescaleLUT returned nil")
@@ -82,16 +73,9 @@ func TestModalityRescaleLUT_Transform(t *testing.T) {
 		},
 	}
 
-	bitDepth := &imaging.BitDepth{
-		BitsAllocated: 16,
-		BitsStored:    12,
-		HighBit:       11,
-		IsSigned:      false,
-	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			lut := NewModalityRescaleLUT(tc.slope, tc.intercept, bitDepth)
+			lut := NewModalityRescaleLUT(tc.slope, tc.intercept, math.NaN(), math.NaN())
 			result := lut.Transform(tc.input)
 
 			if math.Abs(result-tc.expected) > 0.0001 {
@@ -102,15 +86,8 @@ func TestModalityRescaleLUT_Transform(t *testing.T) {
 }
 
 func TestModalityRescaleLUT_OutputRange(t *testing.T) {
-	bitDepth := &imaging.BitDepth{
-		BitsAllocated: 16,
-		BitsStored:    12,
-		HighBit:       11,
-		IsSigned:      false,
-	}
-
 	// CT with Hounsfield Units
-	lut := NewModalityRescaleLUT(1.0, -1024.0, bitDepth)
+	lut := NewModalityRescaleLUT(1.0, -1024.0, 0, 4095)
 
 	minOut := lut.MinimumOutputValue()
 	maxOut := lut.MaximumOutputValue()
@@ -131,14 +108,7 @@ func TestModalityRescaleLUT_OutputRange(t *testing.T) {
 }
 
 func TestModalityRescaleLUT_Recalculate(t *testing.T) {
-	bitDepth := &imaging.BitDepth{
-		BitsAllocated: 16,
-		BitsStored:    12,
-		HighBit:       11,
-		IsSigned:      false,
-	}
-
-	lut := NewModalityRescaleLUT(1.0, 0.0, bitDepth)
+	lut := NewModalityRescaleLUT(1.0, 0.0, 0, 4095)
 
 	// Recalculate should be a no-op
 	beforeMin := lut.MinimumOutputValue()
@@ -156,14 +126,7 @@ func TestModalityRescaleLUT_Recalculate(t *testing.T) {
 }
 
 func TestModalityRescaleLUT_SignedData(t *testing.T) {
-	bitDepth := &imaging.BitDepth{
-		BitsAllocated: 16,
-		BitsStored:    16,
-		HighBit:       15,
-		IsSigned:      true,
-	}
-
-	lut := NewModalityRescaleLUT(1.0, 0.0, bitDepth)
+	lut := NewModalityRescaleLUT(1.0, 0.0, -32768, 32767)
 
 	// Test negative values
 	result := lut.Transform(-1000.0)

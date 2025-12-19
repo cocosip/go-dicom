@@ -4,7 +4,7 @@
 package lut
 
 import (
-	"github.com/cocosip/go-dicom/pkg/imaging"
+	"math"
 )
 
 // ModalityRescaleLUT implements a modality LUT using Rescale Slope and Intercept.
@@ -21,7 +21,6 @@ import (
 type ModalityRescaleLUT struct {
 	rescaleSlope     float64
 	rescaleIntercept float64
-	bitDepth         *imaging.BitDepth
 	minOutputValue   float64
 	maxOutputValue   float64
 }
@@ -31,18 +30,17 @@ type ModalityRescaleLUT struct {
 // Parameters:
 //   - rescaleSlope: Modality Rescale Slope (0028,1053)
 //   - rescaleIntercept: Modality Rescale Intercept (0028,1052)
-//   - bitDepth: Bit depth information for the pixel data
-func NewModalityRescaleLUT(rescaleSlope, rescaleIntercept float64, bitDepth *imaging.BitDepth) *ModalityRescaleLUT {
+//   - minInput, maxInput: optional input range used to pre-compute output min/max (pass NaN to skip)
+func NewModalityRescaleLUT(rescaleSlope, rescaleIntercept float64, minInput, maxInput float64) *ModalityRescaleLUT {
 	lut := &ModalityRescaleLUT{
 		rescaleSlope:     rescaleSlope,
 		rescaleIntercept: rescaleIntercept,
-		bitDepth:         bitDepth,
 	}
 
 	// Calculate output range based on bit depth
-	if bitDepth != nil {
-		lut.minOutputValue = lut.Transform(bitDepth.MinimumValue())
-		lut.maxOutputValue = lut.Transform(bitDepth.MaximumValue())
+	if !math.IsNaN(minInput) && !math.IsNaN(maxInput) {
+		lut.minOutputValue = lut.Transform(minInput)
+		lut.maxOutputValue = lut.Transform(maxInput)
 	}
 
 	return lut

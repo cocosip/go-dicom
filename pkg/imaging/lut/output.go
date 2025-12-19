@@ -5,9 +5,30 @@ package lut
 
 import (
 	"math"
-
-	"github.com/cocosip/go-dicom/pkg/imaging"
 )
+
+// clampToByte clamps an integer to 0-255.
+func clampToByte(v int) byte {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return byte(v)
+}
+
+// Color32 is a minimal ARGB struct for LUT purposes (avoids importing imaging to prevent cycles).
+type Color32 struct {
+	A uint8
+	R uint8
+	G uint8
+	B uint8
+}
+
+func (c Color32) ToInt32() int32 {
+	return int32(uint32(c.A)<<24 | uint32(c.R)<<16 | uint32(c.G)<<8 | uint32(c.B))
+}
 
 // OutputLUT maps grayscale values to RGB or pseudo-color values.
 //
@@ -17,7 +38,7 @@ import (
 //
 // Based on fo-dicom OutputLUT
 type OutputLUT struct {
-	colorMap [256]imaging.Color32
+	colorMap [256]Color32
 }
 
 // NewOutputLUT creates a new Output LUT with the specified color map.
@@ -27,20 +48,38 @@ type OutputLUT struct {
 //
 // For standard grayscale display, use a linear gray map where RGB channels
 // all equal the input value.
-func NewOutputLUT(colorMap [256]imaging.Color32) *OutputLUT {
+func NewOutputLUT(colorMap [256]Color32) *OutputLUT {
 	return &OutputLUT{
 		colorMap: colorMap,
 	}
+}
+
+// NewOutputLUTFromValues builds an OutputLUT from a slice of uint16 values and first mapped index.
+// Values are clamped to 8-bit.
+func NewOutputLUTFromValues(first float64, values []uint16) *OutputLUT {
+	var colorMap [256]Color32
+	for i := 0; i < 256; i++ {
+		idx := int(first) + i
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(values) {
+			idx = len(values) - 1
+		}
+		v := clampToByte(int(values[idx]))
+		colorMap[i] = Color32{A: 255, R: v, G: v, B: v}
+	}
+	return &OutputLUT{colorMap: colorMap}
 }
 
 // NewGrayscaleOutputLUT creates a standard grayscale Output LUT.
 //
 // Maps each value to an RGB gray where R=G=B=value.
 func NewGrayscaleOutputLUT() *OutputLUT {
-	var colorMap [256]imaging.Color32
+	var colorMap [256]Color32
 	for i := 0; i < 256; i++ {
 		gray := uint8(i) // #nosec G115 -- loop bound ensures i < 256
-		colorMap[i] = imaging.Color32{
+		colorMap[i] = Color32{
 			A: 255,
 			R: gray,
 			G: gray,
@@ -90,7 +129,7 @@ func (o *OutputLUT) Recalculate() {
 }
 
 // GetColor returns the Color32 for the given grayscale value (clamped to [0, 255])
-func (o *OutputLUT) GetColor(value int) imaging.Color32 {
+func (o *OutputLUT) GetColor(value int) Color32 {
 	if value < 0 {
 		return o.colorMap[0]
 	}
@@ -101,6 +140,6 @@ func (o *OutputLUT) GetColor(value int) imaging.Color32 {
 }
 
 // ColorMap returns a copy of the color map
-func (o *OutputLUT) ColorMap() [256]imaging.Color32 {
+func (o *OutputLUT) ColorMap() [256]Color32 {
 	return o.colorMap
 }
