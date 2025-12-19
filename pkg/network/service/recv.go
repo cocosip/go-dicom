@@ -144,6 +144,9 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 
 	// Dispatch to handler
 	if err := s.handleReceivedMessage(s.ctx, msg); err != nil {
+		// If handling failed (e.g., couldn't send response due to missing presentation context),
+		// send A-ABORT to notify the peer instead of silently failing
+		_ = s.Abort(s.ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
 		return fmt.Errorf("failed to handle received message: %w", err)
 	}
 

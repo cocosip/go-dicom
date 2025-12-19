@@ -316,16 +316,17 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		}
 	}
 
-	// Write preamble if requested
+	// Write preamble and File Meta Information if requested
+	// For network DIMSE messages, we skip both preamble and File Meta Information
 	if writer.includePreamble {
 		if err := writer.writePreamble(); err != nil {
 			return fmt.Errorf("failed to write preamble: %w", err)
 		}
-	}
 
-	// Write File Meta Information (always Explicit VR Little Endian)
-	if err := writer.writeFileMetaInformation(fileMetaInfo); err != nil {
-		return fmt.Errorf("failed to write file meta information: %w", err)
+		// Write File Meta Information (always Explicit VR Little Endian)
+		if err := writer.writeFileMetaInformation(fileMetaInfo); err != nil {
+			return fmt.Errorf("failed to write file meta information: %w", err)
+		}
 	}
 
 	// Write main dataset

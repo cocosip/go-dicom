@@ -277,8 +277,11 @@ func CreateCommandDataset(commandField uint16, messageID uint16) *dataset.Datase
 	// CommandField
 	_ = ds.Add(element.NewUnsignedShort(tag.CommandField, []uint16{commandField}))
 
-	// MessageID
-	_ = ds.Add(element.NewUnsignedShort(tag.MessageID, []uint16{messageID}))
+	// MessageID - only add for requests (messageID != 0)
+	// Responses use MessageIDBeingRespondedTo instead
+	if messageID != 0 {
+		_ = ds.Add(element.NewUnsignedShort(tag.MessageID, []uint16{messageID}))
+	}
 
 	// CommandDataSetType - 0x0101 means no dataset present
 	_ = ds.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))

@@ -55,6 +55,12 @@ func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.E
 	// Remove trailing spaces (DICOM requirement)
 	data = bytes.TrimRight(data, " ")
 
+	// Add padding if required by VR
+	// UI (Unique Identifier) must be even length, pad with null byte if odd
+	if v == vr.UI && len(data)%2 == 1 {
+		data = append(data, 0x00)
+	}
+
 	// Create buffer
 	buf := buffer.NewMemory(data)
 
@@ -93,16 +99,27 @@ func (s *String) GetString() string {
 	}
 
 	data := s.buffer.Data()
+
+	// Decode if encoding is specified
+	var strData []byte
 	if s.encoding != nil {
 		decoder := s.encoding.NewDecoder()
 		decoded, err := decoder.Bytes(data)
 		if err != nil {
-			// Fallback to raw string on decoding error
-			return string(data)
+			// Fallback to raw bytes on decoding error
+			strData = data
+		} else {
+			strData = decoded
 		}
-		return string(decoded)
+	} else {
+		strData = data
 	}
-	return string(data)
+
+	// Remove trailing null bytes and spaces (DICOM padding)
+	// UI VR uses null byte (0x00) for padding, other VRs may use space
+	strData = bytes.TrimRight(strData, "\x00 ")
+
+	return string(strData)
 }
 
 // GetValue returns the value at the specified index.

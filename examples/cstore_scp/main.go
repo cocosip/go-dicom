@@ -134,10 +134,10 @@ func main() {
 
 // handleCEcho handles C-ECHO verification requests
 func handleCEcho(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
-	if *verbose {
-		log.Printf("C-ECHO request received: %s", req)
-	}
-	return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+	log.Printf("C-ECHO request received: MessageID=%d, SOPClass=%s", req.MessageID(), req.AffectedSOPClassUID())
+	resp := dimse.NewCEchoResponseFromRequest(req, 0x0000)
+	log.Printf("C-ECHO response created: Status=0x0000 (Success)")
+	return resp, nil
 }
 
 // handleCStore handles C-STORE storage requests
@@ -208,11 +208,9 @@ func handleCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreRes
 func handleAssociationNegotiation(ctx context.Context, assoc *association.Association, responder service.AssociationResponder) error {
 	stats.incrementConnections()
 
-	if *verbose {
-		log.Printf("Association request from: %s (calling AE: %s)",
-			assoc.CallingAE, assoc.CallingAE)
-		log.Printf("Proposed presentation contexts: %d", len(assoc.PresentationContexts))
-	}
+	log.Printf("Association request from: %s (calling AE: %s)",
+		assoc.CallingAE, assoc.CallingAE)
+	log.Printf("Proposed presentation contexts: %d", len(assoc.PresentationContexts))
 
 	// Accept all presentation contexts with their first proposed transfer syntax
 	// In a real application, you might want to validate:
@@ -220,16 +218,15 @@ func handleAssociationNegotiation(ctx context.Context, assoc *association.Associ
 	// - Specific SOP Classes
 	// - Transfer syntaxes your implementation supports
 	acceptedCount := 0
+
 	for _, pc := range assoc.PresentationContexts {
 		if len(pc.ProposedTransferSyntaxes) > 0 {
 			// Accept with the first transfer syntax
 			pc.Accept(pc.ProposedTransferSyntaxes[0])
 			acceptedCount++
 
-			if *verbose {
-				log.Printf("  Accepted PC ID %d: %s with TS: %s",
-					pc.ID, pc.AbstractSyntax, pc.ProposedTransferSyntaxes[0])
-			}
+			log.Printf("  Accepted PC ID %d: %s with TS: %s",
+				pc.ID, pc.AbstractSyntax, pc.ProposedTransferSyntaxes[0])
 		}
 	}
 
