@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -24,45 +25,50 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/client"
 )
 
-// Configuration - modify these values as needed
-const (
-	host          = "localhost"
-	port          = 11112
-	callingAE     = "NETPUSH"
-	calledAE      = "NETGATE"
-	dicomFile     = ""      // Single DICOM file to send (leave empty to use dicomDir)
-	dicomDir      = "D:\\1" // Directory containing DICOM files to send
-	timeout       = 30 * time.Second
-	verifyOnly    = false // Only verify connection (C-ECHO)
-	printMetadata = false // Print file metadata before sending
+// Command-line flags with default values
+var (
+	host          = flag.String("host", "localhost", "DICOM server hostname or IP address")
+	port          = flag.Int("port", 11112, "DICOM server port")
+	callingAE     = flag.String("calling-ae", "NETPUSH", "Calling AE Title (SCU)")
+	calledAE      = flag.String("called-ae", "NETGATE", "Called AE Title (SCP)")
+	dicomFile     = flag.String("file", "", "Single DICOM file to send")
+	dicomDir      = flag.String("dir", "D:\\1", "Directory containing DICOM files to send")
+	timeout       = flag.Duration("timeout", 30*time.Second, "Connection timeout")
+	verifyOnly    = flag.Bool("verify", false, "Only verify connection with C-ECHO, don't send files")
+	printMetadata = flag.Bool("metadata", false, "Print DICOM file metadata before sending")
 )
 
 func main() {
+	// Parse command-line flags
+	flag.Parse()
+
 	// Validate parameters
-	if dicomFile == "" && dicomDir == "" {
-		fmt.Println("Error: Either dicomFile or dicomDir must be specified in the source code")
-		fmt.Println("Press Enter to exit...")
-		fmt.Scanln()
+	if *dicomFile == "" && *dicomDir == "" {
+		fmt.Println("Error: Either -file or -dir must be specified")
+		fmt.Println("Usage:")
+		flag.PrintDefaults()
+		fmt.Println("\nPress Enter to exit...")
+		_, _ = fmt.Scanln()
 		return
 	}
 
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
 	// Create DICOM client
 	fmt.Printf("=== DICOM C-STORE SCU Example ===\n")
-	fmt.Printf("Calling AE: %s\n", callingAE)
-	fmt.Printf("Called AE:  %s\n", calledAE)
-	fmt.Printf("Server:     %s:%d\n", host, port)
+	fmt.Printf("Calling AE: %s\n", *callingAE)
+	fmt.Printf("Called AE:  %s\n", *calledAE)
+	fmt.Printf("Server:     %s:%d\n", *host, *port)
 	fmt.Println()
 
 	// Initialize client with configuration
 	c := client.New(
-		client.WithCallingAE(callingAE),
-		client.WithCalledAE(calledAE),
+		client.WithCallingAE(*callingAE),
+		client.WithCalledAE(*calledAE),
 		client.WithConnectTimeout(10*time.Second),
-		client.WithRequestTimeout(timeout),
+		client.WithRequestTimeout(*timeout),
 	)
 
 	// Add presentation contexts for various storage SOP classes
@@ -83,24 +89,24 @@ func main() {
 
 	// MR Image Storage
 	c.AddPresentationContext(
-		"1.2.840.10008.5.1.4.1.1.4", // MR Image Storage
+		uid.MRImageStorage.UID(), // MR Image Storage
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
 	)
 
 	// Secondary Capture Image Storage (commonly used)
 	c.AddPresentationContext(
-		"1.2.840.10008.5.1.4.1.1.7", // Secondary Capture Image Storage
+		uid.SecondaryCaptureImageStorage.UID(), // Secondary Capture Image Storage
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
 	)
 
 	// Connect to server
-	fmt.Printf("Connecting to %s:%d...\n", host, port)
-	if err := c.Connect(ctx, host, port); err != nil {
+	fmt.Printf("Connecting to %s:%d...\n", *host, *port)
+	if err := c.Connect(ctx, *host, *port); err != nil {
 		fmt.Printf("Failed to connect: %v\n", err)
 		fmt.Println("Press Enter to exit...")
-		fmt.Scanln()
+		_, _ = fmt.Scanln()
 		return
 	}
 	defer func() {
@@ -127,29 +133,29 @@ func main() {
 	if err := c.CEcho(ctx); err != nil {
 		fmt.Printf("C-ECHO failed: %v\n", err)
 		fmt.Println("Press Enter to exit...")
-		fmt.Scanln()
+		_, _ = fmt.Scanln()
 		return
 	}
 	fmt.Println("C-ECHO successful!")
 	fmt.Println()
 
 	// If verify-only mode, exit here
-	if verifyOnly {
+	if *verifyOnly {
 		fmt.Println("Verification complete. Exiting.")
 		return
 	}
 
 	// Collect files to send
 	var filesToSend []string
-	if dicomFile != "" {
-		filesToSend = append(filesToSend, dicomFile)
+	if *dicomFile != "" {
+		filesToSend = append(filesToSend, *dicomFile)
 	}
-	if dicomDir != "" {
-		files, err := findDICOMFiles(dicomDir)
+	if *dicomDir != "" {
+		files, err := findDICOMFiles(*dicomDir)
 		if err != nil {
 			fmt.Printf("Failed to scan directory: %v\n", err)
 			fmt.Println("Press Enter to exit...")
-			fmt.Scanln()
+			_, _ = fmt.Scanln()
 			return
 		}
 		filesToSend = append(filesToSend, files...)
@@ -158,7 +164,7 @@ func main() {
 	if len(filesToSend) == 0 {
 		fmt.Println("No DICOM files to send.")
 		fmt.Println("Press Enter to exit...")
-		fmt.Scanln()
+		_, _ = fmt.Scanln()
 		return
 	}
 
@@ -186,7 +192,7 @@ func main() {
 	fmt.Printf("Successful:  %d\n", successCount)
 	fmt.Printf("Failed:      %d\n", failureCount)
 	fmt.Println("\nPress Enter to exit...")
-	fmt.Scanln()
+	_, _ = fmt.Scanln()
 }
 
 // sendDICOMFile reads and sends a single DICOM file
@@ -198,17 +204,16 @@ func sendDICOMFile(ctx context.Context, c *client.Client, filePath string) error
 	}
 
 	// Print metadata if requested
-	if printMetadata {
+	if *printMetadata {
 		printFileMetadata(result, filePath)
 	}
 
 	// Verify required UIDs are present and ensure they're in the dataset
-	sopClassUID, ok := result.Dataset.GetString(tag.SOPClassUID)
+	_, ok := result.Dataset.GetString(tag.SOPClassUID)
 	if !ok {
 		// Try to get it from FileMetaInformation if available
 		if result.FileMetaInformation != nil {
-			if metaClass, metaOk := result.FileMetaInformation.MediaStorageSOPClassUID(); metaOk {
-				sopClassUID = metaClass
+			if sopClassUID, metaOk := result.FileMetaInformation.MediaStorageSOPClassUID(); metaOk {
 				// Add it to the dataset for C-STORE
 				elem := element.NewString(tag.SOPClassUID, vr.UI, []string{sopClassUID})
 				if err := result.Dataset.AddOrUpdate(elem); err != nil {
@@ -222,12 +227,11 @@ func sendDICOMFile(ctx context.Context, c *client.Client, filePath string) error
 		}
 	}
 
-	sopInstanceUID, ok := result.Dataset.GetString(tag.SOPInstanceUID)
+	_, ok = result.Dataset.GetString(tag.SOPInstanceUID)
 	if !ok {
 		// Try to get it from FileMetaInformation if available
 		if result.FileMetaInformation != nil {
-			if metaInstance, metaOk := result.FileMetaInformation.MediaStorageSOPInstanceUID(); metaOk {
-				sopInstanceUID = metaInstance
+			if sopInstanceUID, metaOk := result.FileMetaInformation.MediaStorageSOPInstanceUID(); metaOk {
 				// Add it to the dataset for C-STORE
 				elem := element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID})
 				if err := result.Dataset.AddOrUpdate(elem); err != nil {
