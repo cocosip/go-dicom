@@ -5,7 +5,10 @@ package imaging
 
 import (
 	"fmt"
+	"strconv"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 )
 
@@ -183,6 +186,82 @@ func (pd *DicomPixelData) GetFrame(frameIndex int) ([]byte, error) {
 	return pd.frames[frameIndex], nil
 }
 
+// CalculateOptimalWindow computes optimal window center/width from pixel data
+// by sampling pixel values and finding min/max range
+func (pd *DicomPixelData) CalculateOptimalWindow() (center, width float64) {
+	if len(pd.frames) == 0 {
+		return 0, 256 // Default fallback
+	}
+
+	// Sample first frame for window calculation
+	pixelData := pd.frames[0]
+	bytesPerPixel := int(pd.Info.BitsAllocated) / 8
+	pixelCount := len(pixelData) / bytesPerPixel
+	isSigned := pd.Info.PixelRepresentation == SignedPixels
+
+	if pixelCount == 0 {
+		return 0, 256
+	}
+
+	// Sample pixels (use every Nth pixel for speed, but at least 1000 samples)
+	step := pixelCount / 1000
+	if step < 1 {
+		step = 1
+	}
+
+	var minVal, maxVal float64
+	firstPixel := true
+
+	for i := 0; i < pixelCount; i += step {
+		pixelIndex := i * bytesPerPixel
+		if pixelIndex+bytesPerPixel > len(pixelData) {
+			break
+		}
+
+		var pixelValue float64
+		switch bytesPerPixel {
+		case 1:
+			if isSigned {
+				pixelValue = float64(int8(pixelData[pixelIndex]))
+			} else {
+				pixelValue = float64(pixelData[pixelIndex])
+			}
+		case 2:
+			if isSigned {
+				pixelValue = float64(int16(pixelData[pixelIndex]) | int16(pixelData[pixelIndex+1])<<8)
+			} else {
+				pixelValue = float64(uint16(pixelData[pixelIndex]) | uint16(pixelData[pixelIndex+1])<<8)
+			}
+		default:
+			continue
+		}
+
+		if firstPixel {
+			minVal = pixelValue
+			maxVal = pixelValue
+			firstPixel = false
+		} else {
+			if pixelValue < minVal {
+				minVal = pixelValue
+			}
+			if pixelValue > maxVal {
+				maxVal = pixelValue
+			}
+		}
+	}
+
+	// Calculate window center and width from min/max
+	center = (minVal + maxVal) / 2
+	width = maxVal - minVal
+
+	// Ensure reasonable minimum width
+	if width < 1 {
+		width = 1
+	}
+
+	return center, width
+}
+
 // AddFrame appends a new frame to the pixel data.
 func (pd *DicomPixelData) AddFrame(frameData []byte) error {
 	expectedSize := pd.Info.UncompressedFrameSize()
@@ -355,4 +434,136 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 	}
 
 	return result, nil
+}
+
+// CreatePixelData creates a new DicomPixelData from a DICOM dataset.
+// This function extracts all necessary image information from the dataset
+// including pixel data, image dimensions, bit depth, and photometric interpretation.
+//
+// Example:
+//
+//	result, err := parser.ParseFile("image.dcm")
+//	if err != nil {
+//	    return err
+//	}
+//	pixelData, err := imaging.CreatePixelData(result.Dataset)
+//	if err != nil {
+//	    return err
+//	}
+//	image := imaging.NewDicomImage(pixelData)
+func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
+	// Extract required tags
+	rows, err := ds.GetUInt16(tag.Rows, 0)
+	if err != nil {
+		return nil, fmt.Errorf("missing or invalid Rows tag: %w", err)
+	}
+
+	cols, err := ds.GetUInt16(tag.Columns, 0)
+	if err != nil {
+		return nil, fmt.Errorf("missing or invalid Columns tag: %w", err)
+	}
+
+	// Get pixel data element
+	pixelDataElem, ok := ds.Get(tag.PixelData)
+	if !ok {
+		return nil, fmt.Errorf("missing Pixel Data tag")
+	}
+
+	// Extract raw bytes from pixel data element
+	var pixelData []byte
+	switch elem := pixelDataElem.(type) {
+	case interface{ GetData() []byte }:
+		pixelData = elem.GetData()
+	default:
+		return nil, fmt.Errorf("unsupported pixel data element type: %T", pixelDataElem)
+	}
+
+	if len(pixelData) == 0 {
+		return nil, fmt.Errorf("pixel data is empty")
+	}
+
+	// Get optional parameters with defaults
+	bitsAllocated := ds.TryGetUInt16(tag.BitsAllocated, 0)
+	if bitsAllocated == 0 {
+		bitsAllocated = 16
+	}
+
+	bitsStored := ds.TryGetUInt16(tag.BitsStored, 0)
+	if bitsStored == 0 {
+		bitsStored = bitsAllocated
+	}
+
+	highBit := ds.TryGetUInt16(tag.HighBit, 0)
+	if highBit == 0 {
+		highBit = bitsStored - 1
+	}
+
+	samplesPerPixel := ds.TryGetUInt16(tag.SamplesPerPixel, 0)
+	if samplesPerPixel == 0 {
+		samplesPerPixel = 1
+	}
+
+	pixelRepr := ds.TryGetUInt16(tag.PixelRepresentation, 0)
+
+	// Get number of frames
+	numberOfFrames := 1
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
+		numberOfFrames = int(nf)
+	}
+
+	planarConfig := ds.TryGetUInt16(tag.PlanarConfiguration, 0)
+
+	// Get photometric interpretation
+	photoInterp, _ := ds.GetString(tag.PhotometricInterpretation)
+	if photoInterp == "" {
+		photoInterp = "MONOCHROME2"
+	}
+
+	pi, err := ParsePhotometricInterpretation(photoInterp)
+	if err != nil {
+		return nil, fmt.Errorf("invalid photometric interpretation %q: %w", photoInterp, err)
+	}
+
+	// Get transfer syntax UID
+	transferSyntaxUID := "1.2.840.10008.1.2" // Default: Implicit VR Little Endian
+	// Note: In a full implementation, this should be extracted from the file meta information
+
+	// Get lossy compression information if present
+	isLossy := false
+	if lossyComp, ok := ds.GetString(tag.LossyImageCompression); ok && lossyComp == "01" {
+		isLossy = true
+	}
+
+	lossyMethod := ""
+	if method, ok := ds.GetString(tag.LossyImageCompressionMethod); ok {
+		lossyMethod = method
+	}
+
+	lossyRatio := 0.0
+	if ratioStr, ok := ds.GetString(tag.LossyImageCompressionRatio); ok {
+		if ratio, err := strconv.ParseFloat(ratioStr, 64); err == nil {
+			lossyRatio = ratio
+		}
+	}
+
+	// Create pixel data info
+	info := &PixelDataInfo{
+		Width:                     cols,
+		Height:                    rows,
+		NumberOfFrames:            numberOfFrames,
+		BitsAllocated:             bitsAllocated,
+		BitsStored:                bitsStored,
+		HighBit:                   highBit,
+		SamplesPerPixel:           samplesPerPixel,
+		PixelRepresentation:       PixelRepresentation(pixelRepr),
+		PlanarConfiguration:       PlanarConfiguration(planarConfig),
+		PhotometricInterpretation: pi,
+		TransferSyntaxUID:         transferSyntaxUID,
+		IsLossy:                   isLossy,
+		LossyCompressionMethod:    lossyMethod,
+		LossyCompressionRatio:     lossyRatio,
+	}
+
+	// Create DICOM pixel data from bytes
+	return NewDicomPixelDataFromBytes(info, pixelData)
 }

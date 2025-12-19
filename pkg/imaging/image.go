@@ -129,12 +129,12 @@ func (img *DicomImage) GetOrCreatePipeline(frame int) render.Pipeline {
 	} else {
 		// Unsigned pixels
 		minInput = 0
-		maxInput = float64(uint16(1<<img.pixelData.Info.BitsStored - 1))
+		maxVal := uint16((1 << uint(img.pixelData.Info.BitsStored)) - 1)
+		maxInput = float64(maxVal)
 	}
 
-	// Default window center and width (full range)
-	windowCenter := (maxInput + minInput) / 2
-	windowWidth := maxInput - minInput
+	// Calculate optimal window from actual pixel data
+	windowCenter, windowWidth := img.pixelData.CalculateOptimalWindow()
 
 	// Default rescale: slope=1, intercept=0
 	pipeline := render.NewGrayscalePipeline(1.0, 0, windowCenter, windowWidth, minInput, maxInput, false)
