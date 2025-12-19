@@ -10,59 +10,59 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/client"
 )
 
-var (
-	// Command line flags
-	host         = flag.String("host", "localhost", "DICOM server hostname or IP")
-	port         = flag.Int("port", 11112, "DICOM server port")
-	callingAE    = flag.String("calling-ae", "STORE_SCU", "Calling AE Title")
-	calledAE     = flag.String("called-ae", "STORE_SCP", "Called AE Title")
-	dicomFile    = flag.String("file", "", "DICOM file to send (required)")
-	dicomDir     = flag.String("dir", "", "Directory containing DICOM files to send")
-	timeout      = flag.Duration("timeout", 30*time.Second, "Operation timeout")
-	verifyOnly   = flag.Bool("verify", false, "Only verify connection (C-ECHO)")
-	printMetadata = flag.Bool("metadata", false, "Print file metadata before sending")
+// Configuration - modify these values as needed
+const (
+	host          = "localhost"
+	port          = 11112
+	callingAE     = "NETPUSH"
+	calledAE      = "NETGATE"
+	dicomFile     = ""      // Single DICOM file to send (leave empty to use dicomDir)
+	dicomDir      = "D:\\1" // Directory containing DICOM files to send
+	timeout       = 30 * time.Second
+	verifyOnly    = false // Only verify connection (C-ECHO)
+	printMetadata = false // Print file metadata before sending
 )
 
 func main() {
-	flag.Parse()
-
 	// Validate parameters
-	if *dicomFile == "" && *dicomDir == "" {
-		fmt.Println("Error: Either -file or -dir must be specified")
-		flag.Usage()
-		os.Exit(1)
+	if dicomFile == "" && dicomDir == "" {
+		fmt.Println("Error: Either dicomFile or dicomDir must be specified in the source code")
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
+		return
 	}
 
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Create DICOM client
 	fmt.Printf("=== DICOM C-STORE SCU Example ===\n")
-	fmt.Printf("Calling AE: %s\n", *callingAE)
-	fmt.Printf("Called AE:  %s\n", *calledAE)
-	fmt.Printf("Server:     %s:%d\n", *host, *port)
+	fmt.Printf("Calling AE: %s\n", callingAE)
+	fmt.Printf("Called AE:  %s\n", calledAE)
+	fmt.Printf("Server:     %s:%d\n", host, port)
 	fmt.Println()
 
 	// Initialize client with configuration
 	c := client.New(
-		client.WithCallingAE(*callingAE),
-		client.WithCalledAE(*calledAE),
+		client.WithCallingAE(callingAE),
+		client.WithCalledAE(calledAE),
 		client.WithConnectTimeout(10*time.Second),
-		client.WithRequestTimeout(*timeout),
+		client.WithRequestTimeout(timeout),
 	)
 
 	// Add presentation contexts for various storage SOP classes
@@ -96,9 +96,12 @@ func main() {
 	)
 
 	// Connect to server
-	fmt.Printf("Connecting to %s:%d...\n", *host, *port)
-	if err := c.Connect(ctx, *host, *port); err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+	fmt.Printf("Connecting to %s:%d...\n", host, port)
+	if err := c.Connect(ctx, host, port); err != nil {
+		fmt.Printf("Failed to connect: %v\n", err)
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
+		return
 	}
 	defer func() {
 		if err := c.Close(); err != nil {
@@ -107,38 +110,55 @@ func main() {
 	}()
 
 	fmt.Println("Connected successfully!")
-	fmt.Printf("Association established with %d presentation contexts\n", len(c.GetAssociation().PresentationContexts))
+	assoc := c.GetAssociation()
+	fmt.Printf("Association established with %d presentation contexts\n", len(assoc.PresentationContexts))
+
+	// Print accepted presentation contexts for debugging
+	fmt.Println("Accepted Presentation Contexts:")
+	for _, pc := range assoc.PresentationContexts {
+		if pc.Result == 0 && pc.AcceptedTransferSyntax != nil { // Accepted
+			fmt.Printf("  ID %d: %s with %s\n", pc.ID, pc.AbstractSyntax, pc.AcceptedTransferSyntax.UID().Name())
+		}
+	}
 	fmt.Println()
 
 	// Perform C-ECHO to verify connection
 	fmt.Println("Performing C-ECHO verification...")
 	if err := c.CEcho(ctx); err != nil {
-		log.Fatalf("C-ECHO failed: %v", err)
+		fmt.Printf("C-ECHO failed: %v\n", err)
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
+		return
 	}
 	fmt.Println("C-ECHO successful!")
 	fmt.Println()
 
 	// If verify-only mode, exit here
-	if *verifyOnly {
+	if verifyOnly {
 		fmt.Println("Verification complete. Exiting.")
 		return
 	}
 
 	// Collect files to send
 	var filesToSend []string
-	if *dicomFile != "" {
-		filesToSend = append(filesToSend, *dicomFile)
+	if dicomFile != "" {
+		filesToSend = append(filesToSend, dicomFile)
 	}
-	if *dicomDir != "" {
-		files, err := findDICOMFiles(*dicomDir)
+	if dicomDir != "" {
+		files, err := findDICOMFiles(dicomDir)
 		if err != nil {
-			log.Fatalf("Failed to scan directory: %v", err)
+			fmt.Printf("Failed to scan directory: %v\n", err)
+			fmt.Println("Press Enter to exit...")
+			fmt.Scanln()
+			return
 		}
 		filesToSend = append(filesToSend, files...)
 	}
 
 	if len(filesToSend) == 0 {
 		fmt.Println("No DICOM files to send.")
+		fmt.Println("Press Enter to exit...")
+		fmt.Scanln()
 		return
 	}
 
@@ -165,6 +185,8 @@ func main() {
 	fmt.Printf("Total files: %d\n", len(filesToSend))
 	fmt.Printf("Successful:  %d\n", successCount)
 	fmt.Printf("Failed:      %d\n", failureCount)
+	fmt.Println("\nPress Enter to exit...")
+	fmt.Scanln()
 }
 
 // sendDICOMFile reads and sends a single DICOM file
@@ -176,32 +198,65 @@ func sendDICOMFile(ctx context.Context, c *client.Client, filePath string) error
 	}
 
 	// Print metadata if requested
-	if *printMetadata {
+	if printMetadata {
 		printFileMetadata(result, filePath)
 	}
 
-	// Verify required UIDs are present
+	// Verify required UIDs are present and ensure they're in the dataset
 	sopClassUID, ok := result.Dataset.GetString(tag.SOPClassUID)
 	if !ok {
-		return fmt.Errorf("missing SOPClassUID in dataset")
+		// Try to get it from FileMetaInformation if available
+		if result.FileMetaInformation != nil {
+			if metaClass, metaOk := result.FileMetaInformation.MediaStorageSOPClassUID(); metaOk {
+				sopClassUID = metaClass
+				// Add it to the dataset for C-STORE
+				elem := element.NewString(tag.SOPClassUID, vr.UI, []string{sopClassUID})
+				if err := result.Dataset.AddOrUpdate(elem); err != nil {
+					return fmt.Errorf("failed to add SOPClassUID to dataset: %w", err)
+				}
+				ok = true
+			}
+		}
+		if !ok {
+			return fmt.Errorf("missing SOPClassUID in dataset and FileMetaInformation")
+		}
 	}
 
 	sopInstanceUID, ok := result.Dataset.GetString(tag.SOPInstanceUID)
 	if !ok {
-		return fmt.Errorf("missing SOPInstanceUID in dataset")
+		// Try to get it from FileMetaInformation if available
+		if result.FileMetaInformation != nil {
+			if metaInstance, metaOk := result.FileMetaInformation.MediaStorageSOPInstanceUID(); metaOk {
+				sopInstanceUID = metaInstance
+				// Add it to the dataset for C-STORE
+				elem := element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID})
+				if err := result.Dataset.AddOrUpdate(elem); err != nil {
+					return fmt.Errorf("failed to add SOPInstanceUID to dataset: %w", err)
+				}
+				ok = true
+			}
+		}
+		if !ok {
+			return fmt.Errorf("missing SOPInstanceUID in dataset and FileMetaInformation")
+		}
 	}
 
-	fmt.Printf("  SOP Class:    %s\n", sopClassUID)
-	fmt.Printf("  SOP Instance: %s\n", sopInstanceUID)
+	// Remove Group Length elements before sending (compatibility issue with some PACS)
+	// Group Length elements have tag format (GGGG,0000)
+	elementsToRemove := []*tag.Tag{}
+	for _, elem := range result.Dataset.Elements() {
+		if elem.Tag().Element() == 0x0000 {
+			elementsToRemove = append(elementsToRemove, elem.Tag())
+		}
+	}
+	for _, t := range elementsToRemove {
+		result.Dataset.Remove(t)
+	}
 
 	// Send using C-STORE
-	startTime := time.Now()
 	if err := c.CStore(ctx, result.Dataset); err != nil {
 		return fmt.Errorf("C-STORE failed: %w", err)
 	}
-	duration := time.Since(startTime)
-
-	fmt.Printf("  Sent in:      %v\n", duration)
 
 	return nil
 }

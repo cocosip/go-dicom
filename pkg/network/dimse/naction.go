@@ -47,9 +47,9 @@ func NewNActionRequest(
 
 	// CommandDataSetType
 	if actionInformation != nil {
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &NActionRequest{
@@ -121,9 +121,9 @@ func createNOperationResponseCommand(
 		_ = command.Add(element.NewUnsignedShort(typeIDTag, []uint16{typeIDValue}))
 	}
 	if dataPresent {
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 	return command
 }

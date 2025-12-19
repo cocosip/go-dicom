@@ -53,7 +53,7 @@ func createQueryRetrieveRequest(
 	command := CreateCommandDataset(commandType, 0)
 	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
 	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	if data != nil {
 		if _, exists := data.Get(tag.QueryRetrieveLevel); !exists {
 			_ = data.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
@@ -146,10 +146,10 @@ func NewCFindResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 	// CommandDataSetType
 	if identifier != nil && statusCode == 0xFF00 {
 		// Pending response with identifier
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
 		// Final response or no identifier
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &CFindResponse{

@@ -57,7 +57,7 @@ func NewCMoveRequest(level QueryRetrieveLevel, moveDestination string, identifie
 	_ = command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{moveDestination}))
 
 	// CommandDataSetType - dataset is present (identifier)
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 
 	// Add QueryRetrieveLevel to the identifier dataset if not already present
 	if identifier != nil {
@@ -164,7 +164,7 @@ func NewCMoveResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType - no dataset
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CMoveResponse{
 		BaseResponse:              NewBaseResponse(command, nil),

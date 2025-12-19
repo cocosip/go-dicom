@@ -125,7 +125,7 @@ func NewCGetResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCla
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType - no dataset
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CGetResponse{
 		BaseResponse:              NewBaseResponse(command, nil),

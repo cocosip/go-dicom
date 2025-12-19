@@ -616,18 +616,22 @@ func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 	}
 
 	// Implicit VR: look up in dictionary
-	if p.dictionary != nil {
-		entry := p.dictionary.Lookup(t)
-		if entry != nil {
-			vrs := entry.ValueRepresentations()
-			if len(vrs) > 0 {
-				// Return the first VR (most common case has only one VR)
-				return vrs[0], nil
-			}
+	// Use provided dictionary, or default dictionary if not provided
+	dictionary := p.dictionary
+	if dictionary == nil {
+		dictionary = dict.Default()
+	}
+
+	entry := dictionary.Lookup(t)
+	if entry != nil {
+		vrs := entry.ValueRepresentations()
+		if len(vrs) > 0 {
+			// Return the first VR (most common case has only one VR)
+			return vrs[0], nil
 		}
 	}
 
-	// If no dictionary or tag not found, return UN (Unknown)
+	// If tag not found in dictionary, return UN (Unknown)
 	return vr.UN, nil
 }
 

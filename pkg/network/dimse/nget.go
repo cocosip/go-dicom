@@ -46,7 +46,7 @@ func NewNGetRequest(
 	}
 
 	// CommandDataSetType - no dataset in request
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &NGetRequest{
 		BaseRequest:             NewBaseRequest(command, nil),
@@ -175,9 +175,9 @@ func createNResponseCommand(
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 	if attributeList != nil && statusCode == 0x0000 {
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 	return command
 }

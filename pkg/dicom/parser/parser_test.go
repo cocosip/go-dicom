@@ -142,9 +142,9 @@ func TestReadVR(t *testing.T) {
 			t.Fatalf("readVR() error = %v", err)
 		}
 
-		// Should return UN for now (dictionary lookup not implemented)
-		if vrResult.Code() != "UN" {
-			t.Errorf("vr = %s, want UN", vrResult)
+		// Should automatically use default dictionary and return PN
+		if vrResult.Code() != "PN" {
+			t.Errorf("vr = %s, want PN", vrResult)
 		}
 	})
 }

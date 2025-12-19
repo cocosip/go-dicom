@@ -47,8 +47,8 @@ func NewCStoreRequest(dicomData *dataset.Dataset) (*CStoreRequest, error) {
 	// Priority (optional, default to medium)
 	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
 
-	// CommandDataSetType - dataset is present
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	// CommandDataSetType - dataset is present (use AddOrUpdate since CreateCommandDataset sets it to 0x0101)
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 
 	return &CStoreRequest{
 		BaseRequest:            NewBaseRequest(command, dicomData),
@@ -114,7 +114,7 @@ func NewCStoreResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopC
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType - no dataset in response
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CStoreResponse{
 		BaseResponse:              NewBaseResponse(command, nil),

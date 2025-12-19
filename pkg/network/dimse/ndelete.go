@@ -37,7 +37,7 @@ func NewNDeleteRequest(
 	_ = command.Add(element.NewString(tag.RequestedSOPInstanceUID, vr.UI, []string{requestedSOPInstanceUID}))
 
 	// CommandDataSetType - no dataset in request
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &NDeleteRequest{
 		BaseRequest:             NewBaseRequest(command, nil),
@@ -98,7 +98,7 @@ func NewNDeleteResponse(
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
 
 	// CommandDataSetType - no dataset in response
-	_ = command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &NDeleteResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
