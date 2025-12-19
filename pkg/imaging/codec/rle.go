@@ -429,3 +429,14 @@ func (d *rleDecoder) decode(buffer []byte, start int, sampleOffset int, rleData 
 
 	return nil
 }
+
+// RegisterRLECodec registers the RLE Lossless codec with the global registry.
+func RegisterRLECodec() {
+	registry := GetGlobalRegistry()
+	rleCodec := NewRLECodec()
+	registry.RegisterCodec(transfer.RLELossless, rleCodec)
+}
+
+func init() {
+	RegisterRLECodec()
+}

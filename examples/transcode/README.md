@@ -22,10 +22,11 @@ This example supports the following transfer syntaxes:
 - **jpeg-lossless**: JPEG Lossless, Non-Hierarchical (Process 14)
 - **jpeg-ls**: JPEG-LS Lossless
 - **jpeg2000-lossless**: JPEG 2000 Lossless
-- **rle**: RLE Lossless
+- **rle**: RLE (Run-Length Encoding) Lossless
 
 ### Lossy Compression
 - **jpeg** / **jpeg-baseline**: JPEG Baseline (Process 1) - 8-bit lossy
+- **jpeg-extended** / **jpeg-12bit**: JPEG Extended (Process 2 & 4) - up to 12-bit lossy
 - **jpeg-ls-lossy**: JPEG-LS Near-Lossless
 - **jpeg2000** / **j2k**: JPEG 2000 with lossy options
 
@@ -58,9 +59,10 @@ transcode -input <input-file> -ts <transfer-syntax> [-output <output-file>]
 - `-input` (required): Input DICOM file path
 - `-output`: Output DICOM file path (default: input filename with "_transcoded" suffix)
 - `-ts`: Target transfer syntax (default: "jpeg")
-  - Options: uncompressed, jpeg, jpeg-lossless, jpeg-ls, jpeg2000, jpeg2000-lossless, rle
+  - Options: uncompressed, jpeg, jpeg-extended, jpeg-lossless, jpeg-ls, jpeg2000, jpeg2000-lossless, rle
 - `-jpeg-quality`: JPEG quality for lossy compression, 1-100 (default: 90)
 - `-verbose`: Show verbose output (default: true)
+- `-all`: Generate output files for all compatible formats (ignores `-ts` and `-output`)
 
 ### Examples
 
@@ -130,8 +132,70 @@ Note: The transcoder will decompress the source format and then compress to the 
 #### 6. Specify Custom Output Path
 
 ```bash
-transcode -input input.dcm -ts rle -output D:\output\compressed.dcm
+transcode -input input.dcm -ts jpeg2000-lossless -output D:\output\compressed.dcm
 ```
+
+#### 7. Generate All Compatible Formats (Recommended for Comparison)
+
+The most powerful feature - automatically generate output files for all compatible compression formats and compare results:
+
+```bash
+transcode -input myimage.dcm -all
+```
+
+**Note**: Output files are automatically named based on the input filename with a format suffix:
+- Input: `myimage.dcm`
+- Outputs: `myimage_uncompressed.dcm`, `myimage_rle.dcm`, `myimage_jpeg_lossless.dcm`, etc.
+
+**Output Example**:
+```
+=== Generating All Compatible Formats ===
+
+Found 6 compatible formats for 16-bit image:
+
+[1/6] Processing Uncompressed (Explicit VR)...
+  ✅ Success: myimage_uncompressed.dcm (819572 bytes, -0.0% reduction)
+[2/6] Processing RLE Lossless...
+  ✅ Success: myimage_rle.dcm (417130 bytes, 49.1% reduction)
+[3/6] Processing JPEG Lossless...
+  ✅ Success: myimage_jpeg_lossless.dcm (239646 bytes, 70.7% reduction)
+[4/6] Processing JPEG-LS Lossless...
+  ✅ Success: myimage_jpegls_lossless.dcm (198471 bytes, 75.8% reduction)
+[5/6] Processing JPEG 2000 Lossless...
+  ✅ Success: myimage_jpeg2000_lossless.dcm (218118 bytes, 73.4% reduction)
+[6/6] Processing JPEG 2000 Lossy...
+  ✅ Success: myimage_jpeg2000_lossy.dcm (113272 bytes, 86.2% reduction)
+
+=== Compression Comparison ===
+
+Input File: myimage.dcm
+
+Format                         Output File                     Size       Compression
+------------------------------------------------------------------------------------
+Uncompressed (Explicit VR)     myimage_uncompressed.dcm        800.4 KB   0.0%↑
+RLE Lossless                   myimage_rle.dcm                 407.4 KB   1.96:1 (49.1%↓)
+JPEG Lossless                  myimage_jpeg_lossless.dcm       234.0 KB   3.42:1 (70.7%↓)
+JPEG-LS Lossless               myimage_jpegls_lossless.dcm     193.8 KB   4.13:1 (75.8%↓)
+JPEG 2000 Lossless             myimage_jpeg2000_lossless.dcm   213.0 KB   3.76:1 (73.4%↓)
+JPEG 2000 Lossy                myimage_jpeg2000_lossy.dcm      110.6 KB   7.23:1 (86.2%↓)
+------------------------------------------------------------------------------------
+
+Best Compression: JPEG 2000 Lossy (7.23:1, 86.2% reduction)
+Input Size:       800.1 KB
+Smallest Output:  110.6 KB
+```
+
+**Benefits**:
+- ✅ Automatically detects compatible formats based on image bit depth
+- ✅ Generates all formats in one command
+- ✅ Shows side-by-side compression comparison
+- ✅ Identifies the best compression format
+- ✅ Perfect for benchmarking and choosing the optimal format
+
+**Smart Format Selection**:
+- For 8-bit images: Generates 8 formats (includes JPEG Baseline & Extended)
+- For 10/12-bit images: Generates 7 formats (includes JPEG Extended)
+- For 16-bit images: Generates 6 formats (excludes JPEG Baseline & Extended)
 
 ## Understanding Transfer Syntaxes
 
@@ -188,16 +252,22 @@ To use compression/decompression, you need to register codecs from the [go-dicom
 
 ```go
 import (
-    _ "github.com/cocosip/go-dicom-codec/jpeg"     // JPEG codecs
-    _ "github.com/cocosip/go-dicom-codec/jpegls"   // JPEG-LS codecs
-    _ "github.com/cocosip/go-dicom-codec/jpeg2000" // JPEG 2000 codecs
-    _ "github.com/cocosip/go-dicom-codec/rle"      // RLE codec
+    _ "github.com/cocosip/go-dicom-codec/jpeg/baseline"        // JPEG Baseline
+    _ "github.com/cocosip/go-dicom-codec/jpeg/lossless"        // JPEG Lossless
+    _ "github.com/cocosip/go-dicom-codec/jpegls/lossless"      // JPEG-LS Lossless
+    _ "github.com/cocosip/go-dicom-codec/jpegls/nearlossless"  // JPEG-LS Near-Lossless
+    _ "github.com/cocosip/go-dicom-codec/jpeg2000/lossless"    // JPEG 2000 Lossless
+    _ "github.com/cocosip/go-dicom-codec/jpeg2000/lossy"       // JPEG 2000 Lossy
 )
 ```
 
 The blank imports automatically register the codecs with the global registry when the packages are imported.
 
-**Current Status**: The current implementation provides the transcoding infrastructure. Full codec support will be available once the go-dicom-codec package implementations are complete.
+**Current Status**: The go-dicom-codec package is production-ready for most codecs:
+- ✅ JPEG Baseline, Extended, and Lossless - Fully functional
+- ✅ JPEG-LS Lossless and Near-Lossless - Fully functional
+- ✅ JPEG 2000 Lossless and Lossy - Fully functional
+- 🧪 HTJ2K (High-Throughput JPEG 2000) - Experimental
 
 ## Code Overview
 
@@ -244,15 +314,57 @@ For a typical uncompressed CT image (512×512×16-bit, ~524 KB):
 - **JPEG Lossless**: ~350 KB (33% reduction)
 - **JPEG-LS Lossless**: ~320 KB (39% reduction)
 - **JPEG 2000 Lossless**: ~280 KB (47% reduction)
-- **JPEG Baseline (Q=90)**: ~80 KB (85% reduction, lossy)
+- **JPEG Baseline (Q=90)**: ~80 KB (85% reduction, lossy)*
+
+\* Note: JPEG Baseline only supports 8-bit images
 
 *Actual results vary based on image content and characteristics.*
 
 ## Limitations
 
-Current implementation limitations:
+### Bit Depth Constraints
 
-1. **Codec Availability**: Some transfer syntaxes require external codec libraries
+Different compression formats have specific bit depth requirements:
+
+| Format | Supported Bit Depths | Notes |
+|--------|---------------------|-------|
+| **JPEG Baseline** | 8-bit only | Most restrictive, lossy compression |
+| **JPEG Extended** | 8-bit, 12-bit | Lossy compression for higher bit depths |
+| **JPEG Lossless** | 8-bit, 10-bit, 12-bit, 16-bit | Recommended for medical images |
+| **JPEG-LS** | 8-bit, 10-bit, 12-bit, 16-bit | Efficient lossless compression |
+| **JPEG 2000** | 8-bit, 10-bit, 12-bit, 16-bit | Modern standard, flexible |
+| **RLE** | All bit depths | Simple, reliable |
+| **Uncompressed** | All bit depths | No restrictions |
+
+**Smart Format Selection**: The transcoder automatically detects bit depth incompatibilities and switches to a compatible format while preserving the user's intent (lossy vs lossless).
+
+**Example - Auto-switching**:
+```bash
+$ transcode -input 16bit_image.dcm -ts jpeg
+
+Compatibility Error: JPEG Baseline only supports 8-bit images.
+  Your image has 16 bits allocated.
+
+  Auto-switching to compatible format...
+  → Switching to JPEG 2000 Lossy (supports all bit depths)
+
+Auto-switching to compatible format: JPEG 2000 Image Compression
+Creating transcoder...
+Transcoding dataset...
+Transcoding complete!
+```
+
+**Auto-switching Logic**:
+
+| Requested Format | Image Bit Depth | Auto-switched To | Reason |
+|-----------------|----------------|------------------|---------|
+| JPEG Baseline | 10/12/16-bit | JPEG Extended (≤12-bit) or JPEG 2000 Lossy (>12-bit) | Preserves lossy intent |
+| JPEG Extended | 16-bit | JPEG 2000 Lossy | Supports all bit depths |
+| Any incompatible | Any | JPEG Lossless | Safe lossless default |
+
+### Other Limitations
+
+1. **Codec Availability**: Some transfer syntaxes require codec libraries
 2. **Multi-frame Support**: Complex multi-frame sequences may have limitations
 3. **Color Space Conversion**: Some conversions may not preserve exact color representation
 4. **Overlay Data**: Embedded overlays are preserved but not converted
