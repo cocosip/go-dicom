@@ -4,7 +4,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
@@ -164,6 +166,7 @@ func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, commandFragments, datasetFra
 
 	// Process each PDV
 	for _, pdv := range pdvs {
+
 		// If this is the first PDV or context ID changed, reset state
 		if *currentContextID == 0 {
 			*currentContextID = pdv.PresentationContextID
@@ -179,25 +182,92 @@ func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, commandFragments, datasetFra
 			*datasetFragments = append(*datasetFragments, pdv.Data...)
 		}
 
-		// If this is the last fragment, decode the message
+		// Process message only when we have received all fragments
+		// IMPORTANT: IsLastFragment=true means the last fragment of the CURRENT TYPE (command or data)
+		// For messages with data (e.g., C-STORE), we need to wait for BOTH:
+		//   1. Command PDV with IsLastFragment=true
+		//   2. Data PDV with IsLastFragment=true
+		// For messages without data (e.g., C-ECHO), only command PDVs are sent
 		if pdv.IsLastFragment {
-			// Get transfer syntax from presentation context
-			transferSyntax := s.getTransferSyntaxForContext(*currentContextID)
+			if pdv.IsCommand {
+				// Command PDV is complete
+				// Check CommandDataSetType to see if data is expected
+				// 0x0101 = NO_DATA_SET_PRESENT
+				hasData := s.commandHasDataset(*commandFragments)
 
-			// Decode the complete message
-			err := s.processReceivedMessage(*commandFragments, *datasetFragments, transferSyntax, *currentContextID)
-			if err != nil {
-				return fmt.Errorf("failed to process received message: %w", err)
+				if !hasData {
+					// No data dataset expected - process message now
+					transferSyntax := s.getTransferSyntaxForContext(*currentContextID)
+					err := s.processReceivedMessage(*commandFragments, *datasetFragments, transferSyntax, *currentContextID)
+					if err != nil {
+						return fmt.Errorf("failed to process received message: %w", err)
+					}
+
+					*commandFragments = nil
+					*datasetFragments = nil
+					*currentContextID = 0
+				}
+				// else: Data dataset expected - wait for data PDVs
+			} else {
+				// Data PDV is complete - now we can process the entire message
+				transferSyntax := s.getTransferSyntaxForContext(*currentContextID)
+
+				// Decode the complete message
+				err := s.processReceivedMessage(*commandFragments, *datasetFragments, transferSyntax, *currentContextID)
+				if err != nil {
+					return fmt.Errorf("failed to process received message: %w", err)
+				}
+
+				// Reset state for next message
+				*commandFragments = nil
+				*datasetFragments = nil
+				*currentContextID = 0
 			}
-
-			// Reset state for next message
-			*commandFragments = nil
-			*datasetFragments = nil
-			*currentContextID = 0
 		}
 	}
 
 	return nil
+}
+
+// commandHasDataset checks the CommandDataSetType field to determine if a data dataset is present.
+// Returns true if data is expected, false if CommandDataSetType = 0x0101 (NO_DATA_SET_PRESENT).
+func (s *Service) commandHasDataset(commandData []byte) bool {
+	// Quick check: decode just enough to read CommandDataSetType (0000,0800)
+	// This is a simplified check using Implicit VR Little Endian (command dataset encoding)
+	r := bytes.NewReader(commandData)
+	byteOrder := binary.LittleEndian
+
+	for r.Len() > 0 {
+		if r.Len() < 8 {
+			break // Not enough data for tag + length
+		}
+
+		var group, elem uint16
+		_ = binary.Read(r, byteOrder, &group)
+		_ = binary.Read(r, byteOrder, &elem)
+
+		var valueLength uint32
+		_ = binary.Read(r, byteOrder, &valueLength)
+
+		if group == 0x0000 && elem == 0x0800 {
+			// Found CommandDataSetType
+			if valueLength >= 2 {
+				var dataSetType uint16
+				_ = binary.Read(r, byteOrder, &dataSetType)
+				// 0x0101 = NO_DATA_SET_PRESENT
+				return dataSetType != 0x0101
+			}
+			return true // Default to expecting data if we can't read the value
+		}
+
+		// Skip value
+		if valueLength > 0 && valueLength != 0xFFFFFFFF {
+			r.Seek(int64(valueLength), 1)
+		}
+	}
+
+	// If CommandDataSetType not found, assume data is present for safety
+	return true
 }
 
 // handleReleaseRequest processes an A-RELEASE-RQ PDU.
