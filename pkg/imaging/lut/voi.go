@@ -6,18 +6,18 @@ package lut
 import (
 	"math"
 	"strings"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 )
 
-// VOILUTFunction represents the type of VOI LUT function
-type VOILUTFunction string
+// VOILUTFunction is an alias for the common VOILUTFunction type defined in types package.
+type VOILUTFunction = types.VOILUTFunction
 
+// Backward compatibility constants
 const (
-	// VOILUTFunctionLinear is the standard linear windowing function
-	VOILUTFunctionLinear VOILUTFunction = "LINEAR"
-	// VOILUTFunctionLinearExact is the DICOM C.11.2.1.3.2 exact linear function
-	VOILUTFunctionLinearExact VOILUTFunction = "LINEAR_EXACT"
-	// VOILUTFunctionSigmoid is a sigmoid windowing function
-	VOILUTFunctionSigmoid VOILUTFunction = "SIGMOID"
+	VOILUTFunctionLinear      = types.VOILUTFunctionLinear
+	VOILUTFunctionLinearExact = types.VOILUTFunctionLinearExact
+	VOILUTFunctionSigmoid     = types.VOILUTFunctionSigmoid
 )
 
 // VOILUT is the base interface for Value of Interest LUT implementations.

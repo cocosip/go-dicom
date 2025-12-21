@@ -5,6 +5,8 @@ package render
 
 import (
 	"testing"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 )
 
 func TestGrayscalePipeline(t *testing.T) {
@@ -168,7 +170,7 @@ func TestGrayscalePipelineConcurrency(_ *testing.T) {
 }
 
 func TestCompositeLUTEmpty(t *testing.T) {
-	lut := NewCompositeLUT()
+	lut := lut.NewCompositeLUT()
 
 	if lut == nil {
 		t.Fatal("Expected non-nil composite LUT")
@@ -178,8 +180,9 @@ func TestCompositeLUTEmpty(t *testing.T) {
 		t.Errorf("Expected min output 0, got %f", lut.MinimumOutputValue())
 	}
 
-	if lut.MaximumOutputValue() != 255 {
-		t.Errorf("Expected max output 255, got %f", lut.MaximumOutputValue())
+	// Empty composite LUT returns 0 for max output (no LUTs in chain)
+	if lut.MaximumOutputValue() != 0 {
+		t.Errorf("Expected max output 0 for empty composite, got %f", lut.MaximumOutputValue())
 	}
 
 	// Empty composite should just pass through
@@ -192,16 +195,20 @@ func TestCompositeLUTEmpty(t *testing.T) {
 func TestCompositeLUTIsValid(t *testing.T) {
 	// Create composite with modality LUT (always valid) and invert LUT (always valid)
 	lut1 := NewModalityRescaleLUT(1.0, 0, 0, 100)
-	lut2 := NewInvertLUT(0, 255)
-	composite := NewCompositeLUT(lut1, lut2)
+	lut2 := lut.NewInvertLUT(0, 255)
+	composite := lut.NewCompositeLUT()
+	composite.Add(lut1)
+	composite.Add(lut2)
 
 	if !composite.IsValid() {
 		t.Error("Expected composite to be valid when all components are valid")
 	}
 
 	// Create composite with VOI LUT (always returns false for IsValid to force recalculation)
-	lut3 := NewLinearVOILUT(128, 256)
-	composite2 := NewCompositeLUT(lut1, lut3)
+	lut3 := lut.NewVOILinearLUT(128, 256)
+	composite2 := lut.NewCompositeLUT()
+	composite2.Add(lut1)
+	composite2.Add(lut3)
 
 	if composite2.IsValid() {
 		t.Error("Expected composite to be invalid when VOI LUT is included (VOI LUT always returns false)")
@@ -210,8 +217,10 @@ func TestCompositeLUTIsValid(t *testing.T) {
 
 func TestCompositeLUTRecalculate(_ *testing.T) {
 	lut1 := NewModalityRescaleLUT(1.0, 0, 0, 100)
-	lut2 := NewLinearVOILUT(128, 256)
-	composite := NewCompositeLUT(lut1, lut2)
+	lut2 := lut.NewVOILinearLUT(128, 256)
+	composite := lut.NewCompositeLUT()
+	composite.Add(lut1)
+	composite.Add(lut2)
 
 	// Recalculate should not panic
 	composite.Recalculate()

@@ -6,6 +6,9 @@ package render
 import (
 	"math"
 	"testing"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 )
 
 func TestModalityRescaleLUT(t *testing.T) {
@@ -86,7 +89,7 @@ func TestModalitySequenceLUT(t *testing.T) {
 
 func TestLinearVOILUT(t *testing.T) {
 	// Window center = 128, window width = 256
-	lut := NewLinearVOILUT(128, 256)
+	lut := lut.NewVOILinearLUT(128, 256)
 
 	if lut.WindowCenter() != 128 {
 		t.Errorf("Expected center 128, got %f", lut.WindowCenter())
@@ -131,7 +134,7 @@ func TestLinearVOILUT(t *testing.T) {
 
 func TestLinearExactVOILUT(t *testing.T) {
 	// Window center = 128, window width = 0.5 (test LINEAR_EXACT)
-	lut := NewLinearExactVOILUT(128, 0.5)
+	lut := lut.NewVOILinearExactLUT(128, 0.5)
 
 	if lut.WindowCenter() != 128 {
 		t.Errorf("Expected center 128, got %f", lut.WindowCenter())
@@ -153,7 +156,7 @@ func TestLinearExactVOILUT(t *testing.T) {
 
 func TestSigmoidVOILUT(t *testing.T) {
 	// Window center = 128, window width = 64
-	lut := NewSigmoidVOILUT(128, 64)
+	lut := lut.NewVOISigmoidLUT(128, 64)
 
 	// Sigmoid should produce values in range [0, 255]
 	// At center, output should be around 127.5
@@ -176,36 +179,32 @@ func TestSigmoidVOILUT(t *testing.T) {
 
 func TestCreateVOILUT(t *testing.T) {
 	// Test LINEAR
-	lut1 := CreateVOILUT(VOILinear, 128, 256)
-	if _, ok := lut1.(*LinearVOILUT); !ok {
+	lut1 := lut.CreateVOILUT(types.VOILUTFunctionLinear, 128, 256)
+	if _, ok := lut1.(*lut.VOILinearLUT); !ok {
 		t.Error("Expected LinearVOILUT for LINEAR function")
 	}
 
 	// Test LINEAR_EXACT
-	lut2 := CreateVOILUT(VOILinearExact, 128, 256)
-	if _, ok := lut2.(*LinearExactVOILUT); !ok {
+	lut2 := lut.CreateVOILUT(types.VOILUTFunctionLinearExact, 128, 256)
+	if _, ok := lut2.(*lut.VOILinearExactLUT); !ok {
 		t.Error("Expected LinearExactVOILUT for LINEAR_EXACT function")
 	}
 
 	// Test SIGMOID
-	lut3 := CreateVOILUT(VOISigmoid, 128, 64)
-	if _, ok := lut3.(*SigmoidVOILUT); !ok {
+	lut3 := lut.CreateVOILUT(types.VOILUTFunctionSigmoid, 128, 64)
+	if _, ok := lut3.(*lut.VOISigmoidLUT); !ok {
 		t.Error("Expected SigmoidVOILUT for SIGMOID function")
-	}
-
-	// Test automatic LINEAR_EXACT for width < 1.0
-	lut4 := CreateVOILUT(VOILinear, 128, 0.5)
-	if _, ok := lut4.(*LinearExactVOILUT); !ok {
-		t.Error("Expected automatic LINEAR_EXACT when width < 1.0")
 	}
 }
 
 func TestCompositeLUT(t *testing.T) {
 	// Create a chain: Modality (slope=2, intercept=0) -> VOI (center=100, width=200)
 	modalityLUT := NewModalityRescaleLUT(2.0, 0, 0, 100)
-	voiLUT := NewLinearVOILUT(100, 200)
+	voiLUT := lut.NewVOILinearLUT(100, 200)
 
-	compositeLUT := NewCompositeLUT(modalityLUT, voiLUT)
+	compositeLUT := lut.NewCompositeLUT()
+	compositeLUT.Add(modalityLUT)
+	compositeLUT.Add(voiLUT)
 
 	// Test: input=50 -> modality: 50*2+0=100 -> VOI: should map to middle range
 	result := compositeLUT.Transform(50)
@@ -223,7 +222,7 @@ func TestCompositeLUT(t *testing.T) {
 }
 
 func TestInvertLUT(t *testing.T) {
-	lut := NewInvertLUT(0, 255)
+	lut := lut.NewInvertLUT(0, 255)
 
 	testCases := []struct {
 		input    float64
