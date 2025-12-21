@@ -1,7 +1,7 @@
 // Copyright (c) 2025 go-dicom authors.
 // Licensed under the Microsoft Public License (MS-PL).
 
-package imaging
+package types
 
 import (
 	"testing"
