@@ -13,7 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
-	"github.com/cocosip/go-dicom/pkg/imaging/lut"
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -922,7 +922,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 
 type paletteLUT struct {
 	first   int32
-	entries []lut.Color32
+	entries []types.Color32
 }
 
 // convertPaletteToRGB loads palette LUT from dataset and converts frames to RGB using shared LUT Color32 type.
@@ -1150,15 +1150,15 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
 	}, nil
 }
 
-func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []lut.Color32 {
+func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []types.Color32 {
 	shift := 0
 	if bits > 8 {
 		shift = bits - 8
 	}
 
-	entries := make([]lut.Color32, len(rLUT))
+	entries := make([]types.Color32, len(rLUT))
 	for i := 0; i < len(rLUT); i++ {
-		entries[i] = lut.Color32{
+		entries[i] = types.Color32{
 			A: 255,
 			R: clampByte(int(rLUT[i] >> shift)),
 			G: clampByte(int(gLUT[i] >> shift)),

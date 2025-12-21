@@ -5,25 +5,9 @@ package imaging
 
 import (
 	"fmt"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 )
-
-// Color32 represents a 32-bit RGBA color
-type Color32 struct {
-	A uint8 // Alpha
-	R uint8 // Red
-	G uint8 // Green
-	B uint8 // Blue
-}
-
-// NewColor32 creates a new Color32
-func NewColor32(a, r, g, b uint8) Color32 {
-	return Color32{A: a, R: r, G: g, B: b}
-}
-
-// ToInt32 converts the Color32 to a packed int32 value (ARGB format)
-func (c Color32) ToInt32() int32 {
-	return int32(c.A)<<24 | int32(c.R)<<16 | int32(c.G)<<8 | int32(c.B)
-}
 
 // PaletteColorLUT represents a palette color lookup table
 type PaletteColorLUT struct {
@@ -38,7 +22,7 @@ type PaletteColorLUT struct {
 	// Blue channel LUT data
 	Blue []byte
 	// LUT is the parsed color lookup table
-	LUT []Color32
+	LUT []types.Color32
 }
 
 // NewPaletteColorLUT creates a new palette color LUT from descriptor and data
@@ -61,7 +45,7 @@ func NewPaletteColorLUT(descriptorRed []uint16, red, green, blue []byte) (*Palet
 		Red:   red,
 		Green: green,
 		Blue:  blue,
-		LUT:   make([]Color32, size),
+		LUT:   make([]types.Color32, size),
 	}
 
 	// Parse the LUT
@@ -77,7 +61,7 @@ func (p *PaletteColorLUT) parseLUT() error {
 	if len(p.Red) == p.Size && len(p.Green) == p.Size && len(p.Blue) == p.Size {
 		// 8-bit LUT entries
 		for i := 0; i < p.Size; i++ {
-			p.LUT[i] = NewColor32(0xFF, p.Red[i], p.Green[i], p.Blue[i])
+			p.LUT[i] = types.NewColor32(0xFF, p.Red[i], p.Green[i], p.Blue[i])
 		}
 	} else if len(p.Red) >= p.Size*2 && len(p.Green) >= p.Size*2 && len(p.Blue) >= p.Size*2 {
 		// 16-bit LUT entries... we only support 8-bit until someone can find a sample image with a 16-bit palette
@@ -95,7 +79,7 @@ func (p *PaletteColorLUT) parseLUT() error {
 			if idx >= len(p.Red) || idx >= len(p.Green) || idx >= len(p.Blue) {
 				return fmt.Errorf("palette LUT index out of range")
 			}
-			p.LUT[i] = NewColor32(0xFF, p.Red[idx], p.Green[idx], p.Blue[idx])
+			p.LUT[i] = types.NewColor32(0xFF, p.Red[idx], p.Green[idx], p.Blue[idx])
 		}
 	} else {
 		return fmt.Errorf("invalid palette color LUT data size: red=%d, green=%d, blue=%d, expected size=%d",
@@ -106,10 +90,10 @@ func (p *PaletteColorLUT) parseLUT() error {
 }
 
 // GetColor returns the color for the specified pixel value
-func (p *PaletteColorLUT) GetColor(pixelValue uint16) Color32 {
+func (p *PaletteColorLUT) GetColor(pixelValue uint16) types.Color32 {
 	if int(pixelValue) >= len(p.LUT) {
 		// Return black for out of range values
-		return NewColor32(0xFF, 0, 0, 0)
+		return types.NewColor32(0xFF, 0, 0, 0)
 	}
 	return p.LUT[pixelValue]
 }
