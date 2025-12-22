@@ -24,7 +24,7 @@ func main() {
 	// RECOMMENDED USAGE: Configure implementation information at app startup
 	// This is typically done once in your main() or init() function
 	// ========================================================================
-	log.Println("=== Global DICOM Configuration Demo ===\n")
+	log.Println("=== Global DICOM Configuration Demo ===")
 	log.Println("Step 1: Setting global implementation information...")
 	writer.SetDefaultImplementationClassUID("1.2.840.99999.5.6.7")
 	writer.SetDefaultImplementationVersionName("MyHospitalApp_3.2.1")

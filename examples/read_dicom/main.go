@@ -14,7 +14,7 @@ import (
 
 func main() {
 	// Parse a DICOM file
-	result, err := parser.ParseFile("D:\\2.dcm")
+	result, err := parser.ParseFile("input.dcm")
 	if err != nil {
 		log.Fatalf("Failed to parse DICOM file: %v", err)
 	}

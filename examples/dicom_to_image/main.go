@@ -23,8 +23,8 @@ import (
 
 // Command-line flags
 var (
-	inputFile    = flag.String("input", "D:\\1\\FILE0.dcm", "Input DICOM file path (required)")
-	outputFile   = flag.String("output", "1.jpeg", "Output image file path (default: input filename with .jpeg extension)")
+	inputFile    = flag.String("input", "input.dcm", "Input DICOM file path (required)")
+	outputFile   = flag.String("output", "output.jpeg", "Output image file path (default: input filename with .jpeg extension)")
 	windowCenter = flag.Float64("window-center", 0, "Window center for display (0 = use DICOM value or auto)")
 	windowWidth  = flag.Float64("window-width", 0, "Window width for display (0 = use DICOM value or auto)")
 	invert       = flag.Bool("invert", false, "Invert grayscale (swap black/white)")

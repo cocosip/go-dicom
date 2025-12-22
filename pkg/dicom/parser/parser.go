@@ -533,6 +533,14 @@ func (p *parseContext) readElement() (element.Element, error) {
 		return p.readSequence(t, length)
 	}
 
+	// Handle special case: VR=UN with undefined length
+	// In DICOM, private tags or unknown tags may be encoded as UN
+	// When combined with undefined length, they are typically sequences
+	// Treat UN with undefined length as a sequence
+	if vrValue.Code() == vr.CodeUN && length == 0xFFFFFFFF {
+		return p.readSequence(t, length)
+	}
+
 	// Handle special case: Fragment Sequence (encapsulated pixel data)
 	// Fragment sequences have OB or OW VR with undefined length (0xFFFFFFFF)
 	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF {
@@ -571,6 +579,14 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 
 	// Handle special case: Sequence
 	if vrValue.Code() == vr.CodeSQ {
+		return p.readSequence(t, length)
+	}
+
+	// Handle special case: VR=UN with undefined length
+	// In DICOM, private tags or unknown tags may be encoded as UN
+	// When combined with undefined length, they are typically sequences
+	// Treat UN with undefined length as a sequence
+	if vrValue.Code() == vr.CodeUN && length == 0xFFFFFFFF {
 		return p.readSequence(t, length)
 	}
 
