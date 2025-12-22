@@ -496,14 +496,21 @@ func buildFragmentSequence(frames [][]byte) (*element.OtherByteFragment, error) 
 	var offsets []uint32
 	var runningOffset uint32
 	for i, frame := range frames {
+		// DICOM requires even-length values; pad to even and use padded length for BOT offsets.
+		padded := frame
+		if len(frame)%2 != 0 {
+			padded = make([]byte, len(frame)+1)
+			copy(padded, frame)
+		}
+
 		offsets = append(offsets, runningOffset)
 
-		if len(frame) > int(math.MaxUint32-runningOffset) {
+		if len(padded) > int(math.MaxUint32-runningOffset) {
 			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
 		}
-		runningOffset += uint32(len(frame))
+		runningOffset += uint32(len(padded))
 
-		obf.AddFragment(buffer.NewMemory(frame))
+		obf.AddFragment(buffer.NewMemory(padded))
 	}
 
 	if len(frames) > 1 {

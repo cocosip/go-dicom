@@ -802,23 +802,58 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		return fmt.Errorf("failed to write undefined length: %w", err)
 	}
 
+	// Collect fragments and pad to even length as required by DICOM.
+	fragCount := fs.FragmentCount()
+	if fragCount == 0 {
+		return fmt.Errorf("fragment sequence has no fragments")
+	}
+
+	paddedFrags := make([][]byte, fragCount)
+	for i := 0; i < fragCount; i++ {
+		frag, err := fs.GetFragment(i)
+		if err != nil {
+			return fmt.Errorf("failed to get fragment %d: %w", i, err)
+		}
+		data := frag.Data()
+		if len(data)%2 != 0 {
+			padded := make([]byte, len(data)+1)
+			copy(padded, data)
+			paddedFrags[i] = padded
+		} else {
+			paddedFrags[i] = data
+		}
+	}
+
+	// Build Basic Offset Table based on padded fragment lengths (only for multi-frame).
+	var offsets []uint32
+	if fragCount > 1 {
+		var runningOffset uint32
+		offsets = make([]uint32, fragCount)
+		for i, data := range paddedFrags {
+			offsets[i] = runningOffset
+			if len(data) > int(math.MaxUint32-runningOffset) {
+				return fmt.Errorf("fragment too large to represent in BOT at index %d", i)
+			}
+			runningOffset += uint32(len(data))
+		}
+	}
+
 	// Write Item for Offset Table (FFFE,E000)
 	itemTag := tag.New(0xFFFE, 0xE000)
 	if err := w.writeTag(itemTag); err != nil {
 		return fmt.Errorf("failed to write offset table item tag: %w", err)
 	}
 
-    // Write offset table
-    offsets := fs.OffsetTable()
-    // Each offset is 4 bytes; verify the multiplication does not overflow uint32.
-    offsetCount := len(offsets)
-    if offsetCount > int(math.MaxUint32/4) {
-        return fmt.Errorf("offset table too large: %d entries", offsetCount)
-    }
-    offsetTableLength := uint32(offsetCount) * 4
-    if err := binary.Write(w.writer, w.byteOrder, offsetTableLength); err != nil {
-        return fmt.Errorf("failed to write offset table length: %w", err)
-    }
+	// Write offset table
+	offsetCount := len(offsets)
+	// Each offset is 4 bytes; verify the multiplication does not overflow uint32.
+	if offsetCount > int(math.MaxUint32/4) {
+		return fmt.Errorf("offset table too large: %d entries", offsetCount)
+	}
+	offsetTableLength := uint32(offsetCount) * 4
+	if err := binary.Write(w.writer, w.byteOrder, offsetTableLength); err != nil {
+		return fmt.Errorf("failed to write offset table length: %w", err)
+	}
 
 	// Write offset values
 	for _, offset := range offsets {
@@ -828,26 +863,22 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 	}
 
 	// Write fragments
-	for i := 0; i < fs.FragmentCount(); i++ {
-		frag, err := fs.GetFragment(i)
-		if err != nil {
-			return fmt.Errorf("failed to get fragment %d: %w", i, err)
-		}
+	for i := 0; i < fragCount; i++ {
+		fragData := paddedFrags[i]
 
 		// Write Item tag (FFFE,E000)
 		if err := w.writeTag(itemTag); err != nil {
 			return fmt.Errorf("failed to write fragment item tag: %w", err)
 		}
 
-    // Write fragment length
-    fragData := frag.Data()
-    fragLen := len(fragData)
-    if fragLen > int(math.MaxUint32) {
-        return fmt.Errorf("fragment too large: %d bytes", fragLen)
-    }
-    if err := binary.Write(w.writer, w.byteOrder, uint32(fragLen)); err != nil {
-        return fmt.Errorf("failed to write fragment length: %w", err)
-    }
+		// Write fragment length
+		fragLen := len(fragData)
+		if fragLen > int(math.MaxUint32) {
+			return fmt.Errorf("fragment too large: %d bytes", fragLen)
+		}
+		if err := binary.Write(w.writer, w.byteOrder, uint32(fragLen)); err != nil {
+			return fmt.Errorf("failed to write fragment length: %w", err)
+		}
 
 		// Write fragment data
 		if _, err := w.writer.Write(fragData); err != nil {
