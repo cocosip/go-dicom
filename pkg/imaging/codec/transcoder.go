@@ -478,9 +478,18 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 		} else if len(data) != expectedSize {
 			return nil, fmt.Errorf("fragment size mismatch at index %d: got %d, expected %d", i, len(data), expectedSize)
 		}
-		frames = append(frames, data)
+		frames = append(frames, stripTrailingPadding(data))
 	}
 	return frames, nil
+}
+
+// stripTrailingPadding removes a single trailing 0x00 that follows the JPEG/JPEG-LS EOI marker (0xFF 0xD9).
+// Some encoders pad encapsulated fragments to even length; the padding byte should not be passed to the codec.
+func stripTrailingPadding(data []byte) []byte {
+	if len(data) >= 3 && data[len(data)-1] == 0x00 && data[len(data)-2] == 0xD9 && data[len(data)-3] == 0xFF {
+		return data[:len(data)-1]
+	}
+	return data
 }
 
 // buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
@@ -496,21 +505,14 @@ func buildFragmentSequence(frames [][]byte) (*element.OtherByteFragment, error) 
 	var offsets []uint32
 	var runningOffset uint32
 	for i, frame := range frames {
-		// DICOM requires even-length values; pad to even and use padded length for BOT offsets.
-		padded := frame
-		if len(frame)%2 != 0 {
-			padded = make([]byte, len(frame)+1)
-			copy(padded, frame)
-		}
-
 		offsets = append(offsets, runningOffset)
 
-		if len(padded) > int(math.MaxUint32-runningOffset) {
+		if len(frame) > int(math.MaxUint32-runningOffset) {
 			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
 		}
-		runningOffset += uint32(len(padded))
+		runningOffset += uint32(len(frame))
 
-		obf.AddFragment(buffer.NewMemory(padded))
+		obf.AddFragment(buffer.NewMemory(frame))
 	}
 
 	if len(frames) > 1 {
