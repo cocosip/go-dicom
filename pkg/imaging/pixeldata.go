@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -762,9 +763,15 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 	pixelRepr := ds.TryGetUInt16(tag.PixelRepresentation, 0)
 
 	// Get number of frames
+	// Note: NumberOfFrames has VR of IS (Integer String) per DICOM standard
 	numberOfFrames := 1
 	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
 		numberOfFrames = int(nf)
+	} else if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
+		// Try parsing as string (IS VR type)
+		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
+			numberOfFrames = parsed
+		}
 	}
 
 	planarConfig := ds.TryGetUInt16(tag.PlanarConfiguration, 0)

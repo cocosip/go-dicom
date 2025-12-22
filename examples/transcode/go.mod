@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/cocosip/go-dicom v0.0.0
-	github.com/cocosip/go-dicom-codec v0.0.0-20251217093959-265dcf252f1a
+	github.com/cocosip/go-dicom-codec v0.0.0-20251222055040-b96244dbe584
 )
 
 require (

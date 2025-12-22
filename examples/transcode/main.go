@@ -143,7 +143,7 @@ func printImageInfo(ds *dataset.Dataset) {
 	columns := ds.TryGetUInt16(tag.Columns, 0)
 	bitsAlloc := ds.TryGetUInt16(tag.BitsAllocated, 0)
 	bitsStored := ds.TryGetUInt16(tag.BitsStored, 0)
-	samplesPerPixel := ds.TryGetUInt16(tag.SamplesPerPixel, 1)
+	samplesPerPixel := ds.TryGetUInt16(tag.SamplesPerPixel, 0)
 
 	frames := int32(1)
 	if val, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {

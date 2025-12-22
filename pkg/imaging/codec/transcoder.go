@@ -6,6 +6,8 @@ package codec
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -344,9 +346,15 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	}
 
 	// Determine frame count
+	// Note: NumberOfFrames has VR of IS (Integer String) per DICOM standard
 	frameCount := 1
 	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
 		frameCount = int(nf)
+	} else if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
+		// Try parsing as string (IS VR type)
+		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
+			frameCount = parsed
+		}
 	}
 
 	// Calculate frame size
