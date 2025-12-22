@@ -6,6 +6,7 @@ package tag_test
 import (
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dictif"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
@@ -364,11 +365,11 @@ func TestDictionaryEntry(t *testing.T) {
 }
 
 func TestDictionaryEntryNotInitialized(t *testing.T) {
-	// Save the original lookup function
-	originalLookup := tag.SetDictionaryLookup
+	// Save the original lookup implementation
+	originalLookup := dictif.GlobalLookup()
 
 	// Set lookup to nil to simulate uninitialized dictionary
-	tag.SetDictionaryLookup(nil)
+	dictif.SetGlobalLookup(nil)
 
 	testTag := tag.New(0x0010, 0x0010)
 	entry := testTag.DictionaryEntry()
@@ -377,10 +378,8 @@ func TestDictionaryEntryNotInitialized(t *testing.T) {
 		t.Error("DictionaryEntry() should return nil when lookup is not initialized")
 	}
 
-	// Restore the original lookup function
-	// Note: This won't actually restore it because SetDictionaryLookup
-	// sets a global variable, but we include it for clarity
-	_ = originalLookup
+	// Restore the original lookup implementation
+	dictif.SetGlobalLookup(originalLookup)
 }
 
 func TestParsePrivateCreatorCaching(t *testing.T) {

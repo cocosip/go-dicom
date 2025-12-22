@@ -6,24 +6,38 @@ package dict
 import (
 	"sync"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dictif"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
-// init registers the dictionary lookup functions with the tag package.
+// dictionaryAdapter wraps Dictionary to implement dictif.Lookup interface.
+// This adapter is needed because Go's interface matching requires exact method signatures,
+// and we can't change existing Dictionary methods without breaking compatibility.
+type dictionaryAdapter struct {
+	*Dictionary
+}
+
+// LookupKeyword implements dictif.Lookup by wrapping Dictionary.LookupKeyword.
+func (da *dictionaryAdapter) LookupKeyword(keyword string) dictif.Tag {
+	tag := da.Dictionary.LookupKeyword(keyword)
+	if tag == nil {
+		return nil
+	}
+	return tag // *tag.Tag implements dictif.Tag
+}
+
+// GetPrivateCreator implements dictif.Lookup by wrapping Dictionary.GetPrivateCreator.
+func (da *dictionaryAdapter) GetPrivateCreator(creator string) dictif.PrivateCreator {
+	pc := da.Dictionary.GetPrivateCreator(creator)
+	if pc == nil {
+		return nil
+	}
+	return pc // *tag.PrivateCreator implements dictif.PrivateCreator
+}
+
+// init registers the default dictionary as the global lookup implementation.
 func init() {
-	tag.SetDictionaryLookup(func(t *tag.Tag) interface{} {
-		return Default().Lookup(t)
-	})
-	tag.SetKeywordLookup(func(keyword string) (*tag.Tag, error) {
-		t := Default().LookupKeyword(keyword)
-		if t == nil {
-			return nil, nil
-		}
-		return t, nil
-	})
-	tag.SetPrivateCreatorLookup(func(creator string) *tag.PrivateCreator {
-		return Default().GetPrivateCreator(creator)
-	})
+	dictif.SetGlobalLookup(&dictionaryAdapter{Dictionary: Default()})
 }
 
 // Dictionary manages DICOM dictionary entries.
@@ -197,4 +211,20 @@ func Default() *Dictionary {
 func initializeDefaultDictionary(d *Dictionary) {
 	// Load all standard DICOM dictionary entries from generated data
 	loadStandardEntries(d)
+}
+
+// LookupTag implements dictif.Lookup interface.
+// It converts dictif.Tag to *tag.Tag and returns dictif.Entry.
+func (d *Dictionary) LookupTag(t dictif.Tag) dictif.Entry {
+	// Convert dictif.Tag to *tag.Tag
+	tagPtr := tag.New(t.Group(), t.Element())
+
+	// Use existing Lookup method
+	entry := d.Lookup(tagPtr)
+	if entry == nil {
+		return nil
+	}
+
+	// Entry already implements dictif.Entry
+	return entry
 }

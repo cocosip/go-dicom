@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/dictif"
 )
 
 // Tag represents a DICOM tag, which uniquely identifies a data element.
@@ -270,8 +272,15 @@ func Parse(s string) (*Tag, error) {
 		creatorStr = strings.TrimSuffix(creatorStr, ")")
 
 		// Look up private creator in dictionary if available
-		if globalPrivateCreatorLookup != nil {
-			tag.privateCreator = globalPrivateCreatorLookup(creatorStr)
+		lookup := getDictionaryLookup()
+		if lookup != nil {
+			dictPC := lookup.GetPrivateCreator(creatorStr)
+			if dictPC != nil {
+				// Convert dictif.PrivateCreator to tag.PrivateCreator
+				tag.privateCreator = NewPrivateCreator(dictPC.Creator())
+			} else {
+				tag.privateCreator = NewPrivateCreator(creatorStr)
+			}
 		} else {
 			// Fallback: create a simple private creator if dictionary not initialized
 			tag.privateCreator = NewPrivateCreator(creatorStr)
@@ -297,20 +306,6 @@ var (
 	Unknown = New(0xFFFF, 0xFFFF)
 )
 
-// DictionaryEntryLookup is a function type for looking up dictionary entries.
-// This is used to avoid circular dependencies between tag and dict packages.
-type DictionaryEntryLookup func(*Tag) interface{}
-
-// globalDictionaryLookup holds the function to lookup dictionary entries.
-// This is set by the dict package during initialization.
-var globalDictionaryLookup DictionaryEntryLookup
-
-// SetDictionaryLookup sets the global dictionary lookup function.
-// This is called by the dict package to register the lookup function.
-func SetDictionaryLookup(lookup DictionaryEntryLookup) {
-	globalDictionaryLookup = lookup
-}
-
 // DictionaryEntry returns the dictionary entry for this tag.
 //
 // The dictionary entry contains metadata about the tag including its name,
@@ -322,10 +317,11 @@ func SetDictionaryLookup(lookup DictionaryEntryLookup) {
 // Note: The returned interface{} should be type-asserted to *dict.Entry.
 // This design avoids circular dependencies between tag and dict packages.
 func (t *Tag) DictionaryEntry() interface{} {
-	if globalDictionaryLookup == nil {
+	lookup := getDictionaryLookup()
+	if lookup == nil {
 		return nil
 	}
-	return globalDictionaryLookup(t)
+	return lookup.LookupTag(t)
 }
 
 // Uint32 returns the tag as a 32-bit unsigned integer.
@@ -334,32 +330,10 @@ func (t *Tag) Uint32() uint32 {
 	return t.ToUint32()
 }
 
-// KeywordLookup is a function type for looking up tags by keyword.
-// This is used to avoid circular dependencies between tag and dict packages.
-type KeywordLookup func(keyword string) (*Tag, error)
-
-// globalKeywordLookup holds the function to lookup tags by keyword.
-// This is set by the dict package during initialization.
-var globalKeywordLookup KeywordLookup
-
-// SetKeywordLookup sets the global keyword lookup function.
-// This is called by the dict package to register the lookup function.
-func SetKeywordLookup(lookup KeywordLookup) {
-	globalKeywordLookup = lookup
-}
-
-// PrivateCreatorLookup is a function type for looking up or creating private creators.
-// This is used to avoid circular dependencies between tag and dict packages.
-type PrivateCreatorLookup func(creator string) *PrivateCreator
-
-// globalPrivateCreatorLookup holds the function to lookup/create private creators.
-// This is set by the dict package during initialization.
-var globalPrivateCreatorLookup PrivateCreatorLookup
-
-// SetPrivateCreatorLookup sets the global private creator lookup function.
-// This is called by the dict package to register the lookup function.
-func SetPrivateCreatorLookup(lookup PrivateCreatorLookup) {
-	globalPrivateCreatorLookup = lookup
+// getDictionaryLookup returns the global dictionary lookup implementation.
+// This helper function wraps dictif.GlobalLookup() for convenience.
+func getDictionaryLookup() dictif.Lookup {
+	return dictif.GlobalLookup()
 }
 
 // ParseKeyword parses a tag from its DICOM keyword.
@@ -372,17 +346,19 @@ func SetPrivateCreatorLookup(lookup PrivateCreatorLookup) {
 // Returns an error if the keyword is not found in the dictionary or if the
 // dictionary has not been initialized.
 func ParseKeyword(keyword string) (Tag, error) {
-	if globalKeywordLookup == nil {
+	lookup := getDictionaryLookup()
+	if lookup == nil {
 		return Tag{}, fmt.Errorf("keyword lookup not available (dictionary not initialized)")
 	}
 
-	t, err := globalKeywordLookup(keyword)
-	if err != nil {
-		return Tag{}, err
-	}
-	if t == nil {
+	dictTag := lookup.LookupKeyword(keyword)
+	if dictTag == nil {
 		return Tag{}, fmt.Errorf("keyword not found: %s", keyword)
 	}
 
-	return *t, nil
+	// Convert dictif.Tag to tag.Tag
+	return Tag{
+		group:   dictTag.Group(),
+		element: dictTag.Element(),
+	}, nil
 }
