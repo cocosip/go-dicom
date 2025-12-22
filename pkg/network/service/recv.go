@@ -262,7 +262,10 @@ func (s *Service) commandHasDataset(commandData []byte) bool {
 
 		// Skip value
 		if valueLength > 0 && valueLength != 0xFFFFFFFF {
-			r.Seek(int64(valueLength), 1)
+			if _, err := r.Seek(int64(valueLength), 1); err != nil {
+				// If we can't skip, assume data is present for safety
+				return true
+			}
 		}
 	}
 

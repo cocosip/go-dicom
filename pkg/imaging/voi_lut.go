@@ -15,7 +15,7 @@ import (
 
 // applyVOILUT applies VOI LUT Sequence if present; otherwise falls back to windowing.
 // For now, LUT output is clamped to 8-bit; LUT entry values are assumed to be 8 or 16 bit.
-func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, center, width float64, ignorePadding bool) ([][]byte, error) {
+func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, _, _ float64, ignorePadding bool) ([][]byte, error) {
 	if ds == nil {
 		return nil, fmt.Errorf("dataset is nil for VOI LUT")
 	}

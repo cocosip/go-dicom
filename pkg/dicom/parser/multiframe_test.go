@@ -15,6 +15,8 @@ import (
 
 // TestMultiFrameImage tests parsing of a multi-frame DICOM image.
 // This test specifically verifies the fix for VR=UN with undefined length (private sequences).
+//
+//nolint:gocyclo // Test function with comprehensive test cases
 func TestMultiFrameImage(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data")
 	filePath := filepath.Join(testDataDir, "TestMultiFrame.dcm")
@@ -24,7 +26,11 @@ func TestMultiFrameImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open TestMultiFrame.dcm: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Errorf("Failed to close file: %v", closeErr)
+		}
+	}()
 
 	// Parse the DICOM file
 	result, err := Parse(file)
@@ -233,7 +239,10 @@ func TestMultiFrameImage(t *testing.T) {
 		// Parse NumberOfFrames from string (IS - Integer String)
 		numFrames := 1
 		if numFramesStr, exists := result.Dataset.GetString(tag.NumberOfFrames); exists {
-			fmt.Sscanf(numFramesStr, "%d", &numFrames)
+			if _, err := fmt.Sscanf(numFramesStr, "%d", &numFrames); err != nil {
+				t.Logf("Warning: Failed to parse NumberOfFrames '%s': %v", numFramesStr, err)
+				numFrames = 1
+			}
 		}
 
 		if rows > 0 && cols > 0 && bitsAllocated > 0 {
@@ -270,7 +279,11 @@ func TestMultiFramePixelDataExtraction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open TestMultiFrame.dcm: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Errorf("Failed to close file: %v", closeErr)
+		}
+	}()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -344,7 +357,11 @@ func TestMultiFrameVsPrivateSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open TestMultiFrame.dcm: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Errorf("Failed to close file: %v", closeErr)
+		}
+	}()
 
 	result, err := Parse(file)
 	if err != nil {

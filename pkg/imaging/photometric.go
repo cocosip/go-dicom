@@ -8,6 +8,13 @@ import (
 	"strings"
 )
 
+// Photometric interpretation string constants
+const (
+	photometricMonochrome1   = "MONOCHROME1"
+	photometricYBRPartial422 = "YBR_PARTIAL_422"
+	photometricYBRPartial420 = "YBR_PARTIAL_420"
+)
+
 // PhotometricInterpretation represents the photometric interpretation of pixel data.
 // This corresponds to DICOM tag (0028,0004).
 type PhotometricInterpretation struct {
@@ -39,7 +46,7 @@ func ParsePhotometricInterpretation(value string) (*PhotometricInterpretation, e
 	value = strings.Trim(value, " \x00")
 
 	switch value {
-	case "MONOCHROME1":
+	case photometricMonochrome1:
 		return Monochrome1, nil
 	case "MONOCHROME", "MONOCHROME2":
 		return Monochrome2, nil
@@ -51,9 +58,9 @@ func ParsePhotometricInterpretation(value string) (*PhotometricInterpretation, e
 		return YbrFull, nil
 	case "YBR_FULL_422":
 		return YbrFull422, nil
-	case "YBR_PARTIAL_422":
+	case photometricYBRPartial422:
 		return YbrPartial422, nil
-	case "YBR_PARTIAL_420":
+	case photometricYBRPartial420:
 		return YbrPartial420, nil
 	case "YBR_ICT":
 		return YbrIct, nil
@@ -80,7 +87,7 @@ func MustParsePhotometricInterpretation(value string) *PhotometricInterpretation
 // value is intended to be displayed as white after any VOI gray scale transformations.
 // This value may be used only when Samples per Pixel (0028,0002) has a value of 1.
 var Monochrome1 = &PhotometricInterpretation{
-	Value:       "MONOCHROME1",
+	Value:       photometricMonochrome1,
 	Description: "Monochrome 1",
 	IsColor:     false,
 	IsPalette:   false,
@@ -167,7 +174,7 @@ var YbrFull422 = &PhotometricInterpretation{
 //	Cb = -0.1482*R - 0.2910*G + 0.4392*B + 128
 //	Cr = +0.4392*R - 0.3678*G - 0.0714*B + 128
 var YbrPartial422 = &PhotometricInterpretation{
-	Value:       "YBR_PARTIAL_422",
+	Value:       photometricYBRPartial422,
 	Description: "YBR Partial 4:2:2",
 	IsColor:     true,
 	IsPalette:   false,
@@ -179,7 +186,7 @@ var YbrPartial422 = &PhotometricInterpretation{
 // are sampled horizontally and vertically at half the Y rate (4:2:0 subsampling).
 // This results in four times less Cb and Cr values than Y values.
 var YbrPartial420 = &PhotometricInterpretation{
-	Value:       "YBR_PARTIAL_420",
+	Value:       photometricYBRPartial420,
 	Description: "YBR Partial 4:2:0",
 	IsColor:     true,
 	IsPalette:   false,

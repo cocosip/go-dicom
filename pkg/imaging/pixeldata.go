@@ -78,16 +78,16 @@ func (info *PixelDataInfo) UncompressedFrameSize() int {
 	if actualWidth%2 != 0 &&
 		info.PhotometricInterpretation != nil &&
 		(info.PhotometricInterpretation.Value == ybrFull422 ||
-			info.PhotometricInterpretation.Value == "YBR_PARTIAL_422" ||
-			info.PhotometricInterpretation.Value == "YBR_PARTIAL_420") {
+			info.PhotometricInterpretation.Value == photometricYBRPartial422 ||
+			info.PhotometricInterpretation.Value == photometricYBRPartial420) {
 		actualWidth++
 	}
 
 	// Handle YBR_FULL_422 special case for uncompressed data
 	if info.PhotometricInterpretation != nil &&
 		(info.PhotometricInterpretation.Value == ybrFull422 ||
-			info.PhotometricInterpretation.Value == "YBR_PARTIAL_422" ||
-			info.PhotometricInterpretation.Value == "YBR_PARTIAL_420") {
+			info.PhotometricInterpretation.Value == photometricYBRPartial422 ||
+			info.PhotometricInterpretation.Value == photometricYBRPartial420) {
 		// For uncompressed transfer syntaxes, chrominance channels are downsampled
 		return info.BytesAllocated() * 2 * actualWidth * int(info.Height)
 	}
@@ -376,11 +376,11 @@ func (pd *DicomPixelData) ConvertMonochrome1ToMonochrome2() error {
 	if pd.Info.Encapsulated {
 		return fmt.Errorf("cannot convert photometric on encapsulated data")
 	}
-	if pd.Info.PhotometricInterpretation == nil || pd.Info.PhotometricInterpretation.Value != "MONOCHROME1" {
+	if pd.Info.PhotometricInterpretation == nil || pd.Info.PhotometricInterpretation.Value != photometricMonochrome1 {
 		return nil
 	}
 	if pd.Info.SamplesPerPixel != 1 {
-		return fmt.Errorf("MONOCHROME1 expected SamplesPerPixel=1, got %d", pd.Info.SamplesPerPixel)
+		return fmt.Errorf("%s expected SamplesPerPixel=1, got %d", photometricMonochrome1, pd.Info.SamplesPerPixel)
 	}
 
 	bytesPerSample := pd.Info.BytesAllocated()
@@ -440,13 +440,13 @@ func (pd *DicomPixelData) ConvertYBRToRGB() error {
 			}
 			pd.frames[i] = converted
 		}
-	case "YBR_PARTIAL_422":
+	case photometricYBRPartial422:
 		if pd.Info.SamplesPerPixel != 3 {
-			return fmt.Errorf("YBR_PARTIAL_422 expected SamplesPerPixel=3, got %d", pd.Info.SamplesPerPixel)
+			return fmt.Errorf("%s expected SamplesPerPixel=3, got %d", photometricYBRPartial422, pd.Info.SamplesPerPixel)
 		}
 		width := int(pd.Info.Width)
 		if width == 0 {
-			return fmt.Errorf("YBR_PARTIAL_422 requires valid width")
+			return fmt.Errorf("%s requires valid width", photometricYBRPartial422)
 		}
 		for i, frame := range pd.frames {
 			converted, err := ConvertYBRPartial422ToRGB(frame, width)
@@ -458,7 +458,7 @@ func (pd *DicomPixelData) ConvertYBRToRGB() error {
 	case "YBR_ICT":
 		bytesPerSample := pd.Info.BytesAllocated()
 		for i, frame := range pd.frames {
-			converted, err := ConvertYBRICTToRGB(frame, int(bytesPerSample*8))
+			converted, err := ConvertYBRICTToRGB(frame, bytesPerSample*8)
 			if err != nil {
 				return fmt.Errorf("frame %d: %w", i, err)
 			}
@@ -467,7 +467,7 @@ func (pd *DicomPixelData) ConvertYBRToRGB() error {
 	case "YBR_RCT":
 		bytesPerSample := pd.Info.BytesAllocated()
 		for i, frame := range pd.frames {
-			converted, err := ConvertYBRRCTToRGB(frame, int(bytesPerSample*8))
+			converted, err := ConvertYBRRCTToRGB(frame, bytesPerSample*8)
 			if err != nil {
 				return fmt.Errorf("frame %d: %w", i, err)
 			}
@@ -492,7 +492,7 @@ func (pd *DicomPixelData) WindowTo8bit(center, width float64, ignorePadding bool
 
 // MinMax returns the minimum和maximum sample values across all frames.
 // If ignorePadding is true and PixelPaddingValue/(RangeLimit) is set, padding samples are skipped.
-func (pd *DicomPixelData) MinMax(ignorePadding bool) (min float64, max float64, err error) {
+func (pd *DicomPixelData) MinMax(ignorePadding bool) (minVal float64, maxVal float64, err error) {
 	return minMaxSamples(pd, ignorePadding)
 }
 
@@ -718,6 +718,8 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 //	    return err
 //	}
 //	image := imaging.NewDicomImage(pixelData)
+//
+//nolint:gocyclo // Complex function handling many DICOM variations
 func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 	// Extract required tags
 	rows, err := ds.GetUInt16(tag.Rows, 0)
@@ -991,6 +993,8 @@ func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 }
 
 // buildPaletteLUTFromDataset builds palette LUT using descriptors/data in the provided dataset (no sequence recursion).
+//
+//nolint:gocyclo // Complex function handling palette LUT variations
 func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
 	// Descriptors
 	rDesc, err := ds.GetUInt16(tag.RedPaletteColorLookupTableDescriptor, 0)
@@ -1265,28 +1269,6 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 	return frames, nil
 }
 
-// planarToInterleaved converts planar configuration 1 data to interleaved layout.
-func planarToInterleaved(src []byte, samplesPerPixel int, bytesPerSample int) ([]byte, error) {
-	if samplesPerPixel <= 1 {
-		return src, nil
-	}
-
-	pixelCount := len(src) / (samplesPerPixel * bytesPerSample)
-	if pixelCount == 0 {
-		return src, nil
-	}
-
-	dst := make([]byte, len(src))
-	for i := 0; i < pixelCount; i++ {
-		for s := 0; s < samplesPerPixel; s++ {
-			srcOffset := (s*pixelCount + i) * bytesPerSample
-			dstOffset := (i*samplesPerPixel + s) * bytesPerSample
-			copy(dst[dstOffset:dstOffset+bytesPerSample], src[srcOffset:srcOffset+bytesPerSample])
-		}
-	}
-	return dst, nil
-}
-
 // buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
 // populating the Basic Offset Table for multi-frame images.
 // If an existing BOT is provided and matches frames length, it is used; otherwise BOT is rebuilt.
@@ -1305,9 +1287,6 @@ func buildFragmentSequence(frames [][]byte, existingBOT []uint32) (*element.Othe
 	} else {
 		var runningOffset uint32
 		for i, frame := range frames {
-			if runningOffset > math.MaxUint32 {
-				return nil, fmt.Errorf("offset exceeds uint32 range at frame %d", i)
-			}
 			offsets = append(offsets, runningOffset)
 			if len(frame) > int(math.MaxUint32-runningOffset) {
 				return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
@@ -1325,118 +1304,4 @@ func buildFragmentSequence(frames [][]byte, existingBOT []uint32) (*element.Othe
 	}
 
 	return obf, nil
-}
-
-// ybrFullToRGB converts YBR_FULL (8-bit) interleaved data to RGB interleaved.
-func ybrFullToRGB(src []byte) ([]byte, error) {
-	if len(src)%3 != 0 {
-		return nil, fmt.Errorf("invalid YBR_FULL length %d", len(src))
-	}
-	dst := make([]byte, len(src))
-	for i := 0; i < len(src); i += 3 {
-		y := float64(src[i])
-		cb := float64(src[i+1])
-		cr := float64(src[i+2])
-		r := y + 1.4020*(cr-128)
-		g := y - 0.3441*(cb-128) - 0.7141*(cr-128)
-		b := y + 1.7720*(cb-128)
-		dst[i] = clampByte(int(r + 0.5))
-		dst[i+1] = clampByte(int(g + 0.5))
-		dst[i+2] = clampByte(int(b + 0.5))
-	}
-	return dst, nil
-}
-
-// ybrFull422ToRGB converts YBR_FULL_422 (8-bit) to RGB interleaved.
-// Input layout per two pixels: Y1 Y2 Cb Cr.
-func ybrFull422ToRGB(src []byte, width int) ([]byte, error) {
-	if width <= 0 {
-		return nil, fmt.Errorf("width must be positive")
-	}
-	if len(src)%4 != 0 {
-		return nil, fmt.Errorf("invalid YBR_FULL_422 length %d", len(src))
-	}
-	// Each group of 4 bytes yields 2 RGB pixels.
-	// Handle odd width by skipping the second pixel in the last odd position (fo-dicom behavior).
-	outPixels := (len(src) / 4) * 2
-	dst := make([]byte, outPixels*3)
-	var p int
-	col := 0
-	for i := 0; i < len(src); {
-		y1 := float64(src[i])
-		y2 := float64(src[i+1])
-		cb := float64(src[i+2])
-		cr := float64(src[i+3])
-		i += 4
-
-		// first pixel
-		dst[p] = clampByte(int(y1 + 1.4020*(cr-128) + 0.5))
-		dst[p+1] = clampByte(int(y1 - 0.3441*(cb-128) - 0.7141*(cr-128) + 0.5))
-		dst[p+2] = clampByte(int(y1 + 1.7720*(cb-128) + 0.5))
-		p += 3
-		col++
-		if col == width {
-			col = 0
-			continue
-		}
-
-		// second pixel (same Cb/Cr)
-		dst[p] = clampByte(int(y2 + 1.4020*(cr-128) + 0.5))
-		dst[p+1] = clampByte(int(y2 - 0.3441*(cb-128) - 0.7141*(cr-128) + 0.5))
-		dst[p+2] = clampByte(int(y2 + 1.7720*(cb-128) + 0.5))
-		p += 3
-		col++
-		if col == width {
-			col = 0
-		}
-	}
-	return dst[:p], nil
-}
-
-// ybrPartial422ToRGB converts YBR_PARTIAL_422 (8-bit, limited range) to RGB interleaved.
-// Input layout per two pixels: Y1 Y2 Cb Cr.
-func ybrPartial422ToRGB(src []byte, width int) ([]byte, error) {
-	if width <= 0 {
-		return nil, fmt.Errorf("width must be positive")
-	}
-	if len(src)%4 != 0 {
-		return nil, fmt.Errorf("invalid YBR_PARTIAL_422 length %d", len(src))
-	}
-	outPixels := (len(src) / 4) * 2
-	dst := make([]byte, outPixels*3)
-	var p int
-	col := 0
-	for i := 0; i < len(src); {
-		y1 := float64(src[i])
-		y2 := float64(src[i+1])
-		cb := float64(src[i+2])
-		cr := float64(src[i+3])
-		i += 4
-
-		r1 := 1.1644*(y1-16) + 1.5960*(cr-128)
-		g1 := 1.1644*(y1-16) - 0.3917*(cb-128) - 0.8130*(cr-128)
-		b1 := 1.1644*(y1-16) + 2.0173*(cb-128)
-		dst[p] = clampByte(int(r1 + 0.5))
-		dst[p+1] = clampByte(int(g1 + 0.5))
-		dst[p+2] = clampByte(int(b1 + 0.5))
-		p += 3
-		col++
-		if col == width {
-			col = 0
-			continue
-		}
-
-		r2 := 1.1644*(y2-16) + 1.5960*(cr-128)
-		g2 := 1.1644*(y2-16) - 0.3917*(cb-128) - 0.8130*(cr-128)
-		b2 := 1.1644*(y2-16) + 2.0173*(cb-128)
-		dst[p] = clampByte(int(r2 + 0.5))
-		dst[p+1] = clampByte(int(g2 + 0.5))
-		dst[p+2] = clampByte(int(b2 + 0.5))
-		p += 3
-		col++
-		if col == width {
-			col = 0
-		}
-	}
-	return dst[:p], nil
 }

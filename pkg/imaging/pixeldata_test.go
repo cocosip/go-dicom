@@ -547,12 +547,12 @@ func TestDicomPixelData_MinMaxIgnorePadding(t *testing.T) {
 		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
 	}
 
-	min, max, err := pd.MinMax(true)
+	minVal, maxVal, err := pd.MinMax(true)
 	if err != nil {
 		t.Fatalf("MinMax(ignorePadding=true) error = %v", err)
 	}
-	if min != 5 || max != 10 {
-		t.Fatalf("expected min=5 max=10, got min=%v max=%v", min, max)
+	if minVal != 5 || maxVal != 10 {
+		t.Fatalf("expected min=5 max=10, got min=%v max=%v", minVal, maxVal)
 	}
 
 	minAll, maxAll, err := pd.MinMax(false)

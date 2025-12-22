@@ -229,7 +229,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 //
 // Note: This method requires types.PixelData implementations that also support conversion
 // back to DICOM elements (e.g., DicomPixelData from the imaging package).
-func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
+func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.inputCodec == nil {
 		return nil, fmt.Errorf("no codec available for decoding %s", t.inputSyntax.UID().UID())
 	}
@@ -488,9 +488,6 @@ func buildFragmentSequence(frames [][]byte) (*element.OtherByteFragment, error) 
 	var offsets []uint32
 	var runningOffset uint32
 	for i, frame := range frames {
-		if runningOffset > math.MaxUint32 {
-			return nil, fmt.Errorf("offset exceeds uint32 range at frame %d", i)
-		}
 		offsets = append(offsets, runningOffset)
 
 		if len(frame) > int(math.MaxUint32-runningOffset) {

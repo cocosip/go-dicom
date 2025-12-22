@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom authors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//nolint:revive // "types" is a descriptive and appropriate package name for common imaging types
 package types
 
 // LUT is the interface for all Lookup Table implementations.
