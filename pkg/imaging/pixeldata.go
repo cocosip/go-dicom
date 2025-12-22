@@ -146,11 +146,15 @@ func (info *PixelDataInfo) Validate() error {
 }
 
 // DicomPixelData manages DICOM pixel data with support for multiple frames and codecs.
+// This type implements the types.PixelData interface.
 type DicomPixelData struct {
 	Info             *PixelDataInfo
 	frames           [][]byte // Per-frame data (uncompressed for native; compressed for encapsulated)
 	basicOffsetTable []uint32 // BOT for encapsulated data
 }
+
+// Ensure DicomPixelData implements types.PixelData interface
+var _ types.PixelData = (*DicomPixelData)(nil)
 
 // NewDicomPixelData creates a new DicomPixelData instance.
 func NewDicomPixelData(info *PixelDataInfo) (*DicomPixelData, error) {
@@ -290,16 +294,25 @@ func (pd *DicomPixelData) CalculateOptimalWindow() (center, width float64) {
 
 // AddFrame appends a new frame to the pixel data.
 func (pd *DicomPixelData) AddFrame(frameData []byte) error {
-	expectedSize := pd.Info.UncompressedFrameSize()
-	if len(frameData) < expectedSize {
-		return fmt.Errorf("frame data too small: got %d bytes, expected %d bytes",
-			len(frameData), expectedSize)
-	}
+	// For encapsulated (compressed) data, frames can be any size
+	// For uncompressed data, validate the frame size
+	if !pd.Info.Encapsulated {
+		expectedSize := pd.Info.UncompressedFrameSize()
+		if len(frameData) < expectedSize {
+			return fmt.Errorf("frame data too small: got %d bytes, expected %d bytes",
+				len(frameData), expectedSize)
+		}
 
-	// Copy the frame data
-	frame := make([]byte, expectedSize)
-	copy(frame, frameData)
-	pd.frames = append(pd.frames, frame)
+		// Copy the frame data (trim to expected size)
+		frame := make([]byte, expectedSize)
+		copy(frame, frameData)
+		pd.frames = append(pd.frames, frame)
+	} else {
+		// For encapsulated data, just copy the entire frame as-is
+		frame := make([]byte, len(frameData))
+		copy(frame, frameData)
+		pd.frames = append(pd.frames, frame)
+	}
 
 	// Update frame count
 	pd.Info.NumberOfFrames = len(pd.frames)
@@ -588,20 +601,16 @@ func (pd *DicomPixelData) BasicOffsetTable() []uint32 {
 	return pd.basicOffsetTable
 }
 
-// ToCodecPixelData converts DicomPixelData to codec.PixelData for codec operations.
-func (pd *DicomPixelData) ToCodecPixelData() *codec.PixelData {
+// GetFrameInfo returns frame metadata for codec operations.
+func (pd *DicomPixelData) GetFrameInfo() *types.FrameInfo {
 	piValue := ""
 	if pd.Info.PhotometricInterpretation != nil {
 		piValue = pd.Info.PhotometricInterpretation.Value
 	}
 
-	data := pd.GetAllFrames()
-
-	return &codec.PixelData{
-		Data:                      data,
+	return &types.FrameInfo{
 		Width:                     pd.Info.Width,
 		Height:                    pd.Info.Height,
-		NumberOfFrames:            pd.Info.NumberOfFrames,
 		BitsAllocated:             pd.Info.BitsAllocated,
 		BitsStored:                pd.Info.BitsStored,
 		HighBit:                   pd.Info.HighBit,
@@ -609,44 +618,17 @@ func (pd *DicomPixelData) ToCodecPixelData() *codec.PixelData {
 		PixelRepresentation:       uint16(pd.Info.PixelRepresentation),
 		PlanarConfiguration:       uint16(pd.Info.PlanarConfiguration),
 		PhotometricInterpretation: piValue,
-		TransferSyntaxUID:         pd.Info.TransferSyntaxUID,
 	}
 }
 
-// FromCodecPixelData updates DicomPixelData from codec.PixelData after codec operations.
-func (pd *DicomPixelData) FromCodecPixelData(codecData *codec.PixelData) error {
-	// Clear existing frames
-	pd.frames = make([][]byte, 0, pd.Info.NumberOfFrames)
-
-	// Split data into frames
-	frameSize := pd.Info.UncompressedFrameSize()
-	data := codecData.Data
-
-	for i := 0; i < pd.Info.NumberOfFrames; i++ {
-		start := i * frameSize
-		end := start + frameSize
-		if end > len(data) {
-			// Handle partial last frame
-			end = len(data)
-		}
-		if start >= len(data) {
-			break
-		}
-
-		frameData := make([]byte, frameSize)
-		copy(frameData, data[start:end])
-		pd.frames = append(pd.frames, frameData)
-	}
-
-	return nil
-}
-
-// Encode compresses the pixel data using the specified codec.
+// Encode encodes the pixel data using the specified codec and returns a new DicomPixelData.
 func (pd *DicomPixelData) Encode(c codec.Codec, params codec.Parameters) (*DicomPixelData, error) {
-	src := pd.ToCodecPixelData()
+	if c == nil {
+		return nil, fmt.Errorf("codec must not be nil")
+	}
 
-	// Create destination with same metadata
-	dst := &codec.PixelData{
+	// Create new pixel data info for encoded data
+	newInfo := &PixelDataInfo{
 		Width:                     pd.Info.Width,
 		Height:                    pd.Info.Height,
 		NumberOfFrames:            pd.Info.NumberOfFrames,
@@ -654,37 +636,40 @@ func (pd *DicomPixelData) Encode(c codec.Codec, params codec.Parameters) (*Dicom
 		BitsStored:                pd.Info.BitsStored,
 		HighBit:                   pd.Info.HighBit,
 		SamplesPerPixel:           pd.Info.SamplesPerPixel,
-		PixelRepresentation:       uint16(pd.Info.PixelRepresentation),
-		PlanarConfiguration:       uint16(pd.Info.PlanarConfiguration),
-		PhotometricInterpretation: pd.Info.PhotometricInterpretation.Value,
+		PixelRepresentation:       pd.Info.PixelRepresentation,
+		PlanarConfiguration:       pd.Info.PlanarConfiguration,
+		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
+		VRCode:                    "OB", // Encoded data typically uses OB
+		Encapsulated:              c.TransferSyntax().IsEncapsulated(),
+		TransferSyntaxUID:         c.TransferSyntax().UID().UID(),
+		IsLossy:                   pd.Info.IsLossy,
+		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
+		LossyCompressionRatio:     pd.Info.LossyCompressionRatio,
+		PixelPaddingValue:         pd.Info.PixelPaddingValue,
+		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
 	}
 
-	// Encode
-	err := c.Encode(src, dst, params)
+	newPD, err := NewDicomPixelData(newInfo)
 	if err != nil {
-		return nil, fmt.Errorf("encode failed: %w", err)
+		return nil, fmt.Errorf("failed to create new pixel data: %w", err)
 	}
 
-	// Create new DicomPixelData from encoded result
-	// Note: For compressed data, we can't easily split into frames,
-	// so we store the entire compressed data as a single blob
-	encodedInfo := *pd.Info
-	result, err := NewDicomPixelData(&encodedInfo)
-	if err != nil {
-		return nil, err
+	// Use the codec to encode
+	if err := c.Encode(pd, newPD, params); err != nil {
+		return nil, fmt.Errorf("failed to encode pixel data: %w", err)
 	}
 
-	// For compressed data, add all data as a single "frame"
-	// This is a simplification - in reality, compressed data needs special handling
-	result.frames = [][]byte{dst.Data}
-
-	return result, nil
+	return newPD, nil
 }
 
-// Decode decompresses the pixel data using the specified codec.
+// Decode decodes the pixel data using the specified codec and returns a new DicomPixelData.
 func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*DicomPixelData, error) {
-	src := &codec.PixelData{
-		Data:                      pd.GetAllFrames(),
+	if c == nil {
+		return nil, fmt.Errorf("codec must not be nil")
+	}
+
+	// Create new pixel data info for decoded data
+	newInfo := &PixelDataInfo{
 		Width:                     pd.Info.Width,
 		Height:                    pd.Info.Height,
 		NumberOfFrames:            pd.Info.NumberOfFrames,
@@ -692,38 +677,30 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 		BitsStored:                pd.Info.BitsStored,
 		HighBit:                   pd.Info.HighBit,
 		SamplesPerPixel:           pd.Info.SamplesPerPixel,
-		PixelRepresentation:       uint16(pd.Info.PixelRepresentation),
-		PlanarConfiguration:       uint16(pd.Info.PlanarConfiguration),
-		PhotometricInterpretation: pd.Info.PhotometricInterpretation.Value,
+		PixelRepresentation:       pd.Info.PixelRepresentation,
+		PlanarConfiguration:       pd.Info.PlanarConfiguration,
+		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
+		VRCode:                    pd.Info.VRCode, // Keep original VR
+		Encapsulated:              false,          // Decoded data is not encapsulated
+		TransferSyntaxUID:         "1.2.840.10008.1.2.1", // Explicit VR Little Endian
+		IsLossy:                   pd.Info.IsLossy,
+		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
+		LossyCompressionRatio:     pd.Info.LossyCompressionRatio,
+		PixelPaddingValue:         pd.Info.PixelPaddingValue,
+		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
 	}
 
-	dst := &codec.PixelData{
-		Width:                     pd.Info.Width,
-		Height:                    pd.Info.Height,
-		NumberOfFrames:            pd.Info.NumberOfFrames,
-		BitsAllocated:             pd.Info.BitsAllocated,
-		BitsStored:                pd.Info.BitsStored,
-		HighBit:                   pd.Info.HighBit,
-		SamplesPerPixel:           pd.Info.SamplesPerPixel,
-		PixelRepresentation:       uint16(pd.Info.PixelRepresentation),
-		PlanarConfiguration:       uint16(pd.Info.PlanarConfiguration),
-		PhotometricInterpretation: pd.Info.PhotometricInterpretation.Value,
-	}
-
-	// Decode
-	err := c.Decode(src, dst, params)
+	newPD, err := NewDicomPixelData(newInfo)
 	if err != nil {
-		return nil, fmt.Errorf("decode failed: %w", err)
+		return nil, fmt.Errorf("failed to create new pixel data: %w", err)
 	}
 
-	// Create new DicomPixelData from decoded result
-	decodedInfo := *pd.Info
-	result, err := NewDicomPixelDataFromBytes(&decodedInfo, dst.Data)
-	if err != nil {
-		return nil, err
+	// Use the codec to decode
+	if err := c.Decode(pd, newPD, params); err != nil {
+		return nil, fmt.Errorf("failed to decode pixel data: %w", err)
 	}
 
-	return result, nil
+	return newPD, nil
 }
 
 // CreatePixelData creates a new DicomPixelData from a DICOM dataset.

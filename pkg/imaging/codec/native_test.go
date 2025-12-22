@@ -6,6 +6,8 @@ package codec
 import (
 	"bytes"
 	"testing"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 )
 
 func TestNativeCodec_Name(t *testing.T) {
@@ -41,11 +43,9 @@ func TestNativeCodec_EncodeDecode8Bit(t *testing.T) {
 	// 8-bit grayscale image data (no swapping needed)
 	pixelData := []byte{0, 10, 20, 30, 40, 50, 60, 70, 80, 90}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     10,
 		Height:                    1,
-		NumberOfFrames:            1,
 		BitsAllocated:             8,
 		BitsStored:                8,
 		HighBit:                   7,
@@ -55,49 +55,32 @@ func TestNativeCodec_EncodeDecode8Bit(t *testing.T) {
 		PhotometricInterpretation: "MONOCHROME2",
 	}
 
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
+
 	// Encode (should be a simple copy for 8-bit)
-	encoded := &PixelData{
-		Width:                     10,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	encoded := newTestPixelData(frameInfo)
 
 	err := codec.Encode(src, encoded, nil)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, encoded.Data) {
+	encodedData, _ := encoded.GetFrame(0)
+	if !bytes.Equal(pixelData, encodedData) {
 		t.Error("Encoded 8-bit data does not match original")
 	}
 
 	// Decode
-	decoded := &PixelData{
-		Width:                     10,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err = codec.Decode(encoded, decoded, nil)
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, decoded.Data) {
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(pixelData, decodedData) {
 		t.Error("Decoded 8-bit data does not match original")
 	}
 }
@@ -113,11 +96,9 @@ func TestNativeCodec_EncodeDecode16Bit(t *testing.T) {
 		0x00, 0x04, // 1024
 	}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     4,
 		Height:                    1,
-		NumberOfFrames:            1,
 		BitsAllocated:             16,
 		BitsStored:                16,
 		HighBit:                   15,
@@ -127,49 +108,32 @@ func TestNativeCodec_EncodeDecode16Bit(t *testing.T) {
 		PhotometricInterpretation: "MONOCHROME2",
 	}
 
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
+
 	// Encode without swapping
-	encoded := &PixelData{
-		Width:                     4,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	encoded := newTestPixelData(frameInfo)
 
 	err := codec.Encode(src, encoded, nil)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, encoded.Data) {
+	encodedData, _ := encoded.GetFrame(0)
+	if !bytes.Equal(pixelData, encodedData) {
 		t.Error("Encoded 16-bit data does not match original")
 	}
 
 	// Decode
-	decoded := &PixelData{
-		Width:                     4,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err = codec.Decode(encoded, decoded, nil)
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, decoded.Data) {
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(pixelData, decodedData) {
 		t.Error("Decoded 16-bit data does not match original")
 	}
 }
@@ -183,11 +147,9 @@ func TestNativeCodec_ByteSwapping16Bit(t *testing.T) {
 		0x56, 0x78, // 0x7856 in LE
 	}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     2,
 		Height:                    1,
-		NumberOfFrames:            1,
 		BitsAllocated:             16,
 		BitsStored:                16,
 		HighBit:                   15,
@@ -196,23 +158,15 @@ func TestNativeCodec_ByteSwapping16Bit(t *testing.T) {
 		PlanarConfiguration:       0,
 		PhotometricInterpretation: "MONOCHROME2",
 	}
+
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
 
 	// Encode with byte swapping
 	params := NewBaseParameters()
 	params.SetParameter("swap_bytes", true)
 
-	encoded := &PixelData{
-		Width:                     2,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	encoded := newTestPixelData(frameInfo)
 
 	err := codec.Encode(src, encoded, params)
 	if err != nil {
@@ -221,31 +175,22 @@ func TestNativeCodec_ByteSwapping16Bit(t *testing.T) {
 
 	// Check that bytes are swapped
 	expected := []byte{0x34, 0x12, 0x78, 0x56}
-	if !bytes.Equal(expected, encoded.Data) {
-		t.Errorf("Swapped data = %v, want %v", encoded.Data, expected)
+	encodedData, _ := encoded.GetFrame(0)
+	if !bytes.Equal(expected, encodedData) {
+		t.Errorf("Swapped data = %v, want %v", encodedData, expected)
 	}
 
 	// Decode with byte swapping should restore original
-	decoded := &PixelData{
-		Width:                     2,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err = codec.Decode(encoded, decoded, params)
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, decoded.Data) {
-		t.Errorf("Decoded data = %v, want %v", decoded.Data, pixelData)
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(pixelData, decodedData) {
+		t.Errorf("Decoded data = %v, want %v", decodedData, pixelData)
 	}
 }
 
@@ -258,11 +203,9 @@ func TestNativeCodec_BigEndian(t *testing.T) {
 		0x56, 0x78, // 0x5678 in BE
 	}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     2,
 		Height:                    1,
-		NumberOfFrames:            1,
 		BitsAllocated:             16,
 		BitsStored:                16,
 		HighBit:                   15,
@@ -272,19 +215,11 @@ func TestNativeCodec_BigEndian(t *testing.T) {
 		PhotometricInterpretation: "MONOCHROME2",
 	}
 
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
+
 	// Decode (should swap to little endian by default for big endian codec)
-	decoded := &PixelData{
-		Width:                     2,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err := codec.Decode(src, decoded, nil)
 	if err != nil {
@@ -293,8 +228,9 @@ func TestNativeCodec_BigEndian(t *testing.T) {
 
 	// Should be swapped to little endian
 	expected := []byte{0x34, 0x12, 0x78, 0x56}
-	if !bytes.Equal(expected, decoded.Data) {
-		t.Errorf("Decoded BE data = %v, want %v", decoded.Data, expected)
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(expected, decodedData) {
+		t.Errorf("Decoded BE data = %v, want %v", decodedData, expected)
 	}
 }
 

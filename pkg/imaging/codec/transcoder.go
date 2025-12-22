@@ -11,6 +11,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -147,6 +148,8 @@ func (t *Transcoder) Transcode(ds *dataset.Dataset) (*dataset.Dataset, error) {
 }
 
 // DecodeFrame decodes a single frame from compressed pixel data.
+// This follows fo-dicom's pattern of creating a temporary PixelData with one frame,
+// then using the high-level Decode method.
 func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, error) {
 	// Check if pixel data exists
 	pixelDataElem, exists := ds.Get(tag.PixelData)
@@ -183,36 +186,27 @@ func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, e
 			t.inputSyntax.UID().UID())
 	}
 
-	// Build PixelData for decoding
-	srcPixelData, err := t.buildPixelDataFromDataset(ds)
+	// Build frame info from dataset
+	frameInfo, err := t.buildFrameInfoFromDataset(ds)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build pixel data: %w", err)
+		return nil, fmt.Errorf("failed to build frame info: %w", err)
 	}
 
-	srcPixelData.Data = compressedFrame
-	srcPixelData.NumberOfFrames = 1
-
-	// Create destination pixel data
-	dstPixelData := &PixelData{
-		Width:                     srcPixelData.Width,
-		Height:                    srcPixelData.Height,
-		NumberOfFrames:            1,
-		BitsAllocated:             srcPixelData.BitsAllocated,
-		BitsStored:                srcPixelData.BitsStored,
-		HighBit:                   srcPixelData.HighBit,
-		SamplesPerPixel:           srcPixelData.SamplesPerPixel,
-		PixelRepresentation:       srcPixelData.PixelRepresentation,
-		PlanarConfiguration:       srcPixelData.PlanarConfiguration,
-		PhotometricInterpretation: srcPixelData.PhotometricInterpretation,
-		TransferSyntaxUID:         t.outputSyntax.UID().UID(),
+	// Create temporary PixelData with only this frame (fo-dicom pattern)
+	oldPixelData := newSimplePixelData(frameInfo, true) // encapsulated=true
+	if err := oldPixelData.AddFrame(compressedFrame); err != nil {
+		return nil, fmt.Errorf("failed to add frame: %w", err)
 	}
 
-	// Decode
-	if err := t.inputCodec.Decode(srcPixelData, dstPixelData, t.inputParams); err != nil {
+	newPixelData := newSimplePixelData(frameInfo, false) // encapsulated=false
+
+	// Decode using high-level codec method
+	if err := t.inputCodec.Decode(oldPixelData, newPixelData, t.inputParams); err != nil {
 		return nil, fmt.Errorf("failed to decode frame: %w", err)
 	}
 
-	return dstPixelData.Data, nil
+	// Return the decoded frame
+	return newPixelData.GetFrame(0)
 }
 
 // transcodeUncompressedToUncompressed handles conversion between uncompressed formats.
@@ -229,21 +223,28 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 	return newDS, nil
 }
 
-// decode decompresses pixel data from a dataset.
+// decode decompresses pixel data from a dataset using the high-level codec.Decode method.
+// This follows the fo-dicom pattern of creating complete PixelData objects and using
+// the codec's Decode method instead of frame-by-frame processing.
+//
+// Note: This method requires types.PixelData implementations that also support conversion
+// back to DICOM elements (e.g., DicomPixelData from the imaging package).
 func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.inputCodec == nil {
 		return nil, fmt.Errorf("no codec available for decoding %s", t.inputSyntax.UID().UID())
 	}
 
-	// Build source pixel data
-	srcPixelData, err := t.buildPixelDataFromDataset(ds)
+	// Build frame info from dataset
+	frameInfo, err := t.buildFrameInfoFromDataset(ds)
 	if err != nil {
 		return nil, err
 	}
 
-	// Extract compressed data from fragment sequence (per-frame)
-	pixelDataElem, _ := ds.Get(tag.PixelData)
+	// Create temporary PixelData objects using testPixelData helper (same as DecodeFrame pattern)
+	// This allows us to use the high-level codec.Decode without a circular dependency
 
+	// Extract compressed pixel data
+	pixelDataElem, _ := ds.Get(tag.PixelData)
 	var fragments []buffer.ByteBuffer
 	var offsetTable []uint32
 
@@ -259,7 +260,10 @@ func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	}
 
 	// Determine frame count
-	frameCount := srcPixelData.NumberOfFrames
+	frameCount := 1
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil { 
+		frameCount = int(nf)
+	}
 	if frameCount < 1 {
 		frameCount = len(fragments)
 	}
@@ -267,59 +271,44 @@ func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 		frameCount = 1
 	}
 
-	// Build compressed frames either from offset table or one-fragment-per-frame
+	// Build compressed frames from offset table or one-fragment-per-frame
 	compressedFrames, err := framesFromFragments(fragments, offsetTable, frameCount)
 	if err != nil {
 		return nil, err
 	}
 
-	// Decode frame by frame and rebuild uncompressed buffer
-	var uncompressedData []byte
-	for i, compressedFrame := range compressedFrames {
-		frameSrc := &PixelData{
-			Data:                      compressedFrame,
-			Width:                     srcPixelData.Width,
-			Height:                    srcPixelData.Height,
-			NumberOfFrames:            1,
-			BitsAllocated:             srcPixelData.BitsAllocated,
-			BitsStored:                srcPixelData.BitsStored,
-			HighBit:                   srcPixelData.HighBit,
-			SamplesPerPixel:           srcPixelData.SamplesPerPixel,
-			PixelRepresentation:       srcPixelData.PixelRepresentation,
-			PlanarConfiguration:       srcPixelData.PlanarConfiguration,
-			PhotometricInterpretation: srcPixelData.PhotometricInterpretation,
-			TransferSyntaxUID:         t.inputSyntax.UID().UID(),
+	// Create old PixelData with all compressed frames
+	oldPixelData := newSimplePixelData(frameInfo, true) // encapsulated=true
+	for _, frame := range compressedFrames {
+		if err := oldPixelData.AddFrame(frame); err != nil {
+			return nil, fmt.Errorf("failed to add frame to oldPixelData: %w", err)
 		}
+	}
 
-		frameDst := &PixelData{
-			Width:                     srcPixelData.Width,
-			Height:                    srcPixelData.Height,
-			NumberOfFrames:            1,
-			BitsAllocated:             srcPixelData.BitsAllocated,
-			BitsStored:                srcPixelData.BitsStored,
-			HighBit:                   srcPixelData.HighBit,
-			SamplesPerPixel:           srcPixelData.SamplesPerPixel,
-			PixelRepresentation:       srcPixelData.PixelRepresentation,
-			PlanarConfiguration:       srcPixelData.PlanarConfiguration,
-			PhotometricInterpretation: srcPixelData.PhotometricInterpretation,
-			TransferSyntaxUID:         outputTS.UID().UID(),
-		}
+	// Create new PixelData for decoded output
+	newPixelData := newSimplePixelData(frameInfo, false) // encapsulated=false
 
-		if err := t.inputCodec.Decode(frameSrc, frameDst, t.inputParams); err != nil {
-			return nil, fmt.Errorf("decode failed for frame %d: %w", i, err)
-		}
-
-		uncompressedData = append(uncompressedData, frameDst.Data...)
+	// Use the high-level codec.Decode method
+	if err := t.inputCodec.Decode(oldPixelData, newPixelData, t.inputParams); err != nil {
+		return nil, fmt.Errorf("failed to decode pixel data: %w", err)
 	}
 
 	// Create new dataset with decoded pixel data
 	newDS := ds.Clone()
-
-	// Remove old pixel data
 	newDS.Remove(tag.PixelData)
 
+	// Reconstruct uncompressed pixel data from decoded frames
+	var uncompressedData []byte
+	for i := 0; i < newPixelData.FrameCount(); i++ {
+		frameData, err := newPixelData.GetFrame(i)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get decoded frame %d: %w", i, err)
+		}
+		uncompressedData = append(uncompressedData, frameData...)
+	}
+
 	// Add uncompressed pixel data
-	if srcPixelData.BitsAllocated <= 8 {
+	if frameInfo.BitsAllocated <= 8 {
 		_ = newDS.Add(element.NewOtherByte(tag.PixelData, uncompressedData))
 	} else {
 		_ = newDS.Add(element.NewOtherWord(tag.PixelData, uncompressedData))
@@ -328,74 +317,77 @@ func (t *Transcoder) decode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	return newDS, nil
 }
 
-// encode compresses pixel data from a dataset.
+// encode compresses pixel data from a dataset using the high-level codec.Encode method.
+// This follows the fo-dicom pattern of creating complete PixelData objects and using
+// the codec's Encode method instead of frame-by-frame processing.
 func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.outputCodec == nil {
 		return nil, fmt.Errorf("no codec available for encoding to %s", outputTS.UID().UID())
 	}
 
-	// Build source pixel data
-	srcPixelData, err := t.buildPixelDataFromDataset(ds)
+	// Build frame info from dataset
+	frameInfo, err := t.buildFrameInfoFromDataset(ds)
 	if err != nil {
 		return nil, err
 	}
 
-	frameSize := srcPixelData.UncompressedFrameSize()
+	// Extract uncompressed pixel data
+	pixelDataElem, _ := ds.Get(tag.PixelData)
+	var pixelData []byte
+	switch elem := pixelDataElem.(type) {
+	case *element.OtherByte:
+		pixelData = elem.GetData()
+	case *element.OtherWord:
+		pixelData = elem.GetData()
+	default:
+		return nil, fmt.Errorf("unexpected pixel data element type for uncompressed data")
+	}
+
+	// Determine frame count
+	frameCount := 1
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
+		frameCount = int(nf)
+	}
+
+	// Calculate frame size
+	bytesAllocated := int((frameInfo.BitsAllocated - 1) / 8 + 1)
+	frameSize := bytesAllocated * int(frameInfo.SamplesPerPixel) * int(frameInfo.Width) * int(frameInfo.Height)
 	if frameSize <= 0 {
 		return nil, fmt.Errorf("invalid frame size calculated")
 	}
 
-	totalFrames := srcPixelData.NumberOfFrames
-	if totalFrames < 1 {
-		totalFrames = 1
-	}
-
-	if len(srcPixelData.Data) < totalFrames*frameSize {
-		return nil, fmt.Errorf("pixel data length %d smaller than expected %d for %d frame(s)",
-			len(srcPixelData.Data), totalFrames*frameSize, totalFrames)
-	}
-
-	var frameFragments [][]byte
-
-	for i := 0; i < totalFrames; i++ {
+	// Split uncompressed data into frames
+	oldPixelData := newSimplePixelData(frameInfo, false) // encapsulated=false
+	for i := 0; i < frameCount; i++ {
 		start := i * frameSize
 		end := start + frameSize
-		frameData := srcPixelData.Data[start:end]
-
-		frameSrc := &PixelData{
-			Data:                      frameData,
-			Width:                     srcPixelData.Width,
-			Height:                    srcPixelData.Height,
-			NumberOfFrames:            1,
-			BitsAllocated:             srcPixelData.BitsAllocated,
-			BitsStored:                srcPixelData.BitsStored,
-			HighBit:                   srcPixelData.HighBit,
-			SamplesPerPixel:           srcPixelData.SamplesPerPixel,
-			PixelRepresentation:       srcPixelData.PixelRepresentation,
-			PlanarConfiguration:       srcPixelData.PlanarConfiguration,
-			PhotometricInterpretation: srcPixelData.PhotometricInterpretation,
-			TransferSyntaxUID:         srcPixelData.TransferSyntaxUID,
+		if end > len(pixelData) {
+			end = len(pixelData)
 		}
-
-		frameDst := &PixelData{
-			Width:                     srcPixelData.Width,
-			Height:                    srcPixelData.Height,
-			NumberOfFrames:            1,
-			BitsAllocated:             srcPixelData.BitsAllocated,
-			BitsStored:                srcPixelData.BitsStored,
-			HighBit:                   srcPixelData.HighBit,
-			SamplesPerPixel:           srcPixelData.SamplesPerPixel,
-			PixelRepresentation:       srcPixelData.PixelRepresentation,
-			PlanarConfiguration:       srcPixelData.PlanarConfiguration,
-			PhotometricInterpretation: srcPixelData.PhotometricInterpretation,
-			TransferSyntaxUID:         outputTS.UID().UID(),
+		if start < len(pixelData) {
+			frameData := pixelData[start:end]
+			if err := oldPixelData.AddFrame(frameData); err != nil {
+				return nil, fmt.Errorf("failed to add frame to oldPixelData: %w", err)
+			}
 		}
+	}
 
-		if err := t.outputCodec.Encode(frameSrc, frameDst, t.outputParams); err != nil {
-			return nil, fmt.Errorf("encode failed on frame %d: %w", i, err)
+	// Create new PixelData for encoded output
+	newPixelData := newSimplePixelData(frameInfo, true) // encapsulated=true
+
+	// Use the high-level codec.Encode method
+	if err := t.outputCodec.Encode(oldPixelData, newPixelData, t.outputParams); err != nil {
+		return nil, fmt.Errorf("failed to encode pixel data: %w", err)
+	}
+
+	// Collect encoded frames and build fragment sequence
+	var frameFragments [][]byte
+	for i := 0; i < newPixelData.FrameCount(); i++ {
+		frameData, err := newPixelData.GetFrame(i)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get encoded frame %d: %w", i, err)
 		}
-
-		frameFragments = append(frameFragments, frameDst.Data)
+		frameFragments = append(frameFragments, frameData)
 	}
 
 	obf, err := buildFragmentSequence(frameFragments)
@@ -405,11 +397,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 
 	// Create new dataset with encoded pixel data
 	newDS := ds.Clone()
-
-	// Remove old pixel data
 	newDS.Remove(tag.PixelData)
-
-	// Add compressed pixel data as fragment sequence
 	_ = newDS.Add(obf)
 
 	return newDS, nil
@@ -520,10 +508,10 @@ func buildFragmentSequence(frames [][]byte) (*element.OtherByteFragment, error) 
 	return obf, nil
 }
 
-// buildPixelDataFromDataset extracts pixel data information from a dataset.
-func (t *Transcoder) buildPixelDataFromDataset(ds *dataset.Dataset) (*PixelData, error) {
-	// Extract pixel data element
-	pixelDataElem, exists := ds.Get(tag.PixelData)
+// buildFrameInfoFromDataset extracts frame metadata from a dataset.
+func (t *Transcoder) buildFrameInfoFromDataset(ds *dataset.Dataset) (*types.FrameInfo, error) {
+	// Extract pixel data element to verify it exists
+	_, exists := ds.Get(tag.PixelData)
 	if !exists {
 		return nil, fmt.Errorf("dataset does not contain pixel data")
 	}
@@ -531,12 +519,6 @@ func (t *Transcoder) buildPixelDataFromDataset(ds *dataset.Dataset) (*PixelData,
 	// Extract image attributes using dataset accessors
 	width := ds.TryGetUInt16(tag.Columns, 0)
 	height := ds.TryGetUInt16(tag.Rows, 0)
-
-	// NumberOfFrames is often stored as IS (Integer String), try int32 first
-	frames := int32(1)
-	if val, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
-		frames = val
-	}
 
 	bitsAlloc := ds.TryGetUInt16(tag.BitsAllocated, 0)
 	bitsStored := ds.TryGetUInt16(tag.BitsStored, 0)
@@ -562,10 +544,9 @@ func (t *Transcoder) buildPixelDataFromDataset(ds *dataset.Dataset) (*PixelData,
 		photometric = "MONOCHROME2"
 	}
 
-	pd := &PixelData{
+	return &types.FrameInfo{
 		Width:                     width,
 		Height:                    height,
-		NumberOfFrames:            int(frames),
 		BitsAllocated:             bitsAlloc,
 		BitsStored:                bitsStored,
 		HighBit:                   highBit,
@@ -573,44 +554,47 @@ func (t *Transcoder) buildPixelDataFromDataset(ds *dataset.Dataset) (*PixelData,
 		PixelRepresentation:       pixelRep,
 		PlanarConfiguration:       planarConfig,
 		PhotometricInterpretation: photometric,
-		TransferSyntaxUID:         t.inputSyntax.UID().UID(),
-	}
-
-	// Extract data
-	switch elem := pixelDataElem.(type) {
-	case *element.OtherByte:
-		pd.Data = elem.GetData()
-	case *element.OtherWord:
-		pd.Data = elem.GetData()
-	case *element.OtherByteFragment:
-		// Will be handled by decode function
-	case *element.OtherWordFragment:
-		// Will be handled by decode function
-	default:
-		return nil, fmt.Errorf("unexpected pixel data element type: %T", elem)
-	}
-
-	return pd, nil
+	}, nil
 }
 
 // extractUncompressedFrame extracts a single frame from uncompressed pixel data.
 func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex int) ([]byte, error) {
-	pixelData, err := t.buildPixelDataFromDataset(ds)
+	frameInfo, err := t.buildFrameInfoFromDataset(ds)
 	if err != nil {
 		return nil, err
 	}
 
-	if frameIndex >= pixelData.NumberOfFrames {
-		return nil, fmt.Errorf("frame index %d out of range (0-%d)",
-			frameIndex, pixelData.NumberOfFrames-1)
+	// Get frame count
+	frameCount := 1
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
+		frameCount = int(nf)
 	}
 
-	frameSize := pixelData.UncompressedFrameSize()
+	if frameIndex >= frameCount {
+		return nil, fmt.Errorf("frame index %d out of range (0-%d)",
+			frameIndex, frameCount-1)
+	}
+
+	// Extract pixel data
+	pixelDataElem, _ := ds.Get(tag.PixelData)
+	var pixelData []byte
+	switch elem := pixelDataElem.(type) {
+	case *element.OtherByte:
+		pixelData = elem.GetData()
+	case *element.OtherWord:
+		pixelData = elem.GetData()
+	default:
+		return nil, fmt.Errorf("unexpected pixel data element type")
+	}
+
+	// Calculate frame size
+	bytesAllocated := int((frameInfo.BitsAllocated-1)/8 + 1)
+	frameSize := bytesAllocated * int(frameInfo.SamplesPerPixel) * int(frameInfo.Width) * int(frameInfo.Height)
 	offset := frameIndex * frameSize
 
-	if offset+frameSize > len(pixelData.Data) {
+	if offset+frameSize > len(pixelData) {
 		return nil, fmt.Errorf("frame data out of bounds")
 	}
 
-	return pixelData.Data[offset : offset+frameSize], nil
+	return pixelData[offset : offset+frameSize], nil
 }

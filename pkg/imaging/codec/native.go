@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 )
 
 // NativeCodec handles uncompressed pixel data with various transfer syntaxes.
@@ -65,20 +66,87 @@ func (c *NativeCodec) TransferSyntax() *transfer.Syntax {
 	return c.transferSyntax
 }
 
-// Encode copies and optionally swaps byte order of pixel data.
-// For uncompressed data, encoding is primarily a byte-order conversion.
-func (c *NativeCodec) Encode(src *PixelData, dst *PixelData, params Parameters) error {
-	if src == nil || dst == nil {
+// GetDefaultParameters returns default parameters for this codec.
+func (c *NativeCodec) GetDefaultParameters() Parameters {
+	return NewBaseParameters()
+}
+
+// Encode encodes pixel data from oldPixelData to newPixelData.
+// For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
+func (c *NativeCodec) Encode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
 
-	// For uncompressed data, we need to handle byte swapping if necessary
-	bytesPerSample := src.BytesAllocated()
+	frameInfo := oldPixelData.GetFrameInfo()
+	frameCount := oldPixelData.FrameCount()
+
+	// Process each frame
+	for i := 0; i < frameCount; i++ {
+		srcFrame, err := oldPixelData.GetFrame(i)
+		if err != nil {
+			return fmt.Errorf("failed to get frame %d: %w", i, err)
+		}
+
+		var dstFrame []byte
+		if err := c.encodeFrame(srcFrame, &dstFrame, frameInfo, parameters); err != nil {
+			return fmt.Errorf("failed to encode frame %d: %w", i, err)
+		}
+
+		if err := newPixelData.AddFrame(dstFrame); err != nil {
+			return fmt.Errorf("failed to add frame %d: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// Decode decodes pixel data from oldPixelData to newPixelData.
+// For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
+func (c *NativeCodec) Decode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+	if oldPixelData == nil || newPixelData == nil {
+		return fmt.Errorf("source and destination pixel data must not be nil")
+	}
+
+	frameInfo := oldPixelData.GetFrameInfo()
+	frameCount := oldPixelData.FrameCount()
+
+	// Process each frame
+	for i := 0; i < frameCount; i++ {
+		srcFrame, err := oldPixelData.GetFrame(i)
+		if err != nil {
+			return fmt.Errorf("failed to get frame %d: %w", i, err)
+		}
+
+		var dstFrame []byte
+		if err := c.decodeFrame(srcFrame, &dstFrame, frameInfo, parameters); err != nil {
+			return fmt.Errorf("failed to decode frame %d: %w", i, err)
+		}
+
+		if err := newPixelData.AddFrame(dstFrame); err != nil {
+			return fmt.Errorf("failed to add frame %d: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// encodeFrame encodes a single frame (internal helper method).
+func (c *NativeCodec) encodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, params Parameters) error {
+	if len(src) == 0 {
+		return fmt.Errorf("source frame data must not be empty")
+	}
+	if info == nil {
+		return fmt.Errorf("frame info must not be nil")
+	}
+
+	// Calculate bytes per sample from frame info
+	bytesPerSample := int((info.BitsAllocated-1)/8 + 1)
 
 	// If single-byte samples, no swapping needed
 	if bytesPerSample == 1 {
-		dst.Data = make([]byte, len(src.Data))
-		copy(dst.Data, src.Data)
+		*dst = make([]byte, len(src))
+		copy(*dst, src)
 		return nil
 	}
 
@@ -92,32 +160,34 @@ func (c *NativeCodec) Encode(src *PixelData, dst *PixelData, params Parameters) 
 		}
 	}
 
-	dst.Data = make([]byte, len(src.Data))
+	*dst = make([]byte, len(src))
 
 	if !shouldSwap {
 		// No swapping, just copy
-		copy(dst.Data, src.Data)
+		copy(*dst, src)
 		return nil
 	}
 
 	// Swap bytes based on sample size
-	return c.swapBytes(src.Data, dst.Data, bytesPerSample)
+	return c.swapBytes(src, *dst, bytesPerSample)
 }
 
-// Decode copies and optionally swaps byte order of pixel data.
-// For uncompressed data, decoding is primarily a byte-order conversion.
-func (c *NativeCodec) Decode(src *PixelData, dst *PixelData, params Parameters) error {
-	if src == nil || dst == nil {
-		return fmt.Errorf("source and destination pixel data must not be nil")
+// decodeFrame decodes a single frame (internal helper method).
+func (c *NativeCodec) decodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, params Parameters) error {
+	if len(src) == 0 {
+		return fmt.Errorf("source frame data must not be empty")
+	}
+	if info == nil {
+		return fmt.Errorf("frame info must not be nil")
 	}
 
-	// For uncompressed data, we need to handle byte swapping if necessary
-	bytesPerSample := src.BytesAllocated()
+	// Calculate bytes per sample from frame info
+	bytesPerSample := int((info.BitsAllocated-1)/8 + 1)
 
 	// If single-byte samples, no swapping needed
 	if bytesPerSample == 1 {
-		dst.Data = make([]byte, len(src.Data))
-		copy(dst.Data, src.Data)
+		*dst = make([]byte, len(src))
+		copy(*dst, src)
 		return nil
 	}
 
@@ -131,16 +201,16 @@ func (c *NativeCodec) Decode(src *PixelData, dst *PixelData, params Parameters) 
 		}
 	}
 
-	dst.Data = make([]byte, len(src.Data))
+	*dst = make([]byte, len(src))
 
 	if !shouldSwap {
 		// No swapping, just copy
-		copy(dst.Data, src.Data)
+		copy(*dst, src)
 		return nil
 	}
 
 	// Swap bytes based on sample size
-	return c.swapBytes(src.Data, dst.Data, bytesPerSample)
+	return c.swapBytes(src, *dst, bytesPerSample)
 }
 
 // swapBytes swaps the byte order of multi-byte samples.

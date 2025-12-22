@@ -1,0 +1,58 @@
+// Copyright (c) 2025 go-dicom contributors.
+// Licensed under the Microsoft Public License (MS-PL).
+
+// Package types provides shared types and interfaces for the imaging package.
+// This package defines interfaces that can be used across different packages
+// without creating circular dependencies.
+package types
+
+// PixelData represents the interface for DICOM pixel data operations.
+// This mirrors fo-dicom's abstract DicomPixelData class pattern.
+//
+// In fo-dicom, DicomPixelData is an abstract class with three implementations:
+// - OtherBytePixelData (uncompressed, OB VR)
+// - OtherWordPixelData (uncompressed, OW VR)
+// - EncapsulatedPixelData (compressed/encapsulated)
+//
+// This Go interface provides the same abstraction for use by codecs.
+type PixelData interface {
+	// GetFrame returns the pixel data for the specified frame (0-indexed).
+	// In fo-dicom: public abstract IByteBuffer GetFrame(int frame);
+	GetFrame(frameIndex int) ([]byte, error)
+
+	// AddFrame appends a new frame to the pixel data.
+	// In fo-dicom: public abstract void AddFrame(IByteBuffer data);
+	AddFrame(frameData []byte) error
+
+	// FrameCount returns the number of frames in the pixel data.
+	FrameCount() int
+
+	// GetFrameInfo returns frame metadata for codec operations.
+	GetFrameInfo() *FrameInfo
+
+	// IsEncapsulated returns true if pixel data is encapsulated (compressed).
+	IsEncapsulated() bool
+}
+
+// FrameInfo contains the metadata needed for encoding/decoding a frame.
+// This is a lightweight struct used by codecs for frame-level operations.
+type FrameInfo struct {
+	// Image dimensions
+	Width  uint16
+	Height uint16
+
+	// Bit depth information
+	BitsAllocated  uint16
+	BitsStored     uint16
+	HighBit        uint16
+	SamplesPerPixel uint16
+
+	// Pixel representation (0 = unsigned, 1 = signed)
+	PixelRepresentation uint16
+
+	// Planar configuration (0 = interleaved, 1 = planar)
+	PlanarConfiguration uint16
+
+	// Photometric interpretation
+	PhotometricInterpretation string
+}

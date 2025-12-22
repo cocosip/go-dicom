@@ -6,6 +6,8 @@ package codec
 import (
 	"bytes"
 	"testing"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 )
 
 func TestRLECodec_Name(t *testing.T) {
@@ -28,11 +30,9 @@ func TestRLECodec_EncodeDecodeSimple(t *testing.T) {
 		pixelData[i] = byte(i % 256)
 	}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     width,
 		Height:                    height,
-		NumberOfFrames:            1,
 		BitsAllocated:             8,
 		BitsStored:                8,
 		HighBit:                   7,
@@ -42,42 +42,24 @@ func TestRLECodec_EncodeDecodeSimple(t *testing.T) {
 		PhotometricInterpretation: "MONOCHROME2",
 	}
 
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
+
 	// Encode
-	encoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	encoded := newTestPixelData(frameInfo)
 
 	err := codec.Encode(src, encoded, nil)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	if len(encoded.Data) == 0 {
+	encodedData, _ := encoded.GetFrame(0)
+	if len(encodedData) == 0 {
 		t.Fatal("Encode() produced no data")
 	}
 
 	// Decode
-	decoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err = codec.Decode(encoded, decoded, nil)
 	if err != nil {
@@ -85,7 +67,8 @@ func TestRLECodec_EncodeDecodeSimple(t *testing.T) {
 	}
 
 	// Verify decoded data matches original
-	if !bytes.Equal(pixelData, decoded.Data[:len(pixelData)]) {
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(pixelData, decodedData[:len(pixelData)]) {
 		t.Error("Decoded data does not match original")
 	}
 }
@@ -103,11 +86,9 @@ func TestRLECodec_EncodeDecodeRepeating(t *testing.T) {
 		pixelData[i] = byte(i/10) % 16
 	}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     width,
 		Height:                    height,
-		NumberOfFrames:            1,
 		BitsAllocated:             8,
 		BitsStored:                8,
 		HighBit:                   7,
@@ -117,18 +98,10 @@ func TestRLECodec_EncodeDecodeRepeating(t *testing.T) {
 		PhotometricInterpretation: "MONOCHROME2",
 	}
 
-	encoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
+
+	encoded := newTestPixelData(frameInfo)
 
 	err := codec.Encode(src, encoded, nil)
 	if err != nil {
@@ -136,31 +109,22 @@ func TestRLECodec_EncodeDecodeRepeating(t *testing.T) {
 	}
 
 	// RLE should compress repeating data
-	if len(encoded.Data) >= len(pixelData) {
+	encodedData, _ := encoded.GetFrame(0)
+	if len(encodedData) >= len(pixelData) {
 		t.Logf("RLE compression: %d bytes -> %d bytes (%.1f%%)",
-			len(pixelData), len(encoded.Data),
-			float64(len(encoded.Data))/float64(len(pixelData))*100)
+			len(pixelData), len(encodedData),
+			float64(len(encodedData))/float64(len(pixelData))*100)
 	}
 
-	decoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err = codec.Decode(encoded, decoded, nil)
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, decoded.Data[:len(pixelData)]) {
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(pixelData, decodedData[:len(pixelData)]) {
 		t.Error("Decoded data does not match original")
 	}
 }
@@ -181,11 +145,9 @@ func TestRLECodec_EncodeDecodeRGB(t *testing.T) {
 		pixelData[i+2] = byte((i/3 + 100) % 256) // B
 	}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     width,
 		Height:                    height,
-		NumberOfFrames:            1,
 		BitsAllocated:             8,
 		BitsStored:                8,
 		HighBit:                   7,
@@ -195,43 +157,25 @@ func TestRLECodec_EncodeDecodeRGB(t *testing.T) {
 		PhotometricInterpretation: "RGB",
 	}
 
-	encoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           samplesPerPixel,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "RGB",
-	}
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
+
+	encoded := newTestPixelData(frameInfo)
 
 	err := codec.Encode(src, encoded, nil)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	decoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           samplesPerPixel,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "RGB",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err = codec.Decode(encoded, decoded, nil)
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, decoded.Data[:len(pixelData)]) {
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(pixelData, decodedData[:len(pixelData)]) {
 		t.Error("Decoded RGB data does not match original")
 	}
 }
@@ -251,11 +195,9 @@ func TestRLECodec_Encode16Bit(t *testing.T) {
 		pixelData[i+1] = byte((val >> 8) & 0xFF)
 	}
 
-	src := &PixelData{
-		Data:                      pixelData,
+	frameInfo := &types.FrameInfo{
 		Width:                     width,
 		Height:                    height,
-		NumberOfFrames:            1,
 		BitsAllocated:             16,
 		BitsStored:                16,
 		HighBit:                   15,
@@ -265,43 +207,25 @@ func TestRLECodec_Encode16Bit(t *testing.T) {
 		PhotometricInterpretation: "MONOCHROME2",
 	}
 
-	encoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	src := newTestPixelData(frameInfo)
+	_ = src.AddFrame(pixelData)
+
+	encoded := newTestPixelData(frameInfo)
 
 	err := codec.Encode(src, encoded, nil)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	decoded := &PixelData{
-		Width:                     width,
-		Height:                    height,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       0,
-		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
-	}
+	decoded := newTestPixelData(frameInfo)
 
 	err = codec.Decode(encoded, decoded, nil)
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
 
-	if !bytes.Equal(pixelData, decoded.Data[:len(pixelData)]) {
+	decodedData, _ := decoded.GetFrame(0)
+	if !bytes.Equal(pixelData, decodedData[:len(pixelData)]) {
 		t.Error("Decoded 16-bit data does not match original")
 	}
 }

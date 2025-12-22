@@ -10,6 +10,7 @@ import (
 	"io"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/types"
 )
 
 // RLECodec implements DICOM RLE (Run-Length Encoding) compression and decompression.
@@ -31,127 +32,173 @@ func (c *RLECodec) TransferSyntax() *transfer.Syntax {
 	return transfer.RLELossless
 }
 
-// Encode compresses pixel data using RLE compression.
-func (c *RLECodec) Encode(src *PixelData, dst *PixelData, _ Parameters) error {
-	if src == nil || dst == nil {
+// GetDefaultParameters returns default parameters for this codec.
+func (c *RLECodec) GetDefaultParameters() Parameters {
+	return NewBaseParameters()
+}
+
+// Encode encodes pixel data from oldPixelData to newPixelData.
+func (c *RLECodec) Encode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
 
-	pixelCount := int(src.Width) * int(src.Height)
-	numberOfSegments := src.BytesAllocated() * int(src.SamplesPerPixel)
-	frameSize := src.UncompressedFrameSize()
+	frameInfo := oldPixelData.GetFrameInfo()
+	frameCount := oldPixelData.FrameCount()
 
-	var result bytes.Buffer
-
-	for frame := 0; frame < src.NumberOfFrames; frame++ {
-		frameStart := frame * frameSize
-		frameEnd := frameStart + frameSize
-		if frameEnd > len(src.Data) {
-			return fmt.Errorf("frame %d exceeds data length", frame)
-		}
-		frameData := src.Data[frameStart:frameEnd]
-
-		encoder := newRLEEncoder()
-
-		for s := 0; s < numberOfSegments; s++ {
-			encoder.NextSegment()
-
-			sample := s / src.BytesAllocated()
-			sabyte := s % src.BytesAllocated()
-
-			var pos, offset int
-
-			if src.IsInterleaved() {
-				pos = sample * src.BytesAllocated()
-				offset = numberOfSegments
-			} else {
-				pos = sample * src.BytesAllocated() * pixelCount
-				offset = src.BytesAllocated()
-			}
-
-			pos += src.BytesAllocated() - sabyte - 1
-
-			for p := 0; p < pixelCount; p++ {
-				if pos >= len(frameData) {
-					return fmt.Errorf("read position %d exceeds frame buffer length %d", pos, len(frameData))
-				}
-				encoder.Encode(frameData[pos])
-				pos += offset
-			}
-			encoder.Flush()
+	// Process each frame
+	for i := 0; i < frameCount; i++ {
+		srcFrame, err := oldPixelData.GetFrame(i)
+		if err != nil {
+			return fmt.Errorf("failed to get frame %d: %w", i, err)
 		}
 
-		encoder.MakeEvenLength()
-		frameBytes := encoder.GetBuffer()
-		result.Write(frameBytes)
+		var dstFrame []byte
+		if err := c.encodeFrame(srcFrame, &dstFrame, frameInfo, parameters); err != nil {
+			return fmt.Errorf("failed to encode frame %d: %w", i, err)
+		}
+
+		if err := newPixelData.AddFrame(dstFrame); err != nil {
+			return fmt.Errorf("failed to add frame %d: %w", i, err)
+		}
 	}
 
-	dst.Data = result.Bytes()
 	return nil
 }
 
-// Decode decompresses RLE-compressed pixel data.
-func (c *RLECodec) Decode(src *PixelData, dst *PixelData, _ Parameters) error {
-	if src == nil || dst == nil {
+// Decode decodes pixel data from oldPixelData to newPixelData.
+func (c *RLECodec) Decode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
 
-	pixelCount := int(src.Width) * int(src.Height)
-	numberOfSegments := src.BytesAllocated() * int(src.SamplesPerPixel)
+	frameInfo := oldPixelData.GetFrameInfo()
+	frameCount := oldPixelData.FrameCount()
 
-	var result bytes.Buffer
-	dataOffset := 0
-
-	for frame := 0; frame < src.NumberOfFrames; frame++ {
-		// Create new frame data of even length
-		frameSize := dst.UncompressedFrameSize()
-		if (frameSize & 1) == 1 {
-			frameSize++
-		}
-
-		frameData := make([]byte, frameSize)
-
-		// Decode RLE data for this frame
-		if dataOffset >= len(src.Data) {
-			return fmt.Errorf("insufficient data for frame %d", frame)
-		}
-
-		decoder, bytesRead, err := newRLEDecoder(src.Data[dataOffset:])
+	// Process each frame
+	for i := 0; i < frameCount; i++ {
+		srcFrame, err := oldPixelData.GetFrame(i)
 		if err != nil {
-			return fmt.Errorf("failed to create RLE decoder for frame %d: %w", frame, err)
-		}
-		dataOffset += bytesRead
-
-		if decoder.NumberOfSegments != numberOfSegments {
-			return fmt.Errorf("unexpected number of RLE segments: got %d, expected %d",
-				decoder.NumberOfSegments, numberOfSegments)
+			return fmt.Errorf("failed to get frame %d: %w", i, err)
 		}
 
-		for s := 0; s < numberOfSegments; s++ {
-			sample := s / dst.BytesAllocated()
-			sabyte := s % dst.BytesAllocated()
-
-			var pos, offset int
-
-			if dst.IsInterleaved() {
-				pos = sample * dst.BytesAllocated()
-				offset = int(dst.SamplesPerPixel) * dst.BytesAllocated()
-			} else {
-				pos = sample * dst.BytesAllocated() * pixelCount
-				offset = dst.BytesAllocated()
-			}
-
-			pos += dst.BytesAllocated() - sabyte - 1
-
-			if err := decoder.DecodeSegment(s, frameData, pos, offset); err != nil {
-				return fmt.Errorf("failed to decode segment %d: %w", s, err)
-			}
+		var dstFrame []byte
+		if err := c.decodeFrame(srcFrame, &dstFrame, frameInfo, parameters); err != nil {
+			return fmt.Errorf("failed to decode frame %d: %w", i, err)
 		}
 
-		result.Write(frameData)
+		if err := newPixelData.AddFrame(dstFrame); err != nil {
+			return fmt.Errorf("failed to add frame %d: %w", i, err)
+		}
 	}
 
-	dst.Data = result.Bytes()
+	return nil
+}
+
+// encodeFrame compresses a single frame of pixel data using RLE compression (internal helper method).
+func (c *RLECodec) encodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, _ Parameters) error {
+	if len(src) == 0 {
+		return fmt.Errorf("source frame data must not be empty")
+	}
+	if info == nil {
+		return fmt.Errorf("frame info must not be nil")
+	}
+
+	pixelCount := int(info.Width) * int(info.Height)
+	bytesAllocated := int((info.BitsAllocated-1)/8 + 1)
+	numberOfSegments := bytesAllocated * int(info.SamplesPerPixel)
+	isInterleaved := info.PlanarConfiguration == 0
+
+	encoder := newRLEEncoder()
+
+	for s := 0; s < numberOfSegments; s++ {
+		encoder.NextSegment()
+
+		sample := s / bytesAllocated
+		sabyte := s % bytesAllocated
+
+		var pos, offset int
+
+		if isInterleaved {
+			pos = sample * bytesAllocated
+			offset = numberOfSegments
+		} else {
+			pos = sample * bytesAllocated * pixelCount
+			offset = bytesAllocated
+		}
+
+		pos += bytesAllocated - sabyte - 1
+
+		for p := 0; p < pixelCount; p++ {
+			if pos >= len(src) {
+				return fmt.Errorf("read position %d exceeds frame buffer length %d", pos, len(src))
+			}
+			encoder.Encode(src[pos])
+			pos += offset
+		}
+		encoder.Flush()
+	}
+
+	encoder.MakeEvenLength()
+	*dst = encoder.GetBuffer()
+	return nil
+}
+
+// decodeFrame decompresses a single frame of RLE-compressed pixel data (internal helper method).
+func (c *RLECodec) decodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, _ Parameters) error {
+	if len(src) == 0 {
+		return fmt.Errorf("source frame data must not be empty")
+	}
+	if info == nil {
+		return fmt.Errorf("frame info must not be nil")
+	}
+
+	pixelCount := int(info.Width) * int(info.Height)
+	bytesAllocated := int((info.BitsAllocated-1)/8 + 1)
+	numberOfSegments := bytesAllocated * int(info.SamplesPerPixel)
+	isInterleaved := info.PlanarConfiguration == 0
+
+	// Calculate uncompressed frame size
+	frameSize := bytesAllocated * int(info.SamplesPerPixel) * int(info.Width) * int(info.Height)
+	if (frameSize & 1) == 1 {
+		frameSize++
+	}
+
+	frameData := make([]byte, frameSize)
+
+	// Decode RLE data
+	decoder, _, err := newRLEDecoder(src)
+	if err != nil {
+		return fmt.Errorf("failed to create RLE decoder: %w", err)
+	}
+
+	if decoder.NumberOfSegments != numberOfSegments {
+		return fmt.Errorf("unexpected number of RLE segments: got %d, expected %d",
+			decoder.NumberOfSegments, numberOfSegments)
+	}
+
+	for s := 0; s < numberOfSegments; s++ {
+		sample := s / bytesAllocated
+		sabyte := s % bytesAllocated
+
+		var pos, offset int
+
+		if isInterleaved {
+			pos = sample * bytesAllocated
+			offset = int(info.SamplesPerPixel) * bytesAllocated
+		} else {
+			pos = sample * bytesAllocated * pixelCount
+			offset = bytesAllocated
+		}
+
+		pos += bytesAllocated - sabyte - 1
+
+		if err := decoder.DecodeSegment(s, frameData, pos, offset); err != nil {
+			return fmt.Errorf("failed to decode segment %d: %w", s, err)
+		}
+	}
+
+	*dst = frameData
 	return nil
 }
 
