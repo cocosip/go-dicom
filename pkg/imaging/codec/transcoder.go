@@ -295,10 +295,6 @@ func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.D
 		return nil, fmt.Errorf("failed to decode pixel data: %w", err)
 	}
 
-	// Create new dataset with decoded pixel data
-	newDS := ds.Clone()
-	newDS.Remove(tag.PixelData)
-
 	// Reconstruct uncompressed pixel data from decoded frames
 	var uncompressedData []byte
 	for i := 0; i < newPixelData.FrameCount(); i++ {
@@ -307,6 +303,16 @@ func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.D
 			return nil, fmt.Errorf("failed to get decoded frame %d: %w", i, err)
 		}
 		uncompressedData = append(uncompressedData, frameData...)
+	}
+
+	// Create new dataset with the output transfer syntax
+	newDS := dataset.NewWithTransferSyntax(t.outputSyntax)
+
+	// Copy all elements except PixelData
+	for _, elem := range ds.Elements() {
+		if elem.Tag().ToUint32() != tag.PixelData.ToUint32() {
+			_ = newDS.Add(elem)
+		}
 	}
 
 	// Add uncompressed pixel data
@@ -403,9 +409,18 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 		return nil, err
 	}
 
-	// Create new dataset with encoded pixel data
-	newDS := ds.Clone()
-	newDS.Remove(tag.PixelData)
+	// Create new dataset with the output transfer syntax
+	// Clone preserves the original transfer syntax, so we need to create a new one
+	newDS := dataset.NewWithTransferSyntax(outputTS)
+
+	// Copy all elements except PixelData
+	for _, elem := range ds.Elements() {
+		if elem.Tag().ToUint32() != tag.PixelData.ToUint32() {
+			_ = newDS.Add(elem)
+		}
+	}
+
+	// Add encoded pixel data
 	_ = newDS.Add(fragSeq)
 
 	return newDS, nil

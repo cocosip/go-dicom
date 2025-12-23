@@ -260,6 +260,15 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		opt(config)
 	}
 
+	// If no transfer syntax was explicitly specified via options,
+	// try to use the dataset's InternalTransferSyntax (set by transcoder/parser)
+	// This allows automatic transfer syntax detection from the dataset
+	if config.transferSyntax == transfer.ExplicitVRLittleEndian {
+		if internalTS := ds.InternalTransferSyntax(); internalTS != nil {
+			config.transferSyntax = internalTS
+		}
+	}
+
 	// If largeObjectSize is explicitly set to 0, use default
 	if config.largeObjectSize == 0 {
 		config.largeObjectSize = 1024 * 1024

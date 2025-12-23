@@ -9,6 +9,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 )
 
 // Dataset represents a DICOM dataset - a collection of data elements.
@@ -18,12 +19,27 @@ import (
 type Dataset struct {
 	// items stores elements indexed by tag
 	items map[uint32]element.Element
+
+	// internalTransferSyntax represents the transfer syntax of this dataset.
+	// This is used to track the encoding format of pixel data and other elements.
+	// Following fo-dicom pattern, this is internal and can be set by transcoder/parser.
+	internalTransferSyntax *transfer.Syntax
 }
 
 // New creates a new empty dataset.
 func New() *Dataset {
 	return &Dataset{
 		items: make(map[uint32]element.Element),
+	}
+}
+
+// NewWithTransferSyntax creates a new empty dataset with the specified transfer syntax.
+// This is the recommended way to create datasets when the transfer syntax is known
+// (e.g., when transcoding or parsing).
+func NewWithTransferSyntax(ts *transfer.Syntax) *Dataset {
+	return &Dataset{
+		items:                  make(map[uint32]element.Element),
+		internalTransferSyntax: ts,
 	}
 }
 
@@ -180,6 +196,7 @@ func (ds *Dataset) Tags() []*tag.Tag {
 // Note: Elements themselves are not cloned, only the dataset structure.
 func (ds *Dataset) Clone() *Dataset {
 	clone := New()
+	clone.internalTransferSyntax = ds.internalTransferSyntax // Preserve transfer syntax
 	for tagValue, elem := range ds.items {
 		clone.items[tagValue] = elem
 	}
@@ -215,4 +232,34 @@ func (ds *Dataset) Filter(predicate func(element.Element) bool) *Dataset {
 // String returns a string representation of the dataset.
 func (ds *Dataset) String() string {
 	return fmt.Sprintf("Dataset{%d elements}", len(ds.items))
+}
+
+// InternalTransferSyntax returns the transfer syntax of this dataset.
+// This represents the encoding format of pixel data and other elements.
+// Returns nil if no transfer syntax has been set.
+func (ds *Dataset) InternalTransferSyntax() *transfer.Syntax {
+	return ds.internalTransferSyntax
+}
+
+// SetInternalTransferSyntax sets the transfer syntax of this dataset.
+// This is an internal method that should primarily be used by transcoder and parser.
+// Following fo-dicom pattern, this also propagates to nested sequence items.
+//
+// Note: In most cases, you should create a new dataset with NewWithTransferSyntax()
+// rather than modifying an existing one. However, this setter is provided for
+// scenarios where in-place modification is necessary (e.g., after cloning).
+func (ds *Dataset) SetInternalTransferSyntax(ts *transfer.Syntax) {
+	ds.internalTransferSyntax = ts
+
+	// Update transfer syntax for sequence items (following fo-dicom pattern)
+	for _, elem := range ds.items {
+		if seq, ok := elem.(*Sequence); ok {
+			for i := 0; i < seq.Count(); i++ {
+				item := seq.GetItem(i)
+				if item != nil {
+					item.SetInternalTransferSyntax(ts)
+				}
+			}
+		}
+	}
 }
