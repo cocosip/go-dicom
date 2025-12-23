@@ -269,3 +269,85 @@ func TestGetGlobalRegistry(t *testing.T) {
 		t.Error("Global registry does not have RLE codec")
 	}
 }
+
+// TestTranscoder_VRSelection tests that the transcoder correctly chooses OB/OW
+// based on BitsAllocated when encoding to encapsulated formats.
+func TestTranscoder_VRSelection(t *testing.T) {
+	tests := []struct {
+		name           string
+		bitsAllocated  uint16
+		expectedVRType string // "OB" or "OW"
+	}{
+		{
+			name:           "8-bit should use OB",
+			bitsAllocated:  8,
+			expectedVRType: "OB",
+		},
+		{
+			name:           "16-bit should use OW",
+			bitsAllocated:  16,
+			expectedVRType: "OW",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create dataset with uncompressed pixel data
+			ds := dataset.New()
+
+			// Add image attributes
+			_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
+			_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
+			_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{tt.bitsAllocated}))
+			_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{tt.bitsAllocated}))
+			_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{tt.bitsAllocated - 1}))
+			_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+			_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+			_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+
+			// Create pixel data
+			bytesPerPixel := (tt.bitsAllocated + 7) / 8
+			pixelDataSize := int(10 * 10 * bytesPerPixel)
+			pixelData := make([]byte, pixelDataSize)
+			for i := range pixelData {
+				pixelData[i] = byte(i % 256)
+			}
+
+			if tt.bitsAllocated <= 8 {
+				_ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+			} else {
+				_ = ds.Add(element.NewOtherWord(tag.PixelData, pixelData))
+			}
+
+			// Create transcoder to encode to RLE
+			transcoder := NewTranscoder(transfer.ExplicitVRLittleEndian, transfer.RLELossless)
+
+			// Encode
+			encodedDS, err := transcoder.Transcode(ds)
+			if err != nil {
+				t.Fatalf("Transcode error = %v", err)
+			}
+
+			// Check pixel data VR type
+			pixelDataElem, exists := encodedDS.Get(tag.PixelData)
+			if !exists {
+				t.Fatal("PixelData not found in encoded dataset")
+			}
+
+			var actualVR string
+			switch pixelDataElem.(type) {
+			case *element.OtherByteFragment:
+				actualVR = "OB"
+			case *element.OtherWordFragment:
+				actualVR = "OW"
+			default:
+				t.Fatalf("Unexpected pixel data element type: %T", pixelDataElem)
+			}
+
+			if actualVR != tt.expectedVRType {
+				t.Errorf("VR type = %s, want %s (BitsAllocated=%d)",
+					actualVR, tt.expectedVRType, tt.bitsAllocated)
+			}
+		})
+	}
+}

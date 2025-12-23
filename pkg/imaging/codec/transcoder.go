@@ -398,7 +398,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 		frameFragments = append(frameFragments, frameData)
 	}
 
-	obf, err := buildFragmentSequence(frameFragments)
+	fragSeq, err := buildFragmentSequence(frameFragments, frameInfo.BitsAllocated)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +406,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	// Create new dataset with encoded pixel data
 	newDS := ds.Clone()
 	newDS.Remove(tag.PixelData)
-	_ = newDS.Add(obf)
+	_ = newDS.Add(fragSeq)
 
 	return newDS, nil
 }
@@ -492,16 +492,17 @@ func stripTrailingPadding(data []byte) []byte {
 	return data
 }
 
-// buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
-// populating the Basic Offset Table for multi-frame images.
-func buildFragmentSequence(frames [][]byte) (*element.OtherByteFragment, error) {
-	obf := element.NewOtherByteFragment(tag.PixelData)
-
-	// Single-frame images may omit BOT; still add the fragment.
+// buildFragmentSequence creates an OB or OW fragment sequence from per-frame compressed data,
+// populating the Basic Offset Table. The VR type (OB/OW) is chosen based on BitsAllocated
+// following fo-dicom behavior: BitsAllocated > 8 uses OW, otherwise OB.
+func buildFragmentSequence(frames [][]byte, bitsAllocated uint16) (element.Element, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frame data provided for fragment sequence")
 	}
 
+	// Build Basic Offset Table
+	// According to DICOM standard, Basic Offset Table should contain at least one offset (0x00000000) for single-frame,
+	// and all frame offsets for multi-frame images.
 	var offsets []uint32
 	var runningOffset uint32
 	for i, frame := range frames {
@@ -511,14 +512,29 @@ func buildFragmentSequence(frames [][]byte) (*element.OtherByteFragment, error) 
 			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
 		}
 		runningOffset += uint32(len(frame))
+	}
 
+	// Choose OB/OW based on BitsAllocated (following fo-dicom behavior)
+	// - BitsAllocated > 8: use OW (Other Word)
+	// - BitsAllocated <= 8: use OB (Other Byte)
+	if bitsAllocated > 8 {
+		// Create OtherWordFragment
+		owf := element.NewOtherWordFragment(tag.PixelData)
+		for _, frame := range frames {
+			owf.AddFragment(buffer.NewMemory(frame))
+		}
+		// Always set offset table (even for single-frame images)
+		owf.SetOffsetTable(offsets)
+		return owf, nil
+	}
+
+	// Create OtherByteFragment
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	for _, frame := range frames {
 		obf.AddFragment(buffer.NewMemory(frame))
 	}
-
-	if len(frames) > 1 {
-		obf.SetOffsetTable(offsets)
-	}
-
+	// Always set offset table (even for single-frame images)
+	obf.SetOffsetTable(offsets)
 	return obf, nil
 }
 
