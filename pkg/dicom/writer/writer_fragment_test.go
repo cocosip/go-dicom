@@ -17,6 +17,56 @@ import (
 )
 
 func TestWriteFragmentSequence(t *testing.T) {
+	t.Run("SingleFrame", func(t *testing.T) {
+		// Create dataset with single-frame fragment sequence
+		ds := dataset.New()
+
+		// Create fragment sequence with single frame
+		obf := element.NewOtherByteFragment(tag.PixelData)
+		obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
+
+		if err := ds.Add(obf); err != nil {
+			t.Fatalf("Add() error: %v", err)
+		}
+
+		// Write to buffer
+		buf := &bytes.Buffer{}
+		err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
+		if err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+
+		// Verify we wrote something
+		if buf.Len() == 0 {
+			t.Fatal("Write produced no output")
+		}
+
+		// Read back and verify offset table is present
+		result, err := parser.Parse(buf)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
+		if !exists {
+			t.Fatal("PixelData not found after round-trip")
+		}
+
+		readObf, ok := pixelDataElem.(*element.OtherByteFragment)
+		if !ok {
+			t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
+		}
+
+		// Verify offset table has one entry with value 0 for single-frame
+		offsetTable := readObf.OffsetTable()
+		if len(offsetTable) != 1 {
+			t.Errorf("Single-frame offset table length = %d, want 1", len(offsetTable))
+		}
+		if len(offsetTable) > 0 && offsetTable[0] != 0 {
+			t.Errorf("Single-frame offset table[0] = %d, want 0", offsetTable[0])
+		}
+	})
+
 	t.Run("EmptyOffsetTable", func(t *testing.T) {
 		// Create dataset with fragment sequence
         ds := dataset.New()

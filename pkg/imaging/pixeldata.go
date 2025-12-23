@@ -1287,6 +1287,8 @@ func buildFragmentSequence(frames [][]byte, existingBOT []uint32) (*element.Othe
 	}
 
 	// Rebuild BOT if missing or length mismatch
+	// According to DICOM standard, Basic Offset Table should contain at least one offset (0x00000000) for single-frame,
+	// and all frame offsets for multi-frame images.
 	var offsets []uint32
 	useExisting := len(existingBOT) == len(frames)
 	if useExisting {
@@ -1306,9 +1308,8 @@ func buildFragmentSequence(frames [][]byte, existingBOT []uint32) (*element.Othe
 		obf.AddFragment(buffer.NewMemory(frame))
 	}
 
-	if len(frames) > 1 {
-		obf.SetOffsetTable(offsets)
-	}
+	// Always set offset table (even for single-frame images)
+	obf.SetOffsetTable(offsets)
 
 	return obf, nil
 }

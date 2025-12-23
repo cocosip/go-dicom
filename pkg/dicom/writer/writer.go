@@ -824,18 +824,17 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		}
 	}
 
-	// Build Basic Offset Table based on padded fragment lengths (only for multi-frame).
-	var offsets []uint32
-	if fragCount > 1 {
-		var runningOffset uint32
-		offsets = make([]uint32, fragCount)
-		for i, data := range paddedFrags {
-			offsets[i] = runningOffset
-			if len(data) > int(math.MaxUint32-runningOffset) {
-				return fmt.Errorf("fragment too large to represent in BOT at index %d", i)
-			}
-			runningOffset += uint32(len(data))
+	// Build Basic Offset Table based on padded fragment lengths.
+	// According to DICOM standard, Basic Offset Table should contain at least one offset (0x00000000) for single-frame,
+	// and all frame offsets for multi-frame images.
+	var runningOffset uint32
+	offsets := make([]uint32, fragCount)
+	for i, data := range paddedFrags {
+		offsets[i] = runningOffset
+		if len(data) > int(math.MaxUint32-runningOffset) {
+			return fmt.Errorf("fragment too large to represent in BOT at index %d", i)
 		}
+		runningOffset += uint32(len(data))
 	}
 
 	// Write Item for Offset Table (FFFE,E000)
