@@ -576,8 +576,9 @@ func (pd *DicomPixelData) ToElement() (element.Element, error) {
 	}
 
 	// Encapsulated: create fragment sequence
+	// Choose OB/OW based on BitsAllocated (following fo-dicom behavior)
 	if pd.Info.Encapsulated {
-		return buildFragmentSequence(pd.frames, pd.basicOffsetTable)
+		return buildFragmentSequence(pd.frames, pd.basicOffsetTable, pd.Info.BitsAllocated)
 	}
 
 	// Uncompressed: concatenate frames
@@ -1279,9 +1280,7 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 // buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
 // populating the Basic Offset Table for multi-frame images.
 // If an existing BOT is provided and matches frames length, it is used; otherwise BOT is rebuilt.
-func buildFragmentSequence(frames [][]byte, existingBOT []uint32) (*element.OtherByteFragment, error) {
-	obf := element.NewOtherByteFragment(tag.PixelData)
-
+func buildFragmentSequence(frames [][]byte, existingBOT []uint32, bitsAllocated uint16) (element.Element, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frame data provided for fragment sequence")
 	}
@@ -1304,12 +1303,24 @@ func buildFragmentSequence(frames [][]byte, existingBOT []uint32) (*element.Othe
 		}
 	}
 
+	// Choose OB/OW based on BitsAllocated (following fo-dicom behavior)
+	// - BitsAllocated > 8: use OW (Other Word)
+	// - BitsAllocated <= 8: use OB (Other Byte)
+	if bitsAllocated > 8 {
+		// Create OtherWordFragment
+		owf := element.NewOtherWordFragment(tag.PixelData)
+		for _, frame := range frames {
+			owf.AddFragment(buffer.NewMemory(frame))
+		}
+		owf.SetOffsetTable(offsets)
+		return owf, nil
+	}
+
+	// Create OtherByteFragment
+	obf := element.NewOtherByteFragment(tag.PixelData)
 	for _, frame := range frames {
 		obf.AddFragment(buffer.NewMemory(frame))
 	}
-
-	// Always set offset table (even for single-frame images)
 	obf.SetOffsetTable(offsets)
-
 	return obf, nil
 }

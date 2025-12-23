@@ -1049,3 +1049,100 @@ func TestNewDicomPixelDataFromBytes(t *testing.T) {
 		t.Error("Frame 1 data mismatch")
 	}
 }
+
+// TestDicomPixelData_ToElement_VRSelection tests that ToElement correctly chooses
+// OB vs OW based on BitsAllocated for both encapsulated and native formats.
+func TestDicomPixelData_ToElement_VRSelection(t *testing.T) {
+	tests := []struct {
+		name           string
+		bitsAllocated  uint16
+		encapsulated   bool
+		expectedVRType string // "OB" or "OW"
+	}{
+		{
+			name:           "Encapsulated 8-bit should use OB",
+			bitsAllocated:  8,
+			encapsulated:   true,
+			expectedVRType: "OB",
+		},
+		{
+			name:           "Encapsulated 16-bit should use OW",
+			bitsAllocated:  16,
+			encapsulated:   true,
+			expectedVRType: "OW",
+		},
+		{
+			name:           "Native 8-bit should use OB",
+			bitsAllocated:  8,
+			encapsulated:   false,
+			expectedVRType: "OB",
+		},
+		{
+			name:           "Native 16-bit should use OW",
+			bitsAllocated:  16,
+			encapsulated:   false,
+			expectedVRType: "OW",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := &PixelDataInfo{
+				Width:               10,
+				Height:              10,
+				NumberOfFrames:      1,
+				BitsAllocated:       tt.bitsAllocated,
+				BitsStored:          tt.bitsAllocated,
+				HighBit:             tt.bitsAllocated - 1,
+				SamplesPerPixel:     1,
+				PixelRepresentation: UnsignedPixels,
+				PlanarConfiguration: InterleavedPlanar,
+				PhotometricInterpretation: Monochrome2,
+				Encapsulated:        tt.encapsulated,
+			}
+
+			pd, err := NewDicomPixelData(info)
+			if err != nil {
+				t.Fatalf("NewDicomPixelData error = %v", err)
+			}
+
+			// Add dummy frame data
+			// Calculate correct frame size based on BitsAllocated
+			bytesPerPixel := (tt.bitsAllocated + 7) / 8
+			frameSize := int(10 * 10 * bytesPerPixel)
+			frameData := make([]byte, frameSize)
+			for i := range frameData {
+				frameData[i] = byte(i % 256)
+			}
+			if err := pd.AddFrame(frameData); err != nil {
+				t.Fatalf("AddFrame error = %v", err)
+			}
+
+			// Convert to element
+			elem, err := pd.ToElement()
+			if err != nil {
+				t.Fatalf("ToElement error = %v", err)
+			}
+
+			// Check VR type
+			var actualVR string
+			switch elem.(type) {
+			case *element.OtherByte:
+				actualVR = "OB"
+			case *element.OtherWord:
+				actualVR = "OW"
+			case *element.OtherByteFragment:
+				actualVR = "OB"
+			case *element.OtherWordFragment:
+				actualVR = "OW"
+			default:
+				t.Fatalf("Unexpected element type: %T", elem)
+			}
+
+			if actualVR != tt.expectedVRType {
+				t.Errorf("VR type = %s, want %s (BitsAllocated=%d, Encapsulated=%v)",
+					actualVR, tt.expectedVRType, tt.bitsAllocated, tt.encapsulated)
+			}
+		})
+	}
+}
