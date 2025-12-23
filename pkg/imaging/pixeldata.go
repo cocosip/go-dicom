@@ -788,9 +788,14 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 		return nil, fmt.Errorf("invalid photometric interpretation %q: %w", photoInterp, err)
 	}
 
-	// Get transfer syntax UID
-	transferSyntaxUID := "1.2.840.10008.1.2" // Default: Implicit VR Little Endian
-	// Note: In a full implementation, this should be extracted from the file meta information
+	// Get transfer syntax UID from dataset
+	// Priority: 1) InternalTransferSyntax 2) TransferSyntaxUID tag 3) Default
+	transferSyntaxUID := "1.2.840.10008.1.2.1" // Default: Explicit VR Little Endian
+	if ts := ds.InternalTransferSyntax(); ts != nil {
+		transferSyntaxUID = ts.UID().UID()
+	} else if tsUID, ok := ds.GetString(tag.TransferSyntaxUID); ok {
+		transferSyntaxUID = tsUID
+	}
 
 	// Get lossy compression information if present
 	isLossy := false

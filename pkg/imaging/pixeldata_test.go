@@ -10,6 +10,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 )
 
@@ -1142,6 +1144,134 @@ func TestDicomPixelData_ToElement_VRSelection(t *testing.T) {
 			if actualVR != tt.expectedVRType {
 				t.Errorf("VR type = %s, want %s (BitsAllocated=%d, Encapsulated=%v)",
 					actualVR, tt.expectedVRType, tt.bitsAllocated, tt.encapsulated)
+			}
+		})
+	}
+}
+
+// TestCreatePixelData_TransferSyntax verifies that CreatePixelData correctly reads
+// transfer syntax from the dataset
+func TestCreatePixelData_TransferSyntax(t *testing.T) {
+	tests := []struct {
+		name                 string
+		setupDataset         func() *dataset.Dataset
+		expectedTransferSyntax string
+	}{
+		{
+			name: "reads from InternalTransferSyntax",
+			setupDataset: func() *dataset.Dataset {
+				ts, err := transfer.Parse("1.2.840.10008.1.2.4.50") // JPEG Baseline
+				if err != nil {
+					t.Fatalf("failed to parse transfer syntax: %v", err)
+				}
+				ds := dataset.NewWithTransferSyntax(ts)
+
+				// Add required image attributes
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Rows, []uint16{256}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Columns, []uint16{256}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+
+				// Add pixel data
+				pixelData := make([]byte, 256*256)
+				_ = ds.AddOrUpdate(element.NewOtherByte(tag.PixelData, pixelData))
+
+				return ds
+			},
+			expectedTransferSyntax: "1.2.840.10008.1.2.4.50",
+		},
+		{
+			name: "reads from TransferSyntaxUID tag",
+			setupDataset: func() *dataset.Dataset {
+				ds := dataset.New()
+
+				// Add transfer syntax as a tag (e.g., from file meta information)
+				_ = ds.AddOrUpdate(element.NewString(tag.TransferSyntaxUID, vr.UI, []string{"1.2.840.10008.1.2.2"})) // Explicit VR Big Endian
+
+				// Add required image attributes
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Rows, []uint16{256}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Columns, []uint16{256}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{12}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{11}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+
+				// Add pixel data
+				pixelData := make([]byte, 256*256*2)
+				_ = ds.AddOrUpdate(element.NewOtherWord(tag.PixelData, pixelData))
+
+				return ds
+			},
+			expectedTransferSyntax: "1.2.840.10008.1.2.2",
+		},
+		{
+			name: "uses default when no transfer syntax specified",
+			setupDataset: func() *dataset.Dataset {
+				ds := dataset.New()
+
+				// Add required image attributes
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Rows, []uint16{128}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Columns, []uint16{128}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+
+				// Add pixel data
+				pixelData := make([]byte, 128*128)
+				_ = ds.AddOrUpdate(element.NewOtherByte(tag.PixelData, pixelData))
+
+				return ds
+			},
+			expectedTransferSyntax: "1.2.840.10008.1.2.1", // Default: Explicit VR Little Endian
+		},
+		{
+			name: "InternalTransferSyntax takes priority over tag",
+			setupDataset: func() *dataset.Dataset {
+				ts, err := transfer.Parse("1.2.840.10008.1.2.5") // RLE Lossless
+				if err != nil {
+					t.Fatalf("failed to parse transfer syntax: %v", err)
+				}
+				ds := dataset.NewWithTransferSyntax(ts)
+
+				// Add a different transfer syntax as a tag (should be ignored)
+				_ = ds.AddOrUpdate(element.NewString(tag.TransferSyntaxUID, vr.UI, []string{"1.2.840.10008.1.2"}))
+
+				// Add required image attributes
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Rows, []uint16{256}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.Columns, []uint16{256}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+
+				// Add pixel data
+				pixelData := make([]byte, 256*256)
+				_ = ds.AddOrUpdate(element.NewOtherByte(tag.PixelData, pixelData))
+
+				return ds
+			},
+			expectedTransferSyntax: "1.2.840.10008.1.2.5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := tt.setupDataset()
+
+			pd, err := CreatePixelData(ds)
+			if err != nil {
+				t.Fatalf("CreatePixelData() error = %v", err)
+			}
+
+			if pd.Info.TransferSyntaxUID != tt.expectedTransferSyntax {
+				t.Errorf("TransferSyntaxUID = %s, want %s", pd.Info.TransferSyntaxUID, tt.expectedTransferSyntax)
 			}
 		})
 	}
