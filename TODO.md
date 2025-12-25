@@ -29,7 +29,6 @@
 ### 1.2 开发工具配置
 - [x] 创建 Makefile 用于常用命令
 - [x] 设置 .gitignore
-- [ ] 配置 VSCode/GoLand 调试环境 (可选)
 
 ---
 
