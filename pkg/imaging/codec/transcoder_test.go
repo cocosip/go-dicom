@@ -270,13 +270,18 @@ func TestGetGlobalRegistry(t *testing.T) {
 	}
 }
 
-// TestTranscoder_VRSelection tests that the transcoder correctly chooses OB/OW
-// based on BitsAllocated when encoding to encapsulated formats.
+// TestTranscoder_VRSelection tests that the transcoder correctly uses OB
+// for all encapsulated/compressed formats according to DICOM Part 5 Section 8.2.
+//
+// DICOM Standard: "If sent in an Encapsulated Format (i.e., other than the Native Format)
+// the Value Representation OB is used."
+//
+// This means ALL compressed/encapsulated pixel data must use OB, regardless of BitsAllocated.
 func TestTranscoder_VRSelection(t *testing.T) {
 	tests := []struct {
 		name           string
 		bitsAllocated  uint16
-		expectedVRType string // "OB" or "OW"
+		expectedVRType string // Should always be "OB" for encapsulated formats
 	}{
 		{
 			name:           "8-bit should use OB",
@@ -284,9 +289,9 @@ func TestTranscoder_VRSelection(t *testing.T) {
 			expectedVRType: "OB",
 		},
 		{
-			name:           "16-bit should use OW",
+			name:           "16-bit should use OB (not OW for encapsulated)",
 			bitsAllocated:  16,
-			expectedVRType: "OW",
+			expectedVRType: "OB", // Changed from "OW" to comply with DICOM standard
 		},
 	}
 
