@@ -138,7 +138,7 @@ func TestGlobalLookup(t *testing.T) {
 	}
 }
 
-func TestInterfaceImplementations(t *testing.T) {
+func TestInterfaceImplementations(_ *testing.T) {
 	// Verify that our mock types implement the interfaces
 	var _ dictif.Tag = (*mockTag)(nil)
 	var _ dictif.Entry = (*mockEntry)(nil)

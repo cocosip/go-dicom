@@ -18,7 +18,7 @@ func main() {
 	inputPath := "D:\\2.dcm"
 	outputPath := "D:\\2_transcoded_correct.dcm"
 
-	fmt.Println("=== DICOM Transcoding with Metadata Preservation ===\n")
+	fmt.Println("=== DICOM Transcoding with Metadata Preservation ===")
 
 	// Step 1: Parse the input file
 	fmt.Printf("Reading input file: %s\n", inputPath)
