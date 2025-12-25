@@ -1,10 +1,10 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
-// Package types provides shared types and interfaces for the imaging package.
+// Package imagetypes provides shared types and interfaces for the imaging package.
 // This package defines interfaces that can be used across different packages
 // without creating circular dependencies.
-package types
+package imagetypes
 
 // PixelData represents the interface for DICOM pixel data operations.
 // This mirrors fo-dicom's abstract DicomPixelData class pattern.

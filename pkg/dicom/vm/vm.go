@@ -1,7 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
-// Package vm implements DICOM Value Multiplicity (VM) types.
+// Package vm implements DICOM Value Multiplicity (VM) imagetypes.
 //
 // VM defines the number of values that can be encoded in a DICOM element.
 // Examples:

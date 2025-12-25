@@ -13,7 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -349,7 +349,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 // This follows the fo-dicom pattern of creating complete PixelData objects and using
 // the codec's Decode method instead of frame-by-frame processing.
 //
-// Note: This method requires types.PixelData implementations that also support conversion
+// Note: This method requires imagetypes.PixelData implementations that also support conversion
 // back to DICOM elements (e.g., DicomPixelData from the imaging package).
 func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.inputCodec == nil {
@@ -676,7 +676,7 @@ func buildFragmentSequence(frames [][]byte, bitsAllocated uint16) (element.Eleme
 }
 
 // buildFrameInfoFromDataset extracts frame metadata from a dataset.
-func (t *Transcoder) buildFrameInfoFromDataset(ds *dataset.Dataset) (*types.FrameInfo, error) {
+func (t *Transcoder) buildFrameInfoFromDataset(ds *dataset.Dataset) (*imagetypes.FrameInfo, error) {
 	// Extract pixel data element to verify it exists
 	_, exists := ds.Get(tag.PixelData)
 	if !exists {
@@ -711,7 +711,7 @@ func (t *Transcoder) buildFrameInfoFromDataset(ds *dataset.Dataset) (*types.Fram
 		photometric = "MONOCHROME2"
 	}
 
-	return &types.FrameInfo{
+	return &imagetypes.FrameInfo{
 		Width:                     width,
 		Height:                    height,
 		BitsAllocated:             bitsAlloc,

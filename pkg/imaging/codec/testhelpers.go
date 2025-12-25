@@ -6,10 +6,10 @@ package codec
 import (
 	"fmt"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
-// testPixelData is a simple in-memory implementation of types.PixelData for testing.
+// testPixelData is a simple in-memory implementation of imagetypes.PixelData for testing.
 type testPixelData struct {
 	frames                    [][]byte
 	width                     uint16
@@ -25,7 +25,7 @@ type testPixelData struct {
 }
 
 // newTestPixelData creates a new test pixel data instance.
-func newTestPixelData(info *types.FrameInfo) *testPixelData {
+func newTestPixelData(info *imagetypes.FrameInfo) *testPixelData {
 	return &testPixelData{
 		frames:                    make([][]byte, 0),
 		width:                     info.Width,
@@ -60,8 +60,8 @@ func (pd *testPixelData) FrameCount() int {
 }
 
 // GetFrameInfo returns frame metadata.
-func (pd *testPixelData) GetFrameInfo() *types.FrameInfo {
-	return &types.FrameInfo{
+func (pd *testPixelData) GetFrameInfo() *imagetypes.FrameInfo {
+	return &imagetypes.FrameInfo{
 		Width:                     pd.width,
 		Height:                    pd.height,
 		BitsAllocated:             pd.bitsAllocated,

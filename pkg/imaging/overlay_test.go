@@ -6,7 +6,7 @@ package imaging
 import (
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 func TestOverlayType_String(t *testing.T) {
@@ -246,7 +246,7 @@ func TestDicomOverlayData_ApplyToImage_Grayscale(t *testing.T) {
 	}
 
 	// Apply overlay
-	overlayColor := types.NewColor32(255, 200, 200, 200) // Light gray
+	overlayColor := imagetypes.NewColor32(255, 200, 200, 200) // Light gray
 	result, err := overlay.ApplyToImage(imageData, 4, 4, 1, overlayColor)
 	if err != nil {
 		t.Fatalf("ApplyToImage failed: %v", err)
@@ -277,7 +277,7 @@ func TestDicomOverlayData_ApplyToImage_RGB(t *testing.T) {
 	imageData := make([]byte, 2*2*3)
 
 	// Apply red overlay
-	overlayColor := types.NewColor32(255, 255, 0, 0) // Red
+	overlayColor := imagetypes.NewColor32(255, 255, 0, 0) // Red
 	result, err := overlay.ApplyToImage(imageData, 2, 2, 3, overlayColor)
 	if err != nil {
 		t.Fatalf("ApplyToImage failed: %v", err)
@@ -296,7 +296,7 @@ func TestDicomOverlayData_ApplyToImage_DimensionMismatch(t *testing.T) {
 
 	imageData := make([]byte, 16)
 
-	overlayColor := types.NewColor32(255, 255, 255, 255)
+	overlayColor := imagetypes.NewColor32(255, 255, 255, 255)
 
 	// Mismatched dimensions
 	_, err := overlay.ApplyToImage(imageData, 8, 8, 1, overlayColor)

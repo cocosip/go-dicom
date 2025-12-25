@@ -10,7 +10,7 @@ import (
 	"io"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 // RLECodec implements DICOM RLE (Run-Length Encoding) compression and decompression.
@@ -38,7 +38,7 @@ func (c *RLECodec) GetDefaultParameters() Parameters {
 }
 
 // Encode encodes pixel data from oldPixelData to newPixelData.
-func (c *RLECodec) Encode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+func (c *RLECodec) Encode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error {
 	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
@@ -67,7 +67,7 @@ func (c *RLECodec) Encode(oldPixelData types.PixelData, newPixelData types.Pixel
 }
 
 // Decode decodes pixel data from oldPixelData to newPixelData.
-func (c *RLECodec) Decode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+func (c *RLECodec) Decode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error {
 	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
@@ -96,7 +96,7 @@ func (c *RLECodec) Decode(oldPixelData types.PixelData, newPixelData types.Pixel
 }
 
 // encodeFrame compresses a single frame of pixel data using RLE compression (internal helper method).
-func (c *RLECodec) encodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, _ Parameters) error {
+func (c *RLECodec) encodeFrame(src []byte, dst *[]byte, info *imagetypes.FrameInfo, _ Parameters) error {
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}
@@ -145,7 +145,7 @@ func (c *RLECodec) encodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, _
 }
 
 // decodeFrame decompresses a single frame of RLE-compressed pixel data (internal helper method).
-func (c *RLECodec) decodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, _ Parameters) error {
+func (c *RLECodec) decodeFrame(src []byte, dst *[]byte, info *imagetypes.FrameInfo, _ Parameters) error {
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}

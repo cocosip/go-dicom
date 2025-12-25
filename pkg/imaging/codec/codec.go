@@ -9,7 +9,7 @@ package codec
 
 import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 // Codec represents a DICOM image codec that can encode and decode pixel data.
@@ -34,15 +34,15 @@ type Codec interface {
 
 	// Encode encodes pixel data from oldPixelData to newPixelData.
 	// This mirrors fo-dicom's: void Encode(DicomPixelData oldPixelData, DicomPixelData newPixelData, DicomCodecParams parameters)
-	Encode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error
+	Encode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error
 
 	// Decode decodes pixel data from oldPixelData to newPixelData.
 	// This mirrors fo-dicom's: void Decode(DicomPixelData oldPixelData, DicomPixelData newPixelData, DicomCodecParams parameters)
-	Decode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error
+	Decode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error
 }
 
 // Parameters represents codec-specific parameters.
-// Different codec implementations may provide their own parameter types.
+// Different codec implementations may provide their own parameter imagetypes.
 type Parameters interface {
 	// GetParameter retrieves a parameter by name.
 	GetParameter(name string) interface{}

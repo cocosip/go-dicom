@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 // Pipeline defines the interface for rendering pipelines
@@ -143,7 +143,7 @@ func (p *GrayscalePipeline) buildPipeline() {
 	}
 
 	// 2. VOI LUT (windowing)
-	p.voiLUT = lut.CreateVOILUT(types.VOILUTFunctionLinear, p.windowCenter, p.windowWidth)
+	p.voiLUT = lut.CreateVOILUT(imagetypes.VOILUTFunctionLinear, p.windowCenter, p.windowWidth)
 	luts = append(luts, p.voiLUT)
 
 	// 3. Output LUT (8-bit normalization) is implicitly handled by VOI LUT

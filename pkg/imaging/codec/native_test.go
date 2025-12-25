@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 func TestNativeCodec_Name(t *testing.T) {
@@ -43,7 +43,7 @@ func TestNativeCodec_EncodeDecode8Bit(t *testing.T) {
 	// 8-bit grayscale image data (no swapping needed)
 	pixelData := []byte{0, 10, 20, 30, 40, 50, 60, 70, 80, 90}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     10,
 		Height:                    1,
 		BitsAllocated:             8,
@@ -96,7 +96,7 @@ func TestNativeCodec_EncodeDecode16Bit(t *testing.T) {
 		0x00, 0x04, // 1024
 	}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     4,
 		Height:                    1,
 		BitsAllocated:             16,
@@ -147,7 +147,7 @@ func TestNativeCodec_ByteSwapping16Bit(t *testing.T) {
 		0x56, 0x78, // 0x7856 in LE
 	}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     2,
 		Height:                    1,
 		BitsAllocated:             16,
@@ -203,7 +203,7 @@ func TestNativeCodec_BigEndian(t *testing.T) {
 		0x56, 0x78, // 0x5678 in BE
 	}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     2,
 		Height:                    1,
 		BitsAllocated:             16,

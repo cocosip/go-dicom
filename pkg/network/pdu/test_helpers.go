@@ -10,7 +10,7 @@ type reasonStringer interface {
 	ReasonString() string
 }
 
-// testReasonStrings is a helper function to test reason string conversions for PDU types.
+// testReasonStrings is a helper function to test reason string conversions for PDU imagetypes.
 // It takes a list of test cases and a factory function that creates the PDU instance.
 func testReasonStrings(t *testing.T, tests []struct {
 	name     string

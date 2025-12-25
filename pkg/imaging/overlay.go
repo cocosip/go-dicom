@@ -6,7 +6,7 @@ package imaging
 import (
 	"fmt"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 const unknownStr = "Unknown"
@@ -196,7 +196,7 @@ func (o *DicomOverlayData) GetFrame(frameIndex int) ([]byte, error) {
 // imageData: RGB or grayscale image data
 // overlayColor: color to use for overlay (ARGB format)
 // Returns: modified image data with overlay applied
-func (o *DicomOverlayData) ApplyToImage(imageData []byte, width, height int, samplesPerPixel int, overlayColor types.Color32) ([]byte, error) {
+func (o *DicomOverlayData) ApplyToImage(imageData []byte, width, height int, samplesPerPixel int, overlayColor imagetypes.Color32) ([]byte, error) {
 	if width != o.Columns || height != o.Rows {
 		return nil, fmt.Errorf("image dimensions (%dx%d) don't match overlay dimensions (%dx%d)",
 			width, height, o.Columns, o.Rows)

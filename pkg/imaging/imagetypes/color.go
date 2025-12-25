@@ -1,8 +1,8 @@
 // Copyright (c) 2025 go-dicom authors.
 // Licensed under the Microsoft Public License (MS-PL).
 
-// Package types provides common types used across the imaging package.
-package types
+// Package imagetypes provides common types used across the imaging package.
+package imagetypes
 
 // Color32 represents a 32-bit RGBA color
 type Color32 struct {

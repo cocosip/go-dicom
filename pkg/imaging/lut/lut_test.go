@@ -7,7 +7,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 func TestInvertLUT(t *testing.T) {
@@ -73,7 +73,7 @@ func TestOutputLUT_Grayscale(t *testing.T) {
 
 func TestOutputLUT_CustomColorMap(t *testing.T) {
 	// Create a simple hot metal color map (simplified)
-	var colorMap [256]types.Color32
+	var colorMap [256]imagetypes.Color32
 
 	for i := 0; i < 256; i++ {
 		// Simple gradient: Red -> Yellow -> White
@@ -85,7 +85,7 @@ func TestOutputLUT_CustomColorMap(t *testing.T) {
 			g = uint8((i - 128) * 2)
 		}
 
-		colorMap[i] = types.Color32{A: 255, R: r, G: g, B: b}
+		colorMap[i] = imagetypes.Color32{A: 255, R: r, G: g, B: b}
 	}
 
 	lut := NewOutputLUT(colorMap)

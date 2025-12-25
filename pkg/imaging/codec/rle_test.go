@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 func TestRLECodec_Name(t *testing.T) {
@@ -30,7 +30,7 @@ func TestRLECodec_EncodeDecodeSimple(t *testing.T) {
 		pixelData[i] = byte(i % 256)
 	}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     width,
 		Height:                    height,
 		BitsAllocated:             8,
@@ -86,7 +86,7 @@ func TestRLECodec_EncodeDecodeRepeating(t *testing.T) {
 		pixelData[i] = byte(i/10) % 16
 	}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     width,
 		Height:                    height,
 		BitsAllocated:             8,
@@ -145,7 +145,7 @@ func TestRLECodec_EncodeDecodeRGB(t *testing.T) {
 		pixelData[i+2] = byte((i/3 + 100) % 256) // B
 	}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     width,
 		Height:                    height,
 		BitsAllocated:             8,
@@ -195,7 +195,7 @@ func TestRLECodec_Encode16Bit(t *testing.T) {
 		pixelData[i+1] = byte((val >> 8) & 0xFF)
 	}
 
-	frameInfo := &types.FrameInfo{
+	frameInfo := &imagetypes.FrameInfo{
 		Width:                     width,
 		Height:                    height,
 		BitsAllocated:             16,

@@ -7,17 +7,17 @@ import (
 	"math"
 	"strings"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 // VOILUTFunction is an alias for the common VOILUTFunction type defined in types package.
-type VOILUTFunction = types.VOILUTFunction
+type VOILUTFunction = imagetypes.VOILUTFunction
 
 // Backward compatibility constants
 const (
-	VOILUTFunctionLinear      = types.VOILUTFunctionLinear
-	VOILUTFunctionLinearExact = types.VOILUTFunctionLinearExact
-	VOILUTFunctionSigmoid     = types.VOILUTFunctionSigmoid
+	VOILUTFunctionLinear      = imagetypes.VOILUTFunctionLinear
+	VOILUTFunctionLinearExact = imagetypes.VOILUTFunctionLinearExact
+	VOILUTFunctionSigmoid     = imagetypes.VOILUTFunctionSigmoid
 )
 
 // VOILUT is the base interface for Value of Interest LUT implementations.

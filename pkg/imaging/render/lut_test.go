@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 func TestModalityRescaleLUT(t *testing.T) {
@@ -179,19 +179,19 @@ func TestSigmoidVOILUT(t *testing.T) {
 
 func TestCreateVOILUT(t *testing.T) {
 	// Test LINEAR
-	lut1 := lut.CreateVOILUT(types.VOILUTFunctionLinear, 128, 256)
+	lut1 := lut.CreateVOILUT(imagetypes.VOILUTFunctionLinear, 128, 256)
 	if _, ok := lut1.(*lut.VOILinearLUT); !ok {
 		t.Error("Expected LinearVOILUT for LINEAR function")
 	}
 
 	// Test LINEAR_EXACT
-	lut2 := lut.CreateVOILUT(types.VOILUTFunctionLinearExact, 128, 256)
+	lut2 := lut.CreateVOILUT(imagetypes.VOILUTFunctionLinearExact, 128, 256)
 	if _, ok := lut2.(*lut.VOILinearExactLUT); !ok {
 		t.Error("Expected LinearExactVOILUT for LINEAR_EXACT function")
 	}
 
 	// Test SIGMOID
-	lut3 := lut.CreateVOILUT(types.VOILUTFunctionSigmoid, 128, 64)
+	lut3 := lut.CreateVOILUT(imagetypes.VOILUTFunctionSigmoid, 128, 64)
 	if _, ok := lut3.(*lut.VOISigmoidLUT); !ok {
 		t.Error("Expected SigmoidVOILUT for SIGMOID function")
 	}

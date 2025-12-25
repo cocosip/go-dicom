@@ -4,12 +4,12 @@
 package render
 
 import (
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 // LUT is an alias for the common LUT interface defined in types package.
 // This alias is provided for backward compatibility and convenience.
-type LUT = types.LUT
+type LUT = imagetypes.LUT
 
 // ModalityLUT defines the interface for Modality lookup tables.
 // Either Modality Rescale LUT or Modality Sequence LUT

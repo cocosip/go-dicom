@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 // NativeCodec handles uncompressed pixel data with various transfer syntaxes.
@@ -73,7 +73,7 @@ func (c *NativeCodec) GetDefaultParameters() Parameters {
 
 // Encode encodes pixel data from oldPixelData to newPixelData.
 // For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
-func (c *NativeCodec) Encode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+func (c *NativeCodec) Encode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error {
 	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
@@ -103,7 +103,7 @@ func (c *NativeCodec) Encode(oldPixelData types.PixelData, newPixelData types.Pi
 
 // Decode decodes pixel data from oldPixelData to newPixelData.
 // For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
-func (c *NativeCodec) Decode(oldPixelData types.PixelData, newPixelData types.PixelData, parameters Parameters) error {
+func (c *NativeCodec) Decode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error {
 	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
@@ -132,7 +132,7 @@ func (c *NativeCodec) Decode(oldPixelData types.PixelData, newPixelData types.Pi
 }
 
 // encodeFrame encodes a single frame (internal helper method).
-func (c *NativeCodec) encodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, params Parameters) error {
+func (c *NativeCodec) encodeFrame(src []byte, dst *[]byte, info *imagetypes.FrameInfo, params Parameters) error {
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}
@@ -173,7 +173,7 @@ func (c *NativeCodec) encodeFrame(src []byte, dst *[]byte, info *types.FrameInfo
 }
 
 // decodeFrame decodes a single frame (internal helper method).
-func (c *NativeCodec) decodeFrame(src []byte, dst *[]byte, info *types.FrameInfo, params Parameters) error {
+func (c *NativeCodec) decodeFrame(src []byte, dst *[]byte, info *imagetypes.FrameInfo, params Parameters) error {
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}

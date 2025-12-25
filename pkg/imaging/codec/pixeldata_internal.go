@@ -6,7 +6,7 @@ package codec
 import (
 	"fmt"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 // simplePixelData is an internal PixelData implementation used by Transcoder.
@@ -26,7 +26,7 @@ type simplePixelData struct {
 }
 
 // newSimplePixelData creates a new simple pixel data instance for internal use.
-func newSimplePixelData(info *types.FrameInfo, encapsulated bool) *simplePixelData {
+func newSimplePixelData(info *imagetypes.FrameInfo, encapsulated bool) *simplePixelData {
 	return &simplePixelData{
 		frames:                    make([][]byte, 0),
 		width:                     info.Width,
@@ -62,8 +62,8 @@ func (pd *simplePixelData) FrameCount() int {
 }
 
 // GetFrameInfo returns frame metadata.
-func (pd *simplePixelData) GetFrameInfo() *types.FrameInfo {
-	return &types.FrameInfo{
+func (pd *simplePixelData) GetFrameInfo() *imagetypes.FrameInfo {
+	return &imagetypes.FrameInfo{
 		Width:                     pd.width,
 		Height:                    pd.height,
 		BitsAllocated:             pd.bitsAllocated,

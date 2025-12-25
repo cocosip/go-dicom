@@ -6,11 +6,11 @@ package imaging
 import (
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
 
 func TestNewColor32(t *testing.T) {
-	color := types.NewColor32(255, 100, 150, 200)
+	color := imagetypes.NewColor32(255, 100, 150, 200)
 
 	if color.A != 255 {
 		t.Errorf("Expected A=255, got %d", color.A)

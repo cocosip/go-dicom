@@ -101,7 +101,7 @@ type NActionResponse struct {
 }
 
 // createNOperationResponseCommand creates a command dataset for N-operation responses (N-ACTION, N-EVENT-REPORT).
-// This helper reduces code duplication across similar N-operation response types.
+// This helper reduces code duplication across similar N-operation response imagetypes.
 func createNOperationResponseCommand(
 	commandType uint16,
 	messageIDBeingRespondedTo uint16,

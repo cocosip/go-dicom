@@ -2,7 +2,7 @@
 // Licensed under the Microsoft Public License (MS-PL).
 
 //nolint:revive // "types" is a descriptive and appropriate package name for common imaging types
-package types
+package imagetypes
 
 // LUT is the interface for all Lookup Table implementations.
 // It transforms input pixel values to output values through various transformations.

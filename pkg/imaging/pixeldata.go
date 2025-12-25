@@ -14,7 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
-	"github.com/cocosip/go-dicom/pkg/imaging/types"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -147,15 +147,15 @@ func (info *PixelDataInfo) Validate() error {
 }
 
 // DicomPixelData manages DICOM pixel data with support for multiple frames and codecs.
-// This type implements the types.PixelData interface.
+// This type implements the imagetypes.PixelData interface.
 type DicomPixelData struct {
 	Info             *PixelDataInfo
 	frames           [][]byte // Per-frame data (uncompressed for native; compressed for encapsulated)
 	basicOffsetTable []uint32 // BOT for encapsulated data
 }
 
-// Ensure DicomPixelData implements types.PixelData interface
-var _ types.PixelData = (*DicomPixelData)(nil)
+// Ensure DicomPixelData implements imagetypes.PixelData interface
+var _ imagetypes.PixelData = (*DicomPixelData)(nil)
 
 // NewDicomPixelData creates a new DicomPixelData instance.
 func NewDicomPixelData(info *PixelDataInfo) (*DicomPixelData, error) {
@@ -604,13 +604,13 @@ func (pd *DicomPixelData) BasicOffsetTable() []uint32 {
 }
 
 // GetFrameInfo returns frame metadata for codec operations.
-func (pd *DicomPixelData) GetFrameInfo() *types.FrameInfo {
+func (pd *DicomPixelData) GetFrameInfo() *imagetypes.FrameInfo {
 	piValue := ""
 	if pd.Info.PhotometricInterpretation != nil {
 		piValue = pd.Info.PhotometricInterpretation.Value
 	}
 
-	return &types.FrameInfo{
+	return &imagetypes.FrameInfo{
 		Width:                     pd.Info.Width,
 		Height:                    pd.Info.Height,
 		BitsAllocated:             pd.Info.BitsAllocated,
@@ -914,7 +914,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 
 type paletteLUT struct {
 	first   int32
-	entries []types.Color32
+	entries []imagetypes.Color32
 }
 
 // convertPaletteToRGB loads palette LUT from dataset and converts frames to RGB using shared LUT Color32 type.
@@ -1144,15 +1144,15 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
 	}, nil
 }
 
-func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []types.Color32 {
+func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []imagetypes.Color32 {
 	shift := 0
 	if bits > 8 {
 		shift = bits - 8
 	}
 
-	entries := make([]types.Color32, len(rLUT))
+	entries := make([]imagetypes.Color32, len(rLUT))
 	for i := 0; i < len(rLUT); i++ {
-		entries[i] = types.Color32{
+		entries[i] = imagetypes.Color32{
 			A: 255,
 			R: clampByte(int(rLUT[i] >> shift)),
 			G: clampByte(int(gLUT[i] >> shift)),
@@ -1163,7 +1163,7 @@ func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []types.Color32 {
 }
 
 // expandSegmentedLUT expands DICOM segmented palette LUT data (Type 0/1 segments).
-// Supports discrete and linear segments; skips unsupported types.
+// Supports discrete and linear segments; skips unsupported imagetypes.
 func expandSegmentedLUT(raw []byte, expectedSize int) ([]uint16, error) {
 	var out []uint16
 	for i := 0; i+1 < len(raw); {
