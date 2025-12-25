@@ -107,6 +107,8 @@ func (t *Transcoder) OutputSyntax() *transfer.Syntax {
 }
 
 // Transcode converts a dataset from input transfer syntax to output transfer syntax.
+// Note: This method only transcodes the dataset and does not preserve File Meta Information.
+// If you need to preserve File Meta Information, use TranscodeWithMetadata instead.
 func (t *Transcoder) Transcode(ds *dataset.Dataset) (*dataset.Dataset, error) {
 	// Check if dataset contains pixel data
 	if !ds.Contains(tag.PixelData) {
@@ -147,6 +149,59 @@ func (t *Transcoder) Transcode(ds *dataset.Dataset) (*dataset.Dataset, error) {
 
 	return nil, fmt.Errorf("unable to determine transcode path from %s to %s",
 		t.inputSyntax.UID().UID(), t.outputSyntax.UID().UID())
+}
+
+// TranscodeWithMetadata converts a dataset from input transfer syntax to output transfer syntax
+// while preserving File Meta Information from the source.
+//
+// This method transcodes the dataset and preserves the File Meta Information from the source,
+// updating only the Transfer Syntax UID to match the output format. This is useful when you
+// want to preserve all File Meta Information tags (like SourceApplicationEntityTitle) after
+// transcoding.
+//
+// Parameters:
+//   - ds: The main DICOM dataset to transcode
+//   - sourceMeta: The File Meta Information from the source file (optional)
+//     If nil, a new minimal File Meta Information will be created
+//
+// Returns:
+//   - Transcoded dataset
+//   - Updated File Meta Information (preserves all fields except Transfer Syntax UID)
+//   - Error if transcoding fails
+//
+// Example usage:
+//
+//	result, _ := parser.ParseFile("input.dcm")
+//	transcoder := NewTranscoder(inputTS, outputTS)
+//	newDS, newMeta, _ := transcoder.TranscodeWithMetadata(
+//	    result.Dataset,
+//	    result.FileMetaInformation)
+//	writer.WriteFile("output.dcm", newDS, writer.WithFileMetaInfo(newMeta.Dataset()))
+func (t *Transcoder) TranscodeWithMetadata(ds *dataset.Dataset, sourceMeta *dataset.FileMetaInformation) (*dataset.Dataset, *dataset.FileMetaInformation, error) {
+	// Transcode the dataset
+	newDS, err := t.Transcode(ds)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// If no source metadata provided, create a new minimal one
+	if sourceMeta == nil {
+		newMeta, err := dataset.NewFileMetaInformationFromMainDataset(newDS, t.outputSyntax)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create file meta information: %w", err)
+		}
+		return newDS, newMeta, nil
+	}
+
+	// Clone the source File Meta Information by creating a new one from the cloned dataset
+	newMeta := dataset.NewFileMetaInformationFromDataset(sourceMeta.Dataset().Clone())
+
+	// Update Transfer Syntax UID to match the output transfer syntax
+	if err := newMeta.SetTransferSyntax(t.outputSyntax); err != nil {
+		return nil, nil, fmt.Errorf("failed to update transfer syntax: %w", err)
+	}
+
+	return newDS, newMeta, nil
 }
 
 // DecodeFrame decodes a single frame from compressed pixel data.
@@ -212,16 +267,81 @@ func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, e
 }
 
 // transcodeUncompressedToUncompressed handles conversion between uncompressed formats.
+// This includes byte order conversion, planar configuration changes, etc.
 func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*dataset.Dataset, error) {
-	// Clone dataset
-	newDS := ds.Clone()
+	// Check if we need any actual conversion
+	inputEndian := t.inputSyntax.Endian()
+	outputEndian := t.outputSyntax.Endian()
 
-	// In a full implementation, would handle:
-	// - Byte order conversion
-	// - Planar configuration conversion
-	// - Photometric interpretation conversion
+	// If input and output are the same, just clone and update transfer syntax
+	if inputEndian == outputEndian {
+		newDS := ds.Clone()
+		newDS.SetInternalTransferSyntax(t.outputSyntax)
+		return newDS, nil
+	}
 
-	// For now, just clone
+	// Need byte order conversion for pixel data
+	// Get pixel data element
+	pixelDataElem, exists := ds.Get(tag.PixelData)
+	if !exists {
+		// No pixel data, just clone
+		newDS := ds.Clone()
+		newDS.SetInternalTransferSyntax(t.outputSyntax)
+		return newDS, nil
+	}
+
+	// Extract pixel data
+	var pixelData []byte
+	switch elem := pixelDataElem.(type) {
+	case *element.OtherByte:
+		// 8-bit data doesn't need byte order conversion
+		newDS := ds.Clone()
+		newDS.SetInternalTransferSyntax(t.outputSyntax)
+		return newDS, nil
+	case *element.OtherWord:
+		pixelData = elem.GetData()
+	default:
+		return nil, fmt.Errorf("unexpected pixel data element type for uncompressed data")
+	}
+
+	// Get frame info
+	frameInfo, err := t.buildFrameInfoFromDataset(ds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only need to swap bytes for multi-byte data (BitsAllocated > 8)
+	if frameInfo.BitsAllocated <= 8 {
+		newDS := ds.Clone()
+		newDS.SetInternalTransferSyntax(t.outputSyntax)
+		return newDS, nil
+	}
+
+	// Swap byte order for 16-bit data
+	if len(pixelData)%2 != 0 {
+		return nil, fmt.Errorf("pixel data length is not even for 16-bit data")
+	}
+
+	convertedData := make([]byte, len(pixelData))
+	for i := 0; i < len(pixelData); i += 2 {
+		// Swap bytes
+		convertedData[i] = pixelData[i+1]
+		convertedData[i+1] = pixelData[i]
+	}
+
+	// Create new dataset with converted pixel data
+	newDS := dataset.NewWithTransferSyntax(t.outputSyntax)
+
+	// Copy all elements except PixelData
+	for _, elem := range ds.Elements() {
+		if elem.Tag().ToUint32() != tag.PixelData.ToUint32() {
+			_ = newDS.Add(elem)
+		}
+	}
+
+	// Add converted pixel data
+	_ = newDS.Add(element.NewOtherWord(tag.PixelData, convertedData))
+
 	return newDS, nil
 }
 
@@ -263,7 +383,7 @@ func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.D
 
 	// Determine frame count
 	frameCount := 1
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil { 
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
 		frameCount = int(nf)
 	}
 	if frameCount < 1 {
@@ -364,7 +484,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	}
 
 	// Calculate frame size
-	bytesAllocated := int((frameInfo.BitsAllocated - 1) / 8 + 1)
+	bytesAllocated := int((frameInfo.BitsAllocated-1)/8 + 1)
 	frameSize := bytesAllocated * int(frameInfo.SamplesPerPixel) * int(frameInfo.Width) * int(frameInfo.Height)
 	if frameSize <= 0 {
 		return nil, fmt.Errorf("invalid frame size calculated")
@@ -507,9 +627,14 @@ func stripTrailingPadding(data []byte) []byte {
 	return data
 }
 
-// buildFragmentSequence creates an OB or OW fragment sequence from per-frame compressed data,
-// populating the Basic Offset Table. The VR type (OB/OW) is chosen based on BitsAllocated
-// following fo-dicom behavior: BitsAllocated > 8 uses OW, otherwise OB.
+// buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
+// populating the Basic Offset Table.
+//
+// According to DICOM Part 5 Section 8.2, all encapsulated/compressed pixel data
+// MUST use VR=OB (Other Byte), regardless of the BitsAllocated value.
+//
+// The bitsAllocated parameter is kept for backward compatibility but is not used
+// in VR selection for encapsulated data.
 func buildFragmentSequence(frames [][]byte, bitsAllocated uint16) (element.Element, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frame data provided for fragment sequence")
@@ -529,21 +654,18 @@ func buildFragmentSequence(frames [][]byte, bitsAllocated uint16) (element.Eleme
 		runningOffset += uint32(len(frame))
 	}
 
-	// Choose OB/OW based on BitsAllocated (following fo-dicom behavior)
-	// - BitsAllocated > 8: use OW (Other Word)
-	// - BitsAllocated <= 8: use OB (Other Byte)
-	if bitsAllocated > 8 {
-		// Create OtherWordFragment
-		owf := element.NewOtherWordFragment(tag.PixelData)
-		for _, frame := range frames {
-			owf.AddFragment(buffer.NewMemory(frame))
-		}
-		// Always set offset table (even for single-frame images)
-		owf.SetOffsetTable(offsets)
-		return owf, nil
-	}
+	// According to DICOM Part 5 Section 8.2:
+	// "If sent in an Encapsulated Format (i.e., other than the Native Format)
+	//  the Value Representation OB is used."
+	//
+	// Therefore, ALL compressed/encapsulated pixel data MUST use OB,
+	// regardless of BitsAllocated value.
+	//
+	// NOTE: The bitsAllocated parameter is kept for potential future use
+	// but is currently not used in VR selection for encapsulated data.
+	_ = bitsAllocated
 
-	// Create OtherByteFragment
+	// Create OtherByteFragment (OB) for encapsulated/compressed data
 	obf := element.NewOtherByteFragment(tag.PixelData)
 	for _, frame := range frames {
 		obf.AddFragment(buffer.NewMemory(frame))
