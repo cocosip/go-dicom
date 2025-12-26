@@ -27,6 +27,7 @@ type Transcoder struct {
 	inputParams   Parameters
 	outputParams  Parameters
 	codecRegistry *Registry
+	strictDICOMVR bool // Controls VR selection according to DICOM standard
 }
 
 // TranscoderOption is a functional option for creating a Transcoder.
@@ -38,6 +39,7 @@ func NewTranscoder(inputSyntax, outputSyntax *transfer.Syntax, opts ...Transcode
 		inputSyntax:   inputSyntax,
 		outputSyntax:  outputSyntax,
 		codecRegistry: GetGlobalRegistry(),
+		strictDICOMVR: false, // Default: follow DICOM standard for VR selection
 	}
 
 	// Apply options
@@ -93,6 +95,21 @@ func WithOutputParameters(params Parameters) TranscoderOption {
 func WithCodecRegistry(registry *Registry) TranscoderOption {
 	return func(t *Transcoder) {
 		t.codecRegistry = registry
+	}
+}
+
+// WithStrictDICOMVR controls VR selection for pixel data according to DICOM standard.
+// When true (default, recommended):
+//   - Uncompressed data: VR selected based on BitsAllocated (OB for <=8 bits, OW for >8 bits)
+//   - Compressed data: VR is always OB (DICOM Part 5 Section 8.2)
+//
+// When false (compatibility mode):
+//   - Both compressed and uncompressed data: VR selected based on BitsAllocated
+//
+// Note: Setting this to false may violate DICOM standard but might be needed for compatibility.
+func WithStrictDICOMVR(strict bool) TranscoderOption {
+	return func(t *Transcoder) {
+		t.strictDICOMVR = strict
 	}
 }
 
@@ -524,7 +541,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 		frameFragments = append(frameFragments, frameData)
 	}
 
-	fragSeq, err := buildFragmentSequence(frameFragments, frameInfo.BitsAllocated)
+	fragSeq, err := buildFragmentSequence(frameFragments, frameInfo.BitsAllocated, t.strictDICOMVR)
 	if err != nil {
 		return nil, err
 	}
@@ -627,15 +644,22 @@ func stripTrailingPadding(data []byte) []byte {
 	return data
 }
 
-// buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
+// buildFragmentSequence creates a fragment sequence from per-frame compressed data,
 // populating the Basic Offset Table.
 //
-// According to DICOM Part 5 Section 8.2, all encapsulated/compressed pixel data
-// MUST use VR=OB (Other Byte), regardless of the BitsAllocated value.
+// VR Selection according to DICOM standard:
+//   - For encapsulated (compressed) pixel data, DICOM Part 5 Section 8.2 specifies
+//     that VR should always be OB (Other Byte), regardless of BitsAllocated.
+//   - For native (uncompressed) pixel data, VR is selected based on BitsAllocated:
+//     OB for <=8 bits, OW for >8 bits.
 //
-// The bitsAllocated parameter is kept for backward compatibility but is not used
-// in VR selection for encapsulated data.
-func buildFragmentSequence(frames [][]byte, bitsAllocated uint16) (element.Element, error) {
+// Parameters:
+//   - frames: Per-frame compressed data
+//   - bitsAllocated: Bits allocated per pixel
+//   - strictDICOM: Controls VR selection mode:
+//     true:  Use OB for encapsulated data (DICOM standard compliant, recommended)
+//     false: Select VR based on BitsAllocated even for encapsulated data (compatibility mode)
+func buildFragmentSequence(frames [][]byte, bitsAllocated uint16, strictDICOM bool) (element.Element, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frame data provided for fragment sequence")
 	}
@@ -654,25 +678,39 @@ func buildFragmentSequence(frames [][]byte, bitsAllocated uint16) (element.Eleme
 		runningOffset += uint32(len(frame))
 	}
 
-	// According to DICOM Part 5 Section 8.2:
-	// "If sent in an Encapsulated Format (i.e., other than the Native Format)
-	//  the Value Representation OB is used."
-	//
-	// Therefore, ALL compressed/encapsulated pixel data MUST use OB,
-	// regardless of BitsAllocated value.
-	//
-	// NOTE: The bitsAllocated parameter is kept for potential future use
-	// but is currently not used in VR selection for encapsulated data.
-	_ = bitsAllocated
-
-	// Create OtherByteFragment (OB) for encapsulated/compressed data
-	obf := element.NewOtherByteFragment(tag.PixelData)
-	for _, frame := range frames {
-		obf.AddFragment(buffer.NewMemory(frame))
+	// Determine VR based on strictDICOM mode
+	if strictDICOM {
+		// According to DICOM Part 5 Section 8.2:
+		// "If sent in an Encapsulated Format (i.e., other than the Native Format)
+		//  the Value Representation OB is used."
+		// This is the recommended and standard-compliant mode.
+		obf := element.NewOtherByteFragment(tag.PixelData)
+		for _, frame := range frames {
+			obf.AddFragment(buffer.NewMemory(frame))
+		}
+		obf.SetOffsetTable(offsets)
+		return obf, nil
 	}
-	// Always set offset table (even for single-frame images)
-	obf.SetOffsetTable(offsets)
-	return obf, nil
+
+	// strictDICOM is false: select VR based on BitsAllocated (compatibility mode)
+	// This may be needed for compatibility with certain non-standard implementations
+	// that expect OW for 16-bit data even when encapsulated.
+	if bitsAllocated <= 8 {
+		obf := element.NewOtherByteFragment(tag.PixelData)
+		for _, frame := range frames {
+			obf.AddFragment(buffer.NewMemory(frame))
+		}
+		obf.SetOffsetTable(offsets)
+		return obf, nil
+	}
+
+	// BitsAllocated > 8: use OW
+	owf := element.NewOtherWordFragment(tag.PixelData)
+	for _, frame := range frames {
+		owf.AddFragment(buffer.NewMemory(frame))
+	}
+	owf.SetOffsetTable(offsets)
+	return owf, nil
 }
 
 // buildFrameInfoFromDataset extracts frame metadata from a dataset.

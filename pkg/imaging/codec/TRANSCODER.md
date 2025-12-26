@@ -44,6 +44,8 @@ DicomTranscoder 是 DICOM 图像编解码的核心组件，负责在不同 Trans
 ✅ PixelData interface pattern following fo-dicom
 ✅ Internal simplePixelData implementation for codec operations
 ✅ Fragment sequence support for compressed data
+✅ VR selection control for compressed pixel data (strictDICOMVR option)
+✅ DICOM standard compliant VR selection (OB for encapsulated data)
 
 ---
 
@@ -345,6 +347,7 @@ func (m *TranscoderManager) CanTranscode(inputTS, outputTS *transfer.Syntax) boo
   - `WithInputParameters()` - 配置输入 codec 参数
   - `WithOutputParameters()` - 配置输出 codec 参数
   - `WithCodecRegistry()` - 使用自定义 registry
+  - `WithStrictDICOMVR()` - 控制压缩像素数据的 VR 选择策略
 
 **转码场景**:
 
@@ -496,6 +499,34 @@ transcoder := codec.NewTranscoder(
 )
 ```
 
+### VR 选择控制
+
+```go
+// 默认模式：严格遵循 DICOM 标准（推荐）
+// 压缩数据强制使用 OB（符合 DICOM Part 5 Section 8.2）
+transcoder := codec.NewTranscoder(
+    transfer.ExplicitVRLittleEndian,
+    transfer.JPEGBaseline,
+)
+
+// 兼容模式：压缩数据也根据 BitsAllocated 选择 VR
+// 用于兼容某些非标准实现
+transcoder := codec.NewTranscoder(
+    transfer.ExplicitVRLittleEndian,
+    transfer.JPEGBaseline,
+    codec.WithStrictDICOMVR(false),
+)
+
+// VR 选择规则：
+// strictDICOMVR = true (强制):
+//   - 非压缩数据: BitsAllocated ≤8 → OB, >8 → OW
+//   - 压缩数据: 强制 OB
+//
+// strictDICOMVR = false (兼容模式 ):
+//   - 非压缩数据: BitsAllocated ≤8 → OB, >8 → OW
+//   - 压缩数据: BitsAllocated ≤8 → OB, >8 → OW
+```
+
 ---
 
 ## 实现细节
@@ -537,6 +568,68 @@ Transcoder 正确处理：
 - `element.OtherWordFragment` - 压缩像素数据（16-bit）
 - Fragment 提取和重组
 - 多帧图像的 offset table 处理
+
+### VR 选择规则
+
+根据 DICOM Part 5 Section 8.2 标准，像素数据的 VR（Value Representation）选择规则如下：
+
+#### 标准规定
+
+**非压缩数据**（Native Format）：
+- VR 根据 BitsAllocated 选择
+- BitsAllocated ≤ 8 位：使用 OB（Other Byte）
+- BitsAllocated > 8 位：使用 OW（Other Word）
+
+**压缩数据**（Encapsulated Format）：
+- DICOM 标准规定：**必须使用 OB**（Other Byte）
+- 引用标准原文："If sent in an Encapsulated Format (i.e., other than the Native Format) the Value Representation OB is used."
+- 无论 BitsAllocated 的值是多少，压缩数据都应使用 OB
+
+#### Transcoder 实现
+
+Transcoder 提供 `strictDICOMVR` 配置选项来控制压缩数据的 VR 选择：
+
+**strictDICOMVR = true（默认，推荐）**：
+```go
+// 非压缩数据：根据 BitsAllocated 选择
+if bitsAllocated <= 8 {
+    element.NewOtherByte(tag.PixelData, data)
+} else {
+    element.NewOtherWord(tag.PixelData, data)
+}
+
+// 压缩数据：强制使用 OB（符合 DICOM 标准）
+element.NewOtherByteFragment(tag.PixelData)
+```
+
+**strictDICOMVR = false（兼容模式）**：
+```go
+// 非压缩数据：根据 BitsAllocated 选择
+if bitsAllocated <= 8 {
+    element.NewOtherByte(tag.PixelData, data)
+} else {
+    element.NewOtherWord(tag.PixelData, data)
+}
+
+// 压缩数据：也根据 BitsAllocated 选择（用于兼容某些非标准实现）
+if bitsAllocated <= 8 {
+    element.NewOtherByteFragment(tag.PixelData)
+} else {
+    element.NewOtherWordFragment(tag.PixelData)
+}
+```
+
+#### 使用建议
+
+1. **默认使用 strictDICOMVR = true**
+   - 符合 DICOM 标准
+   - 确保与标准兼容的 DICOM 查看器正常工作
+   - 推荐用于生产环境
+
+2. **仅在必要时使用 strictDICOMVR = false**
+   - 用于兼容某些非标准的 DICOM 实现
+   - 某些旧版本软件可能期望压缩的 16-bit 数据使用 OW
+   - 使用前应充分测试兼容性
 
 ### AddFrame 验证逻辑
 
@@ -736,6 +829,7 @@ DICOM Transcoder 实现已完成并完全可用：
 - CodecRegistry 线程安全操作
 - TranscoderManager 高级 API
 - 全局单例 registry with built-in codecs
+- VR 选择控制（strictDICOMVR 配置）
 
 ✅ **fo-dicom 对齐**
 - Codec 接口完全对齐 IDicomCodec
@@ -748,6 +842,7 @@ DICOM Transcoder 实现已完成并完全可用：
 - 正确集成现有 dataset accessors
 - Fragment sequence 支持压缩数据
 - 清晰的测试/生产代码分离
+- 符合 DICOM 标准的 VR 选择（压缩数据使用 OB）
 
 ✅ **文档**
 - 完整的设计文档
