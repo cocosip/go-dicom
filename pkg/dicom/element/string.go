@@ -15,6 +15,9 @@ import (
 	"golang.org/x/text/encoding"
 )
 
+// Compile-time check to ensure String implements Element interface
+var _ Element = (*String)(nil)
+
 // String represents a DICOM string element.
 //
 // String elements can contain single or multiple values separated by backslashes.

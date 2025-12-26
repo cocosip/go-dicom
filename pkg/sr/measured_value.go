@@ -27,9 +27,9 @@ func NewMeasuredValue(value float64, units *CodeItem) *MeasuredValue {
 	ds := dataset.New()
 
 	// Add numeric value (0040,A30A) VR=DS
-	// Use the embedded String from DecimalString to satisfy Element interface
+	// DecimalString implements Element interface through delegation
 	dsElem := element.NewDecimalStringFromFloat(tag.NumericValue, []float64{value})
-	_ = ds.AddOrUpdate(dsElem.String)
+	_ = ds.AddOrUpdate(dsElem)
 
 	// Add measurement units code sequence (0040,08EA) VR=SQ
 	if units != nil {
@@ -74,10 +74,17 @@ func (m *MeasuredValue) Value() float64 {
 		return 0.0
 	}
 
-	// Cast to String element and parse as decimal
+	// Try to cast to DecimalString first (most common case)
+	if ds, ok := elem.(*element.DecimalString); ok {
+		if val, err := ds.GetFloat(0); err == nil {
+			return val
+		}
+	}
+
+	// Fallback: try to parse as String element
 	if str, ok := elem.(*element.String); ok {
 		// Create DecimalString wrapper to parse
-		ds := &element.DecimalString{String: str}
+		ds := element.NewDecimalStringFromBuffer(tag.NumericValue, str.Buffer(), nil)
 		if val, err := ds.GetFloat(0); err == nil {
 			return val
 		}

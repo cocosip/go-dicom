@@ -13,6 +13,9 @@ import (
 	"golang.org/x/text/encoding"
 )
 
+// Compile-time check to ensure PersonName implements Element interface
+var _ Element = (*PersonName)(nil)
+
 // PersonNameComponents represents the components of a DICOM person name.
 // Format: FamilyName^GivenName^MiddleName^NamePrefix^NameSuffix
 type PersonNameComponents struct {
@@ -37,13 +40,12 @@ func (p *PersonNameComponents) String() string {
 // PersonName represents a DICOM element with VR = PN (Person Name).
 // Person names have special structure: FamilyName^GivenName^MiddleName^NamePrefix^NameSuffix
 type PersonName struct {
-	*String
+	str *String
 }
 
 // NewPersonName creates a new PN element with the given names.
 func NewPersonName(t *tag.Tag, names []string) *PersonName {
-	str := NewString(t, vr.PN, names)
-	return &PersonName{String: str}
+	return &PersonName{str: NewString(t, vr.PN, names)}
 }
 
 // NewPersonNameWithComponents creates a new PN element from person name components.
@@ -59,8 +61,47 @@ func NewPersonNameWithComponents(t *tag.Tag, components []*PersonNameComponents)
 
 // NewPersonNameFromBuffer creates a PN element from an existing buffer.
 func NewPersonNameFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *PersonName {
-	str := NewStringFromBuffer(t, vr.PN, buf, enc)
-	return &PersonName{String: str}
+	return &PersonName{str: NewStringFromBuffer(t, vr.PN, buf, enc)}
+}
+
+// Tag returns the DICOM tag.
+func (p *PersonName) Tag() *tag.Tag {
+	return p.str.Tag()
+}
+
+// ValueRepresentation returns the VR.
+func (p *PersonName) ValueRepresentation() *vr.VR {
+	return p.str.ValueRepresentation()
+}
+
+// Buffer returns the binary data buffer.
+func (p *PersonName) Buffer() buffer.ByteBuffer {
+	return p.str.Buffer()
+}
+
+// Length returns the length in bytes.
+func (p *PersonName) Length() uint32 {
+	return p.str.Length()
+}
+
+// Count returns the number of values.
+func (p *PersonName) Count() int {
+	return p.str.Count()
+}
+
+// String returns a string representation.
+func (p *PersonName) String() string {
+	return p.str.String()
+}
+
+// Validate performs validation.
+func (p *PersonName) Validate() error {
+	return p.str.Validate()
+}
+
+// GetValue returns the string value at the specified index.
+func (p *PersonName) GetValue(index int) string {
+	return p.str.GetValue(index)
 }
 
 // GetComponents returns the person name components at the specified index.

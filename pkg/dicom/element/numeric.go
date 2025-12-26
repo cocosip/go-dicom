@@ -14,6 +14,16 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
+// Compile-time checks to ensure all numeric types implement Element interface
+var _ Element = (*UnsignedShort)(nil)
+var _ Element = (*UnsignedLong)(nil)
+var _ Element = (*SignedShort)(nil)
+var _ Element = (*SignedLong)(nil)
+var _ Element = (*Float)(nil)
+var _ Element = (*Double)(nil)
+var _ Element = (*SignedVeryLong)(nil)
+var _ Element = (*UnsignedVeryLong)(nil)
+
 // UnsignedShort represents a DICOM element with VR = US (Unsigned Short).
 // Stores 16-bit unsigned integers.
 type UnsignedShort struct {

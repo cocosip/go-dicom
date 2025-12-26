@@ -39,7 +39,7 @@ func NewTranscoder(inputSyntax, outputSyntax *transfer.Syntax, opts ...Transcode
 		inputSyntax:   inputSyntax,
 		outputSyntax:  outputSyntax,
 		codecRegistry: GetGlobalRegistry(),
-		strictDICOMVR: false, // Default: follow DICOM standard for VR selection
+		strictDICOMVR: true, // Default: follow DICOM standard for VR selection (OB for encapsulated data)
 	}
 
 	// Apply options

@@ -11,6 +11,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
+// Compile-time checks to ensure fragment types implement Element interface
+var _ Element = (*FragmentSequence)(nil)
+var _ Element = (*OtherByteFragment)(nil)
+var _ Element = (*OtherWordFragment)(nil)
+
 // FragmentSequence represents a DICOM fragment sequence used for encapsulated pixel data.
 // This is typically used for compressed image formats like JPEG, JPEG 2000, JPEG-LS, and RLE.
 //

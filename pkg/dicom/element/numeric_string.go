@@ -13,16 +13,19 @@ import (
 	"golang.org/x/text/encoding"
 )
 
+// Compile-time checks to ensure numeric string types implement Element interface
+var _ Element = (*DecimalString)(nil)
+var _ Element = (*IntegerString)(nil)
+
 // DecimalString represents a DICOM element with VR = DS (Decimal String).
 // Stores numeric values as strings that can be converted to float64.
 type DecimalString struct {
-	*String
+	str *String
 }
 
 // NewDecimalString creates a new DS element with the given string values.
 func NewDecimalString(t *tag.Tag, values []string) *DecimalString {
-	str := NewString(t, vr.DS, values)
-	return &DecimalString{String: str}
+	return &DecimalString{str: NewString(t, vr.DS, values)}
 }
 
 // NewDecimalStringFromFloat creates a new DS element from float64 values.
@@ -36,8 +39,52 @@ func NewDecimalStringFromFloat(t *tag.Tag, values []float64) *DecimalString {
 
 // NewDecimalStringFromBuffer creates a DS element from an existing buffer.
 func NewDecimalStringFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *DecimalString {
-	str := NewStringFromBuffer(t, vr.DS, buf, enc)
-	return &DecimalString{String: str}
+	return &DecimalString{str: NewStringFromBuffer(t, vr.DS, buf, enc)}
+}
+
+// Tag returns the DICOM tag.
+func (ds *DecimalString) Tag() *tag.Tag {
+	return ds.str.Tag()
+}
+
+// ValueRepresentation returns the VR.
+func (ds *DecimalString) ValueRepresentation() *vr.VR {
+	return ds.str.ValueRepresentation()
+}
+
+// Buffer returns the binary data buffer.
+func (ds *DecimalString) Buffer() buffer.ByteBuffer {
+	return ds.str.Buffer()
+}
+
+// Length returns the length in bytes.
+func (ds *DecimalString) Length() uint32 {
+	return ds.str.Length()
+}
+
+// Count returns the number of values.
+func (ds *DecimalString) Count() int {
+	return ds.str.Count()
+}
+
+// String returns a string representation.
+func (ds *DecimalString) String() string {
+	return ds.str.String()
+}
+
+// Validate performs validation.
+func (ds *DecimalString) Validate() error {
+	return ds.str.Validate()
+}
+
+// GetValue returns the string value at the specified index.
+func (ds *DecimalString) GetValue(index int) string {
+	return ds.str.GetValue(index)
+}
+
+// GetValues returns all string values.
+func (ds *DecimalString) GetValues() []string {
+	return ds.str.GetValues()
 }
 
 // GetFloat parses and returns the float value at the specified index.
@@ -98,13 +145,12 @@ func (ds *DecimalString) GetFloat32s() ([]float32, error) {
 // IntegerString represents a DICOM element with VR = IS (Integer String).
 // Stores integer values as strings that can be converted to int.
 type IntegerString struct {
-	*String
+	str *String
 }
 
 // NewIntegerString creates a new IS element with the given string values.
 func NewIntegerString(t *tag.Tag, values []string) *IntegerString {
-	str := NewString(t, vr.IS, values)
-	return &IntegerString{String: str}
+	return &IntegerString{str: NewString(t, vr.IS, values)}
 }
 
 // NewIntegerStringFromInt creates a new IS element from int values.
@@ -127,8 +173,52 @@ func NewIntegerStringFromInt32(t *tag.Tag, values []int32) *IntegerString {
 
 // NewIntegerStringFromBuffer creates an IS element from an existing buffer.
 func NewIntegerStringFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *IntegerString {
-	str := NewStringFromBuffer(t, vr.IS, buf, enc)
-	return &IntegerString{String: str}
+	return &IntegerString{str: NewStringFromBuffer(t, vr.IS, buf, enc)}
+}
+
+// Tag returns the DICOM tag.
+func (is *IntegerString) Tag() *tag.Tag {
+	return is.str.Tag()
+}
+
+// ValueRepresentation returns the VR.
+func (is *IntegerString) ValueRepresentation() *vr.VR {
+	return is.str.ValueRepresentation()
+}
+
+// Buffer returns the binary data buffer.
+func (is *IntegerString) Buffer() buffer.ByteBuffer {
+	return is.str.Buffer()
+}
+
+// Length returns the length in bytes.
+func (is *IntegerString) Length() uint32 {
+	return is.str.Length()
+}
+
+// Count returns the number of values.
+func (is *IntegerString) Count() int {
+	return is.str.Count()
+}
+
+// String returns a string representation.
+func (is *IntegerString) String() string {
+	return is.str.String()
+}
+
+// Validate performs validation.
+func (is *IntegerString) Validate() error {
+	return is.str.Validate()
+}
+
+// GetValue returns the string value at the specified index.
+func (is *IntegerString) GetValue(index int) string {
+	return is.str.GetValue(index)
+}
+
+// GetValues returns all string values.
+func (is *IntegerString) GetValues() []string {
+	return is.str.GetValues()
 }
 
 // GetInt parses and returns the int value at the specified index.

@@ -9,6 +9,15 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
+// Compile-time checks to ensure all binary types implement Element interface
+var _ Element = (*OtherByte)(nil)
+var _ Element = (*OtherWord)(nil)
+var _ Element = (*Unknown)(nil)
+var _ Element = (*OtherDouble)(nil)
+var _ Element = (*OtherFloat)(nil)
+var _ Element = (*OtherLong)(nil)
+var _ Element = (*OtherVeryLong)(nil)
+
 // OtherByte represents a DICOM element with VR = OB (Other Byte).
 // Stores binary data as a byte sequence.
 type OtherByte struct {

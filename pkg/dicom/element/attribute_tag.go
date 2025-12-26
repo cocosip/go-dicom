@@ -13,6 +13,9 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
+// Compile-time check to ensure AttributeTag implements Element interface
+var _ Element = (*AttributeTag)(nil)
+
 // AttributeTag represents a DICOM element with VR = AT (Attribute Tag).
 // Each value is a 32-bit tag (group + element).
 type AttributeTag struct {

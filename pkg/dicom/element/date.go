@@ -13,17 +13,21 @@ import (
 	"golang.org/x/text/encoding"
 )
 
+// Compile-time checks to ensure date/time types implement Element interface
+var _ Element = (*Date)(nil)
+var _ Element = (*Time)(nil)
+var _ Element = (*DateTime)(nil)
+
 // Date represents a DICOM element with VR = DA (Date).
 // Format: YYYYMMDD
 type Date struct {
-	*String
+	str *String
 }
 
 // NewDate creates a new DA element with the given date strings.
 // Date format should be YYYYMMDD.
 func NewDate(t *tag.Tag, dates []string) *Date {
-	str := NewString(t, vr.DA, dates)
-	return &Date{String: str}
+	return &Date{str: NewString(t, vr.DA, dates)}
 }
 
 // NewDateFromTime creates a new DA element from time.Time values.
@@ -37,8 +41,47 @@ func NewDateFromTime(t *tag.Tag, times []time.Time) *Date {
 
 // NewDateFromBuffer creates a DA element from an existing buffer.
 func NewDateFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *Date {
-	str := NewStringFromBuffer(t, vr.DA, buf, enc)
-	return &Date{String: str}
+	return &Date{str: NewStringFromBuffer(t, vr.DA, buf, enc)}
+}
+
+// Tag returns the DICOM tag.
+func (d *Date) Tag() *tag.Tag {
+	return d.str.Tag()
+}
+
+// ValueRepresentation returns the VR.
+func (d *Date) ValueRepresentation() *vr.VR {
+	return d.str.ValueRepresentation()
+}
+
+// Buffer returns the binary data buffer.
+func (d *Date) Buffer() buffer.ByteBuffer {
+	return d.str.Buffer()
+}
+
+// Length returns the length in bytes.
+func (d *Date) Length() uint32 {
+	return d.str.Length()
+}
+
+// Count returns the number of values.
+func (d *Date) Count() int {
+	return d.str.Count()
+}
+
+// String returns a string representation.
+func (d *Date) String() string {
+	return d.str.String()
+}
+
+// Validate performs validation.
+func (d *Date) Validate() error {
+	return d.str.Validate()
+}
+
+// GetValue returns the string value at the specified index.
+func (d *Date) GetValue(index int) string {
+	return d.str.GetValue(index)
 }
 
 // GetDate parses and returns the date at the specified index.
@@ -73,14 +116,13 @@ func (d *Date) GetDates() ([]time.Time, error) {
 // Time represents a DICOM element with VR = TM (Time).
 // Format: HHMMSS.FFFFFF (fractional seconds are optional)
 type Time struct {
-	*String
+	str *String
 }
 
 // NewTime creates a new TM element with the given time strings.
 // Time format should be HHMMSS or HHMMSS.FFFFFF.
 func NewTime(t *tag.Tag, times []string) *Time {
-	str := NewString(t, vr.TM, times)
-	return &Time{String: str}
+	return &Time{str: NewString(t, vr.TM, times)}
 }
 
 // NewTimeFromTime creates a new TM element from time.Time values.
@@ -94,8 +136,47 @@ func NewTimeFromTime(t *tag.Tag, times []time.Time) *Time {
 
 // NewTimeFromBuffer creates a TM element from an existing buffer.
 func NewTimeFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *Time {
-	str := NewStringFromBuffer(t, vr.TM, buf, enc)
-	return &Time{String: str}
+	return &Time{str: NewStringFromBuffer(t, vr.TM, buf, enc)}
+}
+
+// Tag returns the DICOM tag.
+func (tm *Time) Tag() *tag.Tag {
+	return tm.str.Tag()
+}
+
+// ValueRepresentation returns the VR.
+func (tm *Time) ValueRepresentation() *vr.VR {
+	return tm.str.ValueRepresentation()
+}
+
+// Buffer returns the binary data buffer.
+func (tm *Time) Buffer() buffer.ByteBuffer {
+	return tm.str.Buffer()
+}
+
+// Length returns the length in bytes.
+func (tm *Time) Length() uint32 {
+	return tm.str.Length()
+}
+
+// Count returns the number of values.
+func (tm *Time) Count() int {
+	return tm.str.Count()
+}
+
+// String returns a string representation.
+func (tm *Time) String() string {
+	return tm.str.String()
+}
+
+// Validate performs validation.
+func (tm *Time) Validate() error {
+	return tm.str.Validate()
+}
+
+// GetValue returns the string value at the specified index.
+func (tm *Time) GetValue(index int) string {
+	return tm.str.GetValue(index)
 }
 
 // GetTime parses and returns the time at the specified index.
@@ -144,14 +225,13 @@ func (tm *Time) GetTimes() ([]time.Time, error) {
 // DateTime represents a DICOM element with VR = DT (Date Time).
 // Format: YYYYMMDDHHMMSS.FFFFFF&ZZXX
 type DateTime struct {
-	*String
+	str *String
 }
 
 // NewDateTime creates a new DT element with the given datetime strings.
 // DateTime format should be YYYYMMDDHHMMSS or YYYYMMDDHHMMSS.FFFFFF&ZZXX.
 func NewDateTime(t *tag.Tag, datetimes []string) *DateTime {
-	str := NewString(t, vr.DT, datetimes)
-	return &DateTime{String: str}
+	return &DateTime{str: NewString(t, vr.DT, datetimes)}
 }
 
 // NewDateTimeFromTime creates a new DT element from time.Time values.
@@ -166,8 +246,47 @@ func NewDateTimeFromTime(t *tag.Tag, times []time.Time) *DateTime {
 
 // NewDateTimeFromBuffer creates a DT element from an existing buffer.
 func NewDateTimeFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *DateTime {
-	str := NewStringFromBuffer(t, vr.DT, buf, enc)
-	return &DateTime{String: str}
+	return &DateTime{str: NewStringFromBuffer(t, vr.DT, buf, enc)}
+}
+
+// Tag returns the DICOM tag.
+func (dt *DateTime) Tag() *tag.Tag {
+	return dt.str.Tag()
+}
+
+// ValueRepresentation returns the VR.
+func (dt *DateTime) ValueRepresentation() *vr.VR {
+	return dt.str.ValueRepresentation()
+}
+
+// Buffer returns the binary data buffer.
+func (dt *DateTime) Buffer() buffer.ByteBuffer {
+	return dt.str.Buffer()
+}
+
+// Length returns the length in bytes.
+func (dt *DateTime) Length() uint32 {
+	return dt.str.Length()
+}
+
+// Count returns the number of values.
+func (dt *DateTime) Count() int {
+	return dt.str.Count()
+}
+
+// String returns a string representation.
+func (dt *DateTime) String() string {
+	return dt.str.String()
+}
+
+// Validate performs validation.
+func (dt *DateTime) Validate() error {
+	return dt.str.Validate()
+}
+
+// GetValue returns the string value at the specified index.
+func (dt *DateTime) GetValue(index int) string {
+	return dt.str.GetValue(index)
 }
 
 // GetDateTime parses and returns the datetime at the specified index.
