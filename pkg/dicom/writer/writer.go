@@ -4,21 +4,97 @@
 package writer
 
 import (
-    "encoding/binary"
-    "fmt"
-    "io"
-    "math"
-    "os"
-    "path/filepath"
-    "sync"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"math"
+	"os"
+	"path/filepath"
+	"sync"
 
     "github.com/cocosip/go-dicom/pkg/dicom/dataset"
     "github.com/cocosip/go-dicom/pkg/dicom/element"
     "github.com/cocosip/go-dicom/pkg/dicom/tag"
     "github.com/cocosip/go-dicom/pkg/dicom/transfer"
-    "github.com/cocosip/go-dicom/pkg/dicom/vr"
-    "github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
+
+// SetOffsetTableForFrames computes and sets the Basic Offset Table (BOT) for a fragment sequence.
+// frameStartIndexes must list the starting fragment index for each frame (first index must be 0).
+// Offsets are computed using even-length padded fragments, per DICOM requirements.
+func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []int) error {
+	fragCount := fs.FragmentCount()
+	if fragCount == 0 {
+		return fmt.Errorf("cannot build offset table: no fragments")
+	}
+	if len(frameStartIndexes) == 0 {
+		return fmt.Errorf("frameStartIndexes cannot be empty")
+	}
+	if frameStartIndexes[0] != 0 {
+		return fmt.Errorf("frameStartIndexes must start with 0")
+	}
+	// Verify ascending order and bounds.
+	for i := 1; i < len(frameStartIndexes); i++ {
+		if frameStartIndexes[i] <= frameStartIndexes[i-1] {
+			return fmt.Errorf("frameStartIndexes must be strictly increasing")
+		}
+	}
+	if frameStartIndexes[len(frameStartIndexes)-1] >= fragCount {
+		return fmt.Errorf("frameStartIndexes contains out-of-range index")
+	}
+
+	// Compute padded fragment lengths to align offsets as written.
+	paddedLens := make([]uint32, fragCount)
+	for i := 0; i < fragCount; i++ {
+		frag, err := fs.GetFragment(i)
+		if err != nil {
+			return err
+		}
+		size := frag.Size()
+		if size > math.MaxUint32 {
+			return fmt.Errorf("fragment %d too large: %d bytes", i, size)
+		}
+		padded := uint32(size)
+		if padded%2 != 0 {
+			padded++
+		}
+		paddedLens[i] = padded
+	}
+
+	// Precompute prefix sums for quick offset lookup.
+	prefix := make([]uint32, fragCount+1)
+	for i := 0; i < fragCount; i++ {
+		if prefix[i] > math.MaxUint32-paddedLens[i] {
+			return fmt.Errorf("offset overflow at fragment %d", i)
+		}
+		prefix[i+1] = prefix[i] + paddedLens[i]
+	}
+
+	offsets := make([]uint32, len(frameStartIndexes))
+	for i, idx := range frameStartIndexes {
+		offsets[i] = prefix[idx]
+	}
+
+	// Deduplicate in case caller provided duplicate offsets after padding (keep stable order).
+	offsets = uniqueUint32(offsets)
+	fs.SetOffsetTable(offsets)
+	return nil
+}
+
+// uniqueUint32 returns a slice with duplicate values removed while preserving order.
+func uniqueUint32(in []uint32) []uint32 {
+	seen := make(map[uint32]struct{}, len(in))
+	out := make([]uint32, 0, len(in))
+	for _, v := range in {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
 
 // Global configuration for DICOM implementation identification.
 // These values are used by default for all DICOM files written by this package.
@@ -813,9 +889,6 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 
 	// Collect fragments and pad to even length as required by DICOM.
 	fragCount := fs.FragmentCount()
-	if fragCount == 0 {
-		return fmt.Errorf("fragment sequence has no fragments")
-	}
 
 	paddedFrags := make([][]byte, fragCount)
 	for i := 0; i < fragCount; i++ {
@@ -833,17 +906,14 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		}
 	}
 
-	// Build Basic Offset Table based on padded fragment lengths.
-	// According to DICOM standard, Basic Offset Table should contain at least one offset (0x00000000) for single-frame,
-	// and all frame offsets for multi-frame images.
-	var runningOffset uint32
-	offsets := make([]uint32, fragCount)
-	for i, data := range paddedFrags {
-		offsets[i] = runningOffset
-		if len(data) > int(math.MaxUint32-runningOffset) {
-			return fmt.Errorf("fragment too large to represent in BOT at index %d", i)
-		}
-		runningOffset += uint32(len(data))
+	// Build Basic Offset Table.
+	// Priority:
+	//   1) Use caller-supplied offset table if present (preserve as-is).
+	//   2) If no offsets provided and there is exactly one fragment, emit a single 0 offset (per DICOM recommendation).
+	//   3) If multiple fragments and no offsets provided, write an empty offset table (safer than per-fragment offsets).
+	offsets := fs.OffsetTable()
+	if len(offsets) == 0 && fragCount == 1 {
+		offsets = []uint32{0}
 	}
 
 	// Write Item for Offset Table (FFFE,E000)
