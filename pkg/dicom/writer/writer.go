@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"sync"
 
-    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
-    "github.com/cocosip/go-dicom/pkg/dicom/element"
-    "github.com/cocosip/go-dicom/pkg/dicom/tag"
-    "github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
@@ -52,10 +52,7 @@ func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []i
 			return err
 		}
 		size := frag.Size()
-		if size > math.MaxUint32 {
-			return fmt.Errorf("fragment %d too large: %d bytes", i, size)
-		}
-		padded := uint32(size)
+		padded := size
 		if padded%2 != 0 {
 			padded++
 		}
@@ -107,7 +104,7 @@ var (
 		implementationVersionName string
 	}{
 		implementationClassUID:    "1.2.826.0.1.3680043.10.1142", // Default UID
-		implementationVersionName: "GO-DICOM_1.0",                 // Default version
+		implementationVersionName: "GO-DICOM_1.0",                // Default version
 	}
 )
 
@@ -321,15 +318,15 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	// Apply options to configuration
 	// Use global defaults initially
 	config := &writeConfig{
-		transferSyntax:              transfer.ExplicitVRLittleEndian,          // Default
-		fileMetaInfo:                nil,                                      // Will be auto-generated
-		includePreamble:             true,                                     // Default to including preamble
-		explicitLengthSequences:     false,                                    // Default: use undefined length
-		explicitLengthSequenceItems: false,                                    // Default: use undefined length
-		keepGroupLengths:            false,                                    // Default: remove group lengths
-		largeObjectSize:             1024 * 1024,                              // Default: 1MB
-		implementationClassUID:      GetDefaultImplementationClassUID(),       // Use global default
-		implementationVersionName:   GetDefaultImplementationVersionName(),    // Use global default
+		transferSyntax:              transfer.ExplicitVRLittleEndian,       // Default
+		fileMetaInfo:                nil,                                   // Will be auto-generated
+		includePreamble:             true,                                  // Default to including preamble
+		explicitLengthSequences:     false,                                 // Default: use undefined length
+		explicitLengthSequenceItems: false,                                 // Default: use undefined length
+		keepGroupLengths:            false,                                 // Default: remove group lengths
+		largeObjectSize:             1024 * 1024,                           // Default: 1MB
+		implementationClassUID:      GetDefaultImplementationClassUID(),    // Use global default
+		implementationVersionName:   GetDefaultImplementationVersionName(), // Use global default
 	}
 
 	for _, opt := range opts {
@@ -432,21 +429,21 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 //
 //	writer.WriteFile("output.dcm", ds, writer.WithTransferSyntax(ts))
 func WriteFile(path string, ds *dataset.Dataset, opts ...WriteOption) error {
-    // Clean the provided path to mitigate path traversal and ensure a canonical form.
-    // Cross-platform: filepath.Clean works on Windows, Linux, and macOS.
-    cleanPath := filepath.Clean(path)
+	// Clean the provided path to mitigate path traversal and ensure a canonical form.
+	// Cross-platform: filepath.Clean works on Windows, Linux, and macOS.
+	cleanPath := filepath.Clean(path)
 
-    // Optional: basic sanity check to avoid extremely suspicious paths.
-    // We only permit creating regular files (no device names, etc.).
-    // Users may still pass any absolute or relative path; we just canonicalize.
+	// Optional: basic sanity check to avoid extremely suspicious paths.
+	// We only permit creating regular files (no device names, etc.).
+	// Users may still pass any absolute or relative path; we just canonicalize.
 
-    file, err := os.Create(cleanPath)
-    if err != nil {
-        return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
-    }
-    defer func() { _ = file.Close() }()
+	file, err := os.Create(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
+	}
+	defer func() { _ = file.Close() }()
 
-    return Write(file, ds, opts...)
+	return Write(file, ds, opts...)
 }
 
 // generateFileMetaInformation generates a minimal File Meta Information dataset.

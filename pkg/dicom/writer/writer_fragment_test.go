@@ -17,205 +17,109 @@ import (
 )
 
 func TestWriteFragmentSequence(t *testing.T) {
-	t.Run("SingleFrame", func(t *testing.T) {
-		// Create dataset with single-frame fragment sequence
-		ds := dataset.New()
+	t.Run("SingleFrame", testWriteFragmentSequenceSingleFrame)
+	t.Run("EmptyOffsetTable", testWriteFragmentSequenceEmptyOffsetTable)
+	t.Run("WithOffsetTable", testWriteFragmentSequenceWithOffsetTable)
+	t.Run("AutoOffsetTableWithMultiFragmentFrames", testWriteFragmentSequenceAutoOffsetTable)
+}
 
-		// Create fragment sequence with single frame
-		obf := element.NewOtherByteFragment(tag.PixelData)
-		obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
+func roundTripOtherByteFragment(t *testing.T, obf *element.OtherByteFragment) *element.OtherByteFragment {
+	t.Helper()
 
-		if err := ds.Add(obf); err != nil {
-			t.Fatalf("Add() error: %v", err)
-		}
+	ds := dataset.New()
+	if err := ds.Add(obf); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
 
-		// Write to buffer
-		buf := &bytes.Buffer{}
-		err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
-		if err != nil {
-			t.Fatalf("Write() error = %v", err)
-		}
+	buf := &bytes.Buffer{}
+	if err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Fatal("Write produced no output")
+	}
 
-		// Verify we wrote something
-		if buf.Len() == 0 {
-			t.Fatal("Write produced no output")
-		}
+	result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
 
-		// Read back and verify offset table is present
-		result, err := parser.Parse(buf)
-		if err != nil {
-			t.Fatalf("Parse() error = %v", err)
-		}
+	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
+	if !exists {
+		t.Fatal("PixelData not found after round-trip")
+	}
 
-		pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-		if !exists {
-			t.Fatal("PixelData not found after round-trip")
-		}
+	readObf, ok := pixelDataElem.(*element.OtherByteFragment)
+	if !ok {
+		t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
+	}
+	return readObf
+}
 
-		readObf, ok := pixelDataElem.(*element.OtherByteFragment)
-		if !ok {
-			t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
-		}
+func testWriteFragmentSequenceSingleFrame(t *testing.T) {
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
 
-		// Verify offset table has one entry with value 0 for single-frame
-		offsetTable := readObf.OffsetTable()
-		if len(offsetTable) != 1 {
-			t.Errorf("Single-frame offset table length = %d, want 1", len(offsetTable))
-		}
-		if len(offsetTable) > 0 && offsetTable[0] != 0 {
-			t.Errorf("Single-frame offset table[0] = %d, want 0", offsetTable[0])
-		}
-	})
+	offsetTable := roundTripOtherByteFragment(t, obf).OffsetTable()
+	if len(offsetTable) != 1 {
+		t.Errorf("Single-frame offset table length = %d, want 1", len(offsetTable))
+	}
+	if len(offsetTable) > 0 && offsetTable[0] != 0 {
+		t.Errorf("Single-frame offset table[0] = %d, want 0", offsetTable[0])
+	}
+}
 
-	t.Run("EmptyOffsetTable", func(t *testing.T) {
-		// Create dataset with fragment sequence
-        ds := dataset.New()
+func testWriteFragmentSequenceEmptyOffsetTable(t *testing.T) {
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
+	obf.AddFragment(buffer.NewMemory([]byte{0x05, 0x06, 0x07, 0x08}))
 
-		// Create fragment sequence
-        obf := element.NewOtherByteFragment(tag.PixelData)
-        obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
-        obf.AddFragment(buffer.NewMemory([]byte{0x05, 0x06, 0x07, 0x08}))
+	if got := len(roundTripOtherByteFragment(t, obf).OffsetTable()); got != 0 {
+		t.Errorf("OffsetTable length = %d, want 0 (empty BOT when not provided)", got)
+	}
+}
 
-        if err := ds.Add(obf); err != nil {
-            t.Fatalf("Add() error: %v", err)
-        }
+func testWriteFragmentSequenceWithOffsetTable(t *testing.T) {
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.SetOffsetTable([]uint32{0, 8})
+	obf.AddFragment(buffer.NewMemory([]byte{0x11, 0x22, 0x33, 0x44}))
+	obf.AddFragment(buffer.NewMemory([]byte{0x55, 0x66, 0x77, 0x88}))
 
-		// Write to buffer
-		buf := &bytes.Buffer{}
-		err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
-		if err != nil {
-			t.Fatalf("Write() error = %v", err)
-		}
+	if got := roundTripOtherByteFragment(t, obf).OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 8 {
+		t.Errorf("OffsetTable = %v, want [0 8]", got)
+	}
+}
 
-		// Verify we wrote something
-		if buf.Len() == 0 {
-			t.Fatal("Write produced no output")
-		}
+func testWriteFragmentSequenceAutoOffsetTable(t *testing.T) {
+	// Two frames: Frame0 uses fragments 0-1, Frame1 uses fragment 2.
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	// Fragment lengths intentionally odd/even to exercise padding.
+	obf.AddFragment(buffer.NewMemory([]byte{0xAA, 0xBB, 0xCC}))       // len=3 -> padded 4
+	obf.AddFragment(buffer.NewMemory([]byte{0x11, 0x22, 0x33, 0x44})) // len=4 -> padded 4
+	obf.AddFragment(buffer.NewMemory([]byte{0x55, 0x66, 0x77}))       // len=3 -> padded 4
 
-		// Read back and verify offset table remains empty
-		result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
-		if err != nil {
-			t.Fatalf("Parse() error = %v", err)
-		}
+	if err := SetOffsetTableForFrames(obf.FragmentSequence, []int{0, 2}); err != nil {
+		t.Fatalf("SetOffsetTableForFrames error: %v", err)
+	}
 
-		pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-		if !exists {
-			t.Fatal("PixelData not found after round-trip")
-		}
-
-		readObf, ok := pixelDataElem.(*element.OtherByteFragment)
-		if !ok {
-			t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
-		}
-
-		if len(readObf.OffsetTable()) != 0 {
-			t.Errorf("OffsetTable length = %d, want 0 (empty BOT when not provided)", len(readObf.OffsetTable()))
-		}
-	})
-
-	t.Run("WithOffsetTable", func(t *testing.T) {
-        ds := dataset.New()
-
-		// Create fragment sequence with offset table
-        obf := element.NewOtherByteFragment(tag.PixelData)
-        obf.SetOffsetTable([]uint32{0, 8})
-        obf.AddFragment(buffer.NewMemory([]byte{0x11, 0x22, 0x33, 0x44}))
-        obf.AddFragment(buffer.NewMemory([]byte{0x55, 0x66, 0x77, 0x88}))
-
-        if err := ds.Add(obf); err != nil {
-            t.Fatalf("Add() error: %v", err)
-        }
-
-		// Write
-		buf := &bytes.Buffer{}
-		err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
-		if err != nil {
-			t.Fatalf("Write() error = %v", err)
-		}
-
-		if buf.Len() == 0 {
-			t.Fatal("Write produced no output")
-		}
-
-		// Read back and verify offset table is preserved
-		result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
-		if err != nil {
-			t.Fatalf("Parse() error = %v", err)
-		}
-
-		pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-		if !exists {
-			t.Fatal("PixelData not found after round-trip")
-		}
-
-		readObf, ok := pixelDataElem.(*element.OtherByteFragment)
-		if !ok {
-			t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
-		}
-
-		if got := readObf.OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 8 {
-			t.Errorf("OffsetTable = %v, want [0 8]", got)
-		}
-	})
-
-	t.Run("AutoOffsetTableWithMultiFragmentFrames", func(t *testing.T) {
-		ds := dataset.New()
-
-		// Two frames: Frame0 uses fragments 0-1, Frame1 uses fragment 2.
-		obf := element.NewOtherByteFragment(tag.PixelData)
-		// Fragment lengths intentionally odd/even to exercise padding.
-		obf.AddFragment(buffer.NewMemory([]byte{0xAA, 0xBB, 0xCC}))       // len=3 -> padded 4
-		obf.AddFragment(buffer.NewMemory([]byte{0x11, 0x22, 0x33, 0x44})) // len=4 -> padded 4
-		obf.AddFragment(buffer.NewMemory([]byte{0x55, 0x66, 0x77}))       // len=3 -> padded 4
-
-		if err := SetOffsetTableForFrames(obf.FragmentSequence, []int{0, 2}); err != nil {
-			t.Fatalf("SetOffsetTableForFrames error: %v", err)
-		}
-
-		if err := ds.Add(obf); err != nil {
-			t.Fatalf("Add() error: %v", err)
-		}
-
-		buf := &bytes.Buffer{}
-		if err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
-			t.Fatalf("Write() error: %v", err)
-		}
-
-		// Read back
-		result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
-		if err != nil {
-			t.Fatalf("Parse() error: %v", err)
-		}
-
-		pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-		if !exists {
-			t.Fatal("PixelData not found after round-trip")
-		}
-
-		readObf, ok := pixelDataElem.(*element.OtherByteFragment)
-		if !ok {
-			t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
-		}
-
-		// Expect offsets: frame0 at 0, frame1 at padded sum of first two fragments (4 + 4 = 8)
-		if got := readObf.OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 8 {
-			t.Errorf("OffsetTable = %v, want [0 8]", got)
-		}
-	})
+	// Expect offsets: frame0 at 0, frame1 at padded sum of first two fragments (4 + 4 = 8).
+	if got := roundTripOtherByteFragment(t, obf).OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 8 {
+		t.Errorf("OffsetTable = %v, want [0 8]", got)
+	}
 }
 
 func TestFragmentSequenceRoundTrip(t *testing.T) {
 	t.Run("RoundTrip", func(t *testing.T) {
 		// Create original dataset
-        ds := dataset.New()
+		ds := dataset.New()
 
 		// Add some metadata
-        if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"})); err != nil {
-            t.Fatalf("Add() error: %v", err)
-        }
-        if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {
-            t.Fatalf("Add() error: %v", err)
-        }
+		if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"})); err != nil {
+			t.Fatalf("Add() error: %v", err)
+		}
+		if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {
+			t.Fatalf("Add() error: %v", err)
+		}
 
 		// Create fragment sequence
 		obf := element.NewOtherByteFragment(tag.PixelData)
@@ -223,9 +127,9 @@ func TestFragmentSequenceRoundTrip(t *testing.T) {
 		obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}))
 		obf.AddFragment(buffer.NewMemory([]byte{0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}))
 
-        if err := ds.Add(obf); err != nil {
-            t.Fatalf("Add() error: %v", err)
-        }
+		if err := ds.Add(obf); err != nil {
+			t.Fatalf("Add() error: %v", err)
+		}
 
 		// Write to buffer
 		buf := &bytes.Buffer{}
