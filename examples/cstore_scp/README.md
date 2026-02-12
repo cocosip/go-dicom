@@ -8,6 +8,7 @@ This example demonstrates how to receive DICOM files from DICOM clients using th
 - Handle C-ECHO verification requests
 - Receive and store DICOM files
 - Support for multiple concurrent connections
+- Validate called/calling AE titles during association negotiation
 - Organize received files by AE title or study date
 - Track server statistics
 - Graceful shutdown
@@ -34,6 +35,12 @@ go run main.go -port 11112 -storage /data/dicom
 go run main.go -verbose
 ```
 
+### Enable AE Validation
+
+```bash
+go run main.go -called-ae NETGATE -allow-calling-ae NETPUSH,MODALITY_A
+```
+
 ### Organize Files by Study Date
 
 ```bash
@@ -52,27 +59,21 @@ This will organize files as: `/data/dicom/YYYY/MM/DD/sopinstance.dcm`
 | `-verbose` | false | Enable verbose logging |
 | `-organize-by-ae` | false | Organize files by calling AE title |
 | `-organize-by-date` | false | Organize files by study date (YYYY/MM/DD) |
+| `-called-ae` | (empty) | Expected called AE title (empty = disable validation) |
+| `-allow-calling-ae` | (empty) | Comma-separated calling AE whitelist (empty = allow all) |
 
 ## Examples
 
 ### 1. Production Server with Custom Settings
 
 ```bash
-go run main.go \
-  -port 104 \
-  -storage /var/dicom/incoming \
-  -max-conn 50 \
-  -organize-by-date \
-  -verbose
+go run main.go -port 104 -storage /var/dicom/incoming -max-conn 50 -organize-by-date -verbose
 ```
 
 ### 2. Development Server
 
 ```bash
-go run main.go \
-  -port 11112 \
-  -storage ./test_storage \
-  -verbose
+go run main.go -port 11112 -storage ./test_storage -verbose
 ```
 
 ### 3. Organized Storage
@@ -85,6 +86,12 @@ go run main.go -organize-by-date -storage /data/archive
 # /data/archive/2024/01/15/1.2.840.113619.2.55.3.12345.dcm
 ```
 
+### 4. Strict AE Validation
+
+```bash
+go run main.go -called-ae NETGATE -allow-calling-ae NETPUSH,MODALITY_1 -verbose
+```
+
 ## Output Example
 
 ```
@@ -93,6 +100,8 @@ Port:          11112
 Storage Dir:   ./received_dicom
 Max Conn:      10
 Verbose:       false
+Called AE:     NETGATE
+Allowed SCUs:  NETPUSH,MODALITY_A
 
 Starting DICOM SCP server on port 11112...
 Press Ctrl+C to stop
@@ -157,13 +166,13 @@ Server stopped.
 
 ## Association Negotiation
 
-The server accepts all presentation contexts by default. In production, you may want to:
+The server currently supports AE validation out of the box:
 
-1. **Validate AE Titles**: Check if the calling AE is in your whitelist
-2. **Restrict SOP Classes**: Only accept specific SOP Classes
-3. **Control Transfer Syntaxes**: Accept only transfer syntaxes you support
+1. **Called AE Validation**: use `-called-ae` to require an exact called AE title
+2. **Calling AE Whitelist**: use `-allow-calling-ae` to allow only specific SCU AE titles
+3. **Presentation Context Negotiation**: accepted contexts still use the first proposed transfer syntax
 
-Modify the `handleAssociationNegotiation` function to implement these checks.
+You can further customize `handleAssociationNegotiation` if you want to restrict SOP Classes or transfer syntaxes.
 
 ## Statistics
 
@@ -236,7 +245,7 @@ sudo systemctl start dicom-scp
 
 ## Security Considerations
 
-1. **AE Title Validation**: Implement whitelist to accept only authorized clients
+1. **AE Title Validation**: Use `-called-ae` and `-allow-calling-ae` to restrict clients
 2. **Network Security**: Use firewall rules to restrict access
 3. **File Validation**: Validate received files before processing
 4. **Disk Space**: Monitor disk usage to prevent DoS

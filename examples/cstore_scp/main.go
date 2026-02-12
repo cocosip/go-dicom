@@ -16,6 +16,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,18 +28,26 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/server"
 	"github.com/cocosip/go-dicom/pkg/network/service"
 )
 
 var (
 	// Command line flags
-	port          = flag.Int("port", 11112, "Port to listen on")
-	storageDir    = flag.String("storage", "./received_dicom", "Directory to store received DICOM files")
-	maxConn       = flag.Int("max-conn", 10, "Maximum concurrent connections (0 = unlimited)")
-	verbose       = flag.Bool("verbose", false, "Enable verbose logging")
-	organizeByAE  = flag.Bool("organize-by-ae", false, "Organize files by calling AE title")
+	port           = flag.Int("port", 11112, "Port to listen on")
+	storageDir     = flag.String("storage", "./received_dicom", "Directory to store received DICOM files")
+	maxConn        = flag.Int("max-conn", 10, "Maximum concurrent connections (0 = unlimited)")
+	verbose        = flag.Bool("verbose", false, "Enable verbose logging")
+	organizeByAE   = flag.Bool("organize-by-ae", false, "Organize files by calling AE title")
 	organizeByDate = flag.Bool("organize-by-date", false, "Organize files by study date")
+	calledAE       = flag.String("called-ae", "", "Expected called AE title (empty = disable validation)")
+	allowCallingAE = flag.String("allow-calling-ae", "", "Comma-separated list of allowed calling AE titles (empty = allow all)")
+)
+
+var (
+	expectedCalledAE  string
+	allowedCallingAEs map[string]struct{}
 )
 
 // Statistics tracks server metrics
@@ -57,6 +67,10 @@ var stats = &Statistics{
 func main() {
 	flag.Parse()
 
+	if err := configureAEValidation(); err != nil {
+		log.Fatalf("Invalid AE validation configuration: %v", err)
+	}
+
 	// Create storage directory if it doesn't exist
 	if err := os.MkdirAll(*storageDir, 0755); err != nil {
 		log.Fatalf("Failed to create storage directory: %v", err)
@@ -68,6 +82,8 @@ func main() {
 	fmt.Printf("Storage Dir:   %s\n", *storageDir)
 	fmt.Printf("Max Conn:      %d\n", *maxConn)
 	fmt.Printf("Verbose:       %v\n", *verbose)
+	fmt.Printf("Called AE:     %s\n", formatConfiguredCalledAE())
+	fmt.Printf("Allowed SCUs:  %s\n", formatAllowedCallingAEs())
 	fmt.Println()
 
 	srv := server.New(
@@ -208,15 +224,33 @@ func handleCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreRes
 func handleAssociationNegotiation(ctx context.Context, assoc *association.Association, responder service.AssociationResponder) error {
 	stats.incrementConnections()
 
-	log.Printf("Association request from: %s (calling AE: %s)",
-		assoc.CallingAE, assoc.CallingAE)
+	callingAETitle := normalizeAETitle(assoc.CallingAE)
+	calledAETitle := normalizeAETitle(assoc.CalledAE)
+
+	log.Printf("Association request: calling AE=%s, called AE=%s", callingAETitle, calledAETitle)
 	log.Printf("Proposed presentation contexts: %d", len(assoc.PresentationContexts))
 
+	if expectedCalledAE != "" && calledAETitle != expectedCalledAE {
+		log.Printf("Association rejected: called AE mismatch (expected=%s, got=%s)", expectedCalledAE, calledAETitle)
+		return responder.SendReject(
+			ctx,
+			pdu.ResultRejectedPermanent,
+			pdu.SourceServiceUser,
+			pdu.ReasonServiceUserCalledAETitleNotRecognized,
+		)
+	}
+
+	if !isCallingAEAllowed(callingAETitle) {
+		log.Printf("Association rejected: calling AE %s is not in allow list", callingAETitle)
+		return responder.SendReject(
+			ctx,
+			pdu.ResultRejectedPermanent,
+			pdu.SourceServiceUser,
+			pdu.ReasonServiceUserCallingAETitleNotRecognized,
+		)
+	}
+
 	// Accept all presentation contexts with their first proposed transfer syntax
-	// In a real application, you might want to validate:
-	// - AE titles against a whitelist
-	// - Specific SOP Classes
-	// - Transfer syntaxes your implementation supports
 	acceptedCount := 0
 
 	for _, pc := range assoc.PresentationContexts {
@@ -232,7 +266,7 @@ func handleAssociationNegotiation(ctx context.Context, assoc *association.Associ
 
 	if acceptedCount == 0 {
 		log.Println("WARNING: No presentation contexts accepted")
-		return responder.SendReject(ctx, 1, 1, 3) // Result: rejected-permanent, Source: service-user, Reason: no-reason-given
+		return responder.SendReject(ctx, pdu.ResultRejectedPermanent, pdu.SourceServiceUser, pdu.ReasonServiceUserNoReasonGiven)
 	}
 
 	log.Printf("Accepted %d/%d presentation contexts from %s\n",
@@ -240,6 +274,97 @@ func handleAssociationNegotiation(ctx context.Context, assoc *association.Associ
 
 	// Send accept response
 	return responder.SendAccept(ctx, assoc)
+}
+
+func configureAEValidation() error {
+	var err error
+
+	expectedCalledAE = normalizeAETitle(*calledAE)
+	if expectedCalledAE != "" {
+		if err := validateAETitle(expectedCalledAE); err != nil {
+			return fmt.Errorf("called-ae: %w", err)
+		}
+	}
+
+	allowedCallingAEs, err = parseAETitleAllowList(*allowCallingAE)
+	if err != nil {
+		return fmt.Errorf("allow-calling-ae: %w", err)
+	}
+
+	return nil
+}
+
+func parseAETitleAllowList(rawList string) (map[string]struct{}, error) {
+	allowed := make(map[string]struct{})
+	if strings.TrimSpace(rawList) == "" {
+		return allowed, nil
+	}
+
+	for _, item := range strings.Split(rawList, ",") {
+		ae := normalizeAETitle(item)
+		if ae == "" {
+			continue
+		}
+
+		if err := validateAETitle(ae); err != nil {
+			return nil, err
+		}
+
+		allowed[ae] = struct{}{}
+	}
+
+	if len(allowed) == 0 {
+		return nil, fmt.Errorf("at least one AE title is required")
+	}
+
+	return allowed, nil
+}
+
+func normalizeAETitle(ae string) string {
+	return strings.TrimSpace(ae)
+}
+
+func validateAETitle(ae string) error {
+	if ae == "" {
+		return fmt.Errorf("AE title cannot be empty")
+	}
+
+	if len(ae) > 16 {
+		return fmt.Errorf("AE title %q exceeds 16 characters", ae)
+	}
+
+	return nil
+}
+
+func isCallingAEAllowed(callingAE string) bool {
+	if len(allowedCallingAEs) == 0 {
+		return true
+	}
+
+	_, ok := allowedCallingAEs[callingAE]
+	return ok
+}
+
+func formatConfiguredCalledAE() string {
+	if expectedCalledAE == "" {
+		return "(disabled)"
+	}
+
+	return expectedCalledAE
+}
+
+func formatAllowedCallingAEs() string {
+	if len(allowedCallingAEs) == 0 {
+		return "(all)"
+	}
+
+	titles := make([]string, 0, len(allowedCallingAEs))
+	for ae := range allowedCallingAEs {
+		titles = append(titles, ae)
+	}
+
+	sort.Strings(titles)
+	return strings.Join(titles, ",")
 }
 
 // handleAbort handles association abort events
