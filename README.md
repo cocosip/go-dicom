@@ -26,7 +26,7 @@ This library is currently under active development. The API is not stable and ma
 - ✅ **Pixel Data Processing** - Access raw pixel data, color space conversion, LUT operations, image rendering
 - ✅ **DICOM Networking** - Complete DIMSE services (C-ECHO/STORE/FIND/MOVE/GET + N-CREATE/GET/SET/DELETE/ACTION/EVENT-REPORT), TLS support
 - ✅ **Image Processing** - Rendering pipeline, windowing, LUT operations, color space conversion
-- ✅ **DICOM Printing** - Film Session, Film Box, Image Box support
+- ✅ **DICOM Printing** - Film Session, Film Box, Image Box, Printer status management
 
 ### Detailed Status
 
@@ -150,13 +150,13 @@ This library is currently under active development. The API is not stable and ma
   Images compressed with JPEG/JPEG2K can be read (fragment sequences extracted), but decompression requires
   codec implementation or external libraries.
 
-- [x] **DICOM Printing** (~90% Complete)
+- [x] **DICOM Printing** (~100% Complete)
   - [x] Film Session management
   - [x] Film Box configuration
   - [x] Image Box handling
   - [x] Presentation LUT
   - [x] Print job creation
-  - [ ] Printer status management - Planned
+  - [x] Printer status management
 
 See [TODO.md](TODO.md) for detailed development roadmap.
 
@@ -1488,7 +1488,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - ✅ Image processing (LUT, windowing, color conversion, rendering)
 - ✅ DICOM networking (All C-services + N-services, TLS secure connections)
 - ✅ RLE codec and transcoding framework
-- ✅ DICOM printing (Film Session, Film Box, Image Box)
+- ✅ DICOM printing (Film Session, Film Box, Image Box, Printer status management)
 
 **In Progress**:
 - [ ] Advanced image codecs (JPEG, JPEG-LS, JPEG2000 decompression)
