@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -234,7 +235,7 @@ func Parse(r io.Reader, opts ...Option) (*ParseResult, error) {
 // parse is the internal parsing implementation.
 func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 	p.reader = r
-	p.detectedFormat = FormatDICOM3 // Assume DICOM3 initially
+	p.detectedFormat = FormatUnknown
 
 	// Check if reader supports seeking (for lazy loading)
 	if rs, ok := r.(io.ReadSeeker); ok {
@@ -246,9 +247,9 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 		p.file = f
 	}
 
-	// Read and validate preamble + DICM prefix
-	if err := p.readPreamble(); err != nil {
-		return nil, fmt.Errorf("failed to read preamble: %w", err)
+	// Detect preamble and position the stream at the first element.
+	if err := p.detectFormatAndPrepareReader(); err != nil {
+		return nil, fmt.Errorf("failed to detect file format: %w", err)
 	}
 
 	// Read File Meta Information (Group 0002)
@@ -295,6 +296,56 @@ func ParseFile(path string, opts ...Option) (*ParseResult, error) {
 	return Parse(file, opts...)
 }
 
+// detectFormatAndPrepareReader detects whether the stream starts with a DICOM preamble
+// and makes sure p.reader is positioned at the first data element.
+func (p *parseContext) detectFormatAndPrepareReader() error {
+	header := make([]byte, 132)
+	n, err := io.ReadFull(p.reader, header)
+	if err == nil {
+		if string(header[128:132]) == "DICM" {
+			p.detectedFormat = FormatDICOM3
+			return nil
+		}
+
+		// Full header was read but no DICM prefix: treat as no-preamble stream.
+		if err := p.restoreReaderToStart(header[:n]); err != nil {
+			return err
+		}
+		p.detectedFormat = FormatDICOM3NoPreamble
+		return nil
+	}
+
+	if err != io.EOF && err != io.ErrUnexpectedEOF {
+		return err
+	}
+
+	if n == 0 {
+		return io.ErrUnexpectedEOF
+	}
+
+	// Short streams can still be valid no-preamble datasets.
+	if err := p.restoreReaderToStart(header[:n]); err != nil {
+		return err
+	}
+	p.detectedFormat = FormatDICOM3NoPreamble
+	return nil
+}
+
+// restoreReaderToStart restores reader position after probing the header.
+// For seekable readers we seek back, otherwise we prepend the consumed bytes.
+func (p *parseContext) restoreReaderToStart(consumed []byte) error {
+	if p.seekableReader != nil {
+		if _, err := p.seekableReader.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("failed to seek reader back to start: %w", err)
+		}
+		p.reader = p.seekableReader
+		return nil
+	}
+
+	p.reader = io.MultiReader(bytes.NewReader(consumed), p.reader)
+	return nil
+}
+
 // readPreamble reads and validates the 128-byte preamble and DICM prefix.
 func (p *parseContext) readPreamble() error {
 	// Read 128-byte preamble (usually all zeros, but can be anything)
@@ -338,6 +389,9 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 			// Save this tag - it belongs to the main dataset
 			// We need to "unread" it for the next phase
 			p.firstDatasetTag = t
+			if ds.Count() == 0 && (p.detectedFormat == FormatDICOM3 || p.detectedFormat == FormatDICOM3NoPreamble || p.detectedFormat == FormatUnknown) {
+				p.detectedFormat = FormatDICOM3NoFileMetaInfo
+			}
 			break
 		}
 
@@ -420,21 +474,15 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	}
 
 	for {
-		// Check stop condition
-		// TODO: Implement stopAtTag functionality for early termination
-		_ = p.stopAtTag
-
-		var elem element.Element
+		// Read the next tag first so stopAtTag can stop before reading value bytes.
+		var t *tag.Tag
 		var err error
-
-		// If we have a saved first tag, use it for the first element
 		if firstTag != nil {
-			elem, err = p.readElementWithTag(firstTag)
-			firstTag = nil // Only use it once
+			t = firstTag
+			firstTag = nil
 		} else {
-			elem, err = p.readElement()
+			t, err = p.readTag()
 		}
-
 		if err == io.EOF {
 			break
 		}
@@ -442,9 +490,15 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 			return nil, err
 		}
 
-		// Check if we should stop
-		if p.stopAtTag != nil && elem.Tag().ToUint32() >= p.stopAtTag.ToUint32() {
+		// Stop before reading this element's value payload.
+		if p.stopAtTag != nil && t.ToUint32() >= p.stopAtTag.ToUint32() {
+			p.isPartial = true
 			break
+		}
+
+		elem, err := p.readElementWithTag(t)
+		if err != nil {
+			return nil, err
 		}
 
 		if err := ds.Add(elem); err != nil {
@@ -877,6 +931,16 @@ func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer
 		return element.NewOtherByteFromBuffer(t, buf), nil
 	case vr.CodeOW:
 		return element.NewOtherWordFromBuffer(t, buf), nil
+	case vr.CodeOD:
+		return element.NewOtherDoubleFromBuffer(t, buf), nil
+	case vr.CodeOF:
+		return element.NewOtherFloatFromBuffer(t, buf), nil
+	case vr.CodeOL:
+		return element.NewOtherLongFromBuffer(t, buf), nil
+	case vr.CodeOV:
+		return element.NewOtherVeryLongFromBuffer(t, buf), nil
+	case vr.CodeAT:
+		return element.NewAttributeTagFromBuffer(t, buf), nil
 	case vr.CodeUN:
 		return element.NewUnknownFromBuffer(t, buf), nil
 

@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -104,8 +105,8 @@ func TestHasFragmentSequence(t *testing.T) {
 	}
 
 	// Verify this is indeed a multi-frame image with fragment sequence
-	t.Log("✓ HasFragmentSequence.dcm parsed successfully")
-	t.Log("✓ Number of frames verified: 96")
+	t.Log("鉁?HasFragmentSequence.dcm parsed successfully")
+	t.Log("鉁?Number of frames verified: 96")
 }
 
 // TestMultiFrameFragmentSequences tests multiple multi-frame files with fragment sequences
@@ -166,14 +167,14 @@ func TestMultiFrameFragmentSequences(t *testing.T) {
 			if numFramesTrimmed != tc.expectedFrames {
 				t.Errorf("NumberOfFrames = %s, want %s", numFramesTrimmed, tc.expectedFrames)
 			} else {
-				t.Logf("✓ Frame count verified: %s frames", tc.expectedFrames)
+				t.Logf("鉁?Frame count verified: %s frames", tc.expectedFrames)
 			}
 
 			// Check for Pixel Data
 			if _, exists := result.Dataset.Get(tag.PixelData); !exists {
 				t.Errorf("PixelData tag not found in %s", tc.filename)
 			} else {
-				t.Log("✓ PixelData element found")
+				t.Log("鉁?PixelData element found")
 			}
 		})
 	}
@@ -270,3 +271,4 @@ func BenchmarkMultiFrameFragmentParsing(b *testing.B) {
 		_, _ = Parse(reader)
 	}
 }
+

@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -54,7 +55,7 @@ func TestETIAMVideo(t *testing.T) {
 		t.Fatal("Parse result or dataset is nil")
 	}
 
-	t.Logf("✓ Successfully parsed ETIAM_video_002.dcm")
+	t.Logf("鉁?Successfully parsed ETIAM_video_002.dcm")
 	t.Logf("Dataset contains %d elements", result.Dataset.Count())
 
 	// Check various video DICOM attributes
@@ -66,8 +67,8 @@ func TestETIAMVideo(t *testing.T) {
 	checkImageDimensions(t, result.Dataset)
 	checkPatientStudyInfo(t, result.Dataset)
 
-	t.Log("\n✓ Video DICOM file parsed successfully")
-	t.Log("✓ Pixel data (video stream) is accessible")
+	t.Log("\n鉁?Video DICOM file parsed successfully")
+	t.Log("鉁?Pixel data (video stream) is accessible")
 }
 
 // TestVideoDICOMPixelDataAccess specifically tests pixel data access
@@ -101,13 +102,13 @@ func TestVideoDICOMPixelDataAccess(t *testing.T) {
 	if !exists {
 		t.Fatal("CRITICAL: PixelData element not found - video data is not accessible")
 	}
-	t.Log("✓ Test 1 PASS: PixelData element exists")
+	t.Log("鉁?Test 1 PASS: PixelData element exists")
 
 	// Test 2: Pixel Data must have a valid type
 	if pixelDataElem == nil {
 		t.Fatal("CRITICAL: PixelData element is nil")
 	}
-	t.Logf("✓ Test 2 PASS: PixelData has type %T", pixelDataElem)
+	t.Logf("鉁?Test 2 PASS: PixelData has type %T", pixelDataElem)
 
 	// Test 3: Check if it's a fragment sequence (typical for compressed video)
 	pixelDataStr := pixelDataElem.String()
@@ -116,7 +117,7 @@ func TestVideoDICOMPixelDataAccess(t *testing.T) {
 	// Test 4: For fragment sequences (typical for compressed video), access fragments
 	if fragSeq, ok := pixelDataElem.(*element.OtherByteFragment); ok {
 		fragmentCount := fragSeq.FragmentCount()
-		t.Logf("✓ Test 4 PASS: Fragment sequence with %d fragments", fragmentCount)
+		t.Logf("鉁?Test 4 PASS: Fragment sequence with %d fragments", fragmentCount)
 
 		if fragmentCount == 0 {
 			t.Fatal("CRITICAL: Fragment sequence has no fragments")
@@ -127,7 +128,7 @@ func TestVideoDICOMPixelDataAccess(t *testing.T) {
 		if fragments == nil {
 			t.Fatal("CRITICAL: Fragments() returned nil")
 		}
-		t.Logf("✓ Test 5 PASS: Can access %d video fragments", len(fragments))
+		t.Logf("鉁?Test 5 PASS: Can access %d video fragments", len(fragments))
 
 		// Verify we can access individual fragments
 		if fragmentCount > 0 {
@@ -138,28 +139,28 @@ func TestVideoDICOMPixelDataAccess(t *testing.T) {
 			if firstFragment == nil {
 				t.Fatal("CRITICAL: First fragment is nil")
 			}
-			t.Logf("✓ Test 6 PASS: Can access individual fragments")
+			t.Logf("鉁?Test 6 PASS: Can access individual fragments")
 		}
 	} else if fragSeq, ok := pixelDataElem.(*element.OtherWordFragment); ok {
 		// OW fragment sequence
 		fragmentCount := fragSeq.FragmentCount()
-		t.Logf("✓ Test 4 PASS: OW Fragment sequence with %d fragments", fragmentCount)
+		t.Logf("鉁?Test 4 PASS: OW Fragment sequence with %d fragments", fragmentCount)
 
 		if fragmentCount == 0 {
 			t.Fatal("CRITICAL: Fragment sequence has no fragments")
 		}
-		t.Logf("✓ Test 5 PASS: Can access %d video fragments", len(fragSeq.Fragments()))
+		t.Logf("鉁?Test 5 PASS: Can access %d video fragments", len(fragSeq.Fragments()))
 	} else {
 		// Not a fragment sequence, check regular buffer
 		buffer := pixelDataElem.Buffer()
 		if buffer == nil {
 			t.Fatal("CRITICAL: PixelData buffer is nil - cannot access video data")
 		}
-		t.Log("✓ Test 4 PASS: PixelData buffer is accessible")
-		t.Logf("✓ Test 5 PASS: Buffer type: %T", buffer)
+		t.Log("鉁?Test 4 PASS: PixelData buffer is accessible")
+		t.Logf("鉁?Test 5 PASS: Buffer type: %T", buffer)
 	}
 
-	t.Log("\n✓ ALL TESTS PASSED: Video pixel data is fully accessible")
+	t.Log("\n鉁?ALL TESTS PASSED: Video pixel data is fully accessible")
 }
 
 // TestVideoDICOMFormats tests various video DICOM formats if available
@@ -205,7 +206,7 @@ func TestVideoDICOMFormats(t *testing.T) {
 				return
 			}
 
-			t.Logf("✓ Successfully parsed video DICOM: %s", filename)
+			t.Logf("鉁?Successfully parsed video DICOM: %s", filename)
 			successCount++
 		})
 	}
@@ -246,7 +247,7 @@ func checkSOPClassUID(t *testing.T, ds *dataset.Dataset) {
 	if sopClassUID, exists := ds.GetString(tag.SOPClassUID); exists {
 		t.Logf("SOP Class UID: %s", sopClassUID)
 		if sopClassUID == "1.2.840.10008.5.1.4.1.1.77.1.1.1" {
-			t.Log("✓ Confirmed: Video Endoscopic Image Storage")
+			t.Log("鉁?Confirmed: Video Endoscopic Image Storage")
 		}
 	} else {
 		t.Error("SOP Class UID not found")
@@ -271,13 +272,13 @@ func checkVideoTransferSyntax(t *testing.T, fmi *dataset.FileMetaInformation) {
 
 		switch tsUID {
 		case "1.2.840.10008.1.2.4.100":
-			t.Log("✓ Video format: MPEG2 Main Profile @ Main Level")
+			t.Log("鉁?Video format: MPEG2 Main Profile @ Main Level")
 		case "1.2.840.10008.1.2.4.101":
-			t.Log("✓ Video format: MPEG2 Main Profile @ High Level")
+			t.Log("鉁?Video format: MPEG2 Main Profile @ High Level")
 		case "1.2.840.10008.1.2.4.102":
-			t.Log("✓ Video format: MPEG4 AVC/H.264 High Profile")
+			t.Log("鉁?Video format: MPEG4 AVC/H.264 High Profile")
 		case "1.2.840.10008.1.2.4.103":
-			t.Log("✓ Video format: MPEG4 AVC/H.264 BD-compatible")
+			t.Log("鉁?Video format: MPEG4 AVC/H.264 BD-compatible")
 		default:
 			t.Logf("Video format: Other (%s)", tsUID)
 		}
@@ -288,10 +289,10 @@ func checkVideoTransferSyntax(t *testing.T, fmi *dataset.FileMetaInformation) {
 func checkVideoPixelData(t *testing.T, ds *dataset.Dataset) {
 	pixelDataElem, exists := ds.Get(tag.PixelData)
 	if !exists {
-		t.Fatal("❌ PixelData tag not found - cannot get video data")
+		t.Fatal("鉂?PixelData tag not found - cannot get video data")
 	}
 
-	t.Logf("✓ PixelData element found")
+	t.Logf("鉁?PixelData element found")
 	t.Logf("  PixelData tag: %s", pixelDataElem.Tag())
 	t.Logf("  PixelData VR: %s", pixelDataElem.ValueRepresentation())
 	t.Logf("  PixelData type: %T", pixelDataElem)
@@ -339,7 +340,7 @@ func checkImageDimensions(t *testing.T, ds *dataset.Dataset) {
 	if samplesPerPixel, err := ds.GetUInt16(tag.SamplesPerPixel, 0); err == nil {
 		t.Logf("  Samples Per Pixel: %d", samplesPerPixel)
 		if samplesPerPixel == 3 {
-			t.Log("  ✓ Color video (RGB or YBR)")
+			t.Log("  鉁?Color video (RGB or YBR)")
 		}
 	}
 
@@ -368,3 +369,4 @@ func checkPatientStudyInfo(t *testing.T, ds *dataset.Dataset) {
 		t.Logf("  Series Description: %s", seriesDesc)
 	}
 }
+

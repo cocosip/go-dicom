@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -343,7 +344,7 @@ func TestMultiFramePixelDataExtraction(t *testing.T) {
 		if expectedFrameSize == 0 {
 			t.Error("Frame size should not be 0")
 		} else {
-			t.Logf("✓ Frame size calculation successful")
+			t.Logf("鉁?Frame size calculation successful")
 		}
 	}
 }
@@ -392,3 +393,4 @@ func TestMultiFrameVsPrivateSequence(t *testing.T) {
 
 	t.Logf("Found %d private tag elements", privateCount)
 }
+

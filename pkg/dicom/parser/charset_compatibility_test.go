@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -284,7 +285,7 @@ func TestCharsetAllFilesParseSuccessfully(t *testing.T) {
 			}
 
 			parsedCount++
-			t.Logf("✓ Successfully parsed %s (%d elements)",
+			t.Logf("鉁?Successfully parsed %s (%d elements)",
 				entry.Name(), result.Dataset.Count())
 		})
 	}
@@ -395,3 +396,4 @@ func (r *fileReader) Read(p []byte) (n int, err error) {
 	r.pos += n
 	return n, nil
 }
+

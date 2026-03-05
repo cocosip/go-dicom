@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -49,7 +50,7 @@ func TestRealWorldDICOMFiles(t *testing.T) {
 				failedCount++
 				return
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -190,7 +191,7 @@ func TestSpecificRealWorldFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -228,7 +229,7 @@ func TestFragmentSequenceFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -269,7 +270,7 @@ func TestCompressedFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -312,7 +313,7 @@ func TestDICOMDIRFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {

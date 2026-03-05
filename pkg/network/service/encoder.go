@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -119,107 +120,31 @@ func decodeRawDataset(data []byte, ts *transfer.Syntax) (*dataset.Dataset, error
 		return dataset.New(), nil
 	}
 
-	ds := dataset.New()
 	r := bytes.NewReader(data)
 
 	// Determine byte order and VR mode from transfer syntax
 	byteOrder := ts.Endian().ByteOrder()
 	isExplicitVR := ts.IsExplicitVR()
 
+	return decodeDatasetFromReader(r, byteOrder, isExplicitVR)
+}
+
+func decodeDatasetFromReader(r *bytes.Reader, byteOrder binary.ByteOrder, isExplicitVR bool) (*dataset.Dataset, error) {
+	ds := dataset.New()
+
 	for r.Len() > 0 {
-		// Read tag (4 bytes)
 		if r.Len() < 4 {
-			break // Not enough data for a tag
+			break
 		}
 
-		var group, elem uint16
-		if err := binary.Read(r, byteOrder, &group); err != nil {
-			return nil, fmt.Errorf("failed to read tag group: %w", err)
-		}
-		if err := binary.Read(r, byteOrder, &elem); err != nil {
-			return nil, fmt.Errorf("failed to read tag element: %w", err)
-		}
-
-		t := tag.New(group, elem)
-
-		var elemVR *vr.VR
-		var valueLength uint32
-
-		if isExplicitVR {
-			// Read VR (2 bytes)
-			if r.Len() < 2 {
-				return nil, fmt.Errorf("not enough data to read VR for tag %s", t)
-			}
-
-			vrBytes := make([]byte, 2)
-			if _, err := r.Read(vrBytes); err != nil {
-				return nil, fmt.Errorf("failed to read VR for tag %s: %w", t, err)
-			}
-
-			var err error
-			elemVR, err = vr.Parse(string(vrBytes))
-			if err != nil {
-				// Unknown VR, use UN (Unknown)
-				elemVR = vr.UN
-			}
-
-			// Read length (2 or 6 bytes depending on VR)
-			// VRs with 4-byte length: OB, OD, OF, OL, OV, OW, SQ, UC, UR, UT, UN
-			if !elemVR.Is16bitLength() {
-				// Reserved (2 bytes) + Length (4 bytes)
-				reserved := make([]byte, 2)
-				if _, err := r.Read(reserved); err != nil {
-					return nil, fmt.Errorf("failed to read reserved bytes for tag %s: %w", t, err)
-				}
-
-				if err := binary.Read(r, byteOrder, &valueLength); err != nil {
-					return nil, fmt.Errorf("failed to read 4-byte length for tag %s: %w", t, err)
-				}
-			} else {
-				// Length (2 bytes)
-				var length16 uint16
-				if err := binary.Read(r, byteOrder, &length16); err != nil {
-					return nil, fmt.Errorf("failed to read 2-byte length for tag %s: %w", t, err)
-				}
-				valueLength = uint32(length16)
-			}
-		} else {
-			// Implicit VR: length is 4 bytes, VR is looked up from dictionary
-			if err := binary.Read(r, byteOrder, &valueLength); err != nil {
-				return nil, fmt.Errorf("failed to read length for tag %s: %w", t, err)
-			}
-
-			// For implicit VR, infer VR based on tag
-			// This is a simplified implementation for common command dataset tags
-			elemVR = inferVRFromTag(t)
-		}
-
-		// Handle undefined length (0xFFFFFFFF)
-		if valueLength == 0xFFFFFFFF {
-			// Sequences and items can have undefined length
-			// For now, skip parsing sequence items properly and just create an empty sequence
-			if elemVR == vr.SQ {
-				seq := dataset.NewSequence(t)
-				_ = ds.Add(seq)
-				// TODO: Parse sequence items properly
-				// For now, we'll read until we find the sequence delimiter
-				continue
-			}
-			return nil, fmt.Errorf("undefined length not supported for non-sequence tag %s", t)
-		}
-
-		// Read value
-		value := make([]byte, valueLength)
-		if valueLength > 0 {
-			if _, err := r.Read(value); err != nil {
-				return nil, fmt.Errorf("failed to read value for tag %s: %w", t, err)
-			}
-		}
-
-		// Create element from raw bytes
-		el, err := createElementFromBytes(t, elemVR, value, byteOrder)
+		t, err := readTagFromReader(r, byteOrder)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create element for tag %s: %w", t, err)
+			return nil, err
+		}
+
+		el, err := decodeElementWithTag(r, byteOrder, isExplicitVR, t)
+		if err != nil {
+			return nil, err
 		}
 
 		if err := ds.Add(el); err != nil {
@@ -228,6 +153,230 @@ func decodeRawDataset(data []byte, ts *transfer.Syntax) (*dataset.Dataset, error
 	}
 
 	return ds, nil
+}
+
+func readTagFromReader(r *bytes.Reader, byteOrder binary.ByteOrder) (*tag.Tag, error) {
+	var group, elem uint16
+	if err := binary.Read(r, byteOrder, &group); err != nil {
+		return nil, fmt.Errorf("failed to read tag group: %w", err)
+	}
+	if err := binary.Read(r, byteOrder, &elem); err != nil {
+		return nil, fmt.Errorf("failed to read tag element: %w", err)
+	}
+	return tag.New(group, elem), nil
+}
+
+func decodeElementWithTag(r *bytes.Reader, byteOrder binary.ByteOrder, isExplicitVR bool, t *tag.Tag) (element.Element, error) {
+	elemVR, valueLength, err := readVROrInferAndLength(r, byteOrder, isExplicitVR, t)
+	if err != nil {
+		return nil, err
+	}
+
+	if elemVR == vr.SQ {
+		return decodeSequenceElement(r, byteOrder, isExplicitVR, t, valueLength)
+	}
+
+	if valueLength == 0xFFFFFFFF {
+		return nil, fmt.Errorf("undefined length not supported for non-sequence tag %s", t)
+	}
+
+	value := make([]byte, valueLength)
+	if valueLength > 0 {
+		if _, err := io.ReadFull(r, value); err != nil {
+			return nil, fmt.Errorf("failed to read value for tag %s: %w", t, err)
+		}
+	}
+
+	el, err := createElementFromBytes(t, elemVR, value, byteOrder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create element for tag %s: %w", t, err)
+	}
+	return el, nil
+}
+
+func readVROrInferAndLength(r *bytes.Reader, byteOrder binary.ByteOrder, isExplicitVR bool, t *tag.Tag) (*vr.VR, uint32, error) {
+	var elemVR *vr.VR
+	var valueLength uint32
+
+	if isExplicitVR {
+		if r.Len() < 2 {
+			return nil, 0, fmt.Errorf("not enough data to read VR for tag %s", t)
+		}
+
+		vrBytes := make([]byte, 2)
+		if _, err := io.ReadFull(r, vrBytes); err != nil {
+			return nil, 0, fmt.Errorf("failed to read VR for tag %s: %w", t, err)
+		}
+
+		var err error
+		elemVR, err = vr.Parse(string(vrBytes))
+		if err != nil {
+			elemVR = vr.UN
+		}
+
+		if !elemVR.Is16bitLength() {
+			reserved := make([]byte, 2)
+			if _, err := io.ReadFull(r, reserved); err != nil {
+				return nil, 0, fmt.Errorf("failed to read reserved bytes for tag %s: %w", t, err)
+			}
+			if err := binary.Read(r, byteOrder, &valueLength); err != nil {
+				return nil, 0, fmt.Errorf("failed to read 4-byte length for tag %s: %w", t, err)
+			}
+		} else {
+			var length16 uint16
+			if err := binary.Read(r, byteOrder, &length16); err != nil {
+				return nil, 0, fmt.Errorf("failed to read 2-byte length for tag %s: %w", t, err)
+			}
+			valueLength = uint32(length16)
+		}
+	} else {
+		if err := binary.Read(r, byteOrder, &valueLength); err != nil {
+			return nil, 0, fmt.Errorf("failed to read length for tag %s: %w", t, err)
+		}
+		elemVR = inferVRFromTag(t)
+	}
+
+	return elemVR, valueLength, nil
+}
+
+func decodeSequenceElement(r *bytes.Reader, byteOrder binary.ByteOrder, isExplicitVR bool, t *tag.Tag, valueLength uint32) (*dataset.Sequence, error) {
+	seq := dataset.NewSequence(t)
+
+	if valueLength == 0xFFFFFFFF {
+		for {
+			if r.Len() < 4 {
+				return nil, fmt.Errorf("unexpected EOF while reading undefined-length sequence %s", t)
+			}
+
+			itemTag, err := readTagFromReader(r, byteOrder)
+			if err != nil {
+				return nil, err
+			}
+
+			if isSequenceDelimitationTag(itemTag) {
+				var delimLength uint32
+				if err := binary.Read(r, byteOrder, &delimLength); err != nil {
+					return nil, fmt.Errorf("failed to read sequence delimiter length for %s: %w", t, err)
+				}
+				break
+			}
+
+			if !isItemTag(itemTag) {
+				return nil, fmt.Errorf("expected item tag in sequence %s, got %s", t, itemTag)
+			}
+
+			var itemLength uint32
+			if err := binary.Read(r, byteOrder, &itemLength); err != nil {
+				return nil, fmt.Errorf("failed to read item length in sequence %s: %w", t, err)
+			}
+
+			item, err := decodeItemDataset(r, byteOrder, isExplicitVR, itemLength)
+			if err != nil {
+				return nil, err
+			}
+			seq.AddItem(item)
+		}
+		return seq, nil
+	}
+
+	sequenceData := make([]byte, valueLength)
+	if _, err := io.ReadFull(r, sequenceData); err != nil {
+		return nil, fmt.Errorf("failed to read sequence data for %s: %w", t, err)
+	}
+
+	seqReader := bytes.NewReader(sequenceData)
+	for seqReader.Len() > 0 {
+		if seqReader.Len() < 4 {
+			break
+		}
+
+		itemTag, err := readTagFromReader(seqReader, byteOrder)
+		if err != nil {
+			return nil, err
+		}
+
+		if isSequenceDelimitationTag(itemTag) {
+			var delimLength uint32
+			if err := binary.Read(seqReader, byteOrder, &delimLength); err != nil {
+				return nil, fmt.Errorf("failed to read sequence delimiter length for %s: %w", t, err)
+			}
+			break
+		}
+
+		if !isItemTag(itemTag) {
+			return nil, fmt.Errorf("expected item tag in sequence %s, got %s", t, itemTag)
+		}
+
+		var itemLength uint32
+		if err := binary.Read(seqReader, byteOrder, &itemLength); err != nil {
+			return nil, fmt.Errorf("failed to read item length in sequence %s: %w", t, err)
+		}
+
+		item, err := decodeItemDataset(seqReader, byteOrder, isExplicitVR, itemLength)
+		if err != nil {
+			return nil, err
+		}
+		seq.AddItem(item)
+	}
+
+	return seq, nil
+}
+
+func decodeItemDataset(r *bytes.Reader, byteOrder binary.ByteOrder, isExplicitVR bool, itemLength uint32) (*dataset.Dataset, error) {
+	// Undefined-length item: read until Item Delimitation Item.
+	if itemLength == 0xFFFFFFFF {
+		item := dataset.New()
+		for {
+			if r.Len() < 4 {
+				return nil, fmt.Errorf("unexpected EOF while reading undefined-length item")
+			}
+
+			t, err := readTagFromReader(r, byteOrder)
+			if err != nil {
+				return nil, err
+			}
+
+			if isItemDelimitationTag(t) {
+				var delimLength uint32
+				if err := binary.Read(r, byteOrder, &delimLength); err != nil {
+					return nil, fmt.Errorf("failed to read item delimiter length: %w", err)
+				}
+				break
+			}
+
+			el, err := decodeElementWithTag(r, byteOrder, isExplicitVR, t)
+			if err != nil {
+				return nil, err
+			}
+			if err := item.Add(el); err != nil {
+				return nil, fmt.Errorf("failed to add element %s to item: %w", t, err)
+			}
+		}
+		return item, nil
+	}
+
+	if itemLength == 0 {
+		return dataset.New(), nil
+	}
+
+	itemData := make([]byte, itemLength)
+	if _, err := io.ReadFull(r, itemData); err != nil {
+		return nil, fmt.Errorf("failed to read item data: %w", err)
+	}
+
+	return decodeDatasetFromReader(bytes.NewReader(itemData), byteOrder, isExplicitVR)
+}
+
+func isItemTag(t *tag.Tag) bool {
+	return t.Group() == 0xFFFE && t.Element() == 0xE000
+}
+
+func isItemDelimitationTag(t *tag.Tag) bool {
+	return t.Group() == 0xFFFE && t.Element() == 0xE00D
+}
+
+func isSequenceDelimitationTag(t *tag.Tag) bool {
+	return t.Group() == 0xFFFE && t.Element() == 0xE0DD
 }
 
 // inferVRFromTag infers the VR for a tag in implicit VR transfer syntax.
@@ -307,113 +456,130 @@ func inferVRFromTag(t *tag.Tag) *vr.VR {
 
 // createElementFromBytes creates a DICOM element from raw bytes based on VR.
 func createElementFromBytes(t *tag.Tag, elemVR *vr.VR, value []byte, byteOrder binary.ByteOrder) (element.Element, error) {
-	// Handle string-based VRs
-	switch elemVR {
-	case vr.AE, vr.AS, vr.CS, vr.DA, vr.DS, vr.DT, vr.IS, vr.LO, vr.LT, vr.PN, vr.SH, vr.ST, vr.TM, vr.UC, vr.UI, vr.UR, vr.UT:
-		// String VRs - parse as null-terminated or space-padded strings
-		strValue := string(value)
-		strValue = strings.TrimRight(strValue, "\x00 ") // Remove null bytes and trailing spaces
-
-		// Some VRs can have multiple values separated by backslash
+	if isStringVR(elemVR) {
+		strValue := strings.TrimRight(string(value), "\x00 ")
 		var values []string
 		if len(strValue) > 0 {
 			values = strings.Split(strValue, "\\")
 		}
-
 		return element.NewString(t, elemVR, values), nil
-
-	case vr.US: // Unsigned Short
-		count := len(value) / 2
-		values := make([]uint16, count)
-		buf := bytes.NewReader(value)
-		for i := 0; i < count; i++ {
-			if err := binary.Read(buf, byteOrder, &values[i]); err != nil {
-				return nil, err
-			}
-		}
-		return element.NewUnsignedShort(t, values), nil
-
-	case vr.UL: // Unsigned Long
-		count := len(value) / 4
-		values := make([]uint32, count)
-		buf := bytes.NewReader(value)
-		for i := 0; i < count; i++ {
-			if err := binary.Read(buf, byteOrder, &values[i]); err != nil {
-				return nil, err
-			}
-		}
-		return element.NewUnsignedLong(t, values), nil
-
-	case vr.SS: // Signed Short
-		count := len(value) / 2
-		values := make([]int16, count)
-		buf := bytes.NewReader(value)
-		for i := 0; i < count; i++ {
-			if err := binary.Read(buf, byteOrder, &values[i]); err != nil {
-				return nil, err
-			}
-		}
-		return element.NewSignedShort(t, values), nil
-
-	case vr.SL: // Signed Long
-		count := len(value) / 4
-		values := make([]int32, count)
-		buf := bytes.NewReader(value)
-		for i := 0; i < count; i++ {
-			if err := binary.Read(buf, byteOrder, &values[i]); err != nil {
-				return nil, err
-			}
-		}
-		return element.NewSignedLong(t, values), nil
-
-	case vr.FL: // Float
-		count := len(value) / 4
-		values := make([]float32, count)
-		buf := bytes.NewReader(value)
-		for i := 0; i < count; i++ {
-			if err := binary.Read(buf, byteOrder, &values[i]); err != nil {
-				return nil, err
-			}
-		}
-		return element.NewFloat(t, values), nil
-
-	case vr.FD: // Double
-		count := len(value) / 8
-		values := make([]float64, count)
-		buf := bytes.NewReader(value)
-		for i := 0; i < count; i++ {
-			if err := binary.Read(buf, byteOrder, &values[i]); err != nil {
-				return nil, err
-			}
-		}
-		return element.NewDouble(t, values), nil
-
-	case vr.AT: // Attribute Tag
-		count := len(value) / 4
-		values := make([]*tag.Tag, count)
-		buf := bytes.NewReader(value)
-		for i := 0; i < count; i++ {
-			var group, elem uint16
-			if err := binary.Read(buf, byteOrder, &group); err != nil {
-				return nil, err
-			}
-			if err := binary.Read(buf, byteOrder, &elem); err != nil {
-				return nil, err
-			}
-			values[i] = tag.New(group, elem)
-		}
-		return element.NewAttributeTag(t, values), nil
-
-	case vr.OB, vr.OD, vr.OF, vr.OL, vr.OV, vr.OW, vr.UN:
-		// Binary VRs - store as is
-		return element.NewOtherByte(t, value), nil
-
-	case vr.SQ:
-		// Sequence - should have been handled earlier
-		return dataset.NewSequence(t), nil
-
-	default:
-		// Unknown VR - treat as binary
-		return element.NewOtherByte(t, value), nil
 	}
+
+	if numericEl, ok, err := createNumericElement(t, elemVR, value, byteOrder); ok || err != nil {
+		return numericEl, err
+	}
+
+	switch elemVR {
+	case vr.OB:
+		return element.NewOtherByte(t, value), nil
+	case vr.OW:
+		return element.NewOtherWord(t, value), nil
+	case vr.OD:
+		return element.NewOtherDouble(t, value), nil
+	case vr.OF:
+		return element.NewOtherFloat(t, value), nil
+	case vr.OL:
+		return element.NewOtherLong(t, value), nil
+	case vr.OV:
+		return element.NewOtherVeryLong(t, value), nil
+	case vr.UN:
+		return element.NewUnknown(t, value), nil
+	case vr.SQ:
+		// Sequence should be handled before reaching this function.
+		return dataset.NewSequence(t), nil
+	default:
+		return element.NewUnknown(t, value), nil
+	}
+}
+
+func isStringVR(elemVR *vr.VR) bool {
+	switch elemVR {
+	case vr.AE, vr.AS, vr.CS, vr.DA, vr.DS, vr.DT, vr.IS, vr.LO, vr.LT, vr.PN, vr.SH, vr.ST, vr.TM, vr.UC, vr.UI, vr.UR, vr.UT:
+		return true
+	default:
+		return false
+	}
+}
+
+func createNumericElement(t *tag.Tag, elemVR *vr.VR, value []byte, byteOrder binary.ByteOrder) (element.Element, bool, error) {
+	switch elemVR {
+	case vr.US:
+		values, err := readTypedValues[uint16](value, byteOrder)
+		if err != nil {
+			return nil, true, err
+		}
+		return element.NewUnsignedShort(t, values), true, nil
+	case vr.UL:
+		values, err := readTypedValues[uint32](value, byteOrder)
+		if err != nil {
+			return nil, true, err
+		}
+		return element.NewUnsignedLong(t, values), true, nil
+	case vr.SS:
+		values, err := readTypedValues[int16](value, byteOrder)
+		if err != nil {
+			return nil, true, err
+		}
+		return element.NewSignedShort(t, values), true, nil
+	case vr.SL:
+		values, err := readTypedValues[int32](value, byteOrder)
+		if err != nil {
+			return nil, true, err
+		}
+		return element.NewSignedLong(t, values), true, nil
+	case vr.FL:
+		values, err := readTypedValues[float32](value, byteOrder)
+		if err != nil {
+			return nil, true, err
+		}
+		return element.NewFloat(t, values), true, nil
+	case vr.FD:
+		values, err := readTypedValues[float64](value, byteOrder)
+		if err != nil {
+			return nil, true, err
+		}
+		return element.NewDouble(t, values), true, nil
+	case vr.AT:
+		values, err := readAttributeTags(value, byteOrder)
+		if err != nil {
+			return nil, true, err
+		}
+		return element.NewAttributeTag(t, values), true, nil
+	default:
+		return nil, false, nil
+	}
+}
+
+func readTypedValues[T any](value []byte, byteOrder binary.ByteOrder) ([]T, error) {
+	var zero T
+	elementSize := binary.Size(zero)
+	if elementSize <= 0 {
+		return nil, fmt.Errorf("invalid element size for typed value")
+	}
+	count := len(value) / elementSize
+	values := make([]T, count)
+	buf := bytes.NewReader(value)
+	for i := 0; i < count; i++ {
+		if err := binary.Read(buf, byteOrder, &values[i]); err != nil {
+			return nil, err
+		}
+	}
+	return values, nil
+}
+
+func readAttributeTags(value []byte, byteOrder binary.ByteOrder) ([]*tag.Tag, error) {
+	count := len(value) / 4
+	values := make([]*tag.Tag, count)
+	buf := bytes.NewReader(value)
+	for i := 0; i < count; i++ {
+		var group, elem uint16
+		if err := binary.Read(buf, byteOrder, &group); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(buf, byteOrder, &elem); err != nil {
+			return nil, err
+		}
+		values[i] = tag.New(group, elem)
+	}
+	return values, nil
 }

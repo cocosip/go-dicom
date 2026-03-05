@@ -1,3 +1,4 @@
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -79,7 +80,7 @@ func TestWriteReadSingleFrame(t *testing.T) {
 	}
 
 	writtenSize := buf.Len()
-	t.Logf("✓ Successfully wrote DICOM: %d bytes", writtenSize)
+	t.Logf("鉁?Successfully wrote DICOM: %d bytes", writtenSize)
 
 	// Parse the written data
 	reader := bytes.NewReader(buf.Bytes())
@@ -88,7 +89,7 @@ func TestWriteReadSingleFrame(t *testing.T) {
 		t.Fatalf("Failed to parse written DICOM: %v", err)
 	}
 
-	t.Logf("✓ Successfully parsed written DICOM")
+	t.Logf("鉁?Successfully parsed written DICOM")
 	t.Logf("Parsed dataset contains %d elements", result.Dataset.Count())
 
 	// Verify image properties
@@ -96,21 +97,21 @@ func TestWriteReadSingleFrame(t *testing.T) {
 	if err != nil || parsedRows != rows {
 		t.Errorf("Rows mismatch: got %d, want %d", parsedRows, rows)
 	} else {
-		t.Logf("✓ Rows verified: %d", parsedRows)
+		t.Logf("鉁?Rows verified: %d", parsedRows)
 	}
 
 	parsedCols, err := result.Dataset.GetUInt16(tag.Columns, 0)
 	if err != nil || parsedCols != cols {
 		t.Errorf("Columns mismatch: got %d, want %d", parsedCols, cols)
 	} else {
-		t.Logf("✓ Columns verified: %d", parsedCols)
+		t.Logf("鉁?Columns verified: %d", parsedCols)
 	}
 
 	parsedBitsAlloc, err := result.Dataset.GetUInt16(tag.BitsAllocated, 0)
 	if err != nil || parsedBitsAlloc != bitsAllocated {
 		t.Errorf("BitsAllocated mismatch: got %d, want %d", parsedBitsAlloc, bitsAllocated)
 	} else {
-		t.Logf("✓ BitsAllocated verified: %d", parsedBitsAlloc)
+		t.Logf("鉁?BitsAllocated verified: %d", parsedBitsAlloc)
 	}
 
 	// Verify number of frames (should default to 1 for single frame)
@@ -120,10 +121,10 @@ func TestWriteReadSingleFrame(t *testing.T) {
 		if numFramesStr != "1" {
 			t.Errorf("NumberOfFrames mismatch: got %s, want 1", numFramesStr)
 		} else {
-			t.Logf("✓ NumberOfFrames verified: %s", numFramesStr)
+			t.Logf("鉁?NumberOfFrames verified: %s", numFramesStr)
 		}
 	} else {
-		t.Log("✓ NumberOfFrames not present (default 1 for single frame)")
+		t.Log("鉁?NumberOfFrames not present (default 1 for single frame)")
 	}
 
 	// Verify pixel data
@@ -132,7 +133,7 @@ func TestWriteReadSingleFrame(t *testing.T) {
 		t.Fatal("Pixel data not found in parsed dataset")
 	}
 
-	t.Logf("✓ Pixel data element found: %T", parsedPixelData)
+	t.Logf("鉁?Pixel data element found: %T", parsedPixelData)
 
 	// Extract pixel data bytes
 	var parsedPixelBytes []byte
@@ -147,12 +148,12 @@ func TestWriteReadSingleFrame(t *testing.T) {
 		t.Fatalf("Unable to extract pixel data from type: %T", parsedPixelData)
 	}
 
-	t.Logf("✓ Pixel data size: %d bytes", len(parsedPixelBytes))
+	t.Logf("鉁?Pixel data size: %d bytes", len(parsedPixelBytes))
 
 	if len(parsedPixelBytes) != pixelDataSize {
 		t.Errorf("Pixel data size mismatch: got %d, want %d", len(parsedPixelBytes), pixelDataSize)
 	} else {
-		t.Log("✓ Pixel data size verified")
+		t.Log("鉁?Pixel data size verified")
 	}
 
 	// Verify first few bytes
@@ -164,12 +165,12 @@ func TestWriteReadSingleFrame(t *testing.T) {
 		}
 	}
 	if match {
-		t.Log("✓ Pixel data content verified (sample check)")
+		t.Log("鉁?Pixel data content verified (sample check)")
 	} else {
 		t.Error("Pixel data content mismatch")
 	}
 
-	t.Log("\n✅ Single Frame Write/Read Cycle: SUCCESS")
+	t.Log("\n鉁?Single Frame Write/Read Cycle: SUCCESS")
 }
 
 // TestWriteReadMultiFrame tests writing and reading a multi-frame DICOM image
@@ -270,7 +271,7 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	if statErr != nil {
 		t.Fatalf("Failed to stat output file: %v", statErr)
 	}
-	t.Logf("✓ Successfully wrote DICOM to file: %s (%d bytes)", outputFile, fileInfo.Size())
+	t.Logf("鉁?Successfully wrote DICOM to file: %s (%d bytes)", outputFile, fileInfo.Size())
 
 	// Parse the written file
 	readFile, err := os.Open(outputFile)
@@ -284,7 +285,7 @@ func TestWriteReadMultiFrame(t *testing.T) {
 		t.Fatalf("Failed to parse written DICOM: %v", err)
 	}
 
-	t.Logf("✓ Successfully parsed written DICOM")
+	t.Logf("鉁?Successfully parsed written DICOM")
 	t.Logf("Parsed dataset contains %d elements", result.Dataset.Count())
 
 	// Verify image properties
@@ -292,37 +293,37 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	if err != nil || parsedRows != rows {
 		t.Errorf("Rows mismatch: got %d, want %d", parsedRows, rows)
 	} else {
-		t.Logf("✓ Rows verified: %d", parsedRows)
+		t.Logf("鉁?Rows verified: %d", parsedRows)
 	}
 
 	parsedCols, err := result.Dataset.GetUInt16(tag.Columns, 0)
 	if err != nil || parsedCols != cols {
 		t.Errorf("Columns mismatch: got %d, want %d", parsedCols, cols)
 	} else {
-		t.Logf("✓ Columns verified: %d", parsedCols)
+		t.Logf("鉁?Columns verified: %d", parsedCols)
 	}
 
 	// CRITICAL: Verify number of frames
 	numFramesStr, exists := result.Dataset.GetString(tag.NumberOfFrames)
 	if !exists {
-		t.Error("❌ CRITICAL: NumberOfFrames not found in parsed dataset")
+		t.Error("鉂?CRITICAL: NumberOfFrames not found in parsed dataset")
 	} else {
 		numFramesStr = strings.TrimSpace(numFramesStr)
 		expectedFrames := "10"
 		if numFramesStr != expectedFrames {
-			t.Errorf("❌ CRITICAL: NumberOfFrames mismatch: got %s, want %s", numFramesStr, expectedFrames)
+			t.Errorf("鉂?CRITICAL: NumberOfFrames mismatch: got %s, want %s", numFramesStr, expectedFrames)
 		} else {
-			t.Logf("✓ NumberOfFrames verified: %s frames", numFramesStr)
+			t.Logf("鉁?NumberOfFrames verified: %s frames", numFramesStr)
 		}
 	}
 
 	// Verify pixel data
 	parsedPixelData, exists := result.Dataset.Get(tag.PixelData)
 	if !exists {
-		t.Fatal("❌ Pixel data not found in parsed dataset")
+		t.Fatal("鉂?Pixel data not found in parsed dataset")
 	}
 
-	t.Logf("✓ Pixel data element found: %T", parsedPixelData)
+	t.Logf("鉁?Pixel data element found: %T", parsedPixelData)
 
 	// Extract pixel data bytes
 	var parsedPixelBytes []byte
@@ -337,12 +338,12 @@ func TestWriteReadMultiFrame(t *testing.T) {
 		t.Fatalf("Unable to extract pixel data from type: %T", parsedPixelData)
 	}
 
-	t.Logf("✓ Pixel data size: %d bytes (%.2f KB)", len(parsedPixelBytes), float64(len(parsedPixelBytes))/1024)
+	t.Logf("鉁?Pixel data size: %d bytes (%.2f KB)", len(parsedPixelBytes), float64(len(parsedPixelBytes))/1024)
 
 	if len(parsedPixelBytes) != totalPixelDataSize {
 		t.Errorf("Pixel data size mismatch: got %d, want %d", len(parsedPixelBytes), totalPixelDataSize)
 	} else {
-		t.Log("✓ Pixel data size verified")
+		t.Log("鉁?Pixel data size verified")
 	}
 
 	// Verify data from different frames
@@ -363,21 +364,21 @@ func TestWriteReadMultiFrame(t *testing.T) {
 		}
 
 		if match {
-			t.Logf("  ✓ Frame %d data verified (sample check)", frame)
+			t.Logf("  鉁?Frame %d data verified (sample check)", frame)
 		} else {
-			t.Errorf("  ❌ Frame %d data mismatch", frame)
+			t.Errorf("  鉂?Frame %d data mismatch", frame)
 		}
 	}
 
 	if allFramesValid {
-		t.Log("✓ All checked frames have correct data")
+		t.Log("鉁?All checked frames have correct data")
 	}
 
 	// Clean up
         _ = os.Remove(outputFile)
 
-	t.Log("\n✅ Multi-Frame Write/Read Cycle: SUCCESS")
-	t.Logf("✅ Verified: %d frames correctly written and parsed", numFrames)
+	t.Log("\n鉁?Multi-Frame Write/Read Cycle: SUCCESS")
+	t.Logf("鉁?Verified: %d frames correctly written and parsed", numFrames)
 }
 
 // TestWriteReadVerifyFrameCount tests frame count accuracy for various frame counts
@@ -441,23 +442,24 @@ func TestWriteReadVerifyFrameCount(t *testing.T) {
 				if exists {
 					numFramesStr = strings.TrimSpace(numFramesStr)
 					if numFramesStr == "1" {
-						t.Logf("✓ Frame count for %d frame: %s (explicit)", expectedFrames, numFramesStr)
+						t.Logf("鉁?Frame count for %d frame: %s (explicit)", expectedFrames, numFramesStr)
 					}
 				} else {
-					t.Logf("✓ Frame count for %d frame: implicit (not present)", expectedFrames)
+					t.Logf("鉁?Frame count for %d frame: implicit (not present)", expectedFrames)
 				}
 			} else {
 				if !exists {
-					t.Errorf("❌ NumberOfFrames missing for %d frames", expectedFrames)
+					t.Errorf("鉂?NumberOfFrames missing for %d frames", expectedFrames)
 				} else {
 					numFramesStr = strings.TrimSpace(numFramesStr)
 					if numFramesStr != string(rune(expectedFrames)) {
-						t.Logf("✓ Frame count verified: %s frames (expected %d)", numFramesStr, expectedFrames)
+						t.Logf("鉁?Frame count verified: %s frames (expected %d)", numFramesStr, expectedFrames)
 					}
 				}
 			}
 		})
 	}
 
-	t.Log("\n✅ Frame Count Verification: COMPLETE")
+	t.Log("\n鉁?Frame Count Verification: COMPLETE")
 }
+

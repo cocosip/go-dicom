@@ -181,10 +181,10 @@ func printFindResults(level dimse.QueryRetrieveLevel, results []*dataset.Dataset
 
 		fmt.Printf("[%d] Patient=%s (%s) StudyDate=%s Modality=%s\n",
 			i+1,
-			nonEmpty(patientNameValue, "-"),
-			nonEmpty(patientIDValue, "-"),
-			nonEmpty(studyDateValue, "-"),
-			nonEmpty(modalityValue, "-"),
+			nonEmpty(patientNameValue),
+			nonEmpty(patientIDValue),
+			nonEmpty(studyDateValue),
+			nonEmpty(modalityValue),
 		)
 		if studyUIDValue != "" {
 			fmt.Printf("    StudyInstanceUID:  %s\n", studyUIDValue)
@@ -217,9 +217,9 @@ func normalizeRetrieveMode(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
 }
 
-func nonEmpty(v, fallback string) string {
+func nonEmpty(v string) string {
 	if strings.TrimSpace(v) == "" {
-		return fallback
+		return "-"
 	}
 	return v
 }

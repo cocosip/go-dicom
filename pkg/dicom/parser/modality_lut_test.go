@@ -1,3 +1,4 @@
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -34,8 +35,8 @@ func TestModalityLUTParsing(t *testing.T) {
 		t.Fatalf("Failed to parse Modality LUT DICOM: %v", err)
 	}
 
-	t.Logf("✓ Successfully parsed Modality LUT DICOM")
-	t.Logf("✓ Dataset contains %d elements", result.Dataset.Count())
+	t.Logf("鉁?Successfully parsed Modality LUT DICOM")
+	t.Logf("鉁?Dataset contains %d elements", result.Dataset.Count())
 
 	// Get SOP Class UID
 	sopClassUID, exists := result.Dataset.GetString(tag.SOPClassUID)
@@ -52,7 +53,7 @@ func TestModalityLUTParsing(t *testing.T) {
 		if modality != "CR" && modality != "CR " {
 			t.Errorf("Expected CR modality, got: %s", modality)
 		} else {
-			t.Log("✓ Confirmed CR (Computed Radiography) modality")
+			t.Log("鉁?Confirmed CR (Computed Radiography) modality")
 		}
 	}
 
@@ -82,7 +83,7 @@ func TestModalityLUTParsing(t *testing.T) {
 		t.Logf("Patient Name: %s", patientName)
 	}
 
-	t.Logf("✓ Modality LUT DICOM file parsed successfully")
+	t.Logf("鉁?Modality LUT DICOM file parsed successfully")
 }
 
 // TestModalityLUTSequence tests accessing the Modality LUT Sequence
@@ -108,7 +109,7 @@ func TestModalityLUTSequence(t *testing.T) {
 		return
 	}
 
-	t.Logf("✓ Modality LUT Sequence found")
+	t.Logf("鉁?Modality LUT Sequence found")
 
 	// Check if it's a sequence
 	modalityLUTSeq, ok := modalityLUTSeqElem.(*dataset.Sequence)
@@ -118,7 +119,7 @@ func TestModalityLUTSequence(t *testing.T) {
 	}
 
 	itemCount := modalityLUTSeq.Count()
-	t.Logf("✓ Modality LUT Sequence is a valid Sequence")
+	t.Logf("鉁?Modality LUT Sequence is a valid Sequence")
 	t.Logf("Number of items in sequence: %d", itemCount)
 
 	if itemCount == 0 {
@@ -167,7 +168,7 @@ func TestModalityLUTSequence(t *testing.T) {
 		}
 	}
 
-	t.Logf("\n✓ Modality LUT Sequence successfully analyzed")
+	t.Logf("\n鉁?Modality LUT Sequence successfully analyzed")
 }
 
 // TestModalityLUTPixelData tests that pixel data is accessible and not empty
@@ -189,10 +190,10 @@ func TestModalityLUTPixelData(t *testing.T) {
 	// Get pixel data element
 	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
 	if !exists {
-		t.Fatal("❌ PixelData element not found - CRITICAL FAILURE")
+		t.Fatal("鉂?PixelData element not found - CRITICAL FAILURE")
 	}
 
-	t.Logf("✓ PixelData element found")
+	t.Logf("鉁?PixelData element found")
 	t.Logf("PixelData element type: %T", pixelDataElem)
 
 	// Verify pixel data is not empty
@@ -243,12 +244,12 @@ func TestModalityLUTPixelData(t *testing.T) {
 
 	// Critical check: Pixel data must not be empty
 	if pixelDataEmpty {
-		t.Fatal("❌ CRITICAL FAILURE: Pixel data is EMPTY - this violates the test requirement")
+		t.Fatal("鉂?CRITICAL FAILURE: Pixel data is EMPTY - this violates the test requirement")
 	}
 
 	if pixelDataSize > 0 {
-		t.Logf("✓ Pixel data is NOT empty: %d bytes", pixelDataSize)
-		t.Logf("✓ PASS: Pixel data requirement satisfied")
+		t.Logf("鉁?Pixel data is NOT empty: %d bytes", pixelDataSize)
+		t.Logf("鉁?PASS: Pixel data requirement satisfied")
 	} else {
 		// Additional check - try to access via other methods
 		t.Log("Attempting alternative pixel data access methods...")
@@ -259,13 +260,13 @@ func TestModalityLUTPixelData(t *testing.T) {
 		}); ok {
 			fragCount := fragSeq.FragmentCount()
 			if fragCount > 0 {
-				t.Logf("✓ Pixel data stored as fragment sequence with %d fragments", fragCount)
+				t.Logf("鉁?Pixel data stored as fragment sequence with %d fragments", fragCount)
 				pixelDataEmpty = false
 			}
 		}
 
 		if pixelDataEmpty {
-			t.Fatal("❌ CRITICAL FAILURE: Could not verify pixel data is not empty")
+			t.Fatal("鉂?CRITICAL FAILURE: Could not verify pixel data is not empty")
 		}
 	}
 
@@ -283,14 +284,14 @@ func TestModalityLUTPixelData(t *testing.T) {
 			t.Logf("Actual/Expected ratio: %.2f", ratio)
 
 			if ratio > 0.5 && ratio < 2.0 {
-				t.Logf("✓ Pixel data size is reasonable")
+				t.Logf("鉁?Pixel data size is reasonable")
 			} else {
-				t.Logf("⚠ Pixel data size differs significantly from expected")
+				t.Logf("鈿?Pixel data size differs significantly from expected")
 			}
 		}
 	}
 
-	t.Logf("\n✓ Pixel data verification complete - data is NOT empty")
+	t.Logf("\n鉁?Pixel data verification complete - data is NOT empty")
 }
 
 // TestModalityLUTComplete tests complete workflow of parsing LUT DICOM with pixel data
@@ -311,18 +312,18 @@ func TestModalityLUTComplete(t *testing.T) {
 	// Parse file
 	result, err := Parse(file)
 	if err != nil {
-		t.Fatalf("❌ Failed to parse: %v", err)
+		t.Fatalf("鉂?Failed to parse: %v", err)
 	}
-	t.Logf("✓ File parsed successfully")
+	t.Logf("鉁?File parsed successfully")
 
 	// Check essential elements
 	checksPass := true
 
 	// 1. Check Modality LUT Sequence exists
 	if _, exists := result.Dataset.Get(tag.ModalityLUTSequence); exists {
-		t.Logf("✓ Modality LUT Sequence present")
+		t.Logf("鉁?Modality LUT Sequence present")
 	} else {
-		t.Logf("❌ Modality LUT Sequence missing")
+		t.Logf("鉂?Modality LUT Sequence missing")
 		checksPass = false
 	}
 
@@ -334,16 +335,16 @@ func TestModalityLUTComplete(t *testing.T) {
 			if len(pd.Data()) == 0 {
 				isEmpty = true
 			} else {
-				t.Logf("✓ Pixel Data present and not empty: %d bytes", len(pd.Data()))
+				t.Logf("鉁?Pixel Data present and not empty: %d bytes", len(pd.Data()))
 			}
 		}
 
 		if isEmpty {
-			t.Logf("❌ Pixel Data is empty")
+			t.Logf("鉂?Pixel Data is empty")
 			checksPass = false
 		}
 	} else {
-		t.Logf("❌ Pixel Data missing")
+		t.Logf("鉂?Pixel Data missing")
 		checksPass = false
 	}
 
@@ -351,20 +352,20 @@ func TestModalityLUTComplete(t *testing.T) {
 	rows, rowsErr := result.Dataset.GetUInt16(tag.Rows, 0)
 	cols, colsErr := result.Dataset.GetUInt16(tag.Columns, 0)
 	if rowsErr == nil && colsErr == nil && rows > 0 && cols > 0 {
-		t.Logf("✓ Image dimensions valid: %d x %d", cols, rows)
+		t.Logf("鉁?Image dimensions valid: %d x %d", cols, rows)
 	} else {
-		t.Logf("❌ Image dimensions invalid")
+		t.Logf("鉂?Image dimensions invalid")
 		checksPass = false
 	}
 
 	// Final result
 	if checksPass {
-		t.Log("\n✅ ALL CHECKS PASSED")
-		t.Log("✓ File parses correctly")
-		t.Log("✓ Modality LUT Sequence accessible")
-		t.Log("✓ Pixel data present and not empty")
+		t.Log("\n鉁?ALL CHECKS PASSED")
+		t.Log("鉁?File parses correctly")
+		t.Log("鉁?Modality LUT Sequence accessible")
+		t.Log("鉁?Pixel data present and not empty")
 	} else {
-		t.Fatal("\n❌ SOME CHECKS FAILED")
+		t.Fatal("\n鉂?SOME CHECKS FAILED")
 	}
 }
 
@@ -388,3 +389,4 @@ func BenchmarkModalityLUTParsing(b *testing.B) {
         _ = file.Close()
 	}
 }
+

@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -51,7 +52,7 @@ func TestRGBImageParsing(t *testing.T) {
 		t.Fatal("Parse result or dataset is nil")
 	}
 
-	t.Logf("✓ Successfully parsed TestPattern_RGB.dcm")
+	t.Logf("鉁?Successfully parsed TestPattern_RGB.dcm")
 	t.Logf("Dataset contains %d elements", result.Dataset.Count())
 
 	// Check image properties
@@ -66,7 +67,7 @@ func TestRGBImageParsing(t *testing.T) {
 	if photoInterp != "RGB" && photoInterp != "RGB " {
 		t.Errorf("Expected RGB photometric interpretation, got: %s", photoInterp)
 	} else {
-		t.Log("✓ Confirmed RGB color format")
+		t.Log("鉁?Confirmed RGB color format")
 	}
 
 	// Samples Per Pixel - must be 3 for RGB
@@ -78,7 +79,7 @@ func TestRGBImageParsing(t *testing.T) {
 	if samplesPerPixel != 3 {
 		t.Errorf("Expected 3 samples per pixel for RGB, got: %d", samplesPerPixel)
 	} else {
-		t.Log("✓ Confirmed 3 color channels (R, G, B)")
+		t.Log("鉁?Confirmed 3 color channels (R, G, B)")
 	}
 
 	// Image dimensions
@@ -93,7 +94,7 @@ func TestRGBImageParsing(t *testing.T) {
 		t.Fatalf("Failed to get Columns: %v", err)
 	}
 	t.Logf("Columns: %d", cols)
-	t.Logf("Image size: %d × %d pixels", cols, rows)
+	t.Logf("Image size: %d 脳 %d pixels", cols, rows)
 
 	// Bits Allocated
 	bitsAlloc, err := result.Dataset.GetUInt16(tag.BitsAllocated, 0)
@@ -124,9 +125,9 @@ func TestRGBImageParsing(t *testing.T) {
 	} else {
 		t.Logf("Planar Configuration: %d", planarConfig)
 		if planarConfig == 0 {
-			t.Log("  → Pixel format: RGBRGBRGB... (interlaced)")
+			t.Log("  鈫?Pixel format: RGBRGBRGB... (interlaced)")
 		} else {
-			t.Log("  → Pixel format: RRR...GGG...BBB... (planar)")
+			t.Log("  鈫?Pixel format: RRR...GGG...BBB... (planar)")
 		}
 	}
 
@@ -134,10 +135,10 @@ func TestRGBImageParsing(t *testing.T) {
 	t.Log("\n=== Pixel Data ===")
 	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
 	if !exists {
-		t.Fatal("❌ PixelData tag not found")
+		t.Fatal("鉂?PixelData tag not found")
 	}
 
-	t.Logf("✓ PixelData element found")
+	t.Logf("鉁?PixelData element found")
 	t.Logf("  PixelData tag: %s", pixelDataElem.Tag())
 	t.Logf("  PixelData VR: %s", pixelDataElem.ValueRepresentation())
 	t.Logf("  PixelData type: %T", pixelDataElem)
@@ -150,9 +151,9 @@ func TestRGBImageParsing(t *testing.T) {
 	t.Logf("  Actual pixel data size: %d bytes (%.2f KB)", actualSize, float64(actualSize)/1024)
 
 	if actualSize != expectedSize {
-		t.Logf("  ⚠ Size mismatch (expected %d, got %d)", expectedSize, actualSize)
+		t.Logf("  鈿?Size mismatch (expected %d, got %d)", expectedSize, actualSize)
 	} else {
-		t.Log("  ✓ Pixel data size matches expected")
+		t.Log("  鉁?Pixel data size matches expected")
 	}
 
 	// Transfer Syntax
@@ -162,9 +163,9 @@ func TestRGBImageParsing(t *testing.T) {
 		}
 	}
 
-	t.Log("\n✓ RGB DICOM image parsed successfully")
-	t.Log("✓ All image metadata accessible")
-	t.Log("✓ Pixel data present and accessible")
+	t.Log("\n鉁?RGB DICOM image parsed successfully")
+	t.Log("鉁?All image metadata accessible")
+	t.Log("鉁?Pixel data present and accessible")
 }
 
 // TestRGBImageToImage tests converting RGB DICOM to Go image.Image
@@ -250,7 +251,7 @@ func TestRGBImageToImage(t *testing.T) {
 		t.Fatalf("Unsupported format: %d samples/pixel, %d bits", samplesPerPixel, bitsAlloc)
 	}
 
-	t.Logf("✓ Image converted successfully")
+	t.Logf("鉁?Image converted successfully")
 	t.Logf("  Image size: %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
 
 	// Verify image has data (check a few pixels are not black)
@@ -267,10 +268,10 @@ func TestRGBImageToImage(t *testing.T) {
 	if !hasColor {
 		t.Error("Warning: Converted image appears to be completely black")
 	} else {
-		t.Log("✓ Image contains color data")
+		t.Log("鉁?Image contains color data")
 	}
 
-	t.Log("\n✓ RGB DICOM successfully converted to image.Image")
+	t.Log("\n鉁?RGB DICOM successfully converted to image.Image")
 }
 
 // TestRGBImageToPNG tests converting RGB DICOM to PNG file
@@ -300,7 +301,7 @@ func TestRGBImageToPNG(t *testing.T) {
 		t.Fatalf("Failed to convert to image: %v", err)
 	}
 
-	t.Logf("✓ Converted to image: %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
+	t.Logf("鉁?Converted to image: %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
 
 	// Save as PNG to temporary file
 	outputPath := filepath.Join(os.TempDir(), "test_rgb_output.png")
@@ -315,7 +316,7 @@ func TestRGBImageToPNG(t *testing.T) {
 		t.Fatalf("Failed to encode PNG: %v", err)
 	}
 
-	t.Logf("✓ PNG saved to: %s", outputPath)
+	t.Logf("鉁?PNG saved to: %s", outputPath)
 
 	// Verify the PNG file was created
 	pngInfo, err := os.Stat(outputPath)
@@ -323,7 +324,7 @@ func TestRGBImageToPNG(t *testing.T) {
 		t.Fatalf("Failed to stat PNG file: %v", err)
 	}
 
-	t.Logf("✓ PNG file size: %.2f KB", float64(pngInfo.Size())/1024)
+	t.Logf("鉁?PNG file size: %.2f KB", float64(pngInfo.Size())/1024)
 
 	// Verify we can read it back
 	pngFile, err := os.Open(outputPath)
@@ -337,11 +338,11 @@ func TestRGBImageToPNG(t *testing.T) {
 		t.Fatalf("Failed to decode PNG: %v", err)
 	}
 
-	t.Logf("✓ PNG successfully read back: %dx%d",
+	t.Logf("鉁?PNG successfully read back: %dx%d",
 		decodedImg.Bounds().Dx(), decodedImg.Bounds().Dy())
 
-	t.Log("\n✓ RGB DICOM successfully converted to PNG file")
-	t.Logf("✓ Output file: %s", outputPath)
+	t.Log("\n鉁?RGB DICOM successfully converted to PNG file")
+	t.Logf("鉁?Output file: %s", outputPath)
 }
 
 // Helper function: Convert interlaced RGB data to image
@@ -458,3 +459,4 @@ func BenchmarkRGBImageConversion(b *testing.B) {
 		_, _ = convertDICOMToImage(result)
 	}
 }
+

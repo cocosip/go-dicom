@@ -46,4 +46,6 @@
 //	    parser.WithLargeObjectSize(128*1024),        // 128KB threshold
 //	    parser.WithStopAtTag(tag.PixelData),         // Stop at pixel data
 //	)
+//
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser

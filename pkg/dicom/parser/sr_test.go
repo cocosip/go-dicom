@@ -1,6 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
@@ -49,7 +50,7 @@ func TestStructuredReportParsing(t *testing.T) {
 		t.Fatal("Parse result or dataset is nil")
 	}
 
-	t.Logf("✓ Successfully parsed test_SR.dcm")
+	t.Logf("鉁?Successfully parsed test_SR.dcm")
 	t.Logf("Dataset contains %d elements", result.Dataset.Count())
 
 	// Check SOP Class UID - should be a SR-related class
@@ -64,16 +65,16 @@ func TestStructuredReportParsing(t *testing.T) {
 		// Mammography CAD SR: 1.2.840.10008.5.1.4.1.1.88.50
 		switch sopClassUID {
 		case "1.2.840.10008.5.1.4.1.1.88.11":
-			t.Log("✓ SR Type: Basic Text SR")
+			t.Log("鉁?SR Type: Basic Text SR")
 		case "1.2.840.10008.5.1.4.1.1.88.22":
-			t.Log("✓ SR Type: Enhanced SR")
+			t.Log("鉁?SR Type: Enhanced SR")
 		case "1.2.840.10008.5.1.4.1.1.88.33":
-			t.Log("✓ SR Type: Comprehensive SR")
+			t.Log("鉁?SR Type: Comprehensive SR")
 		case "1.2.840.10008.5.1.4.1.1.88.50":
-			t.Log("✓ SR Type: Mammography CAD SR")
+			t.Log("鉁?SR Type: Mammography CAD SR")
 		default:
 			if len(sopClassUID) > 20 && sopClassUID[:20] == "1.2.840.10008.5.1.4." {
-				t.Logf("✓ SR Type: Structured Report (UID: %s)", sopClassUID)
+				t.Logf("鉁?SR Type: Structured Report (UID: %s)", sopClassUID)
 			} else {
 				t.Logf("SOP Class: %s", sopClassUID)
 			}
@@ -86,7 +87,7 @@ func TestStructuredReportParsing(t *testing.T) {
 	if modality, exists := result.Dataset.GetString(tag.Modality); exists {
 		t.Logf("Modality: %s", modality)
 		if modality == "SR" || modality == "SR " {
-			t.Log("✓ Confirmed: Structured Report modality")
+			t.Log("鉁?Confirmed: Structured Report modality")
 		}
 	}
 
@@ -134,10 +135,10 @@ func TestStructuredReportParsing(t *testing.T) {
 	t.Log("\n=== SR Content Sequence ===")
 	contentSeqElem, exists := result.Dataset.Get(tag.ContentSequence)
 	if !exists {
-		t.Fatal("❌ ContentSequence not found - SR content not accessible")
+		t.Fatal("鉂?ContentSequence not found - SR content not accessible")
 	}
 
-	t.Log("✓ ContentSequence found")
+	t.Log("鉁?ContentSequence found")
 
 	// Cast to Sequence to access items
 	contentSeq, ok := contentSeqElem.(*dataset.Sequence)
@@ -146,12 +147,12 @@ func TestStructuredReportParsing(t *testing.T) {
 	}
 
 	itemCount := contentSeq.Count()
-	t.Logf("✓ Content Sequence contains %d items", itemCount)
+	t.Logf("鉁?Content Sequence contains %d items", itemCount)
 
 	if itemCount == 0 {
 		t.Error("Warning: Content Sequence is empty")
 	} else {
-		t.Log("✓ SR has content items")
+		t.Log("鉁?SR has content items")
 	}
 
 	// Transfer Syntax
@@ -161,8 +162,8 @@ func TestStructuredReportParsing(t *testing.T) {
 		}
 	}
 
-	t.Log("\n✓ Structured Report DICOM parsed successfully")
-	t.Log("✓ SR content accessible")
+	t.Log("\n鉁?Structured Report DICOM parsed successfully")
+	t.Log("鉁?SR content accessible")
 }
 
 // TestSRContentSequenceDetails tests detailed parsing of SR content
@@ -209,7 +210,7 @@ func TestSRContentSequenceDetails(t *testing.T) {
 		analyzeSRContentItem(t, i, item)
 	}
 
-	t.Logf("✓ Analyzed %d content items", contentSeq.Count())
+	t.Logf("鉁?Analyzed %d content items", contentSeq.Count())
 }
 
 // TestSRContentExtraction tests extracting structured content from SR
@@ -242,7 +243,7 @@ func TestSRContentExtraction(t *testing.T) {
 		return
 	}
 
-	t.Logf("✓ Extracted %d content items\n", len(content))
+	t.Logf("鉁?Extracted %d content items\n", len(content))
 
 	// Display extracted content
 	for i, item := range content {
@@ -253,7 +254,7 @@ func TestSRContentExtraction(t *testing.T) {
 		t.Log("")
 	}
 
-	t.Log("✓ SR content successfully extracted and accessible")
+	t.Log("鉁?SR content successfully extracted and accessible")
 }
 
 // TestSRHierarchy tests the hierarchical structure of SR
@@ -282,7 +283,7 @@ func TestSRHierarchy(t *testing.T) {
 	// Print the SR tree structure
 	printSRTree(t, result.Dataset, 0)
 
-	t.Log("\n✓ SR hierarchy accessible")
+	t.Log("\n鉁?SR hierarchy accessible")
 }
 
 // Helper function: Extract SR content as map
@@ -402,7 +403,7 @@ func printSRTree(t *testing.T, ds *dataset.Dataset, level int) {
 		// Get value if TEXT
 		if valueType == textValueType {
 			if textValue, exists := item.GetString(tag.TextValue); exists {
-				t.Logf("%s  → %s", indent, textValue)
+				t.Logf("%s  鈫?%s", indent, textValue)
 			}
 		}
 
@@ -562,3 +563,4 @@ func logConceptName(t *testing.T, item *dataset.Dataset) {
 		}
 	}
 }
+

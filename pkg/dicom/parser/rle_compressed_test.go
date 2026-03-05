@@ -1,10 +1,11 @@
-package parser
+package parser_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
@@ -17,7 +18,7 @@ func TestRLECompressedDICOM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open RLE test file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	// Get file info
 	fileInfo, err := file.Stat()
@@ -28,7 +29,7 @@ func TestRLECompressedDICOM(t *testing.T) {
 	t.Logf("File size: %.2f KB", float64(fileInfo.Size())/1024)
 
 	// Parse the DICOM file
-	result, err := Parse(file)
+	result, err := parser.Parse(file)
 	if err != nil {
 		t.Fatalf("Failed to parse RLE DICOM: %v", err)
 	}
@@ -131,9 +132,9 @@ func TestRLEPixelDataAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
-	result, err := Parse(file)
+	result, err := parser.Parse(file)
 	if err != nil {
 		t.Fatalf("Failed to parse DICOM: %v", err)
 	}
@@ -194,9 +195,9 @@ func TestRLEImageProperties(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
-	result, err := Parse(file)
+	result, err := parser.Parse(file)
 	if err != nil {
 		t.Fatalf("Failed to parse DICOM: %v", err)
 	}
@@ -271,12 +272,12 @@ func BenchmarkRLEParsing(b *testing.B) {
 			b.Fatalf("Failed to open file: %v", err)
 		}
 
-		_, err = Parse(file)
+		_, err = parser.Parse(file)
 		if err != nil {
-                        _ = file.Close()
+			_ = file.Close()
 			b.Fatalf("Failed to parse: %v", err)
 		}
 
-                _ = file.Close()
+		_ = file.Close()
 	}
 }

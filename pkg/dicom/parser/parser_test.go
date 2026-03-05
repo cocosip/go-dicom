@@ -1,16 +1,20 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
+//revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser
 
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 const (
@@ -324,6 +328,124 @@ func TestParseMiniDICOM(t *testing.T) {
 	}
 }
 
+func TestParseNoPreambleDICOM(t *testing.T) {
+	full := createMiniDICOM().Bytes()
+	if len(full) <= 132 {
+		t.Fatal("test fixture too short")
+	}
+
+	noPreamble := bytes.NewReader(full[132:])
+	result, err := Parse(noPreamble)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	if result.Format != FormatDICOM3NoPreamble {
+		t.Fatalf("Format = %s, want %s", result.Format, FormatDICOM3NoPreamble)
+	}
+
+	name, exists := result.Dataset.GetString(tag.PatientName)
+	if !exists {
+		t.Fatal("Dataset should contain PatientName")
+	}
+	if name != testPatientName {
+		t.Fatalf("PatientName = %q, want %q", name, testPatientName)
+	}
+}
+
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+func TestParseStopAtTagStopsBeforePayload(t *testing.T) {
+	buf := createMiniDICOM()
+
+	// Add a large Pixel Data element after Patient Name.
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x7FE0))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+	buf.WriteString("OB")
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0)) // Reserved
+
+	pixelData := make([]byte, 1024*1024)
+	_ = binary.Write(buf, binary.LittleEndian, uint32(len(pixelData)))
+	buf.Write(pixelData)
+
+	cr := &countingReader{r: bytes.NewReader(buf.Bytes())}
+	result, err := Parse(cr, WithStopAtTag(tag.PixelData))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	if !result.IsPartial {
+		t.Fatal("IsPartial should be true when stopAtTag stops parsing early")
+	}
+
+	if _, exists := result.Dataset.Get(tag.PixelData); exists {
+		t.Fatal("PixelData should not be present when stopping at PixelData")
+	}
+
+	if cr.n >= int64(len(buf.Bytes())) {
+		t.Fatalf("expected early termination to avoid full read, read=%d total=%d", cr.n, len(buf.Bytes()))
+	}
+}
+
+func TestCreateElementSupportsAttributeAndBinaryVRs(t *testing.T) {
+	ctx := newParseContext()
+	testTag := tag.New(0x0008, 0x0001)
+
+	tests := []struct {
+		name string
+		vr   *vr.VR
+		data []byte
+		want any
+	}{
+		{"AT", vr.AT, []byte{0x10, 0x00, 0x10, 0x00}, (*element.AttributeTag)(nil)},
+		{"OD", vr.OD, make([]byte, 8), (*element.OtherDouble)(nil)},
+		{"OF", vr.OF, make([]byte, 4), (*element.OtherFloat)(nil)},
+		{"OL", vr.OL, make([]byte, 4), (*element.OtherLong)(nil)},
+		{"OV", vr.OV, make([]byte, 8), (*element.OtherVeryLong)(nil)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			el, err := ctx.createElement(testTag, tc.vr, buffer.NewMemory(tc.data))
+			if err != nil {
+				t.Fatalf("createElement() error = %v", err)
+			}
+
+			switch tc.want.(type) {
+			case *element.AttributeTag:
+				if _, ok := el.(*element.AttributeTag); !ok {
+					t.Fatalf("got %T, want *element.AttributeTag", el)
+				}
+			case *element.OtherDouble:
+				if _, ok := el.(*element.OtherDouble); !ok {
+					t.Fatalf("got %T, want *element.OtherDouble", el)
+				}
+			case *element.OtherFloat:
+				if _, ok := el.(*element.OtherFloat); !ok {
+					t.Fatalf("got %T, want *element.OtherFloat", el)
+				}
+			case *element.OtherLong:
+				if _, ok := el.(*element.OtherLong); !ok {
+					t.Fatalf("got %T, want *element.OtherLong", el)
+				}
+			case *element.OtherVeryLong:
+				if _, ok := el.(*element.OtherVeryLong); !ok {
+					t.Fatalf("got %T, want *element.OtherVeryLong", el)
+				}
+			}
+		})
+	}
+}
+
 // TestParseInvalidFile tests error handling
 func TestParseInvalidFile(t *testing.T) {
 	t.Run("EmptyFile", func(t *testing.T) {
@@ -352,8 +474,8 @@ func TestParseInvalidFile(t *testing.T) {
 		buf.WriteString("DICM")
 
 		// Start of Group 0002 element, but incomplete (no VR or value)
-        _ = binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
-        _ = binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002)) // Group
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0000)) // Element
 		// Missing VR and value - EOF will occur when trying to read VR
 
 		_, err := Parse(buf)
@@ -543,7 +665,7 @@ func createBenchmarkDICOMData(numElements int) []byte {
 
 		// Write value
 		value := "TestValue"
-        _ = binary.Write(buf, binary.LittleEndian, uint16(len(value)))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(value)))
 		buf.WriteString(value)
 		if len(value)%2 != 0 {
 			buf.WriteByte(0)
