@@ -19,6 +19,7 @@ import (
 
 const (
 	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
+	testExplicitVRBigE     = "1.2.840.10008.1.2.2"
 	testPatientName        = "Doe^John"
 )
 
@@ -286,6 +287,43 @@ func createMiniDICOM() *bytes.Buffer {
 	return buf
 }
 
+func createBigEndianMiniDICOM() *bytes.Buffer {
+	buf := bytes.NewBuffer(nil)
+
+	// Preamble + DICM
+	buf.Write(make([]byte, 128))
+	buf.WriteString("DICM")
+
+	// File Meta Information Group Length (0002,0000) - UL, Explicit VR Little Endian.
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0000))
+	buf.WriteString("UL")
+	_ = binary.Write(buf, binary.LittleEndian, uint16(4))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(30))
+
+	// Transfer Syntax UID (0002,0010) - UI, Explicit VR Little Endian.
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+	buf.WriteString("UI")
+	_ = binary.Write(buf, binary.LittleEndian, uint16(len(testExplicitVRBigE)))
+	buf.WriteString(testExplicitVRBigE)
+
+	// Dataset encoded as Explicit VR Big Endian.
+	_ = binary.Write(buf, binary.BigEndian, uint16(0x0028)) // Rows
+	_ = binary.Write(buf, binary.BigEndian, uint16(0x0010))
+	buf.WriteString("US")
+	_ = binary.Write(buf, binary.BigEndian, uint16(2))
+	_ = binary.Write(buf, binary.BigEndian, uint16(1))
+
+	_ = binary.Write(buf, binary.BigEndian, uint16(0x0028)) // Columns
+	_ = binary.Write(buf, binary.BigEndian, uint16(0x0011))
+	buf.WriteString("US")
+	_ = binary.Write(buf, binary.BigEndian, uint16(2))
+	_ = binary.Write(buf, binary.BigEndian, uint16(0x1234))
+
+	return buf
+}
+
 // TestParseMiniDICOM tests parsing a minimal DICOM file
 func TestParseMiniDICOM(t *testing.T) {
 	buf := createMiniDICOM()
@@ -325,6 +363,51 @@ func TestParseMiniDICOM(t *testing.T) {
 	}
 	if name != testPatientName {
 		t.Errorf("PatientName = %q, want %q", name, "Doe^John")
+	}
+}
+
+func TestParseBigEndianFirstDatasetTag(t *testing.T) {
+	result, err := Parse(createBigEndianMiniDICOM())
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	if result.TransferSyntax == nil {
+		t.Fatal("TransferSyntax should not be nil")
+	}
+	if got := result.TransferSyntax.UID().String(); got != testExplicitVRBigE {
+		t.Fatalf("TransferSyntax UID = %s, want %s", got, testExplicitVRBigE)
+	}
+
+	rows, err := result.Dataset.GetUInt16(tag.Rows, 0)
+	if err != nil {
+		t.Fatalf("Rows read failed: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("Rows = %d, want 1", rows)
+	}
+
+	cols, err := result.Dataset.GetUInt16(tag.Columns, 0)
+	if err != nil {
+		t.Fatalf("Columns read failed: %v", err)
+	}
+	if cols != 0x1234 {
+		t.Fatalf("Columns = 0x%04X, want 0x1234", cols)
+	}
+}
+
+func TestParseSetsDatasetInternalTransferSyntax(t *testing.T) {
+	result, err := Parse(createMiniDICOM())
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	dsTS := result.Dataset.InternalTransferSyntax()
+	if dsTS == nil {
+		t.Fatal("Dataset.InternalTransferSyntax() should not be nil")
+	}
+	if got := dsTS.UID().String(); got != result.TransferSyntax.UID().String() {
+		t.Fatalf("Dataset TS = %s, want %s", got, result.TransferSyntax.UID().String())
 	}
 }
 

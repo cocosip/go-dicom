@@ -5,6 +5,7 @@
 package element
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -48,17 +49,29 @@ type base struct {
 	tag    *tag.Tag
 	vr     *vr.VR
 	buffer buffer.ByteBuffer
+	// byteOrder is used by numeric-like VRs when decoding values from Buffer().
+	// Most DICOM datasets are little-endian; parser overrides this for big-endian inputs.
+	byteOrder binary.ByteOrder
 }
 
 // newBase creates a new base element with the given tag, VR, and buffer.
 func newBase(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) *base {
+	return newBaseWithByteOrder(t, v, buf, binary.LittleEndian)
+}
+
+// newBaseWithByteOrder creates a new base element with explicit byte order.
+func newBaseWithByteOrder(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer, order binary.ByteOrder) *base {
 	if buf == nil {
 		buf = buffer.Empty
 	}
+	if order == nil {
+		order = binary.LittleEndian
+	}
 	return &base{
-		tag:    t,
-		vr:     v,
-		buffer: buf,
+		tag:       t,
+		vr:        v,
+		buffer:    buf,
+		byteOrder: order,
 	}
 }
 
@@ -102,4 +115,26 @@ func (e *base) Validate() error {
 // For example, a multi-valued string element returns the number of strings.
 func (e *base) Count() int {
 	return 1
+}
+
+func (e *base) setByteOrder(order binary.ByteOrder) {
+	if order == nil {
+		order = binary.LittleEndian
+	}
+	e.byteOrder = order
+}
+
+func (e *base) getByteOrder() binary.ByteOrder {
+	if e.byteOrder == nil {
+		return binary.LittleEndian
+	}
+	return e.byteOrder
+}
+
+// SetByteOrder sets byte order for an element when decoding numeric data.
+// This is primarily used by parser for big-endian transfer syntaxes.
+func SetByteOrder(elem Element, order binary.ByteOrder) {
+	if setter, ok := elem.(interface{ setByteOrder(binary.ByteOrder) }); ok {
+		setter.setByteOrder(order)
+	}
 }

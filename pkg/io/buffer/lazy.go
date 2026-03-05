@@ -13,10 +13,11 @@ import (
 // The data is loaded once and cached for subsequent accesses.
 // This is useful when you want to defer expensive data loading operations.
 type LazyByteBuffer struct {
-	loader func() []byte // Function that loads the data
-	data   []byte        // Cached data after first load
-	once   sync.Once     // Ensures loader is called only once
-	mu     sync.RWMutex  // Protects data access
+	loader func() ([]byte, error) // Function that loads the data
+	data   []byte                 // Cached data after first load
+	err    error                  // Cached loader error
+	once   sync.Once              // Ensures loader is called only once
+	mu     sync.RWMutex           // Protects data access
 }
 
 // NewLazy creates a new lazy-loading buffer.
@@ -30,6 +31,16 @@ func NewLazy(loader func() []byte) (*LazyByteBuffer, error) {
 	if loader == nil {
 		return nil, fmt.Errorf("loader function cannot be nil")
 	}
+	return NewLazyWithError(func() ([]byte, error) {
+		return loader(), nil
+	})
+}
+
+// NewLazyWithError creates a lazy buffer whose loader can return errors.
+func NewLazyWithError(loader func() ([]byte, error)) (*LazyByteBuffer, error) {
+	if loader == nil {
+		return nil, fmt.Errorf("loader function cannot be nil")
+	}
 
 	return &LazyByteBuffer{
 		loader: loader,
@@ -37,16 +48,16 @@ func NewLazy(loader func() []byte) (*LazyByteBuffer, error) {
 }
 
 // load ensures the data is loaded exactly once.
-func (l *LazyByteBuffer) load() []byte {
+func (l *LazyByteBuffer) load() ([]byte, error) {
 	l.once.Do(func() {
 		l.mu.Lock()
 		defer l.mu.Unlock()
-		l.data = l.loader()
+		l.data, l.err = l.loader()
 	})
 
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	return l.data
+	return l.data, l.err
 }
 
 // IsMemory returns true since lazy buffers ultimately load data into memory.
@@ -57,7 +68,10 @@ func (l *LazyByteBuffer) IsMemory() bool {
 // Size returns the size of the buffer.
 // Note: This will trigger data loading if not already loaded.
 func (l *LazyByteBuffer) Size() uint32 {
-	data := l.load()
+	data, err := l.load()
+	if err != nil {
+		return 0
+	}
 	if data == nil {
 		return 0
 	}
@@ -67,7 +81,8 @@ func (l *LazyByteBuffer) Size() uint32 {
 // Data returns all the buffer data.
 // Note: This will trigger data loading if not already loaded.
 func (l *LazyByteBuffer) Data() []byte {
-	return l.load()
+	data, _ := l.load()
+	return data
 }
 
 // GetByteRange reads a range of bytes from the buffer.
@@ -88,7 +103,10 @@ func (l *LazyByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 
-	data := l.load()
+	data, err := l.load()
+	if err != nil {
+		return fmt.Errorf("lazy loader failed: %w", err)
+	}
 	if data == nil {
 		return fmt.Errorf("lazy loader returned nil data")
 	}
@@ -113,7 +131,10 @@ func (l *LazyByteBuffer) WriteTo(w io.Writer) (int64, error) {
 		return 0, fmt.Errorf("writer cannot be nil")
 	}
 
-	data := l.load()
+	data, err := l.load()
+	if err != nil {
+		return 0, fmt.Errorf("lazy loader failed: %w", err)
+	}
 	if data == nil {
 		return 0, nil
 	}
@@ -127,5 +148,5 @@ func (l *LazyByteBuffer) WriteTo(w io.Writer) (int64, error) {
 func (l *LazyByteBuffer) IsLoaded() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	return l.data != nil
+	return l.data != nil || l.err != nil
 }

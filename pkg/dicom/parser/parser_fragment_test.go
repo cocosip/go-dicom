@@ -216,3 +216,28 @@ func TestParseFragmentSequence(t *testing.T) {
 		}
 	})
 }
+
+func TestParseFragmentSequenceSkipLargeTags(t *testing.T) {
+	data := createFragmentSequenceDICOM()
+	result, err := Parse(data, WithReadOption(SkipLargeTags))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
+	if !exists {
+		t.Fatal("PixelData element not found")
+	}
+
+	obf, ok := pixelDataElem.(*element.OtherByteFragment)
+	if !ok {
+		t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
+	}
+
+	if obf.FragmentCount() != 0 {
+		t.Fatalf("FragmentCount() = %d, want 0 when SkipLargeTags is enabled", obf.FragmentCount())
+	}
+	if len(obf.OffsetTable()) != 0 {
+		t.Fatalf("OffsetTable length = %d, want 0 when SkipLargeTags is enabled", len(obf.OffsetTable()))
+	}
+}

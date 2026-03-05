@@ -76,8 +76,7 @@ func (u *UnsignedShort) GetValue(index int) (uint16, error) {
 		return 0, err
 	}
 
-	// Assume little endian by default (most common in DICOM)
-	return binary.LittleEndian.Uint16(data), nil
+	return u.getByteOrder().Uint16(data), nil
 }
 
 // GetValues returns all values as a slice.
@@ -150,7 +149,7 @@ func (u *UnsignedLong) GetValue(index int) (uint32, error) {
 		return 0, err
 	}
 
-	return binary.LittleEndian.Uint32(data), nil
+	return u.getByteOrder().Uint32(data), nil
 }
 
 // GetValues returns all values as a slice.
@@ -223,7 +222,7 @@ func (s *SignedShort) GetValue(index int) (int16, error) {
 		return 0, err
 	}
 
-	return int16(binary.LittleEndian.Uint16(data)), nil // #nosec G115 -- safe bit pattern conversion
+	return int16(s.getByteOrder().Uint16(data)), nil // #nosec G115 -- safe bit pattern conversion
 }
 
 // GetValues returns all values as a slice.
@@ -296,7 +295,7 @@ func (s *SignedLong) GetValue(index int) (int32, error) {
 		return 0, err
 	}
 
-	return int32(binary.LittleEndian.Uint32(data)), nil // #nosec G115 -- safe bit pattern conversion
+	return int32(s.getByteOrder().Uint32(data)), nil // #nosec G115 -- safe bit pattern conversion
 }
 
 // GetValues returns all values as a slice.
@@ -370,7 +369,7 @@ func (f *Float) GetValue(index int) (float32, error) {
 		return 0, err
 	}
 
-	bits := binary.LittleEndian.Uint32(data)
+	bits := f.getByteOrder().Uint32(data)
 	return math.Float32frombits(bits), nil
 }
 
@@ -445,7 +444,7 @@ func (d *Double) GetValue(index int) (float64, error) {
 		return 0, err
 	}
 
-	bits := binary.LittleEndian.Uint64(data)
+	bits := d.getByteOrder().Uint64(data)
 	return math.Float64frombits(bits), nil
 }
 
@@ -519,7 +518,7 @@ func (s *SignedVeryLong) GetValue(index int) (int64, error) {
 		return 0, err
 	}
 
-	return int64(binary.LittleEndian.Uint64(data)), nil // #nosec G115 -- safe bit pattern conversion
+	return int64(s.getByteOrder().Uint64(data)), nil // #nosec G115 -- safe bit pattern conversion
 }
 
 // GetValues returns all values as a slice.
@@ -592,7 +591,7 @@ func (u *UnsignedVeryLong) GetValue(index int) (uint64, error) {
 		return 0, err
 	}
 
-	return binary.LittleEndian.Uint64(data), nil
+	return u.getByteOrder().Uint64(data), nil
 }
 
 // GetValues returns all values as a slice.

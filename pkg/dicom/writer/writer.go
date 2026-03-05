@@ -315,6 +315,10 @@ func New(ts *transfer.Syntax, opts ...Option) *Writer {
 //   - File Meta Information (Group 0002, always Explicit VR Little Endian)
 //   - Dataset (encoding depends on Transfer Syntax)
 func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
+	if ds == nil {
+		return fmt.Errorf("dataset cannot be nil")
+	}
+
 	// Apply options to configuration
 	// Use global defaults initially
 	config := &writeConfig{
@@ -908,24 +912,7 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		return fmt.Errorf("failed to write undefined length: %w", err)
 	}
 
-	// Collect fragments and pad to even length as required by DICOM.
 	fragCount := fs.FragmentCount()
-
-	paddedFrags := make([][]byte, fragCount)
-	for i := 0; i < fragCount; i++ {
-		frag, err := fs.GetFragment(i)
-		if err != nil {
-			return fmt.Errorf("failed to get fragment %d: %w", i, err)
-		}
-		data := frag.Data()
-		if len(data)%2 != 0 {
-			padded := make([]byte, len(data)+1)
-			copy(padded, data)
-			paddedFrags[i] = padded
-		} else {
-			paddedFrags[i] = data
-		}
-	}
 
 	// Build Basic Offset Table.
 	// Priority:
@@ -962,8 +949,13 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 	}
 
 	// Write fragments
+	padByte := []byte{0}
 	for i := 0; i < fragCount; i++ {
-		fragData := paddedFrags[i]
+		frag, err := fs.GetFragment(i)
+		if err != nil {
+			return fmt.Errorf("failed to get fragment %d: %w", i, err)
+		}
+		fragData := frag.Data()
 
 		// Write Item tag (FFFE,E000)
 		if err := w.writeTag(itemTag); err != nil {
@@ -972,6 +964,9 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 
 		// Write fragment length
 		fragLen := len(fragData)
+		if fragLen%2 != 0 {
+			fragLen++
+		}
 		if fragLen > int(math.MaxUint32) {
 			return fmt.Errorf("fragment too large: %d bytes", fragLen)
 		}
@@ -982,6 +977,11 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		// Write fragment data
 		if _, err := w.writer.Write(fragData); err != nil {
 			return fmt.Errorf("failed to write fragment data: %w", err)
+		}
+		if len(fragData)%2 != 0 {
+			if _, err := w.writer.Write(padByte); err != nil {
+				return fmt.Errorf("failed to write fragment padding: %w", err)
+			}
 		}
 	}
 

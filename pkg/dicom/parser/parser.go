@@ -125,9 +125,10 @@ type parseContext struct {
 	transferSyntax *transfer.Syntax
 	dictionary     *dict.Dictionary
 
-	// firstDatasetTag is the first tag read that doesn't belong to Group 0002
-	// It's stored here to be used when reading the main dataset
-	firstDatasetTag *tag.Tag
+	// firstDatasetTagRaw holds the first tag read that doesn't belong to Group 0002.
+	// Raw bytes are preserved because dataset byte order is only known after reading Transfer Syntax.
+	firstDatasetTagRaw [4]byte
+	hasFirstDatasetTag bool
 
 	// Configuration options
 	maxElementSize  uint32     // Maximum element size to read (0 = unlimited)
@@ -274,6 +275,7 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dataset: %w", err)
 	}
+	mainDS.SetInternalTransferSyntax(p.transferSyntax)
 
 	// Wrap metaDS in FileMetaInformation for convenience
 	fmi := dataset.NewFileMetaInformationFromDataset(metaDS)
@@ -375,10 +377,9 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 
 	// Read elements until we leave Group 0002
 	for {
-		// Peek at the tag first to check if we're still in Group 0002
-		// This is important because if we call readElement() on a non-0002 tag,
-		// it might try to read a sequence which uses different encoding rules
-		t, err := p.readTag()
+		// Peek at the tag first to check if we're still in Group 0002.
+		// Keep raw bytes so the first dataset tag can be re-decoded with dataset byte order.
+		t, rawTag, err := p.readTagWithRaw()
 		if err == io.EOF {
 			break
 		}
@@ -388,9 +389,9 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 
 		// Stop when we leave Group 0002
 		if t.Group() != 0x0002 {
-			// Save this tag - it belongs to the main dataset
-			// We need to "unread" it for the next phase
-			p.firstDatasetTag = t
+			// Save raw bytes and parse this tag later with the dataset byte order.
+			p.firstDatasetTagRaw = rawTag
+			p.hasFirstDatasetTag = true
 			if ds.Count() == 0 && (p.detectedFormat == FormatDICOM3 || p.detectedFormat == FormatDICOM3NoPreamble || p.detectedFormat == FormatUnknown) {
 				p.detectedFormat = FormatDICOM3NoFileMetaInfo
 			}
@@ -468,11 +469,10 @@ func (p *parseContext) setTransferSyntax(metaDS *dataset.Dataset) error {
 func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	ds := dataset.New()
 
-	// Check if we have a saved tag from readFileMetaInformation
 	var firstTag *tag.Tag
-	if p.firstDatasetTag != nil {
-		firstTag = p.firstDatasetTag
-		p.firstDatasetTag = nil // Clear it
+	if p.hasFirstDatasetTag {
+		firstTag = decodeTag(p.firstDatasetTagRaw, p.byteOrder)
+		p.hasFirstDatasetTag = false
 	}
 
 	for {
@@ -600,6 +600,12 @@ func (p *parseContext) readElement() (element.Element, error) {
 	// Handle special case: Fragment Sequence (encapsulated pixel data)
 	// Fragment sequences have OB or OW VR with undefined length (0xFFFFFFFF)
 	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF {
+		if p.readOption == SkipLargeTags {
+			if err := p.skipFragmentSequence(); err != nil {
+				return nil, err
+			}
+			return createEmptyFragmentSequence(t, vrValue)
+		}
 		return p.readFragmentSequence(t, vrValue)
 	}
 
@@ -649,6 +655,12 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 	// Handle special case: Fragment Sequence (encapsulated pixel data)
 	// Fragment sequences have OB or OW VR with undefined length (0xFFFFFFFF)
 	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF {
+		if p.readOption == SkipLargeTags {
+			if err := p.skipFragmentSequence(); err != nil {
+				return nil, err
+			}
+			return createEmptyFragmentSequence(t, vrValue)
+		}
 		return p.readFragmentSequence(t, vrValue)
 	}
 
@@ -664,16 +676,24 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 
 // readTag reads a DICOM tag (4 bytes).
 func (p *parseContext) readTag() (*tag.Tag, error) {
-	var group, elem uint16
+	t, _, err := p.readTagWithRaw()
+	return t, err
+}
 
-	if err := binary.Read(p.reader, p.byteOrder, &group); err != nil {
-		return nil, err
+// readTagWithRaw reads a DICOM tag and returns both decoded tag and raw bytes.
+func (p *parseContext) readTagWithRaw() (*tag.Tag, [4]byte, error) {
+	var raw [4]byte
+	if _, err := io.ReadFull(p.reader, raw[:]); err != nil {
+		return nil, raw, err
 	}
-	if err := binary.Read(p.reader, p.byteOrder, &elem); err != nil {
-		return nil, err
-	}
+	return decodeTag(raw, p.byteOrder), raw, nil
+}
 
-	return tag.New(group, elem), nil
+func decodeTag(raw [4]byte, order binary.ByteOrder) *tag.Tag {
+	if order == nil {
+		order = binary.LittleEndian
+	}
+	return tag.New(order.Uint16(raw[0:2]), order.Uint16(raw[2:4]))
 }
 
 // readVR reads the Value Representation.
@@ -921,47 +941,52 @@ func (p *parseContext) withBoundedReader(length uint32, fn func(*io.LimitedReade
 
 // createElement creates an element from tag, VR, and buffer.
 func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) (element.Element, error) {
+	setOrder := func(elem element.Element) element.Element {
+		element.SetByteOrder(elem, p.byteOrder)
+		return elem
+	}
+
 	// Create appropriate element type based on VR code
 	vrCode := v.Code()
 	switch vrCode {
 	case vr.CodeAE, vr.CodeAS, vr.CodeCS, vr.CodeDA, vr.CodeDS, vr.CodeDT,
 		vr.CodeIS, vr.CodeLO, vr.CodeLT, vr.CodePN, vr.CodeSH, vr.CodeST,
 		vr.CodeTM, vr.CodeUC, vr.CodeUI, vr.CodeUR, vr.CodeUT:
-		return element.NewStringFromBuffer(t, v, buf, nil), nil
+		return setOrder(element.NewStringFromBuffer(t, v, buf, nil)), nil
 
 	case vr.CodeUS:
-		return element.NewUnsignedShortFromBuffer(t, buf), nil
+		return setOrder(element.NewUnsignedShortFromBuffer(t, buf)), nil
 	case vr.CodeUL:
-		return element.NewUnsignedLongFromBuffer(t, buf), nil
+		return setOrder(element.NewUnsignedLongFromBuffer(t, buf)), nil
 	case vr.CodeSS:
-		return element.NewSignedShortFromBuffer(t, buf), nil
+		return setOrder(element.NewSignedShortFromBuffer(t, buf)), nil
 	case vr.CodeSL:
-		return element.NewSignedLongFromBuffer(t, buf), nil
+		return setOrder(element.NewSignedLongFromBuffer(t, buf)), nil
 	case vr.CodeFL:
-		return element.NewFloatFromBuffer(t, buf), nil
+		return setOrder(element.NewFloatFromBuffer(t, buf)), nil
 	case vr.CodeFD:
-		return element.NewDoubleFromBuffer(t, buf), nil
+		return setOrder(element.NewDoubleFromBuffer(t, buf)), nil
 
 	case vr.CodeOB:
-		return element.NewOtherByteFromBuffer(t, buf), nil
+		return setOrder(element.NewOtherByteFromBuffer(t, buf)), nil
 	case vr.CodeOW:
-		return element.NewOtherWordFromBuffer(t, buf), nil
+		return setOrder(element.NewOtherWordFromBuffer(t, buf)), nil
 	case vr.CodeOD:
-		return element.NewOtherDoubleFromBuffer(t, buf), nil
+		return setOrder(element.NewOtherDoubleFromBuffer(t, buf)), nil
 	case vr.CodeOF:
-		return element.NewOtherFloatFromBuffer(t, buf), nil
+		return setOrder(element.NewOtherFloatFromBuffer(t, buf)), nil
 	case vr.CodeOL:
-		return element.NewOtherLongFromBuffer(t, buf), nil
+		return setOrder(element.NewOtherLongFromBuffer(t, buf)), nil
 	case vr.CodeOV:
-		return element.NewOtherVeryLongFromBuffer(t, buf), nil
+		return setOrder(element.NewOtherVeryLongFromBuffer(t, buf)), nil
 	case vr.CodeAT:
-		return element.NewAttributeTagFromBuffer(t, buf), nil
+		return setOrder(element.NewAttributeTagFromBuffer(t, buf)), nil
 	case vr.CodeUN:
-		return element.NewUnknownFromBuffer(t, buf), nil
+		return setOrder(element.NewUnknownFromBuffer(t, buf)), nil
 
 	default:
 		// Default to Unknown
-		return element.NewUnknownFromBuffer(t, buf), nil
+		return setOrder(element.NewUnknownFromBuffer(t, buf)), nil
 	}
 }
 
@@ -1004,31 +1029,34 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 		}
 
 		// Create a loader function that will read the data when needed
-		loader := func() []byte {
+		loader := func() ([]byte, error) {
 			p.lazyReadMu.Lock()
 			defer p.lazyReadMu.Unlock()
 
 			// Save current position
-			savedPos, _ := p.seekableReader.Seek(0, io.SeekCurrent)
+			savedPos, err := p.seekableReader.Seek(0, io.SeekCurrent)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get current position: %w", err)
+			}
 
 			// Seek to the data position
 			if _, err := p.seekableReader.Seek(currentPos, io.SeekStart); err != nil {
-				return nil
+				return nil, fmt.Errorf("failed to seek to lazy data position: %w", err)
 			}
+			defer func() {
+				_, _ = p.seekableReader.Seek(savedPos, io.SeekStart)
+			}()
 
 			// Read the data
 			data := make([]byte, length)
 			if _, err := io.ReadFull(p.seekableReader, data); err != nil {
-				return nil
+				return nil, fmt.Errorf("failed to read lazy data: %w", err)
 			}
 
-			// Restore position
-			_, _ = p.seekableReader.Seek(savedPos, io.SeekStart)
-
-			return data
+			return data, nil
 		}
 
-		lb, err := buffer.NewLazy(loader)
+		lb, err := buffer.NewLazyWithError(loader)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create lazy buffer: %w", err)
 		}
@@ -1043,6 +1071,53 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 
 	// No seekable reader available
 	return nil, fmt.Errorf("lazy loading not supported for non-seekable readers")
+}
+
+func createEmptyFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element.Element, error) {
+	switch vrValue.Code() {
+	case vr.CodeOB:
+		return element.NewOtherByteFragment(t), nil
+	case vr.CodeOW:
+		return element.NewOtherWordFragment(t), nil
+	default:
+		return nil, fmt.Errorf("invalid VR for fragment sequence: %v", vrValue)
+	}
+}
+
+// skipFragmentSequence skips an encapsulated fragment sequence payload.
+func (p *parseContext) skipFragmentSequence() error {
+	for {
+		itemTag, err := p.readTag()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("failed to read fragment item tag: %w", err)
+		}
+
+		// Sequence Delimitation Item (FFFE,E0DD)
+		if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE0DD {
+			var delimLength uint32
+			if err := binary.Read(p.reader, p.byteOrder, &delimLength); err != nil {
+				return fmt.Errorf("failed to read sequence delimitation length: %w", err)
+			}
+			return nil
+		}
+
+		// Item tag (FFFE,E000)
+		if itemTag.Group() != 0xFFFE || itemTag.Element() != 0xE000 {
+			return fmt.Errorf("expected Item tag (FFFE,E000) in fragment sequence, got %s", itemTag)
+		}
+
+		var itemLength uint32
+		if err := binary.Read(p.reader, p.byteOrder, &itemLength); err != nil {
+			return fmt.Errorf("failed to read fragment item length: %w", err)
+		}
+
+		if _, err := io.CopyN(io.Discard, p.reader, int64(itemLength)); err != nil {
+			return fmt.Errorf("failed to skip fragment item data: %w", err)
+		}
+	}
 }
 
 // readFragmentSequence reads a DICOM fragment sequence (encapsulated pixel data).

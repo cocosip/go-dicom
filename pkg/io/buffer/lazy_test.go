@@ -5,6 +5,7 @@ package buffer_test
 
 import (
 	"bytes"
+	"errors"
 	"sync"
 	"testing"
 
@@ -30,6 +31,13 @@ func TestNewLazy_NilLoader(t *testing.T) {
 	_, err := buffer.NewLazy(nil)
 	if err == nil {
 		t.Error("NewLazy(nil) expected error, got nil")
+	}
+}
+
+func TestNewLazyWithError_NilLoader(t *testing.T) {
+	_, err := buffer.NewLazyWithError(nil)
+	if err == nil {
+		t.Error("NewLazyWithError(nil) expected error, got nil")
 	}
 }
 
@@ -88,6 +96,33 @@ func TestLazyByteBuffer_LazyLoading(t *testing.T) {
 	// Data should be the same
 	if !bytes.Equal(data1, data2) {
 		t.Error("Data() returned different results on subsequent calls")
+	}
+}
+
+func TestLazyByteBuffer_LoaderError(t *testing.T) {
+	loadErr := errors.New("boom")
+	lb, err := buffer.NewLazyWithError(func() ([]byte, error) {
+		return nil, loadErr
+	})
+	if err != nil {
+		t.Fatalf("NewLazyWithError() unexpected error: %v", err)
+	}
+
+	if lb.Size() != 0 {
+		t.Fatalf("Size() = %d, want 0 on loader error", lb.Size())
+	}
+
+	out := make([]byte, 1)
+	if err := lb.GetByteRange(0, 1, out); err == nil {
+		t.Fatal("GetByteRange() should fail when loader returns error")
+	}
+
+	if _, err := lb.WriteTo(&bytes.Buffer{}); err == nil {
+		t.Fatal("WriteTo() should fail when loader returns error")
+	}
+
+	if !lb.IsLoaded() {
+		t.Fatal("IsLoaded() should be true after loader error")
 	}
 }
 

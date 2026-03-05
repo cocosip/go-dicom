@@ -4,16 +4,16 @@
 package writer
 
 import (
-    "bytes"
-    "encoding/binary"
-    "testing"
+	"bytes"
+	"encoding/binary"
+	"testing"
 
-    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
-    "github.com/cocosip/go-dicom/pkg/dicom/element"
-    "github.com/cocosip/go-dicom/pkg/dicom/tag"
-    "github.com/cocosip/go-dicom/pkg/dicom/transfer"
-    "github.com/cocosip/go-dicom/pkg/dicom/vr"
-    "github.com/cocosip/go-dicom/pkg/dicom/testutil"
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
 const dicmPrefix = "DICM"
@@ -185,10 +185,10 @@ func TestWriteElement(t *testing.T) {
 		w := New(transfer.ExplicitVRLittleEndian)
 		w.writer = buf
 
-    elem := element.NewUnsignedShort(tag.Rows, []uint16{512})
-    if err := w.writeElement(elem); err != nil {
-        t.Fatalf("writeElement() error = %v", err)
-    }
+		elem := element.NewUnsignedShort(tag.Rows, []uint16{512})
+		if err := w.writeElement(elem); err != nil {
+			t.Fatalf("writeElement() error = %v", err)
+		}
 
 		// Tag (4) + VR (2) + Length (2) + Value (2) = 10 bytes
 		if buf.Len() != 10 {
@@ -202,13 +202,13 @@ func TestWriteSimpleDataset(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	// Create dataset
-    ds := dataset.New()
-    if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
-        t.Fatalf("Add() error: %v", err)
-    }
-    if err := ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512})); err != nil {
-        t.Fatalf("Add() error: %v", err)
-    }
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
+	if err := ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512})); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
 
 	// Write (using defaults)
 	if err := Write(buf, ds); err != nil {
@@ -232,14 +232,21 @@ func TestWriteSimpleDataset(t *testing.T) {
 	}
 }
 
+func TestWriteNilDataset(t *testing.T) {
+	buf := &bytes.Buffer{}
+	if err := Write(buf, nil); err == nil {
+		t.Fatal("Write() should fail for nil dataset")
+	}
+}
+
 // TestWriteWithoutPreamble tests writing without preamble
 func TestWriteWithoutPreamble(t *testing.T) {
 	buf := &bytes.Buffer{}
 
-    ds := dataset.New()
-    if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"})); err != nil {
-        t.Fatalf("Add() error: %v", err)
-    }
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"})); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
 
 	if err := Write(buf, ds, WithoutPreamble()); err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -263,10 +270,10 @@ func TestWriteSequence(t *testing.T) {
 
 	// Create a sequence with one item
 	seq := dataset.NewSequence(tag.New(0x0008, 0x1140))
-    item := dataset.New()
-    if err := item.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.4"})); err != nil {
-        t.Fatalf("Item.Add() error: %v", err)
-    }
+	item := dataset.New()
+	if err := item.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.4"})); err != nil {
+		t.Fatalf("Item.Add() error: %v", err)
+	}
 	seq.AddItem(item)
 
 	if err := w.writeSequence(seq); err != nil {
@@ -303,19 +310,19 @@ func TestWriteSequence(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	buf := &bytes.Buffer{}
 
-    ds := dataset.New()
-    if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
-        t.Fatalf("Add() error: %v", err)
-    }
-    if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {
-        t.Fatalf("Add() error: %v", err)
-    }
-    if err := ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512})); err != nil {
-        t.Fatalf("Add() error: %v", err)
-    }
-    if err := ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512})); err != nil {
-        t.Fatalf("Add() error: %v", err)
-    }
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
+	if err := ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512})); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
+	if err := ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512})); err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
 
 	if err := Write(buf, ds); err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -341,10 +348,10 @@ func TestRoundTrip(t *testing.T) {
 
 func BenchmarkWriteSmallDataset(b *testing.B) {
 	// Create a small dataset
-    ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-    _ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
-    _ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
+	_ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -354,14 +361,14 @@ func BenchmarkWriteSmallDataset(b *testing.B) {
 }
 
 func BenchmarkWriteMediumDataset(b *testing.B) {
-    // Create a medium dataset with 50 elements
-    ds := dataset.New()
-    for i := 0; i < 50; i++ {
-        // Use safe conversion helper to satisfy gosec
-        elem := testutil.SafeUint16FromInt(i)
-        t := tag.New(0x0010, elem)
-        _ = ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
-    }
+	// Create a medium dataset with 50 elements
+	ds := dataset.New()
+	for i := 0; i < 50; i++ {
+		// Use safe conversion helper to satisfy gosec
+		elem := testutil.SafeUint16FromInt(i)
+		t := tag.New(0x0010, elem)
+		_ = ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -373,12 +380,12 @@ func BenchmarkWriteMediumDataset(b *testing.B) {
 func BenchmarkWriteLargeDataset(b *testing.B) {
 	// Create a large dataset with 200 elements
 	ds := dataset.New()
-    for i := 0; i < 200; i++ {
-        // Use safe conversion helper
-        elem := testutil.SafeUint16FromInt(i % 256)
-        t := tag.New(0x0010, elem)
-        _ = ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
-    }
+	for i := 0; i < 200; i++ {
+		// Use safe conversion helper
+		elem := testutil.SafeUint16FromInt(i % 256)
+		t := tag.New(0x0010, elem)
+		_ = ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

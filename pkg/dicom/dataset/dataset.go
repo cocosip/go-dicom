@@ -20,6 +20,11 @@ type Dataset struct {
 	// items stores elements indexed by tag
 	items map[uint32]element.Element
 
+	// sortedTags caches sorted tag values for deterministic iteration.
+	// It is invalidated on structural mutations (add/remove/clear/merge/filter).
+	sortedTags []uint32
+	cacheDirty bool
+
 	// internalTransferSyntax represents the transfer syntax of this dataset.
 	// This is used to track the encoding format of pixel data and other elements.
 	// Following fo-dicom pattern, this is internal and can be set by transcoder/parser.
@@ -29,7 +34,8 @@ type Dataset struct {
 // New creates a new empty dataset.
 func New() *Dataset {
 	return &Dataset{
-		items: make(map[uint32]element.Element),
+		items:      make(map[uint32]element.Element),
+		cacheDirty: true,
 	}
 }
 
@@ -40,6 +46,7 @@ func NewWithTransferSyntax(ts *transfer.Syntax) *Dataset {
 	return &Dataset{
 		items:                  make(map[uint32]element.Element),
 		internalTransferSyntax: ts,
+		cacheDirty:             true,
 	}
 }
 
@@ -65,6 +72,7 @@ func (ds *Dataset) Add(elem element.Element) error {
 	}
 
 	ds.items[tagValue] = elem
+	ds.markDirty()
 	return nil
 }
 
@@ -75,6 +83,7 @@ func (ds *Dataset) AddOrUpdate(elem element.Element) error {
 	}
 
 	ds.items[elem.Tag().ToUint32()] = elem
+	ds.markDirty()
 	return nil
 }
 
@@ -112,6 +121,7 @@ func (ds *Dataset) Remove(t *tag.Tag) bool {
 	tagValue := t.ToUint32()
 	if _, exists := ds.items[tagValue]; exists {
 		delete(ds.items, tagValue)
+		ds.markDirty()
 		return true
 	}
 	return false
@@ -132,6 +142,7 @@ func (ds *Dataset) RemoveAll(tags ...*tag.Tag) int {
 // Clear removes all elements from the dataset.
 func (ds *Dataset) Clear() {
 	ds.items = make(map[uint32]element.Element)
+	ds.markDirty()
 }
 
 // Count returns the number of elements in the dataset.
@@ -150,18 +161,11 @@ func (ds *Dataset) Elements() []element.Element {
 		return nil
 	}
 
-	// Get sorted tags
-	tags := make([]uint32, 0, len(ds.items))
-	for tagValue := range ds.items {
-		tags = append(tags, tagValue)
-	}
-	sort.Slice(tags, func(i, j int) bool {
-		return tags[i] < tags[j]
-	})
+	tagValues := ds.sortedTagValues()
 
 	// Build sorted element list
-	elements := make([]element.Element, len(tags))
-	for i, tagValue := range tags {
+	elements := make([]element.Element, len(tagValues))
+	for i, tagValue := range tagValues {
 		elements[i] = ds.items[tagValue]
 	}
 
@@ -174,14 +178,7 @@ func (ds *Dataset) Tags() []*tag.Tag {
 		return nil
 	}
 
-	// Get sorted tags
-	tagValues := make([]uint32, 0, len(ds.items))
-	for tagValue := range ds.items {
-		tagValues = append(tagValues, tagValue)
-	}
-	sort.Slice(tagValues, func(i, j int) bool {
-		return tagValues[i] < tagValues[j]
-	})
+	tagValues := ds.sortedTagValues()
 
 	// Convert to Tag objects
 	tags := make([]*tag.Tag, len(tagValues))
@@ -200,6 +197,10 @@ func (ds *Dataset) Clone() *Dataset {
 	for tagValue, elem := range ds.items {
 		clone.items[tagValue] = elem
 	}
+	if !ds.cacheDirty && len(ds.sortedTags) > 0 {
+		clone.sortedTags = append([]uint32(nil), ds.sortedTags...)
+		clone.cacheDirty = false
+	}
 	return clone
 }
 
@@ -214,6 +215,7 @@ func (ds *Dataset) Merge(other *Dataset, overwrite bool) {
 	for tagValue, elem := range other.items {
 		if overwrite || !ds.Contains(elem.Tag()) {
 			ds.items[tagValue] = elem
+			ds.markDirty()
 		}
 	}
 }
@@ -223,7 +225,9 @@ func (ds *Dataset) Filter(predicate func(element.Element) bool) *Dataset {
 	filtered := New()
 	for _, elem := range ds.items {
 		if predicate(elem) {
-			filtered.items[elem.Tag().ToUint32()] = elem
+			if err := filtered.Add(elem); err != nil {
+				continue
+			}
 		}
 	}
 	return filtered
@@ -262,4 +266,26 @@ func (ds *Dataset) SetInternalTransferSyntax(ts *transfer.Syntax) {
 			}
 		}
 	}
+}
+
+func (ds *Dataset) markDirty() {
+	ds.cacheDirty = true
+	ds.sortedTags = nil
+}
+
+func (ds *Dataset) sortedTagValues() []uint32 {
+	if !ds.cacheDirty && len(ds.sortedTags) == len(ds.items) {
+		return ds.sortedTags
+	}
+
+	tagValues := make([]uint32, 0, len(ds.items))
+	for tagValue := range ds.items {
+		tagValues = append(tagValues, tagValue)
+	}
+	sort.Slice(tagValues, func(i, j int) bool {
+		return tagValues[i] < tagValues[j]
+	})
+	ds.sortedTags = tagValues
+	ds.cacheDirty = false
+	return ds.sortedTags
 }

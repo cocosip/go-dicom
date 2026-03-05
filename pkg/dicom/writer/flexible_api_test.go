@@ -23,7 +23,7 @@ func TestWriteWithDefaults(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
 
 	// Write with defaults (no options)
 	if err := Write(buf, ds); err != nil {
@@ -65,7 +65,7 @@ func TestWriteWithFileMetaInfo(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
 
 	// Write with custom file meta info
 	if err := Write(buf, ds, WithFileMetaInfo(fileMetaInfo)); err != nil {
@@ -94,10 +94,10 @@ func TestWriteWithTransferSyntax(t *testing.T) {
 
 	// Create a dataset
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
-    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
 
 	// Write with explicit transfer syntax option
 	ts := transfer.ExplicitVRLittleEndian
@@ -135,7 +135,7 @@ func TestWriteWithoutPreambleOption(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test"}))
 
 	// Write without preamble
 	if err := Write(buf, ds, WithoutPreamble()); err != nil {
@@ -149,5 +149,29 @@ func TestWriteWithoutPreambleOption(t *testing.T) {
 		if dicmCheck == "DICM" {
 			t.Error("Should not contain DICM prefix when WithoutPreamble is used")
 		}
+	}
+}
+
+func TestWriteUsesDatasetInternalTransferSyntax(t *testing.T) {
+	buf := &bytes.Buffer{}
+
+	ds := dataset.NewWithTransferSyntax(transfer.RLELossless)
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"TS^FromDataset"}))
+
+	if err := Write(buf, ds); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	tsUID, exists := result.FileMetaInformation.TransferSyntaxUID()
+	if !exists {
+		t.Fatal("TransferSyntaxUID not found")
+	}
+	if tsUID != transfer.RLELossless.UID().String() {
+		t.Fatalf("TransferSyntaxUID = %q, want %q", tsUID, transfer.RLELossless.UID().String())
 	}
 }
