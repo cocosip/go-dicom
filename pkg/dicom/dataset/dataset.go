@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/daterange"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/parseable"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 )
 
 // Dataset represents a DICOM dataset - a collection of data elements.
@@ -288,4 +291,87 @@ func (ds *Dataset) sortedTagValues() []uint32 {
 	ds.sortedTags = tagValues
 	ds.cacheDirty = false
 	return ds.sortedTags
+}
+
+// GetParseable retrieves an element by tag and parses it using the parseable.Parseable interface.
+// This is useful for types that implement Parseable, such as uid.UID or transfer.Syntax.
+//
+// Example:
+//
+//	ts, err := ds.GetParseable(tag.TransferSyntaxUID, parseable.ParserFor(func() *transfer.Syntax { return &transfer.Syntax{} }))
+//	sopClass, err := ds.GetParseable(tag.SOPClassUID, parseable.ParserFor(func() *uid.UID { return &uid.UID{} }))
+func GetParseable[T parseable.Parseable](ds *Dataset, t *tag.Tag, parser parseable.Parser[T]) (T, error) {
+	var zero T
+	elem, exists := ds.Get(t)
+	if !exists {
+		return zero, fmt.Errorf("element %s not found", t)
+	}
+
+	strElem, ok := elem.(*element.String)
+	if !ok {
+		return zero, fmt.Errorf("element %s is not a string type", t)
+	}
+
+	value := strElem.GetString()
+	if value == "" {
+		return zero, fmt.Errorf("element %s is empty", t)
+	}
+
+	return parser(value)
+}
+
+// GetUID retrieves a UID element and parses it.
+func (ds *Dataset) GetUID(t *tag.Tag) (*uid.UID, error) {
+	return GetParseable(ds, t, parseable.ParserFor(func() *uid.UID { return &uid.UID{} }))
+}
+
+// GetTransferSyntax retrieves the Transfer Syntax UID and returns the TransferSyntax.
+func (ds *Dataset) GetTransferSyntax() (*transfer.Syntax, error) {
+	return GetParseable(ds, tag.TransferSyntaxUID, parseable.ParserFor(func() *transfer.Syntax { return &transfer.Syntax{} }))
+}
+
+// GetDateRange retrieves a date element and parses it as a DateRange.
+// This supports DICOM query format: "YYYYMMDD-YYYYMMDD", "YYYYMMDD-", "-YYYYMMDD", or single date.
+func (ds *Dataset) GetDateRange(t *tag.Tag) (*daterange.DateRange, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	dateElem, ok := elem.(*element.Date)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not a Date type", t)
+	}
+
+	return dateElem.GetDateRange()
+}
+
+// GetTimeRange retrieves a time element and parses it as a TimeRange.
+func (ds *Dataset) GetTimeRange(t *tag.Tag) (*daterange.TimeRange, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	timeElem, ok := elem.(*element.Time)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not a Time type", t)
+	}
+
+	return timeElem.GetTimeRange()
+}
+
+// GetDateTimeRange retrieves a datetime element and parses it as a DateTimeRange.
+func (ds *Dataset) GetDateTimeRange(t *tag.Tag) (*daterange.DateTimeRange, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	dtElem, ok := elem.(*element.DateTime)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not a DateTime type", t)
+	}
+
+	return dtElem.GetDateTimeRange()
 }

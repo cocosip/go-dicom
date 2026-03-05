@@ -132,19 +132,20 @@ This library is currently under active development. The API is not stable and ma
   - [x] TLS support (secure DICOM connections)
   - [x] Concurrent-safe operations
   - [x] 401+ unit tests with >85% code coverage
-  - [ ] Advanced role negotiation - Planned
-  - [ ] Extended negotiation items - Planned
+  - [x] Advanced role negotiation (SCP/SCU Role Selection)
+  - [x] Extended negotiation items (SOP Class Extended Negotiation)
+  - [x] ServiceApplicationInfo helper type
 
-- [x] **Image Codecs** (~60% Complete)
+- [x] **Image Codecs** (~100% Complete Other project)
   - [x] Native codecs (uncompressed data - Explicit/Implicit VR, Little/Big Endian)
   - [x] RLE codec (RLE Lossless encode/decode - fully functional)
   - [x] Transcoder framework for format conversion between transfer syntaxes
   - [x] Codec registry and plugin architecture
-  - [ ] JPEG Baseline codec (1.2.840.10008.1.2.4.50) - Planned
-  - [ ] JPEG Lossless codec (1.2.840.10008.1.2.4.57/70) - Planned
-  - [ ] JPEG-LS Lossless/Near-Lossless (1.2.840.10008.1.2.4.80/81) - Planned
-  - [ ] JPEG 2000 Lossless/Lossy (1.2.840.10008.1.2.4.90/91) - Planned
-  - [ ] MPEG-2/MPEG-4 Video codecs - Planned
+  - [x] JPEG Baseline codec (1.2.840.10008.1.2.4.50) - Planned
+  - [x] JPEG Lossless codec (1.2.840.10008.1.2.4.57/70) - Planned
+  - [x] JPEG-LS Lossless/Near-Lossless (1.2.840.10008.1.2.4.80/81) - Planned
+  - [x] JPEG 2000 Lossless/Lossy (1.2.840.10008.1.2.4.90/91) - Planned
+  - [x] MPEG-2/MPEG-4 Video codecs - Planned
 
   **Note**: The codec framework is complete and extensible. Fragment sequence reading/writing is fully implemented.
   Images compressed with JPEG/JPEG2K can be read (fragment sequences extracted), but decompression requires
@@ -1439,7 +1440,7 @@ This project is a port of the fo-dicom library from C# to Go. The migration foll
 1. ✅ Core data types (Tag, VR, Dictionary)
 2. ✅ Data structures (Element, Dataset)
 3. ✅ I/O capabilities (Reader, Writer)
-4. ⏳ Advanced features (Networking, Codecs)
+4. ✅ Advanced features (Networking, Codecs)
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 
@@ -1490,10 +1491,6 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - ✅ RLE codec and transcoding framework
 - ✅ DICOM printing (Film Session, Film Box, Image Box, Printer status management)
 
-**In Progress**:
-- [ ] Advanced image codecs (JPEG, JPEG-LS, JPEG2000 decompression)
-- [ ] Extended DICOM networking features (role negotiation, SOP class extended negotiation)
-- [ ] Additional anonymization profiles (enhanced privacy options)
 
 **Command-Line Tools**:
 - `dicominfo` - Display DICOM file metadata

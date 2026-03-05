@@ -187,20 +187,28 @@
 **实际工作量**: 1 天
 **状态**: ✅ 完成，所有测试通过
 
-### 2.7 辅助类型
+### 2.7 辅助类型 ✅
 **参考**: `fo-dicom-code/DicomDateRange.cs`, `DicomParseable.cs`
-**包**: `pkg/dicom`
+**包**: `pkg/dicom/daterange`, `pkg/dicom/parseable`
 
-- [ ] DicomDateRange
-  - [ ] 日期范围解析
-  - [ ] DICOM 查询格式支持 ("20240101-20241231")
-  - [ ] 单元测试
-- [ ] DicomParseable 接口
-  - [ ] 定义 Parse() 接口规范
-  - [ ] 文档说明
+- [x] DicomDateRange
+  - [x] 日期范围解析
+  - [x] DICOM 查询格式支持 ("20240101-20241231")
+  - [x] 时间范围支持 (TimeRange)
+  - [x] 日期时间范围支持 (DateTimeRange)
+  - [x] 单元测试
+- [x] DicomParseable 接口
+  - [x] 定义 Parse() 接口规范
+  - [x] Parser 泛型函数支持
+  - [x] 文档说明
+- [x] 集成到 element 包
+  - [x] Date.GetDateRange()
+  - [x] Time.GetTimeRange()
+  - [x] DateTime.GetDateTimeRange()
 
 **依赖**: 无
-**预计工作量**: 0.5-1 天
+**实际工作量**: 0.5 天
+**状态**: ✅ 完成，所有测试通过
 
 ---
 
@@ -489,27 +497,32 @@
 **参考**: `fo-dicom-code/Serialization/DicomXML.cs`
 **包**: `pkg/dicom/serialization`
 
-- [x] 实现 DICOM XML 序列化 (NativeDicomModel格式)
+- [x] 实现 DICOM XML 序列化 (NativeDicomModel 格式)
 - [x] 实现 ToXML() 函数
 - [x] 实现 XML 选项配置 (WithXMLIndent, WithXMLCompact)
 - [x] 支持所有 DICOM 元素类型
   - [x] 字符串元素 (使用 `<Value>` 标签)
   - [x] 数值元素 (US, UL, SS, SL, FL, FD, SV, UV - 自动转换为字符串)
-  - [x] 二进制元素 (使用 `<InlineBinary>` base64编码)
-  - [x] PersonName (结构化格式: Alphabetic/Ideographic/Phonetic)
+  - [x] 二进制元素 (使用 `<InlineBinary>` base64 编码)
+  - [x] PersonName (结构化格式：Alphabetic/Ideographic/Phonetic)
   - [x] 序列 (使用 `<Item>` 标签)
 - [x] 支持嵌套序列
 - [x] XML 特殊字符转义 (&, <, >, ", ')
 - [x] 支持私有标签 (privateCreator 属性)
 - [x] 支持 keyword 属性 (从字典查找)
-- [x] 编写单元测试 (16个测试用例，全部通过)
-- [ ] 实现 FromXML() 反序列化 (未实现 - 可选功能)
+- [x] 编写单元测试 (16 个测试用例，全部通过)
+- [x] 实现 FromXML() 反序列化
+  - [x] 支持所有 DICOM VR 类型
+  - [x] 支持序列嵌套
+  - [x] 支持 Base64 二进制数据
+  - [x] 支持 PersonName 结构化格式
+  - [x] 编写单元测试 (9 个测试用例，全部通过)
 
 **依赖**: DicomDataset, DicomElement, DicomDictionary
-**实际工作量**: 1 天
-**状态**: ✅ 完成 XML 序列化，所有测试通过
-**完成日期**: 2025-11-07
-**优先级**: 低 (FromXML 反序列化可根据需求决定是否实现)
+**实际工作量**: 1.5 天
+**状态**: ✅ 完成 XML 序列化和反序列化，所有测试通过
+**完成日期**: 2025-11-07 (序列化), 2026-03-05 (反序列化)
+**优先级**: 中 (FromXML 反序列化已实现)
 
 ### 7.3 DicomAnonymizer ✅
 **参考**: `fo-dicom-code/DicomAnonymizer.cs`, `DicomAnonymizerGenerated.cs`

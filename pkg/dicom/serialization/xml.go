@@ -6,12 +6,14 @@ package serialization
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/xml"
 	"fmt"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
@@ -454,4 +456,264 @@ func escapeXML(s string) string {
 	s = strings.ReplaceAll(s, "\"", "&quot;")
 	s = strings.ReplaceAll(s, "'", "&apos;")
 	return s
+}
+
+// FromXML deserializes a DICOM dataset from XML format (NativeDicomModel)
+// according to DICOM Part 19: Native DICOM Model
+func FromXML(xmlData []byte, opts ...XMLOption) (*dataset.Dataset, error) {
+	cfg := defaultXMLConfig()
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	r := &xmlReader{
+		config: cfg,
+	}
+
+	return r.readDataset(xmlData)
+}
+
+// xmlReader handles the XML deserialization process
+type xmlReader struct {
+	config xmlConfig
+}
+
+// readDataset parses XML data into a DICOM dataset
+func (r *xmlReader) readDataset(xmlData []byte) (*dataset.Dataset, error) {
+	var model nativeDicomModel
+	if err := xml.Unmarshal(xmlData, &model); err != nil {
+		return nil, fmt.Errorf("failed to parse XML: %w", err)
+	}
+
+	ds := dataset.New()
+	for _, attr := range model.DicomAttributes {
+		elem, err := r.readAttribute(attr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read attribute %s: %w", attr.Tag, err)
+		}
+		if elem != nil {
+			_ = ds.Add(elem) // Ignore add errors in deserialization
+		}
+	}
+
+	return ds, nil
+}
+
+// nativeDicomModel represents the root XML structure
+type nativeDicomModel struct {
+	XMLName         xml.Name         `xml:"NativeDicomModel"`
+	DicomAttributes []dicomAttribute `xml:"DicomAttribute"`
+}
+
+// dicomAttribute represents a DicomAttribute XML element
+type dicomAttribute struct {
+	Tag            string       `xml:"tag,attr"`
+	VR             string       `xml:"vr,attr"`
+	Keyword        string       `xml:"keyword,attr,omitempty"`
+	PrivateCreator string       `xml:"privateCreator,attr,omitempty"`
+	InlineBinary   string       `xml:"InlineBinary,omitempty"`
+	PersonNames    []personName `xml:"PersonName,omitempty"`
+	Values         []xmlValue   `xml:"Value,omitempty"`
+	Items          []xmlItem    `xml:"Item,omitempty"`
+}
+
+// personName represents a PersonName XML element
+type personName struct {
+	Number      int                `xml:"number,attr,omitempty"`
+	Alphabetic  nameComponentGroup `xml:"Alphabetic,omitempty"`
+	Ideographic nameComponentGroup `xml:"Ideographic,omitempty"`
+	Phonetic    nameComponentGroup `xml:"Phonetic,omitempty"`
+}
+
+// nameComponentGroup represents name components (Family, Given, etc.)
+type nameComponentGroup struct {
+	FamilyName string `xml:"FamilyName,omitempty"`
+	GivenName  string `xml:"GivenName,omitempty"`
+	MiddleName string `xml:"MiddleName,omitempty"`
+	NamePrefix string `xml:"NamePrefix,omitempty"`
+	NameSuffix string `xml:"NameSuffix,omitempty"`
+}
+
+// xmlValue represents a Value XML element
+type xmlValue struct {
+	Number int    `xml:"number,attr,omitempty"`
+	Value  string `xml:",chardata"`
+}
+
+// xmlItem represents an Item XML element (for sequences)
+type xmlItem struct {
+	Number     int              `xml:"number,attr,omitempty"`
+	Attributes []dicomAttribute `xml:"DicomAttribute,omitempty"`
+}
+
+// readAttribute parses a dicomAttribute into an element.Element
+func (r *xmlReader) readAttribute(attr dicomAttribute) (element.Element, error) {
+	// Parse tag
+	t, err := tag.Parse(attr.Tag)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tag %q: %w", attr.Tag, err)
+	}
+
+	// Parse VR
+	vrCode, err := vr.Parse(attr.VR)
+	if err != nil {
+		return nil, fmt.Errorf("invalid VR %q: %w", attr.VR, err)
+	}
+
+	// Handle sequences
+	if vrCode == vr.SQ {
+		return r.readSequence(t, attr.Items)
+	}
+
+	// Handle binary VRs
+	if vrCode == vr.OB || vrCode == vr.OD || vrCode == vr.OF ||
+		vrCode == vr.OW || vrCode == vr.OL || vrCode == vr.OV || vrCode == vr.UN {
+		return r.readBinary(t, vrCode, attr.InlineBinary)
+	}
+
+	// Handle PersonName
+	if vrCode == vr.PN {
+		return r.readPersonName(t, attr.PersonNames), nil
+	}
+
+	// Handle all other VRs as string/numeric
+	return r.readStringElement(t, vrCode, attr.Values)
+}
+
+// readSequence parses sequence items
+func (r *xmlReader) readSequence(t *tag.Tag, items []xmlItem) (*dataset.Sequence, error) {
+	seq := dataset.NewSequence(t)
+
+	for _, item := range items {
+		itemDS := dataset.New()
+		for _, attr := range item.Attributes {
+			elem, err := r.readAttribute(attr)
+			if err != nil {
+				return nil, err
+			}
+			if elem != nil {
+				_ = itemDS.Add(elem) // Ignore add errors in deserialization
+			}
+		}
+		seq.AddItem(itemDS)
+	}
+
+	return seq, nil
+}
+
+// readBinary parses binary data from base64
+func (r *xmlReader) readBinary(t *tag.Tag, vrCode *vr.VR, data string) (element.Element, error) {
+	if data == "" {
+		// Return empty element based on VR
+		switch vrCode {
+		case vr.OB:
+			return element.NewOtherByte(t, nil), nil
+		case vr.OW:
+			return element.NewOtherWord(t, nil), nil
+		default:
+			return element.NewOtherByte(t, nil), nil
+		}
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	switch vrCode {
+	case vr.OB, vr.UN:
+		return element.NewOtherByte(t, decoded), nil
+	case vr.OW:
+		return element.NewOtherWord(t, decoded), nil
+	case vr.OD:
+		return element.NewOtherDouble(t, decoded), nil
+	case vr.OF:
+		return element.NewOtherFloat(t, decoded), nil
+	default:
+		return element.NewOtherByte(t, decoded), nil
+	}
+}
+
+// readPersonName parses PersonName values
+func (r *xmlReader) readPersonName(t *tag.Tag, personNames []personName) *element.PersonName {
+	values := make([]string, 0, len(personNames))
+
+	for _, pn := range personNames {
+		var components []string
+
+		// Build Alphabetic component
+		if pn.Alphabetic.hasData() {
+			components = append(components, pn.Alphabetic.String())
+		}
+
+		// Build Ideographic component
+		if pn.Ideographic.hasData() {
+			if len(components) == 0 {
+				components = append(components, "")
+			}
+			components = append(components, pn.Ideographic.String())
+		}
+
+		// Build Phonetic component
+		if pn.Phonetic.hasData() {
+			if len(components) == 0 {
+				components = append(components, "")
+			}
+			if len(components) == 1 {
+				components = append(components, "")
+			}
+			components = append(components, pn.Phonetic.String())
+		}
+
+		if len(components) > 0 {
+			values = append(values, strings.Join(components, "="))
+		}
+	}
+
+	if len(values) == 0 {
+		values = append(values, "")
+	}
+
+	return element.NewPersonName(t, values)
+}
+
+// hasData returns true if the name component has any data
+func (g nameComponentGroup) hasData() bool {
+	return g.FamilyName != "" || g.GivenName != "" ||
+		g.MiddleName != "" || g.NamePrefix != "" || g.NameSuffix != ""
+}
+
+// String returns the DICOM format of the name component
+func (g nameComponentGroup) String() string {
+	parts := []string{g.FamilyName, g.GivenName, g.MiddleName, g.NamePrefix, g.NameSuffix}
+
+	// Trim trailing empty parts
+	lastNonEmpty := -1
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] != "" {
+			lastNonEmpty = i
+			break
+		}
+	}
+
+	if lastNonEmpty == -1 {
+		return ""
+	}
+
+	return strings.Join(parts[:lastNonEmpty+1], "^")
+}
+
+// readStringElement parses string or numeric elements
+func (r *xmlReader) readStringElement(t *tag.Tag, vrCode *vr.VR, values []xmlValue) (element.Element, error) {
+	strValues := make([]string, 0, len(values))
+	for _, v := range values {
+		strValues = append(strValues, strings.TrimSpace(v.Value))
+	}
+
+	// If no values, create element with empty value
+	if len(strValues) == 0 {
+		strValues = append(strValues, "")
+	}
+
+	return element.NewString(t, vrCode, strValues), nil
 }

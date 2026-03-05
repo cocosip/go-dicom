@@ -9,8 +9,11 @@ import (
 	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/endian"
+	"github.com/cocosip/go-dicom/pkg/dicom/parseable"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 )
+
+var _ parseable.Parseable = (*Syntax)(nil)
 
 // Syntax represents a DICOM transfer syntax.
 //
@@ -145,6 +148,16 @@ func Lookup(u *uid.UID) (*Syntax, error) {
 	ts.endian = endian.Little
 
 	return ts, nil
+}
+
+// Parse implements parseable.Parseable interface.
+func (ts *Syntax) Parse(s string) error {
+	parsed, err := Parse(s)
+	if err != nil {
+		return err
+	}
+	*ts = *parsed
+	return nil
 }
 
 // Register registers a transfer syntax in the global registry.

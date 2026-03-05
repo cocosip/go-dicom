@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/daterange"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
@@ -42,6 +43,12 @@ func NewDateFromTime(t *tag.Tag, times []time.Time) *Date {
 // NewDateFromBuffer creates a DA element from an existing buffer.
 func NewDateFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *Date {
 	return &Date{str: NewStringFromBuffer(t, vr.DA, buf, enc)}
+}
+
+// NewDateFromRange creates a DA element from a DateRange.
+// This is used in DICOM query operations (C-FIND, C-GET, C-MOVE).
+func NewDateFromRange(t *tag.Tag, r *daterange.DateRange) *Date {
+	return &Date{str: NewString(t, vr.DA, []string{r.String()})}
 }
 
 // Tag returns the DICOM tag.
@@ -111,6 +118,27 @@ func (d *Date) GetDates() ([]time.Time, error) {
 		dates[i] = date
 	}
 	return dates, nil
+}
+
+// GetDateRange parses and returns the date as a DateRange.
+// This supports DICOM query format: "YYYYMMDD-YYYYMMDD", "YYYYMMDD-", "-YYYYMMDD", or single date.
+func (d *Date) GetDateRange() (*daterange.DateRange, error) {
+	dateStr := d.str.GetString()
+	if dateStr == "" {
+		return daterange.NewDateRangeAll(), nil
+	}
+	return daterange.ParseDateRange(dateStr)
+}
+
+// IsRange returns true if the date value represents a range (contains "-").
+func (d *Date) IsRange() bool {
+	dateStr := d.str.GetString()
+	for i := 0; i < len(dateStr); i++ {
+		if dateStr[i] == '-' {
+			return true
+		}
+	}
+	return false
 }
 
 // Time represents a DICOM element with VR = TM (Time).
@@ -222,6 +250,33 @@ func (tm *Time) GetTimes() ([]time.Time, error) {
 	return times, nil
 }
 
+// NewTimeFromRange creates a TM element from a TimeRange.
+// This is used in DICOM query operations (C-FIND, C-GET, C-MOVE).
+func NewTimeFromRange(t *tag.Tag, r *daterange.TimeRange) *Time {
+	return &Time{str: NewString(t, vr.TM, []string{r.String()})}
+}
+
+// GetTimeRange parses and returns the time as a TimeRange.
+// This supports DICOM query format: "HHMMSS-HHMMSS", "HHMMSS-", "-HHMMSS", or single time.
+func (tm *Time) GetTimeRange() (*daterange.TimeRange, error) {
+	timeStr := tm.str.GetString()
+	if timeStr == "" {
+		return &daterange.TimeRange{Range: daterange.NewRange(time.Time{}, time.Time{})}, nil
+	}
+	return daterange.ParseTimeRange(timeStr)
+}
+
+// IsRange returns true if the time value represents a range (contains "-").
+func (tm *Time) IsRange() bool {
+	timeStr := tm.str.GetString()
+	for i := 0; i < len(timeStr); i++ {
+		if timeStr[i] == '-' {
+			return true
+		}
+	}
+	return false
+}
+
 // DateTime represents a DICOM element with VR = DT (Date Time).
 // Format: YYYYMMDDHHMMSS.FFFFFF&ZZXX
 type DateTime struct {
@@ -331,4 +386,36 @@ func (dt *DateTime) GetDateTimes() ([]time.Time, error) {
 		times[i] = t
 	}
 	return times, nil
+}
+
+// NewDateTimeFromRange creates a DT element from a DateTimeRange.
+// This is used in DICOM query operations (C-FIND, C-GET, C-MOVE).
+func NewDateTimeFromRange(t *tag.Tag, r *daterange.DateTimeRange) *DateTime {
+	return &DateTime{str: NewString(t, vr.DT, []string{r.String()})}
+}
+
+// GetDateTimeRange parses and returns the datetime as a DateTimeRange.
+// This supports DICOM query format: "YYYYMMDDHHMMSS-YYYYMMDDHHMMSS", etc.
+func (dt *DateTime) GetDateTimeRange() (*daterange.DateTimeRange, error) {
+	dtStr := dt.str.GetString()
+	if dtStr == "" {
+		return &daterange.DateTimeRange{Range: daterange.NewRange(time.Time{}, time.Time{})}, nil
+	}
+	return daterange.ParseDateTimeRange(dtStr)
+}
+
+// IsRange returns true if the datetime value represents a range (contains "-").
+func (dt *DateTime) IsRange() bool {
+	dtStr := dt.str.GetString()
+	for i := 0; i < len(dtStr); i++ {
+		if dtStr[i] == '-' {
+			if i > 0 && (dtStr[i-1] >= '0' && dtStr[i-1] <= '9') {
+				if i+1 < len(dtStr) && (dtStr[i+1] >= '0' && dtStr[i+1] <= '9') {
+					continue
+				}
+			}
+			return true
+		}
+	}
+	return false
 }

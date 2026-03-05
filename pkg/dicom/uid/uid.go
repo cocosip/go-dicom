@@ -9,7 +9,11 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/parseable"
 )
+
+var _ parseable.Parseable = (*UID)(nil)
 
 // Type represents the type of a DICOM UID.
 type Type int
@@ -222,6 +226,15 @@ func MustParse(s string) *UID {
 		panic(fmt.Sprintf("invalid UID: %s", s))
 	}
 	return Parse(s, "Unknown", TypeUnknown)
+}
+
+// Parse implements parseable.Parseable interface.
+func (u *UID) Parse(s string) error {
+	if !IsValid(s) {
+		return fmt.Errorf("invalid UID: %s", s)
+	}
+	*u = *Parse(s, "Unknown", TypeUnknown)
+	return nil
 }
 
 // IsValid validates a UID string according to DICOM rules.

@@ -7,6 +7,7 @@ package association
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
@@ -395,6 +396,145 @@ func NewExtendedNegotiation(sopClassUID string, appInfo []byte) *ExtendedNegotia
 	return &ExtendedNegotiation{
 		SOPClassUID:         sopClassUID,
 		ServiceClassAppInfo: appInfo,
+	}
+}
+
+// ServiceApplicationInfo encapsulates the Service Class Application Information field
+// for the SOP Class Extended Negotiation Sub-item.
+// See: http://dicom.nema.org/medical/dicom/current/output/chtml/part07/sect_D.3.3.5.html
+type ServiceApplicationInfo struct {
+	fields map[byte]byte
+}
+
+// NewServiceApplicationInfo creates a new ServiceApplicationInfo from raw bytes.
+func NewServiceApplicationInfo(data []byte) *ServiceApplicationInfo {
+	info := &ServiceApplicationInfo{
+		fields: make(map[byte]byte),
+	}
+	for i, b := range data {
+		info.fields[byte(i+1)] = b
+	}
+	return info
+}
+
+// NewServiceApplicationInfoEmpty creates an empty ServiceApplicationInfo.
+func NewServiceApplicationInfoEmpty() *ServiceApplicationInfo {
+	return &ServiceApplicationInfo{
+		fields: make(map[byte]byte),
+	}
+}
+
+// Count returns the number of fields.
+func (s *ServiceApplicationInfo) Count() int {
+	return len(s.fields)
+}
+
+// Get returns the value at the given index (1-based).
+func (s *ServiceApplicationInfo) Get(index byte) (byte, bool) {
+	v, ok := s.fields[index]
+	return v, ok
+}
+
+// Set sets the value at the given index.
+func (s *ServiceApplicationInfo) Set(index byte, value byte) error {
+	if index == 0 {
+		return fmt.Errorf("index 0 is not valid")
+	}
+	s.fields[index] = value
+	s.fillGaps()
+	return nil
+}
+
+// SetBool sets a boolean value at the given index.
+func (s *ServiceApplicationInfo) SetBool(index byte, value bool) error {
+	if value {
+		return s.Set(index, 1)
+	}
+	return s.Set(index, 0)
+}
+
+// Contains returns true if the index exists.
+func (s *ServiceApplicationInfo) Contains(index byte) bool {
+	_, ok := s.fields[index]
+	return ok
+}
+
+// GetBool returns the value as a boolean, or the default if not present.
+func (s *ServiceApplicationInfo) GetBool(index byte, defaultValue bool) bool {
+	if v, ok := s.fields[index]; ok {
+		return v == 1
+	}
+	return defaultValue
+}
+
+// Remove removes the field at the given index.
+func (s *ServiceApplicationInfo) Remove(index byte) bool {
+	if _, ok := s.fields[index]; ok {
+		delete(s.fields, index)
+		return true
+	}
+	return false
+}
+
+// Values returns the raw bytes representation.
+func (s *ServiceApplicationInfo) Values() []byte {
+	if len(s.fields) == 0 {
+		return nil
+	}
+
+	maxKey := byte(0)
+	for k := range s.fields {
+		if k > maxKey {
+			maxKey = k
+		}
+	}
+
+	result := make([]byte, maxKey)
+	for k, v := range s.fields {
+		result[k-1] = v
+	}
+	return result
+}
+
+// String returns a string representation.
+func (s *ServiceApplicationInfo) String() string {
+	if len(s.fields) == 0 {
+		return ""
+	}
+
+	keys := make([]byte, 0, len(s.fields))
+	for k := range s.fields {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	result := ""
+	for i, k := range keys {
+		if i > 0 {
+			result += ", "
+		}
+		result += fmt.Sprintf("%d", s.fields[k])
+	}
+	return result
+}
+
+// fillGaps ensures sequential fields from 1 to max index.
+func (s *ServiceApplicationInfo) fillGaps() {
+	if len(s.fields) == 0 {
+		return
+	}
+
+	maxKey := byte(0)
+	for k := range s.fields {
+		if k > maxKey {
+			maxKey = k
+		}
+	}
+
+	for i := byte(1); i < maxKey; i++ {
+		if _, ok := s.fields[i]; !ok {
+			s.fields[i] = 0
+		}
 	}
 }
 
