@@ -39,27 +39,27 @@ func NewTempFile(data []byte) (*TempFileBuffer, error) {
 	// Write data to the temporary file
 	n, err := tmpFile.Write(data)
 	if err != nil {
-        _ = tmpFile.Close()
-        _ = os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 		return nil, fmt.Errorf("failed to write to temporary file: %w", err)
 	}
 
 	if n != len(data) {
-        _ = tmpFile.Close()
-        _ = os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 		return nil, fmt.Errorf("failed to write all data to temporary file: wrote %d of %d bytes", n, len(data))
 	}
 
 	// Sync to ensure data is written to disk
 	if err := tmpFile.Sync(); err != nil {
-        _ = tmpFile.Close()
-        _ = os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 		return nil, fmt.Errorf("failed to sync temporary file: %w", err)
 	}
 
 	return &TempFileBuffer{
 		file:     tmpFile,
-    size:     uint32(len(data)), //nolint:gosec // DICOM buffer size within uint32 range
+		size:     uint32(len(data)), //nolint:gosec // DICOM buffer size within uint32 range
 		filePath: tmpFile.Name(),
 	}, nil
 }
@@ -96,7 +96,7 @@ func (t *TempFileBuffer) Data() []byte {
 		return nil
 	}
 
-    if uint32(n) != t.size { //nolint:gosec // bytes read check
+	if uint32(n) != t.size { //nolint:gosec // bytes read check
 		return nil
 	}
 
@@ -116,11 +116,11 @@ func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer cannot be nil")
 	}
 
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 
-	if offset+count > t.size {
+	if offset > t.size || count > t.size-offset {
 		return fmt.Errorf("range [%d:%d) exceeds buffer size %d", offset, offset+count, t.size)
 	}
 
@@ -135,12 +135,12 @@ func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error
 	}
 
 	// Read the requested number of bytes
-	n, err := t.file.Read(output[:count])
+	n, err := t.file.Read(output[:int(count)])
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("failed to read from temporary file: %w", err)
 	}
 
-    if uint32(n) != count { //nolint:gosec // bytes read check
+	if uint32(n) != count { //nolint:gosec // bytes read check
 		return fmt.Errorf("read %d bytes, expected %d", n, count)
 	}
 

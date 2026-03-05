@@ -60,17 +60,18 @@ func (e *EvenLengthBuffer) GetByteRange(offset, count uint32, output []byte) err
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
-	if offset+count > e.Size() {
+	size := e.Size()
+	if offset > size || count > size-offset {
 		return fmt.Errorf("offset %d + count %d exceeds buffer size %d", offset, count, e.Size())
 	}
 
 	internalSize := e.internal.Size()
 
 	// If the range is entirely within the internal buffer
-	if offset+count <= internalSize {
+	if offset <= internalSize && count <= internalSize-offset {
 		return e.internal.GetByteRange(offset, count, output)
 	}
 

@@ -75,10 +75,10 @@ func (s *StreamByteBuffer) GetByteRange(offset, count uint32, output []byte) err
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
-	if offset+count > s.size {
+	if offset > s.size || count > s.size-offset {
 		return fmt.Errorf("offset %d + count %d exceeds buffer size %d", offset, count, s.size)
 	}
 
@@ -92,7 +92,7 @@ func (s *StreamByteBuffer) GetByteRange(offset, count uint32, output []byte) err
 	}
 
 	// Read data
-	n, err := io.ReadFull(s.stream, output[:count])
+	n, err := io.ReadFull(s.stream, output[:int(count)])
 	if err != nil {
 		return fmt.Errorf("failed to read %d bytes (read %d): %w", count, n, err)
 	}

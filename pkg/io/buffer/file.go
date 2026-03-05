@@ -37,12 +37,12 @@ func NewFile(filePath string, position, size uint32) (*FileByteBuffer, error) {
 		return nil, fmt.Errorf("cannot access file: %w", err)
 	}
 
-    fileSize := uint32(info.Size()) //nolint:gosec // file size for DICOM buffer
-	if position > fileSize {
+	fileSize := uint64(info.Size()) //nolint:gosec // file size is non-negative for regular files
+	if uint64(position) > fileSize {
 		return nil, fmt.Errorf("position %d exceeds file size %d", position, fileSize)
 	}
 
-	if position+size > fileSize {
+	if uint64(size) > fileSize-uint64(position) {
 		return nil, fmt.Errorf("range [%d:%d) exceeds file size %d", position, position+size, fileSize)
 	}
 
@@ -75,7 +75,7 @@ func (f *FileByteBuffer) Data() []byte {
 	if err != nil {
 		return nil
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	data := make([]byte, f.size)
 	_, err = file.ReadAt(data, int64(f.position))
@@ -99,11 +99,11 @@ func (f *FileByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer cannot be nil")
 	}
 
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 
-	if offset+count > f.size {
+	if offset > f.size || count > f.size-offset {
 		return fmt.Errorf("range [%d:%d) exceeds buffer size %d", offset, offset+count, f.size)
 	}
 
@@ -115,10 +115,10 @@ func (f *FileByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 	if err != nil {
 		return fmt.Errorf("cannot open file: %w", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	// Read from the absolute position: buffer position + offset
-	_, err = file.ReadAt(output[:count], int64(f.position+offset))
+	_, err = file.ReadAt(output[:int(count)], int64(f.position+offset))
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("failed to read from file: %w", err)
 	}
@@ -144,7 +144,7 @@ func (f *FileByteBuffer) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot open file: %w", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	// Seek to the starting position
 	_, err = file.Seek(int64(f.position), io.SeekStart)

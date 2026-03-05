@@ -26,7 +26,8 @@ func NewRange(buffer ByteBuffer, offset, length uint32) (*RangeByteBuffer, error
 	if buffer == nil {
 		return nil, fmt.Errorf("buffer cannot be nil")
 	}
-	if offset+length > buffer.Size() {
+	size := buffer.Size()
+	if offset > size || length > size-offset {
 		return nil, fmt.Errorf("offset %d + length %d exceeds buffer size %d", offset, length, buffer.Size())
 	}
 
@@ -84,10 +85,10 @@ func (r *RangeByteBuffer) GetByteRange(offset, count uint32, output []byte) erro
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
-	if offset+count > r.length {
+	if offset > r.length || count > r.length-offset {
 		return fmt.Errorf("offset %d + count %d exceeds range size %d", offset, count, r.length)
 	}
 

@@ -624,6 +624,96 @@ func TestSequenceReading(t *testing.T) {
 			t.Errorf("Wrong tag: %s", sopUIDElem.Tag())
 		}
 	})
+
+	t.Run("DefinedLengthSequenceWithLargeItemValue_StreamParsing", func(t *testing.T) {
+		buf := bytes.NewBuffer(nil)
+
+		// Preamble + DICM
+		buf.Write(make([]byte, 128))
+		buf.WriteString("DICM")
+
+		// Transfer Syntax UID (0002,0010)
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		buf.WriteString("UI")
+		tsUID := testExplicitVRLittleLE
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
+		buf.WriteString(tsUID)
+
+		// Build sequence payload (defined length).
+		seqData := bytes.NewBuffer(nil)
+		_ = binary.Write(seqData, binary.LittleEndian, uint16(0xFFFE))
+		_ = binary.Write(seqData, binary.LittleEndian, uint16(0xE000))
+
+		itemData := bytes.NewBuffer(nil)
+		largeValue := bytes.Repeat([]byte{0xAB}, 70*1024)
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x7FE1))
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x0010))
+		itemData.WriteString("OB")
+		_ = binary.Write(itemData, binary.LittleEndian, uint16(0))
+		_ = binary.Write(itemData, binary.LittleEndian, uint32(len(largeValue)))
+		_, _ = itemData.Write(largeValue)
+
+		_ = binary.Write(seqData, binary.LittleEndian, uint32(itemData.Len()))
+		seqData.Write(itemData.Bytes())
+
+		// Sequence element (0008,1140) with defined length.
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0008))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x1140))
+		buf.WriteString("SQ")
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0))
+		_ = binary.Write(buf, binary.LittleEndian, uint32(seqData.Len()))
+		buf.Write(seqData.Bytes())
+
+		// Tail element after sequence to verify stream alignment.
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
+		buf.WriteString("PN")
+		tailName := "Tail^Marker"
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(tailName)))
+		buf.WriteString(tailName)
+
+		result, err := Parse(buf,
+			WithReadOption(ReadLargeOnDemand),
+			WithLargeObjectSize(1024), // force large-object branch
+		)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+
+		elem, exists := result.Dataset.Get(tag.New(0x0008, 0x1140))
+		if !exists {
+			t.Fatal("Sequence element should exist")
+		}
+
+		seq, ok := elem.(*dataset.Sequence)
+		if !ok {
+			t.Fatalf("Element should be a Sequence, got %T", elem)
+		}
+		if seq.Count() != 1 {
+			t.Fatalf("Sequence should have 1 item, got %d", seq.Count())
+		}
+
+		item := seq.GetItem(0)
+		if item == nil {
+			t.Fatal("Item should not be nil")
+		}
+		largeElem, exists := item.Get(tag.New(0x7FE1, 0x0010))
+		if !exists {
+			t.Fatal("Large OB element should exist in item")
+		}
+		if largeElem.Length() != uint32(len(largeValue)) {
+			t.Fatalf("Large OB length = %d, want %d", largeElem.Length(), len(largeValue))
+		}
+		got := largeElem.Buffer().Data()
+		if len(got) != len(largeValue) || got[0] != 0xAB || got[len(got)-1] != 0xAB {
+			t.Fatalf("Large OB payload mismatch: len=%d first=%d last=%d", len(got), got[0], got[len(got)-1])
+		}
+
+		if name, ok := result.Dataset.GetString(tag.PatientName); !ok || name != tailName {
+			t.Fatalf("tail element parse failed: got=%q exists=%v", name, ok)
+		}
+	})
 }
 
 // Benchmark tests for Parser

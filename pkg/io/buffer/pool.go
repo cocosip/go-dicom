@@ -69,18 +69,17 @@ func PutBuffer(buf []byte) {
 	capacity := cap(buf)
 
 	// Clear the buffer before returning to pool
-	for i := range buf {
-		buf[i] = 0
-	}
+	full := buf[:capacity]
+	clear(full)
 
 	// Return to appropriate pool based on capacity
 	switch {
 	case capacity <= 4096:
-		defaultBufferPool.small.Put(&buf)
+		defaultBufferPool.small.Put(&full)
 	case capacity <= 65536:
-		defaultBufferPool.medium.Put(&buf)
+		defaultBufferPool.medium.Put(&full)
 	case capacity <= 1048576:
-		defaultBufferPool.large.Put(&buf)
+		defaultBufferPool.large.Put(&full)
 		// else: don't pool very large buffers, let GC handle them
 	}
 }

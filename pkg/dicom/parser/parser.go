@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dict"
@@ -141,6 +142,7 @@ type parseContext struct {
 	// For lazy loading support
 	seekableReader io.ReadSeeker // Set if reader is seekable (for lazy loading)
 	file           *os.File      // Set if reader is a file (for FileByteBuffer)
+	lazyReadMu     sync.Mutex    // Serializes seek/read operations for lazy loaders on shared readers
 }
 
 // Option is a functional option for configuring the parser.
@@ -756,7 +758,9 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 			if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE0DD {
 				// Read and discard length
 				var delimitLength uint32
-				_ = binary.Read(p.reader, p.byteOrder, &delimitLength)
+				if err := binary.Read(p.reader, p.byteOrder, &delimitLength); err != nil {
+					return nil, err
+				}
 				break
 			}
 
@@ -780,54 +784,39 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 			seq.AddItem(item)
 		}
 	} else {
-		// Defined length sequence
-		// Read exactly 'length' bytes and parse items within
-		sequenceData := make([]byte, length)
-		if _, err := io.ReadFull(p.reader, sequenceData); err != nil {
-			return nil, fmt.Errorf("failed to read sequence data: %w", err)
+		// Defined-length sequence: parse directly from a bounded stream to avoid
+		// allocating and copying the whole sequence payload.
+		err := p.withBoundedReader(length, func(lr *io.LimitedReader) error {
+			for lr.N > 0 {
+				itemTag, err := p.readTag()
+				if err != nil {
+					return err
+				}
+
+				// Should be Item tag (FFFE,E000)
+				if itemTag.Group() != 0xFFFE || itemTag.Element() != 0xE000 {
+					return fmt.Errorf("expected Item tag in sequence, got %s", itemTag)
+				}
+
+				// Read item length
+				var itemLength uint32
+				if err := binary.Read(p.reader, p.byteOrder, &itemLength); err != nil {
+					return err
+				}
+
+				// Read item dataset
+				item, err := p.readItemDataset(itemLength)
+				if err != nil {
+					return err
+				}
+
+				seq.AddItem(item)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
-
-		// Create a reader for the sequence data
-		seqReader := bytes.NewReader(sequenceData)
-		originalReader := p.reader
-		p.reader = seqReader
-
-		// Read items until we've consumed all sequence data
-		for seqReader.Len() > 0 {
-			itemTag, err := p.readTag()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				p.reader = originalReader
-				return nil, err
-			}
-
-			// Should be Item tag (FFFE,E000)
-			if itemTag.Group() != 0xFFFE || itemTag.Element() != 0xE000 {
-				p.reader = originalReader
-				return nil, fmt.Errorf("expected Item tag in sequence, got %s", itemTag)
-			}
-
-			// Read item length
-			var itemLength uint32
-			if err := binary.Read(p.reader, p.byteOrder, &itemLength); err != nil {
-				p.reader = originalReader
-				return nil, err
-			}
-
-			// Read item dataset
-			item, err := p.readItemDataset(itemLength)
-			if err != nil {
-				p.reader = originalReader
-				return nil, err
-			}
-
-			seq.AddItem(item)
-		}
-
-		// Restore original reader
-		p.reader = originalReader
 	}
 
 	return seq, nil
@@ -853,7 +842,9 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 			if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE00D {
 				// Read and discard the length (should be 0)
 				var delimitLength uint32
-				_ = binary.Read(p.reader, p.byteOrder, &delimitLength)
+				if err := binary.Read(p.reader, p.byteOrder, &delimitLength); err != nil {
+					return nil, err
+				}
 				break
 			}
 
@@ -868,40 +859,64 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 			}
 		}
 	} else {
-		// Defined length item
-		// Read exactly 'length' bytes and parse elements within
-		itemData := make([]byte, length)
-		if _, err := io.ReadFull(p.reader, itemData); err != nil {
-			return nil, fmt.Errorf("failed to read item data: %w", err)
+		// Defined-length item: parse directly from a bounded stream to avoid
+		// allocating and copying the whole item payload.
+		err := p.withBoundedReader(length, func(lr *io.LimitedReader) error {
+			for lr.N > 0 {
+				elem, err := p.readElement()
+				if err != nil {
+					return err
+				}
+
+				if err := item.Add(elem); err != nil {
+					return fmt.Errorf("failed to add element to item: %w", err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
-
-		// Create a reader for the item data
-		itemReader := bytes.NewReader(itemData)
-		originalReader := p.reader
-		p.reader = itemReader
-
-		// Read elements until we've consumed all item data
-		for itemReader.Len() > 0 {
-			elem, err := p.readElement()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				p.reader = originalReader
-				return nil, err
-			}
-
-			if err := item.Add(elem); err != nil {
-				p.reader = originalReader
-				return nil, fmt.Errorf("failed to add element to item: %w", err)
-			}
-		}
-
-		// Restore original reader
-		p.reader = originalReader
 	}
 
 	return item, nil
+}
+
+// withBoundedReader runs fn with p.reader limited to the next 'length' bytes.
+// It restores parser state afterward and drains any unread bytes from the bound.
+//
+// Lazy-loading state (seekable reader/file) is disabled inside the bounded scope
+// to keep stream boundaries correct.
+func (p *parseContext) withBoundedReader(length uint32, fn func(*io.LimitedReader) error) error {
+	lr := &io.LimitedReader{R: p.reader, N: int64(length)}
+
+	originalReader := p.reader
+	originalSeekableReader := p.seekableReader
+	originalFile := p.file
+
+	p.reader = lr
+	p.seekableReader = nil
+	p.file = nil
+
+	defer func() {
+		p.reader = originalReader
+		p.seekableReader = originalSeekableReader
+		p.file = originalFile
+	}()
+
+	if err := fn(lr); err != nil {
+		return err
+	}
+
+	// If the bounded parser didn't consume all bytes, discard the remainder
+	// so the outer parser stays aligned at the next element.
+	if lr.N > 0 {
+		if _, err := io.CopyN(io.Discard, lr, lr.N); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // createElement creates an element from tag, VR, and buffer.
@@ -990,6 +1005,9 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 
 		// Create a loader function that will read the data when needed
 		loader := func() []byte {
+			p.lazyReadMu.Lock()
+			defer p.lazyReadMu.Unlock()
+
 			// Save current position
 			savedPos, _ := p.seekableReader.Seek(0, io.SeekCurrent)
 

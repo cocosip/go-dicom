@@ -50,7 +50,7 @@ func (b *BulkDataURIByteBuffer) Size() uint32 {
 		// So we return 0, but callers should check IsMemory() first
 		return 0
 	}
-    return uint32(len(b.data)) //nolint:gosec // DICOM buffer size within uint32 range
+	return uint32(len(b.data)) //nolint:gosec // DICOM buffer size within uint32 range
 }
 
 // Data returns the buffered data.
@@ -82,15 +82,18 @@ func (b *BulkDataURIByteBuffer) GetByteRange(offset, count uint32, output []byte
 		return fmt.Errorf("BulkDataUriByteBuffer cannot provide data until SetData() has been called")
 	}
 
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output slice with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 
-    if offset+count > uint32(len(b.data)) { //nolint:gosec // buffer size check
+	size := uint32(len(b.data)) //nolint:gosec // buffer size check
+	if offset > size || count > size-offset {
 		return fmt.Errorf("range [%d:%d] exceeds buffer size %d", offset, offset+count, len(b.data))
 	}
 
-	copy(output, b.data[offset:offset+count])
+	start := int(offset)
+	end := start + int(count)
+	copy(output[:int(count)], b.data[start:end])
 	return nil
 }
 

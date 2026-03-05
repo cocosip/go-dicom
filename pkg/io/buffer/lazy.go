@@ -61,7 +61,7 @@ func (l *LazyByteBuffer) Size() uint32 {
 	if data == nil {
 		return 0
 	}
-    return uint32(len(data)) //nolint:gosec // DICOM buffer size within uint32 range
+	return uint32(len(data)) //nolint:gosec // DICOM buffer size within uint32 range
 }
 
 // Data returns all the buffer data.
@@ -84,7 +84,7 @@ func (l *LazyByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer cannot be nil")
 	}
 
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 
@@ -93,11 +93,14 @@ func (l *LazyByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("lazy loader returned nil data")
 	}
 
-    if offset+count > uint32(len(data)) { //nolint:gosec // buffer size check
+	size := uint32(len(data)) //nolint:gosec // data size within uint32 range
+	if offset > size || count > size-offset {
 		return fmt.Errorf("range [%d:%d) exceeds buffer size %d", offset, offset+count, len(data))
 	}
 
-	copy(output[:count], data[offset:offset+count])
+	start := int(offset)
+	end := start + int(count)
+	copy(output[:int(count)], data[start:end])
 	return nil
 }
 

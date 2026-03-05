@@ -66,7 +66,7 @@ func (c *CompositeByteBuffer) Data() []byte {
 	for _, buf := range c.buffers {
 		bufData := buf.Data()
 		copy(data[offset:], bufData)
-    offset += uint32(len(bufData)) //nolint:gosec // buffer size within uint32 range
+		offset += uint32(len(bufData)) //nolint:gosec // buffer size within uint32 range
 	}
 	return data
 }
@@ -77,10 +77,11 @@ func (c *CompositeByteBuffer) GetByteRange(offset, count uint32, output []byte) 
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
-    if uint32(len(output)) < count { //nolint:gosec // buffer size check
+	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
-	if offset+count > c.Size() {
+	size := c.Size()
+	if offset > size || count > size-offset {
 		return fmt.Errorf("offset %d + count %d exceeds buffer size %d", offset, count, c.Size())
 	}
 
@@ -104,13 +105,11 @@ func (c *CompositeByteBuffer) GetByteRange(offset, count uint32, output []byte) 
 			toCopy = available
 		}
 
-		// Get data from current buffer
-		temp := make([]byte, toCopy)
-		if err := currentBuf.GetByteRange(bufOffset, toCopy, temp); err != nil {
+		start := int(outputOffset)
+		end := start + int(toCopy)
+		if err := currentBuf.GetByteRange(bufOffset, toCopy, output[start:end]); err != nil {
 			return fmt.Errorf("error reading from buffer %d: %w", bufIdx, err)
 		}
-
-		copy(output[outputOffset:], temp)
 
 		remaining -= toCopy
 		outputOffset += toCopy

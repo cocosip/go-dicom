@@ -519,9 +519,10 @@ func (w *Writer) writeFileMetaInformation(ds *dataset.Dataset) error {
 	defer buffer.PutBytesBuffer(tempBuf)
 
 	tempWriter := &Writer{
-		writer:       tempBuf,
-		byteOrder:    binary.LittleEndian,
-		isExplicitVR: true,
+		writer:          tempBuf,
+		byteOrder:       binary.LittleEndian,
+		isExplicitVR:    true,
+		largeObjectSize: w.largeObjectSize,
 	}
 
 	elements := ds.Elements()
@@ -639,18 +640,39 @@ func (w *Writer) writeElement(elem element.Element) error {
 		}
 	}
 
-	// Get value bytes
-	valueBytes := elem.Buffer().Data()
+	buf := elem.Buffer()
+	if buf == nil {
+		buf = buffer.Empty
+	}
+	valueLength := buf.Size()
 
 	// Write length
-	if err := w.writeLength(elemVR, uint32(len(valueBytes)) /* #nosec G115 -- DICOM value length within uint32 range */); err != nil {
+	if err := w.writeLength(elemVR, valueLength); err != nil {
 		return fmt.Errorf("failed to write length for tag %s: %w", elem.Tag(), err)
 	}
 
 	// Write value
-	if len(valueBytes) > 0 {
-		if _, err := w.writer.Write(valueBytes); err != nil {
-			return fmt.Errorf("failed to write value for tag %s: %w", elem.Tag(), err)
+	if valueLength > 0 {
+		streamLargeValue := !buf.IsMemory()
+		if !streamLargeValue && w.largeObjectSize > 0 && valueLength > w.largeObjectSize {
+			streamLargeValue = true
+		}
+		if streamLargeValue {
+			written, err := buf.WriteTo(w.writer)
+			if err != nil {
+				return fmt.Errorf("failed to stream value for tag %s: %w", elem.Tag(), err)
+			}
+			if written != int64(valueLength) {
+				return fmt.Errorf("short write for tag %s: wrote %d bytes, expected %d", elem.Tag(), written, valueLength)
+			}
+		} else {
+			valueBytes := buf.Data()
+			if uint32(len(valueBytes)) != valueLength { //nolint:gosec // buffer sizes are uint32 by interface contract
+				return fmt.Errorf("buffer size mismatch for tag %s: got %d bytes, expected %d", elem.Tag(), len(valueBytes), valueLength)
+			}
+			if _, err := w.writer.Write(valueBytes); err != nil {
+				return fmt.Errorf("failed to write value for tag %s: %w", elem.Tag(), err)
+			}
 		}
 	}
 
@@ -735,6 +757,7 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 			isExplicitVR:                w.isExplicitVR,
 			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
 			keepGroupLengths:            w.keepGroupLengths,
+			largeObjectSize:             w.largeObjectSize,
 		}
 
 		for i := 0; i < seq.Count(); i++ {
@@ -804,6 +827,7 @@ func (w *Writer) writeItem(item *dataset.Dataset) error {
 			explicitLengthSequences:     w.explicitLengthSequences,
 			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
 			keepGroupLengths:            w.keepGroupLengths,
+			largeObjectSize:             w.largeObjectSize,
 		}
 
 		// Write all elements in the item
