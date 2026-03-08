@@ -1,8 +1,14 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
-// Package main demonstrates a minimal Query/Retrieve SCU.
-// It performs C-ECHO + C-FIND, and optionally C-MOVE or C-GET.
+// Package main demonstrates a complete Query/Retrieve SCU workflow.
+// It performs:
+// 1. C-ECHO verification
+// 2. C-FIND query to search for studies/series/images
+// 3. C-MOVE or C-GET to retrieve DICOM instances
+//
+// For C-GET, this SCU also acts as a temporary SCP to receive the C-STORE
+// sub-operations sent by the QR SCP.
 package main
 
 import (
@@ -10,16 +16,23 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/client"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/server"
 )
 
 var (
@@ -35,7 +48,15 @@ var (
 	retrieveMode     = flag.String("retrieve", "none", "Retrieve mode: none|move|get")
 	retrieveStudyUID = flag.String("retrieve-study-uid", "", "StudyInstanceUID for retrieve (defaults to first C-FIND result)")
 	moveDestination  = flag.String("move-destination", "QRDEST", "Move destination AE (used when -retrieve=move)")
-	timeout          = flag.Duration("timeout", 30*time.Second, "Overall timeout")
+	outputDir        = flag.String("output-dir", "./received_qr", "Directory to save received DICOM files (for C-GET)")
+	scpPort          = flag.Int("scp-port", 11114, "Local SCP port for receiving C-GET results")
+	timeout          = flag.Duration("timeout", 60*time.Second, "Overall timeout")
+	verbose          = flag.Bool("verbose", false, "Enable verbose logging")
+)
+
+var (
+	receivedCount atomic.Int32
+	receivedMu    sync.Mutex
 )
 
 func main() {
@@ -51,51 +72,45 @@ func main() {
 		log.Fatalf("invalid -retrieve value %q, expected none|move|get", *retrieveMode)
 	}
 
+	// Create output directory for C-GET results
+	if retrieve == "get" {
+		if err := os.MkdirAll(*outputDir, 0755); err != nil {
+			log.Fatalf("failed to create output directory: %v", err)
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	c := client.New(
-		client.WithCallingAE(strings.TrimSpace(*callingAE)),
-		client.WithCalledAE(strings.TrimSpace(*calledAE)),
-		client.WithConnectTimeout(10*time.Second),
-		client.WithRequestTimeout(*timeout),
-	)
+	printBanner(level, retrieve)
 
-	addPresentationContexts(c)
-
-	fmt.Printf("=== DICOM Query/Retrieve SCU Example ===\n")
-	fmt.Printf("Target:      %s:%d\n", *host, *port)
-	fmt.Printf("Calling AE:  %s\n", *callingAE)
-	fmt.Printf("Called AE:   %s\n", *calledAE)
-	fmt.Printf("Level:       %s\n", level)
-	fmt.Printf("Retrieve:    %s\n", retrieve)
-	fmt.Println()
-
-	if err := c.Connect(ctx, *host, *port); err != nil {
-		log.Fatalf("connect failed: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			log.Printf("close warning: %v", err)
-		}
-	}()
-
-	if err := c.CEcho(ctx); err != nil {
+	// Step 1: C-ECHO
+	fmt.Println("\n[Step 1/4] Performing C-ECHO verification...")
+	if err := performCEcho(ctx); err != nil {
 		log.Fatalf("C-ECHO failed: %v", err)
 	}
-	fmt.Println("C-ECHO succeeded")
+	fmt.Println("✓ C-ECHO succeeded")
 
-	query := buildQueryDataset(level)
-	results, err := c.CFind(ctx, level, query)
+	// Step 2: C-FIND
+	fmt.Printf("\n[Step 2/4] Performing C-FIND query (level=%s)...\n", level)
+	results, err := performCFind(ctx, level)
 	if err != nil {
 		log.Fatalf("C-FIND failed: %v", err)
 	}
-
+	fmt.Printf("✓ C-FIND completed: found %d result(s)\n", len(results))
 	printFindResults(level, results)
-	if len(results) == 0 || retrieve == "none" {
+
+	if len(results) == 0 {
+		fmt.Println("\nNo results found. Exiting.")
 		return
 	}
 
+	if retrieve == "none" {
+		fmt.Println("\nRetrieve mode is 'none'. Exiting.")
+		return
+	}
+
+	// Step 3: Select target for retrieve
 	targetStudyUID := strings.TrimSpace(*retrieveStudyUID)
 	if targetStudyUID == "" {
 		targetStudyUID, _ = results[0].GetString(tag.StudyInstanceUID)
@@ -104,34 +119,208 @@ func main() {
 		log.Fatal("unable to determine StudyInstanceUID for retrieve")
 	}
 
-	identifier := dataset.NewWithElements([]element.Element{
-		element.NewString(tag.StudyInstanceUID, vr.UI, []string{targetStudyUID}),
-	})
-
+	// Step 4: Perform retrieve
 	switch retrieve {
 	case "move":
-		fmt.Printf("\nStarting C-MOVE for StudyInstanceUID=%s destination=%s\n", targetStudyUID, *moveDestination)
-		err = c.CMove(ctx, dimse.QueryRetrieveLevelStudy, strings.TrimSpace(*moveDestination), identifier,
-			func(remaining, completed, failed, warning uint16) bool {
-				fmt.Printf("  C-MOVE progress: remaining=%d completed=%d failed=%d warning=%d\n", remaining, completed, failed, warning)
-				return true
-			})
-		if err != nil {
+		fmt.Printf("\n[Step 3/4] Performing C-MOVE...\n")
+		fmt.Printf("  Target Study:     %s\n", targetStudyUID)
+		fmt.Printf("  Move Destination: %s\n", *moveDestination)
+		if err := performCMove(ctx, targetStudyUID); err != nil {
 			log.Fatalf("C-MOVE failed: %v", err)
 		}
-		fmt.Println("C-MOVE completed")
+		fmt.Println("✓ C-MOVE completed")
 	case "get":
-		fmt.Printf("\nStarting C-GET for StudyInstanceUID=%s\n", targetStudyUID)
-		err = c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
-			func(remaining, completed, failed, warning uint16) bool {
-				fmt.Printf("  C-GET progress:  remaining=%d completed=%d failed=%d warning=%d\n", remaining, completed, failed, warning)
-				return true
-			})
-		if err != nil {
+		fmt.Printf("\n[Step 3/4] Starting local SCP on port %d to receive C-STORE...\n", *scpPort)
+		srv, stopSCP := startStorageSCP(ctx)
+		defer stopSCP()
+
+		fmt.Printf("\n[Step 4/4] Performing C-GET...\n")
+		fmt.Printf("  Target Study: %s\n", targetStudyUID)
+		fmt.Printf("  Output Dir:   %s\n", *outputDir)
+		if err := performCGet(ctx, targetStudyUID); err != nil {
 			log.Fatalf("C-GET failed: %v", err)
 		}
-		fmt.Println("C-GET completed")
+		fmt.Println("✓ C-GET completed")
+
+		// Give server time to receive C-STORE operations
+		time.Sleep(2 * time.Second)
+
+		fmt.Printf("\n✓ Received %d DICOM instance(s)\n", receivedCount.Load())
+		if srv != nil {
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer shutdownCancel()
+			_ = srv.Shutdown(shutdownCtx)
+		}
 	}
+
+	fmt.Println("\n=== Query/Retrieve workflow completed successfully ===")
+}
+
+func printBanner(level dimse.QueryRetrieveLevel, retrieve string) {
+	fmt.Printf("=== DICOM Query/Retrieve SCU - Complete Workflow ===\n")
+	fmt.Printf("Target:          %s:%d\n", *host, *port)
+	fmt.Printf("Calling AE:      %s\n", *callingAE)
+	fmt.Printf("Called AE:       %s\n", *calledAE)
+	fmt.Printf("Query Level:     %s\n", level)
+	fmt.Printf("Retrieve Mode:   %s\n", retrieve)
+	if retrieve == "move" {
+		fmt.Printf("Move Dest:       %s\n", *moveDestination)
+	} else if retrieve == "get" {
+		fmt.Printf("Output Dir:      %s\n", *outputDir)
+		fmt.Printf("Local SCP Port:  %d\n", *scpPort)
+	}
+	fmt.Println()
+}
+
+func performCEcho(ctx context.Context) error {
+	c := client.New(
+		client.WithCallingAE(strings.TrimSpace(*callingAE)),
+		client.WithCalledAE(strings.TrimSpace(*calledAE)),
+		client.WithConnectTimeout(10*time.Second),
+		client.WithRequestTimeout(*timeout),
+	)
+	addPresentationContexts(c)
+
+	if err := c.Connect(ctx, *host, *port); err != nil {
+		return fmt.Errorf("connect failed: %w", err)
+	}
+	defer c.Close()
+
+	return c.CEcho(ctx)
+}
+
+func performCFind(ctx context.Context, level dimse.QueryRetrieveLevel) ([]*dataset.Dataset, error) {
+	c := client.New(
+		client.WithCallingAE(strings.TrimSpace(*callingAE)),
+		client.WithCalledAE(strings.TrimSpace(*calledAE)),
+		client.WithConnectTimeout(10*time.Second),
+		client.WithRequestTimeout(*timeout),
+	)
+	addPresentationContexts(c)
+
+	if err := c.Connect(ctx, *host, *port); err != nil {
+		return nil, fmt.Errorf("connect failed: %w", err)
+	}
+	defer c.Close()
+
+	query := buildQueryDataset(level)
+	return c.CFind(ctx, level, query)
+}
+
+func performCMove(ctx context.Context, studyUID string) error {
+	c := client.New(
+		client.WithCallingAE(strings.TrimSpace(*callingAE)),
+		client.WithCalledAE(strings.TrimSpace(*calledAE)),
+		client.WithConnectTimeout(10*time.Second),
+		client.WithRequestTimeout(*timeout),
+	)
+	addPresentationContexts(c)
+
+	if err := c.Connect(ctx, *host, *port); err != nil {
+		return fmt.Errorf("connect failed: %w", err)
+	}
+	defer c.Close()
+
+	identifier := dataset.NewWithElements([]element.Element{
+		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
+	})
+
+	return c.CMove(ctx, dimse.QueryRetrieveLevelStudy, strings.TrimSpace(*moveDestination), identifier,
+		func(remaining, completed, failed, warning uint16) bool {
+			fmt.Printf("  Progress: remaining=%d completed=%d failed=%d warning=%d\n",
+				remaining, completed, failed, warning)
+			return true
+		})
+}
+
+func performCGet(ctx context.Context, studyUID string) error {
+	c := client.New(
+		client.WithCallingAE(strings.TrimSpace(*callingAE)),
+		client.WithCalledAE(strings.TrimSpace(*calledAE)),
+		client.WithConnectTimeout(10*time.Second),
+		client.WithRequestTimeout(*timeout),
+	)
+	addPresentationContexts(c)
+
+	if err := c.Connect(ctx, *host, *port); err != nil {
+		return fmt.Errorf("connect failed: %w", err)
+	}
+	defer c.Close()
+
+	identifier := dataset.NewWithElements([]element.Element{
+		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
+	})
+
+	return c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
+		func(remaining, completed, failed, warning uint16) bool {
+			fmt.Printf("  Progress: remaining=%d completed=%d failed=%d warning=%d\n",
+				remaining, completed, failed, warning)
+			return true
+		})
+}
+
+func startStorageSCP(ctx context.Context) (*server.Server, func()) {
+	srv := server.New(
+		server.WithPort(*scpPort),
+		server.WithAssociationTimeout(30*time.Second),
+		server.WithRequestTimeout(30*time.Second),
+	)
+
+	// Handle C-STORE requests (sub-operations from C-GET)
+	srv.SetCStoreHandler(func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+		ds := req.DataDataset()
+		if ds == nil {
+			return dimse.NewCStoreResponseFromRequest(req, 0xC000), fmt.Errorf("no dataset")
+		}
+
+		sopInstanceUID := ds.TryGetString(tag.SOPInstanceUID)
+		if sopInstanceUID == "" {
+			sopInstanceUID = fmt.Sprintf("unknown_%d", time.Now().UnixNano())
+		}
+
+		filename := fmt.Sprintf("%s.dcm", sopInstanceUID)
+		filePath := filepath.Join(*outputDir, filename)
+
+		if *verbose {
+			log.Printf("Receiving C-STORE: SOP=%s", sopInstanceUID)
+		}
+
+		// Write DICOM file using the writer package
+		if err := writer.WriteFile(filePath, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+			log.Printf("Failed to write file: %v", err)
+			return dimse.NewCStoreResponseFromRequest(req, 0xC000), err
+		}
+
+		receivedCount.Add(1)
+		if *verbose {
+			fmt.Printf("  Saved: %s\n", filename)
+		}
+
+		return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
+	})
+
+	// Handle C-ECHO
+	srv.SetCEchoHandler(func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+		return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+	})
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.ListenAndServe(ctx)
+	}()
+
+	// Wait a bit for server to start
+	time.Sleep(500 * time.Millisecond)
+
+	stopFunc := func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("SCP shutdown error: %v", err)
+		}
+	}
+
+	return srv, stopFunc
 }
 
 func addPresentationContexts(c *client.Client) {
@@ -140,15 +329,30 @@ func addPresentationContexts(c *client.Client) {
 		uid.ExplicitVRLittleEndian.UID(),
 	}
 
+	// Verification
 	c.AddPresentationContext(uid.Verification.UID(), transferSyntaxes...)
 
+	// Query/Retrieve - Patient Root
 	c.AddPresentationContext(uid.PatientRootQueryRetrieveInformationModelFind.UID(), transferSyntaxes...)
 	c.AddPresentationContext(uid.PatientRootQueryRetrieveInformationModelMove.UID(), transferSyntaxes...)
 	c.AddPresentationContext(uid.PatientRootQueryRetrieveInformationModelGet.UID(), transferSyntaxes...)
 
+	// Query/Retrieve - Study Root
 	c.AddPresentationContext(uid.StudyRootQueryRetrieveInformationModelFind.UID(), transferSyntaxes...)
 	c.AddPresentationContext(uid.StudyRootQueryRetrieveInformationModelMove.UID(), transferSyntaxes...)
 	c.AddPresentationContext(uid.StudyRootQueryRetrieveInformationModelGet.UID(), transferSyntaxes...)
+
+	// Storage (for receiving C-STORE during C-GET)
+	storageClasses := []string{
+		uid.CTImageStorage.UID(),
+		uid.MRImageStorage.UID(),
+		uid.SecondaryCaptureImageStorage.UID(),
+		uid.XRayAngiographicImageStorage.UID(),
+		uid.UltrasoundImageStorage.UID(),
+	}
+	for _, sopClass := range storageClasses {
+		c.AddPresentationContext(sopClass, transferSyntaxes...)
+	}
 }
 
 func buildQueryDataset(level dimse.QueryRetrieveLevel) *dataset.Dataset {
