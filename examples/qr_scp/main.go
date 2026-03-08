@@ -148,7 +148,7 @@ func (r *qrRepository) handleCFind(_ context.Context, req *dimse.CFindRequest) (
 	return responses, nil
 }
 
-func (r *qrRepository) handleCMove(ctx context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
+func (r *qrRepository) handleCMove(_ context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
 	matched := r.filterRecords(req.QueryLevel(), req.DataDataset())
 	total := safeUint16(len(matched))
 	destination := strings.TrimSpace(req.MoveDestination())
@@ -187,7 +187,7 @@ func (r *qrRepository) handleCMove(ctx context.Context, req *dimse.CMoveRequest)
 	return responses, nil
 }
 
-func (r *qrRepository) handleCGet(ctx context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
+func (r *qrRepository) handleCGet(_ context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
 	matched := r.filterRecords(req.QueryLevel(), req.DataDataset())
 	total := safeUint16(len(matched))
 

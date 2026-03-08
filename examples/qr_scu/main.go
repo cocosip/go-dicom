@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -54,10 +53,12 @@ var (
 	verbose          = flag.Bool("verbose", false, "Enable verbose logging")
 )
 
-var (
-	receivedCount atomic.Int32
-	receivedMu    sync.Mutex
+const (
+	retrieveModeGet  = "get"
+	retrieveModeMove = "move"
 )
+
+var receivedCount atomic.Int32
 
 func main() {
 	flag.Parse()
@@ -68,12 +69,12 @@ func main() {
 	}
 
 	retrieve := normalizeRetrieveMode(*retrieveMode)
-	if retrieve != "none" && retrieve != "move" && retrieve != "get" {
+	if retrieve != "none" && retrieve != retrieveModeMove && retrieve != retrieveModeGet {
 		log.Fatalf("invalid -retrieve value %q, expected none|move|get", *retrieveMode)
 	}
 
 	// Create output directory for C-GET results
-	if retrieve == "get" {
+	if retrieve == retrieveModeGet {
 		if err := os.MkdirAll(*outputDir, 0755); err != nil {
 			log.Fatalf("failed to create output directory: %v", err)
 		}
@@ -121,7 +122,7 @@ func main() {
 
 	// Step 4: Perform retrieve
 	switch retrieve {
-	case "move":
+	case retrieveModeMove:
 		fmt.Printf("\n[Step 3/4] Performing C-MOVE...\n")
 		fmt.Printf("  Target Study:     %s\n", targetStudyUID)
 		fmt.Printf("  Move Destination: %s\n", *moveDestination)
@@ -129,7 +130,7 @@ func main() {
 			log.Fatalf("C-MOVE failed: %v", err)
 		}
 		fmt.Println("✓ C-MOVE completed")
-	case "get":
+	case retrieveModeGet:
 		fmt.Printf("\n[Step 3/4] Starting local SCP on port %d to receive C-STORE...\n", *scpPort)
 		srv, stopSCP := startStorageSCP(ctx)
 		defer stopSCP()
@@ -163,9 +164,10 @@ func printBanner(level dimse.QueryRetrieveLevel, retrieve string) {
 	fmt.Printf("Called AE:       %s\n", *calledAE)
 	fmt.Printf("Query Level:     %s\n", level)
 	fmt.Printf("Retrieve Mode:   %s\n", retrieve)
-	if retrieve == "move" {
+	switch retrieve {
+	case retrieveModeMove:
 		fmt.Printf("Move Dest:       %s\n", *moveDestination)
-	} else if retrieve == "get" {
+	case retrieveModeGet:
 		fmt.Printf("Output Dir:      %s\n", *outputDir)
 		fmt.Printf("Local SCP Port:  %d\n", *scpPort)
 	}
@@ -184,7 +186,7 @@ func performCEcho(ctx context.Context) error {
 	if err := c.Connect(ctx, *host, *port); err != nil {
 		return fmt.Errorf("connect failed: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	return c.CEcho(ctx)
 }
@@ -201,7 +203,7 @@ func performCFind(ctx context.Context, level dimse.QueryRetrieveLevel) ([]*datas
 	if err := c.Connect(ctx, *host, *port); err != nil {
 		return nil, fmt.Errorf("connect failed: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	query := buildQueryDataset(level)
 	return c.CFind(ctx, level, query)
@@ -219,7 +221,7 @@ func performCMove(ctx context.Context, studyUID string) error {
 	if err := c.Connect(ctx, *host, *port); err != nil {
 		return fmt.Errorf("connect failed: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	identifier := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
@@ -245,7 +247,7 @@ func performCGet(ctx context.Context, studyUID string) error {
 	if err := c.Connect(ctx, *host, *port); err != nil {
 		return fmt.Errorf("connect failed: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	identifier := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
