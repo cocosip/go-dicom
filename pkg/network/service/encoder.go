@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
@@ -448,8 +449,15 @@ func inferVRFromTag(t *tag.Tag) *vr.VR {
 			// Unknown command tag, use UN
 			return vr.UN
 		}
-	// Most other tags
+	// For all other tags, look up the VR from the DICOM dictionary.
+	// This is required for Implicit VR transfer syntaxes where the VR is
+	// not present in the byte stream and must be inferred from the tag.
 	default:
+		if entry := dict.Default().Lookup(t); entry != nil {
+			if vrs := entry.ValueRepresentations(); len(vrs) > 0 {
+				return vrs[0]
+			}
+		}
 		return vr.UN
 	}
 }
