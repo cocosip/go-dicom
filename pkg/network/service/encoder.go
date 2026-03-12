@@ -402,8 +402,8 @@ func inferVRFromTag(t *tag.Tag) *vr.VR {
 			return vr.US
 		case 0x0120: // MessageIDBeingRespondedTo
 			return vr.US
-		case 0x0600: // MoveDestination (retired)
-			return vr.US
+		case 0x0600: // MoveDestination
+			return vr.AE
 		case 0x0700: // Priority
 			return vr.US
 		case 0x0800: // CommandDataSetType

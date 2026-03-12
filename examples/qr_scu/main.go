@@ -7,8 +7,8 @@
 // 2. C-FIND query to search for studies/series/images
 // 3. C-MOVE or C-GET to retrieve DICOM instances
 //
-// For C-GET, this SCU also acts as a temporary SCP to receive the C-STORE
-// sub-operations sent by the QR SCP.
+// For C-GET, C-STORE sub-operations are received back over the same association.
+// No separate SCP port is required.
 package main
 
 import (
@@ -31,7 +31,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/client"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
-	"github.com/cocosip/go-dicom/pkg/network/server"
 )
 
 var (
@@ -48,7 +47,6 @@ var (
 	retrieveStudyUID = flag.String("retrieve-study-uid", "", "StudyInstanceUID for retrieve (defaults to first C-FIND result)")
 	moveDestination  = flag.String("move-destination", "QRDEST", "Move destination AE (used when -retrieve=move)")
 	outputDir        = flag.String("output-dir", "./received_qr", "Directory to save received DICOM files (for C-GET)")
-	scpPort          = flag.Int("scp-port", 11114, "Local SCP port for receiving C-GET results")
 	timeout          = flag.Duration("timeout", 60*time.Second, "Overall timeout")
 	verbose          = flag.Bool("verbose", false, "Enable verbose logging")
 )
@@ -131,27 +129,15 @@ func main() {
 		}
 		fmt.Println("✓ C-MOVE completed")
 	case retrieveModeGet:
-		fmt.Printf("\n[Step 3/4] Starting local SCP on port %d to receive C-STORE...\n", *scpPort)
-		srv, stopSCP := startStorageSCP(ctx)
-		defer stopSCP()
-
-		fmt.Printf("\n[Step 4/4] Performing C-GET...\n")
+		fmt.Printf("\n[Step 3/4] Performing C-GET...\n")
 		fmt.Printf("  Target Study: %s\n", targetStudyUID)
 		fmt.Printf("  Output Dir:   %s\n", *outputDir)
+		fmt.Println("  (C-STORE sub-operations received on the same association)")
 		if err := performCGet(ctx, targetStudyUID); err != nil {
 			log.Fatalf("C-GET failed: %v", err)
 		}
 		fmt.Println("✓ C-GET completed")
-
-		// Give server time to receive C-STORE operations
-		time.Sleep(2 * time.Second)
-
 		fmt.Printf("\n✓ Received %d DICOM instance(s)\n", receivedCount.Load())
-		if srv != nil {
-			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer shutdownCancel()
-			_ = srv.Shutdown(shutdownCtx)
-		}
 	}
 
 	fmt.Println("\n=== Query/Retrieve workflow completed successfully ===")
@@ -169,7 +155,6 @@ func printBanner(level dimse.QueryRetrieveLevel, retrieve string) {
 		fmt.Printf("Move Dest:       %s\n", *moveDestination)
 	case retrieveModeGet:
 		fmt.Printf("Output Dir:      %s\n", *outputDir)
-		fmt.Printf("Local SCP Port:  %d\n", *scpPort)
 	}
 	fmt.Println()
 }
@@ -241,6 +226,7 @@ func performCGet(ctx context.Context, studyUID string) error {
 		client.WithCalledAE(strings.TrimSpace(*calledAE)),
 		client.WithConnectTimeout(10*time.Second),
 		client.WithRequestTimeout(*timeout),
+		client.WithCStoreHandler(handleCStoreSubOperation),
 	)
 	addPresentationContexts(c)
 
@@ -261,68 +247,35 @@ func performCGet(ctx context.Context, studyUID string) error {
 		})
 }
 
-func startStorageSCP(ctx context.Context) (*server.Server, func()) {
-	srv := server.New(
-		server.WithPort(*scpPort),
-		server.WithAssociationTimeout(30*time.Second),
-		server.WithRequestTimeout(30*time.Second),
-	)
-
-	// Handle C-STORE requests (sub-operations from C-GET)
-	srv.SetCStoreHandler(func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
-		ds := req.DataDataset()
-		if ds == nil {
-			return dimse.NewCStoreResponseFromRequest(req, 0xC000), fmt.Errorf("no dataset")
-		}
-
-		sopInstanceUID := ds.TryGetString(tag.SOPInstanceUID)
-		if sopInstanceUID == "" {
-			sopInstanceUID = fmt.Sprintf("unknown_%d", time.Now().UnixNano())
-		}
-
-		filename := fmt.Sprintf("%s.dcm", sopInstanceUID)
-		filePath := filepath.Join(*outputDir, filename)
-
-		if *verbose {
-			log.Printf("Receiving C-STORE: SOP=%s", sopInstanceUID)
-		}
-
-		// Write DICOM file using the writer package
-		if err := writer.WriteFile(filePath, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
-			log.Printf("Failed to write file: %v", err)
-			return dimse.NewCStoreResponseFromRequest(req, 0xC000), err
-		}
-
-		receivedCount.Add(1)
-		if *verbose {
-			fmt.Printf("  Saved: %s\n", filename)
-		}
-
-		return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
-	})
-
-	// Handle C-ECHO
-	srv.SetCEchoHandler(func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
-		return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
-	})
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.ListenAndServe(ctx)
-	}()
-
-	// Wait a bit for server to start
-	time.Sleep(500 * time.Millisecond)
-
-	stopFunc := func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("SCP shutdown error: %v", err)
-		}
+// handleCStoreSubOperation handles a C-STORE request sent by the SCP back over the
+// same association during a C-GET operation. It writes the received dataset to disk.
+func handleCStoreSubOperation(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+	ds := req.DataDataset()
+	if ds == nil {
+		return dimse.NewCStoreResponseFromRequest(req, 0xC000), fmt.Errorf("no dataset in C-STORE request")
 	}
 
-	return srv, stopFunc
+	sopInstanceUID := ds.TryGetString(tag.SOPInstanceUID)
+	if sopInstanceUID == "" {
+		sopInstanceUID = fmt.Sprintf("unknown_%d", time.Now().UnixNano())
+	}
+
+	filename := fmt.Sprintf("%s.dcm", sopInstanceUID)
+	filePath := filepath.Join(*outputDir, filename)
+
+	if *verbose {
+		log.Printf("Receiving C-STORE: SOP=%s", sopInstanceUID)
+	}
+
+	if err := writer.WriteFile(filePath, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+		log.Printf("Failed to write file: %v", err)
+		return dimse.NewCStoreResponseFromRequest(req, 0xC000), err
+	}
+
+	receivedCount.Add(1)
+	fmt.Printf("  Saved: %s\n", filename)
+
+	return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
 }
 
 func addPresentationContexts(c *client.Client) {

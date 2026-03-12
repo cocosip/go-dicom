@@ -106,6 +106,11 @@ type Config struct {
 	// ImplementationVersionName identifies the implementation version
 	// Default: "GO-DICOM-1.0"
 	ImplementationVersionName string
+
+	// CStoreHandler handles incoming C-STORE requests on this connection.
+	// Required for C-GET: the SCP sends C-STORE sub-operations back over the
+	// same association, so this handler must be set to receive the images.
+	CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
 }
 
 // Option is a function that modifies client configuration.
@@ -164,6 +169,16 @@ func WithImplementationClassUID(uid string) Option {
 func WithImplementationVersionName(name string) Option {
 	return func(o *Config) {
 		o.ImplementationVersionName = name
+	}
+}
+
+// WithCStoreHandler sets a handler for incoming C-STORE requests on the client connection.
+// This is required for C-GET operations: the SCP sends C-STORE sub-operations back
+// over the same association, and without this handler the images are silently accepted
+// but discarded.
+func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)) Option {
+	return func(o *Config) {
+		o.CStoreHandler = handler
 	}
 }
 
@@ -367,11 +382,15 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	defer cancel()
 
 	// Create service
-	c.service = service.NewService(c.conn, nil,
+	svcOpts := []service.Option{
 		service.WithMaxPDULength(c.config.MaxPDULength),
 		service.WithReadTimeout(c.config.AssociationTimeout),
 		service.WithWriteTimeout(c.config.AssociationTimeout),
-	)
+	}
+	if c.config.CStoreHandler != nil {
+		svcOpts = append(svcOpts, service.WithCStoreHandler(c.config.CStoreHandler))
+	}
+	c.service = service.NewService(c.conn, nil, svcOpts...)
 
 	// Build and send A-ASSOCIATE-RQ
 	rq := c.buildAssociateRQ()

@@ -86,6 +86,10 @@ func (g *MessageIDGenerator) AssignMessageID(msg Message) (uint16, error) {
 		return g.assignToBaseRequest(m.BaseRequest, newID)
 	case *CFindRequest:
 		return g.assignToBaseRequest(m.BaseRequest, newID)
+	case *CGetRequest:
+		return g.assignToBaseRequest(m.BaseRequest, newID)
+	case *CMoveRequest:
+		return g.assignToBaseRequest(m.BaseRequest, newID)
 	case *NEventReportRequest:
 		return g.assignToBaseRequest(m.BaseRequest, newID)
 	case *NGetRequest:
