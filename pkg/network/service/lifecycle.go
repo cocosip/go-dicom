@@ -84,10 +84,21 @@ func (s *Service) Start() error {
 	go func() {
 		err := s.sendLoop(s.ctx)
 		if err != nil && err != context.Canceled {
+			loopErr := fmt.Errorf("send loop error: %w", err)
 			select {
-			case s.errCh <- fmt.Errorf("send loop error: %w", err):
+			case s.errCh <- loopErr:
 			default:
 			}
+			// Record the error and close so all pending goroutines unblock.
+			s.setCloseError(loopErr)
+			s.closeOnce.Do(func() {
+				s.cancel()
+				close(s.closeCh)
+				s.cancelPendingRequests()
+				if s.conn != nil {
+					_ = s.conn.Close()
+				}
+			})
 		}
 	}()
 
@@ -95,10 +106,21 @@ func (s *Service) Start() error {
 	go func() {
 		err := s.recvLoop(s.ctx)
 		if err != nil && err != context.Canceled {
+			loopErr := fmt.Errorf("recv loop error: %w", err)
 			select {
-			case s.errCh <- fmt.Errorf("recv loop error: %w", err):
+			case s.errCh <- loopErr:
 			default:
 			}
+			// Record the error and close so all pending goroutines unblock.
+			s.setCloseError(loopErr)
+			s.closeOnce.Do(func() {
+				s.cancel()
+				close(s.closeCh)
+				s.cancelPendingRequests()
+				if s.conn != nil {
+					_ = s.conn.Close()
+				}
+			})
 		}
 	}()
 

@@ -36,11 +36,13 @@ type Service struct {
 	stateMu sync.RWMutex
 
 	// Goroutine communication
-	sendQueue chan *sendRequest
-	recvQueue chan dimse.Message
-	closeOnce sync.Once
-	closeCh   chan struct{}
-	errCh     chan error
+	sendQueue  chan *sendRequest
+	recvQueue  chan dimse.Message
+	closeOnce  sync.Once
+	closeCh    chan struct{}
+	errCh      chan error
+	closeErr   error
+	closeErrMu sync.RWMutex
 
 	// Configuration
 	config *serviceConfig
@@ -241,6 +243,31 @@ func (s *Service) cancelPendingRequests() {
 		close(pending.cancelCh)
 	}
 	s.pendingRequests = make(map[uint16]*pendingRequest)
+}
+
+// setCloseError stores the error that caused the service to close.
+// Must be called before closing closeCh so readers always see it.
+func (s *Service) setCloseError(err error) {
+	s.closeErrMu.Lock()
+	defer s.closeErrMu.Unlock()
+	if s.closeErr == nil {
+		s.closeErr = err
+	}
+}
+
+// CloseError returns the error that caused the service to close, or nil if it
+// closed normally. Returns ErrServiceClosed when the service is closed but no
+// specific error was recorded.
+func (s *Service) CloseError() error {
+	s.closeErrMu.RLock()
+	defer s.closeErrMu.RUnlock()
+	if s.closeErr != nil {
+		return s.closeErr
+	}
+	if s.IsClosed() {
+		return ErrServiceClosed
+	}
+	return nil
 }
 
 // IsClosed returns true if the service is closed.

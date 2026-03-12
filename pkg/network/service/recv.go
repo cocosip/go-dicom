@@ -131,7 +131,7 @@ func (s *Service) getTransferSyntaxForContext(contextID byte) *transfer.Syntax {
 }
 
 // processReceivedMessage decodes and dispatches a received DIMSE message.
-func (s *Service) processReceivedMessage(commandData, datasetData []byte, transferSyntax *transfer.Syntax, _ byte) error {
+func (s *Service) processReceivedMessage(commandData, datasetData []byte, transferSyntax *transfer.Syntax, contextID byte) error {
 	// Decode command and data datasets
 	commandDS, dataDS, err := DecodeDIMSEMessage(commandData, datasetData, transferSyntax)
 	if err != nil {
@@ -143,6 +143,11 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 	if err != nil {
 		return fmt.Errorf("failed to create message from datasets: %w", err)
 	}
+
+	// Store the presentation context ID so responses can be sent on the same context.
+	// This is required by the DICOM standard: a response must use the same
+	// presentation context ID as the corresponding request.
+	msg.SetPresentationContextID(contextID)
 
 	// Dispatch to handler
 	if err := s.handleReceivedMessage(s.ctx, msg); err != nil {

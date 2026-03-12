@@ -9,6 +9,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
@@ -69,21 +70,29 @@ func (s *Service) sendMessage(req *sendRequest) error {
 		return fmt.Errorf("no association available")
 	}
 
-	// Get SOP Class UID (Abstract Syntax) from message command dataset
-	// Try AffectedSOPClassUID first (used by most operations)
-	sopClassUID, ok := req.message.CommandDataset().GetString(tag.AffectedSOPClassUID)
-	if !ok || sopClassUID == "" {
-		// Some messages use RequestedSOPClassUID instead (N-GET, N-SET, N-DELETE, N-ACTION)
-		sopClassUID, ok = req.message.CommandDataset().GetString(tag.RequestedSOPClassUID)
-		if !ok || sopClassUID == "" {
-			return fmt.Errorf("message has no SOP Class UID (neither AffectedSOPClassUID nor RequestedSOPClassUID)")
-		}
+	// Find presentation context.
+	// For responses (or any message with an explicit presentation context ID set),
+	// use the stored ID directly — the DICOM standard requires that a response is
+	// sent on the same presentation context as its request.
+	// For outgoing requests, fall back to an abstract-syntax lookup.
+	var pc *association.PresentationContext
+	if contextID := req.message.PresentationContextID(); contextID != 0 {
+		pc = assoc.FindPresentationContextByID(contextID)
 	}
-
-	// Find presentation context for this SOP Class
-	pc := assoc.FindPresentationContextByAbstractSyntax(sopClassUID)
 	if pc == nil {
-		return fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
+		// Fall back: look up by SOP Class UID (abstract syntax).
+		sopClassUID, ok := req.message.CommandDataset().GetString(tag.AffectedSOPClassUID)
+		if !ok || sopClassUID == "" {
+			// Some messages use RequestedSOPClassUID instead (N-GET, N-SET, N-DELETE, N-ACTION)
+			sopClassUID, ok = req.message.CommandDataset().GetString(tag.RequestedSOPClassUID)
+			if !ok || sopClassUID == "" {
+				return fmt.Errorf("message has no SOP Class UID (neither AffectedSOPClassUID nor RequestedSOPClassUID)")
+			}
+		}
+		pc = assoc.FindPresentationContextByAbstractSyntax(sopClassUID)
+		if pc == nil {
+			return fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
+		}
 	}
 
 	// Get transfer syntax from presentation context

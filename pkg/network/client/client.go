@@ -384,8 +384,8 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	// Create service
 	svcOpts := []service.Option{
 		service.WithMaxPDULength(c.config.MaxPDULength),
-		service.WithReadTimeout(c.config.AssociationTimeout),
-		service.WithWriteTimeout(c.config.AssociationTimeout),
+		service.WithReadTimeout(c.config.RequestTimeout),
+		service.WithWriteTimeout(c.config.RequestTimeout),
 	}
 	if c.config.CStoreHandler != nil {
 		svcOpts = append(svcOpts, service.WithCStoreHandler(c.config.CStoreHandler))

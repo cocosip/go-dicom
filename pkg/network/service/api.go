@@ -56,7 +56,7 @@ func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-s.closeCh:
-		return ErrServiceClosed
+		return s.CloseError()
 	}
 
 	// Wait for result
@@ -66,7 +66,7 @@ func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-s.closeCh:
-		return ErrServiceClosed
+		return s.CloseError()
 	}
 }
 
@@ -183,7 +183,7 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 	case <-ctx.Done():
 		return zero, ctx.Err()
 	case <-s.closeCh:
-		return zero, ErrServiceClosed
+		return zero, s.CloseError()
 	}
 }
 

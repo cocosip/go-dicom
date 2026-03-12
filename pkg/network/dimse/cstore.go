@@ -139,12 +139,16 @@ func NewCStoreResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID, sop
 //	// When receiving a C-STORE request
 //	resp := dimse.NewCStoreResponseFromRequest(req, 0x0000) // Success
 func NewCStoreResponseFromRequest(req *CStoreRequest, statusCode uint16) *CStoreResponse {
-	return NewCStoreResponse(
+	resp := NewCStoreResponse(
 		req.MessageID(),
 		statusCode,
 		req.AffectedSOPClassUID(),
 		req.AffectedSOPInstanceUID(),
 	)
+	// Copy the presentation context ID so the response is sent on the same
+	// context as the request (required by DICOM PS3.7).
+	resp.SetPresentationContextID(req.PresentationContextID())
+	return resp
 }
 
 // StatusCode returns the status code.
