@@ -92,7 +92,7 @@ func createMessageFromDatasets(commandDS, dataDS *dataset.Dataset) (dimse.Messag
 
 	// C-CANCEL
 	case dimse.CommandCCancelRQ:
-		return createCCancelRequest(commandDS)
+		return dimse.NewBaseRequest(commandDS, nil), nil
 
 	default:
 		return nil, fmt.Errorf("unsupported command type: 0x%04X", commandField)
@@ -548,8 +548,3 @@ func createNDeleteResponse(commandDS *dataset.Dataset) (*dimse.NDeleteResponse, 
 	return dimse.NewNDeleteResponse(messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID), nil
 }
 
-// createCCancelRequest creates a C-CANCEL-RQ from datasets.
-// C-CANCEL uses MessageIDBeingRespondedTo to identify which pending operation to cancel.
-func createCCancelRequest(commandDS *dataset.Dataset) (*dimse.BaseRequest, error) {
-	return dimse.NewBaseRequest(commandDS, nil), nil
-}
