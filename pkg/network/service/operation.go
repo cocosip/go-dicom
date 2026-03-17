@@ -36,8 +36,6 @@ type SubOperationResponder interface {
 // subOperationBase holds the shared state and implements SubOperationResponder.
 // It is embedded by CMoveOperation and CGetOperation.
 type subOperationBase struct {
-	msgID       uint16
-	sopClassUID string
 	sendPending func(remaining, completed, failed, warning uint16) error
 	sendFinal   func(s *status.Status) error
 }
