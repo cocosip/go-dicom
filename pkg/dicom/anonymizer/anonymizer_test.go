@@ -17,6 +17,7 @@ func TestNewAnonymizer(t *testing.T) {
 	anon := NewAnonymizer(nil)
 	if anon == nil {
 		t.Fatal("NewAnonymizer returned nil")
+		return
 	}
 	if anon.Profile == nil {
 		t.Fatal("Profile is nil")
@@ -37,6 +38,7 @@ func TestNewSecurityProfile(t *testing.T) {
 	profile := NewSecurityProfile(BasicProfile)
 	if profile == nil {
 		t.Fatal("NewSecurityProfile returned nil")
+		return
 	}
 	if len(profile.rules) == 0 {
 		t.Error("Profile has no rules loaded")
@@ -355,6 +357,7 @@ func TestSecurityProfileOptions(t *testing.T) {
 	profile := NewSecurityProfile(options)
 	if profile == nil {
 		t.Fatal("NewSecurityProfile returned nil")
+		return
 	}
 	if len(profile.rules) == 0 {
 		t.Error("Profile with combined options should have rules")
