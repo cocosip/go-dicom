@@ -29,8 +29,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
+	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/client"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/server"
+	"github.com/cocosip/go-dicom/pkg/network/service"
 )
 
 var (
@@ -46,8 +49,9 @@ var (
 	retrieveMode     = flag.String("retrieve", "none", "Retrieve mode: none|move|get")
 	retrieveStudyUID = flag.String("retrieve-study-uid", "", "StudyInstanceUID for retrieve (defaults to first C-FIND result)")
 	moveDestination  = flag.String("move-destination", "QRDEST", "Move destination AE (used when -retrieve=move)")
-	outputDir        = flag.String("output-dir", "./received_qr", "Directory to save received DICOM files (for C-GET)")
-	timeout          = flag.Duration("timeout", 60*time.Second, "Overall timeout")
+	storePort        = flag.Int("store-port", 11114, "Local Storage SCP port for receiving C-MOVE images")
+	outputDir        = flag.String("output-dir", "./received_qr", "Directory to save received DICOM files")
+	timeout          = flag.Duration("timeout", 180*time.Second, "Overall timeout")
 	verbose          = flag.Bool("verbose", false, "Enable verbose logging")
 )
 
@@ -71,8 +75,8 @@ func main() {
 		log.Fatalf("invalid -retrieve value %q, expected none|move|get", *retrieveMode)
 	}
 
-	// Create output directory for C-GET results
-	if retrieve == retrieveModeGet {
+	// Create output directory for C-GET / C-MOVE results
+	if retrieve == retrieveModeGet || retrieve == retrieveModeMove {
 		if err := os.MkdirAll(*outputDir, 0755); err != nil {
 			log.Fatalf("failed to create output directory: %v", err)
 		}
@@ -121,13 +125,27 @@ func main() {
 	// Step 4: Perform retrieve
 	switch retrieve {
 	case retrieveModeMove:
-		fmt.Printf("\n[Step 3/4] Performing C-MOVE...\n")
+		fmt.Printf("\n[Step 3/4] Starting embedded Storage SCP on port %d...\n", *storePort)
+		stopSCP, err := startEmbeddedStoreSCP(ctx)
+		if err != nil {
+			log.Fatalf("Failed to start embedded Storage SCP: %v", err)
+		}
+		fmt.Printf("  ✓ Storage SCP listening on port %d (AE: %s)\n", *storePort, *moveDestination)
+		fmt.Printf("  Configure the remote QR SCP to route AE \"%s\" -> this host:%d\n", *moveDestination, *storePort)
+		fmt.Printf("  Output Dir: %s\n", *outputDir)
+
+		fmt.Printf("\n[Step 4/4] Performing C-MOVE...\n")
 		fmt.Printf("  Target Study:     %s\n", targetStudyUID)
 		fmt.Printf("  Move Destination: %s\n", *moveDestination)
 		if err := performCMove(ctx, targetStudyUID); err != nil {
+			stopSCP()
 			log.Fatalf("C-MOVE failed: %v", err)
 		}
+		// Allow any in-flight C-STORE sub-operations to finish before stopping.
+		time.Sleep(2 * time.Second)
+		stopSCP()
 		fmt.Println("✓ C-MOVE completed")
+		fmt.Printf("✓ Received %d DICOM instance(s)\n", receivedCount.Load())
 	case retrieveModeGet:
 		fmt.Printf("\n[Step 3/4] Performing C-GET...\n")
 		fmt.Printf("  Target Study: %s\n", targetStudyUID)
@@ -152,11 +170,67 @@ func printBanner(level dimse.QueryRetrieveLevel, retrieve string) {
 	fmt.Printf("Retrieve Mode:   %s\n", retrieve)
 	switch retrieve {
 	case retrieveModeMove:
-		fmt.Printf("Move Dest:       %s\n", *moveDestination)
+		fmt.Printf("Move Dest AE:    %s\n", *moveDestination)
+		fmt.Printf("Store Port:      %d\n", *storePort)
+		fmt.Printf("Output Dir:      %s\n", *outputDir)
 	case retrieveModeGet:
 		fmt.Printf("Output Dir:      %s\n", *outputDir)
 	}
 	fmt.Println()
+}
+
+// startEmbeddedStoreSCP starts a local Storage SCP in the background that receives
+// images pushed by the remote QR SCP during a C-MOVE operation. It returns a stop
+// function that shuts the server down gracefully.
+func startEmbeddedStoreSCP(parentCtx context.Context) (stop func(), err error) {
+	srv := server.New(
+		server.WithPort(*storePort),
+		server.WithAssociationTimeout(30*time.Second),
+		server.WithRequestTimeout(120*time.Second),
+	)
+
+	srv.SetCStoreHandler(handleCStoreSubOperation)
+	srv.SetAssociationNegotiatorFunc(acceptAllContexts)
+
+	ctx, cancel := context.WithCancel(parentCtx)
+
+	ready := make(chan error, 1)
+	go func() {
+		// Signal that the goroutine has started; the OS bind happens inside
+		// ListenAndServe, so we give it a short grace period.
+		ready <- nil
+		if serveErr := srv.ListenAndServe(ctx); serveErr != nil && ctx.Err() == nil {
+			log.Printf("Storage SCP error: %v", serveErr)
+		}
+	}()
+
+	if startErr := <-ready; startErr != nil {
+		cancel()
+		return nil, startErr
+	}
+
+	// Brief pause so the TCP listener is fully bound before the caller proceeds.
+	time.Sleep(200 * time.Millisecond)
+
+	stop = func() {
+		cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}
+
+	return stop, nil
+}
+
+// acceptAllContexts is an association negotiator that accepts every proposed
+// presentation context using its first offered transfer syntax.
+func acceptAllContexts(ctx context.Context, assoc *association.Association, responder service.AssociationResponder) error {
+	for _, pc := range assoc.PresentationContexts {
+		if len(pc.ProposedTransferSyntaxes) > 0 {
+			pc.Accept(pc.ProposedTransferSyntaxes[0])
+		}
+	}
+	return responder.SendAccept(ctx, assoc)
 }
 
 func performCEcho(ctx context.Context) error {
