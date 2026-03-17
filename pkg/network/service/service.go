@@ -64,6 +64,9 @@ type Service struct {
 	// Context for goroutine lifecycle
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// Tracks in-flight request handler goroutines so Close() can wait for them.
+	requestWg sync.WaitGroup
 }
 
 // sendRequest represents a request to send a DIMSE message.
@@ -225,16 +228,23 @@ func (s *Service) Close() error {
 		if s.conn != nil {
 			err = s.conn.Close()
 		}
-
-		// Call OnConnectionClosed callback if set
-		s.callbacksMu.RLock()
-		lifecycleHandler := s.connectionLifecycleHandler
-		s.callbacksMu.RUnlock()
-
-		if lifecycleHandler != nil {
-			lifecycleHandler.OnConnectionClosed(s.ctx, err)
-		}
 	})
+
+	// Wait for all in-flight request handler goroutines to exit.
+	// This is safe outside closeOnce.Do: the goroutines unblock quickly because
+	// their context is cancelled, pending requests are cancelled, and the
+	// connection is closed above.
+	s.requestWg.Wait()
+
+	// Call OnConnectionClosed callback if set
+	s.callbacksMu.RLock()
+	lifecycleHandler := s.connectionLifecycleHandler
+	s.callbacksMu.RUnlock()
+
+	if lifecycleHandler != nil {
+		lifecycleHandler.OnConnectionClosed(s.ctx, err)
+	}
+
 	return err
 }
 

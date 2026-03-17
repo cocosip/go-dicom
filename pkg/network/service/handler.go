@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
@@ -54,13 +55,29 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 }
 
 // handleRequest dispatches a request to the appropriate handler.
+//
+// All requests are dispatched in a goroutine so the recv loop stays free to
+// route incoming responses. This is essential for C-GET, whose handler sends
+// C-STORE sub-operations back over the same association and then waits for
+// the C-STORE responses — blocking the recv loop would cause a deadlock.
+// Dispatching all request types the same way keeps the design consistent.
 func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
-	// Get handlers
 	s.handlersMu.RLock()
 	handlers := s.handlers
 	s.handlersMu.RUnlock()
 
-	// Dispatch based on CommandField instead of type assertion
+	s.requestWg.Add(1)
+	go func() {
+		defer s.requestWg.Done()
+		if err := s.dispatchRequest(ctx, req, handlers); err != nil {
+			_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+		}
+	}()
+	return nil
+}
+
+// dispatchRequest routes a request to the appropriate handler by command field.
+func (s *Service) dispatchRequest(ctx context.Context, req dimse.Request, handlers *Handlers) error {
 	cmdField := dimse.CommandField(req.CommandField())
 	switch cmdField {
 	case dimse.CommandCEchoRQ:
