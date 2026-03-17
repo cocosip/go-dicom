@@ -1,6 +1,0 @@
-github.com/cocosip/go-dicom-codec v0.0.0-20251222055040-b96244dbe584 h1:lnrbQzR//P0IVnpCPSkWaiyuPo16C2oP0oXg7/7MOgU=
-github.com/cocosip/go-dicom-codec v0.0.0-20251222055040-b96244dbe584/go.mod h1:CYs7gTU5TE4U4Vk57Q6P5KMqG1KVlQK7guj9FaRo+tg=
-github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
-github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-golang.org/x/text v0.30.0 h1:yznKA/E9zq54KzlzBEAWn1NXSQ8DIp/NYMy88xJjl4k=
-golang.org/x/text v0.30.0/go.mod h1:yDdHFIX9t+tORqspjENWgzaCVXgk0yYnYuSZ8UzzBVM=
