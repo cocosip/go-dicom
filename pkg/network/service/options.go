@@ -174,8 +174,10 @@ func WithCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dim
 	}
 }
 
-// WithCMoveHandler sets the C-MOVE request handler.
-func WithCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)) Option {
+// WithCMoveHandler sets the C-MOVE request handler via a CMoveOperation interface.
+// The handler calls op.SendPending after each sub-operation and finishes with
+// op.SendSuccess(), op.SendWarning(), or op.SendFailure(code).
+func WithCMoveHandler(handler func(ctx context.Context, op CMoveOperation) error) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}
@@ -184,8 +186,10 @@ func WithCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dim
 	}
 }
 
-// WithCGetHandler sets the C-GET request handler.
-func WithCGetHandler(handler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)) Option {
+// WithCGetHandler sets the C-GET handler via a CGetOperation interface.
+// The handler calls op.SendCStore for each file, op.SendPending after each result,
+// and finishes with op.SendSuccess(), op.SendWarning(), or op.SendFailure(code).
+func WithCGetHandler(handler func(ctx context.Context, op CGetOperation) error) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}

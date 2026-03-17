@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // NActionRequest represents an N-ACTION-RQ message.
@@ -132,14 +133,14 @@ func createNOperationResponseCommand(
 //
 // Parameters:
 //   - messageIDBeingRespondedTo: MessageID of the request being responded to
-//   - statusCode: Status code (0x0000 = Success, etc.)
+//   - s: Status (use status.NActionSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID
 //   - actionTypeID: Action type identifier from the request
 //   - actionReply: Optional dataset containing action-specific reply information
 func NewNActionResponse(
 	messageIDBeingRespondedTo uint16,
-	statusCode uint16,
+	s *status.Status,
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 	actionTypeID uint16,
@@ -148,7 +149,7 @@ func NewNActionResponse(
 	command := createNOperationResponseCommand(
 		uint16(CommandNActionRSP),
 		messageIDBeingRespondedTo,
-		statusCode,
+		s.Code,
 		affectedSOPClassUID,
 		affectedSOPInstanceUID,
 		tag.ActionTypeID,
@@ -158,7 +159,7 @@ func NewNActionResponse(
 
 	return &NActionResponse{
 		BaseResponse:              NewBaseResponse(command, actionReply),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
 		actionTypeID:              actionTypeID,
@@ -174,7 +175,7 @@ func NewNActionResponseSuccess(
 	actionTypeID uint16,
 	actionReply *dataset.Dataset,
 ) *NActionResponse {
-	return NewNActionResponse(messageIDBeingRespondedTo, 0x0000, affectedSOPClassUID,
+	return NewNActionResponse(messageIDBeingRespondedTo, status.NActionSuccess, affectedSOPClassUID,
 		affectedSOPInstanceUID, actionTypeID, actionReply)
 }
 

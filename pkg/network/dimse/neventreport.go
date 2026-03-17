@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // NEventReportRequest represents an N-EVENT-REPORT-RQ message.
@@ -104,14 +105,14 @@ type NEventReportResponse struct {
 //
 // Parameters:
 //   - messageIDBeingRespondedTo: MessageID of the request being responded to
-//   - statusCode: Status code (0x0000 = Success, etc.)
+//   - s: Status (use status.NEventReportSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID
 //   - eventTypeID: Event type identifier from the request
 //   - eventReply: Optional dataset containing event-specific reply information
 func NewNEventReportResponse(
 	messageIDBeingRespondedTo uint16,
-	statusCode uint16,
+	s *status.Status,
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 	eventTypeID uint16,
@@ -120,7 +121,7 @@ func NewNEventReportResponse(
 	command := createNOperationResponseCommand(
 		uint16(CommandNEventReportRSP),
 		messageIDBeingRespondedTo,
-		statusCode,
+		s.Code,
 		affectedSOPClassUID,
 		affectedSOPInstanceUID,
 		tag.EventTypeID,
@@ -130,7 +131,7 @@ func NewNEventReportResponse(
 
 	return &NEventReportResponse{
 		BaseResponse:              NewBaseResponse(command, eventReply),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
 		eventTypeID:               eventTypeID,
@@ -146,7 +147,7 @@ func NewNEventReportResponseSuccess(
 	eventTypeID uint16,
 	eventReply *dataset.Dataset,
 ) *NEventReportResponse {
-	return NewNEventReportResponse(messageIDBeingRespondedTo, 0x0000, affectedSOPClassUID,
+	return NewNEventReportResponse(messageIDBeingRespondedTo, status.NEventReportSuccess, affectedSOPClassUID,
 		affectedSOPInstanceUID, eventTypeID, eventReply)
 }
 

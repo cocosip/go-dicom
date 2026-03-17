@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // CGetRequest represents a C-GET-RQ message.
@@ -102,14 +103,14 @@ type CGetResponse struct {
 // NewCGetResponse creates a new C-GET-RSP message.
 //
 // Status codes:
-//   - 0xFF00: Pending (sub-operations are continuing)
-//   - 0x0000: Success (all sub-operations completed successfully)
-//   - 0xB000: Warning (completed with some sub-operation warnings)
-//   - 0xA701: Out of resources - unable to calculate number of matches
-//   - 0xA702: Out of resources - unable to perform sub-operations
-//   - 0xA900: Identifier does not match SOP Class
-//   - 0xC000: Unable to process
-func NewCGetResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopClassUID string) *CGetResponse {
+//   - status.CGetPending (0xFF00): Pending (sub-operations are continuing)
+//   - status.Success (0x0000): Success (all sub-operations completed successfully)
+//   - status.CGetWarningSubOperationsComplete (0xB000): Warning (completed with some sub-operation warnings)
+//   - status.CGetRefusedOutOfResources (0xA701): Out of resources - unable to calculate number of matches
+//   - status.CGetRefusedOutOfResourcesSubOps (0xA702): Out of resources - unable to perform sub-operations
+//   - status.CGetFailedIdentifierDoesNotMatchSOPClass (0xA900): Identifier does not match SOP Class
+//   - status.CGetFailedUnableToProcess (0xC000): Unable to process
+func NewCGetResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string) *CGetResponse {
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCGetRSP), 0)
 
@@ -122,14 +123,14 @@ func NewCGetResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCla
 	}
 
 	// Set status
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType - no dataset
 	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CGetResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       sopClassUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
 	}
@@ -139,7 +140,7 @@ func NewCGetResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCla
 func NewCGetResponsePending(messageIDBeingRespondedTo uint16, sopClassUID string,
 	remaining, completed, failed, warning uint16) *CGetResponse {
 
-	resp := NewCGetResponse(messageIDBeingRespondedTo, 0xFF00, sopClassUID)
+	resp := NewCGetResponse(messageIDBeingRespondedTo, status.CGetPending, sopClassUID)
 
 	// Add sub-operation counters
 	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfRemainingSuboperations, []uint16{remaining}))
@@ -157,12 +158,12 @@ func NewCGetResponsePending(messageIDBeingRespondedTo uint16, sopClassUID string
 
 // NewCGetResponseSuccess creates a successful C-GET-RSP message.
 func NewCGetResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID string) *CGetResponse {
-	return NewCGetResponse(messageIDBeingRespondedTo, 0x0000, sopClassUID)
+	return NewCGetResponse(messageIDBeingRespondedTo, status.Success, sopClassUID)
 }
 
 // NewCGetResponseFromRequest creates a C-GET-RSP message from the corresponding request.
-func NewCGetResponseFromRequest(req *CGetRequest, statusCode uint16) *CGetResponse {
-	return NewCGetResponse(req.MessageID(), statusCode, req.AffectedSOPClassUID())
+func NewCGetResponseFromRequest(req *CGetRequest, s *status.Status) *CGetResponse {
+	return NewCGetResponse(req.MessageID(), s, req.AffectedSOPClassUID())
 }
 
 // StatusCode returns the status code.
@@ -203,7 +204,7 @@ func (r *CGetResponse) NumberOfWarningSubOperations() uint16 {
 // HasSubOperationCounts returns true if this response includes sub-operation counts.
 func (r *CGetResponse) HasSubOperationCounts() bool {
 	// Sub-operation counts are typically present in pending responses
-	return r.statusCode == 0xFF00
+	return r.statusCode == status.CGetPending.Code
 }
 
 // String returns a human-readable representation.

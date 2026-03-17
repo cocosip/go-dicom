@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // QueryRetrieveLevel represents the Query/Retrieve Information Model level.
@@ -130,7 +131,7 @@ type CFindResponse struct {
 }
 
 // NewCFindResponse creates a new C-FIND-RSP message.
-func NewCFindResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopClassUID string, identifier *dataset.Dataset) *CFindResponse {
+func NewCFindResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string, identifier *dataset.Dataset) *CFindResponse {
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCFindRSP), 0)
 
@@ -141,10 +142,10 @@ func NewCFindResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType
-	if identifier != nil && statusCode == 0xFF00 {
+	if identifier != nil && s.IsPending() {
 		// Pending response with identifier
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
@@ -154,7 +155,7 @@ func NewCFindResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 
 	return &CFindResponse{
 		BaseResponse:              NewBaseResponse(command, identifier),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       sopClassUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
 	}
@@ -162,12 +163,12 @@ func NewCFindResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 
 // NewCFindResponsePending creates a pending C-FIND-RSP message with a result.
 func NewCFindResponsePending(messageIDBeingRespondedTo uint16, sopClassUID string, identifier *dataset.Dataset) *CFindResponse {
-	return NewCFindResponse(messageIDBeingRespondedTo, 0xFF00, sopClassUID, identifier)
+	return NewCFindResponse(messageIDBeingRespondedTo, status.CFindPending, sopClassUID, identifier)
 }
 
 // NewCFindResponseSuccess creates a successful C-FIND-RSP message (no more results).
 func NewCFindResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID string) *CFindResponse {
-	return NewCFindResponse(messageIDBeingRespondedTo, 0x0000, sopClassUID, nil)
+	return NewCFindResponse(messageIDBeingRespondedTo, status.Success, sopClassUID, nil)
 }
 
 // NewCFindResponseFromRequest creates a C-FIND-RSP message from the corresponding request.
@@ -176,14 +177,14 @@ func NewCFindResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID strin
 // Example:
 //
 //	// When receiving a C-FIND request and sending a pending response with results
-//	resp := dimse.NewCFindResponseFromRequest(req, 0xFF00, resultDataset) // Pending
+//	resp := dimse.NewCFindResponseFromRequest(req, status.CFindPending, resultDataset) // Pending
 //
 //	// When sending the final success response
-//	resp := dimse.NewCFindResponseFromRequest(req, 0x0000, nil) // Success
-func NewCFindResponseFromRequest(req *CFindRequest, statusCode uint16, identifier *dataset.Dataset) *CFindResponse {
+//	resp := dimse.NewCFindResponseFromRequest(req, status.Success, nil) // Success
+func NewCFindResponseFromRequest(req *CFindRequest, s *status.Status, identifier *dataset.Dataset) *CFindResponse {
 	return NewCFindResponse(
 		req.MessageID(),
-		statusCode,
+		s,
 		req.AffectedSOPClassUID(),
 		identifier,
 	)

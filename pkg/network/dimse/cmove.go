@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // CMoveRequest represents a C-MOVE-RQ message.
@@ -140,15 +141,15 @@ type CMoveResponse struct {
 // NewCMoveResponse creates a new C-MOVE-RSP message.
 //
 // Status codes:
-//   - 0xFF00: Pending (sub-operations are continuing)
-//   - 0x0000: Success (all sub-operations completed successfully)
-//   - 0xB000: Warning (completed with some sub-operation warnings)
-//   - 0xA701: Out of resources - unable to calculate number of matches
-//   - 0xA702: Out of resources - unable to perform sub-operations
-//   - 0xA801: Move destination unknown
-//   - 0xA900: Identifier does not match SOP Class
-//   - 0xC000: Unable to process
-func NewCMoveResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopClassUID string) *CMoveResponse {
+//   - status.CMovePending (0xFF00): Pending (sub-operations are continuing)
+//   - status.Success (0x0000): Success (all sub-operations completed successfully)
+//   - status.CMoveWarningSubOperationsComplete (0xB000): Warning (completed with some sub-operation warnings)
+//   - status.CMoveRefusedOutOfResources (0xA701): Out of resources - unable to calculate number of matches
+//   - status.CMoveRefusedOutOfResourcesSubOps (0xA702): Out of resources - unable to perform sub-operations
+//   - status.CMoveRefusedMoveDestinationUnknown (0xA801): Move destination unknown
+//   - status.CMoveFailedIdentifierDoesNotMatchSOPClass (0xA900): Identifier does not match SOP Class
+//   - status.CMoveFailedUnableToProcess (0xC000): Unable to process
+func NewCMoveResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string) *CMoveResponse {
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCMoveRSP), 0)
 
@@ -161,14 +162,14 @@ func NewCMoveResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 	}
 
 	// Set status
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType - no dataset
 	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CMoveResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       sopClassUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
 	}
@@ -178,7 +179,7 @@ func NewCMoveResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopCl
 func NewCMoveResponsePending(messageIDBeingRespondedTo uint16, sopClassUID string,
 	remaining, completed, failed, warning uint16) *CMoveResponse {
 
-	resp := NewCMoveResponse(messageIDBeingRespondedTo, 0xFF00, sopClassUID)
+	resp := NewCMoveResponse(messageIDBeingRespondedTo, status.CMovePending, sopClassUID)
 
 	// Add sub-operation counters
 	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfRemainingSuboperations, []uint16{remaining}))
@@ -196,12 +197,12 @@ func NewCMoveResponsePending(messageIDBeingRespondedTo uint16, sopClassUID strin
 
 // NewCMoveResponseSuccess creates a successful C-MOVE-RSP message.
 func NewCMoveResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID string) *CMoveResponse {
-	return NewCMoveResponse(messageIDBeingRespondedTo, 0x0000, sopClassUID)
+	return NewCMoveResponse(messageIDBeingRespondedTo, status.Success, sopClassUID)
 }
 
 // NewCMoveResponseFromRequest creates a C-MOVE-RSP message from the corresponding request.
-func NewCMoveResponseFromRequest(req *CMoveRequest, statusCode uint16) *CMoveResponse {
-	return NewCMoveResponse(req.MessageID(), statusCode, req.AffectedSOPClassUID())
+func NewCMoveResponseFromRequest(req *CMoveRequest, s *status.Status) *CMoveResponse {
+	return NewCMoveResponse(req.MessageID(), s, req.AffectedSOPClassUID())
 }
 
 // StatusCode returns the status code.
@@ -242,7 +243,7 @@ func (r *CMoveResponse) NumberOfWarningSubOperations() uint16 {
 // HasSubOperationCounts returns true if this response includes sub-operation counts.
 func (r *CMoveResponse) HasSubOperationCounts() bool {
 	// Sub-operation counts are typically present in pending responses
-	return r.statusCode == 0xFF00
+	return r.statusCode == status.CMovePending.Code
 }
 
 // String returns a human-readable representation.

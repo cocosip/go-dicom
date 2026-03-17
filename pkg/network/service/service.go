@@ -98,13 +98,17 @@ type Handlers struct {
 	// Returns multiple responses (Pending + final Success/Failed).
 	CFindHandler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)
 
-	// CMoveHandler handles C-MOVE requests.
-	// Returns multiple responses (Pending with progress + final Success/Failed).
-	CMoveHandler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)
+	// CMoveHandler handles C-MOVE requests via a CMoveOperation interface.
+	// The handler calls op.SendPending after each sub-operation completes, enabling
+	// per-instance progress streaming analogous to fo-dicom's IAsyncEnumerable pattern.
+	// Finish with op.SendSuccess(), op.SendWarning(), or op.SendFailure(code).
+	CMoveHandler func(ctx context.Context, op CMoveOperation) error
 
-	// CGetHandler handles C-GET requests.
-	// Returns multiple responses (Pending with progress + final Success/Failed).
-	CGetHandler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)
+	// CGetHandler handles C-GET requests via a CGetOperation interface.
+	// The handler calls op.SendCStore to push each file back to the SCU over the same
+	// association, then op.SendPending to report progress. Finish with op.SendSuccess(),
+	// op.SendWarning(), or op.SendFailure(code).
+	CGetHandler func(ctx context.Context, op CGetOperation) error
 
 	// Additional handlers for N-* operations can be added here
 }

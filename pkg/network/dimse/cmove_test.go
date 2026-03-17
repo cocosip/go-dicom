@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 const testStudyRootMoveUID = "1.2.840.10008.5.1.4.1.2.2.2"
@@ -64,7 +65,7 @@ func TestCMoveRequest_SetPriority(t *testing.T) {
 }
 
 func TestNewCMoveResponse(t *testing.T) {
-	resp := NewCMoveResponse(123, 0x0000, testStudyRootMoveUID)
+	resp := NewCMoveResponse(123, status.Success, testStudyRootMoveUID)
 
 	if resp == nil {
 		t.Fatal("NewCMoveResponse returned nil")
@@ -128,7 +129,7 @@ func TestNewCMoveResponseFromRequest(t *testing.T) {
     req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)
     _ = req.SetMessageID(456)
 
-	resp := NewCMoveResponseFromRequest(req, 0x0000)
+	resp := NewCMoveResponseFromRequest(req, status.Success)
 
 	if resp.MessageIDBeingRespondedTo() != 456 {
 		t.Errorf("Expected message ID 456, got %d", resp.MessageIDBeingRespondedTo())

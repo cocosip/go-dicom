@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // handleReceivedMessage processes a received DIMSE message.
@@ -87,11 +88,11 @@ func (s *Service) handleCEchoRequest(ctx context.Context, req *dimse.CEchoReques
 		resp, err = handlers.CEchoHandler(ctx, req)
 		if err != nil {
 			// Handler returned error - send failure response
-			resp = dimse.NewCEchoResponseFromRequest(req, 0xA700) // Refused: Out of Resources
+			resp = dimse.NewCEchoResponseFromRequest(req, status.RefusedOutOfResources)
 		}
 	} else {
 		// Default handler - always return success
-		resp = dimse.NewCEchoResponseFromRequest(req, 0x0000)
+		resp = dimse.NewCEchoResponseFromRequest(req, status.Success)
 	}
 
 	// Send response
@@ -108,11 +109,11 @@ func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequ
 		resp, err = handlers.CStoreHandler(ctx, req)
 		if err != nil {
 			// Handler returned error - send failure response
-			resp = dimse.NewCStoreResponseFromRequest(req, 0xA700) // Refused: Out of Resources
+			resp = dimse.NewCStoreResponseFromRequest(req, status.CStoreRefusedOutOfResources)
 		}
 	} else {
 		// Default handler - return success (but don't actually store anything)
-		resp = dimse.NewCStoreResponseFromRequest(req, 0x0000)
+		resp = dimse.NewCStoreResponseFromRequest(req, status.Success)
 	}
 
 	// Send response
@@ -129,12 +130,12 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 		responses, err = handlers.CFindHandler(ctx, req)
 		if err != nil {
 			// Handler returned error - send failure response
-			resp := dimse.NewCFindResponseFromRequest(req, 0xA700, nil) // Refused: Out of Resources
+			resp := dimse.NewCFindResponseFromRequest(req, status.CFindRefusedOutOfResources, nil)
 			return s.Send(ctx, resp)
 		}
 	} else {
 		// Default handler - return success with no results
-		resp := dimse.NewCFindResponseFromRequest(req, 0x0000, nil)
+		resp := dimse.NewCFindResponseFromRequest(req, status.Success, nil)
 		responses = []*dimse.CFindResponse{resp}
 	}
 
@@ -150,60 +151,38 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 
 // handleCMoveRequest handles a C-MOVE request.
 func (s *Service) handleCMoveRequest(ctx context.Context, req *dimse.CMoveRequest, handlers *Handlers) error {
-	var responses []*dimse.CMoveResponse
-
-	// Use custom handler if available
 	if handlers != nil && handlers.CMoveHandler != nil {
-		var err error
-		responses, err = handlers.CMoveHandler(ctx, req)
-		if err != nil {
-			// Handler returned error - send failure response
-			resp := dimse.NewCMoveResponseFromRequest(req, 0xA700) // Refused: Out of Resources
+		op := newCMoveOperation(req, func(resp *dimse.CMoveResponse) error {
 			return s.Send(ctx, resp)
+		})
+		if err := handlers.CMoveHandler(ctx, op); err != nil {
+			return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.CMoveFailedUnableToProcess))
 		}
-	} else {
-		// Default handler - return success with no operations
-		resp := dimse.NewCMoveResponseFromRequest(req, 0x0000)
-		responses = []*dimse.CMoveResponse{resp}
+		return nil
 	}
-
-	// Send all responses (typically: pending updates + final success/failure)
-	for _, resp := range responses {
-		if err := s.Send(ctx, resp); err != nil {
-			return fmt.Errorf("failed to send C-MOVE response: %w", err)
-		}
-	}
-
-	return nil
+	// Default: no handler registered — return success with no operations.
+	return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.Success))
 }
 
 // handleCGetRequest handles a C-GET request.
 func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest, handlers *Handlers) error {
-	var responses []*dimse.CGetResponse
-
-	// Use custom handler if available
 	if handlers != nil && handlers.CGetHandler != nil {
-		var err error
-		responses, err = handlers.CGetHandler(ctx, req)
-		if err != nil {
-			// Handler returned error - send failure response
-			resp := dimse.NewCGetResponseFromRequest(req, 0xA700) // Refused: Out of Resources
-			return s.Send(ctx, resp)
+		op := newCGetOperation(
+			req,
+			func(storeCtx context.Context, storeReq *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+				return s.SendCStore(storeCtx, storeReq)
+			},
+			func(resp *dimse.CGetResponse) error {
+				return s.Send(ctx, resp)
+			},
+		)
+		if err := handlers.CGetHandler(ctx, op); err != nil {
+			return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.CGetFailedUnableToProcess))
 		}
-	} else {
-		// Default handler - return success with no operations
-		resp := dimse.NewCGetResponseFromRequest(req, 0x0000)
-		responses = []*dimse.CGetResponse{resp}
+		return nil
 	}
-
-	// Send all responses (typically: pending updates + final success/failure)
-	for _, resp := range responses {
-		if err := s.Send(ctx, resp); err != nil {
-			return fmt.Errorf("failed to send C-GET response: %w", err)
-		}
-	}
-
-	return nil
+	// Default: no handler registered — return success with no operations.
+	return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.Success))
 }
 
 // SetHandlers sets the DIMSE message handlers for this service.

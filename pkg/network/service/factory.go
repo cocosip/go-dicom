@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // createMessageFromDatasets creates a DIMSE message from command and data datasets.
@@ -123,12 +124,12 @@ func createCEchoResponse(commandDS *dataset.Dataset) (*dimse.CEchoResponse, erro
 	}
 
 	// Get Status
-	status, err := commandDS.GetUInt16(tag.Status, 0)
+	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Status: %w", err)
 	}
 
-	return dimse.NewCEchoResponse(messageID, status), nil
+	return dimse.NewCEchoResponse(messageID, status.LookupStatus(statusCode)), nil
 }
 
 // createCStoreRequest creates a C-STORE-RQ from datasets.
@@ -164,7 +165,7 @@ func createCStoreResponse(commandDS *dataset.Dataset) (*dimse.CStoreResponse, er
 	}
 
 	// Get Status
-	status, err := commandDS.GetUInt16(tag.Status, 0)
+	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Status: %w", err)
 	}
@@ -181,7 +182,7 @@ func createCStoreResponse(commandDS *dataset.Dataset) (*dimse.CStoreResponse, er
 		return nil, fmt.Errorf("AffectedSOPInstanceUID not found")
 	}
 
-	return dimse.NewCStoreResponse(messageID, status, sopClassUID, sopInstanceUID), nil
+	return dimse.NewCStoreResponse(messageID, status.LookupStatus(statusCode), sopClassUID, sopInstanceUID), nil
 }
 
 // createCFindRequest creates a C-FIND-RQ from datasets.
@@ -246,14 +247,14 @@ func createCGetResponse(commandDS *dataset.Dataset) (*dimse.CGetResponse, error)
 
 	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
-	if statusCode == 0xFF00 {
+	if statusCode == status.CGetPending.Code {
 		remaining, _ := commandDS.GetUInt16(tag.NumberOfRemainingSuboperations, 0)
 		completed, _ := commandDS.GetUInt16(tag.NumberOfCompletedSuboperations, 0)
 		failed, _ := commandDS.GetUInt16(tag.NumberOfFailedSuboperations, 0)
 		warning, _ := commandDS.GetUInt16(tag.NumberOfWarningSuboperations, 0)
 		return dimse.NewCGetResponsePending(messageID, sopClassUID, remaining, completed, failed, warning), nil
 	}
-	return dimse.NewCGetResponse(messageID, statusCode, sopClassUID), nil
+	return dimse.NewCGetResponse(messageID, status.LookupStatus(statusCode), sopClassUID), nil
 }
 
 // createCMoveRequest creates a C-MOVE-RQ from datasets.
@@ -292,14 +293,14 @@ func createCMoveResponse(commandDS *dataset.Dataset) (*dimse.CMoveResponse, erro
 
 	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
-	if statusCode == 0xFF00 {
+	if statusCode == status.CMovePending.Code {
 		remaining, _ := commandDS.GetUInt16(tag.NumberOfRemainingSuboperations, 0)
 		completed, _ := commandDS.GetUInt16(tag.NumberOfCompletedSuboperations, 0)
 		failed, _ := commandDS.GetUInt16(tag.NumberOfFailedSuboperations, 0)
 		warning, _ := commandDS.GetUInt16(tag.NumberOfWarningSuboperations, 0)
 		return dimse.NewCMoveResponsePending(messageID, sopClassUID, remaining, completed, failed, warning), nil
 	}
-	return dimse.NewCMoveResponse(messageID, statusCode, sopClassUID), nil
+	return dimse.NewCMoveResponse(messageID, status.LookupStatus(statusCode), sopClassUID), nil
 }
 
 // createCFindResponse creates a C-FIND-RSP from datasets.
@@ -311,7 +312,7 @@ func createCFindResponse(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRespon
 	}
 
 	// Get Status
-	status, err := commandDS.GetUInt16(tag.Status, 0)
+	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Status: %w", err)
 	}
@@ -323,7 +324,7 @@ func createCFindResponse(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRespon
 	}
 
 	// dataDS is the identifier (may be nil for final response)
-	return dimse.NewCFindResponse(messageID, status, sopClassUID, dataDS), nil
+	return dimse.NewCFindResponse(messageID, status.LookupStatus(statusCode), sopClassUID, dataDS), nil
 }
 
 // createNEventReportRequest creates an N-EVENT-REPORT-RQ from datasets.
@@ -360,7 +361,7 @@ func createNEventReportResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NEve
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 	eventTypeID, _ := commandDS.GetUInt16(tag.EventTypeID, 0)
 
-	return dimse.NewNEventReportResponse(messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, eventTypeID, dataDS), nil
+	return dimse.NewNEventReportResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, eventTypeID, dataDS), nil
 }
 
 // createNGetRequest creates an N-GET-RQ from datasets.
@@ -403,7 +404,7 @@ func createNGetResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NGetResponse
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
-	return dimse.NewNGetResponse(messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
+	return dimse.NewNGetResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
 }
 
 // createNSetRequest creates an N-SET-RQ from datasets.
@@ -438,7 +439,7 @@ func createNSetResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NSetResponse
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
-	return dimse.NewNSetResponse(messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
+	return dimse.NewNSetResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
 }
 
 // createNActionRequest creates an N-ACTION-RQ from datasets.
@@ -475,7 +476,7 @@ func createNActionResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NActionRe
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 	actionTypeID, _ := commandDS.GetUInt16(tag.ActionTypeID, 0)
 
-	return dimse.NewNActionResponse(messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, actionTypeID, dataDS), nil
+	return dimse.NewNActionResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, actionTypeID, dataDS), nil
 }
 
 // createNCreateRequest creates an N-CREATE-RQ from datasets.
@@ -510,7 +511,7 @@ func createNCreateResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NCreateRe
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
-	return dimse.NewNCreateResponse(messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
+	return dimse.NewNCreateResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
 }
 
 // createNDeleteRequest creates an N-DELETE-RQ from datasets.
@@ -545,6 +546,6 @@ func createNDeleteResponse(commandDS *dataset.Dataset) (*dimse.NDeleteResponse, 
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
-	return dimse.NewNDeleteResponse(messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID), nil
+	return dimse.NewNDeleteResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID), nil
 }
 

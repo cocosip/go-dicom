@@ -34,6 +34,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/server"
 	"github.com/cocosip/go-dicom/pkg/network/service"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 var (
@@ -326,7 +327,7 @@ func performCGet(ctx context.Context, studyUID string) error {
 func handleCStoreSubOperation(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
 	ds := req.DataDataset()
 	if ds == nil {
-		return dimse.NewCStoreResponseFromRequest(req, 0xC000), fmt.Errorf("no dataset in C-STORE request")
+		return dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand), fmt.Errorf("no dataset in C-STORE request")
 	}
 
 	sopInstanceUID := ds.TryGetString(tag.SOPInstanceUID)
@@ -343,13 +344,13 @@ func handleCStoreSubOperation(_ context.Context, req *dimse.CStoreRequest) (*dim
 
 	if err := writer.WriteFile(filePath, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
 		log.Printf("Failed to write file: %v", err)
-		return dimse.NewCStoreResponseFromRequest(req, 0xC000), err
+		return dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand), err
 	}
 
 	receivedCount.Add(1)
 	fmt.Printf("  Saved: %s\n", filename)
 
-	return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
+	return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
 }
 
 func addPresentationContexts(c *client.Client) {

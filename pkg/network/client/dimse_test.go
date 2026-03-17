@@ -16,6 +16,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 const errNotConnected = "client not connected"
@@ -157,7 +158,7 @@ func (m *mockServiceForDIMSE) SendCEcho(_ context.Context, req *dimse.CEchoReque
 	}
 
 	// Default success response
-	return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+	return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 }
 
 func (m *mockServiceForDIMSE) SendCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
@@ -169,7 +170,7 @@ func (m *mockServiceForDIMSE) SendCStore(_ context.Context, req *dimse.CStoreReq
 	}
 
 	// Default success response
-	return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
+	return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
 }
 
 func (m *mockServiceForDIMSE) SendCFind(_ context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error) {
@@ -188,7 +189,7 @@ func (m *mockServiceForDIMSE) SendCFind(_ context.Context, req *dimse.CFindReque
 			}
 		} else {
 			// Default success response (no results)
-			resp := dimse.NewCFindResponseFromRequest(req, 0x0000, nil)
+			resp := dimse.NewCFindResponseFromRequest(req, status.Success, nil)
 			respCh <- resp
 		}
 	}()
@@ -306,9 +307,9 @@ func TestCFind_Success_MultipleResults(t *testing.T) {
     _ = req.SetMessageID(1)
 
 	mockService.findResponses = []*dimse.CFindResponse{
-		dimse.NewCFindResponseFromRequest(req, 0xFF00, id1), // Pending
-		dimse.NewCFindResponseFromRequest(req, 0xFF00, id2), // Pending
-		dimse.NewCFindResponseFromRequest(req, 0x0000, nil), // Success
+		dimse.NewCFindResponseFromRequest(req, status.CFindPending, id1), // Pending
+		dimse.NewCFindResponseFromRequest(req, status.CFindPending, id2), // Pending
+		dimse.NewCFindResponseFromRequest(req, status.Success, nil),       // Success
 	}
 
     query := dataset.New()
@@ -354,8 +355,8 @@ func TestCFindWithCallback_Success(t *testing.T) {
     _ = req.SetMessageID(1)
 
 	mockService.findResponses = []*dimse.CFindResponse{
-		dimse.NewCFindResponseFromRequest(req, 0xFF00, id1), // Pending
-		dimse.NewCFindResponseFromRequest(req, 0x0000, nil), // Success
+		dimse.NewCFindResponseFromRequest(req, status.CFindPending, id1), // Pending
+		dimse.NewCFindResponseFromRequest(req, status.Success, nil),       // Success
 	}
 
 	query := dataset.New()
@@ -394,9 +395,9 @@ func TestCFindWithCallback_StopEarly(t *testing.T) {
     _ = req.SetMessageID(1)
 
 	mockService.findResponses = []*dimse.CFindResponse{
-		dimse.NewCFindResponseFromRequest(req, 0xFF00, id1), // Pending
-		dimse.NewCFindResponseFromRequest(req, 0xFF00, id2), // Pending
-		dimse.NewCFindResponseFromRequest(req, 0x0000, nil), // Success
+		dimse.NewCFindResponseFromRequest(req, status.CFindPending, id1), // Pending
+		dimse.NewCFindResponseFromRequest(req, status.CFindPending, id2), // Pending
+		dimse.NewCFindResponseFromRequest(req, status.Success, nil),       // Success
 	}
 
 	query := dataset.New()

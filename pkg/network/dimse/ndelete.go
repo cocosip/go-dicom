@@ -9,6 +9,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // NDeleteRequest represents an N-DELETE-RQ message.
@@ -75,12 +76,12 @@ type NDeleteResponse struct {
 //
 // Parameters:
 //   - messageIDBeingRespondedTo: MessageID of the request being responded to
-//   - statusCode: Status code (0x0000 = Success, etc.)
+//   - s: Status (use status.NDeleteSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID of the deleted object
 func NewNDeleteResponse(
 	messageIDBeingRespondedTo uint16,
-	statusCode uint16,
+	s *status.Status,
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 ) *NDeleteResponse {
@@ -95,14 +96,14 @@ func NewNDeleteResponse(
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType - no dataset in response
 	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &NDeleteResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
@@ -115,7 +116,7 @@ func NewNDeleteResponseSuccess(
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 ) *NDeleteResponse {
-	return NewNDeleteResponse(messageIDBeingRespondedTo, 0x0000, affectedSOPClassUID, affectedSOPInstanceUID)
+	return NewNDeleteResponse(messageIDBeingRespondedTo, status.NDeleteSuccess, affectedSOPClassUID, affectedSOPInstanceUID)
 }
 
 // StatusCode returns the status code.

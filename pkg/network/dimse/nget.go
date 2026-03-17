@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // NGetRequest represents an N-GET-RQ message.
@@ -95,22 +96,22 @@ type NGetResponse struct {
 //
 // Parameters:
 //   - messageIDBeingRespondedTo: MessageID of the request being responded to
-//   - statusCode: Status code (0x0000 = Success, etc.)
+//   - s: Status (use status.NGetSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID
 //   - attributeList: Dataset containing the requested attribute values
 func NewNGetResponse(
 	messageIDBeingRespondedTo uint16,
-	statusCode uint16,
+	s *status.Status,
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NGetResponse {
 	command := createNResponseCommand(uint16(CommandNGetRSP), messageIDBeingRespondedTo,
-		statusCode, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
+		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
 	return &NGetResponse{
 		BaseResponse:              NewBaseResponse(command, attributeList),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
@@ -124,7 +125,7 @@ func NewNGetResponseSuccess(
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NGetResponse {
-	return NewNGetResponse(messageIDBeingRespondedTo, 0x0000, affectedSOPClassUID,
+	return NewNGetResponse(messageIDBeingRespondedTo, status.NGetSuccess, affectedSOPClassUID,
 		affectedSOPInstanceUID, attributeList)
 }
 
@@ -164,7 +165,7 @@ func (r *NGetResponse) String() string {
 func createNResponseCommand(
 	commandType uint16,
 	messageIDBeingRespondedTo uint16,
-	statusCode uint16,
+	s *status.Status,
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
@@ -173,8 +174,8 @@ func createNResponseCommand(
 	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
 	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
-	if attributeList != nil && statusCode == 0x0000 {
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
+	if attributeList != nil && s.IsSuccess() {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))

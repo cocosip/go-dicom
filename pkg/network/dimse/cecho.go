@@ -9,6 +9,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // CEchoRequest represents a C-ECHO-RQ message.
@@ -58,7 +59,7 @@ type CEchoResponse struct {
 }
 
 // NewCEchoResponse creates a new C-ECHO-RSP message.
-func NewCEchoResponse(messageIDBeingRespondedTo uint16, statusCode uint16) *CEchoResponse {
+func NewCEchoResponse(messageIDBeingRespondedTo uint16, s *status.Status) *CEchoResponse {
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCEchoRSP), 0) // Response doesn't have its own MessageID
 
@@ -69,13 +70,13 @@ func NewCEchoResponse(messageIDBeingRespondedTo uint16, statusCode uint16) *CEch
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType is already set to 0x0101 (no dataset)
 
 	return &CEchoResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       "1.2.840.10008.1.1",
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
 	}
@@ -83,7 +84,7 @@ func NewCEchoResponse(messageIDBeingRespondedTo uint16, statusCode uint16) *CEch
 
 // NewCEchoResponseSuccess creates a successful C-ECHO-RSP message.
 func NewCEchoResponseSuccess(messageIDBeingRespondedTo uint16) *CEchoResponse {
-	return NewCEchoResponse(messageIDBeingRespondedTo, 0x0000)
+	return NewCEchoResponse(messageIDBeingRespondedTo, status.Success)
 }
 
 // NewCEchoResponseFromRequest creates a C-ECHO-RSP message from the corresponding request.
@@ -92,9 +93,9 @@ func NewCEchoResponseSuccess(messageIDBeingRespondedTo uint16) *CEchoResponse {
 // Example:
 //
 //	// When receiving a C-ECHO request
-//	resp := dimse.NewCEchoResponseFromRequest(req, 0x0000) // Success
-func NewCEchoResponseFromRequest(req *CEchoRequest, statusCode uint16) *CEchoResponse {
-	return NewCEchoResponse(req.MessageID(), statusCode)
+//	resp := dimse.NewCEchoResponseFromRequest(req, status.Success) // Success
+func NewCEchoResponseFromRequest(req *CEchoRequest, s *status.Status) *CEchoResponse {
+	return NewCEchoResponse(req.MessageID(), s)
 }
 
 // StatusCode returns the status code.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func TestNew(t *testing.T) {
@@ -74,18 +75,18 @@ func TestSetHandlers(_ *testing.T) {
 
 	// Set C-ECHO handler
 	server.SetCEchoHandler(func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
-		return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+		return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 	})
 
 	// Set C-STORE handler
 	server.SetCStoreHandler(func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
-		return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
+		return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
 	})
 
 	// Set C-FIND handler
 	server.SetCFindHandler(func(_ context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
 		return []*dimse.CFindResponse{
-			dimse.NewCFindResponseFromRequest(req, 0x0000, nil),
+			dimse.NewCFindResponseFromRequest(req, status.Success, nil),
 		}, nil
 	})
 

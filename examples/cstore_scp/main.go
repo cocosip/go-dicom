@@ -31,6 +31,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/server"
 	"github.com/cocosip/go-dicom/pkg/network/service"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 var (
@@ -151,8 +152,8 @@ func main() {
 // handleCEcho handles C-ECHO verification requests
 func handleCEcho(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 	log.Printf("C-ECHO request received: MessageID=%d, SOPClass=%s", req.MessageID(), req.AffectedSOPClassUID())
-	resp := dimse.NewCEchoResponseFromRequest(req, 0x0000)
-	log.Printf("C-ECHO response created: Status=0x0000 (Success)")
+	resp := dimse.NewCEchoResponseFromRequest(req, status.Success)
+	log.Printf("C-ECHO response created: %s", status.Success)
 	return resp, nil
 }
 
@@ -163,7 +164,7 @@ func handleCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreRes
 	if ds == nil {
 		log.Println("ERROR: C-STORE request has no dataset")
 		stats.incrementFailed()
-		return dimse.NewCStoreResponseFromRequest(req, 0xC000), // Failed - unable to process
+		return dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand), // Failed - unable to process
 			fmt.Errorf("no dataset in C-STORE request")
 	}
 
@@ -197,14 +198,14 @@ func handleCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreRes
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		log.Printf("  ERROR: Failed to create directory: %v", err)
 		stats.incrementFailed()
-		return dimse.NewCStoreResponseFromRequest(req, 0xC000), err
+		return dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand), err
 	}
 
 	// Save the DICOM file
 	if err := saveDICOMFile(filePath, ds); err != nil {
 		log.Printf("  ERROR: Failed to save file: %v", err)
 		stats.incrementFailed()
-		return dimse.NewCStoreResponseFromRequest(req, 0xC000), err
+		return dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand), err
 	}
 
 	// Get file size for statistics
@@ -217,7 +218,7 @@ func handleCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreRes
 	log.Println()
 
 	// Return success response
-	return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
+	return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
 }
 
 // handleAssociationNegotiation handles association negotiation

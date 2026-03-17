@@ -25,15 +25,25 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/client"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/server"
+	"github.com/cocosip/go-dicom/pkg/network/service"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 var (
-	port    = flag.Int("port", 11113, "Port to listen on")
-	dataDir = flag.String("data-dir", "", "Optional DICOM folder used to build query index")
-	verbose = flag.Bool("verbose", false, "Enable verbose logging")
+	port     = flag.Int("port", 11113, "Port to listen on")
+	dataDir  = flag.String("data-dir", "", "Optional DICOM folder used to build query index")
+	aeRoutes = flag.String("ae-routes", "", "AE routing table for C-MOVE, format: AE1=host:port,AE2=host:port")
+	verbose  = flag.Bool("verbose", false, "Enable verbose logging")
 )
+
+// aeRoute holds a resolved host:port for a destination AE title.
+type aeRoute struct {
+	host string
+	port int
+}
 
 type qrRecord struct {
 	PatientName       string
@@ -50,6 +60,7 @@ type qrRecord struct {
 
 type qrRepository struct {
 	records []qrRecord
+	routes  map[string]aeRoute // AE title -> host:port
 }
 
 func main() {
@@ -63,7 +74,12 @@ func main() {
 		records = sampleRecords()
 	}
 
-	repo := &qrRepository{records: records}
+	routes, err := parseAERoutes(*aeRoutes)
+	if err != nil {
+		log.Fatalf("invalid -ae-routes: %v", err)
+	}
+
+	repo := &qrRepository{records: records, routes: routes}
 
 	fmt.Printf("=== DICOM Query/Retrieve SCP - Complete Server ===\n")
 	fmt.Printf("Port:           %d\n", *port)
@@ -75,11 +91,17 @@ func main() {
 	} else {
 		fmt.Printf("Data Directory: %s\n", *dataDir)
 	}
+	if len(routes) > 0 {
+		fmt.Printf("AE Routes:\n")
+		for ae, r := range routes {
+			fmt.Printf("  %s -> %s:%d\n", ae, r.host, r.port)
+		}
+	}
 	fmt.Printf("\nSupported Operations:\n")
 	fmt.Printf("  - C-ECHO:  Verification\n")
 	fmt.Printf("  - C-FIND:  Query for studies/series/images\n")
-	fmt.Printf("  - C-MOVE:  Move instances to another AE (simulated)\n")
-	fmt.Printf("  - C-GET:   Retrieve instances directly (simulated)\n")
+	fmt.Printf("  - C-MOVE:  Move instances to destination AE via C-STORE\n")
+	fmt.Printf("  - C-GET:   Retrieve instances back over same association\n")
 	fmt.Printf("\nQuery Levels:\n")
 	fmt.Printf("  - PATIENT, STUDY, SERIES, IMAGE\n")
 	fmt.Println()
@@ -94,7 +116,7 @@ func main() {
 		if *verbose {
 			log.Printf("C-ECHO request messageID=%d", req.MessageID())
 		}
-		return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+		return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 	})
 
 	srv.SetCFindHandler(repo.handleCFind)
@@ -141,123 +163,147 @@ func (r *qrRepository) handleCFind(_ context.Context, req *dimse.CFindRequest) (
 	responses := make([]*dimse.CFindResponse, 0, len(results)+1)
 	for _, rec := range results {
 		identifier := buildFindIdentifier(req.QueryLevel(), rec)
-		responses = append(responses, dimse.NewCFindResponseFromRequest(req, 0xFF00, identifier))
+		responses = append(responses, dimse.NewCFindResponseFromRequest(req, status.CFindPending, identifier))
 	}
 
-	responses = append(responses, dimse.NewCFindResponseFromRequest(req, 0x0000, nil))
+	responses = append(responses, dimse.NewCFindResponseFromRequest(req, status.Success, nil))
 	return responses, nil
 }
 
-func (r *qrRepository) handleCMove(_ context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
-	matched := r.filterRecords(req.QueryLevel(), req.DataDataset())
+func (r *qrRepository) handleCMove(ctx context.Context, op service.CMoveOperation) error {
+	matched := r.filterRecords(op.QueryLevel(), op.Identifier())
 	total := safeUint16(len(matched))
-	destination := strings.TrimSpace(req.MoveDestination())
+	destination := strings.TrimSpace(op.MoveDestination())
 
 	if *verbose {
-		log.Printf("C-MOVE level=%s destination=%s instances=%d", req.QueryLevel(), destination, total)
+		log.Printf("C-MOVE level=%s destination=%s instances=%d", op.QueryLevel(), destination, total)
 	}
 
 	if total == 0 {
-		return []*dimse.CMoveResponse{dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())}, nil
+		return op.SendSuccess()
 	}
 
-	// For C-MOVE, we need to send C-STORE to the move destination
-	// In a real implementation, you would:
-	// 1. Resolve destination AE to host:port (from AE title configuration)
-	// 2. Create client connection to destination
-	// 3. Send C-STORE for each matched instance
-	// 4. Track progress and send pending responses
-	//
-	// For this example, we simulate the operation
-	log.Printf("C-MOVE: Would send %d instance(s) to %s", total, destination)
-	log.Printf("  (Note: Actual C-STORE sending requires AE configuration)")
-
-	// Simulate progress responses
-	responses := make([]*dimse.CMoveResponse, 0, 3)
-
-	// Initial pending - all remaining
-	responses = append(responses, dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), total, 0, 0, 0))
-
-	// Final pending - all completed
-	responses = append(responses, dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 0, total, 0, 0))
-
-	// Success
-	responses = append(responses, dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID()))
-
-	return responses, nil
-}
-
-func (r *qrRepository) handleCGet(_ context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
-	matched := r.filterRecords(req.QueryLevel(), req.DataDataset())
-	total := safeUint16(len(matched))
-
-	if *verbose {
-		log.Printf("C-GET level=%s instances=%d", req.QueryLevel(), total)
+	// Look up the destination AE in the routing table.
+	route, ok := r.routes[destination]
+	if !ok {
+		log.Printf("C-MOVE: unknown destination AE %q (configure via -ae-routes)", destination)
+		return op.SendFailure(status.CMoveRefusedMoveDestinationUnknown)
 	}
 
-	if total == 0 {
-		return []*dimse.CGetResponse{dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())}, nil
+	// Connect to the destination Storage SCP.
+	transferSyntaxes := []string{
+		uid.ExplicitVRLittleEndian.UID(),
+		uid.ImplicitVRLittleEndian.UID(),
 	}
+	destClient := client.New(
+		client.WithCallingAE("QRSCP"),
+		client.WithCalledAE(destination),
+		client.WithConnectTimeout(10*time.Second),
+		client.WithRequestTimeout(60*time.Second),
+	)
+	for _, rec := range matched {
+		if rec.SOPClassUID != "" {
+			destClient.AddPresentationContext(rec.SOPClassUID, transferSyntaxes...)
+		}
+	}
+	if err := destClient.Connect(ctx, route.host, route.port); err != nil {
+		log.Printf("C-MOVE: failed to connect to %s (%s:%d): %v", destination, route.host, route.port, err)
+		return op.SendFailure(status.CMoveRefusedOutOfResourcesSubOps)
+	}
+	defer func() { _ = destClient.Close() }()
 
-	// For C-GET, we need to send C-STORE sub-operations back to the requester
-	// over the current association.
-	//
-	// Current architecture limitation:
-	// The handler signature doesn't provide access to the Service object
-	// needed to send C-STORE sub-operations. A complete implementation would require:
-	//
-	// 1. Handler signature change to provide Service access, or
-	// 2. A callback mechanism to send C-STORE operations, or
-	// 3. A channel-based approach to communicate sub-operations
-	//
-	// For now, we simulate the operation and log what would be sent:
-
-	completed := 0
-	failed := 0
+	var completed, failed uint16
+	remaining := total
 
 	for _, rec := range matched {
 		if rec.SourcePath == "" {
-			log.Printf("C-GET: Instance %s has no source file (using sample data)", rec.SOPInstanceUID)
+			log.Printf("C-MOVE: instance %s has no source file (sample data)", rec.SOPInstanceUID)
 			failed++
+			remaining--
+			if err := op.SendPending(remaining, completed, failed, 0); err != nil {
+				return err
+			}
 			continue
 		}
 
-		if *verbose {
-			log.Printf("C-GET: Would send C-STORE for SOP=%s from file=%s", rec.SOPInstanceUID, rec.SourcePath)
+		ds, err := loadDICOMFile(rec.SourcePath)
+		if err != nil {
+			log.Printf("C-MOVE: failed to load %s: %v", rec.SourcePath, err)
+			failed++
+		} else if err = destClient.CStore(ctx, ds); err != nil {
+			log.Printf("C-MOVE: C-STORE to %s failed for %s: %v", destination, rec.SOPInstanceUID, err)
+			failed++
+		} else {
+			if *verbose {
+				log.Printf("C-MOVE: sent %s to %s", rec.SOPInstanceUID, destination)
+			}
+			completed++
+		}
+		remaining--
+		if err2 := op.SendPending(remaining, completed, failed, 0); err2 != nil {
+			return err2
+		}
+	}
+
+	if failed > 0 {
+		return op.SendWarning() // 0xB000: completed with failures
+	}
+	return op.SendSuccess()
+}
+
+func (r *qrRepository) handleCGet(ctx context.Context, op service.CGetOperation) error {
+	matched := r.filterRecords(op.QueryLevel(), op.Identifier())
+	total := safeUint16(len(matched))
+
+	if *verbose {
+		log.Printf("C-GET level=%s instances=%d", op.QueryLevel(), total)
+	}
+
+	if total == 0 {
+		return op.SendSuccess()
+	}
+
+	var completed, failed uint16
+	remaining := total
+
+	for _, rec := range matched {
+		if rec.SourcePath == "" {
+			log.Printf("C-GET: instance %s has no source file (sample data)", rec.SOPInstanceUID)
+			failed++
+			remaining--
+			if err := op.SendPending(remaining, completed, failed, 0); err != nil {
+				return err
+			}
+			continue
 		}
 
-		// In a complete implementation, here we would:
-		// - Load the DICOM file from rec.SourcePath
-		// - Create C-STORE request with the dataset
-		// - Send it via service.SendCStore(ctx, cstoreReq)
-		// - Track progress
+		ds, err := loadDICOMFile(rec.SourcePath)
+		if err != nil {
+			log.Printf("C-GET: failed to load %s: %v", rec.SourcePath, err)
+			failed++
+		} else if resp, err2 := op.SendCStore(ctx, ds); err2 != nil {
+			log.Printf("C-GET: C-STORE for %s failed: %v", rec.SOPInstanceUID, err2)
+			failed++
+		} else if !resp.Status().IsSuccess() {
+			log.Printf("C-GET: C-STORE for %s returned status %s", rec.SOPInstanceUID, resp.Status())
+			failed++
+		} else {
+			if *verbose {
+				log.Printf("C-GET: sent %s", rec.SOPInstanceUID)
+			}
+			completed++
+		}
 
-		completed++
+		remaining--
+		if err2 := op.SendPending(remaining, completed, failed, 0); err2 != nil {
+			return err2
+		}
 	}
 
-	responses := make([]*dimse.CGetResponse, 0, 3)
-
-	// Pending - show initial state
-	remaining := total - uint16(completed) - uint16(failed)
-	if remaining > 0 {
-		responses = append(responses, dimse.NewCGetResponsePending(
-			req.MessageID(), req.AffectedSOPClassUID(),
-			remaining, uint16(completed), uint16(failed), 0))
-	}
-
-	// Pending - show final state
-	responses = append(responses, dimse.NewCGetResponsePending(
-		req.MessageID(), req.AffectedSOPClassUID(),
-		0, uint16(completed), uint16(failed), 0))
-
-	// Success or warning
 	if failed > 0 {
-		log.Printf("C-GET completed with %d failures", failed)
+		return op.SendWarning() // 0xB000: completed with failures
 	}
-
-	responses = append(responses, dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID()))
-
-	return responses, nil
+	return op.SendSuccess()
 }
 
 func (r *qrRepository) filterRecords(level dimse.QueryRetrieveLevel, query *dataset.Dataset) []qrRecord {
@@ -571,4 +617,51 @@ func safeUint16(n int) uint16 {
 		return math.MaxUint16
 	}
 	return uint16(n)
+}
+
+// loadDICOMFile parses a DICOM file and returns its dataset.
+func loadDICOMFile(path string) (*dataset.Dataset, error) {
+	result, err := parser.ParseFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return result.Dataset, nil
+}
+
+// parseAERoutes parses the -ae-routes flag value into a map.
+// Format: "AETITLE1=host:port,AETITLE2=host:port"
+func parseAERoutes(raw string) (map[string]aeRoute, error) {
+	routes := make(map[string]aeRoute)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return routes, nil
+	}
+
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid entry %q: expected AE=host:port", entry)
+		}
+		ae := strings.TrimSpace(parts[0])
+		addr := strings.TrimSpace(parts[1])
+
+		lastColon := strings.LastIndex(addr, ":")
+		if lastColon < 0 {
+			return nil, fmt.Errorf("invalid address %q in entry %q: expected host:port", addr, entry)
+		}
+		host := addr[:lastColon]
+		portStr := addr[lastColon+1:]
+
+		var p int
+		if _, err := fmt.Sscanf(portStr, "%d", &p); err != nil || p <= 0 || p > 65535 {
+			return nil, fmt.Errorf("invalid port %q in entry %q", portStr, entry)
+		}
+
+		routes[ae] = aeRoute{host: host, port: p}
+	}
+	return routes, nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // CStoreRequest represents a C-STORE-RQ message.
@@ -99,7 +100,7 @@ type CStoreResponse struct {
 }
 
 // NewCStoreResponse creates a new C-STORE-RSP message.
-func NewCStoreResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopClassUID, sopInstanceUID string) *CStoreResponse {
+func NewCStoreResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID, sopInstanceUID string) *CStoreResponse {
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCStoreRSP), 0)
 
@@ -111,14 +112,14 @@ func NewCStoreResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopC
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType - no dataset in response
 	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
 	return &CStoreResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       sopClassUID,
 		affectedSOPInstanceUID:    sopInstanceUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
@@ -127,7 +128,7 @@ func NewCStoreResponse(messageIDBeingRespondedTo uint16, statusCode uint16, sopC
 
 // NewCStoreResponseSuccess creates a successful C-STORE-RSP message.
 func NewCStoreResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID, sopInstanceUID string) *CStoreResponse {
-	return NewCStoreResponse(messageIDBeingRespondedTo, 0x0000, sopClassUID, sopInstanceUID)
+	return NewCStoreResponse(messageIDBeingRespondedTo, status.Success, sopClassUID, sopInstanceUID)
 }
 
 // NewCStoreResponseFromRequest creates a C-STORE-RSP message from the corresponding request.
@@ -137,11 +138,11 @@ func NewCStoreResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID, sop
 // Example:
 //
 //	// When receiving a C-STORE request
-//	resp := dimse.NewCStoreResponseFromRequest(req, 0x0000) // Success
-func NewCStoreResponseFromRequest(req *CStoreRequest, statusCode uint16) *CStoreResponse {
+//	resp := dimse.NewCStoreResponseFromRequest(req, status.Success) // Success
+func NewCStoreResponseFromRequest(req *CStoreRequest, s *status.Status) *CStoreResponse {
 	resp := NewCStoreResponse(
 		req.MessageID(),
-		statusCode,
+		s,
 		req.AffectedSOPClassUID(),
 		req.AffectedSOPInstanceUID(),
 	)

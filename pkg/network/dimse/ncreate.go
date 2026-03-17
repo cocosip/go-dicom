@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 const (
@@ -105,13 +106,13 @@ type NCreateResponse struct {
 //
 // Parameters:
 //   - messageIDBeingRespondedTo: MessageID of the request being responded to
-//   - statusCode: Status code (0x0000 = Success, etc.)
+//   - s: Status (use status.NCreateSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID of the created object
 //   - attributeList: Optional dataset containing attribute values of the created instance
 func NewNCreateResponse(
 	messageIDBeingRespondedTo uint16,
-	statusCode uint16,
+	s *status.Status,
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
@@ -129,10 +130,10 @@ func NewNCreateResponse(
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
 	// Status
-	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
+	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType
-	if attributeList != nil && statusCode == 0x0000 {
+	if attributeList != nil && s.IsSuccess() {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
@@ -140,7 +141,7 @@ func NewNCreateResponse(
 
 	return &NCreateResponse{
 		BaseResponse:              NewBaseResponse(command, attributeList),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
@@ -154,7 +155,7 @@ func NewNCreateResponseSuccess(
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NCreateResponse {
-	return NewNCreateResponse(messageIDBeingRespondedTo, 0x0000, affectedSOPClassUID,
+	return NewNCreateResponse(messageIDBeingRespondedTo, status.NCreateSuccess, affectedSOPClassUID,
 		affectedSOPInstanceUID, attributeList)
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // CEcho sends a C-ECHO request and waits for the response.
@@ -151,8 +152,8 @@ func (c *Client) CFind(ctx context.Context, level dimse.QueryRetrieveLevel, quer
 
 			statusCode := resp.StatusCode()
 
-			// Pending status (0xFF00) - more results coming
-			if statusCode == 0xFF00 {
+			// Pending status - more results coming
+			if statusCode == status.CFindPending.Code {
 				// Extract identifier dataset
 				if resp.HasIdentifier() {
 					identifier := resp.DataDataset()
@@ -163,8 +164,8 @@ func (c *Client) CFind(ctx context.Context, level dimse.QueryRetrieveLevel, quer
 				continue
 			}
 
-			// Success status (0x0000) - final response
-			if statusCode == 0x0000 {
+			// Success status - final response
+			if statusCode == status.Success.Code {
 				return results, nil
 			}
 
@@ -227,8 +228,8 @@ func (c *Client) CFindWithCallback(ctx context.Context, level dimse.QueryRetriev
 
 			statusCode := resp.StatusCode()
 
-			// Pending status (0xFF00) - more results coming
-			if statusCode == 0xFF00 {
+			// Pending status - more results coming
+			if statusCode == status.CFindPending.Code {
 				if resp.HasIdentifier() {
 					identifier := resp.DataDataset()
 					// Call callback, stop if it returns false
@@ -239,8 +240,8 @@ func (c *Client) CFindWithCallback(ctx context.Context, level dimse.QueryRetriev
 				continue
 			}
 
-			// Success status (0x0000) - final response
-			if statusCode == 0x0000 {
+			// Success status - final response
+			if statusCode == status.Success.Code {
 				return nil
 			}
 
@@ -411,8 +412,8 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 
 			statusCode := resp.StatusCode()
 
-			// Pending status (0xFF00) - sub-operations in progress
-			if statusCode == 0xFF00 {
+			// Pending status - sub-operations in progress
+			if statusCode == status.CMovePending.Code {
 				if callback != nil && resp.HasSubOperationCounts() {
 					// Call callback, stop if it returns false
 					if !callback(
@@ -427,13 +428,13 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 				continue
 			}
 
-			// Success status (0x0000) - all sub-operations completed
-			if statusCode == 0x0000 {
+			// Success status - all sub-operations completed
+			if statusCode == status.Success.Code {
 				return nil
 			}
 
-			// Warning status (0xB000) - completed with warnings
-			if statusCode == 0xB000 {
+			// Warning status - completed with sub-operation failures
+			if statusCode == status.CMoveWarningSubOperationsComplete.Code {
 				return nil
 			}
 
@@ -503,8 +504,8 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 
 			statusCode := resp.StatusCode()
 
-			// Pending status (0xFF00) - sub-operations in progress
-			if statusCode == 0xFF00 {
+			// Pending status - sub-operations in progress
+			if statusCode == status.CGetPending.Code {
 				if callback != nil && resp.HasSubOperationCounts() {
 					// Call callback, stop if it returns false
 					if !callback(
@@ -519,13 +520,13 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 				continue
 			}
 
-			// Success status (0x0000) - all sub-operations completed
-			if statusCode == 0x0000 {
+			// Success status - all sub-operations completed
+			if statusCode == status.Success.Code {
 				return nil
 			}
 
-			// Warning status (0xB000) - completed with warnings
-			if statusCode == 0xB000 {
+			// Warning status - completed with sub-operation failures
+			if statusCode == status.CGetWarningSubOperationsComplete.Code {
 				return nil
 			}
 

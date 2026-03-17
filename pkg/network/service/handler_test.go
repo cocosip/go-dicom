@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // setupTestService creates a service ready for testing handlers.
@@ -59,7 +60,7 @@ func TestSetGetHandlers(t *testing.T) {
 	// Set handlers
 	handlers := &Handlers{
 		CEchoHandler: func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
-			return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+			return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 		},
 	}
 	service.SetHandlers(handlers)
@@ -106,7 +107,7 @@ func TestHandleCEchoRequest_CustomHandler(t *testing.T) {
 	handlers := &Handlers{
 		CEchoHandler: func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
 			handlerCalled = true
-			return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+			return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 		},
 	}
 
@@ -168,7 +169,7 @@ func TestHandleCStoreRequest_CustomHandler(t *testing.T) {
 	handlers := &Handlers{
 		CStoreHandler: func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
 			handlerCalled = true
-			return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
+			return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
 		},
 	}
 
@@ -218,9 +219,9 @@ func TestHandleCFindRequest_CustomHandler(t *testing.T) {
 			handlerCalled = true
 			// Return 2 pending + 1 success
 			return []*dimse.CFindResponse{
-				dimse.NewCFindResponseFromRequest(req, 0xFF00, dataset.New()), // Pending
-				dimse.NewCFindResponseFromRequest(req, 0xFF00, dataset.New()), // Pending
-				dimse.NewCFindResponseFromRequest(req, 0x0000, nil),           // Success
+				dimse.NewCFindResponseFromRequest(req, status.CFindPending, dataset.New()), // Pending
+				dimse.NewCFindResponseFromRequest(req, status.CFindPending, dataset.New()), // Pending
+				dimse.NewCFindResponseFromRequest(req, status.Success, nil),               // Success
 			}, nil
 		},
 	}
@@ -246,7 +247,7 @@ func TestHandleResponse(t *testing.T) {
 	service.registerPendingRequest(msgID, req, respCh)
 
 	// Create a response
-	resp := dimse.NewCEchoResponse(msgID, 0x0000)
+	resp := dimse.NewCEchoResponse(msgID, status.Success)
 
 	// Handle the response
 	err := service.handleResponse(resp)
@@ -277,7 +278,7 @@ func TestHandleResponse_UnknownMessageID(t *testing.T) {
     defer func() { _ = service.Close() }()
 
 	// Create a response for a MessageID that has no pending request
-	resp := dimse.NewCEchoResponse(999, 0x0000)
+	resp := dimse.NewCEchoResponse(999, status.Success)
 
 	// Should return error
 	err := service.handleResponse(resp)
@@ -317,17 +318,15 @@ func TestHandleCMoveRequest_CustomHandler(t *testing.T) {
         t.Fatalf("SetMessageID failed: %v", err)
     }
 
-	// Custom handler that returns multiple responses
+	// Custom handler using CMoveOperation
 	handlerCalled := false
 	handlers := &Handlers{
-		CMoveHandler: func(_ context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
+		CMoveHandler: func(_ context.Context, op CMoveOperation) error {
 			handlerCalled = true
-			// Return 2 pending + 1 success
-			return []*dimse.CMoveResponse{
-				dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 10, 0, 0, 0), // Pending
-				dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 0, 10, 0, 0), // Pending
-				dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID()),              // Success
-			}, nil
+			// Send 2 pending updates then success
+			_ = op.SendPending(10, 0, 0, 0)
+			_ = op.SendPending(0, 10, 0, 0)
+			return op.SendSuccess()
 		},
 	}
 
@@ -372,17 +371,15 @@ func TestHandleCGetRequest_CustomHandler(t *testing.T) {
         t.Fatalf("SetMessageID failed: %v", err)
     }
 
-	// Custom handler that returns multiple responses
+	// Custom handler using CGetOperation
 	handlerCalled := false
 	handlers := &Handlers{
-		CGetHandler: func(_ context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
+		CGetHandler: func(_ context.Context, op CGetOperation) error {
 			handlerCalled = true
-			// Return 2 pending + 1 success
-			return []*dimse.CGetResponse{
-				dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 5, 0, 0, 0), // Pending
-				dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 0, 5, 0, 0), // Pending
-				dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID()),             // Success
-			}, nil
+			// Send 2 pending updates then success (no real C-STORE in unit test)
+			_ = op.SendPending(5, 0, 0, 0)
+			_ = op.SendPending(0, 5, 0, 0)
+			return op.SendSuccess()
 		},
 	}
 

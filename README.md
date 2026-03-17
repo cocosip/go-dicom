@@ -1240,6 +1240,295 @@ func main() {
 }
 ```
 
+### DICOM Networking - C-STORE SCU (Send Files)
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom"
+    "github.com/cocosip/go-dicom/pkg/network/client"
+    "github.com/cocosip/go-dicom/pkg/uid"
+)
+
+func main() {
+    c := client.New(
+        client.WithCallingAE("GO-SCU"),
+        client.WithCalledAE("STORE-SCP"),
+    )
+
+    // Propose CT Image Storage with common transfer syntaxes
+    c.AddPresentationContext(
+        uid.CTImageStorage,
+        uid.ExplicitVRLittleEndian,
+        uid.ImplicitVRLittleEndian,
+    )
+
+    ctx := context.Background()
+    if err := c.Connect(ctx, "localhost", 11112); err != nil {
+        log.Fatalf("connect: %v", err)
+    }
+    defer c.Close()
+
+    // Read DICOM file
+    f, err := dicom.OpenFile("scan.dcm", nil)
+    if err != nil {
+        log.Fatalf("open: %v", err)
+    }
+
+    // Send via C-STORE
+    if err := c.CStore(ctx, f.Dataset()); err != nil {
+        log.Fatalf("C-STORE: %v", err)
+    }
+    log.Println("C-STORE successful")
+}
+```
+
+### DICOM Networking - C-FIND SCU (Query)
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/network/client"
+    "github.com/cocosip/go-dicom/pkg/network/dimse"
+    "github.com/cocosip/go-dicom/pkg/uid"
+)
+
+func main() {
+    c := client.New(
+        client.WithCallingAE("GO-SCU"),
+        client.WithCalledAE("QR-SCP"),
+    )
+    c.AddPresentationContext(
+        uid.StudyRootQueryRetrieveInformationModelFind,
+        uid.ExplicitVRLittleEndian,
+    )
+
+    ctx := context.Background()
+    if err := c.Connect(ctx, "localhost", 11112); err != nil {
+        log.Fatalf("connect: %v", err)
+    }
+    defer c.Close()
+
+    // Build query identifier
+    query := dataset.New()
+    _ = query.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{"STUDY"}))
+    _ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
+    _ = query.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{""})) // empty = return all
+
+    responses, err := c.CFind(ctx, dimse.QueryRetrieveLevelStudy, query)
+    if err != nil {
+        log.Fatalf("C-FIND: %v", err)
+    }
+    for _, resp := range responses {
+        log.Printf("Found study: %v", resp.DataDataset())
+    }
+}
+```
+
+### DICOM Networking - C-MOVE SCU (Retrieve to third-party AE)
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/network/client"
+    "github.com/cocosip/go-dicom/pkg/network/dimse"
+    "github.com/cocosip/go-dicom/pkg/uid"
+)
+
+func main() {
+    c := client.New(
+        client.WithCallingAE("GO-SCU"),
+        client.WithCalledAE("QR-SCP"),
+    )
+    c.AddPresentationContext(
+        uid.StudyRootQueryRetrieveInformationModelMove,
+        uid.ExplicitVRLittleEndian,
+    )
+
+    ctx := context.Background()
+    if err := c.Connect(ctx, "localhost", 11112); err != nil {
+        log.Fatalf("connect: %v", err)
+    }
+    defer c.Close()
+
+    // Identifier dataset: which study to move
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.840.999.1"}))
+
+    // "DEST-AE" must be known to the SCP (registered in its AE routing table)
+    responses, err := c.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST-AE", identifier)
+    if err != nil {
+        log.Fatalf("C-MOVE: %v", err)
+    }
+    for _, resp := range responses {
+        log.Printf("C-MOVE progress: completed=%d failed=%d",
+            resp.NumberOfCompletedSubOperations(),
+            resp.NumberOfFailedSubOperations())
+    }
+}
+```
+
+### DICOM Networking - C-GET SCU (Retrieve to self)
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/network/client"
+    "github.com/cocosip/go-dicom/pkg/network/dimse"
+    "github.com/cocosip/go-dicom/pkg/uid"
+)
+
+func main() {
+    c := client.New(
+        client.WithCallingAE("GO-SCU"),
+        client.WithCalledAE("QR-SCP"),
+    )
+    // Propose both C-GET and the storage SOP classes you expect to receive
+    c.AddPresentationContext(
+        uid.StudyRootQueryRetrieveInformationModelGet,
+        uid.ExplicitVRLittleEndian,
+    )
+    c.AddPresentationContext(
+        uid.CTImageStorage,
+        uid.ExplicitVRLittleEndian,
+    )
+
+    ctx := context.Background()
+    if err := c.Connect(ctx, "localhost", 11112); err != nil {
+        log.Fatalf("connect: %v", err)
+    }
+    defer c.Close()
+
+    identifier := dataset.New()
+    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.840.999.1"}))
+
+    // C-GET: SCP sends C-STORE sub-operations back over the same association.
+    // The client's CStoreHandler is called for each received instance.
+    c.SetCStoreHandler(func(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+        ds := req.DataDataset()
+        log.Printf("Received instance: %v", ds)
+        return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
+    })
+
+    responses, err := c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier)
+    if err != nil {
+        log.Fatalf("C-GET: %v", err)
+    }
+    for _, resp := range responses {
+        log.Printf("C-GET progress: completed=%d failed=%d",
+            resp.NumberOfCompletedSubOperations(),
+            resp.NumberOfFailedSubOperations())
+    }
+}
+```
+
+### DICOM Networking - SCP Server (C-MOVE and C-GET handlers)
+
+The SCP handlers for C-MOVE and C-GET use an **operation object** that implements
+`SubOperationResponder`. This enables streaming progress — each call to
+`op.SendPending` immediately writes a response to the wire, equivalent to
+fo-dicom's `IAsyncEnumerable<DicomCMoveResponse>` pattern.
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/network/server"
+    "github.com/cocosip/go-dicom/pkg/network/service"
+)
+
+func main() {
+    srv := server.New(server.WithPort(11112))
+
+    // ── C-MOVE SCP ────────────────────────────────────────────────────────────
+    // CMoveOperation embeds SubOperationResponder and exposes:
+    //   op.QueryLevel()       dimse.QueryRetrieveLevel
+    //   op.MoveDestination()  string  (destination AE title)
+    //   op.Identifier()       *dataset.Dataset
+    //   op.SendPending(remaining, completed, failed, warning uint16) error
+    //   op.SendSuccess() / op.SendWarning() / op.SendFailure(code) error
+    srv.SetCMoveHandler(func(ctx context.Context, op service.CMoveOperation) error {
+        destination := op.MoveDestination()
+        log.Printf("C-MOVE to %s level=%s", destination, op.QueryLevel())
+
+        // Look up destination address from your AE routing table
+        // destHost, destPort := aeRoutes[destination]
+        // ... connect and send C-STORE to destination ...
+
+        // Report progress after each sub-operation
+        _ = op.SendPending(9, 1, 0, 0)  // 1 sent, 9 remaining
+        _ = op.SendPending(0, 10, 0, 0) // all done
+
+        return op.SendSuccess()
+    })
+
+    // ── C-GET SCP ─────────────────────────────────────────────────────────────
+    // CGetOperation embeds SubOperationResponder and exposes:
+    //   op.QueryLevel()   dimse.QueryRetrieveLevel
+    //   op.Identifier()   *dataset.Dataset
+    //   op.SendCStore(ctx, ds) (*dimse.CStoreResponse, error)  ← same association
+    //   op.SendPending / op.SendSuccess / op.SendWarning / op.SendFailure
+    srv.SetCGetHandler(func(ctx context.Context, op service.CGetOperation) error {
+        log.Printf("C-GET level=%s", op.QueryLevel())
+
+        // For each matching instance, push it back to the SCU
+        // ds, _ := loadInstance(...)
+        // resp, err := op.SendCStore(ctx, ds)
+
+        // Report progress after each push
+        _ = op.SendPending(4, 1, 0, 0)
+        _ = op.SendPending(0, 5, 0, 0)
+
+        return op.SendSuccess()
+    })
+
+    ctx := context.Background()
+    if err := srv.ListenAndServe(ctx); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+**`SubOperationResponder` interface** (embedded by both `CMoveOperation` and `CGetOperation`):
+
+| Method | Status code | Description |
+|---|---|---|
+| `SendPending(remaining, completed, failed, warning uint16) error` | 0xFF00 | Progress update after each sub-operation |
+| `SendSuccess() error` | 0x0000 | All sub-operations completed successfully |
+| `SendWarning() error` | 0xB000 | Completed but some sub-operations failed |
+| `SendFailure(code uint16) error` | custom | Fatal failure (e.g. 0xA801 = Move Destination Unknown) |
+
 ### Image Processing and Rendering
 
 ```go

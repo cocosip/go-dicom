@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // NSetRequest represents an N-SET-RQ message.
@@ -91,22 +92,22 @@ type NSetResponse struct {
 //
 // Parameters:
 //   - messageIDBeingRespondedTo: MessageID of the request being responded to
-//   - statusCode: Status code (0x0000 = Success, etc.)
+//   - s: Status (use status.NSetSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID
 //   - attributeList: Optional dataset containing attribute values after modification
 func NewNSetResponse(
 	messageIDBeingRespondedTo uint16,
-	statusCode uint16,
+	s *status.Status,
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NSetResponse {
 	command := createNResponseCommand(uint16(CommandNSetRSP), messageIDBeingRespondedTo,
-		statusCode, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
+		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
 	return &NSetResponse{
 		BaseResponse:              NewBaseResponse(command, attributeList),
-		statusCode:                statusCode,
+		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
@@ -120,7 +121,7 @@ func NewNSetResponseSuccess(
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NSetResponse {
-	return NewNSetResponse(messageIDBeingRespondedTo, 0x0000, affectedSOPClassUID,
+	return NewNSetResponse(messageIDBeingRespondedTo, status.NSetSuccess, affectedSOPClassUID,
 		affectedSOPInstanceUID, attributeList)
 }
 

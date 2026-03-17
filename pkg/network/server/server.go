@@ -247,15 +247,19 @@ func (s *Server) SetCFindHandler(handler func(context.Context, *dimse.CFindReque
 	s.serviceOptions = append(s.serviceOptions, service.WithCFindHandler(handler))
 }
 
-// SetCMoveHandler sets the C-MOVE request handler.
-func (s *Server) SetCMoveHandler(handler func(context.Context, *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error)) {
+// SetCMoveHandler sets the C-MOVE handler via a CMoveOperation interface.
+// The handler calls op.SendPending after each sub-operation and finishes with
+// op.SendSuccess(), op.SendWarning(), or op.SendFailure(code).
+func (s *Server) SetCMoveHandler(handler func(ctx context.Context, op service.CMoveOperation) error) {
 	s.optionsMu.Lock()
 	defer s.optionsMu.Unlock()
 	s.serviceOptions = append(s.serviceOptions, service.WithCMoveHandler(handler))
 }
 
-// SetCGetHandler sets the C-GET request handler.
-func (s *Server) SetCGetHandler(handler func(context.Context, *dimse.CGetRequest) ([]*dimse.CGetResponse, error)) {
+// SetCGetHandler sets the C-GET handler via a CGetOperation interface.
+// The handler calls op.SendCStore for each file, op.SendPending after each result,
+// and finishes with op.SendSuccess(), op.SendWarning(), or op.SendFailure(code).
+func (s *Server) SetCGetHandler(handler func(ctx context.Context, op service.CGetOperation) error) {
 	s.optionsMu.Lock()
 	defer s.optionsMu.Unlock()
 	s.serviceOptions = append(s.serviceOptions, service.WithCGetHandler(handler))

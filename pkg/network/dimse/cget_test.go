@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func TestNewCGetRequest(t *testing.T) {
@@ -58,7 +59,7 @@ func TestCGetRequest_SetPriority(t *testing.T) {
 }
 
 func TestNewCGetResponse(t *testing.T) {
-	resp := NewCGetResponse(123, 0x0000, "1.2.840.10008.5.1.4.1.2.2.3")
+	resp := NewCGetResponse(123, status.Success, "1.2.840.10008.5.1.4.1.2.2.3")
 
 	if resp == nil {
 		t.Fatal("NewCGetResponse returned nil")
@@ -122,7 +123,7 @@ func TestNewCGetResponseFromRequest(t *testing.T) {
     req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
     _ = req.SetMessageID(456)
 
-	resp := NewCGetResponseFromRequest(req, 0x0000)
+	resp := NewCGetResponseFromRequest(req, status.Success)
 
 	if resp.MessageIDBeingRespondedTo() != 456 {
 		t.Errorf("Expected message ID 456, got %d", resp.MessageIDBeingRespondedTo())
