@@ -6,7 +6,11 @@ package buffer
 import (
 	"fmt"
 	"io"
+	"math"
 )
+
+// ErrCompositeSizeOverflow indicates the combined size exceeded uint32 capacity.
+var ErrCompositeSizeOverflow = fmt.Errorf("composite buffer size exceeds uint32 capacity")
 
 // CompositeByteBuffer is a ByteBuffer implementation that combines multiple buffers.
 //
@@ -46,9 +50,9 @@ func (c *CompositeByteBuffer) IsMemory() bool {
 
 // Size returns the total size of all contained buffers.
 func (c *CompositeByteBuffer) Size() uint32 {
-	var total uint32
-	for _, buf := range c.buffers {
-		total += buf.Size()
+	total, overflow := c.totalSize()
+	if overflow {
+		return math.MaxUint32
 	}
 	return total
 }
@@ -56,7 +60,10 @@ func (c *CompositeByteBuffer) Size() uint32 {
 // Data returns all data concatenated into a single byte slice.
 // This will allocate memory for the entire composite buffer.
 func (c *CompositeByteBuffer) Data() []byte {
-	size := c.Size()
+	size, overflow := c.totalSize()
+	if overflow {
+		panic(ErrCompositeSizeOverflow)
+	}
 	if size == 0 {
 		return []byte{}
 	}
@@ -80,9 +87,12 @@ func (c *CompositeByteBuffer) GetByteRange(offset, count uint32, output []byte) 
 	if uint32(len(output)) < count { //nolint:gosec // buffer size check
 		return fmt.Errorf("output buffer length %d is less than requested count %d", len(output), count)
 	}
-	size := c.Size()
+	size, overflow := c.totalSize()
+	if overflow {
+		return ErrCompositeSizeOverflow
+	}
 	if offset > size || count > size-offset {
-		return fmt.Errorf("offset %d + count %d exceeds buffer size %d", offset, count, c.Size())
+		return fmt.Errorf("offset %d + count %d exceeds buffer size %d", offset, count, size)
 	}
 
 	// Find the starting buffer
@@ -118,6 +128,19 @@ func (c *CompositeByteBuffer) GetByteRange(offset, count uint32, output []byte) 
 	}
 
 	return nil
+}
+
+func (c *CompositeByteBuffer) totalSize() (uint32, bool) {
+	var total uint32
+	for _, buf := range c.buffers {
+		size := buf.Size()
+		if size > math.MaxUint32-total {
+			return 0, true
+		}
+		total += size
+	}
+
+	return total, false
 }
 
 // WriteTo writes all contained buffers to the writer in sequence.

@@ -6,14 +6,21 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"time"
 )
 
 // Listener wraps a net.Listener with optional TLS support for DICOM connections.
 type Listener struct {
 	listener  net.Listener
 	tlsConfig *tls.Config
+}
+
+type deadlineListener interface {
+	SetDeadline(time.Time) error
 }
 
 // ListenOption configures how we create a listener.
@@ -84,61 +91,79 @@ func Listen(network, address string, opts ...ListenOption) (*Listener, error) {
 //	}
 //	defer conn.Close()
 func (l *Listener) Accept(ctx context.Context) (net.Conn, error) {
-	// Channel to receive the connection or error
-	type result struct {
-		conn net.Conn
-		err  error
+	if ctx == nil {
+		return nil, fmt.Errorf("accept failed: context cannot be nil")
 	}
-	resultChan := make(chan result, 1)
 
-	// Accept in a goroutine
-	go func() {
+	conn, err := l.acceptWithContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if l.tlsConfig == nil {
+		return conn, nil
+	}
+
+	tlsConn := tls.Server(conn, l.tlsConfig)
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		_ = tlsConn.Close()
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("TLS handshake cancelled: %w", err)
+		}
+		return nil, fmt.Errorf("TLS handshake failed: %w", err)
+	}
+
+	return tlsConn, nil
+}
+
+func (l *Listener) acceptWithContext(ctx context.Context) (net.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("accept cancelled: %w", err)
+	}
+
+	deadlineCapable, ok := l.listener.(deadlineListener)
+	if !ok {
 		conn, err := l.listener.Accept()
-		resultChan <- result{conn: conn, err: err}
-	}()
-
-	// Wait for either accept to complete or context to be cancelled
-	select {
-	case <-ctx.Done():
-		// Context was cancelled, but we can't cancel Accept()
-		// The connection will be accepted anyway, so we close it
-		go func() {
-			res := <-resultChan
-			if res.conn != nil {
-				_ = res.conn.Close()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("accept cancelled: %w", ctx.Err())
 			}
-		}()
-		return nil, fmt.Errorf("accept cancelled: %w", ctx.Err())
-	case res := <-resultChan:
-		if res.err != nil {
-			return nil, fmt.Errorf("accept failed: %w", res.err)
+			return nil, fmt.Errorf("accept failed: %w", err)
+		}
+		return conn, nil
+	}
+
+	for {
+		deadline := time.Now().Add(100 * time.Millisecond)
+		if deadlineErr := deadlineCapable.SetDeadline(deadline); deadlineErr != nil {
+			return nil, fmt.Errorf("accept failed: %w", deadlineErr)
 		}
 
-		// If TLS is enabled, upgrade the connection
-		if l.tlsConfig != nil {
-			tlsConn := tls.Server(res.conn, l.tlsConfig)
-
-			// Perform TLS handshake with context
-			errChan := make(chan error, 1)
-			go func() {
-				errChan <- tlsConn.Handshake()
-			}()
-
-			select {
-			case <-ctx.Done():
-				_ = tlsConn.Close()
-				return nil, fmt.Errorf("TLS handshake cancelled: %w", ctx.Err())
-			case err := <-errChan:
-				if err != nil {
-					_ = tlsConn.Close()
-					return nil, fmt.Errorf("TLS handshake failed: %w", err)
-				}
+		conn, err := l.listener.Accept()
+		if err == nil {
+			if clearErr := deadlineCapable.SetDeadline(time.Time{}); clearErr != nil {
+				_ = conn.Close()
+				return nil, fmt.Errorf("accept failed: %w", clearErr)
 			}
-
-			return tlsConn, nil
+			return conn, nil
 		}
 
-		return res.conn, nil
+		if ctx.Err() != nil {
+			_ = deadlineCapable.SetDeadline(time.Time{})
+			return nil, fmt.Errorf("accept cancelled: %w", ctx.Err())
+		}
+
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			continue
+		}
+
+		if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed) {
+			_ = deadlineCapable.SetDeadline(time.Time{})
+			return nil, fmt.Errorf("accept failed: %w", err)
+		}
+
+		_ = deadlineCapable.SetDeadline(time.Time{})
+		return nil, fmt.Errorf("accept failed: %w", err)
 	}
 }
 

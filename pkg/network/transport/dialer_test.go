@@ -91,7 +91,7 @@ func TestDialTLS_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-    defer func() { _ = listener.Close() }()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -104,7 +104,7 @@ func TestDialTLS_Success(t *testing.T) {
 		defer func() { _ = conn.Close() }()
 
 		tlsConn := tls.Server(conn, serverConfig)
-        defer func() { _ = tlsConn.Close() }()
+		defer func() { _ = tlsConn.Close() }()
 
 		// Perform handshake
 		if err := tlsConn.Handshake(); err != nil {
@@ -155,7 +155,7 @@ func TestDialTLS_HandshakeFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-    defer func() { _ = listener.Close() }()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -165,7 +165,7 @@ func TestDialTLS_HandshakeFailure(t *testing.T) {
 		if err != nil {
 			return
 		}
-        defer func() { _ = conn.Close() }()
+		defer func() { _ = conn.Close() }()
 		// Just accept and wait (no TLS handshake)
 		time.Sleep(200 * time.Millisecond)
 	}()
@@ -191,7 +191,7 @@ func TestDial_WithKeepAlive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-    defer func() { _ = listener.Close() }()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -201,7 +201,7 @@ func TestDial_WithKeepAlive(t *testing.T) {
 		if err != nil {
 			return
 		}
-                defer func() { _ = conn.Close() }()
+		defer func() { _ = conn.Close() }()
 		time.Sleep(100 * time.Millisecond)
 	}()
 
@@ -210,7 +210,7 @@ func TestDial_WithKeepAlive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
-    defer func() { _ = conn.Close() }()
+	defer func() { _ = conn.Close() }()
 
 	// Verify it's a TCP connection
 	tcpConn, ok := conn.(*net.TCPConn)
@@ -241,7 +241,7 @@ func TestDialTLS_WithMultipleOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-    defer func() { _ = listener.Close() }()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -251,7 +251,7 @@ func TestDialTLS_WithMultipleOptions(t *testing.T) {
 		if err != nil {
 			return
 		}
-    defer func() { _ = conn.Close() }()
+		defer func() { _ = conn.Close() }()
 
 		tlsConn := tls.Server(conn, serverConfig)
 		defer func() { _ = tlsConn.Close() }()
@@ -286,4 +286,63 @@ func TestDialTLS_WithMultipleOptions(t *testing.T) {
 		t.Fatalf("DialTLS with options failed: %v", err)
 	}
 	defer func() { _ = conn.Close() }()
+}
+
+func TestDialTLS_DoesNotMutateCallerTLSConfig(t *testing.T) {
+	cert, err := generateTestCertificate()
+	if err != nil {
+		t.Fatalf("Failed to generate test certificate: %v", err)
+	}
+
+	serverConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start test server: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		tlsConn := tls.Server(conn, serverConfig)
+		defer func() { _ = tlsConn.Close() }()
+		_ = tlsConn.Handshake()
+	}()
+
+	rootPool := x509.NewCertPool()
+	if len(cert.Certificate) == 0 {
+		t.Fatal("generated certificate missing DER data")
+	}
+	parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+	rootPool.AddCert(parsedCert)
+
+	clientConfig := &tls.Config{
+		RootCAs:    rootPool,
+		ServerName: "localhost",
+	}
+
+	if clientConfig.MinVersion != 0 {
+		t.Fatalf("expected zero MinVersion before dial, got %d", clientConfig.MinVersion)
+	}
+
+	conn, err := DialTLS(context.Background(), "tcp", listener.Addr().String(), WithTLSConfig(clientConfig))
+	if err != nil {
+		t.Fatalf("DialTLS failed: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if clientConfig.MinVersion != 0 {
+		t.Fatalf("expected caller TLS config to remain unchanged, got MinVersion=%d", clientConfig.MinVersion)
+	}
 }

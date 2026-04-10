@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -81,6 +82,9 @@ func TestListener_AcceptContextCancellation(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error due to cancelled context, got nil")
 	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
 }
 
 func TestListener_Close(t *testing.T) {
@@ -153,11 +157,11 @@ func TestListenTLS_Success(t *testing.T) {
 	}()
 
 	// Accept the TLS connection
-    conn, err := listener.Accept(context.Background())
+	conn, err := listener.Accept(context.Background())
 	if err != nil {
 		t.Fatalf("Accept TLS failed: %v", err)
 	}
-    defer func() { _ = conn.Close() }()
+	defer func() { _ = conn.Close() }()
 
 	// Verify it's a TLS connection
 	if _, ok := conn.(*tls.Conn); !ok {
@@ -193,7 +197,7 @@ func TestListenTLS_HandshakeFailure(t *testing.T) {
 		if err != nil {
 			return
 		}
-        defer func() { _ = conn.Close() }()
+		defer func() { _ = conn.Close() }()
 		// Just hold the connection for a bit
 		time.Sleep(200 * time.Millisecond)
 	}()
@@ -206,6 +210,43 @@ func TestListenTLS_HandshakeFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected TLS handshake failure, got nil")
 	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline exceeded during TLS handshake, got %v", err)
+	}
+}
+
+func TestListener_AcceptContextTimeoutDoesNotConsumeNextConnection(t *testing.T) {
+	listener, err := Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err = listener.Accept(ctx)
+	if err == nil {
+		t.Fatal("Expected timeout error, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline exceeded, got %v", err)
+	}
+
+	client, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial listener: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	acceptCtx, acceptCancel := context.WithTimeout(context.Background(), time.Second)
+	defer acceptCancel()
+
+	conn, err := listener.Accept(acceptCtx)
+	if err != nil {
+		t.Fatalf("Accept after timeout failed: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
 }
 
 func TestListener_MultipleConnections(t *testing.T) {
@@ -214,7 +255,7 @@ func TestListener_MultipleConnections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-    defer func() { _ = listener.Close() }()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 
@@ -229,17 +270,17 @@ func TestListener_MultipleConnections(t *testing.T) {
 			if err != nil {
 				return
 			}
-            defer func() { _ = conn.Close() }()
+			defer func() { _ = conn.Close() }()
 			time.Sleep(100 * time.Millisecond)
 		}(i)
 	}
 
 	// Accept multiple connections
 	for i := 0; i < numConns; i++ {
-        conn, err := listener.Accept(context.Background())
+		conn, err := listener.Accept(context.Background())
 		if err != nil {
 			t.Fatalf("Accept %d failed: %v", i, err)
 		}
-        _ = conn.Close()
+		_ = conn.Close()
 	}
 }

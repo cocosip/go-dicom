@@ -130,33 +130,29 @@ func DialTLS(ctx context.Context, network, address string, opts ...DialOption) (
 		return nil, err
 	}
 
-	// Get TLS config (use default if not specified)
-    tlsConfig := config.tlsConfig
-    if tlsConfig == nil {
-        tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-    } else if tlsConfig.MinVersion == 0 {
-        tlsConfig.MinVersion = tls.VersionTLS12
-    }
+	// Clone caller-provided config so dialing cannot mutate shared TLS state.
+	tlsConfig := cloneTLSConfig(config.tlsConfig)
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	} else if tlsConfig.MinVersion == 0 {
+		tlsConfig.MinVersion = tls.VersionTLS12
+	}
 
 	// Wrap the connection with TLS
 	tlsConn := tls.Client(rawConn, tlsConfig)
 
-	// Perform the TLS handshake with context
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- tlsConn.Handshake()
-	}()
-
-	select {
-	case <-ctx.Done():
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		_ = tlsConn.Close()
-		return nil, fmt.Errorf("TLS handshake cancelled: %w", ctx.Err())
-	case err := <-errChan:
-		if err != nil {
-			_ = tlsConn.Close()
-			return nil, fmt.Errorf("TLS handshake failed: %w", err)
-		}
+		return nil, fmt.Errorf("TLS handshake failed: %w", err)
 	}
 
 	return tlsConn, nil
+}
+
+func cloneTLSConfig(config *tls.Config) *tls.Config {
+	if config == nil {
+		return nil
+	}
+
+	return config.Clone()
 }

@@ -5,7 +5,9 @@ package transport
 
 import (
 	"bytes"
+	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,8 +17,8 @@ import (
 func TestReadWritePDU_Basic(t *testing.T) {
 	// Create a pair of connected pipes
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Test data
 	testPDU := &pdu.RawPDU{
@@ -47,9 +49,9 @@ func TestReadWritePDU_Basic(t *testing.T) {
 }
 
 func TestReadWritePDU_EmptyData(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// PDU with empty data
 	testPDU := &pdu.RawPDU{
@@ -77,9 +79,9 @@ func TestReadWritePDU_EmptyData(t *testing.T) {
 }
 
 func TestReadWritePDU_LargeData(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Large PDU (1 MB)
 	largeData := make([]byte, 1024*1024)
@@ -112,9 +114,9 @@ func TestReadWritePDU_LargeData(t *testing.T) {
 }
 
 func TestReadPDU_Timeout(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Don't write anything, just try to read with timeout
 	errChan := make(chan error, 1)
@@ -135,9 +137,9 @@ func TestReadPDU_Timeout(t *testing.T) {
 }
 
 func TestWritePDU_Timeout(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Fill up the pipe buffer to cause write to block
 	largeData := make([]byte, 10*1024*1024) // 10 MB
@@ -165,9 +167,9 @@ func TestWritePDU_Timeout(t *testing.T) {
 }
 
 func TestReadWritePDU_MultipleTypes(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Test different PDU types
 	testPDUs := []*pdu.RawPDU{
@@ -207,23 +209,23 @@ func TestReadWritePDU_MultipleTypes(t *testing.T) {
 }
 
 func TestReadPDU_ExcessiveLength(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Manually write a PDU with excessive length
 	go func() {
 		// Write PDU header with length > 100MB
-        header := make([]byte, 6)
-        header[0] = pdu.TypePDataTF
-        header[1] = 0
+		header := make([]byte, 6)
+		header[0] = pdu.TypePDataTF
+		header[1] = 0
 		// Set length to 200MB (exceeds limit)
 		length := uint32(200 * 1024 * 1024)
 		header[2] = byte(length >> 24)
 		header[3] = byte(length >> 16)
 		header[4] = byte(length >> 8)
 		header[5] = byte(length)
-        _, _ = client.Write(header)
+		_, _ = client.Write(header)
 	}()
 
 	// Should fail with length validation error
@@ -231,4 +233,110 @@ func TestReadPDU_ExcessiveLength(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for excessive PDU length, got nil")
 	}
+}
+
+func TestWritePDU_RetriesShortWrites(t *testing.T) {
+	testPDU := &pdu.RawPDU{
+		Type: pdu.TypePDataTF,
+		Data: []byte("short writes should still send the full pdu payload"),
+	}
+
+	conn := &shortWriteConn{maxChunk: 3}
+	if err := WritePDU(conn, 0, testPDU); err != nil {
+		t.Fatalf("WritePDU failed: %v", err)
+	}
+
+	encoded := conn.Bytes()
+	if len(encoded) != 6+len(testPDU.Data) {
+		t.Fatalf("expected %d bytes written, got %d", 6+len(testPDU.Data), len(encoded))
+	}
+
+	if encoded[0] != testPDU.Type {
+		t.Fatalf("expected type byte %d, got %d", testPDU.Type, encoded[0])
+	}
+
+	length := uint32(len(testPDU.Data))
+	expectedHeader := []byte{testPDU.Type, 0, byte(length >> 24), byte(length >> 16), byte(length >> 8), byte(length)}
+	if !bytes.Equal(encoded[:6], expectedHeader) {
+		t.Fatalf("unexpected header bytes: got %v want %v", encoded[:6], expectedHeader)
+	}
+
+	if !bytes.Equal(encoded[6:], testPDU.Data) {
+		t.Fatal("payload mismatch after short writes")
+	}
+}
+
+type shortWriteConn struct {
+	mu       sync.Mutex
+	buf      bytes.Buffer
+	maxChunk int
+}
+
+func (c *shortWriteConn) Read(_ []byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (c *shortWriteConn) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	chunk := c.maxChunk
+	if chunk <= 0 || chunk > len(p) {
+		chunk = len(p)
+	}
+
+	n, err := c.buf.Write(p[:chunk])
+	if err != nil {
+		return n, err
+	}
+
+	if n == 0 {
+		return 0, io.ErrShortWrite
+	}
+
+	return n, nil
+}
+
+func (c *shortWriteConn) Close() error {
+	return nil
+}
+
+func (c *shortWriteConn) LocalAddr() net.Addr {
+	return dummyAddr("local")
+}
+
+func (c *shortWriteConn) RemoteAddr() net.Addr {
+	return dummyAddr("remote")
+}
+
+func (c *shortWriteConn) SetDeadline(_ time.Time) error {
+	return nil
+}
+
+func (c *shortWriteConn) SetReadDeadline(_ time.Time) error {
+	return nil
+}
+
+func (c *shortWriteConn) SetWriteDeadline(_ time.Time) error {
+	return nil
+}
+
+func (c *shortWriteConn) Bytes() []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]byte(nil), c.buf.Bytes()...)
+}
+
+type dummyAddr string
+
+func (a dummyAddr) Network() string {
+	return string(a)
+}
+
+func (a dummyAddr) String() string {
+	return string(a)
 }

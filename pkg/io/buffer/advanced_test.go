@@ -5,6 +5,9 @@ package buffer_test
 
 import (
 	"bytes"
+	"errors"
+	"io"
+	"math"
 	"strings"
 	"testing"
 
@@ -320,6 +323,60 @@ func TestCompositeWithRangeBuffers(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Errorf("Composite of ranges = %q, want %q", got, want)
 	}
+}
+
+func TestCompositeByteBuffer_SizeOverflow(t *testing.T) {
+	largeA := overflowByteBuffer{size: math.MaxUint32}
+	largeB := buffer.NewMemory([]byte{1})
+	composite := buffer.NewComposite(largeA, largeB)
+
+	if got := composite.Size(); got != math.MaxUint32 {
+		t.Fatalf("Size() = %d, want %d when overflow is detected", got, uint32(math.MaxUint32))
+	}
+
+	out := make([]byte, 1)
+	err := composite.GetByteRange(0, 1, out)
+	if !errors.Is(err, buffer.ErrCompositeSizeOverflow) {
+		t.Fatalf("expected ErrCompositeSizeOverflow, got %v", err)
+	}
+
+	defer func() {
+		recovered := recover()
+		if !errors.Is(asError(recovered), buffer.ErrCompositeSizeOverflow) {
+			t.Fatalf("expected panic with ErrCompositeSizeOverflow, got %v", recovered)
+		}
+	}()
+
+	_ = composite.Data()
+}
+
+func asError(v any) error {
+	err, _ := v.(error)
+	return err
+}
+
+type overflowByteBuffer struct {
+	size uint32
+}
+
+func (b overflowByteBuffer) IsMemory() bool {
+	return true
+}
+
+func (b overflowByteBuffer) Size() uint32 {
+	return b.size
+}
+
+func (b overflowByteBuffer) Data() []byte {
+	return nil
+}
+
+func (b overflowByteBuffer) GetByteRange(_, _ uint32, _ []byte) error {
+	return nil
+}
+
+func (b overflowByteBuffer) WriteTo(_ io.Writer) (int64, error) {
+	return 0, nil
 }
 
 // TestStreamByteBuffer_Concurrent tests concurrent access to stream buffer

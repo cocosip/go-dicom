@@ -4,12 +4,12 @@
 package transport
 
 import (
-    "encoding/binary"
-    "fmt"
-    "io"
-    "net"
-    "math"
-    "time"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"math"
+	"net"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
@@ -104,30 +104,45 @@ func WritePDU(conn net.Conn, timeout time.Duration, p *pdu.RawPDU) error {
 		defer func() { _ = conn.SetWriteDeadline(time.Time{}) }()
 	}
 
-    // Encode PDU header
-    // Format: [type:1][reserved:1][length:4]
-    // Validate data length before converting to uint32
-    dataLen := len(p.Data)
-    if dataLen < 0 || dataLen > int(math.MaxUint32) {
-        return fmt.Errorf("PDU data length %d exceeds uint32 range", dataLen)
-    }
-    length := uint32(dataLen)
-    var header [6]byte
-    header[0] = p.Type        // #nosec G602 -- fixed-size header array [6]byte
-    var reserved byte
-    header[1] = reserved // #nosec G602 -- fixed-size header array [6]byte
-    binary.BigEndian.PutUint32(header[2:6], length)
+	// Encode PDU header
+	// Format: [type:1][reserved:1][length:4]
+	// Validate data length before converting to uint32
+	dataLen := len(p.Data)
+	if dataLen < 0 || dataLen > int(math.MaxUint32) {
+		return fmt.Errorf("PDU data length %d exceeds uint32 range", dataLen)
+	}
+	length := uint32(dataLen)
+	var header [6]byte
+	header[0] = p.Type // #nosec G602 -- fixed-size header array [6]byte
+	var reserved byte
+	header[1] = reserved // #nosec G602 -- fixed-size header array [6]byte
+	binary.BigEndian.PutUint32(header[2:6], length)
 
 	// Write header
-    if _, err := conn.Write(header[:]); err != nil {
-        return fmt.Errorf("failed to write PDU header: %w", err)
-    }
+	if err := writeFull(conn, header[:]); err != nil {
+		return fmt.Errorf("failed to write PDU header: %w", err)
+	}
 
 	// Write data
 	if length > 0 {
-		if _, err := conn.Write(p.Data); err != nil {
+		if err := writeFull(conn, p.Data); err != nil {
 			return fmt.Errorf("failed to write PDU data: %w", err)
 		}
+	}
+
+	return nil
+}
+
+func writeFull(conn net.Conn, data []byte) error {
+	for len(data) > 0 {
+		n, err := conn.Write(data)
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return io.ErrShortWrite
+		}
+		data = data[n:]
 	}
 
 	return nil
