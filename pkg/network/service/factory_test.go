@@ -11,6 +11,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func TestCreateCGetRequestRequiresQueryRetrieveLevel(t *testing.T) {
@@ -84,5 +86,29 @@ func TestCreateNGetRequestRequiresRequestedSOPUIDs(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "RequestedSOPClassUID") {
 		t.Fatalf("expected RequestedSOPClassUID error, got %v", err)
+	}
+}
+
+func TestCreateNActionResponseAllowsZeroActionTypeID(t *testing.T) {
+	resp := dimse.NewNActionResponse(100, status.NActionSuccess, "1.2.840.10008.5.1.1.40", "1.2.3", 0, nil)
+
+	decoded, err := createNActionResponse(resp.CommandDataset(), resp.DataDataset())
+	if err != nil {
+		t.Fatalf("expected zero ActionTypeID to round-trip, got error: %v", err)
+	}
+	if decoded.ActionTypeID() != 0 {
+		t.Fatalf("expected ActionTypeID 0, got %d", decoded.ActionTypeID())
+	}
+}
+
+func TestCreateNEventReportResponseAllowsZeroEventTypeID(t *testing.T) {
+	resp := dimse.NewNEventReportResponse(100, status.NEventReportSuccess, "1.2.840.10008.5.1.1.40", "1.2.3", 0, nil)
+
+	decoded, err := createNEventReportResponse(resp.CommandDataset(), resp.DataDataset())
+	if err != nil {
+		t.Fatalf("expected zero EventTypeID to round-trip, got error: %v", err)
+	}
+	if decoded.EventTypeID() != 0 {
+		t.Fatalf("expected EventTypeID 0, got %d", decoded.EventTypeID())
 	}
 }

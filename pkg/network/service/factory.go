@@ -116,6 +116,13 @@ func requiredUInt16(commandDS *dataset.Dataset, fieldName string, fieldTag *tag.
 	return value, nil
 }
 
+func optionalUInt16(commandDS *dataset.Dataset, fieldTag *tag.Tag) (uint16, error) {
+	if !commandDS.Contains(fieldTag) {
+		return 0, nil
+	}
+	return commandDS.GetUInt16(fieldTag, 0)
+}
+
 // createCEchoRequest creates a C-ECHO-RQ from datasets.
 func createCEchoRequest(commandDS *dataset.Dataset) (*dimse.CEchoRequest, error) {
 	// Get MessageID
@@ -417,9 +424,9 @@ func createNEventReportResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NEve
 
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
-	eventTypeID, err := requiredUInt16(commandDS, "EventTypeID", tag.EventTypeID)
+	eventTypeID, err := optionalUInt16(commandDS, tag.EventTypeID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get EventTypeID: %w", err)
 	}
 
 	return dimse.NewNEventReportResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, eventTypeID, dataDS), nil
@@ -561,9 +568,9 @@ func createNActionResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NActionRe
 
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
-	actionTypeID, err := requiredUInt16(commandDS, "ActionTypeID", tag.ActionTypeID)
+	actionTypeID, err := optionalUInt16(commandDS, tag.ActionTypeID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get ActionTypeID: %w", err)
 	}
 
 	return dimse.NewNActionResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, actionTypeID, dataDS), nil

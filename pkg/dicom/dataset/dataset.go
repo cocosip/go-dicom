@@ -55,12 +55,12 @@ func NewWithTransferSyntax(ts *transfer.Syntax) *Dataset {
 
 // NewWithElements creates a dataset initialized with the given elements.
 // Later elements replace earlier ones when the same tag appears multiple times.
-// A nil element is treated as a programming error and will panic.
+// Nil elements are ignored.
 func NewWithElements(elements []element.Element) *Dataset {
 	ds := New()
 	for _, elem := range elements {
 		if elem == nil {
-			panic("cannot initialize dataset with nil element")
+			continue
 		}
 		_ = ds.AddOrUpdate(elem)
 	}

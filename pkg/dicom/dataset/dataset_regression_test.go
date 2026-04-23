@@ -26,12 +26,18 @@ func TestNewWithElementsDuplicateTagUsesLatestValue(t *testing.T) {
 	}
 }
 
-func TestNewWithElementsPanicsOnNilElement(t *testing.T) {
+func TestNewWithElementsIgnoresNilElement(t *testing.T) {
 	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic when NewWithElements receives nil element")
+		if r := recover(); r != nil {
+			t.Fatalf("expected nil element to be ignored, got panic: %v", r)
 		}
 	}()
 
-	_ = NewWithElements([]element.Element{nil})
+	ds := NewWithElements([]element.Element{nil})
+	if ds == nil {
+		t.Fatal("expected dataset to be created")
+	}
+	if ds.Count() != 0 {
+		t.Fatalf("expected nil element to be ignored, got %d elements", ds.Count())
+	}
 }
