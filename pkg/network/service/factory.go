@@ -100,6 +100,22 @@ func createMessageFromDatasets(commandDS, dataDS *dataset.Dataset) (dimse.Messag
 	}
 }
 
+func requiredString(commandDS *dataset.Dataset, fieldName string, fieldTag *tag.Tag) (string, error) {
+	value, ok := commandDS.GetString(fieldTag)
+	if !ok {
+		return "", fmt.Errorf("%s not found", fieldName)
+	}
+	return value, nil
+}
+
+func requiredUInt16(commandDS *dataset.Dataset, fieldName string, fieldTag *tag.Tag) (uint16, error) {
+	value, err := commandDS.GetUInt16(fieldTag, 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get %s: %w", fieldName, err)
+	}
+	return value, nil
+}
+
 // createCEchoRequest creates a C-ECHO-RQ from datasets.
 func createCEchoRequest(commandDS *dataset.Dataset) (*dimse.CEchoRequest, error) {
 	// Get MessageID
@@ -108,11 +124,11 @@ func createCEchoRequest(commandDS *dataset.Dataset) (*dimse.CEchoRequest, error)
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-    req := dimse.NewCEchoRequest()
-    if err := req.SetMessageID(messageID); err != nil {
-        return nil, fmt.Errorf("failed to set MessageID: %w", err)
-    }
-    return req, nil
+	req := dimse.NewCEchoRequest()
+	if err := req.SetMessageID(messageID); err != nil {
+		return nil, fmt.Errorf("failed to set MessageID: %w", err)
+	}
+	return req, nil
 }
 
 // createCEchoResponse creates a C-ECHO-RSP from datasets.
@@ -150,10 +166,10 @@ func createCStoreRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CStoreReque
 		return nil, fmt.Errorf("failed to create C-STORE request: %w", err)
 	}
 
-    if err := req.SetMessageID(messageID); err != nil {
-        return nil, fmt.Errorf("failed to set MessageID: %w", err)
-    }
-    return req, nil
+	if err := req.SetMessageID(messageID); err != nil {
+		return nil, fmt.Errorf("failed to set MessageID: %w", err)
+	}
+	return req, nil
 }
 
 // createCStoreResponse creates a C-STORE-RSP from datasets.
@@ -205,11 +221,11 @@ func createCFindRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRequest
 	level := dimse.QueryRetrieveLevel(levelStr)
 
 	// Create request
-    req := dimse.NewCFindRequest(level, dataDS)
-    if err := req.SetMessageID(messageID); err != nil {
-        return nil, fmt.Errorf("failed to set MessageID: %w", err)
-    }
-    return req, nil
+	req := dimse.NewCFindRequest(level, dataDS)
+	if err := req.SetMessageID(messageID); err != nil {
+		return nil, fmt.Errorf("failed to set MessageID: %w", err)
+	}
+	return req, nil
 }
 
 // createCGetRequest creates a C-GET-RQ from datasets.
@@ -223,7 +239,10 @@ func createCGetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CGetRequest, 
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	levelStr, _ := dataDS.GetString(tag.QueryRetrieveLevel)
+	levelStr, ok := dataDS.GetString(tag.QueryRetrieveLevel)
+	if !ok {
+		return nil, fmt.Errorf("QueryRetrieveLevel not found in identifier")
+	}
 	level := dimse.QueryRetrieveLevel(levelStr)
 
 	req := dimse.NewCGetRequest(level, dataDS)
@@ -248,10 +267,22 @@ func createCGetResponse(commandDS *dataset.Dataset) (*dimse.CGetResponse, error)
 	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
 	if statusCode == status.CGetPending.Code {
-		remaining, _ := commandDS.GetUInt16(tag.NumberOfRemainingSuboperations, 0)
-		completed, _ := commandDS.GetUInt16(tag.NumberOfCompletedSuboperations, 0)
-		failed, _ := commandDS.GetUInt16(tag.NumberOfFailedSuboperations, 0)
-		warning, _ := commandDS.GetUInt16(tag.NumberOfWarningSuboperations, 0)
+		remaining, err := requiredUInt16(commandDS, "NumberOfRemainingSuboperations", tag.NumberOfRemainingSuboperations)
+		if err != nil {
+			return nil, err
+		}
+		completed, err := requiredUInt16(commandDS, "NumberOfCompletedSuboperations", tag.NumberOfCompletedSuboperations)
+		if err != nil {
+			return nil, err
+		}
+		failed, err := requiredUInt16(commandDS, "NumberOfFailedSuboperations", tag.NumberOfFailedSuboperations)
+		if err != nil {
+			return nil, err
+		}
+		warning, err := requiredUInt16(commandDS, "NumberOfWarningSuboperations", tag.NumberOfWarningSuboperations)
+		if err != nil {
+			return nil, err
+		}
 		return dimse.NewCGetResponsePending(messageID, sopClassUID, remaining, completed, failed, warning), nil
 	}
 	return dimse.NewCGetResponse(messageID, status.LookupStatus(statusCode), sopClassUID), nil
@@ -268,8 +299,14 @@ func createCMoveRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CMoveRequest
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	moveDestination, _ := commandDS.GetString(tag.MoveDestination)
-	levelStr, _ := dataDS.GetString(tag.QueryRetrieveLevel)
+	moveDestination, err := requiredString(commandDS, "MoveDestination", tag.MoveDestination)
+	if err != nil {
+		return nil, err
+	}
+	levelStr, ok := dataDS.GetString(tag.QueryRetrieveLevel)
+	if !ok {
+		return nil, fmt.Errorf("QueryRetrieveLevel not found in identifier")
+	}
 	level := dimse.QueryRetrieveLevel(levelStr)
 
 	req := dimse.NewCMoveRequest(level, moveDestination, dataDS)
@@ -294,10 +331,22 @@ func createCMoveResponse(commandDS *dataset.Dataset) (*dimse.CMoveResponse, erro
 	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
 	if statusCode == status.CMovePending.Code {
-		remaining, _ := commandDS.GetUInt16(tag.NumberOfRemainingSuboperations, 0)
-		completed, _ := commandDS.GetUInt16(tag.NumberOfCompletedSuboperations, 0)
-		failed, _ := commandDS.GetUInt16(tag.NumberOfFailedSuboperations, 0)
-		warning, _ := commandDS.GetUInt16(tag.NumberOfWarningSuboperations, 0)
+		remaining, err := requiredUInt16(commandDS, "NumberOfRemainingSuboperations", tag.NumberOfRemainingSuboperations)
+		if err != nil {
+			return nil, err
+		}
+		completed, err := requiredUInt16(commandDS, "NumberOfCompletedSuboperations", tag.NumberOfCompletedSuboperations)
+		if err != nil {
+			return nil, err
+		}
+		failed, err := requiredUInt16(commandDS, "NumberOfFailedSuboperations", tag.NumberOfFailedSuboperations)
+		if err != nil {
+			return nil, err
+		}
+		warning, err := requiredUInt16(commandDS, "NumberOfWarningSuboperations", tag.NumberOfWarningSuboperations)
+		if err != nil {
+			return nil, err
+		}
 		return dimse.NewCMoveResponsePending(messageID, sopClassUID, remaining, completed, failed, warning), nil
 	}
 	return dimse.NewCMoveResponse(messageID, status.LookupStatus(statusCode), sopClassUID), nil
@@ -334,9 +383,18 @@ func createNEventReportRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NEven
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
-	eventTypeID, _ := commandDS.GetUInt16(tag.EventTypeID, 0)
+	affectedSOPClassUID, err := requiredString(commandDS, "AffectedSOPClassUID", tag.AffectedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
+	affectedSOPInstanceUID, err := requiredString(commandDS, "AffectedSOPInstanceUID", tag.AffectedSOPInstanceUID)
+	if err != nil {
+		return nil, err
+	}
+	eventTypeID, err := requiredUInt16(commandDS, "EventTypeID", tag.EventTypeID)
+	if err != nil {
+		return nil, err
+	}
 
 	req := dimse.NewNEventReportRequest(affectedSOPClassUID, affectedSOPInstanceUID, eventTypeID, dataDS)
 	if err := req.SetMessageID(messageID); err != nil {
@@ -359,7 +417,10 @@ func createNEventReportResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NEve
 
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
-	eventTypeID, _ := commandDS.GetUInt16(tag.EventTypeID, 0)
+	eventTypeID, err := requiredUInt16(commandDS, "EventTypeID", tag.EventTypeID)
+	if err != nil {
+		return nil, err
+	}
 
 	return dimse.NewNEventReportResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, eventTypeID, dataDS), nil
 }
@@ -371,14 +432,25 @@ func createNGetRequest(commandDS *dataset.Dataset) (*dimse.NGetRequest, error) {
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	requestedSOPClassUID, _ := commandDS.GetString(tag.RequestedSOPClassUID)
-	requestedSOPInstanceUID, _ := commandDS.GetString(tag.RequestedSOPInstanceUID)
+	requestedSOPClassUID, err := requiredString(commandDS, "RequestedSOPClassUID", tag.RequestedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
+	requestedSOPInstanceUID, err := requiredString(commandDS, "RequestedSOPInstanceUID", tag.RequestedSOPInstanceUID)
+	if err != nil {
+		return nil, err
+	}
 
 	// AttributeIdentifierList is optional
 	var attrList []*tag.Tag
 	if elem, ok := commandDS.Get(tag.AttributeIdentifierList); ok {
 		if atElem, ok := elem.(*element.AttributeTag); ok {
-			attrList, _ = atElem.GetValues()
+			attrList, err = atElem.GetValues()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get AttributeIdentifierList: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("AttributeIdentifierList is not AttributeTag")
 		}
 	}
 
@@ -414,8 +486,14 @@ func createNSetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NSetRequest, 
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	requestedSOPClassUID, _ := commandDS.GetString(tag.RequestedSOPClassUID)
-	requestedSOPInstanceUID, _ := commandDS.GetString(tag.RequestedSOPInstanceUID)
+	requestedSOPClassUID, err := requiredString(commandDS, "RequestedSOPClassUID", tag.RequestedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
+	requestedSOPInstanceUID, err := requiredString(commandDS, "RequestedSOPInstanceUID", tag.RequestedSOPInstanceUID)
+	if err != nil {
+		return nil, err
+	}
 
 	req := dimse.NewNSetRequest(requestedSOPClassUID, requestedSOPInstanceUID, dataDS)
 	if err := req.SetMessageID(messageID); err != nil {
@@ -449,9 +527,18 @@ func createNActionRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NActionReq
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	requestedSOPClassUID, _ := commandDS.GetString(tag.RequestedSOPClassUID)
-	requestedSOPInstanceUID, _ := commandDS.GetString(tag.RequestedSOPInstanceUID)
-	actionTypeID, _ := commandDS.GetUInt16(tag.ActionTypeID, 0)
+	requestedSOPClassUID, err := requiredString(commandDS, "RequestedSOPClassUID", tag.RequestedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
+	requestedSOPInstanceUID, err := requiredString(commandDS, "RequestedSOPInstanceUID", tag.RequestedSOPInstanceUID)
+	if err != nil {
+		return nil, err
+	}
+	actionTypeID, err := requiredUInt16(commandDS, "ActionTypeID", tag.ActionTypeID)
+	if err != nil {
+		return nil, err
+	}
 
 	req := dimse.NewNActionRequest(requestedSOPClassUID, requestedSOPInstanceUID, actionTypeID, dataDS)
 	if err := req.SetMessageID(messageID); err != nil {
@@ -474,7 +561,10 @@ func createNActionResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NActionRe
 
 	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
-	actionTypeID, _ := commandDS.GetUInt16(tag.ActionTypeID, 0)
+	actionTypeID, err := requiredUInt16(commandDS, "ActionTypeID", tag.ActionTypeID)
+	if err != nil {
+		return nil, err
+	}
 
 	return dimse.NewNActionResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, actionTypeID, dataDS), nil
 }
@@ -486,7 +576,10 @@ func createNCreateRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NCreateReq
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
+	affectedSOPClassUID, err := requiredString(commandDS, "AffectedSOPClassUID", tag.AffectedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
 	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
 	req := dimse.NewNCreateRequest(affectedSOPClassUID, affectedSOPInstanceUID, dataDS)
@@ -521,8 +614,14 @@ func createNDeleteRequest(commandDS *dataset.Dataset) (*dimse.NDeleteRequest, er
 		return nil, fmt.Errorf("failed to get MessageID: %w", err)
 	}
 
-	requestedSOPClassUID, _ := commandDS.GetString(tag.RequestedSOPClassUID)
-	requestedSOPInstanceUID, _ := commandDS.GetString(tag.RequestedSOPInstanceUID)
+	requestedSOPClassUID, err := requiredString(commandDS, "RequestedSOPClassUID", tag.RequestedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
+	requestedSOPInstanceUID, err := requiredString(commandDS, "RequestedSOPInstanceUID", tag.RequestedSOPInstanceUID)
+	if err != nil {
+		return nil, err
+	}
 
 	req := dimse.NewNDeleteRequest(requestedSOPClassUID, requestedSOPInstanceUID)
 	if err := req.SetMessageID(messageID); err != nil {
@@ -548,4 +647,3 @@ func createNDeleteResponse(commandDS *dataset.Dataset) (*dimse.NDeleteResponse, 
 
 	return dimse.NewNDeleteResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID), nil
 }
-

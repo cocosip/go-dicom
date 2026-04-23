@@ -40,9 +40,9 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 
 	// Add content sequence if items provided (0040,A730) VR=SQ
 	if len(items) > 0 {
-		datasets := make([]*dataset.Dataset, len(items))
-		for i, item := range items {
-			datasets[i] = item.Dataset()
+		datasets, err := contentItemDatasets(items)
+		if err != nil {
+			return nil, err
 		}
 
 		seq := dataset.NewSequenceWithItems(tag.ContentSequence, datasets)

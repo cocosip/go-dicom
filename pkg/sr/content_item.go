@@ -115,9 +115,9 @@ func NewContentItemContainer(code *CodeItem, relationship Relationship, continui
 
 	// Add content sequence (0040,A730) VR=SQ
 	if len(items) > 0 {
-		datasets := make([]*dataset.Dataset, len(items))
-		for i, item := range items {
-			datasets[i] = item.Dataset()
+		datasets, err := contentItemDatasets(items)
+		if err != nil {
+			return nil, err
 		}
 
 		seq := dataset.NewSequenceWithItems(tag.ContentSequence, datasets)
@@ -192,7 +192,10 @@ func (c *ContentItem) Children() ([]*ContentItem, error) {
 
 	seq, err := c.dataset.GetSequence(tag.ContentSequence)
 	if err != nil {
-		return nil, nil // No children
+		if !c.dataset.Contains(tag.ContentSequence) {
+			return nil, nil
+		}
+		return nil, err
 	}
 
 	items := make([]*ContentItem, seq.Count())
@@ -201,6 +204,20 @@ func (c *ContentItem) Children() ([]*ContentItem, error) {
 	}
 
 	return items, nil
+}
+
+func contentItemDatasets(items []*ContentItem) ([]*dataset.Dataset, error) {
+	datasets := make([]*dataset.Dataset, len(items))
+	for i, item := range items {
+		if item == nil {
+			return nil, NewError("cannot add nil item")
+		}
+		if item.Dataset() == nil {
+			return nil, NewError("content item dataset is nil")
+		}
+		datasets[i] = item.Dataset()
+	}
+	return datasets, nil
 }
 
 // GetText returns the text value (for TEXT type)

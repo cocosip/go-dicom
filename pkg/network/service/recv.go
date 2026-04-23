@@ -198,7 +198,10 @@ func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, commandFragments, datasetFra
 				// Command PDV is complete
 				// Check CommandDataSetType to see if data is expected
 				// 0x0101 = NO_DATA_SET_PRESENT
-				hasData := s.commandHasDataset(*commandFragments)
+				hasData, err := s.inspectCommandHasDataset(*commandFragments)
+				if err != nil {
+					return fmt.Errorf("failed to inspect CommandDataSetType: %w", err)
+				}
 
 				if !hasData {
 					// No data dataset expected - process message now
@@ -237,6 +240,11 @@ func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, commandFragments, datasetFra
 // commandHasDataset checks the CommandDataSetType field to determine if a data dataset is present.
 // Returns true if data is expected, false if CommandDataSetType = 0x0101 (NO_DATA_SET_PRESENT).
 func (s *Service) commandHasDataset(commandData []byte) bool {
+	hasData, err := s.inspectCommandHasDataset(commandData)
+	return err == nil && hasData
+}
+
+func (s *Service) inspectCommandHasDataset(commandData []byte) (bool, error) {
 	// Quick check: decode just enough to read CommandDataSetType (0000,0800)
 	// This is a simplified check using Implicit VR Little Endian (command dataset encoding)
 	r := bytes.NewReader(commandData)
@@ -244,38 +252,49 @@ func (s *Service) commandHasDataset(commandData []byte) bool {
 
 	for r.Len() > 0 {
 		if r.Len() < 8 {
-			break // Not enough data for tag + length
+			return false, fmt.Errorf("CommandDataSetType not readable: truncated command header")
 		}
 
 		var group, elem uint16
-		_ = binary.Read(r, byteOrder, &group)
-		_ = binary.Read(r, byteOrder, &elem)
+		if err := binary.Read(r, byteOrder, &group); err != nil {
+			return false, fmt.Errorf("CommandDataSetType not readable: %w", err)
+		}
+		if err := binary.Read(r, byteOrder, &elem); err != nil {
+			return false, fmt.Errorf("CommandDataSetType not readable: %w", err)
+		}
 
 		var valueLength uint32
-		_ = binary.Read(r, byteOrder, &valueLength)
+		if err := binary.Read(r, byteOrder, &valueLength); err != nil {
+			return false, fmt.Errorf("CommandDataSetType not readable: %w", err)
+		}
 
 		if group == 0x0000 && elem == 0x0800 {
 			// Found CommandDataSetType
-			if valueLength >= 2 {
-				var dataSetType uint16
-				_ = binary.Read(r, byteOrder, &dataSetType)
-				// 0x0101 = NO_DATA_SET_PRESENT
-				return dataSetType != 0x0101
+			if valueLength < 2 || r.Len() < 2 {
+				return false, fmt.Errorf("CommandDataSetType not readable: truncated value")
 			}
-			return true // Default to expecting data if we can't read the value
+			var dataSetType uint16
+			if err := binary.Read(r, byteOrder, &dataSetType); err != nil {
+				return false, fmt.Errorf("CommandDataSetType not readable: %w", err)
+			}
+			// 0x0101 = NO_DATA_SET_PRESENT
+			return dataSetType != 0x0101, nil
 		}
 
 		// Skip value
 		if valueLength > 0 && valueLength != 0xFFFFFFFF {
-			if _, err := r.Seek(int64(valueLength), 1); err != nil {
-				// If we can't skip, assume data is present for safety
-				return true
+			if int64(valueLength) > int64(r.Len()) {
+				return false, fmt.Errorf("CommandDataSetType not readable: truncated element value")
 			}
+			if _, err := r.Seek(int64(valueLength), 1); err != nil {
+				return false, fmt.Errorf("CommandDataSetType not readable: %w", err)
+			}
+		} else if valueLength == 0xFFFFFFFF {
+			return false, fmt.Errorf("CommandDataSetType not readable: undefined length in command set")
 		}
 	}
 
-	// If CommandDataSetType not found, assume data is present for safety
-	return true
+	return false, fmt.Errorf("CommandDataSetType not found")
 }
 
 // handleReleaseRequest processes an A-RELEASE-RQ PDU.
