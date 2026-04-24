@@ -682,8 +682,8 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 		PixelRepresentation:       pd.Info.PixelRepresentation,
 		PlanarConfiguration:       pd.Info.PlanarConfiguration,
 		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
-		VRCode:                    pd.Info.VRCode, // Keep original VR
-		Encapsulated:              false,          // Decoded data is not encapsulated
+		VRCode:                    pd.Info.VRCode,        // Keep original VR
+		Encapsulated:              false,                 // Decoded data is not encapsulated
 		TransferSyntaxUID:         "1.2.840.10008.1.2.1", // Explicit VR Little Endian
 		IsLossy:                   pd.Info.IsLossy,
 		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
@@ -1235,30 +1235,51 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 		frameCount = 1
 	}
 
-	// BOT present: slice concatenated stream by offsets.
+	// BOT present: offsets point to encoded fragment item starts, not to
+	// concatenated payload bytes. Map each offset to a fragment index, then
+	// concatenate the fragments that belong to each frame.
 	if len(offsetTable) > 0 {
 		if frameCount != len(offsetTable) {
 			return nil, fmt.Errorf("offset table frames mismatch: expected %d, got %d", frameCount, len(offsetTable))
 		}
-		var concat []byte
-		for _, frag := range fragments {
-			concat = append(concat, frag.Data()...)
+
+		fragmentStartByOffset := make(map[uint32]int, len(fragments))
+		var runningOffset uint32
+		for i, frag := range fragments {
+			fragmentStartByOffset[runningOffset] = i
+			size := frag.Size()
+			if size%2 != 0 {
+				size++
+			}
+			if size > math.MaxUint32-8 || runningOffset > math.MaxUint32-8-size {
+				return nil, fmt.Errorf("fragment offset overflow at index %d", i)
+			}
+			runningOffset += 8 + size
+		}
+
+		frameStartIndexes := make([]int, frameCount)
+		for i := 0; i < frameCount; i++ {
+			fragmentIndex, ok := fragmentStartByOffset[offsetTable[i]]
+			if !ok {
+				return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[i], i)
+			}
+			frameStartIndexes[i] = fragmentIndex
 		}
 
 		var frames [][]byte
-		for i := 0; i < frameCount; i++ {
-			start := int(offsetTable[i])
-			end := len(concat)
-			if i+1 < len(offsetTable) {
-				end = int(offsetTable[i+1])
+		for i, start := range frameStartIndexes {
+			end := len(fragments)
+			if i+1 < len(frameStartIndexes) {
+				end = frameStartIndexes[i+1]
 			}
-			if start < 0 || end < 0 || start > end || end > len(concat) {
-				return nil, fmt.Errorf("invalid BOT slice for frame %d: start %d end %d total %d", i, start, end, len(concat))
-			}
-			if start == end {
+			if start >= end {
 				return nil, fmt.Errorf("frame %d derived from BOT is empty", i)
 			}
-			frames = append(frames, concat[start:end])
+			var frame []byte
+			for _, frag := range fragments[start:end] {
+				frame = append(frame, frag.Data()...)
+			}
+			frames = append(frames, frame)
 		}
 		return frames, nil
 	}
@@ -1285,27 +1306,29 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 // buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
 // populating the Basic Offset Table for multi-frame images.
 // If an existing BOT is provided and matches frames length, it is used; otherwise BOT is rebuilt.
-func buildFragmentSequence(frames [][]byte, existingBOT []uint32, bitsAllocated uint16) (element.Element, error) {
+func buildFragmentSequence(frames [][]byte, _ []uint32, bitsAllocated uint16) (element.Element, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frame data provided for fragment sequence")
 	}
 
-	// Rebuild BOT if missing or length mismatch
-	// According to DICOM standard, Basic Offset Table should contain at least one offset (0x00000000) for single-frame,
-	// and all frame offsets for multi-frame images.
-	var offsets []uint32
-	useExisting := len(existingBOT) == len(frames)
-	if useExisting {
-		offsets = append(offsets, existingBOT...)
-	} else {
-		var runningOffset uint32
-		for i, frame := range frames {
-			offsets = append(offsets, runningOffset)
-			if len(frame) > int(math.MaxUint32-runningOffset) {
-				return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
-			}
-			runningOffset += uint32(len(frame))
+	// Rebuild BOT for the fragment layout emitted below: one fragment item per
+	// frame. Existing BOT values may refer to a different source fragment layout.
+	offsets := make([]uint32, 0, len(frames))
+	var runningOffset uint32
+	for i, frame := range frames {
+		offsets = append(offsets, runningOffset)
+		paddedSize := len(frame)
+		if paddedSize%2 != 0 {
+			paddedSize++
 		}
+		if paddedSize > int(math.MaxUint32-8) {
+			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
+		}
+		padded := uint32(paddedSize)
+		if runningOffset > math.MaxUint32-8-padded {
+			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
+		}
+		runningOffset += 8 + padded
 	}
 
 	// Choose OB/OW based on BitsAllocated (following fo-dicom behavior)

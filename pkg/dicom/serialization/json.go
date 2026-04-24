@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -385,7 +386,9 @@ func (w *jsonWriter) writeInt64Array(elem element.Element) error {
 		if i > 0 {
 			w.buf.WriteString(",")
 		}
-		w.writeNumberOrString(strconv.FormatInt(val, 10))
+		if err := w.writeNumberOrString(strconv.FormatInt(val, 10)); err != nil {
+			return err
+		}
 	}
 	w.buf.WriteString("]")
 	return nil
@@ -457,7 +460,9 @@ func (w *jsonWriter) writeUint64Array(elem element.Element) error {
 		if i > 0 {
 			w.buf.WriteString(",")
 		}
-		w.writeNumberOrString(strconv.FormatUint(val, 10))
+		if err := w.writeNumberOrString(strconv.FormatUint(val, 10)); err != nil {
+			return err
+		}
 	}
 	w.buf.WriteString("]")
 	return nil
@@ -488,7 +493,9 @@ func (w *jsonWriter) writeNumericStringArray(elem element.Element, vrCode string
 			if vrCode == vr.CodeDS {
 				trimmed = fixDecimalString(trimmed)
 			}
-			w.writeNumberOrString(trimmed)
+			if err := w.writeNumberOrString(trimmed); err != nil {
+				return fmt.Errorf("invalid %s value %q: %w", vrCode, val, err)
+			}
 		}
 	}
 	w.buf.WriteString("]")
@@ -496,37 +503,45 @@ func (w *jsonWriter) writeNumericStringArray(elem element.Element, vrCode string
 }
 
 // writeNumberOrString writes a value as number or string based on configuration
-func (w *jsonWriter) writeNumberOrString(val string) {
+func (w *jsonWriter) writeNumberOrString(val string) error {
 	if w.config.numberSerializationMode == AsString {
 		// Always write as string
 		escaped, _ := json.Marshal(val)
 		w.buf.Write(escaped)
-		return
+		return nil
 	}
 
 	// Try to write as number
 	switch w.config.numberSerializationMode {
 	case AsNumber:
-		// Must parse as number
+		if !isValidJSONNumber(val) {
+			return fmt.Errorf("not a valid JSON number: %q", val)
+		}
 		w.buf.WriteString(val)
 	case PreferablyAsNumber:
 		// Try as number, fallback to string
-		if isValidNumber(val) {
+		if isValidJSONNumber(val) {
 			w.buf.WriteString(val)
 		} else {
 			escaped, _ := json.Marshal(val)
 			w.buf.Write(escaped)
 		}
 	}
+	return nil
 }
 
-// isValidNumber checks if a string is a valid JSON number
-func isValidNumber(s string) bool {
+// isValidJSONNumber checks if a string follows JSON number syntax.
+func isValidJSONNumber(s string) bool {
 	if s == "" {
 		return false
 	}
-	_, err := strconv.ParseFloat(s, 64)
-	return err == nil
+	decoder := json.NewDecoder(strings.NewReader(s))
+	decoder.UseNumber()
+	var n json.Number
+	if err := decoder.Decode(&n); err != nil {
+		return false
+	}
+	return decoder.Decode(&struct{}{}) == io.EOF
 }
 
 // fixDecimalString fixes a DICOM DS value to be a valid JSON number

@@ -80,6 +80,27 @@ func TestPDVDecode(t *testing.T) {
 	}
 }
 
+func TestPDVDecodeRejectsInvalidLength(t *testing.T) {
+	tests := []struct {
+		name   string
+		length uint32
+	}{
+		{name: "zero length", length: 0},
+		{name: "context only", length: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := make([]byte, 6)
+			data[3] = byte(tt.length)
+
+			if _, err := DecodePDV(data); err == nil {
+				t.Fatal("DecodePDV() error = nil, want invalid length error")
+			}
+		})
+	}
+}
+
 func TestPDVEncodeDecodeRoundTrip(t *testing.T) {
 	tests := []struct {
 		name              string

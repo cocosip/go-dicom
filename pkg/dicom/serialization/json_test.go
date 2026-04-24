@@ -17,6 +17,38 @@ import (
 
 const testBulkDataURI = "http://example.com/dicom/pixeldata"
 
+func TestToJSON_AsNumberRejectsInvalidJSONNumber(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.New(0x0020, 0x0013), vr.IS, []string{"+1"})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	if _, err := ToJSON(ds, WithNumberSerializationMode(AsNumber)); err == nil {
+		t.Fatal("ToJSON() error = nil, want invalid JSON number error")
+	}
+}
+
+func TestToJSON_PreferablyAsNumberFallsBackToString(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.New(0x0020, 0x0013), vr.IS, []string{"+1"})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	jsonData, err := ToJSON(ds, WithNumberSerializationMode(PreferablyAsNumber))
+	if err != nil {
+		t.Fatalf("ToJSON() error = %v", err)
+	}
+
+	var result map[string]map[string]any
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	values, ok := result["00200013"]["Value"].([]any)
+	if !ok || len(values) != 1 || values[0] != "+1" {
+		t.Fatalf("Value = %#v, want string +1", result["00200013"]["Value"])
+	}
+}
+
 func TestToJSON_BulkDataURI(t *testing.T) {
 	// Create dataset with BulkDataURI element
 	ds := dataset.New()
@@ -28,7 +60,7 @@ func TestToJSON_BulkDataURI(t *testing.T) {
 	// Create OW element with BulkDataURI
 	pixelDataTag := tag.New(0x7FE0, 0x0010) // PixelData
 	elem := element.NewOtherWordFromBuffer(pixelDataTag, buf)
-    _ = ds.Add(elem)
+	_ = ds.Add(elem)
 
 	// Serialize to JSON
 	jsonData, err := ToJSON(ds)
@@ -80,7 +112,7 @@ func TestToJSON_BulkDataURI_WithData(t *testing.T) {
 
 	pixelDataTag := tag.New(0x7FE0, 0x0010)
 	elem := element.NewOtherByteFromBuffer(pixelDataTag, buf)
-    _ = ds.Add(elem)
+	_ = ds.Add(elem)
 
 	// Serialize to JSON - should still use BulkDataURI, not InlineBinary
 	jsonData, err := ToJSON(ds)
@@ -215,13 +247,13 @@ func TestJSON_BulkDataURI_Roundtrip(t *testing.T) {
 	// Add regular element
 	patientName := tag.New(0x0010, 0x0010)
 	pnVR, _ := vr.Parse(vr.CodePN)
-    _ = ds1.Add(element.NewString(patientName, pnVR, []string{"Doe^John"}))
+	_ = ds1.Add(element.NewString(patientName, pnVR, []string{"Doe^John"}))
 
 	// Add BulkDataURI element
 	uri := "http://example.com/dicom/waveform"
 	buf := buffer.NewBulkDataURI(uri)
 	waveformTag := tag.New(0x5400, 0x1010) // WaveformData
-    _ = ds1.Add(element.NewOtherWordFromBuffer(waveformTag, buf))
+	_ = ds1.Add(element.NewOtherWordFromBuffer(waveformTag, buf))
 
 	// Serialize to JSON
 	jsonData, err := ToJSON(ds1)
@@ -270,13 +302,13 @@ func TestToJSON_MixedBulkDataAndInline(t *testing.T) {
 	tag1 := tag.New(0x0009, 0x1001)
 	data1 := []byte{0xFF, 0xD8, 0xFF, 0xE0} // Small data, inline
 	buf1 := buffer.NewMemory(data1)
-    _ = ds.Add(element.NewOtherByteFromBuffer(tag1, buf1))
+	_ = ds.Add(element.NewOtherByteFromBuffer(tag1, buf1))
 
 	// Add BulkDataURI element
 	tag2 := tag.New(0x0009, 0x1002)
 	uri := "http://example.com/dicom/large"
 	buf2 := buffer.NewBulkDataURI(uri)
-    _ = ds.Add(element.NewOtherByteFromBuffer(tag2, buf2))
+	_ = ds.Add(element.NewOtherByteFromBuffer(tag2, buf2))
 
 	// Serialize to JSON
 	jsonData, err := ToJSON(ds)

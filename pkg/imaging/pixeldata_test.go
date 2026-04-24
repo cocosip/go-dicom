@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 func TestPixelDataInfo_Validate(t *testing.T) {
@@ -123,6 +124,50 @@ func TestPixelDataInfo_Validate(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestFramesFromFragmentsUsesEncodedItemOffsets(t *testing.T) {
+	fragments := []buffer.ByteBuffer{
+		buffer.NewMemory([]byte{0xAA, 0xBB, 0xCC}),       // len=3 -> padded item payload 4
+		buffer.NewMemory([]byte{0x11, 0x22, 0x33, 0x44}), // len=4
+		buffer.NewMemory([]byte{0x55, 0x66, 0x77}),       // len=3
+	}
+
+	frames, err := framesFromFragments(fragments, []uint32{0, 24}, 2)
+	if err != nil {
+		t.Fatalf("framesFromFragments() error = %v", err)
+	}
+	if len(frames) != 2 {
+		t.Fatalf("framesFromFragments() returned %d frames, want 2", len(frames))
+	}
+	if got, want := frames[0], []byte{0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x44}; !bytes.Equal(got, want) {
+		t.Fatalf("frame 0 = %v, want %v", got, want)
+	}
+	if got, want := frames[1], []byte{0x55, 0x66, 0x77}; !bytes.Equal(got, want) {
+		t.Fatalf("frame 1 = %v, want %v", got, want)
+	}
+}
+
+func TestBuildFragmentSequenceRebuildsOffsetsForEmittedLayout(t *testing.T) {
+	elem, err := buildFragmentSequence(
+		[][]byte{
+			{0xAA, 0xBB, 0xCC},       // len=3 -> padded item payload 4
+			{0x11, 0x22, 0x33, 0x44}, // len=4
+		},
+		[]uint32{0, 999},
+		8,
+	)
+	if err != nil {
+		t.Fatalf("buildFragmentSequence() error = %v", err)
+	}
+
+	obf, ok := elem.(*element.OtherByteFragment)
+	if !ok {
+		t.Fatalf("buildFragmentSequence() type = %T, want *element.OtherByteFragment", elem)
+	}
+	if got := obf.OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 12 {
+		t.Fatalf("OffsetTable = %v, want [0 12]", got)
 	}
 }
 
@@ -522,7 +567,7 @@ func TestDicomPixelData_ToElement_EncapsulatedBOT(t *testing.T) {
 		t.Fatalf("expected 2 fragments, got %d", obf.FragmentCount())
 	}
 
-	if len(obf.OffsetTable()) != 2 || obf.OffsetTable()[0] != 0 || obf.OffsetTable()[1] != 1 {
+	if len(obf.OffsetTable()) != 2 || obf.OffsetTable()[0] != 0 || obf.OffsetTable()[1] != 10 {
 		t.Fatalf("unexpected BOT: %v", obf.OffsetTable())
 	}
 }
@@ -1090,17 +1135,17 @@ func TestDicomPixelData_ToElement_VRSelection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			info := &PixelDataInfo{
-				Width:               10,
-				Height:              10,
-				NumberOfFrames:      1,
-				BitsAllocated:       tt.bitsAllocated,
-				BitsStored:          tt.bitsAllocated,
-				HighBit:             tt.bitsAllocated - 1,
-				SamplesPerPixel:     1,
-				PixelRepresentation: UnsignedPixels,
-				PlanarConfiguration: InterleavedPlanar,
+				Width:                     10,
+				Height:                    10,
+				NumberOfFrames:            1,
+				BitsAllocated:             tt.bitsAllocated,
+				BitsStored:                tt.bitsAllocated,
+				HighBit:                   tt.bitsAllocated - 1,
+				SamplesPerPixel:           1,
+				PixelRepresentation:       UnsignedPixels,
+				PlanarConfiguration:       InterleavedPlanar,
 				PhotometricInterpretation: Monochrome2,
-				Encapsulated:        tt.encapsulated,
+				Encapsulated:              tt.encapsulated,
 			}
 
 			pd, err := NewDicomPixelData(info)
@@ -1153,8 +1198,8 @@ func TestDicomPixelData_ToElement_VRSelection(t *testing.T) {
 // transfer syntax from the dataset
 func TestCreatePixelData_TransferSyntax(t *testing.T) {
 	tests := []struct {
-		name                 string
-		setupDataset         func() *dataset.Dataset
+		name                   string
+		setupDataset           func() *dataset.Dataset
 		expectedTransferSyntax string
 	}{
 		{

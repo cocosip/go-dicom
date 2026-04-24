@@ -102,9 +102,10 @@ func testWriteFragmentSequenceAutoOffsetTable(t *testing.T) {
 		t.Fatalf("SetOffsetTableForFrames error: %v", err)
 	}
 
-	// Expect offsets: frame0 at 0, frame1 at padded sum of first two fragments (4 + 4 = 8).
-	if got := roundTripOtherByteFragment(t, obf).OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 8 {
-		t.Errorf("OffsetTable = %v, want [0 8]", got)
+	// Expect offsets: frame0 at 0, frame1 after two encoded fragment items:
+	// (8-byte item header + padded 4-byte payload) * 2 = 24.
+	if got := roundTripOtherByteFragment(t, obf).OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 24 {
+		t.Errorf("OffsetTable = %v, want [0 24]", got)
 	}
 }
 

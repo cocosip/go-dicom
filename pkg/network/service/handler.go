@@ -37,8 +37,9 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 	s.pendingRequestsMu.Unlock()
 
 	if !exists {
-		// No pending request for this response - may have been cancelled or timed out
-		return fmt.Errorf("received response for unknown MessageID: %d", msgID)
+		// The request may have timed out or been cancelled locally. Late or
+		// duplicate responses should not abort the whole association.
+		return nil
 	}
 
 	// Send response to the waiting goroutine

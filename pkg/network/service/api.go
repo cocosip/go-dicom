@@ -212,6 +212,13 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	resultCh := make(chan Resp, 10)
 	respCh := make(chan dimse.Response, 10)
 	s.registerPendingRequest(msgID, req, respCh)
+
+	if err := s.Send(ctx, req); err != nil {
+		s.unregisterPendingRequest(msgID)
+		close(resultCh)
+		return nil, fmt.Errorf("%s: %w", errMsg, err)
+	}
+
 	go func() {
 		defer close(resultCh)
 		defer s.unregisterPendingRequest(msgID)
@@ -242,11 +249,6 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 			}
 		}
 	}()
-	if err := s.Send(ctx, req); err != nil {
-		s.unregisterPendingRequest(msgID)
-		close(resultCh)
-		return nil, fmt.Errorf("%s: %w", errMsg, err)
-	}
 	return resultCh, nil
 }
 
@@ -295,6 +297,15 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 	respCh := make(chan dimse.Response, 10)
 	s.registerPendingRequest(msgID, req, respCh)
 
+	// Send request before starting the response goroutine. The buffered response
+	// channel still accepts fast responses, and send failures cannot race with
+	// the goroutine's channel close.
+	if err := s.Send(ctx, req); err != nil {
+		s.unregisterPendingRequest(msgID)
+		close(resultCh)
+		return nil, err
+	}
+
 	// Start goroutine to handle responses
 	go func() {
 		defer close(resultCh)
@@ -331,12 +342,6 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 			}
 		}
 	}()
-
-	// Send request
-	if err := s.Send(ctx, req); err != nil {
-		s.unregisterPendingRequest(msgID)
-		return nil, err
-	}
 
 	return resultCh, nil
 }

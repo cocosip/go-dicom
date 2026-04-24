@@ -22,7 +22,9 @@ import (
 
 // SetOffsetTableForFrames computes and sets the Basic Offset Table (BOT) for a fragment sequence.
 // frameStartIndexes must list the starting fragment index for each frame (first index must be 0).
-// Offsets are computed using even-length padded fragments, per DICOM requirements.
+// Offsets are computed against the encoded fragment item stream, per DICOM
+// requirements: each preceding fragment contributes its 8-byte item header plus
+// its even-length padded value.
 func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []int) error {
 	fragCount := fs.FragmentCount()
 	if fragCount == 0 {
@@ -44,8 +46,8 @@ func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []i
 		return fmt.Errorf("frameStartIndexes contains out-of-range index")
 	}
 
-	// Compute padded fragment lengths to align offsets as written.
-	paddedLens := make([]uint32, fragCount)
+	// Compute encoded fragment item lengths to align offsets as written.
+	encodedLens := make([]uint32, fragCount)
 	for i := 0; i < fragCount; i++ {
 		frag, err := fs.GetFragment(i)
 		if err != nil {
@@ -56,16 +58,19 @@ func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []i
 		if padded%2 != 0 {
 			padded++
 		}
-		paddedLens[i] = padded
+		if padded > math.MaxUint32-8 {
+			return fmt.Errorf("fragment %d is too large to represent in BOT", i)
+		}
+		encodedLens[i] = 8 + padded
 	}
 
 	// Precompute prefix sums for quick offset lookup.
 	prefix := make([]uint32, fragCount+1)
 	for i := 0; i < fragCount; i++ {
-		if prefix[i] > math.MaxUint32-paddedLens[i] {
+		if prefix[i] > math.MaxUint32-encodedLens[i] {
 			return fmt.Errorf("offset overflow at fragment %d", i)
 		}
-		prefix[i+1] = prefix[i] + paddedLens[i]
+		prefix[i+1] = prefix[i] + encodedLens[i]
 	}
 
 	offsets := make([]uint32, len(frameStartIndexes))
@@ -73,24 +78,8 @@ func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []i
 		offsets[i] = prefix[idx]
 	}
 
-	// Deduplicate in case caller provided duplicate offsets after padding (keep stable order).
-	offsets = uniqueUint32(offsets)
 	fs.SetOffsetTable(offsets)
 	return nil
-}
-
-// uniqueUint32 returns a slice with duplicate values removed while preserving order.
-func uniqueUint32(in []uint32) []uint32 {
-	seen := make(map[uint32]struct{}, len(in))
-	out := make([]uint32, 0, len(in))
-	for _, v := range in {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
 }
 
 // Global configuration for DICOM implementation identification.
