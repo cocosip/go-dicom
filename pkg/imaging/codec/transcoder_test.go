@@ -4,6 +4,7 @@
 package codec
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -11,6 +12,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 func TestNewTranscoder(t *testing.T) {
@@ -37,8 +39,8 @@ func TestNewTranscoder(t *testing.T) {
 func TestTranscoder_TranscodeNoPixelData(t *testing.T) {
 	// Create dataset without pixel data
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
-    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	transcoder := NewTranscoder(
 		transfer.ExplicitVRLittleEndian,
@@ -63,21 +65,21 @@ func TestTranscoder_TranscodeNoPixelData(t *testing.T) {
 func TestTranscoder_TranscodeUncompressedToUncompressed(t *testing.T) {
 	// Create dataset with uncompressed pixel data
 	ds := dataset.New()
-    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
-    _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
-    _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
-    _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
-    _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-    _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-    _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 	// Create simple pixel data (512x512 = 262144 bytes)
 	pixelData := make([]byte, 512*512)
 	for i := range pixelData {
 		pixelData[i] = byte(i % 256)
 	}
-    _ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+	_ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
 
 	transcoder := NewTranscoder(
 		transfer.ExplicitVRLittleEndian,
@@ -103,20 +105,20 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 	t.Run("UncompressedSingleFrame", func(t *testing.T) {
 		// Create dataset with uncompressed pixel data
 		ds := dataset.New()
-    _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
-    _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
-    _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
-    _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
-    _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
-    _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-    _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-    _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+		_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
+		_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
+		_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+		_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+		_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+		_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+		_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+		_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 		pixelData := make([]byte, 10*10)
 		for i := range pixelData {
 			pixelData[i] = byte(i)
 		}
-    _ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+		_ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
 
 		transcoder := NewTranscoder(
 			transfer.ExplicitVRLittleEndian,
@@ -135,17 +137,17 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 
 	t.Run("InvalidFrameIndex", func(t *testing.T) {
 		ds := dataset.New()
-        _ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
-        _ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
-        _ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
-        _ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
-        _ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
-        _ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-        _ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-        _ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+		_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{10}))
+		_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{10}))
+		_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+		_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+		_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+		_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+		_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+		_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
 
 		pixelData := make([]byte, 10*10)
-        _ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+		_ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
 
 		transcoder := NewTranscoder(
 			transfer.ExplicitVRLittleEndian,
@@ -157,6 +159,28 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 			t.Error("DecodeFrame() should return error for invalid frame index")
 		}
 	})
+}
+
+func TestFramesFromFragments_UsesBOTItemOffsets(t *testing.T) {
+	fragments := []buffer.ByteBuffer{
+		buffer.NewMemory([]byte("AA")),
+		buffer.NewMemory([]byte("BBB")),
+		buffer.NewMemory([]byte("CC")),
+	}
+
+	frames, err := framesFromFragments(fragments, []uint32{0, 22}, 2)
+	if err != nil {
+		t.Fatalf("framesFromFragments() error = %v", err)
+	}
+	if len(frames) != 2 {
+		t.Fatalf("len(frames) = %d, want 2", len(frames))
+	}
+	if !bytes.Equal(frames[0], []byte("AABBB")) {
+		t.Errorf("frames[0] = %q, want %q", frames[0], []byte("AABBB"))
+	}
+	if !bytes.Equal(frames[1], []byte("CC")) {
+		t.Errorf("frames[1] = %q, want %q", frames[1], []byte("CC"))
+	}
 }
 
 func TestCodecRegistry(t *testing.T) {

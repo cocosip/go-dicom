@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
@@ -233,6 +234,35 @@ func TestReadLength(t *testing.T) {
 			t.Errorf("length = %08X, want FFFFFFFF", length)
 		}
 	})
+}
+
+func TestParseRawDatasetRequiresAssumedTransferSyntax(t *testing.T) {
+	raw := bytes.NewBuffer(nil)
+	_ = binary.Write(raw, binary.BigEndian, uint16(0x0028))
+	_ = binary.Write(raw, binary.BigEndian, uint16(0x0010))
+	raw.WriteString("US")
+	_ = binary.Write(raw, binary.BigEndian, uint16(2))
+	_ = binary.Write(raw, binary.BigEndian, uint16(123))
+
+	if _, err := Parse(bytes.NewReader(raw.Bytes())); err == nil {
+		t.Fatal("Parse() error = nil, want error for raw dataset without assumed transfer syntax")
+	}
+
+	result, err := Parse(bytes.NewReader(raw.Bytes()), WithAssumedTransferSyntax(transfer.ExplicitVRBigEndian))
+	if err != nil {
+		t.Fatalf("Parse() with assumed transfer syntax error = %v", err)
+	}
+	if result.Format != FormatDICOM3NoFileMetaInfo {
+		t.Fatalf("Format = %s, want %s", result.Format, FormatDICOM3NoFileMetaInfo)
+	}
+
+	rows, err := result.Dataset.GetUInt16(tag.Rows, 0)
+	if err != nil {
+		t.Fatalf("GetUInt16(Rows) error = %v", err)
+	}
+	if rows != 123 {
+		t.Fatalf("Rows = %d, want 123", rows)
+	}
 }
 
 // TestParseWithOptions tests parser options

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
+	"github.com/cocosip/go-dicom/pkg/network/pdu"
+	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
 // mockConnForLifecycle is a mock connection that simulates network behavior
@@ -85,8 +87,8 @@ func TestRun(t *testing.T) {
 	// Create a mock association
 	assoc := &association.Association{}
 
-    service := NewService(conn, assoc)
-    defer func() { _ = service.Close() }()
+	service := NewService(conn, assoc)
+	defer func() { _ = service.Close() }()
 
 	// Start service in goroutine
 	errCh := make(chan error, 1)
@@ -97,8 +99,8 @@ func TestRun(t *testing.T) {
 	// Give it time to start
 	time.Sleep(50 * time.Millisecond)
 
-    // Close the service
-    _ = service.Close()
+	// Close the service
+	_ = service.Close()
 
 	// Wait for Run to finish
 	select {
@@ -114,10 +116,10 @@ func TestRun(t *testing.T) {
 
 func TestRun_AlreadyClosed(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-    service := NewService(conn, nil)
+	service := NewService(conn, nil)
 
 	// Close before running
-    _ = service.Close()
+	_ = service.Close()
 
 	// Run should return immediately with error
 	err := service.Run()
@@ -128,7 +130,7 @@ func TestRun_AlreadyClosed(t *testing.T) {
 
 func TestAbort(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-    service := NewService(conn, nil)
+	service := NewService(conn, nil)
 
 	ctx := context.Background()
 	err := service.Abort(ctx, 0, 0)
@@ -153,17 +155,64 @@ func TestAbort(t *testing.T) {
 }
 
 func TestGracefulRelease_Success(t *testing.T) {
-	conn := &mockConnForLifecycle{}
-    service := NewService(conn, nil)
-    defer func() { _ = service.Close() }()
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = serverConn.Close() }()
+
+	service := NewService(clientConn, nil)
+	defer func() { _ = service.Close() }()
 
 	// Set state to AssociationAccepted (required for release)
 	if err := service.setState(StateAssociationAccepted); err != nil {
 		t.Fatalf("Failed to set state: %v", err)
 	}
 
-	ctx := context.Background()
-	err := service.GracefulRelease(ctx)
+	if err := service.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	releaseSeen := make(chan struct{})
+	go func() {
+		raw, err := transport.ReadPDU(serverConn, time.Second)
+		if err != nil {
+			t.Errorf("ReadPDU() error = %v", err)
+			return
+		}
+		if raw.Type != pdu.TypeAReleaseRQ {
+			t.Errorf("PDU type = 0x%02x, want 0x%02x", raw.Type, pdu.TypeAReleaseRQ)
+			return
+		}
+		close(releaseSeen)
+		time.Sleep(50 * time.Millisecond)
+		rp, err := pdu.NewAReleaseRP().Encode()
+		if err != nil {
+			t.Errorf("Encode() error = %v", err)
+			return
+		}
+		if err := transport.WritePDU(serverConn, time.Second, rp); err != nil {
+			t.Errorf("WritePDU() error = %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- service.GracefulRelease(ctx)
+	}()
+
+	select {
+	case <-releaseSeen:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for A-RELEASE-RQ")
+	}
+
+	select {
+	case err := <-done:
+		t.Fatalf("GracefulRelease() returned before A-RELEASE-RP: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	err := <-done
 	if err != nil {
 		t.Errorf("GracefulRelease failed: %v", err)
 	}
@@ -172,17 +221,12 @@ func TestGracefulRelease_Success(t *testing.T) {
 	if !service.IsClosed() {
 		t.Error("Service should be closed after GracefulRelease")
 	}
-
-	// Verify A-RELEASE-RQ PDU was written
-	if len(conn.writeData) == 0 {
-		t.Error("Expected A-RELEASE-RQ PDU to be written")
-	}
 }
 
 func TestGracefulRelease_WrongState(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-    service := NewService(conn, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(conn, nil)
+	defer func() { _ = service.Close() }()
 
 	// State is Idle, which doesn't allow release
 	ctx := context.Background()
@@ -194,6 +238,160 @@ func TestGracefulRelease_WrongState(t *testing.T) {
 	// Should still close the service
 	if !service.IsClosed() {
 		t.Error("Service should be closed even if release failed")
+	}
+}
+
+func TestGracefulRelease_TimesOutWithoutReleaseResponse(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = serverConn.Close() }()
+
+	service := NewService(clientConn, nil)
+	defer func() { _ = service.Close() }()
+
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("Failed to set state: %v", err)
+	}
+	if err := service.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	requestSeen := make(chan struct{})
+	go func() {
+		raw, err := transport.ReadPDU(serverConn, time.Second)
+		if err != nil {
+			t.Errorf("ReadPDU() error = %v", err)
+			return
+		}
+		if raw.Type != pdu.TypeAReleaseRQ {
+			t.Errorf("PDU type = 0x%02x, want 0x%02x", raw.Type, pdu.TypeAReleaseRQ)
+			return
+		}
+		close(requestSeen)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- service.GracefulRelease(ctx)
+	}()
+
+	select {
+	case <-requestSeen:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for A-RELEASE-RQ")
+	}
+
+	select {
+	case err := <-done:
+		t.Fatalf("GracefulRelease() returned before context timeout: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	err := <-done
+	if err == nil {
+		t.Fatal("GracefulRelease() error = nil, want timeout")
+	}
+	if !service.IsClosed() {
+		t.Error("Service should be closed after timed out graceful release")
+	}
+}
+
+func TestSendReleaseRequest_ReleaseResponseClosesService(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = serverConn.Close() }()
+
+	service := NewService(clientConn, nil)
+	defer func() { _ = service.Close() }()
+
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("Failed to set state: %v", err)
+	}
+	if err := service.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	peerDone := make(chan struct{})
+	go func() {
+		defer close(peerDone)
+
+		raw, err := transport.ReadPDU(serverConn, time.Second)
+		if err != nil {
+			t.Errorf("ReadPDU() error = %v", err)
+			return
+		}
+		if raw.Type != pdu.TypeAReleaseRQ {
+			t.Errorf("PDU type = 0x%02x, want 0x%02x", raw.Type, pdu.TypeAReleaseRQ)
+			return
+		}
+
+		rp, err := pdu.NewAReleaseRP().Encode()
+		if err != nil {
+			t.Errorf("Encode() error = %v", err)
+			return
+		}
+		if err := transport.WritePDU(serverConn, time.Second, rp); err != nil {
+			t.Errorf("WritePDU() error = %v", err)
+		}
+	}()
+
+	if err := service.SendReleaseRequest(ctx); err != nil {
+		t.Fatalf("SendReleaseRequest() error = %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		service.WaitForClose()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("service did not close after receiving A-RELEASE-RP")
+	}
+
+	<-peerDone
+}
+
+func TestLoopError_OnConnectionClosedAfterRequestHandlersExit(t *testing.T) {
+	requestRelease := make(chan struct{})
+	requestDone := make(chan struct{})
+	callbackDone := make(chan struct{})
+
+	conn := &mockConnForLifecycle{closed: true}
+	service := NewService(conn, nil, WithConnectionLifecycleHandler(&ConnectionLifecycleHandlerFuncs{
+		OnConnectionClosedFunc: func(_ context.Context, _ error) {
+			select {
+			case <-requestDone:
+			default:
+				t.Error("OnConnectionClosed fired before request handlers exited")
+			}
+			close(callbackDone)
+		},
+	}))
+
+	service.requestWg.Add(1)
+	go func() {
+		defer service.requestWg.Done()
+		defer close(requestDone)
+		<-requestRelease
+	}()
+	time.AfterFunc(50*time.Millisecond, func() {
+		close(requestRelease)
+	})
+
+	if err := service.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	select {
+	case <-callbackDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for OnConnectionClosed callback")
 	}
 }
 
@@ -209,8 +407,8 @@ func TestWaitForClose(t *testing.T) {
 	}()
 
 	// Close after a delay
-    time.Sleep(50 * time.Millisecond)
-    _ = service.Close()
+	time.Sleep(50 * time.Millisecond)
+	_ = service.Close()
 
 	// WaitForClose should unblock
 	select {
@@ -223,8 +421,8 @@ func TestWaitForClose(t *testing.T) {
 
 func TestErr(t *testing.T) {
 	conn := &mockConnForLifecycle{}
-    service := NewService(conn, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(conn, nil)
+	defer func() { _ = service.Close() }()
 
 	// Get error channel
 	errCh := service.Err()
@@ -248,23 +446,23 @@ func TestRun_SendLoopError(t *testing.T) {
 
 	// Create service with association
 	assoc := &association.Association{}
-    service := NewService(conn, assoc)
-    defer func() { _ = service.Close() }()
+	service := NewService(conn, assoc)
+	defer func() { _ = service.Close() }()
 
 	// Close connection immediately to cause write errors
-    _ = conn.Close()
+	_ = conn.Close()
 
-    // Start service in goroutine
-    errCh := make(chan error, 1)
-    go func() {
-        errCh <- service.Run()
-    }()
+	// Start service in goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- service.Run()
+	}()
 
 	// Give it time to start and detect error
 	time.Sleep(50 * time.Millisecond)
 
 	// Close the service
-    _ = service.Close()
+	_ = service.Close()
 
 	// Wait for Run to finish
 	select {
@@ -285,8 +483,8 @@ func TestRun_RecvLoopError(t *testing.T) {
 	}
 
 	assoc := &association.Association{}
-    service := NewService(conn, assoc)
-    defer func() { _ = service.Close() }()
+	service := NewService(conn, assoc)
+	defer func() { _ = service.Close() }()
 
 	// Start service in goroutine
 	errCh := make(chan error, 1)
@@ -313,22 +511,22 @@ func TestRun_MultipleCallsNotAllowed(_ *testing.T) {
 
 	assoc := &association.Association{}
 	service := NewService(conn, assoc)
-    defer func() { _ = service.Close() }()
+	defer func() { _ = service.Close() }()
 
 	// Start first Run
-    go func() { _ = service.Run() }()
+	go func() { _ = service.Run() }()
 
 	// Give it time to start
 	time.Sleep(50 * time.Millisecond)
 
-    // Try to run again - should just start duplicate goroutines
-    // (This is allowed, though not recommended)
-    // The test just verifies it doesn't panic
-    go func() { _ = service.Run() }()
+	// Try to run again - should just start duplicate goroutines
+	// (This is allowed, though not recommended)
+	// The test just verifies it doesn't panic
+	go func() { _ = service.Run() }()
 
 	time.Sleep(50 * time.Millisecond)
 
-    // Close should stop all
-    _ = service.Close()
-    service.WaitForClose()
+	// Close should stop all
+	_ = service.Close()
+	service.WaitForClose()
 }

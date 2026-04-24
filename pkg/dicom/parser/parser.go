@@ -131,10 +131,11 @@ type parseContext struct {
 	hasFirstDatasetTag bool
 
 	// Configuration options
-	maxElementSize  uint32     // Maximum element size to read (0 = unlimited)
-	stopAtTag       *tag.Tag   // Stop parsing when this tag is reached
-	readOption      ReadOption // How to handle large elements
-	largeObjectSize uint32     // Size threshold for "large" objects (default 64KB)
+	maxElementSize        uint32           // Maximum element size to read (0 = unlimited)
+	stopAtTag             *tag.Tag         // Stop parsing when this tag is reached
+	readOption            ReadOption       // How to handle large elements
+	largeObjectSize       uint32           // Size threshold for "large" objects (default 64KB)
+	assumedTransferSyntax *transfer.Syntax // Transfer syntax to use for raw datasets without file meta
 
 	// File format detection
 	detectedFormat FileFormat
@@ -192,6 +193,13 @@ func WithReadOption(opt ReadOption) Option {
 func WithLargeObjectSize(size uint32) Option {
 	return func(ctx *parseContext) {
 		ctx.largeObjectSize = size
+	}
+}
+
+// WithAssumedTransferSyntax sets the transfer syntax for raw datasets that do not contain file meta information.
+func WithAssumedTransferSyntax(ts *transfer.Syntax) Option {
+	return func(ctx *parseContext) {
+		ctx.assumedTransferSyntax = ts
 	}
 }
 
@@ -440,17 +448,29 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 func (p *parseContext) setTransferSyntax(metaDS *dataset.Dataset) error {
 	tsUID, exists := metaDS.GetString(tag.TransferSyntaxUID)
 	if !exists {
+		if p.detectedFormat == FormatDICOM3NoFileMetaInfo {
+			if p.assumedTransferSyntax == nil {
+				return fmt.Errorf("raw dataset without file meta requires an assumed transfer syntax")
+			}
+			return p.applyTransferSyntax(p.assumedTransferSyntax)
+		}
+
 		// Default to Explicit VR Little Endian
-		p.transferSyntax = transfer.ExplicitVRLittleEndian
-		p.byteOrder = binary.LittleEndian
-		p.isExplicitVR = true
-		return nil
+		return p.applyTransferSyntax(transfer.ExplicitVRLittleEndian)
 	}
 
 	// Look up transfer syntax
 	ts, err := transfer.Parse(tsUID)
 	if err != nil {
 		return fmt.Errorf("failed to parse transfer syntax UID %s: %w", tsUID, err)
+	}
+
+	return p.applyTransferSyntax(ts)
+}
+
+func (p *parseContext) applyTransferSyntax(ts *transfer.Syntax) error {
+	if ts == nil {
+		return fmt.Errorf("transfer syntax cannot be nil")
 	}
 
 	p.transferSyntax = ts
@@ -1056,7 +1076,7 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 			return data, nil
 		}
 
-		lb, err := buffer.NewLazyWithError(loader)
+		lb, err := buffer.NewLazySizedWithError(length, loader)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create lazy buffer: %w", err)
 		}

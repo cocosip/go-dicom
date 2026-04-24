@@ -19,6 +19,8 @@ type ByteBuffer interface {
 	IsMemory() bool
 
 	// Size returns the size of the buffered data in bytes.
+	// Some implementations can report this from metadata without loading data;
+	// others may need to materialize the underlying payload first.
 	Size() uint32
 
 	// Data returns the entire buffer as a byte slice.

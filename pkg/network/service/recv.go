@@ -323,24 +323,16 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 
 // handleReleaseResponse processes an A-RELEASE-RP PDU.
 // This is received in response to our A-RELEASE-RQ, indicating the peer accepted the release.
-// We update the service state and notify the lifecycle handler.
+// We update the state and notify the waiting graceful release path.
 func (s *Service) handleReleaseResponse(ctx context.Context) {
-	// Update state to closed
-	//if err := s.setState(StateClosed); err != nil {
-	// State transition error, but continue with cleanup
-	// (we may already be in a closing state)
-	//}
-	_ = s.setState(StateClosed)
+	_ = ctx
 
-	// Get lifecycle handler
-	s.callbacksMu.RLock()
-	lifecycleHandler := s.connectionLifecycleHandler
-	s.callbacksMu.RUnlock()
-
-	// Call OnConnectionClosed callback if set (nil error = normal close)
-	if lifecycleHandler != nil {
-		lifecycleHandler.OnConnectionClosed(ctx, nil)
+	select {
+	case s.releaseCh <- struct{}{}:
+	default:
 	}
+
+	_ = s.initiateClose(StateClosed, nil)
 }
 
 // handleAbort processes an A-ABORT PDU.

@@ -592,26 +592,45 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 		if frameCount != len(offsetTable) {
 			return nil, fmt.Errorf("offset table frames mismatch: expected %d, got %d entries", frameCount, len(offsetTable))
 		}
-		// Concatenate all fragment data.
-		var concat []byte
-		for _, frag := range fragments {
-			concat = append(concat, frag.Data()...)
+
+		fragmentStartByOffset := make(map[uint32]int, len(fragments))
+		var runningOffset uint32
+		for i, frag := range fragments {
+			fragmentStartByOffset[runningOffset] = i
+			size := frag.Size()
+			if size%2 != 0 {
+				size++
+			}
+			if size > math.MaxUint32-8 || runningOffset > math.MaxUint32-8-size {
+				return nil, fmt.Errorf("fragment offset overflow at index %d", i)
+			}
+			runningOffset += 8 + size
+		}
+
+		frameStartIndexes := make([]int, frameCount)
+		for i := 0; i < frameCount; i++ {
+			fragmentIndex, ok := fragmentStartByOffset[offsetTable[i]]
+			if !ok {
+				return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[i], i)
+			}
+			frameStartIndexes[i] = fragmentIndex
 		}
 
 		var frames [][]byte
-		for i := 0; i < frameCount; i++ {
-			start := int(offsetTable[i])
-			end := len(concat)
-			if i+1 < len(offsetTable) {
-				end = int(offsetTable[i+1])
+		for i, start := range frameStartIndexes {
+			end := len(fragments)
+			if i+1 < len(frameStartIndexes) {
+				end = frameStartIndexes[i+1]
 			}
-			if start < 0 || end < 0 || start > end || end > len(concat) {
-				return nil, fmt.Errorf("invalid BOT slice for frame %d: start %d end %d total %d", i, start, end, len(concat))
-			}
-			if start == end {
+			if start >= end {
 				return nil, fmt.Errorf("frame %d derived from BOT is empty", i)
 			}
-			frames = append(frames, concat[start:end])
+
+			var frame []byte
+			for _, frag := range fragments[start:end] {
+				frame = append(frame, frag.Data()...)
+			}
+			frames = append(frames, frame)
 		}
 		return frames, nil
 	}

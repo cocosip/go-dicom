@@ -3,8 +3,9 @@
 
 // Package parser provides DICOM file parsing functionality.
 //
-// This package implements reading and parsing of DICOM files (Part 10 format).
-// It handles:
+// This package implements reading and parsing of DICOM files, including both
+// Part 10 files and raw datasets when the transfer syntax is known by the
+// caller. It handles:
 //   - File preamble and DICM prefix validation
 //   - Transfer syntax detection
 //   - Element parsing (Tag, VR, Length, Value)
@@ -29,7 +30,7 @@
 //	defer file.Close()
 //
 //	// Parse the file
-//	ds, err := parser.Parse(file)
+//	result, err := parser.Parse(file)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -46,6 +47,24 @@
 //	    parser.WithLargeObjectSize(128*1024),        // 128KB threshold
 //	    parser.WithStopAtTag(tag.PixelData),         // Stop at pixel data
 //	)
+//
+// # Raw Datasets Without File Meta Information
+//
+// Raw datasets do not contain TransferSyntaxUID, so the parser cannot safely
+// infer how elements are encoded. In that case, pass the syntax explicitly:
+//
+//	result, err := parser.Parse(reader,
+//	    parser.WithAssumedTransferSyntax(transfer.ExplicitVRBigEndian),
+//	)
+//
+// If a raw dataset is parsed without WithAssumedTransferSyntax, Parse returns
+// an error instead of silently assuming Explicit VR Little Endian.
+//
+// # Large Object Reading
+//
+// ReadLargeOnDemand keeps large values lazily accessible through their backing
+// ByteBuffer. For seekable readers, the declared element size remains available
+// without materializing the full payload into memory.
 //
 //revive:disable:var-naming // package name must match public import path (pkg/dicom/parser)
 package parser

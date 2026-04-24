@@ -247,7 +247,9 @@ func (c *Client) IsConnected() bool {
 }
 
 // Close closes the client connection.
-// If connected, it will attempt a graceful release first.
+// If connected, it attempts a graceful release first using a short timeout.
+// If the peer does not acknowledge the release in time, Close returns that
+// error after cleaning up the local connection state.
 func (c *Client) Close() error {
 	if !c.connected {
 		return nil

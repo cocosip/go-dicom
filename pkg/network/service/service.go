@@ -36,13 +36,16 @@ type Service struct {
 	stateMu sync.RWMutex
 
 	// Goroutine communication
-	sendQueue  chan *sendRequest
-	recvQueue  chan dimse.Message
-	closeOnce  sync.Once
-	closeCh    chan struct{}
-	errCh      chan error
-	closeErr   error
-	closeErrMu sync.RWMutex
+	sendQueue    chan *sendRequest
+	recvQueue    chan dimse.Message
+	closeOnce    sync.Once
+	closeCh      chan struct{}
+	releaseCh    chan struct{}
+	shutdownCh   chan struct{}
+	errCh        chan error
+	closeErr     error
+	closeConnErr error
+	closeErrMu   sync.RWMutex
 
 	// Configuration
 	config *serviceConfig
@@ -67,6 +70,9 @@ type Service struct {
 
 	// Tracks in-flight request handler goroutines so Close() can wait for them.
 	requestWg sync.WaitGroup
+
+	connectionClosedOnce sync.Once
+	shutdownOnce         sync.Once
 }
 
 // sendRequest represents a request to send a DIMSE message.
@@ -149,6 +155,8 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		sendQueue:                  make(chan *sendRequest, config.sendQueueSize),
 		recvQueue:                  make(chan dimse.Message, config.recvQueueSize),
 		closeCh:                    make(chan struct{}),
+		releaseCh:                  make(chan struct{}, 1),
+		shutdownCh:                 make(chan struct{}),
 		errCh:                      make(chan error, 1),
 		config:                     config,
 		pendingRequests:            make(map[uint16]*pendingRequest),
@@ -208,43 +216,8 @@ func (s *Service) setState(newState State) error {
 // - Cancel all pending requests
 // - Drain all queues
 func (s *Service) Close() error {
-	var err error
-	s.closeOnce.Do(func() {
-		// Cancel context to stop goroutines
-		s.cancel()
-
-		// Close channels
-		close(s.closeCh)
-
-		// Set state to closed
-		s.stateMu.Lock()
-		s.state = StateClosed
-		s.stateMu.Unlock()
-
-		// Cancel all pending requests
-		s.cancelPendingRequests()
-
-		// Close connection
-		if s.conn != nil {
-			err = s.conn.Close()
-		}
-	})
-
-	// Wait for all in-flight request handler goroutines to exit.
-	// This is safe outside closeOnce.Do: the goroutines unblock quickly because
-	// their context is cancelled, pending requests are cancelled, and the
-	// connection is closed above.
-	s.requestWg.Wait()
-
-	// Call OnConnectionClosed callback if set
-	s.callbacksMu.RLock()
-	lifecycleHandler := s.connectionLifecycleHandler
-	s.callbacksMu.RUnlock()
-
-	if lifecycleHandler != nil {
-		lifecycleHandler.OnConnectionClosed(s.ctx, err)
-	}
-
+	err := s.initiateClose(StateClosed, nil)
+	s.waitForShutdown()
 	return err
 }
 
@@ -259,6 +232,59 @@ func (s *Service) cancelPendingRequests() {
 	s.pendingRequests = make(map[uint16]*pendingRequest)
 }
 
+func (s *Service) initiateClose(targetState State, recordErr error) error {
+	if recordErr != nil {
+		s.setCloseError(recordErr)
+	}
+
+	var err error
+	s.closeOnce.Do(func() {
+		s.cancel()
+		close(s.closeCh)
+
+		s.stateMu.Lock()
+		s.state = targetState
+		s.stateMu.Unlock()
+
+		s.cancelPendingRequests()
+
+		if s.conn != nil {
+			err = s.conn.Close()
+			s.setCloseConnError(err)
+		}
+
+		s.startShutdownFinalizer()
+	})
+
+	return err
+}
+
+func (s *Service) startShutdownFinalizer() {
+	s.shutdownOnce.Do(func() {
+		go func() {
+			s.requestWg.Wait()
+			s.notifyConnectionClosed(s.shutdownError())
+			close(s.shutdownCh)
+		}()
+	})
+}
+
+func (s *Service) waitForShutdown() {
+	<-s.shutdownCh
+}
+
+func (s *Service) notifyConnectionClosed(err error) {
+	s.connectionClosedOnce.Do(func() {
+		s.callbacksMu.RLock()
+		lifecycleHandler := s.connectionLifecycleHandler
+		s.callbacksMu.RUnlock()
+
+		if lifecycleHandler != nil {
+			lifecycleHandler.OnConnectionClosed(s.ctx, err)
+		}
+	})
+}
+
 // setCloseError stores the error that caused the service to close.
 // Must be called before closing closeCh so readers always see it.
 func (s *Service) setCloseError(err error) {
@@ -267,6 +293,23 @@ func (s *Service) setCloseError(err error) {
 	if s.closeErr == nil {
 		s.closeErr = err
 	}
+}
+
+func (s *Service) setCloseConnError(err error) {
+	s.closeErrMu.Lock()
+	defer s.closeErrMu.Unlock()
+	if s.closeConnErr == nil {
+		s.closeConnErr = err
+	}
+}
+
+func (s *Service) shutdownError() error {
+	s.closeErrMu.RLock()
+	defer s.closeErrMu.RUnlock()
+	if s.closeErr != nil {
+		return s.closeErr
+	}
+	return s.closeConnErr
 }
 
 // CloseError returns the error that caused the service to close, or nil if it

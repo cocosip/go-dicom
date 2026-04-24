@@ -161,6 +161,34 @@ func TestLazyByteBuffer_Size_NilData(t *testing.T) {
 	}
 }
 
+func TestLazyByteBuffer_SizeKnownDoesNotLoad(t *testing.T) {
+	loadCalled := false
+	lb, err := buffer.NewLazySizedWithError(8, func() ([]byte, error) {
+		loadCalled = true
+		return []byte{1, 2, 3, 4, 5, 6, 7, 8}, nil
+	})
+	if err != nil {
+		t.Fatalf("NewLazySizedWithError() unexpected error: %v", err)
+	}
+
+	if got := lb.Size(); got != 8 {
+		t.Fatalf("Size() = %d, want 8", got)
+	}
+	if loadCalled {
+		t.Fatal("Size() should not trigger lazy load when size is known")
+	}
+	if lb.IsLoaded() {
+		t.Fatal("IsLoaded() = true, want false after Size() on sized lazy buffer")
+	}
+
+	if len(lb.Data()) != 8 {
+		t.Fatalf("len(Data()) = %d, want 8", len(lb.Data()))
+	}
+	if !loadCalled {
+		t.Fatal("Data() should trigger lazy load")
+	}
+}
+
 func TestLazyByteBuffer_Data(t *testing.T) {
 	want := []byte{1, 2, 3, 4, 5}
 	loader := func() []byte {

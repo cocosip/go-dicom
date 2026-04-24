@@ -12,12 +12,17 @@ import (
 // LazyByteBuffer is a buffer that delays loading data until it's actually needed.
 // The data is loaded once and cached for subsequent accesses.
 // This is useful when you want to defer expensive data loading operations.
+//
+// When constructed with NewLazySized or NewLazySizedWithError, Size can be
+// reported from metadata without forcing the loader to materialize the payload.
 type LazyByteBuffer struct {
 	loader func() ([]byte, error) // Function that loads the data
 	data   []byte                 // Cached data after first load
 	err    error                  // Cached loader error
 	once   sync.Once              // Ensures loader is called only once
 	mu     sync.RWMutex           // Protects data access
+	size   uint32                 // Declared size when known without loading
+	sized  bool                   // Whether size was provided up front
 }
 
 // NewLazy creates a new lazy-loading buffer.
@@ -37,6 +42,7 @@ func NewLazy(loader func() []byte) (*LazyByteBuffer, error) {
 }
 
 // NewLazyWithError creates a lazy buffer whose loader can return errors.
+// Size will be determined by loading the data unless a sized constructor is used.
 func NewLazyWithError(loader func() ([]byte, error)) (*LazyByteBuffer, error) {
 	if loader == nil {
 		return nil, fmt.Errorf("loader function cannot be nil")
@@ -44,6 +50,31 @@ func NewLazyWithError(loader func() ([]byte, error)) (*LazyByteBuffer, error) {
 
 	return &LazyByteBuffer{
 		loader: loader,
+	}, nil
+}
+
+// NewLazySized creates a lazy-loading buffer with a known size.
+// Size can be queried without triggering a load.
+func NewLazySized(size uint32, loader func() []byte) (*LazyByteBuffer, error) {
+	if loader == nil {
+		return nil, fmt.Errorf("loader function cannot be nil")
+	}
+	return NewLazySizedWithError(size, func() ([]byte, error) {
+		return loader(), nil
+	})
+}
+
+// NewLazySizedWithError creates a lazy buffer with a known size whose loader can return errors.
+// Size can be queried without triggering a load.
+func NewLazySizedWithError(size uint32, loader func() ([]byte, error)) (*LazyByteBuffer, error) {
+	if loader == nil {
+		return nil, fmt.Errorf("loader function cannot be nil")
+	}
+
+	return &LazyByteBuffer{
+		loader: loader,
+		size:   size,
+		sized:  true,
 	}, nil
 }
 
@@ -66,8 +97,12 @@ func (l *LazyByteBuffer) IsMemory() bool {
 }
 
 // Size returns the size of the buffer.
-// Note: This will trigger data loading if not already loaded.
+// If the size is known ahead of time, it is returned without triggering data loading.
 func (l *LazyByteBuffer) Size() uint32 {
+	if l.sized {
+		return l.size
+	}
+
 	data, err := l.load()
 	if err != nil {
 		return 0

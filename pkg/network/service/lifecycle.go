@@ -90,15 +90,7 @@ func (s *Service) Start() error {
 			default:
 			}
 			// Record the error and close so all pending goroutines unblock.
-			s.setCloseError(loopErr)
-			s.closeOnce.Do(func() {
-				s.cancel()
-				close(s.closeCh)
-				s.cancelPendingRequests()
-				if s.conn != nil {
-					_ = s.conn.Close()
-				}
-			})
+			_ = s.initiateClose(StateClosed, loopErr)
 		}
 	}()
 
@@ -112,15 +104,7 @@ func (s *Service) Start() error {
 			default:
 			}
 			// Record the error and close so all pending goroutines unblock.
-			s.setCloseError(loopErr)
-			s.closeOnce.Do(func() {
-				s.cancel()
-				close(s.closeCh)
-				s.cancelPendingRequests()
-				if s.conn != nil {
-					_ = s.conn.Close()
-				}
-			})
+			_ = s.initiateClose(StateClosed, loopErr)
 		}
 	}()
 
@@ -150,30 +134,16 @@ func (s *Service) Abort(ctx context.Context, source, reason byte) error {
 
 	// Close the service resources without changing state
 	// (state is already Aborted from SendAbort)
-	var err error
-	s.closeOnce.Do(func() {
-		// Cancel context to stop goroutines
-		s.cancel()
-
-		// Close channels
-		close(s.closeCh)
-
-		// Cancel all pending requests
-		s.cancelPendingRequests()
-
-		// Close connection
-		if s.conn != nil {
-			err = s.conn.Close()
-		}
-	})
-
+	err := s.initiateClose(StateAborted, nil)
+	s.waitForShutdown()
 	return err
 }
 
 // GracefulRelease attempts a graceful release of the DICOM association.
 // It sends an A-RELEASE-RQ and waits for A-RELEASE-RP, then closes the service.
 //
-// If the release fails or times out, it falls back to sending an A-ABORT.
+// The provided context controls how long to wait for the peer's A-RELEASE-RP.
+// If the wait is canceled or times out, the service closes and returns an error.
 //
 // This is a convenience method for proper DICOM association termination.
 //
@@ -200,15 +170,17 @@ func (s *Service) GracefulRelease(ctx context.Context) error {
 		return fmt.Errorf("failed to send release request: %w", err)
 	}
 
-	// Wait for A-RELEASE-RP (should be received by recvLoop)
-	// We'll use a simple approach: wait for state to become Closed
-	// In a production implementation, you might want to:
-	// - Have recvLoop handle A-RELEASE-RP specifically
-	// - Use a channel to signal release completion
-	// For now, we'll just close the service
-	// The peer should send A-RELEASE-RP, but we don't wait for it here
-
-	return s.Close()
+	select {
+	case <-s.releaseCh:
+		s.waitForShutdown()
+		return s.shutdownError()
+	case <-s.closeCh:
+		s.waitForShutdown()
+		return s.shutdownError()
+	case <-ctx.Done():
+		_ = s.Close()
+		return fmt.Errorf("timed out waiting for A-RELEASE-RP: %w", ctx.Err())
+	}
 }
 
 // WaitForClose blocks until the service is closed.
