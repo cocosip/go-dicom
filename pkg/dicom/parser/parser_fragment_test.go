@@ -7,11 +7,14 @@ package parser
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
+
+const explicitVRLittleEndianUIDPadded = "1.2.840.10008.1.2.1\x00"
 
 // Helper function to create a DICOM file with fragment sequence
 func createFragmentSequenceDICOM() *bytes.Buffer {
@@ -34,7 +37,7 @@ func createFragmentSequenceDICOM() *bytes.Buffer {
 	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 	_, _ = buf.WriteString("UI")
-	tsUID := "1.2.840.10008.1.2.1\x00" // Explicit VR Little Endian, padded
+	tsUID := explicitVRLittleEndianUIDPadded
 	_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 	_, _ = buf.WriteString(tsUID)
 
@@ -88,7 +91,7 @@ func createFragmentSequenceWithOffsetTable() *bytes.Buffer {
 	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
 	_, _ = buf.WriteString("UI")
-	tsUID := "1.2.840.10008.1.2.1\x00"
+	tsUID := explicitVRLittleEndianUIDPadded
 	_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
 	_, _ = buf.WriteString(tsUID)
 
@@ -239,5 +242,66 @@ func TestParseFragmentSequenceSkipLargeTags(t *testing.T) {
 	}
 	if len(obf.OffsetTable()) != 0 {
 		t.Fatalf("OffsetTable length = %d, want 0 when SkipLargeTags is enabled", len(obf.OffsetTable()))
+	}
+}
+
+func TestParseFragmentSequenceRejectsItemOverMaxElementSize(t *testing.T) {
+	data := createFragmentSequenceWithLargeFragment(24)
+	_, err := Parse(data, WithMaxElementSize(20))
+	if err == nil {
+		t.Fatal("Parse() error = nil, want fragment item size limit error")
+	}
+	if !strings.Contains(err.Error(), "fragment item length 24 exceeds maximum 20") {
+		t.Fatalf("Parse() error = %v, want fragment item size limit error", err)
+	}
+}
+
+func createFragmentSequenceWithLargeFragment(fragmentSize int) *bytes.Buffer {
+	buf := createFragmentSequenceWithOffsetTable()
+	data := buf.Bytes()
+
+	var out bytes.Buffer
+	out.Write(data[:len(data)-24])
+
+	fragment := bytes.Repeat([]byte{0x7F}, fragmentSize)
+	_ = binary.Write(&out, binary.LittleEndian, uint16(0xFFFE))
+	_ = binary.Write(&out, binary.LittleEndian, uint16(0xE000))
+	_ = binary.Write(&out, binary.LittleEndian, uint32(len(fragment)))
+	out.Write(fragment)
+
+	_ = binary.Write(&out, binary.LittleEndian, uint16(0xFFFE))
+	_ = binary.Write(&out, binary.LittleEndian, uint16(0xE0DD))
+	_ = binary.Write(&out, binary.LittleEndian, uint32(0))
+	return &out
+}
+
+func TestParseFragmentSequenceRejectsUndefinedItemLength(t *testing.T) {
+	var buf bytes.Buffer
+	buf.Write(make([]byte, 128))
+	buf.WriteString("DICM")
+
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0x0010))
+	buf.WriteString("UI")
+	tsUID := explicitVRLittleEndianUIDPadded
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(len(tsUID)))
+	buf.WriteString(tsUID)
+
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0x7FE0))
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0x0010))
+	buf.WriteString("OB")
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(0xFFFFFFFF))
+
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFE))
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0xE000))
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(0xFFFFFFFF))
+
+	_, err := Parse(bytes.NewReader(buf.Bytes()))
+	if err == nil {
+		t.Fatal("Parse() error = nil, want undefined fragment item length error")
+	}
+	if !strings.Contains(err.Error(), "undefined length") {
+		t.Fatalf("Parse() error = %v, want undefined fragment item length error", err)
 	}
 }

@@ -5,10 +5,10 @@
 package pdu
 
 import (
-    "encoding/binary"
-    "fmt"
-    "io"
-    "math"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"math"
 )
 
 // PDU type constants as defined in DICOM standard PS3.8
@@ -74,16 +74,16 @@ type RawPDU struct {
 
 // NewRawPDU creates a new RawPDU with the given type and data.
 func NewRawPDU(pduType byte, data []byte) *RawPDU {
-    if len(data) > int(math.MaxUint32) {
-        // Infeasible in practice, but guard to satisfy static analysis
-        panic(fmt.Sprintf("raw PDU data too large: %d", len(data)))
-    }
-    return &RawPDU{
-        Type:     pduType,
-        Reserved: 0x00,
-        Length:   uint32(len(data)), // #nosec G115 -- guarded above
-        Data:     data,
-    }
+	if len(data) > int(math.MaxUint32) {
+		// Infeasible in practice, but guard to satisfy static analysis
+		panic(fmt.Sprintf("raw PDU data too large: %d", len(data)))
+	}
+	return &RawPDU{
+		Type:     pduType,
+		Reserved: 0x00,
+		Length:   uint32(len(data)), // #nosec G115 -- guarded above
+		Data:     data,
+	}
 }
 
 // String returns a string representation of the PDU.
@@ -125,30 +125,44 @@ func (p *RawPDU) Read(r io.Reader) error {
 // Write writes the RawPDU to an io.Writer.
 // It writes the 6-byte header followed by the PDU data.
 func (p *RawPDU) Write(w io.Writer) error {
-    // Update length from data
-    if len(p.Data) > int(math.MaxUint32) {
-        return fmt.Errorf("raw PDU data too large: %d", len(p.Data))
-    }
-    p.Length = uint32(len(p.Data)) // #nosec G115 -- bounded by check above
+	// Update length from data
+	if len(p.Data) > int(math.MaxUint32) {
+		return fmt.Errorf("raw PDU data too large: %d", len(p.Data))
+	}
+	p.Length = uint32(len(p.Data)) // #nosec G115 -- bounded by check above
 
-    // Build 6-byte header using fixed-size array to avoid index warnings
-    var header [6]byte
-    header[0] = p.Type        // #nosec G602 -- fixed-size header array [6]byte
-    header[1] = p.Reserved    // #nosec G602 -- fixed-size header array [6]byte
-    binary.BigEndian.PutUint32(header[2:6], p.Length)
+	// Build 6-byte header using fixed-size array to avoid index warnings
+	var header [6]byte
+	header[0] = p.Type     // #nosec G602 -- fixed-size header array [6]byte
+	header[1] = p.Reserved // #nosec G602 -- fixed-size header array [6]byte
+	binary.BigEndian.PutUint32(header[2:6], p.Length)
 
 	// Write header
-    if _, err := w.Write(header[:]); err != nil {
-        return fmt.Errorf("writing PDU header: %w", err)
-    }
+	if err := writeFull(w, header[:]); err != nil {
+		return fmt.Errorf("writing PDU header: %w", err)
+	}
 
 	// Write data
 	if len(p.Data) > 0 {
-		if _, err := w.Write(p.Data); err != nil {
+		if err := writeFull(w, p.Data); err != nil {
 			return fmt.Errorf("writing PDU data: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func writeFull(w io.Writer, data []byte) error {
+	for len(data) > 0 {
+		n, err := w.Write(data)
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return io.ErrShortWrite
+		}
+		data = data[n:]
+	}
 	return nil
 }
 

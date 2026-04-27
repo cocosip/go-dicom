@@ -638,9 +638,17 @@ func (w *Writer) writeElement(elem element.Element) error {
 		buf = buffer.Empty
 	}
 	valueLength := buf.Size()
+	paddedLength := valueLength
+	needsPadding := valueLength%2 != 0
+	if needsPadding {
+		if valueLength == math.MaxUint32 {
+			return fmt.Errorf("cannot pad maximum-length value for tag %s", elem.Tag())
+		}
+		paddedLength++
+	}
 
 	// Write length
-	if err := w.writeLength(elemVR, valueLength); err != nil {
+	if err := w.writeLength(elemVR, paddedLength); err != nil {
 		return fmt.Errorf("failed to write length for tag %s: %w", elem.Tag(), err)
 	}
 
@@ -663,12 +671,52 @@ func (w *Writer) writeElement(elem element.Element) error {
 			if uint32(len(valueBytes)) != valueLength { //nolint:gosec // buffer sizes are uint32 by interface contract
 				return fmt.Errorf("buffer size mismatch for tag %s: got %d bytes, expected %d", elem.Tag(), len(valueBytes), valueLength)
 			}
-			if _, err := w.writer.Write(valueBytes); err != nil {
+			if err := writeAll(w.writer, valueBytes); err != nil {
 				return fmt.Errorf("failed to write value for tag %s: %w", elem.Tag(), err)
 			}
 		}
 	}
+	if needsPadding {
+		if err := writeAll(w.writer, []byte{padByteForVR(elemVR)}); err != nil {
+			return fmt.Errorf("failed to write padding for tag %s: %w", elem.Tag(), err)
+		}
+	}
 
+	return nil
+}
+
+func padByteForVR(v *vr.VR) byte {
+	if v == vr.UI {
+		return 0x00
+	}
+	if isStringVR(v) {
+		return ' '
+	}
+	return 0x00
+}
+
+func isStringVR(v *vr.VR) bool {
+	switch v.Code() {
+	case vr.CodeAE, vr.CodeAS, vr.CodeCS, vr.CodeDA, vr.CodeDS, vr.CodeDT,
+		vr.CodeIS, vr.CodeLO, vr.CodeLT, vr.CodePN, vr.CodeSH, vr.CodeST,
+		vr.CodeTM, vr.CodeUC, vr.CodeUI, vr.CodeUR, vr.CodeUT:
+		return true
+	default:
+		return false
+	}
+}
+
+func writeAll(w io.Writer, data []byte) error {
+	for len(data) > 0 {
+		n, err := w.Write(data)
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return io.ErrShortWrite
+		}
+		data = data[n:]
+	}
 	return nil
 }
 

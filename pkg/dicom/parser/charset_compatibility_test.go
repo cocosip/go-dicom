@@ -5,6 +5,8 @@
 package parser
 
 import (
+	"bytes"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,40 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
+
+func TestParseUsesSpecificCharacterSetForFollowingText(t *testing.T) {
+	var buf bytes.Buffer
+	buf.Write(make([]byte, 128))
+	buf.WriteString("DICM")
+
+	writeExplicitString := func(tg *tag.Tag, vrCode string, value []byte) {
+		t.Helper()
+		_ = binary.Write(&buf, binary.LittleEndian, tg.Group())
+		_ = binary.Write(&buf, binary.LittleEndian, tg.Element())
+		buf.WriteString(vrCode)
+		_ = binary.Write(&buf, binary.LittleEndian, uint16(len(value)))
+		buf.Write(value)
+	}
+
+	tsUID := []byte("1.2.840.10008.1.2.1\x00")
+	writeExplicitString(tag.TransferSyntaxUID, "UI", tsUID)
+	writeExplicitString(tag.SpecificCharacterSet, "CS", []byte("ISO_IR 144"))
+	writeExplicitString(tag.PatientName, "PN", []byte{0xC2, 0xD5, 0xE1, 0xE2})
+
+	result, err := Parse(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	got, ok := result.Dataset.GetString(tag.PatientName)
+	if !ok {
+		t.Fatal("PatientName not found")
+	}
+	const expectedPatientName = "\u0422\u0435\u0441\u0442"
+	if got != expectedPatientName {
+		t.Fatalf("PatientName = %q, want %q", got, expectedPatientName)
+	}
+}
 
 // CharsetTestCase represents a test case for charset compatibility
 type CharsetTestCase struct {
@@ -128,7 +164,7 @@ func TestCharsetCompatibility(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file %s: %v", filePath, err)
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -206,23 +242,23 @@ func TestCharsetParseBasicInfo(t *testing.T) {
 
 	for _, tf := range testFiles {
 		t.Run(tf.filename, func(t *testing.T) {
-            filePath := filepath.Join(testDataDir, tf.filename)
-            filePath = filepath.Clean(filePath)
-            if !strings.HasPrefix(filePath, filepath.Clean(testDataDir)+string(os.PathSeparator)) && filePath != filepath.Clean(testDataDir) {
-                t.Skipf("Invalid test file path: %s", filePath)
-                return
-            }
+			filePath := filepath.Join(testDataDir, tf.filename)
+			filePath = filepath.Clean(filePath)
+			if !strings.HasPrefix(filePath, filepath.Clean(testDataDir)+string(os.PathSeparator)) && filePath != filepath.Clean(testDataDir) {
+				t.Skipf("Invalid test file path: %s", filePath)
+				return
+			}
 
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				t.Skipf("Test file not found: %s", filePath)
 				return
 			}
 
-            file, err := os.Open(filePath)
-            if err != nil {
-                t.Fatalf("Failed to open file: %v", err)
-            }
-            defer func() { _ = file.Close() }()
+			file, err := os.Open(filePath)
+			if err != nil {
+				t.Fatalf("Failed to open file: %v", err)
+			}
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -269,7 +305,7 @@ func TestCharsetAllFilesParseSuccessfully(t *testing.T) {
 				failedCount++
 				return
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -326,7 +362,7 @@ func TestCharsetEncodingDetection(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -396,4 +432,3 @@ func (r *fileReader) Read(p []byte) (n int, err error) {
 	r.pos += n
 	return n, nil
 }
-

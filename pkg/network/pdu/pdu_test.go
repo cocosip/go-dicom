@@ -9,6 +9,18 @@ import (
 	"testing"
 )
 
+type shortWriter struct {
+	bytes.Buffer
+	max int
+}
+
+func (w *shortWriter) Write(p []byte) (int, error) {
+	if len(p) > w.max {
+		p = p[:w.max]
+	}
+	return w.Buffer.Write(p)
+}
+
 func TestPDUTypeString(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -126,6 +138,27 @@ func TestRawPDU_WriteRead(t *testing.T) {
 				t.Errorf("Data mismatch")
 			}
 		})
+	}
+}
+
+func TestRawPDUWriteHandlesShortWrites(t *testing.T) {
+	pdu := NewRawPDU(TypePDataTF, []byte{0x01, 0x02, 0x03, 0x04})
+	w := &shortWriter{max: 2}
+
+	if err := pdu.Write(w); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	if got, want := w.Len(), int(pdu.TotalLength()); got != want {
+		t.Fatalf("written length = %d, want %d", got, want)
+	}
+
+	read := &RawPDU{}
+	if err := read.Read(bytes.NewReader(w.Bytes())); err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if !bytes.Equal(read.Data, pdu.Data) {
+		t.Fatalf("read data = %v, want %v", read.Data, pdu.Data)
 	}
 }
 

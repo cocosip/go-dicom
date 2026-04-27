@@ -5,6 +5,7 @@ package codec
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
@@ -309,5 +310,28 @@ func TestRLECodec_TransferSyntax(t *testing.T) {
 
 	if !ts.IsEncapsulated() {
 		t.Error("RLE should be encapsulated")
+	}
+}
+
+func TestRLEDecoderRepeatRunReturnsErrorBeforeOverflow(t *testing.T) {
+	data := make([]byte, 64)
+	binary.LittleEndian.PutUint32(data[0:4], 1)
+	binary.LittleEndian.PutUint32(data[4:8], 64)
+	data = append(data, byte(0x81), 0x7F) // -127 repeats the next byte 128 times.
+
+	decoder, err := newRLEDecoder(data)
+	if err != nil {
+		t.Fatalf("newRLEDecoder() error = %v", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("DecodeSegment panicked instead of returning an error: %v", r)
+		}
+	}()
+
+	err = decoder.DecodeSegment(0, make([]byte, 127), 0, 1)
+	if err == nil {
+		t.Fatal("DecodeSegment() error = nil, want output overflow error")
 	}
 }

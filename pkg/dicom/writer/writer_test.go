@@ -195,6 +195,25 @@ func TestWriteElement(t *testing.T) {
 			t.Errorf("Element size = %d, want 10", buf.Len())
 		}
 	})
+
+	t.Run("OddLengthStringElementIsPadded", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		w := New(transfer.ExplicitVRLittleEndian)
+		w.writer = buf
+
+		elem := element.NewString(tag.PatientID, vr.LO, []string{"A"})
+		if err := w.writeElement(elem); err != nil {
+			t.Fatalf("writeElement() error = %v", err)
+		}
+
+		data := buf.Bytes()
+		if got := binary.LittleEndian.Uint16(data[6:8]); got != 2 {
+			t.Fatalf("VL = %d, want 2", got)
+		}
+		if got := data[8:10]; !bytes.Equal(got, []byte{'A', ' '}) {
+			t.Fatalf("value bytes = %v, want %v", got, []byte{'A', ' '})
+		}
+	})
 }
 
 // TestWriteSimpleDataset tests writing a simple dataset

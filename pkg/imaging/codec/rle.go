@@ -167,7 +167,7 @@ func (c *RLECodec) decodeFrame(src []byte, dst *[]byte, info *imagetypes.FrameIn
 	frameData := make([]byte, frameSize)
 
 	// Decode RLE data
-	decoder, _, err := newRLEDecoder(src)
+	decoder, err := newRLEDecoder(src)
 	if err != nil {
 		return fmt.Errorf("failed to create RLE decoder: %w", err)
 	}
@@ -350,9 +350,9 @@ type rleDecoder struct {
 	data             []byte
 }
 
-func newRLEDecoder(data []byte) (*rleDecoder, int, error) {
+func newRLEDecoder(data []byte) (*rleDecoder, error) {
 	if len(data) < 64 {
-		return nil, 0, fmt.Errorf("RLE data too short: need at least 64 bytes, got %d", len(data))
+		return nil, fmt.Errorf("RLE data too short: need at least 64 bytes, got %d", len(data))
 	}
 
 	dec := &rleDecoder{
@@ -363,23 +363,19 @@ func newRLEDecoder(data []byte) (*rleDecoder, int, error) {
 
 	var numSegments uint32
 	if err := binary.Read(reader, binary.LittleEndian, &numSegments); err != nil {
-		return nil, 0, fmt.Errorf("failed to read number of segments: %w", err)
+		return nil, fmt.Errorf("failed to read number of segments: %w", err)
 	}
 	dec.NumberOfSegments = int(numSegments)
 
 	for i := 0; i < 15; i++ {
 		var offset uint32
 		if err := binary.Read(reader, binary.LittleEndian, &offset); err != nil {
-			return nil, 0, fmt.Errorf("failed to read offset %d: %w", i, err)
+			return nil, fmt.Errorf("failed to read offset %d: %w", i, err)
 		}
 		dec.offsets[i] = int(offset)
 	}
 
-	// Calculate total bytes consumed for this frame
-	// RLE segments are variable length, conservatively use all remaining data
-	bytesRead := len(data)
-
-	return dec, bytesRead, nil
+	return dec, nil
 }
 
 func (d *rleDecoder) DecodeSegment(segment int, buffer []byte, start int, sampleOffset int) error {
@@ -443,13 +439,13 @@ func (d *rleDecoder) decode(buffer []byte, start int, sampleOffset int, rleData 
 			}
 		} else if control >= -127 {
 			// Repeat run
-			length := int(-control)
+			length := int(-control) + 1
 
 			if (pos + ((length - 1) * sampleOffset)) >= bufferLength {
 				return fmt.Errorf("RLE repeat run exceeds output buffer length")
 			}
 
-			if i >= len(rleData) {
+			if i >= len(rleData) || i >= end {
 				return io.ErrUnexpectedEOF
 			}
 
@@ -457,12 +453,12 @@ func (d *rleDecoder) decode(buffer []byte, start int, sampleOffset int, rleData 
 			i++
 
 			if sampleOffset == 1 {
-				for j := 0; j <= length; j++ {
+				for j := 0; j < length; j++ {
 					buffer[pos] = b
 					pos++
 				}
 			} else {
-				for j := 0; j <= length; j++ {
+				for j := 0; j < length; j++ {
 					buffer[pos] = b
 					pos += sampleOffset
 				}

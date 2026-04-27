@@ -12,6 +12,9 @@ import (
 	"os"
 	"sync"
 
+	"golang.org/x/text/encoding"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/charset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -124,6 +127,7 @@ type parseContext struct {
 	isExplicitVR   bool
 	transferSyntax *transfer.Syntax
 	dictionary     *dict.Dictionary
+	textEncoding   encoding.Encoding
 
 	// firstDatasetTagRaw holds the first tag read that doesn't belong to Group 0002.
 	// Raw bytes are preserved because dataset byte order is only known after reading Transfer Syntax.
@@ -208,6 +212,7 @@ func newParseContext(opts ...Option) *parseContext {
 	ctx := &parseContext{
 		byteOrder:       binary.LittleEndian,
 		isExplicitVR:    true,
+		textEncoding:    charset.Default,
 		readOption:      ReadDefault,
 		largeObjectSize: 65536, // Default 64KB
 		detectedFormat:  FormatUnknown,
@@ -439,6 +444,7 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 		if err := ds.Add(elem); err != nil {
 			return nil, fmt.Errorf("failed to add element %s to dataset: %w", t, err)
 		}
+		p.updateTextEncoding(elem)
 	}
 
 	return ds, nil
@@ -526,6 +532,7 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 		if err := ds.Add(elem); err != nil {
 			return nil, fmt.Errorf("failed to add element to dataset: %w", err)
 		}
+		p.updateTextEncoding(elem)
 	}
 
 	return ds, nil
@@ -865,6 +872,10 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 // readItemDataset reads a single item dataset within a sequence.
 func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) {
 	item := dataset.New()
+	savedEncoding := p.textEncoding
+	defer func() {
+		p.textEncoding = savedEncoding
+	}()
 
 	if length == 0xFFFFFFFF {
 		// Undefined length item
@@ -897,6 +908,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 			if err := item.Add(elem); err != nil {
 				return nil, fmt.Errorf("failed to add element to item: %w", err)
 			}
+			p.updateTextEncoding(elem)
 		}
 	} else {
 		// Defined-length item: parse directly from a bounded stream to avoid
@@ -911,6 +923,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 				if err := item.Add(elem); err != nil {
 					return fmt.Errorf("failed to add element to item: %w", err)
 				}
+				p.updateTextEncoding(elem)
 			}
 			return nil
 		})
@@ -920,6 +933,24 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 	}
 
 	return item, nil
+}
+
+func (p *parseContext) updateTextEncoding(elem element.Element) {
+	if elem == nil || elem.Tag().ToUint32() != tag.SpecificCharacterSet.ToUint32() {
+		return
+	}
+
+	strElem, ok := elem.(*element.String)
+	if !ok {
+		return
+	}
+
+	values := strElem.GetValues()
+	if len(values) == 0 {
+		p.textEncoding = charset.Default
+		return
+	}
+	p.textEncoding = charset.GetEncoding(values[0])
 }
 
 // withBoundedReader runs fn with p.reader limited to the next 'length' bytes.
@@ -972,7 +1003,7 @@ func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer
 	case vr.CodeAE, vr.CodeAS, vr.CodeCS, vr.CodeDA, vr.CodeDS, vr.CodeDT,
 		vr.CodeIS, vr.CodeLO, vr.CodeLT, vr.CodePN, vr.CodeSH, vr.CodeST,
 		vr.CodeTM, vr.CodeUC, vr.CodeUI, vr.CodeUR, vr.CodeUT:
-		return setOrder(element.NewStringFromBuffer(t, v, buf, nil)), nil
+		return setOrder(element.NewStringFromBuffer(t, v, buf, p.textEncoding)), nil
 
 	case vr.CodeUS:
 		return setOrder(element.NewUnsignedShortFromBuffer(t, buf)), nil
@@ -1133,6 +1164,12 @@ func (p *parseContext) skipFragmentSequence() error {
 		if err := binary.Read(p.reader, p.byteOrder, &itemLength); err != nil {
 			return fmt.Errorf("failed to read fragment item length: %w", err)
 		}
+		if itemLength == 0xFFFFFFFF {
+			return fmt.Errorf("undefined length fragment items are not supported")
+		}
+		if p.maxElementSize > 0 && itemLength > p.maxElementSize {
+			return fmt.Errorf("fragment item length %d exceeds maximum %d", itemLength, p.maxElementSize)
+		}
 
 		if _, err := io.CopyN(io.Discard, p.reader, int64(itemLength)); err != nil {
 			return fmt.Errorf("failed to skip fragment item data: %w", err)
@@ -1204,6 +1241,12 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 		var itemLength uint32
 		if err := binary.Read(p.reader, p.byteOrder, &itemLength); err != nil {
 			return nil, fmt.Errorf("failed to read fragment item length: %w", err)
+		}
+		if itemLength == 0xFFFFFFFF {
+			return nil, fmt.Errorf("undefined length fragment items are not supported")
+		}
+		if p.maxElementSize > 0 && itemLength > p.maxElementSize {
+			return nil, fmt.Errorf("fragment item length %d exceeds maximum %d", itemLength, p.maxElementSize)
 		}
 
 		// Read item data
