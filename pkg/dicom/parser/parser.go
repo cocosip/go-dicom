@@ -1058,7 +1058,7 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 		}
 
 		// Create a FileByteBuffer for this range
-		fb, err := buffer.NewFile(p.file.Name(), uint32(currentPos), length)
+		fb, err := buffer.NewFileAt(p.file.Name(), currentPos, length)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create file buffer: %w", err)
 		}

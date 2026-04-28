@@ -691,10 +691,18 @@ func buildFragmentSequence(frames [][]byte, bitsAllocated uint16, strictDICOM bo
 	for i, frame := range frames {
 		offsets = append(offsets, runningOffset)
 
-		if len(frame) > int(math.MaxUint32-runningOffset) {
+		paddedSize := len(frame)
+		if paddedSize%2 != 0 {
+			paddedSize++
+		}
+		if paddedSize > int(math.MaxUint32-8) {
 			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
 		}
-		runningOffset += uint32(len(frame))
+		padded := uint32(paddedSize)
+		if runningOffset > math.MaxUint32-8-padded {
+			return nil, fmt.Errorf("fragment offset overflow at frame %d", i)
+		}
+		runningOffset += 8 + padded
 	}
 
 	// Determine VR based on strictDICOM mode

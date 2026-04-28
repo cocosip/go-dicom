@@ -77,3 +77,41 @@ func TestNewFileLargeSparseFile(t *testing.T) {
 		t.Fatalf("NewFile() unexpected error for valid range in sparse file: %v", err)
 	}
 }
+
+func TestNewFileAtKeepsOffsetsAbove4GiB(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "sparse-large-offset.dcm")
+
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	const offset = int64(5)<<30 + 123
+	want := []byte{0xAA, 0xBB, 0xCC}
+	if err := f.Truncate(offset + int64(len(want))); err != nil {
+		t.Skipf("sparse truncate unsupported on this filesystem: %v", err)
+	}
+	if _, err := f.WriteAt(want, offset); err != nil {
+		t.Fatalf("WriteAt() error: %v", err)
+	}
+
+	fb, err := buffer.NewFileAt(path, offset, uint32(len(want)))
+	if err != nil {
+		t.Fatalf("NewFileAt() error: %v", err)
+	}
+	if fb.Position64() != offset {
+		t.Fatalf("Position64() = %d, want %d", fb.Position64(), offset)
+	}
+
+	got := make([]byte, len(want))
+	if err := fb.GetByteRange(0, uint32(len(got)), got); err != nil {
+		t.Fatalf("GetByteRange() error: %v", err)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("GetByteRange()[%d] = 0x%02X, want 0x%02X", i, got[i], want[i])
+		}
+	}
+}

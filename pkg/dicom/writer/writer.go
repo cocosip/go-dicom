@@ -165,6 +165,7 @@ type WriteOption func(*writeConfig)
 // writeConfig holds the configuration for a write operation.
 type writeConfig struct {
 	transferSyntax              *transfer.Syntax
+	transferSyntaxSet           bool
 	fileMetaInfo                *dataset.Dataset
 	includePreamble             bool
 	explicitLengthSequences     bool   // Use explicit length for sequences (default: false, use undefined)
@@ -180,6 +181,7 @@ type writeConfig struct {
 func WithTransferSyntax(ts *transfer.Syntax) WriteOption {
 	return func(c *writeConfig) {
 		c.transferSyntax = ts
+		c.transferSyntaxSet = true
 	}
 }
 
@@ -329,10 +331,13 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	// If no transfer syntax was explicitly specified via options,
 	// try to use the dataset's InternalTransferSyntax (set by transcoder/parser)
 	// This allows automatic transfer syntax detection from the dataset
-	if config.transferSyntax == transfer.ExplicitVRLittleEndian {
+	if !config.transferSyntaxSet {
 		if internalTS := ds.InternalTransferSyntax(); internalTS != nil {
 			config.transferSyntax = internalTS
 		}
+	}
+	if config.transferSyntax == nil {
+		return fmt.Errorf("transfer syntax cannot be nil")
 	}
 
 	// If largeObjectSize is explicitly set to 0, use default
@@ -368,10 +373,13 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	if fileMetaInfo == nil {
 		fileMetaInfo = writer.generateFileMetaInformation()
 	} else {
-		// Ensure TransferSyntaxUID is present in the provided fileMetaInfo
-		if _, exists := fileMetaInfo.Get(tag.TransferSyntaxUID); !exists {
-			_ = fileMetaInfo.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
-				[]string{config.transferSyntax.UID().String()}))
+		// Work on a clone so callers can reuse their File Meta Information
+		// dataset. Its TransferSyntaxUID must always match the dataset bytes
+		// written below, even when the caller supplied stale metadata.
+		fileMetaInfo = fileMetaInfo.Clone()
+		if err := fileMetaInfo.AddOrUpdate(element.NewString(tag.TransferSyntaxUID, vr.UI,
+			[]string{config.transferSyntax.UID().String()})); err != nil {
+			return fmt.Errorf("failed to set TransferSyntaxUID in file meta information: %w", err)
 		}
 	}
 
@@ -992,7 +1000,15 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		if err != nil {
 			return fmt.Errorf("failed to get fragment %d: %w", i, err)
 		}
-		fragData := frag.Data()
+		fragLen := frag.Size()
+		paddedLen := fragLen
+		needsPadding := fragLen%2 != 0
+		if needsPadding {
+			if fragLen == math.MaxUint32 {
+				return fmt.Errorf("fragment %d is too large to pad", i)
+			}
+			paddedLen++
+		}
 
 		// Write Item tag (FFFE,E000)
 		if err := w.writeTag(itemTag); err != nil {
@@ -1000,23 +1016,20 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		}
 
 		// Write fragment length
-		fragLen := len(fragData)
-		if fragLen%2 != 0 {
-			fragLen++
-		}
-		if fragLen > int(math.MaxUint32) {
-			return fmt.Errorf("fragment too large: %d bytes", fragLen)
-		}
-		if err := binary.Write(w.writer, w.byteOrder, uint32(fragLen)); err != nil {
+		if err := binary.Write(w.writer, w.byteOrder, paddedLen); err != nil {
 			return fmt.Errorf("failed to write fragment length: %w", err)
 		}
 
 		// Write fragment data
-		if _, err := w.writer.Write(fragData); err != nil {
+		written, err := frag.WriteTo(w.writer)
+		if err != nil {
 			return fmt.Errorf("failed to write fragment data: %w", err)
 		}
-		if len(fragData)%2 != 0 {
-			if _, err := w.writer.Write(padByte); err != nil {
+		if written != int64(fragLen) {
+			return fmt.Errorf("short write for fragment %d: wrote %d bytes, expected %d", i, written, fragLen)
+		}
+		if needsPadding {
+			if err := writeAll(w.writer, padByte); err != nil {
 				return fmt.Errorf("failed to write fragment padding: %w", err)
 			}
 		}

@@ -6,10 +6,12 @@ package writer
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
@@ -39,6 +41,92 @@ func TestWritePreamble(t *testing.T) {
 	if actualPrefix != dicmPrefix {
 		t.Errorf("DICM prefix = %q, want %q", actualPrefix, dicmPrefix)
 	}
+}
+
+func TestWriteUsesDatasetTransferSyntaxAndSyncsFileMeta(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Meta^Sync"}))
+
+	fmi := dataset.New()
+	_ = fmi.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
+		[]string{transfer.ExplicitVRLittleEndian.UID().String()}))
+
+	var buf bytes.Buffer
+	if err := Write(&buf, ds, WithFileMetaInfo(fmi)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	originalTS, ok := fmi.GetString(tag.TransferSyntaxUID)
+	if !ok || originalTS != transfer.ExplicitVRLittleEndian.UID().String() {
+		t.Fatalf("caller file meta was mutated to %q", originalTS)
+	}
+
+	result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	gotTS, ok := result.FileMetaInformationDataset().GetString(tag.TransferSyntaxUID)
+	if !ok {
+		t.Fatal("written file meta missing TransferSyntaxUID")
+	}
+	if gotTS != transfer.ExplicitVRBigEndian.UID().String() {
+		t.Fatalf("TransferSyntaxUID = %q, want %q", gotTS, transfer.ExplicitVRBigEndian.UID().String())
+	}
+	if result.TransferSyntax != transfer.ExplicitVRBigEndian {
+		t.Fatalf("parsed transfer syntax = %v, want ExplicitVRBigEndian", result.TransferSyntax)
+	}
+}
+
+func TestWriteFragmentSequenceStreamsFragments(t *testing.T) {
+	fs := element.NewOtherByteFragment(tag.PixelData).FragmentSequence
+	frag := &trackingBuffer{data: []byte{0x01, 0x02, 0x03}}
+	fs.AddFragment(frag)
+
+	var buf bytes.Buffer
+	w := New(transfer.ExplicitVRLittleEndian)
+	w.writer = &buf
+	if err := w.writeFragmentSequence(fs); err != nil {
+		t.Fatalf("writeFragmentSequence() error = %v", err)
+	}
+
+	if frag.dataCalled {
+		t.Fatal("writeFragmentSequence() called Data(); want streaming through WriteTo")
+	}
+	if !frag.writeToCalled {
+		t.Fatal("writeFragmentSequence() did not call WriteTo")
+	}
+}
+
+type trackingBuffer struct {
+	data          []byte
+	dataCalled    bool
+	writeToCalled bool
+}
+
+func (b *trackingBuffer) IsMemory() bool {
+	return false
+}
+
+func (b *trackingBuffer) Size() uint32 {
+	return uint32(len(b.data)) //nolint:gosec // test data is small
+}
+
+func (b *trackingBuffer) Data() []byte {
+	b.dataCalled = true
+	return b.data
+}
+
+func (b *trackingBuffer) GetByteRange(offset, count uint32, output []byte) error {
+	copy(output[:count], b.data[offset:offset+count])
+	return nil
+}
+
+func (b *trackingBuffer) WriteTo(w io.Writer) (int64, error) {
+	b.writeToCalled = true
+	n, err := w.Write(b.data)
+	return int64(n), err
 }
 
 // TestWriteTag tests tag writing

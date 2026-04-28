@@ -14,7 +14,7 @@ import (
 // the entire file into memory.
 type FileByteBuffer struct {
 	filePath string // Path to the file
-	position uint32 // Starting position within the file
+	position int64  // Starting position within the file
 	size     uint32 // Size of the data range
 }
 
@@ -27,8 +27,20 @@ type FileByteBuffer struct {
 //
 // Returns an error if the file doesn't exist or if the range is invalid.
 func NewFile(filePath string, position, size uint32) (*FileByteBuffer, error) {
+	return NewFileAt(filePath, int64(position), size)
+}
+
+// NewFileAt creates a new file-backed buffer with a 64-bit file position.
+//
+// This should be used for large DICOM files whose payload offsets may exceed
+// 4 GiB. The represented value length is still uint32 because DICOM element
+// value lengths are encoded as 32-bit fields.
+func NewFileAt(filePath string, position int64, size uint32) (*FileByteBuffer, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("file path cannot be empty")
+	}
+	if position < 0 {
+		return nil, fmt.Errorf("position %d cannot be negative", position)
 	}
 
 	// Verify file exists and check bounds
@@ -37,13 +49,13 @@ func NewFile(filePath string, position, size uint32) (*FileByteBuffer, error) {
 		return nil, fmt.Errorf("cannot access file: %w", err)
 	}
 
-	fileSize := uint64(info.Size()) //nolint:gosec // file size is non-negative for regular files
-	if uint64(position) > fileSize {
+	fileSize := info.Size()
+	if position > fileSize {
 		return nil, fmt.Errorf("position %d exceeds file size %d", position, fileSize)
 	}
 
-	if uint64(size) > fileSize-uint64(position) {
-		return nil, fmt.Errorf("range [%d:%d) exceeds file size %d", position, position+size, fileSize)
+	if int64(size) > fileSize-position {
+		return nil, fmt.Errorf("range [%d:%d) exceeds file size %d", position, position+int64(size), fileSize)
 	}
 
 	return &FileByteBuffer{
@@ -78,7 +90,7 @@ func (f *FileByteBuffer) Data() []byte {
 	defer func() { _ = file.Close() }()
 
 	data := make([]byte, f.size)
-	_, err = file.ReadAt(data, int64(f.position))
+	_, err = file.ReadAt(data, f.position)
 	if err != nil && err != io.EOF {
 		return nil
 	}
@@ -118,7 +130,7 @@ func (f *FileByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 	defer func() { _ = file.Close() }()
 
 	// Read from the absolute position: buffer position + offset
-	_, err = file.ReadAt(output[:int(count)], int64(f.position+offset))
+	_, err = file.ReadAt(output[:int(count)], f.position+int64(offset))
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("failed to read from file: %w", err)
 	}
@@ -147,7 +159,7 @@ func (f *FileByteBuffer) WriteTo(w io.Writer) (int64, error) {
 	defer func() { _ = file.Close() }()
 
 	// Seek to the starting position
-	_, err = file.Seek(int64(f.position), io.SeekStart)
+	_, err = file.Seek(f.position, io.SeekStart)
 	if err != nil {
 		return 0, fmt.Errorf("cannot seek to position %d: %w", f.position, err)
 	}
@@ -188,5 +200,10 @@ func (f *FileByteBuffer) FilePath() string {
 
 // Position returns the starting position within the file.
 func (f *FileByteBuffer) Position() uint32 {
+	return uint32(f.position) //nolint:gosec // Backward-compatible legacy accessor.
+}
+
+// Position64 returns the starting position within the file without truncation.
+func (f *FileByteBuffer) Position64() int64 {
 	return f.position
 }

@@ -36,6 +36,33 @@ func TestNewTranscoder(t *testing.T) {
 	})
 }
 
+func TestBuildFragmentSequenceBOTUsesEncodedItemOffsets(t *testing.T) {
+	seqElem, err := buildFragmentSequence([][]byte{
+		[]byte("AA"),
+		[]byte("BBB"),
+		[]byte("C"),
+	}, 16, true)
+	if err != nil {
+		t.Fatalf("buildFragmentSequence() error = %v", err)
+	}
+
+	obf, ok := seqElem.(*element.OtherByteFragment)
+	if !ok {
+		t.Fatalf("buildFragmentSequence() returned %T, want *element.OtherByteFragment", seqElem)
+	}
+
+	want := []uint32{0, 10, 22}
+	got := obf.OffsetTable()
+	if len(got) != len(want) {
+		t.Fatalf("OffsetTable length = %d, want %d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("OffsetTable[%d] = %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
 func TestTranscoder_TranscodeNoPixelData(t *testing.T) {
 	// Create dataset without pixel data
 	ds := dataset.New()
