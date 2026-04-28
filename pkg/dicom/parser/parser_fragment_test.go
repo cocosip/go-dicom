@@ -12,6 +12,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 const explicitVRLittleEndianUIDPadded = "1.2.840.10008.1.2.1\x00"
@@ -242,6 +243,35 @@ func TestParseFragmentSequenceSkipLargeTags(t *testing.T) {
 	}
 	if len(obf.OffsetTable()) != 0 {
 		t.Fatalf("OffsetTable length = %d, want 0 when SkipLargeTags is enabled", len(obf.OffsetTable()))
+	}
+}
+
+func TestParseFragmentSequenceReadLargeOnDemandKeepsFragmentsLazy(t *testing.T) {
+	data := bytes.NewReader(createFragmentSequenceDICOM().Bytes())
+	result, err := Parse(data, WithReadOption(ReadLargeOnDemand), WithLargeObjectSize(4))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
+	if !exists {
+		t.Fatal("PixelData element not found")
+	}
+	obf, ok := pixelDataElem.(*element.OtherByteFragment)
+	if !ok {
+		t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
+	}
+
+	frag, err := obf.GetFragment(0)
+	if err != nil {
+		t.Fatalf("GetFragment(0) error = %v", err)
+	}
+	lazy, ok := frag.(*buffer.LazyByteBuffer)
+	if !ok {
+		t.Fatalf("fragment buffer = %T, want *buffer.LazyByteBuffer", frag)
+	}
+	if lazy.IsLoaded() {
+		t.Fatal("lazy fragment buffer should not be loaded during parse")
 	}
 }
 

@@ -1249,13 +1249,14 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 			return nil, fmt.Errorf("fragment item length %d exceeds maximum %d", itemLength, p.maxElementSize)
 		}
 
-		// Read item data
-		itemData := make([]byte, itemLength)
-		if _, err := io.ReadFull(p.reader, itemData); err != nil {
-			return nil, fmt.Errorf("failed to read fragment item data: %w", err)
-		}
-
 		if isFirstItem {
+			// The first item is the Basic Offset Table and must be materialized
+			// so offsets can be parsed before reading fragments.
+			itemData := make([]byte, itemLength)
+			if _, err := io.ReadFull(p.reader, itemData); err != nil {
+				return nil, fmt.Errorf("failed to read fragment item data: %w", err)
+			}
+
 			// First item is the offset table
 			// Parse it as uint32 array if not empty
 			if itemLength > 0 {
@@ -1275,11 +1276,28 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 			}
 			isFirstItem = false
 		} else {
-			// Subsequent items are fragments
-			fragBuf := buffer.NewMemory(itemData)
+			fragBuf, err := p.readFragmentItemBuffer(itemLength)
+			if err != nil {
+				return nil, err
+			}
 			fragSeq.AddFragment(fragBuf)
 		}
 	}
 
 	return fs, nil
+}
+
+func (p *parseContext) readFragmentItemBuffer(itemLength uint32) (buffer.ByteBuffer, error) {
+	if p.readOption == ReadLargeOnDemand && itemLength > p.largeObjectSize {
+		fragBuf, err := p.createLazyBuffer(itemLength)
+		if err == nil {
+			return fragBuf, nil
+		}
+	}
+
+	itemData := make([]byte, itemLength)
+	if _, err := io.ReadFull(p.reader, itemData); err != nil {
+		return nil, fmt.Errorf("failed to read fragment item data: %w", err)
+	}
+	return buffer.NewMemory(itemData), nil
 }

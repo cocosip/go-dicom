@@ -131,8 +131,7 @@ func (t *Transcoder) Transcode(ds *dataset.Dataset) (*dataset.Dataset, error) {
 	if !ds.Contains(tag.PixelData) {
 		// No pixel data - just clone and update transfer syntax
 		newDS := ds.Clone()
-		// Note: In a full implementation, we would set InternalTransferSyntax
-		// For now, return the cloned dataset
+		newDS.SetInternalTransferSyntax(t.outputSyntax)
 		return newDS, nil
 	}
 
@@ -238,21 +237,36 @@ func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, e
 
 	// Get fragment sequence
 	var fragments []buffer.ByteBuffer
+	var offsetTable []uint32
 	switch pd := pixelDataElem.(type) {
 	case *element.OtherByteFragment:
 		fragments = pd.Fragments()
+		offsetTable = pd.OffsetTable()
 	case *element.OtherWordFragment:
 		fragments = pd.Fragments()
+		offsetTable = pd.OffsetTable()
 	default:
 		return nil, fmt.Errorf("expected fragment sequence for encapsulated transfer syntax")
 	}
 
-	if frameIndex >= len(fragments) {
-		return nil, fmt.Errorf("frame index %d out of range (0-%d)", frameIndex, len(fragments)-1)
+	frameCount := 1
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
+		frameCount = int(nf)
+	} else if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
+			frameCount = parsed
+		}
 	}
 
-	// Get the compressed frame
-	compressedFrame := fragments[frameIndex].Data()
+	compressedFrames, err := framesFromFragments(fragments, offsetTable, frameCount)
+	if err != nil {
+		return nil, err
+	}
+	if frameIndex < 0 || frameIndex >= len(compressedFrames) {
+		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(compressedFrames))
+	}
+
+	compressedFrame := compressedFrames[frameIndex]
 
 	// Decode using input codec
 	if t.inputCodec == nil {
@@ -630,7 +644,7 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 			for _, frag := range fragments[start:end] {
 				frame = append(frame, frag.Data()...)
 			}
-			frames = append(frames, frame)
+			frames = append(frames, stripTrailingPadding(frame))
 		}
 		return frames, nil
 	}

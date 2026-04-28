@@ -171,6 +171,34 @@ func TestBuildFragmentSequenceRebuildsOffsetsForEmittedLayout(t *testing.T) {
 	}
 }
 
+func TestDicomPixelDataToElementUsesOBForEncapsulated16Bit(t *testing.T) {
+	pd, err := NewDicomPixelData(&PixelDataInfo{
+		Width:                     1,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             16,
+		BitsStored:                16,
+		HighBit:                   15,
+		SamplesPerPixel:           1,
+		PhotometricInterpretation: Monochrome2,
+		Encapsulated:              true,
+	})
+	if err != nil {
+		t.Fatalf("NewDicomPixelData() error = %v", err)
+	}
+	if err := pd.AddFrame([]byte{0xAA, 0xBB}); err != nil {
+		t.Fatalf("AddFrame() error = %v", err)
+	}
+
+	elem, err := pd.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+	if _, ok := elem.(*element.OtherByteFragment); !ok {
+		t.Fatalf("ToElement() = %T, want *element.OtherByteFragment for encapsulated data", elem)
+	}
+}
+
 func TestPixelDataInfo_UncompressedFrameSize(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -1113,10 +1141,10 @@ func TestDicomPixelData_ToElement_VRSelection(t *testing.T) {
 			expectedVRType: "OB",
 		},
 		{
-			name:           "Encapsulated 16-bit should use OW",
+			name:           "Encapsulated 16-bit should use OB",
 			bitsAllocated:  16,
 			encapsulated:   true,
-			expectedVRType: "OW",
+			expectedVRType: "OB",
 		},
 		{
 			name:           "Native 8-bit should use OB",

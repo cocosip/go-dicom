@@ -12,6 +12,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -86,6 +87,23 @@ func TestTranscoder_TranscodeNoPixelData(t *testing.T) {
 	// Verify data is preserved
 	if !result.Contains(tag.PatientName) {
 		t.Error("PatientName not found in transcoded dataset")
+	}
+}
+
+func TestTranscodeNoPixelDataSetsOutputTransferSyntax(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"NoPixel^Data"}))
+
+	transcoder := NewTranscoder(
+		transfer.ExplicitVRLittleEndian,
+		transfer.ExplicitVRBigEndian,
+	)
+	result, err := transcoder.Transcode(ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	if result.InternalTransferSyntax() != transfer.ExplicitVRBigEndian {
+		t.Fatalf("InternalTransferSyntax() = %v, want ExplicitVRBigEndian", result.InternalTransferSyntax())
 	}
 }
 
@@ -188,6 +206,66 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 	})
 }
 
+func TestTranscoder_DecodeFrameUsesBOTFrameBoundaries(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
+
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.SetOffsetTable([]uint32{0, 20})
+	obf.AddFragment(buffer.NewMemory([]byte("AA")))
+	obf.AddFragment(buffer.NewMemory([]byte("BB")))
+	obf.AddFragment(buffer.NewMemory([]byte("CC")))
+	_ = ds.Add(obf)
+
+	transcoder := NewTranscoder(
+		transfer.RLELossless,
+		transfer.ExplicitVRLittleEndian,
+		WithInputCodec(echoDecodeCodec{}),
+	)
+
+	frame, err := transcoder.DecodeFrame(ds, 1)
+	if err != nil {
+		t.Fatalf("DecodeFrame() error = %v", err)
+	}
+	if !bytes.Equal(frame, []byte("CC")) {
+		t.Fatalf("DecodeFrame() = %q, want %q", frame, []byte("CC"))
+	}
+}
+
+type echoDecodeCodec struct{}
+
+func (echoDecodeCodec) Name() string {
+	return "echo"
+}
+
+func (echoDecodeCodec) TransferSyntax() *transfer.Syntax {
+	return transfer.RLELossless
+}
+
+func (echoDecodeCodec) GetDefaultParameters() Parameters {
+	return NewBaseParameters()
+}
+
+func (echoDecodeCodec) Encode(_ imagetypes.PixelData, _ imagetypes.PixelData, _ Parameters) error {
+	return nil
+}
+
+func (echoDecodeCodec) Decode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, _ Parameters) error {
+	frame, err := oldPixelData.GetFrame(0)
+	if err != nil {
+		return err
+	}
+	return newPixelData.AddFrame(frame)
+}
+
 func TestFramesFromFragments_UsesBOTItemOffsets(t *testing.T) {
 	fragments := []buffer.ByteBuffer{
 		buffer.NewMemory([]byte("AA")),
@@ -207,6 +285,21 @@ func TestFramesFromFragments_UsesBOTItemOffsets(t *testing.T) {
 	}
 	if !bytes.Equal(frames[1], []byte("CC")) {
 		t.Errorf("frames[1] = %q, want %q", frames[1], []byte("CC"))
+	}
+}
+
+func TestFramesFromFragments_StripsTrailingPaddingWithBOT(t *testing.T) {
+	fragments := []buffer.ByteBuffer{
+		buffer.NewMemory([]byte{0xFF, 0xD9, 0x00}),
+		buffer.NewMemory([]byte("B")),
+	}
+
+	frames, err := framesFromFragments(fragments, []uint32{0, 12}, 2)
+	if err != nil {
+		t.Fatalf("framesFromFragments() error = %v", err)
+	}
+	if !bytes.Equal(frames[0], []byte{0xFF, 0xD9}) {
+		t.Fatalf("frames[0] = %v, want JPEG EOI without padding", frames[0])
 	}
 }
 
