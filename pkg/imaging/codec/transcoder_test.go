@@ -5,6 +5,7 @@ package codec
 
 import (
 	"bytes"
+	"io"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -240,6 +241,92 @@ func TestTranscoder_DecodeFrameUsesBOTFrameBoundaries(t *testing.T) {
 	}
 }
 
+func TestTranscoderDecodeParsesStringNumberOfFrames(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
+
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.SetOffsetTable([]uint32{0, 10})
+	obf.AddFragment(buffer.NewMemory([]byte("AA")))
+	obf.AddFragment(buffer.NewMemory([]byte("BB")))
+	_ = ds.Add(obf)
+
+	transcoder := NewTranscoder(
+		transfer.RLELossless,
+		transfer.ExplicitVRLittleEndian,
+		WithInputCodec(echoDecodeCodec{}),
+	)
+
+	result, err := transcoder.decode(ds, transfer.ExplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("decode() error = %v", err)
+	}
+
+	elem, exists := result.Get(tag.PixelData)
+	if !exists {
+		t.Fatal("decoded PixelData not found")
+	}
+	ob, ok := elem.(*element.OtherByte)
+	if !ok {
+		t.Fatalf("decoded PixelData = %T, want *element.OtherByte", elem)
+	}
+	if !bytes.Equal(ob.GetData(), []byte("AABB")) {
+		t.Fatalf("decoded PixelData = %q, want %q", ob.GetData(), []byte("AABB"))
+	}
+}
+
+func TestTranscoderDecodeFrameLoadsOnlyRequestedBOTFragments(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
+
+	first := &countingBuffer{data: []byte("AA")}
+	second := &countingBuffer{data: []byte("BB")}
+	third := &countingBuffer{data: []byte("CC")}
+
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.SetOffsetTable([]uint32{0, 20})
+	obf.AddFragment(first)
+	obf.AddFragment(second)
+	obf.AddFragment(third)
+	_ = ds.Add(obf)
+
+	transcoder := NewTranscoder(
+		transfer.RLELossless,
+		transfer.ExplicitVRLittleEndian,
+		WithInputCodec(echoDecodeCodec{}),
+	)
+
+	frame, err := transcoder.DecodeFrame(ds, 1)
+	if err != nil {
+		t.Fatalf("DecodeFrame() error = %v", err)
+	}
+	if !bytes.Equal(frame, []byte("CC")) {
+		t.Fatalf("DecodeFrame() = %q, want %q", frame, []byte("CC"))
+	}
+	if first.dataCalls != 0 || second.dataCalls != 0 {
+		t.Fatalf("DecodeFrame() loaded unrequested fragments: first=%d second=%d", first.dataCalls, second.dataCalls)
+	}
+	if third.dataCalls == 0 {
+		t.Fatal("DecodeFrame() did not load requested fragment")
+	}
+}
+
 type echoDecodeCodec struct{}
 
 func (echoDecodeCodec) Name() string {
@@ -259,11 +346,47 @@ func (echoDecodeCodec) Encode(_ imagetypes.PixelData, _ imagetypes.PixelData, _ 
 }
 
 func (echoDecodeCodec) Decode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, _ Parameters) error {
-	frame, err := oldPixelData.GetFrame(0)
-	if err != nil {
-		return err
+	for i := 0; i < oldPixelData.FrameCount(); i++ {
+		frame, err := oldPixelData.GetFrame(i)
+		if err != nil {
+			return err
+		}
+		if err := newPixelData.AddFrame(frame); err != nil {
+			return err
+		}
 	}
-	return newPixelData.AddFrame(frame)
+	return nil
+}
+
+type countingBuffer struct {
+	data      []byte
+	dataCalls int
+}
+
+func (c *countingBuffer) IsMemory() bool {
+	return false
+}
+
+func (c *countingBuffer) Size() uint32 {
+	return uint32(len(c.data)) //nolint:gosec // test data is tiny
+}
+
+func (c *countingBuffer) Data() []byte {
+	c.dataCalls++
+	return c.data
+}
+
+func (c *countingBuffer) GetByteRange(offset, count uint32, output []byte) error {
+	if offset > uint32(len(c.data)) || count > uint32(len(c.data))-offset {
+		return io.ErrUnexpectedEOF
+	}
+	copy(output, c.data[offset:offset+count])
+	return nil
+}
+
+func (c *countingBuffer) WriteTo(w io.Writer) (int64, error) {
+	n, err := w.Write(c.data)
+	return int64(n), err
 }
 
 func TestFramesFromFragments_UsesBOTItemOffsets(t *testing.T) {

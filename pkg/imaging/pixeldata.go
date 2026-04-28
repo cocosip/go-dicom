@@ -1278,7 +1278,7 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 			for _, frag := range fragments[start:end] {
 				frame = append(frame, frag.Data()...)
 			}
-			frames = append(frames, frame)
+			frames = append(frames, stripTrailingPadding(frame))
 		}
 		return frames, nil
 	}
@@ -1297,9 +1297,16 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 		} else if len(data) != expectedSize {
 			return nil, fmt.Errorf("fragment size mismatch at index %d: got %d, expected %d", i, len(data), expectedSize)
 		}
-		frames = append(frames, data)
+		frames = append(frames, stripTrailingPadding(data))
 	}
 	return frames, nil
+}
+
+func stripTrailingPadding(data []byte) []byte {
+	if len(data) >= 3 && data[len(data)-1] == 0x00 && data[len(data)-2] == 0xD9 && data[len(data)-3] == 0xFF {
+		return data[:len(data)-1]
+	}
+	return data
 }
 
 // buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,

@@ -249,24 +249,11 @@ func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, e
 		return nil, fmt.Errorf("expected fragment sequence for encapsulated transfer syntax")
 	}
 
-	frameCount := 1
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
-		frameCount = int(nf)
-	} else if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
-		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
-			frameCount = parsed
-		}
-	}
-
-	compressedFrames, err := framesFromFragments(fragments, offsetTable, frameCount)
+	frameCount := frameCountFromDataset(ds)
+	compressedFrame, err := frameFromFragments(fragments, offsetTable, frameCount, frameIndex)
 	if err != nil {
 		return nil, err
 	}
-	if frameIndex < 0 || frameIndex >= len(compressedFrames) {
-		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(compressedFrames))
-	}
-
-	compressedFrame := compressedFrames[frameIndex]
 
 	// Decode using input codec
 	if t.inputCodec == nil {
@@ -413,10 +400,7 @@ func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.D
 	}
 
 	// Determine frame count
-	frameCount := 1
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
-		frameCount = int(nf)
-	}
+	frameCount := frameCountFromDataset(ds)
 	if frameCount < 1 {
 		frameCount = len(fragments)
 	}
@@ -504,15 +488,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 
 	// Determine frame count
 	// Note: NumberOfFrames has VR of IS (Integer String) per DICOM standard
-	frameCount := 1
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
-		frameCount = int(nf)
-	} else if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
-		// Try parsing as string (IS VR type)
-		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
-			frameCount = parsed
-		}
-	}
+	frameCount := frameCountFromDataset(ds)
 
 	// Calculate frame size
 	bytesAllocated := int((frameInfo.BitsAllocated-1)/8 + 1)
@@ -668,6 +644,90 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 	return frames, nil
 }
 
+func frameFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, frameCount, frameIndex int) ([]byte, error) {
+	if len(fragments) == 0 {
+		return nil, fmt.Errorf("no fragments available to decode")
+	}
+	if frameCount < 1 {
+		frameCount = len(offsetTable)
+	}
+	if frameCount < 1 {
+		frameCount = len(fragments)
+	}
+	if frameCount < 1 {
+		frameCount = 1
+	}
+	if frameIndex < 0 || frameIndex >= frameCount {
+		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, frameCount)
+	}
+
+	if len(offsetTable) > 0 {
+		if frameCount != len(offsetTable) {
+			return nil, fmt.Errorf("offset table frames mismatch: expected %d, got %d entries", frameCount, len(offsetTable))
+		}
+
+		fragmentStartByOffset := make(map[uint32]int, len(fragments))
+		var runningOffset uint32
+		for i, frag := range fragments {
+			fragmentStartByOffset[runningOffset] = i
+			size := frag.Size()
+			if size%2 != 0 {
+				size++
+			}
+			if size > math.MaxUint32-8 || runningOffset > math.MaxUint32-8-size {
+				return nil, fmt.Errorf("fragment offset overflow at index %d", i)
+			}
+			runningOffset += 8 + size
+		}
+
+		start, ok := fragmentStartByOffset[offsetTable[frameIndex]]
+		if !ok {
+			return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[frameIndex], frameIndex)
+		}
+		end := len(fragments)
+		if frameIndex+1 < len(offsetTable) {
+			nextEnd, ok := fragmentStartByOffset[offsetTable[frameIndex+1]]
+			if !ok {
+				return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[frameIndex+1], frameIndex+1)
+			}
+			end = nextEnd
+		}
+		if start >= end {
+			return nil, fmt.Errorf("frame %d derived from BOT is empty", frameIndex)
+		}
+
+		var frame []byte
+		for _, frag := range fragments[start:end] {
+			frame = append(frame, frag.Data()...)
+		}
+		if len(frame) == 0 {
+			return nil, fmt.Errorf("frame %d is empty", frameIndex)
+		}
+		return stripTrailingPadding(frame), nil
+	}
+
+	if frameIndex >= len(fragments) {
+		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(fragments))
+	}
+	data := fragments[frameIndex].Data()
+	if len(data) == 0 {
+		return nil, fmt.Errorf("fragment %d is empty", frameIndex)
+	}
+	return stripTrailingPadding(data), nil
+}
+
+func frameCountFromDataset(ds *dataset.Dataset) int {
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
+		return int(nf)
+	}
+	if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 1
+}
+
 // stripTrailingPadding removes a single trailing 0x00 that follows the JPEG/JPEG-LS EOI marker (0xFF 0xD9).
 // Some encoders pad encapsulated fragments to even length; the padding byte should not be passed to the codec.
 func stripTrailingPadding(data []byte) []byte {
@@ -811,10 +871,7 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 	}
 
 	// Get frame count
-	frameCount := 1
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
-		frameCount = int(nf)
-	}
+	frameCount := frameCountFromDataset(ds)
 
 	if frameIndex >= frameCount {
 		return nil, fmt.Errorf("frame index %d out of range (0-%d)",

@@ -171,6 +171,38 @@ func TestBuildFragmentSequenceRebuildsOffsetsForEmittedLayout(t *testing.T) {
 	}
 }
 
+func TestCreatePixelDataStripsTrailingPaddingWithBOT(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
+	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
+	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
+
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.SetOffsetTable([]uint32{0, 12})
+	obf.AddFragment(buffer.NewMemory([]byte{0xFF, 0xD9, 0x00}))
+	obf.AddFragment(buffer.NewMemory([]byte("B")))
+	_ = ds.Add(obf)
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+
+	frame, err := pd.GetFrame(0)
+	if err != nil {
+		t.Fatalf("GetFrame(0) error = %v", err)
+	}
+	if !bytes.Equal(frame, []byte{0xFF, 0xD9}) {
+		t.Fatalf("frame 0 = %v, want JPEG EOI without padding", frame)
+	}
+}
+
 func TestDicomPixelDataToElementUsesOBForEncapsulated16Bit(t *testing.T) {
 	pd, err := NewDicomPixelData(&PixelDataInfo{
 		Width:                     1,
