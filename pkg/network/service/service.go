@@ -363,10 +363,22 @@ func deadlineFromContext(ctx context.Context, timeout time.Duration) time.Time {
 // readTimeoutFromContext returns the effective read timeout for a context and configured duration.
 // If the context carries a deadline that is sooner than configured, the remaining time until that
 // deadline is returned. Otherwise the configured duration is returned.
+//
+// Edge cases:
+//   - configured == 0 but context has deadline → use context deadline
+//   - Context already expired → return 1ns so ReadPDU arms the deadline and the read fails fast
+//   - Both configured and context deadline → use the earlier one
 func readTimeoutFromContext(ctx context.Context, configured time.Duration) time.Duration {
-	deadline := deadlineFromContext(ctx, configured)
-	if deadline.IsZero() {
-		return configured
+	if ctxDeadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(ctxDeadline)
+		if remaining <= 0 {
+			// Context already expired; return a minimal positive duration so ReadPDU
+			// arms the deadline and the subsequent read fails immediately.
+			return time.Nanosecond
+		}
+		if configured <= 0 || remaining < configured {
+			return remaining
+		}
 	}
-	return time.Until(deadline)
+	return configured
 }

@@ -55,7 +55,7 @@ func (s *Service) recvLoop(ctx context.Context) error {
 
 		default:
 			// Read PDU from connection
-			rawPDU, err := transport.ReadPDU(s.conn, s.config.readTimeout)
+			rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
 			if err != nil {
 				return fmt.Errorf("failed to read PDU: %w", err)
 			}

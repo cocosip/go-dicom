@@ -340,3 +340,105 @@ func TestServiceOptions(t *testing.T) {
 		t.Errorf("WithRecvQueueSize failed")
 	}
 }
+
+// TestReadTimeoutFromContext verifies the edge-case logic in readTimeoutFromContext.
+func TestReadTimeoutFromContext(t *testing.T) {
+	const tolerance = 10 * time.Millisecond
+
+	inDelta := func(t *testing.T, got, want time.Duration, tol time.Duration, label string) {
+		t.Helper()
+		diff := got - want
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > tol {
+			t.Errorf("%s: got %v, want ~%v (tolerance ±%v)", label, got, want, tol)
+		}
+	}
+
+	tests := []struct {
+		name       string
+		configured time.Duration
+		// makeCtx returns the context to use; deadline expressed as offset from now
+		makeCtx func() context.Context
+		// check is called with the returned duration; use wantExact for exact match
+		check func(t *testing.T, got time.Duration)
+	}{
+		{
+			name:       "no ctx deadline, configured > 0",
+			configured: 5 * time.Second,
+			makeCtx:    context.Background,
+			check: func(t *testing.T, got time.Duration) {
+				inDelta(t, got, 5*time.Second, tolerance, "no-ctx-deadline configured>0")
+			},
+		},
+		{
+			name:       "no ctx deadline, configured == 0",
+			configured: 0,
+			makeCtx:    context.Background,
+			check: func(t *testing.T, got time.Duration) {
+				if got != 0 {
+					t.Errorf("no-ctx-deadline configured==0: got %v, want 0", got)
+				}
+			},
+		},
+		{
+			name:       "ctx deadline > configured",
+			configured: 5 * time.Second,
+			makeCtx: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			},
+			check: func(t *testing.T, got time.Duration) {
+				inDelta(t, got, 5*time.Second, tolerance, "ctx-deadline>configured")
+			},
+		},
+		{
+			name:       "ctx deadline < configured",
+			configured: 10 * time.Second,
+			makeCtx: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			},
+			check: func(t *testing.T, got time.Duration) {
+				inDelta(t, got, 3*time.Second, tolerance, "ctx-deadline<configured")
+			},
+		},
+		{
+			name:       "ctx deadline only (configured == 0)",
+			configured: 0,
+			makeCtx: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			},
+			check: func(t *testing.T, got time.Duration) {
+				inDelta(t, got, 5*time.Second, tolerance, "ctx-only configured==0")
+			},
+		},
+		{
+			name:       "ctx deadline already expired",
+			configured: 5 * time.Second,
+			makeCtx: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			},
+			check: func(t *testing.T, got time.Duration) {
+				if got != time.Nanosecond {
+					t.Errorf("expired ctx: got %v, want %v", got, time.Nanosecond)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := tt.makeCtx()
+			got := readTimeoutFromContext(ctx, tt.configured)
+			tt.check(t, got)
+		})
+	}
+}
