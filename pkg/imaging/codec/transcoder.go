@@ -620,26 +620,27 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 			for _, frag := range fragments[start:end] {
 				frame = append(frame, frag.Data()...)
 			}
-			frames = append(frames, stripTrailingPadding(frame))
+			frames = append(frames, StripTrailingPadding(frame))
 		}
 		return frames, nil
 	}
 
-	// Fallback: require one fragment per frame and consistent sizes.
+	if frameCount == 1 {
+		var frame []byte
+		for _, frag := range fragments {
+			frame = append(frame, frag.Data()...)
+		}
+		return [][]byte{StripTrailingPadding(frame)}, nil
+	}
+
+	// Fallback: one fragment per frame. Compressed frames are inherently
+	// variable-length, so no size-equality check is applied here.
 	if frameCount > len(fragments) {
 		return nil, fmt.Errorf("frame count %d exceeds available fragments %d without BOT", frameCount, len(fragments))
 	}
-	framesToUse := frameCount
 	var frames [][]byte
-	var expectedSize int
-	for i := 0; i < framesToUse; i++ {
-		data := fragments[i].Data()
-		if i == 0 {
-			expectedSize = len(data)
-		} else if len(data) != expectedSize {
-			return nil, fmt.Errorf("fragment size mismatch at index %d: got %d, expected %d", i, len(data), expectedSize)
-		}
-		frames = append(frames, stripTrailingPadding(data))
+	for i := 0; i < frameCount; i++ {
+		frames = append(frames, StripTrailingPadding(fragments[i].Data()))
 	}
 	return frames, nil
 }
@@ -703,7 +704,7 @@ func frameFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fra
 		if len(frame) == 0 {
 			return nil, fmt.Errorf("frame %d is empty", frameIndex)
 		}
-		return stripTrailingPadding(frame), nil
+		return StripTrailingPadding(frame), nil
 	}
 
 	if frameIndex >= len(fragments) {
@@ -713,7 +714,7 @@ func frameFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fra
 	if len(data) == 0 {
 		return nil, fmt.Errorf("fragment %d is empty", frameIndex)
 	}
-	return stripTrailingPadding(data), nil
+	return StripTrailingPadding(data), nil
 }
 
 func frameCountFromDataset(ds *dataset.Dataset) int {
@@ -726,15 +727,6 @@ func frameCountFromDataset(ds *dataset.Dataset) int {
 		}
 	}
 	return 1
-}
-
-// stripTrailingPadding removes a single trailing 0x00 that follows the JPEG/JPEG-LS EOI marker (0xFF 0xD9).
-// Some encoders pad encapsulated fragments to even length; the padding byte should not be passed to the codec.
-func stripTrailingPadding(data []byte) []byte {
-	if len(data) >= 3 && data[len(data)-1] == 0x00 && data[len(data)-2] == 0xD9 && data[len(data)-3] == 0xFF {
-		return data[:len(data)-1]
-	}
-	return data
 }
 
 // buildFragmentSequence creates a fragment sequence from per-frame compressed data,
