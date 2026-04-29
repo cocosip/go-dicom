@@ -5,6 +5,9 @@ package imaging
 
 import "encoding/binary"
 
+// decodePixelSampleLE decodes a single pixel sample from data at the given byte offset.
+// Only 8-bit and 16-bit samples (BitsAllocated 8 or 16) are supported; larger allocations
+// return (0, false) and the caller silently skips that pixel.
 func decodePixelSampleLE(data []byte, offset int, info *PixelDataInfo) (int32, bool) {
 	if info == nil {
 		return 0, false
@@ -47,7 +50,7 @@ func decodePixelSampleLE(data []byte, offset int, info *PixelDataInfo) (int32, b
 	return int32(sample) - int32(1<<bitsStored), true
 }
 
-func normalizeNativePixelDataToLittleEndian(data []byte, info *PixelDataInfo) []byte {
+func swapPixelDataBytes(data []byte, info *PixelDataInfo) []byte {
 	if info == nil || info.BytesAllocated() != 2 {
 		return data
 	}

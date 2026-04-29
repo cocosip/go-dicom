@@ -740,17 +740,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 
 	pixelRepr := ds.TryGetUInt16(tag.PixelRepresentation, 0)
 
-	// Get number of frames
-	// Note: NumberOfFrames has VR of IS (Integer String) per DICOM standard
-	numberOfFrames := 1
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil {
-		numberOfFrames = int(nf)
-	} else if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
-		// Try parsing as string (IS VR type)
-		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
-			numberOfFrames = parsed
-		}
-	}
+	numberOfFrames := frameCountFromDataset(ds)
 
 	planarConfig := ds.TryGetUInt16(tag.PlanarConfiguration, 0)
 
@@ -844,7 +834,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 			return nil, fmt.Errorf("pixel data is empty")
 		}
 		if ts := ds.InternalTransferSyntax(); ts != nil && (ts.Endian() == dicomendian.Big || ts.SwapPixelData()) {
-			data = normalizeNativePixelDataToLittleEndian(data, info)
+			data = swapPixelDataBytes(data, info)
 		}
 		pd, err = NewDicomPixelDataFromBytes(info, data)
 		if err != nil {
@@ -1249,7 +1239,7 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 			for _, frag := range fragments[start:end] {
 				frame = append(frame, frag.Data()...)
 			}
-			frames = append(frames, stripTrailingPadding(frame))
+			frames = append(frames, codec.StripTrailingPadding(frame))
 		}
 		return frames, nil
 	}
@@ -1259,7 +1249,7 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 		for _, frag := range fragments {
 			frame = append(frame, frag.Data()...)
 		}
-		return [][]byte{stripTrailingPadding(frame)}, nil
+		return [][]byte{codec.StripTrailingPadding(frame)}, nil
 	}
 
 	// Fallback: require one fragment per frame.
@@ -1270,16 +1260,9 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 	var frames [][]byte
 	for i := 0; i < framesToUse; i++ {
 		data := fragments[i].Data()
-		frames = append(frames, stripTrailingPadding(data))
+		frames = append(frames, codec.StripTrailingPadding(data))
 	}
 	return frames, nil
-}
-
-func stripTrailingPadding(data []byte) []byte {
-	if len(data) >= 3 && data[len(data)-1] == 0x00 && data[len(data)-2] == 0xD9 && data[len(data)-3] == 0xFF {
-		return data[:len(data)-1]
-	}
-	return data
 }
 
 // buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
@@ -1317,4 +1300,16 @@ func buildFragmentSequence(frames [][]byte, _ []uint32, _ uint16) (element.Eleme
 	}
 	obf.SetOffsetTable(offsets)
 	return obf, nil
+}
+
+func frameCountFromDataset(ds *dataset.Dataset) int {
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
+		return int(nf)
+	}
+	if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 1
 }

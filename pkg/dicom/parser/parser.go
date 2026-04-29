@@ -1316,6 +1316,10 @@ func (p *parseContext) readFragmentItemBuffer(itemLength uint32) (buffer.ByteBuf
 		if err == nil {
 			return fragBuf, nil
 		}
+		// Error from createLazyBuffer is intentionally swallowed because lazy loading fails
+		// for non-seekable readers (e.g. deflated streams from flate.Reader). Falling through
+		// to eager loading here ensures the parse continues and the data is still available,
+		// just loaded eagerly instead of on-demand.
 	}
 
 	itemData := make([]byte, itemLength)
