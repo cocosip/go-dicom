@@ -274,7 +274,6 @@ func (s *Service) SendAbort(ctx context.Context, source, reason byte) error {
 //   - *pdu.AAssociateAC if association was accepted
 //   - error if association was rejected or other error occurred
 func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssociateAC, error) {
-	_ = ctx
 	// Check if service is closed
 	if s.IsClosed() {
 		return nil, ErrServiceClosed
@@ -286,7 +285,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		return nil, fmt.Errorf("cannot receive association response in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDU(s.conn, s.config.readTimeout)
+	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
@@ -333,7 +332,6 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 //   - *pdu.AAssociateRQ if successful
 //   - error if failed or wrong PDU type received
 func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociateRQ, error) {
-	_ = ctx
 	// Check if service is closed
 	if s.IsClosed() {
 		return nil, ErrServiceClosed
@@ -345,7 +343,7 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		return nil, fmt.Errorf("cannot receive association request in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDU(s.conn, s.config.readTimeout)
+	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}

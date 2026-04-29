@@ -6,6 +6,7 @@ package buffer
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 )
 
@@ -205,8 +206,12 @@ func (f *FileByteBuffer) FilePath() string {
 }
 
 // Position returns the starting position within the file.
+// Panics if the position exceeds math.MaxUint32; use Position64() for large files.
 func (f *FileByteBuffer) Position() uint32 {
-	return uint32(f.position) //nolint:gosec // Backward-compatible legacy accessor.
+	if f.position > math.MaxUint32 {
+		panic(fmt.Sprintf("FileByteBuffer.Position(): position %d overflows uint32; use Position64()", f.position))
+	}
+	return uint32(f.position) //nolint:gosec // guarded by panic above
 }
 
 // Position64 returns the starting position within the file without truncation.

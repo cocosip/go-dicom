@@ -199,5 +199,10 @@ func (s *Service) outgoingMaxPDULength() uint32 {
 		(maxPDULength == 0 || assoc.MaxPDULength < maxPDULength) {
 		maxPDULength = assoc.MaxPDULength
 	}
+	if maxPDULength == 0 {
+		// 0 means unlimited per DICOM standard (MaximumLengthReceived = 0 in A-ASSOCIATE-RQ).
+		// Use 128 KB to avoid creating excessive numbers of tiny PDV fragments.
+		return 128 * 1024
+	}
 	return maxPDULength
 }

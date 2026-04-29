@@ -359,3 +359,14 @@ func deadlineFromContext(ctx context.Context, timeout time.Duration) time.Time {
 	}
 	return deadline
 }
+
+// readTimeoutFromContext returns the effective read timeout for a context and configured duration.
+// If the context carries a deadline that is sooner than configured, the remaining time until that
+// deadline is returned. Otherwise the configured duration is returned.
+func readTimeoutFromContext(ctx context.Context, configured time.Duration) time.Duration {
+	deadline := deadlineFromContext(ctx, configured)
+	if deadline.IsZero() {
+		return configured
+	}
+	return time.Until(deadline)
+}

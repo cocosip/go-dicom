@@ -177,7 +177,8 @@ func DecodeString(data []byte, encodings []encoding.Encoding) (string, error) {
 	if firstErr != nil {
 		return "", fmt.Errorf("failed to decode string: %w", firstErr)
 	}
-	return string(data), nil
+	// All candidates decoded without error but each still contained ISO 2022 escape sequences.
+	return "", fmt.Errorf("failed to decode string: no declared encoding could consume ISO 2022 escape sequences")
 }
 
 // EncodeString encodes a string using the specified encodings.
