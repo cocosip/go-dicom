@@ -61,6 +61,33 @@ type jsonWriter struct {
 	buf    *bytes.Buffer
 }
 
+type stringValuesProvider interface {
+	GetValues() []string
+}
+
+type indexedStringValueProvider interface {
+	Count() int
+	GetValue(int) string
+}
+
+func elementStringValues(elem element.Element) ([]string, bool) {
+	if values, ok := elem.(stringValuesProvider); ok {
+		return values.GetValues(), true
+	}
+	if values, ok := elem.(indexedStringValueProvider); ok {
+		count := values.Count()
+		if count <= 0 {
+			return nil, true
+		}
+		out := make([]string, count)
+		for i := 0; i < count; i++ {
+			out[i] = values.GetValue(i)
+		}
+		return out, true
+	}
+	return nil, false
+}
+
 // writeDataset writes a DICOM dataset as JSON
 func (w *jsonWriter) writeDataset(ds *dataset.Dataset) error {
 	// Start object
@@ -217,14 +244,11 @@ func (w *jsonWriter) writeKeywordAndName(elem element.Element) {
 
 // writeStringArray writes a string array value
 func (w *jsonWriter) writeStringArray(elem element.Element) error {
-	// Type assert to *element.String
-	strElem, ok := elem.(*element.String)
+	values, ok := elementStringValues(elem)
 	if !ok {
-		// Not a string element, skip value
 		return nil
 	}
 
-	values := strElem.GetValues()
 	if len(values) == 0 {
 		return nil
 	}
@@ -470,13 +494,11 @@ func (w *jsonWriter) writeUint64Array(elem element.Element) error {
 
 // writeNumericStringArray writes an IS or DS (numeric string) array
 func (w *jsonWriter) writeNumericStringArray(elem element.Element, vrCode string) error {
-	// Type assert to *element.String
-	strElem, ok := elem.(*element.String)
+	values, ok := elementStringValues(elem)
 	if !ok {
 		return nil
 	}
 
-	values := strElem.GetValues()
 	if len(values) == 0 {
 		return nil
 	}
@@ -582,13 +604,33 @@ func fixDecimalString(val string) string {
 
 // writeAttributeTag writes an AT (Attribute Tag) value
 func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
-	// Type assert to *element.String (AT is stored as string)
-	strElem, ok := elem.(*element.String)
-	if !ok {
+	if atElem, ok := elem.(*element.AttributeTag); ok {
+		values, err := atElem.GetValues()
+		if err != nil || len(values) == 0 {
+			return err
+		}
+
+		w.buf.WriteString(`,"Value":[`)
+		for i, val := range values {
+			if i > 0 {
+				w.buf.WriteString(",")
+			}
+			if val == nil {
+				w.buf.WriteString("null")
+				continue
+			}
+			w.buf.WriteString(`"`)
+			fmt.Fprintf(w.buf, "%08X", val.Uint32())
+			w.buf.WriteString(`"`)
+		}
+		w.buf.WriteString("]")
 		return nil
 	}
 
-	values := strElem.GetValues()
+	values, ok := elementStringValues(elem)
+	if !ok {
+		return nil
+	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -645,13 +687,11 @@ func (w *jsonWriter) writeOther(elem element.Element) error {
 
 // writePersonName writes a PN (Person Name) value
 func (w *jsonWriter) writePersonName(elem element.Element) error {
-	// Type assert to *element.String
-	strElem, ok := elem.(*element.String)
+	values, ok := elementStringValues(elem)
 	if !ok {
 		return nil
 	}
 
-	values := strElem.GetValues()
 	if len(values) == 0 {
 		return nil
 	}

@@ -5,6 +5,7 @@ package serialization
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -46,6 +47,50 @@ func TestToJSON_PreferablyAsNumberFallsBackToString(t *testing.T) {
 	values, ok := result["00200013"]["Value"].([]any)
 	if !ok || len(values) != 1 || values[0] != "+1" {
 		t.Fatalf("Value = %#v, want string +1", result["00200013"]["Value"])
+	}
+}
+
+func TestToJSON_WrapperStringElementsPreserveValues(t *testing.T) {
+	ds := dataset.New()
+	elements := []element.Element{
+		element.NewDate(tag.StudyDate, []string{"20250102"}),
+		element.NewTime(tag.StudyTime, []string{"123456"}),
+		element.NewDateTime(tag.AcquisitionDateTime, []string{"20250102123456"}),
+		element.NewDecimalString(tag.SliceThickness, []string{"1.25"}),
+		element.NewIntegerString(tag.InstanceNumber, []string{"42"}),
+		element.NewPersonName(tag.PatientName, []string{"Doe^Jane"}),
+	}
+	for _, elem := range elements {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+
+	jsonData, err := ToJSON(ds, WithNumberSerializationMode(AsString))
+	if err != nil {
+		t.Fatalf("ToJSON() error = %v", err)
+	}
+
+	var got map[string]map[string]any
+	if err := json.Unmarshal(jsonData, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	tests := []struct {
+		key  string
+		want any
+	}{
+		{"00080020", []any{"20250102"}},
+		{"00080030", []any{"123456"}},
+		{"0008002A", []any{"20250102123456"}},
+		{"00180050", []any{"1.25"}},
+		{"00200013", []any{"42"}},
+		{"00100010", []any{map[string]any{"Alphabetic": "Doe^Jane"}}},
+	}
+	for _, tt := range tests {
+		if !reflect.DeepEqual(got[tt.key]["Value"], tt.want) {
+			t.Fatalf("%s Value = %#v, want %#v", tt.key, got[tt.key]["Value"], tt.want)
+		}
 	}
 }
 

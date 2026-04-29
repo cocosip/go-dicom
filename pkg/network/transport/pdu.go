@@ -58,11 +58,9 @@ func ReadPDU(conn net.Conn, timeout time.Duration) (*pdu.RawPDU, error) {
 	// reserved := header[1]  // Reserved byte, not used
 	length := binary.BigEndian.Uint32(header[2:6])
 
-	// Validate length (reasonable upper bound to prevent memory exhaustion)
-	// DICOM standard doesn't specify a hard limit, but 100MB seems reasonable
-	const maxPDULength = 100 * 1024 * 1024 // 100 MB
-	if length > maxPDULength {
-		return nil, fmt.Errorf("PDU length %d exceeds maximum allowed %d", length, maxPDULength)
+	// Validate length before allocating the PDU data buffer.
+	if length > pdu.MaxPDUDataLength {
+		return nil, fmt.Errorf("PDU length %d exceeds maximum allowed %d", length, pdu.MaxPDUDataLength)
 	}
 
 	// Read PDU data

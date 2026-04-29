@@ -318,7 +318,7 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 		return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
 	}
 
-	return nil
+	return s.initiateClose(StateClosed, nil)
 }
 
 // handleReleaseResponse processes an A-RELEASE-RP PDU.

@@ -4,6 +4,7 @@
 package writer
 
 import (
+	"compress/flate"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -413,8 +414,23 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		}
 	}
 
-	// Write main dataset
-	if err := writer.writeDataset(ds); err != nil {
+	// Write main dataset. Deflated Explicit VR Little Endian compresses only
+	// the dataset following File Meta Information.
+	if config.transferSyntax.IsDeflate() {
+		fw, err := flate.NewWriter(writer.writer, flate.DefaultCompression)
+		if err != nil {
+			return fmt.Errorf("failed to create deflate writer: %w", err)
+		}
+		deflatedWriter := *writer
+		deflatedWriter.writer = fw
+		if err := deflatedWriter.writeDataset(ds); err != nil {
+			_ = fw.Close()
+			return fmt.Errorf("failed to write deflated dataset: %w", err)
+		}
+		if err := fw.Close(); err != nil {
+			return fmt.Errorf("failed to finish deflated dataset: %w", err)
+		}
+	} else if err := writer.writeDataset(ds); err != nil {
 		return fmt.Errorf("failed to write dataset: %w", err)
 	}
 

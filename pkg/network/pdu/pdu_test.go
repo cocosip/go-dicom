@@ -6,6 +6,7 @@ package pdu
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -171,6 +172,16 @@ func TestRawPDU_Read_InvalidPDUType(t *testing.T) {
 	err := pdu.Read(buf)
 	if err == nil {
 		t.Error("Expected error for invalid PDU type, got nil")
+	}
+}
+
+func TestRawPDUReadRejectsOversizedLength(t *testing.T) {
+	data := []byte{TypeAAssociateAC, 0x00, 0x06, 0x40, 0x00, 0x01} // 100 MiB + 1
+	pdu := &RawPDU{}
+
+	err := pdu.Read(bytes.NewReader(data))
+	if err == nil || !strings.Contains(err.Error(), "exceeds maximum") {
+		t.Fatalf("Read() error = %v, want maximum length error", err)
 	}
 }
 

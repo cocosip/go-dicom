@@ -18,12 +18,12 @@ import (
 func TestRecvLoop_ContextCancellation(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service
-    service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(client, nil)
+	defer func() { _ = service.Close() }()
 
 	// Create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,7 +43,7 @@ func TestRecvLoop_ContextCancellation(t *testing.T) {
 	// Close the connection to unblock the read
 	// This simulates the real scenario where context cancellation
 	// leads to connection close
-    _ = client.Close()
+	_ = client.Close()
 
 	// Wait for loop to exit
 	select {
@@ -57,11 +57,38 @@ func TestRecvLoop_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestRecvLoopPeerReleaseClosesNormally(t *testing.T) {
+	releaseRQ := &pdu.AReleaseRQ{}
+	raw, err := releaseRQ.Encode()
+	if err != nil {
+		t.Fatalf("AReleaseRQ.Encode() error = %v", err)
+	}
+
+	conn := &mockConn{readData: serializeRawPDUForTest(raw)}
+	service := NewService(conn, nil)
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	if err := service.recvLoop(context.Background()); err != nil {
+		t.Fatalf("recvLoop() error = %v", err)
+	}
+	if service.GetState() != StateClosed {
+		t.Fatalf("state = %s, want Closed", service.GetState())
+	}
+	if !conn.closed {
+		t.Fatal("connection was not closed after peer release")
+	}
+	if len(conn.writeData) == 0 || conn.writeData[0] != pdu.TypeAReleaseRP {
+		t.Fatalf("written PDU type = %#v, want A-RELEASE-RP", conn.writeData)
+	}
+}
+
 func TestRecvLoop_ServiceClose(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
@@ -76,7 +103,7 @@ func TestRecvLoop_ServiceClose(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Close service (this closes the context and connection)
-    _ = service.Close()
+	_ = service.Close()
 
 	// Wait for loop to exit
 	select {
@@ -96,7 +123,7 @@ func TestGetTransferSyntaxForContext(t *testing.T) {
 
 	// Create service
 	service := NewService(nil, assoc)
-    defer func() { _ = service.Close() }()
+	defer func() { _ = service.Close() }()
 
 	// Test valid context ID
 	ts := service.getTransferSyntaxForContext(1)
@@ -112,7 +139,7 @@ func TestGetTransferSyntaxForContext(t *testing.T) {
 
 	// Test with nil association (should return default)
 	service2 := NewService(nil, nil)
-    defer func() { _ = service2.Close() }()
+	defer func() { _ = service2.Close() }()
 	ts = service2.getTransferSyntaxForContext(1)
 	if ts != transfer.ExplicitVRLittleEndian {
 		t.Errorf("Expected default ExplicitVRLittleEndian with nil association, got %v", ts)
@@ -124,29 +151,29 @@ func TestRecvLoop_ReceivePDataTF(t *testing.T) {
 
 	// Create a pipe connection
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create association
 	assoc := createTestAssociation()
 
 	// Create service with association
 	service := NewService(client, assoc)
-    defer func() { _ = service.Close() }()
+	defer func() { _ = service.Close() }()
 
 	// Start receive loop
-    go func() {
-        _ = service.recvLoop(service.ctx)
-    }()
+	go func() {
+		_ = service.recvLoop(service.ctx)
+	}()
 
 	// Give loop time to start
 	time.Sleep(10 * time.Millisecond)
 
 	// Create a test C-ECHO request
-    req := dimse.NewCEchoRequest()
-    if err := req.SetMessageID(1); err != nil {
-        t.Fatalf("SetMessageID failed: %v", err)
-    }
+	req := dimse.NewCEchoRequest()
+	if err := req.SetMessageID(1); err != nil {
+		t.Fatalf("SetMessageID failed: %v", err)
+	}
 
 	// Encode the message
 	commandData, datasetData, err := EncodeDIMSEMessage(req, transfer.ExplicitVRLittleEndian)
@@ -187,12 +214,12 @@ func TestRecvLoop_ReceivePDataTF(t *testing.T) {
 func TestRecvLoop_NonPDataTFPDU(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	defer func() { _ = service.Close() }()
 
 	// Start receive loop
 	errCh := make(chan error, 1)
@@ -211,10 +238,10 @@ func TestRecvLoop_NonPDataTFPDU(t *testing.T) {
 	}
 
 	go func() {
-        _ = transport.WritePDU(server, 5*time.Second, nonDataPDU)
+		_ = transport.WritePDU(server, 5*time.Second, nonDataPDU)
 		// Close server after sending to trigger loop exit
 		time.Sleep(50 * time.Millisecond)
-        _ = server.Close()
+		_ = server.Close()
 	}()
 
 	// Wait for loop to exit or timeout
@@ -237,13 +264,13 @@ func TestRecvLoop_ContextIDChange(t *testing.T) {
 
 	// Create a pipe connection
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service
 	assoc := createTestAssociation()
 	service := NewService(client, assoc)
-    defer func() { _ = service.Close() }()
+	defer func() { _ = service.Close() }()
 
 	// Start receive loop
 	errCh := make(chan error, 1)
@@ -277,7 +304,7 @@ func TestRecvLoop_ContextIDChange(t *testing.T) {
 
 	// Send PDU
 	go func() {
-        _ = transport.WritePDU(server, 5*time.Second, pduData)
+		_ = transport.WritePDU(server, 5*time.Second, pduData)
 	}()
 
 	// Wait for error

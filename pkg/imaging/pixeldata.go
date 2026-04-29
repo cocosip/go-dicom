@@ -12,6 +12,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	dicomendian "github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
@@ -228,7 +229,6 @@ func (pd *DicomPixelData) CalculateOptimalWindow() (center, width float64) {
 	pixelData := pd.frames[0]
 	bytesPerPixel := int(pd.Info.BitsAllocated) / 8
 	pixelCount := len(pixelData) / bytesPerPixel
-	isSigned := pd.Info.PixelRepresentation == SignedPixels
 
 	if pixelCount == 0 {
 		return 0, 256
@@ -249,23 +249,11 @@ func (pd *DicomPixelData) CalculateOptimalWindow() (center, width float64) {
 			break
 		}
 
-		var pixelValue float64
-		switch bytesPerPixel {
-		case 1:
-			if isSigned {
-				pixelValue = float64(int8(pixelData[pixelIndex]))
-			} else {
-				pixelValue = float64(pixelData[pixelIndex])
-			}
-		case 2:
-			if isSigned {
-				pixelValue = float64(int16(pixelData[pixelIndex]) | int16(pixelData[pixelIndex+1])<<8)
-			} else {
-				pixelValue = float64(uint16(pixelData[pixelIndex]) | uint16(pixelData[pixelIndex+1])<<8)
-			}
-		default:
+		val, ok := decodePixelSampleLE(pixelData, pixelIndex, pd.Info)
+		if !ok {
 			continue
 		}
+		pixelValue := float64(val)
 
 		if firstPixel {
 			minVal = pixelValue
@@ -527,19 +515,9 @@ func (pd *DicomPixelData) MaskPadding() (frames [][]byte, masks [][]bool, err er
 		mask := make([]bool, len(frame)/bytesPerSample)
 
 		for idx, off := 0, 0; off+bytesPerSample <= len(frame); off, idx = off+bytesPerSample, idx+1 {
-			var val int32
-			if bytesPerSample == 1 {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int8(frame[off]))
-				} else {
-					val = int32(frame[off])
-				}
-			} else {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int16(binary.LittleEndian.Uint16(frame[off:])))
-				} else {
-					val = int32(binary.LittleEndian.Uint16(frame[off:]))
-				}
+			val, ok := decodePixelSampleLE(frame, off, pd.Info)
+			if !ok {
+				continue
 			}
 
 			if val >= padMin && val <= padMax {
@@ -865,6 +843,9 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 		if len(data) == 0 {
 			return nil, fmt.Errorf("pixel data is empty")
 		}
+		if ts := ds.InternalTransferSyntax(); ts != nil && (ts.Endian() == dicomendian.Big || ts.SwapPixelData()) {
+			data = normalizeNativePixelDataToLittleEndian(data, info)
+		}
 		pd, err = NewDicomPixelDataFromBytes(info, data)
 		if err != nil {
 			return nil, err
@@ -933,19 +914,9 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 		out := make([]byte, pixelCount*3)
 
 		for idx, off := 0, 0; idx < pixelCount; idx, off = idx+1, off+bytesPerSample {
-			var val int32
-			if bytesPerSample == 1 {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int8(frame[off]))
-				} else {
-					val = int32(frame[off])
-				}
-			} else {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int16(binary.LittleEndian.Uint16(frame[off:])))
-				} else {
-					val = int32(binary.LittleEndian.Uint16(frame[off:]))
-				}
+			val, ok := decodePixelSampleLE(frame, off, pd.Info)
+			if !ok {
+				continue
 			}
 
 			idxLUT := int(val - lut.first)
@@ -1283,20 +1254,22 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 		return frames, nil
 	}
 
-	// Fallback: require one fragment per frame and consistent sizes.
+	if frameCount == 1 {
+		var frame []byte
+		for _, frag := range fragments {
+			frame = append(frame, frag.Data()...)
+		}
+		return [][]byte{stripTrailingPadding(frame)}, nil
+	}
+
+	// Fallback: require one fragment per frame.
 	if frameCount > len(fragments) {
 		return nil, fmt.Errorf("frame count %d exceeds available fragments %d without BOT", frameCount, len(fragments))
 	}
 	framesToUse := frameCount
 	var frames [][]byte
-	var expectedSize int
 	for i := 0; i < framesToUse; i++ {
 		data := fragments[i].Data()
-		if i == 0 {
-			expectedSize = len(data)
-		} else if len(data) != expectedSize {
-			return nil, fmt.Errorf("fragment size mismatch at index %d: got %d, expected %d", i, len(data), expectedSize)
-		}
 		frames = append(frames, stripTrailingPadding(data))
 	}
 	return frames, nil

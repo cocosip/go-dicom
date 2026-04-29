@@ -138,19 +138,9 @@ func mapThroughLUT(pd *DicomPixelData, table lut.LUT, ignorePadding bool) ([][]b
 		out := make([]byte, len(frame)/bytesPerSample)
 
 		for idx, off := 0, 0; off+bytesPerSample <= len(frame); off, idx = off+bytesPerSample, idx+1 {
-			var val int32
-			if bytesPerSample == 1 {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int8(frame[off]))
-				} else {
-					val = int32(frame[off])
-				}
-			} else {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int16(binary.LittleEndian.Uint16(frame[off:])))
-				} else {
-					val = int32(binary.LittleEndian.Uint16(frame[off:]))
-				}
+			val, ok := decodePixelSampleLE(frame, off, pd.Info)
+			if !ok {
+				continue
 			}
 
 			if ignorePadding && hasPadding && val >= padMin && val <= padMax {

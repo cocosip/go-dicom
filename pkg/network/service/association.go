@@ -6,10 +6,10 @@ package service
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
+	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
 // serviceResponder implements AssociationResponder and provides methods
@@ -274,6 +274,7 @@ func (s *Service) SendAbort(ctx context.Context, source, reason byte) error {
 //   - *pdu.AAssociateAC if association was accepted
 //   - error if association was rejected or other error occurred
 func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssociateAC, error) {
+	_ = ctx
 	// Check if service is closed
 	if s.IsClosed() {
 		return nil, ErrServiceClosed
@@ -285,33 +286,11 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		return nil, fmt.Errorf("cannot receive association response in state %s", currentState)
 	}
 
-	// Read PDU header
-	header := make([]byte, 6)
-	if s.config.readTimeout > 0 {
-		if err := s.conn.SetReadDeadline(deadlineFromContext(ctx, s.config.readTimeout)); err != nil {
-			return nil, fmt.Errorf("failed to set read deadline: %w", err)
-		}
+	rawPDU, err := transport.ReadPDU(s.conn, s.config.readTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
-
-	if _, err := io.ReadFull(s.conn, header); err != nil {
-		return nil, fmt.Errorf("failed to read PDU header: %w", err)
-	}
-
-	pduType := header[0]
-	pduLength := uint32(header[2])<<24 | uint32(header[3])<<16 | uint32(header[4])<<8 | uint32(header[5])
-
-	// Read PDU body
-	body := make([]byte, pduLength)
-	if _, err := io.ReadFull(s.conn, body); err != nil {
-		return nil, fmt.Errorf("failed to read PDU body: %w", err)
-	}
-
-	// Create RawPDU (Data should contain only the body, not header)
-	rawPDU := &pdu.RawPDU{
-		Type:   pduType,
-		Length: pduLength,
-		Data:   body,
-	}
+	pduType := rawPDU.Type
 
 	// Check PDU type
 	switch pduType {
@@ -354,6 +333,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 //   - *pdu.AAssociateRQ if successful
 //   - error if failed or wrong PDU type received
 func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociateRQ, error) {
+	_ = ctx
 	// Check if service is closed
 	if s.IsClosed() {
 		return nil, ErrServiceClosed
@@ -365,37 +345,15 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		return nil, fmt.Errorf("cannot receive association request in state %s", currentState)
 	}
 
-	// Read PDU header
-	header := make([]byte, 6)
-	if s.config.readTimeout > 0 {
-		if err := s.conn.SetReadDeadline(deadlineFromContext(ctx, s.config.readTimeout)); err != nil {
-			return nil, fmt.Errorf("failed to set read deadline: %w", err)
-		}
+	rawPDU, err := transport.ReadPDU(s.conn, s.config.readTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
-
-	if _, err := io.ReadFull(s.conn, header); err != nil {
-		return nil, fmt.Errorf("failed to read PDU header: %w", err)
-	}
-
-	pduType := header[0]
-	pduLength := uint32(header[2])<<24 | uint32(header[3])<<16 | uint32(header[4])<<8 | uint32(header[5])
+	pduType := rawPDU.Type
 
 	// Validate PDU type
 	if pduType != pdu.TypeAAssociateRQ {
 		return nil, fmt.Errorf("unexpected PDU type: expected A-ASSOCIATE-RQ (0x01), got 0x%02X", pduType)
-	}
-
-	// Read PDU body
-	body := make([]byte, pduLength)
-	if _, err := io.ReadFull(s.conn, body); err != nil {
-		return nil, fmt.Errorf("failed to read PDU body: %w", err)
-	}
-
-	// Create RawPDU (Data should contain only the body, not header)
-	rawPDU := &pdu.RawPDU{
-		Type:   pduType,
-		Length: pduLength,
-		Data:   body,
 	}
 
 	// Decode A-ASSOCIATE-RQ

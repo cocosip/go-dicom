@@ -5,6 +5,8 @@ package buffer_test
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,6 +75,32 @@ func TestNewFile(t *testing.T) {
 				t.Errorf("Position() = %d, want %d", fb.Position(), tt.position)
 			}
 		})
+	}
+}
+
+func TestFileByteBufferShortReadFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "short.bin")
+	if err := os.WriteFile(path, []byte{1, 2, 3, 4}, 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	fb, err := buffer.NewFileAt(path, 0, 4)
+	if err != nil {
+		t.Fatalf("NewFileAt() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte{1, 2}, 0600); err != nil {
+		t.Fatalf("truncate WriteFile() error = %v", err)
+	}
+
+	if data := fb.Data(); data != nil {
+		t.Fatalf("Data() = %v, want nil for truncated backing file", data)
+	}
+
+	out := make([]byte, 4)
+	err = fb.GetByteRange(0, 4, out)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("GetByteRange() error = %v, want io.ErrUnexpectedEOF", err)
 	}
 }
 

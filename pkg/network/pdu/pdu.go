@@ -33,6 +33,9 @@ const (
 
 	// TypeAAbort represents A-ABORT PDU (0x07)
 	TypeAAbort byte = 0x07
+
+	// MaxPDUDataLength is the hard safety cap for inbound PDU payloads.
+	MaxPDUDataLength uint32 = 100 * 1024 * 1024
 )
 
 // TypeString returns the string representation of a PDU type.
@@ -103,6 +106,9 @@ func (p *RawPDU) Read(r io.Reader) error {
 	p.Type = header[0]
 	p.Reserved = header[1]
 	p.Length = binary.BigEndian.Uint32(header[2:6])
+	if p.Length > MaxPDUDataLength {
+		return fmt.Errorf("PDU length %d exceeds maximum allowed %d", p.Length, MaxPDUDataLength)
+	}
 
 	// Validate PDU type
 	if !isValidPDUType(p.Type) {

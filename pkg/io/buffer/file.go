@@ -90,8 +90,11 @@ func (f *FileByteBuffer) Data() []byte {
 	defer func() { _ = file.Close() }()
 
 	data := make([]byte, f.size)
-	_, err = file.ReadAt(data, f.position)
+	n, err := file.ReadAt(data, f.position)
 	if err != nil && err != io.EOF {
+		return nil
+	}
+	if n != len(data) {
 		return nil
 	}
 
@@ -130,9 +133,12 @@ func (f *FileByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 	defer func() { _ = file.Close() }()
 
 	// Read from the absolute position: buffer position + offset
-	_, err = file.ReadAt(output[:int(count)], f.position+int64(offset))
+	n, err := file.ReadAt(output[:int(count)], f.position+int64(offset))
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("failed to read from file: %w", err)
+	}
+	if n != int(count) {
+		return fmt.Errorf("failed to read from file: %w", io.ErrUnexpectedEOF)
 	}
 
 	return nil

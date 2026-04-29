@@ -4,7 +4,6 @@
 package imaging
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
@@ -58,19 +57,9 @@ func applyWindowTo8bit(pd *DicomPixelData, center, width float64, ignorePadding 
 		out := make([]byte, len(frame)/bytesPerSample)
 
 		for idx, off := 0, 0; off+bytesPerSample <= len(frame); off, idx = off+bytesPerSample, idx+1 {
-			var val int32
-			if bytesPerSample == 1 {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int8(frame[off]))
-				} else {
-					val = int32(frame[off])
-				}
-			} else {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int16(binary.LittleEndian.Uint16(frame[off:])))
-				} else {
-					val = int32(binary.LittleEndian.Uint16(frame[off:]))
-				}
+			val, ok := decodePixelSampleLE(frame, off, pd.Info)
+			if !ok {
+				continue
 			}
 
 			if ignorePadding && hasPadding && val >= padMin && val <= padMax {
@@ -121,19 +110,9 @@ func minMaxSamples(pd *DicomPixelData, ignorePadding bool) (float64, float64, er
 
 	for _, frame := range pd.frames {
 		for off := 0; off+bytesPerSample <= len(frame); off += bytesPerSample {
-			var val int32
-			if bytesPerSample == 1 {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int8(frame[off]))
-				} else {
-					val = int32(frame[off])
-				}
-			} else {
-				if pd.Info.PixelRepresentation == SignedPixels {
-					val = int32(int16(binary.LittleEndian.Uint16(frame[off:])))
-				} else {
-					val = int32(binary.LittleEndian.Uint16(frame[off:]))
-				}
+			val, ok := decodePixelSampleLE(frame, off, pd.Info)
+			if !ok {
+				continue
 			}
 
 			if ignorePadding && hasPadding && val >= padMin && val <= padMax {

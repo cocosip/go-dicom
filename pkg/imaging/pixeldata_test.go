@@ -149,6 +149,77 @@ func TestFramesFromFragmentsUsesEncodedItemOffsets(t *testing.T) {
 	}
 }
 
+func TestFramesFromFragmentsConcatenatesSingleFrameWithoutBOT(t *testing.T) {
+	fragments := []buffer.ByteBuffer{
+		buffer.NewMemory([]byte{0xAA, 0xBB}),
+		buffer.NewMemory([]byte{0xCC, 0xDD}),
+	}
+
+	frames, err := framesFromFragments(fragments, nil, 1)
+	if err != nil {
+		t.Fatalf("framesFromFragments() error = %v", err)
+	}
+	if len(frames) != 1 {
+		t.Fatalf("framesFromFragments() returned %d frames, want 1", len(frames))
+	}
+	if got, want := frames[0], []byte{0xAA, 0xBB, 0xCC, 0xDD}; !bytes.Equal(got, want) {
+		t.Fatalf("frame = %v, want %v", got, want)
+	}
+}
+
+func TestCreatePixelDataNormalizesBigEndianNativeOW(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}))
+	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{16}))
+	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{15}))
+	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
+	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewOtherWord(tag.PixelData, []byte{0x12, 0x34}))
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+	frame, err := pd.GetFrame(0)
+	if err != nil {
+		t.Fatalf("GetFrame(0) error = %v", err)
+	}
+	if got, want := frame, []byte{0x34, 0x12}; !bytes.Equal(got, want) {
+		t.Fatalf("frame = %v, want little-endian normalized %v", got, want)
+	}
+}
+
+func TestMinMaxSamplesSignExtendsBitsStored(t *testing.T) {
+	pd, err := NewDicomPixelData(&PixelDataInfo{
+		Width:                     2,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             16,
+		BitsStored:                12,
+		HighBit:                   11,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       SignedPixels,
+		PhotometricInterpretation: Monochrome2,
+	})
+	if err != nil {
+		t.Fatalf("NewDicomPixelData() error = %v", err)
+	}
+	if err := pd.AddFrame([]byte{0xFF, 0x0F, 0x00, 0x00}); err != nil {
+		t.Fatalf("AddFrame() error = %v", err)
+	}
+
+	minVal, maxVal, err := minMaxSamples(pd, false)
+	if err != nil {
+		t.Fatalf("minMaxSamples() error = %v", err)
+	}
+	if minVal != -1 || maxVal != 0 {
+		t.Fatalf("min/max = %v/%v, want -1/0", minVal, maxVal)
+	}
+}
+
 func TestBuildFragmentSequenceRebuildsOffsetsForEmittedLayout(t *testing.T) {
 	elem, err := buildFragmentSequence(
 		[][]byte{
