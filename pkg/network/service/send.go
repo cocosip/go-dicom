@@ -112,12 +112,13 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	contextID := pc.ID
 
 	// Fragment command data
-	commandPDVs := FragmentData(commandData, contextID, true, s.config.maxPDULength)
+	maxPDULength := s.outgoingMaxPDULength()
+	commandPDVs := FragmentData(commandData, contextID, true, maxPDULength)
 
 	// Fragment dataset data (if present)
 	var datasetPDVs []*PDV
 	if len(datasetData) > 0 {
-		datasetPDVs = FragmentData(datasetData, contextID, false, s.config.maxPDULength)
+		datasetPDVs = FragmentData(datasetData, contextID, false, maxPDULength)
 	}
 
 	// Combine all PDVs
@@ -164,6 +165,7 @@ func (s *Service) groupPDVsIntoPDUs(pdvs []*PDV) [][]*PDV {
 	var groups [][]*PDV
 	var currentGroup []*PDV
 	currentSize := pduHeaderSize
+	maxPDULength := int(s.outgoingMaxPDULength())
 
 	for _, pdv := range pdvs {
 		// Calculate size of this PDV when encoded
@@ -171,7 +173,7 @@ func (s *Service) groupPDVsIntoPDUs(pdvs []*PDV) [][]*PDV {
 		pdvSize := 4 + 1 + 1 + len(pdv.Data)
 
 		// Check if adding this PDV would exceed max PDU length
-		if currentSize+pdvSize > int(s.config.maxPDULength) && len(currentGroup) > 0 {
+		if currentSize+pdvSize > maxPDULength && len(currentGroup) > 0 {
 			// Start a new PDU
 			groups = append(groups, currentGroup)
 			currentGroup = []*PDV{pdv}
@@ -189,4 +191,13 @@ func (s *Service) groupPDVsIntoPDUs(pdvs []*PDV) [][]*PDV {
 	}
 
 	return groups
+}
+
+func (s *Service) outgoingMaxPDULength() uint32 {
+	maxPDULength := s.config.maxPDULength
+	if assoc := s.GetAssociation(); assoc != nil && assoc.MaxPDULength > 0 &&
+		(maxPDULength == 0 || assoc.MaxPDULength < maxPDULength) {
+		maxPDULength = assoc.MaxPDULength
+	}
+	return maxPDULength
 }

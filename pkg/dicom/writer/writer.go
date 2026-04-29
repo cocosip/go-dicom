@@ -5,6 +5,7 @@ package writer
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -442,9 +443,20 @@ func WriteFile(path string, ds *dataset.Dataset, opts ...WriteOption) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
 	}
-	defer func() { _ = file.Close() }()
 
-	return Write(file, ds, opts...)
+	return writeAndClose(file, ds, opts...)
+}
+
+func writeAndClose(file io.WriteCloser, ds *dataset.Dataset, opts ...WriteOption) error {
+	writeErr := Write(file, ds, opts...)
+	closeErr := file.Close()
+	if writeErr != nil && closeErr != nil {
+		return errors.Join(writeErr, closeErr)
+	}
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
 }
 
 // generateFileMetaInformation generates a minimal File Meta Information dataset.

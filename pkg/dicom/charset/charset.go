@@ -5,6 +5,7 @@
 package charset
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -144,14 +145,39 @@ func DecodeString(data []byte, encodings []encoding.Encoding) (string, error) {
 		encodings = []encoding.Encoding{Default}
 	}
 
-	// Simple case: single encoding, no escape sequences
-	decoder := encodings[0].NewDecoder()
-	decoded, err := decoder.Bytes(data)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode string: %w", err)
+	candidates := append([]encoding.Encoding(nil), encodings...)
+	if len(candidates) > 1 && bytes.Contains(data, []byte{0x1b}) {
+		// ISO 2022 code extension values often declare ASCII first and the
+		// escaped multi-byte set afterward. Try the escaped sets first when
+		// escape bytes are present so they can consume the shift sequences.
+		candidates = append(append([]encoding.Encoding(nil), encodings[1:]...), encodings[0])
 	}
 
-	return string(decoded), nil
+	var firstErr error
+	for _, enc := range candidates {
+		if enc == nil {
+			enc = Default
+		}
+
+		decoder := enc.NewDecoder()
+		decoded, err := decoder.Bytes(data)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if bytes.Contains(data, []byte{0x1b}) && bytes.Contains(decoded, []byte{0x1b}) {
+			continue
+		}
+
+		return string(decoded), nil
+	}
+
+	if firstErr != nil {
+		return "", fmt.Errorf("failed to decode string: %w", firstErr)
+	}
+	return string(data), nil
 }
 
 // EncodeString encodes a string using the specified encodings.

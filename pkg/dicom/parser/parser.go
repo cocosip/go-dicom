@@ -6,6 +6,7 @@ package parser
 
 import (
 	"bytes"
+	"compress/flate"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -128,6 +129,7 @@ type parseContext struct {
 	transferSyntax *transfer.Syntax
 	dictionary     *dict.Dictionary
 	textEncoding   encoding.Encoding
+	textEncodings  []encoding.Encoding
 
 	// firstDatasetTagRaw holds the first tag read that doesn't belong to Group 0002.
 	// Raw bytes are preserved because dataset byte order is only known after reading Transfer Syntax.
@@ -149,6 +151,7 @@ type parseContext struct {
 	seekableReader io.ReadSeeker // Set if reader is seekable (for lazy loading)
 	file           *os.File      // Set if reader is a file (for FileByteBuffer)
 	lazyReadMu     sync.Mutex    // Serializes seek/read operations for lazy loaders on shared readers
+	datasetCloser  io.Closer     // Closes any wrapper reader created for the dataset stream
 }
 
 // Option is a functional option for configuring the parser.
@@ -213,6 +216,7 @@ func newParseContext(opts ...Option) *parseContext {
 		byteOrder:       binary.LittleEndian,
 		isExplicitVR:    true,
 		textEncoding:    charset.Default,
+		textEncodings:   []encoding.Encoding{charset.Default},
 		readOption:      ReadDefault,
 		largeObjectSize: 65536, // Default 64KB
 		detectedFormat:  FormatUnknown,
@@ -281,6 +285,9 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 	// Get Transfer Syntax from meta information
 	if err := p.setTransferSyntax(metaDS); err != nil {
 		return nil, fmt.Errorf("failed to set transfer syntax: %w", err)
+	}
+	if p.datasetCloser != nil {
+		defer func() { _ = p.datasetCloser.Close() }()
 	}
 
 	// Read main dataset with detected transfer syntax
@@ -486,6 +493,18 @@ func (p *parseContext) applyTransferSyntax(ts *transfer.Syntax) error {
 		p.byteOrder = binary.BigEndian
 	} else {
 		p.byteOrder = binary.LittleEndian
+	}
+
+	if ts.IsDeflate() {
+		if p.hasFirstDatasetTag {
+			p.reader = io.MultiReader(bytes.NewReader(p.firstDatasetTagRaw[:]), p.reader)
+			p.hasFirstDatasetTag = false
+		}
+		fr := flate.NewReader(p.reader)
+		p.reader = fr
+		p.datasetCloser = fr
+		p.seekableReader = nil
+		p.file = nil
 	}
 
 	return nil
@@ -873,8 +892,10 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) {
 	item := dataset.New()
 	savedEncoding := p.textEncoding
+	savedEncodings := append([]encoding.Encoding(nil), p.textEncodings...)
 	defer func() {
 		p.textEncoding = savedEncoding
+		p.textEncodings = savedEncodings
 	}()
 
 	if length == 0xFFFFFFFF {
@@ -948,9 +969,11 @@ func (p *parseContext) updateTextEncoding(elem element.Element) {
 	values := strElem.GetValues()
 	if len(values) == 0 {
 		p.textEncoding = charset.Default
+		p.textEncodings = []encoding.Encoding{charset.Default}
 		return
 	}
-	p.textEncoding = charset.GetEncoding(values[0])
+	p.textEncodings = charset.GetEncodings(values)
+	p.textEncoding = p.textEncodings[0]
 }
 
 // withBoundedReader runs fn with p.reader limited to the next 'length' bytes.
@@ -1003,7 +1026,7 @@ func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer
 	case vr.CodeAE, vr.CodeAS, vr.CodeCS, vr.CodeDA, vr.CodeDS, vr.CodeDT,
 		vr.CodeIS, vr.CodeLO, vr.CodeLT, vr.CodePN, vr.CodeSH, vr.CodeST,
 		vr.CodeTM, vr.CodeUC, vr.CodeUI, vr.CodeUR, vr.CodeUT:
-		return setOrder(element.NewStringFromBuffer(t, v, buf, p.textEncoding)), nil
+		return setOrder(element.NewStringFromBufferWithEncodings(t, v, buf, p.textEncodings)), nil
 
 	case vr.CodeUS:
 		return setOrder(element.NewUnsignedShortFromBuffer(t, buf)), nil

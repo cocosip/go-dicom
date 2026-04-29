@@ -6,6 +6,7 @@ package writer
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"testing"
 
@@ -97,6 +98,26 @@ func TestWriteFragmentSequenceStreamsFragments(t *testing.T) {
 	if !frag.writeToCalled {
 		t.Fatal("writeFragmentSequence() did not call WriteTo")
 	}
+}
+
+func TestWriteAndCloseReturnsCloseError(t *testing.T) {
+	closeErr := errors.New("close failed")
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Close^Error"}))
+
+	err := writeAndClose(&closeErrorWriter{closeErr: closeErr}, ds)
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("writeAndClose() error = %v, want close error %v", err, closeErr)
+	}
+}
+
+type closeErrorWriter struct {
+	bytes.Buffer
+	closeErr error
+}
+
+func (w *closeErrorWriter) Close() error {
+	return w.closeErr
 }
 
 type trackingBuffer struct {

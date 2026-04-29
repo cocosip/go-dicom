@@ -6,6 +6,7 @@ package parser
 
 import (
 	"bytes"
+	"compress/flate"
 	"encoding/binary"
 	"io"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"golang.org/x/text/encoding/japanese"
 )
 
 const (
@@ -61,6 +63,75 @@ func TestReadPreamble(t *testing.T) {
 			t.Error("readPreamble() should return error for short preamble")
 		}
 	})
+}
+
+func TestParseDeflatedExplicitVRLittleEndian(t *testing.T) {
+	var datasetBuf bytes.Buffer
+	writeExplicitStringElement(&datasetBuf, tag.PatientName, "PN", []byte("Deflated^Patient"))
+
+	var compressed bytes.Buffer
+	flateWriter, err := flate.NewWriter(&compressed, flate.DefaultCompression)
+	if err != nil {
+		t.Fatalf("flate.NewWriter() error = %v", err)
+	}
+	if _, err := flateWriter.Write(datasetBuf.Bytes()); err != nil {
+		t.Fatalf("deflate write error = %v", err)
+	}
+	if err := flateWriter.Close(); err != nil {
+		t.Fatalf("deflate close error = %v", err)
+	}
+
+	var file bytes.Buffer
+	file.Write(make([]byte, 128))
+	file.WriteString("DICM")
+	writeExplicitStringElement(&file, tag.TransferSyntaxUID, "UI", []byte(transfer.DeflatedExplicitVRLittleEndian.UID().String()+"\x00"))
+	file.Write(compressed.Bytes())
+
+	result, err := Parse(bytes.NewReader(file.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	got, ok := result.Dataset.GetString(tag.PatientName)
+	if !ok {
+		t.Fatal("PatientName not found")
+	}
+	if got != "Deflated^Patient" {
+		t.Fatalf("PatientName = %q, want %q", got, "Deflated^Patient")
+	}
+}
+
+func TestParseUsesSpecificCharacterSetCodeExtensions(t *testing.T) {
+	encodedName, err := japanese.ISO2022JP.NewEncoder().Bytes([]byte("Yamada^日本"))
+	if err != nil {
+		t.Fatalf("ISO2022JP encode error = %v", err)
+	}
+
+	var file bytes.Buffer
+	file.Write(make([]byte, 128))
+	file.WriteString("DICM")
+	writeExplicitStringElement(&file, tag.TransferSyntaxUID, "UI", []byte(testExplicitVRLittleLE+"\x00"))
+	writeExplicitStringElement(&file, tag.SpecificCharacterSet, "CS", []byte("ISO 2022 IR 6\\ISO 2022 IR 87"))
+	writeExplicitStringElement(&file, tag.PatientName, "PN", encodedName)
+
+	result, err := Parse(bytes.NewReader(file.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	got, ok := result.Dataset.GetString(tag.PatientName)
+	if !ok {
+		t.Fatal("PatientName not found")
+	}
+	if got != "Yamada^日本" {
+		t.Fatalf("PatientName = %q, want %q", got, "Yamada^日本")
+	}
+}
+
+func writeExplicitStringElement(buf *bytes.Buffer, tg *tag.Tag, vrCode string, value []byte) {
+	_ = binary.Write(buf, binary.LittleEndian, tg.Group())
+	_ = binary.Write(buf, binary.LittleEndian, tg.Element())
+	buf.WriteString(vrCode)
+	_ = binary.Write(buf, binary.LittleEndian, uint16(len(value)))
+	buf.Write(value)
 }
 
 // TestReadTag tests tag reading

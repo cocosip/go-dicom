@@ -4,12 +4,18 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net"
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
@@ -95,22 +101,22 @@ func TestServiceStart(t *testing.T) {
 
 func TestSendMessage(t *testing.T) {
 	// Create a pipe connection
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create an association with a presentation context for C-ECHO
 	assoc := createTestAssociation()
 
 	// Create service with association
-    service := NewService(client, assoc)
-    defer func() { _ = service.Close() }()
+	service := NewService(client, assoc)
+	defer func() { _ = service.Close() }()
 
 	// Create a send request
-    req := dimse.NewCEchoRequest()
-    if err := req.SetMessageID(1); err != nil {
-        t.Fatalf("SetMessageID failed: %v", err)
-    }
+	req := dimse.NewCEchoRequest()
+	if err := req.SetMessageID(1); err != nil {
+		t.Fatalf("SetMessageID failed: %v", err)
+	}
 
 	sendReq := &sendRequest{
 		message:  req,
@@ -134,6 +140,91 @@ func TestSendMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sendMessage failed: %v", err)
 	}
+}
+
+func TestSendMessageUsesNegotiatedRemoteMaxPDULength(t *testing.T) {
+	assoc := createTestAssociation()
+	assoc.MaxPDULength = 256
+
+	conn := &recordingConn{}
+	service := NewService(conn, assoc, WithMaxPDULength(4096))
+
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = ds.Add(element.NewOtherByte(tag.PixelData, bytes.Repeat([]byte{0x7f}, 2048)))
+
+	msg, err := dimse.NewCStoreRequest(ds)
+	if err != nil {
+		t.Fatalf("NewCStoreRequest() error = %v", err)
+	}
+	if err := msg.SetMessageID(1); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+
+	sendReq := &sendRequest{
+		message:  msg,
+		resultCh: make(chan error, 1),
+	}
+
+	if err := service.sendMessage(sendReq); err != nil {
+		t.Fatalf("sendMessage() error = %v", err)
+	}
+	if len(conn.writes) < 2 {
+		t.Fatalf("sendMessage() wrote %d PDU(s), want fragmentation", len(conn.writes))
+	}
+	for i, write := range conn.writes {
+		if len(write) > int(assoc.MaxPDULength) {
+			t.Fatalf("PDU %d length = %d, exceeds negotiated remote maximum %d", i, len(write), assoc.MaxPDULength)
+		}
+	}
+}
+
+type recordingConn struct {
+	writes [][]byte
+}
+
+func (c *recordingConn) Read(_ []byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (c *recordingConn) Write(p []byte) (int, error) {
+	c.writes = append(c.writes, append([]byte(nil), p...))
+	return len(p), nil
+}
+
+func (c *recordingConn) Close() error {
+	return nil
+}
+
+func (c *recordingConn) LocalAddr() net.Addr {
+	return dummyAddr("local")
+}
+
+func (c *recordingConn) RemoteAddr() net.Addr {
+	return dummyAddr("remote")
+}
+
+func (c *recordingConn) SetDeadline(_ time.Time) error {
+	return nil
+}
+
+func (c *recordingConn) SetReadDeadline(_ time.Time) error {
+	return nil
+}
+
+func (c *recordingConn) SetWriteDeadline(_ time.Time) error {
+	return nil
+}
+
+type dummyAddr string
+
+func (a dummyAddr) Network() string {
+	return string(a)
+}
+
+func (a dummyAddr) String() string {
+	return string(a)
 }
 
 // createTestAssociation creates a test association with common presentation contexts
@@ -163,8 +254,8 @@ func TestSendLoop_ContextCancellation(t *testing.T) {
 	defer func() { _ = client.Close() }()
 
 	// Create service
-    service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(client, nil)
+	defer func() { _ = service.Close() }()
 
 	// Create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -285,9 +376,9 @@ func TestGroupPDVsIntoPDUs(t *testing.T) {
 
 func TestSendLoop_ServiceClose(t *testing.T) {
 	// Create a pipe connection
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service
 	service := NewService(client, nil)
@@ -301,8 +392,8 @@ func TestSendLoop_ServiceClose(t *testing.T) {
 	// Give loop time to start
 	time.Sleep(10 * time.Millisecond)
 
-    // Close service
-    _ = service.Close()
+	// Close service
+	_ = service.Close()
 
 	// Wait for loop to exit
 	select {

@@ -26,7 +26,8 @@ var _ Element = (*String)(nil)
 // Applicable VRs: AE, AS, CS, DA, DS, DT, IS, LO, LT, PN, SH, ST, TM, UC, UI, UR, UT
 type String struct {
 	*base
-	encoding encoding.Encoding
+	encoding  encoding.Encoding
+	encodings []encoding.Encoding
 }
 
 // NewString creates a new string element with the given tag, VR, and values.
@@ -37,6 +38,10 @@ func NewString(t *tag.Tag, v *vr.VR, values []string) *String {
 
 // NewStringWithEncoding creates a new string element with a specific encoding.
 func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.Encoding) *String {
+	if enc == nil {
+		enc = charset.Default
+	}
+
 	// Join values with backslash separator
 	joined := strings.Join(values, "\\")
 
@@ -68,8 +73,9 @@ func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.E
 	buf := buffer.NewMemory(data)
 
 	return &String{
-		base:     newBase(t, v, buf),
-		encoding: enc,
+		base:      newBase(t, v, buf),
+		encoding:  enc,
+		encodings: []encoding.Encoding{enc},
 	}
 }
 
@@ -79,9 +85,25 @@ func NewStringFromBuffer(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer, enc encodi
 	if enc == nil {
 		enc = charset.Default
 	}
+	return NewStringFromBufferWithEncodings(t, v, buf, []encoding.Encoding{enc})
+}
+
+// NewStringFromBufferWithEncodings creates a string element from an existing buffer.
+// Multiple encodings are used for DICOM SpecificCharacterSet code extensions.
+func NewStringFromBufferWithEncodings(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer, encodings []encoding.Encoding) *String {
+	if len(encodings) == 0 {
+		encodings = []encoding.Encoding{charset.Default}
+	}
+	copied := make([]encoding.Encoding, len(encodings))
+	copy(copied, encodings)
+	if copied[0] == nil {
+		copied[0] = charset.Default
+	}
+
 	return &String{
-		base:     newBase(t, v, buf),
-		encoding: enc,
+		base:      newBase(t, v, buf),
+		encoding:  copied[0],
+		encodings: copied,
 	}
 }
 
@@ -103,20 +125,12 @@ func (s *String) GetString() string {
 
 	data := s.buffer.Data()
 
-	// Decode if encoding is specified
-	var strData []byte
-	if s.encoding != nil {
-		decoder := s.encoding.NewDecoder()
-		decoded, err := decoder.Bytes(data)
-		if err != nil {
-			// Fallback to raw bytes on decoding error
-			strData = data
-		} else {
-			strData = decoded
-		}
-	} else {
-		strData = data
+	decoded, err := charset.DecodeString(data, s.encodings)
+	if err != nil {
+		// Fallback to raw bytes on decoding error
+		decoded = string(data)
 	}
+	strData := []byte(decoded)
 
 	// Remove trailing null bytes and spaces (DICOM padding)
 	// UI VR uses null byte (0x00) for padding, other VRs may use space
