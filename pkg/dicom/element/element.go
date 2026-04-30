@@ -117,7 +117,11 @@ func (e *base) Count() int {
 	return 1
 }
 
-func (e *base) setByteOrder(order binary.ByteOrder) {
+// SetNumericByteOrder sets the byte order used when decoding numeric values
+// from the element's buffer. This is primarily used by the parser for
+// big-endian transfer syntaxes. Elements that do not embed base (e.g., Sequence)
+// silently ignore this call.
+func (e *base) SetNumericByteOrder(order binary.ByteOrder) {
 	if order == nil {
 		order = binary.LittleEndian
 	}
@@ -134,7 +138,7 @@ func (e *base) getByteOrder() binary.ByteOrder {
 // SetByteOrder sets byte order for an element when decoding numeric data.
 // This is primarily used by parser for big-endian transfer syntaxes.
 func SetByteOrder(elem Element, order binary.ByteOrder) {
-	if setter, ok := elem.(interface{ setByteOrder(binary.ByteOrder) }); ok {
-		setter.setByteOrder(order)
+	if setter, ok := elem.(interface{ SetNumericByteOrder(binary.ByteOrder) }); ok {
+		setter.SetNumericByteOrder(order)
 	}
 }

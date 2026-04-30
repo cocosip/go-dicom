@@ -7,6 +7,7 @@ package parser
 import (
 	"bytes"
 	"compress/flate"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -30,7 +31,8 @@ import (
 type ReadOption int
 
 const (
-	// ReadDefault reads all tags normally.
+	// ReadDefault reads all tags normally. Large elements may use lazy loading
+	// when the underlying stream is seekable, deferring data reads until accessed.
 	ReadDefault ReadOption = iota
 
 	// ReadLargeOnDemand reads small tags immediately but keeps the stream open
@@ -40,7 +42,8 @@ const (
 	// SkipLargeTags skips reading large tags entirely. The stream can be closed.
 	SkipLargeTags
 
-	// ReadAll reads all tags completely so the stream can be closed.
+	// ReadAll forces eager loading of all elements including large ones.
+	// LazyByteBuffer is never created; all data is loaded into memory during parsing.
 	ReadAll
 )
 
@@ -136,6 +139,9 @@ type parseContext struct {
 	firstDatasetTagRaw [4]byte
 	hasFirstDatasetTag bool
 
+	// Context for cancellation. Checked before blocking reads.
+	ctx context.Context
+
 	// Configuration options
 	maxElementSize        uint32           // Maximum element size to read (0 = unlimited)
 	stopAtTag             *tag.Tag         // Stop parsing when this tag is reached
@@ -184,10 +190,10 @@ func WithDictionary(d *dict.Dictionary) Option {
 // WithReadOption sets how large elements should be handled during parsing.
 //
 // Options:
-//   - ReadDefault: Read all elements normally
+//   - ReadDefault: Read all elements, using lazy loading for large ones when possible
 //   - ReadLargeOnDemand: Read large elements on demand (stream must stay open)
 //   - SkipLargeTags: Skip large elements entirely
-//   - ReadAll: Read all elements including large ones
+//   - ReadAll: Force eager loading of all elements (no lazy buffers)
 func WithReadOption(opt ReadOption) Option {
 	return func(ctx *parseContext) {
 		ctx.readOption = opt
@@ -210,9 +216,20 @@ func WithAssumedTransferSyntax(ts *transfer.Syntax) Option {
 	}
 }
 
+// WithContext sets the context for cancellation during parsing.
+// The context is checked before each blocking read operation. If the context
+// is cancelled, the parse is aborted with the context error.
+// Defaults to context.Background() if not set.
+func WithContext(parent context.Context) Option {
+	return func(ctx *parseContext) {
+		ctx.ctx = parent
+	}
+}
+
 // newParseContext creates a new parse context with the given options.
 func newParseContext(opts ...Option) *parseContext {
 	ctx := &parseContext{
+		ctx:             context.Background(),
 		byteOrder:       binary.LittleEndian,
 		isExplicitVR:    true,
 		textEncoding:    charset.Default,
@@ -231,14 +248,27 @@ func newParseContext(opts ...Option) *parseContext {
 	return ctx
 }
 
+// ctxReader wraps an io.Reader to check context cancellation before every read.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c *ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
+}
+
 // Parse parses a DICOM file from the reader.
 // This is the main entry point for reading DICOM files.
 //
-// Usage:
+// Use WithContext to provide a context for cancellation:
 //
 //	result, err := parser.Parse(reader,
+//	    parser.WithContext(ctx),
 //	    parser.WithReadOption(parser.SkipLargeTags),
-//	    parser.WithLargeObjectSize(128*1024),
 //	)
 //
 // Returns a ParseResult containing:
@@ -248,13 +278,14 @@ func newParseContext(opts ...Option) *parseContext {
 //   - Format: Detected file format
 //   - IsPartial: Whether parsing stopped early
 func Parse(r io.Reader, opts ...Option) (*ParseResult, error) {
-	ctx := newParseContext(opts...)
-	return ctx.parse(r)
+	pctx := newParseContext(opts...)
+	return pctx.parse(r)
 }
 
 // parse is the internal parsing implementation.
 func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
-	p.reader = r
+	// Wrap reader with context cancellation support so every Read checks ctx.Err().
+	p.reader = &ctxReader{ctx: p.ctx, r: r}
 	p.detectedFormat = FormatUnknown
 
 	// Check if reader supports seeking (for lazy loading)
@@ -560,6 +591,13 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 // readElementData handles reading element data based on size and read options.
 // This is a common helper to avoid code duplication between readElement and readElementWithTag.
 func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buffer.ByteBuffer, error) {
+	// Guard against undefined length (0xFFFFFFFF) which should have been handled
+	// by the caller for SQ/UN/OB/OW sequence and fragment paths. Reaching here
+	// with undefined length indicates a malformed DICOM stream.
+	if length == 0xFFFFFFFF {
+		return nil, fmt.Errorf("element %s has undefined length, expected sequence or fragment handling", t)
+	}
+
 	// Handle large objects based on ReadOption
 	isLarge := length > p.largeObjectSize
 
@@ -586,8 +624,16 @@ func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buf
 			}
 			return buf, nil
 
-		case ReadAll, ReadDefault:
-			// Read the data normally
+		case ReadAll:
+			// Force eager loading even for large elements; never create lazy buffers.
+			data := make([]byte, length)
+			if _, err := io.ReadFull(p.reader, data); err != nil {
+				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+			}
+			return buffer.NewMemory(data), nil
+
+		case ReadDefault:
+			// Read the data normally; this path is also taken for non-large elements.
 			data := make([]byte, length)
 			if _, err := io.ReadFull(p.reader, data); err != nil {
 				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)

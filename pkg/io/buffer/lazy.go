@@ -19,8 +19,8 @@ type LazyByteBuffer struct {
 	loader func() ([]byte, error) // Function that loads the data
 	data   []byte                 // Cached data after first load
 	err    error                  // Cached loader error
-	once   sync.Once              // Ensures loader is called only once
-	mu     sync.RWMutex           // Protects data access
+	mu     sync.Mutex             // Protects all fields
+	loaded bool                   // Whether loader has been called
 	size   uint32                 // Declared size when known without loading
 	sized  bool                   // Whether size was provided up front
 }
@@ -80,14 +80,13 @@ func NewLazySizedWithError(size uint32, loader func() ([]byte, error)) (*LazyByt
 
 // load ensures the data is loaded exactly once.
 func (l *LazyByteBuffer) load() ([]byte, error) {
-	l.once.Do(func() {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		l.data, l.err = l.loader()
-	})
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	l.mu.RLock()
-	defer l.mu.RUnlock()
+	if !l.loaded {
+		l.data, l.err = l.loader()
+		l.loaded = true
+	}
 	return l.data, l.err
 }
 
@@ -181,7 +180,7 @@ func (l *LazyByteBuffer) WriteTo(w io.Writer) (int64, error) {
 // IsLoaded returns true if the data has been loaded.
 // This is useful for checking if the lazy loading has been triggered.
 func (l *LazyByteBuffer) IsLoaded() bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.data != nil || l.err != nil
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.loaded
 }

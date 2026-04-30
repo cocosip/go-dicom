@@ -19,6 +19,12 @@ import (
 //
 // Datasets maintain elements in sorted order by tag for consistent iteration
 // and efficient lookup. Elements are stored in a map indexed by tag.
+//
+// Dataset is NOT goroutine-safe. All mutations (Add, AddOrUpdate, Remove, Clear,
+// Merge, SetInternalTransferSyntax) and any reads that may race with mutations
+// must be externally synchronized by the caller. Concurrent read-only access
+// (e.g., Get, Contains, Elements, Tags) is safe as long as no concurrent writes
+// are in progress.
 type Dataset struct {
 	// items stores elements indexed by tag
 	items map[uint32]element.Element
