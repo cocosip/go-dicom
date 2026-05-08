@@ -34,17 +34,27 @@ type Syntax struct {
 }
 
 // Registry holds a collection of transfer syntaxes keyed by UID string.
-// Use NewRegistry to create an isolated registry for testing.
+// Use NewRegistry to create an isolated registry preloaded with standard
+// transfer syntaxes.
 type Registry struct {
 	mu    sync.RWMutex
 	items map[string]*Syntax
 }
 
 // DefaultRegistry is the package-level registry used by Register, Lookup, etc.
-var DefaultRegistry = NewRegistry()
+var DefaultRegistry = newEmptyRegistry()
 
-// NewRegistry creates a new empty transfer syntax registry.
+// NewRegistry creates a new isolated transfer syntax registry containing the
+// standard transfer syntaxes known to the default registry.
 func NewRegistry() *Registry {
+	r := newEmptyRegistry()
+	for _, ts := range DefaultRegistry.KnownEntries() {
+		r.Register(ts)
+	}
+	return r
+}
+
+func newEmptyRegistry() *Registry {
 	return &Registry{
 		items: make(map[string]*Syntax),
 	}

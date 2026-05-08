@@ -7,7 +7,9 @@ package parser
 import (
 	"bytes"
 	"compress/flate"
+	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"testing"
 
@@ -23,6 +25,7 @@ import (
 const (
 	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
 	testExplicitVRBigE     = "1.2.840.10008.1.2.2"
+	testImplicitVRLittleLE = "1.2.840.10008.1.2"
 	testPatientName        = "Doe^John"
 )
 
@@ -132,6 +135,78 @@ func writeExplicitStringElement(buf *bytes.Buffer, tg *tag.Tag, vrCode string, v
 	buf.WriteString(vrCode)
 	_ = binary.Write(buf, binary.LittleEndian, uint16(len(value)))
 	buf.Write(value)
+}
+
+type cancelAfterFirstReadSeeker struct {
+	*bytes.Reader
+	cancel context.CancelFunc
+	reads  int
+}
+
+func (r *cancelAfterFirstReadSeeker) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.reads++
+	if r.reads == 1 {
+		r.cancel()
+	}
+	return n, err
+}
+
+func rawExplicitDataset() []byte {
+	var buf bytes.Buffer
+	writeExplicitStringElement(&buf, tag.PatientName, "PN", []byte(testPatientName))
+	return buf.Bytes()
+}
+
+func rawExplicitDatasetLongerThanPreambleProbe() []byte {
+	var buf bytes.Buffer
+	writeExplicitStringElement(&buf, tag.PatientName, "PN", []byte(testPatientName))
+	longValue := bytes.Repeat([]byte{'A'}, 160)
+	writeExplicitStringElement(&buf, tag.StudyDescription, "LO", longValue)
+	return buf.Bytes()
+}
+
+func TestParseWithContextCanceledAfterSeekableProbe(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := &cancelAfterFirstReadSeeker{
+		Reader: bytes.NewReader(rawExplicitDatasetLongerThanPreambleProbe()),
+		cancel: cancel,
+	}
+
+	_, err := Parse(reader,
+		WithContext(ctx),
+		WithAssumedTransferSyntax(transfer.ExplicitVRLittleEndian),
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Parse() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestParseWithNilContextUsesBackground(t *testing.T) {
+	var result *ParseResult
+	var err error
+	var nilContext context.Context
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				t.Fatalf("Parse() panicked with nil context: %v", recovered)
+			}
+		}()
+		result, err = Parse(bytes.NewReader(rawExplicitDataset()),
+			WithContext(nilContext),
+			WithAssumedTransferSyntax(transfer.ExplicitVRLittleEndian),
+		)
+	}()
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	got, ok := result.Dataset.GetString(tag.PatientName)
+	if !ok {
+		t.Fatal("PatientName not found")
+	}
+	if got != testPatientName {
+		t.Fatalf("PatientName = %q, want %q", got, testPatientName)
+	}
 }
 
 // TestReadTag tests tag reading

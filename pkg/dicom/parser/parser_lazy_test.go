@@ -231,7 +231,7 @@ func TestReadLargeOnDemand_Integration(t *testing.T) {
 	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
 	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
 	_, _ = f.WriteString("UI")
-	tsUID := "1.2.840.10008.1.2\x00" // Implicit VR Little Endian + null padding
+	tsUID := testImplicitVRLittleLE + "\x00" // Implicit VR Little Endian + null padding
 	_ = binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
 	_, _ = f.WriteString(tsUID)
 
@@ -329,7 +329,7 @@ func TestReadOption_SkipVsLazy(t *testing.T) {
 	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
 	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
 	_, _ = f.WriteString("UI")
-	tsUID := "1.2.840.10008.1.2\x00" // Implicit VR Little Endian + null padding
+	tsUID := testImplicitVRLittleLE + "\x00" // Implicit VR Little Endian + null padding
 	_ = binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
 	_, _ = f.WriteString(tsUID)
 
@@ -397,4 +397,58 @@ func TestReadOption_SkipVsLazy(t *testing.T) {
 			t.Errorf("Lazy element should have length %d, got %d", len(largeData), elem.Length())
 		}
 	})
+}
+
+func TestReadDefaultLargeElementUsesLazyBufferForSeekableReader(t *testing.T) {
+	largeData := make([]byte, 200*1024)
+	for i := range largeData {
+		largeData[i] = byte(i % 256)
+	}
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test_read_default_lazy.dcm")
+	f, err := os.Create(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	preamble := make([]byte, 128)
+	_, _ = f.Write(preamble)
+	_, _ = f.WriteString("DICM")
+
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
+	_, _ = f.WriteString("UI")
+	tsUID := testImplicitVRLittleLE + "\x00"
+	_ = binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
+	_, _ = f.WriteString(tsUID)
+
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x7FE0))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
+	_ = binary.Write(f, binary.LittleEndian, uint32(len(largeData)))
+	_, _ = f.Write(largeData)
+
+	_ = f.Close()
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open temp file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	result, err := Parse(file, WithLargeObjectSize(100*1024))
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	elem, exists := result.Dataset.Get(tag.New(0x7FE0, 0x0010))
+	if !exists {
+		t.Fatal("Pixel Data element should exist")
+	}
+	if _, ok := elem.Buffer().(*buffer.FileByteBuffer); !ok {
+		t.Fatalf("ReadDefault buffer = %T, want *buffer.FileByteBuffer", elem.Buffer())
+	}
+	if elem.Length() != uint32(len(largeData)) {
+		t.Fatalf("Pixel Data length = %d, want %d", elem.Length(), len(largeData))
+	}
 }

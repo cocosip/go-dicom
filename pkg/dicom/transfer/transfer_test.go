@@ -172,6 +172,28 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func TestNewRegistryIncludesStandardTransferSyntaxes(t *testing.T) {
+	registry := transfer.NewRegistry()
+
+	ts, err := registry.Lookup(uid.ImplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+	if !ts.Equals(transfer.ImplicitVRLittleEndian) {
+		t.Fatal("isolated registry should return ImplicitVRLittleEndian for the standard UID")
+	}
+	if ts.IsExplicitVR() {
+		t.Fatal("ImplicitVRLittleEndian from isolated registry should use implicit VR")
+	}
+	if ts.IsEncapsulated() {
+		t.Fatal("ImplicitVRLittleEndian from isolated registry should not be encapsulated")
+	}
+
+	if len(registry.KnownEntries()) == 0 {
+		t.Fatal("isolated registry should include standard transfer syntaxes")
+	}
+}
+
 func TestEquals(t *testing.T) {
 	ts1 := transfer.ImplicitVRLittleEndian
 	ts2 := transfer.ImplicitVRLittleEndian

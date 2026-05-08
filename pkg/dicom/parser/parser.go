@@ -222,6 +222,9 @@ func WithAssumedTransferSyntax(ts *transfer.Syntax) Option {
 // Defaults to context.Background() if not set.
 func WithContext(parent context.Context) Option {
 	return func(ctx *parseContext) {
+		if parent == nil {
+			parent = context.Background()
+		}
 		ctx.ctx = parent
 	}
 }
@@ -261,6 +264,22 @@ func (c *ctxReader) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
+type ctxReadSeeker struct {
+	ctx context.Context
+	rs  io.ReadSeeker
+}
+
+func (c *ctxReadSeeker) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.rs.Read(p)
+}
+
+func (c *ctxReadSeeker) Seek(offset int64, whence int) (int64, error) {
+	return c.rs.Seek(offset, whence)
+}
+
 // Parse parses a DICOM file from the reader.
 // This is the main entry point for reading DICOM files.
 //
@@ -285,7 +304,7 @@ func Parse(r io.Reader, opts ...Option) (*ParseResult, error) {
 // parse is the internal parsing implementation.
 func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 	// Wrap reader with context cancellation support so every Read checks ctx.Err().
-	p.reader = &ctxReader{ctx: p.ctx, r: r}
+	p.reader = p.contextAwareReader(r)
 	p.detectedFormat = FormatUnknown
 
 	// Check if reader supports seeking (for lazy loading)
@@ -338,6 +357,13 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 		Format:              p.detectedFormat,
 		IsPartial:           p.isPartial,
 	}, nil
+}
+
+func (p *parseContext) contextAwareReader(r io.Reader) io.Reader {
+	if rs, ok := r.(io.ReadSeeker); ok {
+		return &ctxReadSeeker{ctx: p.ctx, rs: rs}
+	}
+	return &ctxReader{ctx: p.ctx, r: r}
 }
 
 // ParseFile parses a DICOM file from a file path.
@@ -393,7 +419,7 @@ func (p *parseContext) restoreReaderToStart(consumed []byte) error {
 		if _, err := p.seekableReader.Seek(0, io.SeekStart); err != nil {
 			return fmt.Errorf("failed to seek reader back to start: %w", err)
 		}
-		p.reader = p.seekableReader
+		p.reader = p.contextAwareReader(p.seekableReader)
 		return nil
 	}
 
@@ -633,7 +659,11 @@ func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buf
 			return buffer.NewMemory(data), nil
 
 		case ReadDefault:
-			// Read the data normally; this path is also taken for non-large elements.
+			buf, err := p.createLazyBuffer(length)
+			if err == nil {
+				return buf, nil
+			}
+
 			data := make([]byte, length)
 			if _, err := io.ReadFull(p.reader, data); err != nil {
 				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
