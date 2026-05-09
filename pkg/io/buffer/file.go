@@ -4,6 +4,7 @@
 package buffer
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -17,6 +18,7 @@ type FileByteBuffer struct {
 	filePath string // Path to the file
 	position int64  // Starting position within the file
 	size     uint32 // Size of the data range
+	ctx      context.Context
 }
 
 // NewFile creates a new file-backed buffer.
@@ -28,7 +30,7 @@ type FileByteBuffer struct {
 //
 // Returns an error if the file doesn't exist or if the range is invalid.
 func NewFile(filePath string, position, size uint32) (*FileByteBuffer, error) {
-	return NewFileAt(filePath, int64(position), size)
+	return NewFileAtWithContext(context.Background(), filePath, int64(position), size)
 }
 
 // NewFileAt creates a new file-backed buffer with a 64-bit file position.
@@ -37,6 +39,11 @@ func NewFile(filePath string, position, size uint32) (*FileByteBuffer, error) {
 // 4 GiB. The represented value length is still uint32 because DICOM element
 // value lengths are encoded as 32-bit fields.
 func NewFileAt(filePath string, position int64, size uint32) (*FileByteBuffer, error) {
+	return NewFileAtWithContext(context.Background(), filePath, position, size)
+}
+
+// NewFileAtWithContext creates a new file-backed buffer with an optional context.
+func NewFileAtWithContext(ctx context.Context, filePath string, position int64, size uint32) (*FileByteBuffer, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("file path cannot be empty")
 	}
@@ -63,6 +70,7 @@ func NewFileAt(filePath string, position int64, size uint32) (*FileByteBuffer, e
 		filePath: filePath,
 		position: position,
 		size:     size,
+		ctx:      ctx,
 	}, nil
 }
 
@@ -80,6 +88,11 @@ func (f *FileByteBuffer) Size() uint32 {
 // For large files, consider using GetByteRange or WriteTo to avoid loading
 // everything into memory at once.
 func (f *FileByteBuffer) Data() []byte {
+	if f.ctx != nil {
+		if err := f.ctx.Err(); err != nil {
+			return nil
+		}
+	}
 	if f.size == 0 {
 		return nil
 	}
@@ -111,6 +124,11 @@ func (f *FileByteBuffer) Data() []byte {
 //
 // Returns an error if the range is invalid or if reading fails.
 func (f *FileByteBuffer) GetByteRange(offset, count uint32, output []byte) error {
+	if f.ctx != nil {
+		if err := f.ctx.Err(); err != nil {
+			return err
+		}
+	}
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
@@ -151,6 +169,11 @@ func (f *FileByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 //
 // Returns the number of bytes written and any error encountered.
 func (f *FileByteBuffer) WriteTo(w io.Writer) (int64, error) {
+	if f.ctx != nil {
+		if err := f.ctx.Err(); err != nil {
+			return 0, err
+		}
+	}
 	if w == nil {
 		return 0, fmt.Errorf("writer cannot be nil")
 	}

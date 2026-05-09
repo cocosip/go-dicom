@@ -41,6 +41,51 @@ type Registry struct {
 	items map[string]*Syntax
 }
 
+var standardTransferSyntaxes = []*Syntax{
+	ImplicitVRLittleEndian,
+	ExplicitVRLittleEndian,
+	ExplicitVRBigEndian,
+	ImplicitVRBigEndian,
+	GEPrivateImplicitVRBigEndian,
+	Papyrus3ImplicitVRLittleEndianRetired,
+	DeflatedExplicitVRLittleEndian,
+	JPEGProcess1,
+	JPEGBaseline8Bit,
+	JPEGExtended12Bit,
+	JPEGProcess2_4,
+	JPEGProcess3_5Retired,
+	JPEGProcess6_8Retired,
+	JPEGProcess7_9Retired,
+	JPEGProcess10_12Retired,
+	JPEGProcess11_13Retired,
+	JPEGProcess16_18Retired,
+	JPEGProcess17_19Retired,
+	JPEGProcess20_22Retired,
+	JPEGProcess21_23Retired,
+	JPEGProcess24_26Retired,
+	JPEGProcess25_27Retired,
+	JPEGLossless,
+	JPEGProcess15Retired,
+	JPEGProcess28Retired,
+	JPEGProcess29Retired,
+	JPEGLSLossless,
+	JPEGLSNearLossless,
+	JPEG2000Lossless,
+	JPEG2000,
+	JPEG2000Part2MultiComponentLosslessOnly,
+	JPEG2000Part2MultiComponent,
+	HTJ2KLossless,
+	HTJ2KLosslessRPCL,
+	HTJ2K,
+	JPIPReferenced,
+	JPIPReferencedDeflate,
+	JPIPHTJ2KReferenced,
+	JPIPHTJ2KReferencedDeflate,
+	RLELossless,
+	RFC2557MIMEEncapsulation,
+	XMLEncoding,
+}
+
 // DefaultRegistry is the package-level registry used by Register, Lookup, etc.
 var DefaultRegistry = newEmptyRegistry()
 
@@ -48,7 +93,7 @@ var DefaultRegistry = newEmptyRegistry()
 // standard transfer syntaxes known to the default registry.
 func NewRegistry() *Registry {
 	r := newEmptyRegistry()
-	for _, ts := range DefaultRegistry.KnownEntries() {
+	for _, ts := range standardTransferSyntaxes {
 		r.Register(ts)
 	}
 	return r

@@ -309,7 +309,7 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 
 	// Check if reader supports seeking (for lazy loading)
 	if rs, ok := r.(io.ReadSeeker); ok {
-		p.seekableReader = rs
+		p.seekableReader = p.contextAwareReadSeeker(rs)
 	}
 
 	// Check if reader is an *os.File (for FileByteBuffer)
@@ -361,9 +361,13 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 
 func (p *parseContext) contextAwareReader(r io.Reader) io.Reader {
 	if rs, ok := r.(io.ReadSeeker); ok {
-		return &ctxReadSeeker{ctx: p.ctx, rs: rs}
+		return p.contextAwareReadSeeker(rs)
 	}
 	return &ctxReader{ctx: p.ctx, r: r}
+}
+
+func (p *parseContext) contextAwareReadSeeker(rs io.ReadSeeker) io.ReadSeeker {
+	return &ctxReadSeeker{ctx: p.ctx, rs: rs}
 }
 
 // ParseFile parses a DICOM file from a file path.
@@ -419,7 +423,7 @@ func (p *parseContext) restoreReaderToStart(consumed []byte) error {
 		if _, err := p.seekableReader.Seek(0, io.SeekStart); err != nil {
 			return fmt.Errorf("failed to seek reader back to start: %w", err)
 		}
-		p.reader = p.contextAwareReader(p.seekableReader)
+		p.reader = p.seekableReader
 		return nil
 	}
 
@@ -558,7 +562,7 @@ func (p *parseContext) applyTransferSyntax(ts *transfer.Syntax) error {
 			p.hasFirstDatasetTag = false
 		}
 		fr := flate.NewReader(p.reader)
-		p.reader = fr
+		p.reader = p.contextAwareReader(fr)
 		p.datasetCloser = fr
 		p.seekableReader = nil
 		p.file = nil
@@ -1157,7 +1161,7 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 		}
 
 		// Create a FileByteBuffer for this range
-		fb, err := buffer.NewFileAt(p.file.Name(), currentPos, length)
+		fb, err := buffer.NewFileAtWithContext(p.ctx, p.file.Name(), currentPos, length)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create file buffer: %w", err)
 		}
