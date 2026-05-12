@@ -211,6 +211,43 @@ func TestNewRegistryIsolatedFromDefaultRegistryMutation(t *testing.T) {
 	}
 }
 
+func TestNewRegistryIncludesAllBuiltInTransferSyntaxes(t *testing.T) {
+	registry := transfer.NewRegistry()
+
+	tests := []struct {
+		name string
+		want *transfer.Syntax
+	}{
+		{name: "JPEG Lossless SV1", want: transfer.JPEGLosslessSV1},
+		{name: "MPEG2", want: transfer.MPEG2},
+		{name: "Fragmentable MPEG2", want: transfer.FragmentableMPEG2},
+		{name: "HEVC Main Profile Level 5.1", want: transfer.HEVCH265MainProfileLevel51},
+		{name: "HEVC Main 10 Profile Level 5.1", want: transfer.HEVCH265Main10ProfileLevel51},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := registry.Lookup(tt.want.UID())
+			if err != nil {
+				t.Fatalf("Lookup() error = %v", err)
+			}
+			if !got.Equals(tt.want) {
+				t.Fatalf("Lookup() = %v, want %v", got, tt.want)
+			}
+			if got.IsEncapsulated() != tt.want.IsEncapsulated() {
+				t.Fatalf("IsEncapsulated() = %v, want %v", got.IsEncapsulated(), tt.want.IsEncapsulated())
+			}
+			if got.IsLossy() != tt.want.IsLossy() {
+				t.Fatalf("IsLossy() = %v, want %v", got.IsLossy(), tt.want.IsLossy())
+			}
+			if got.LossyCompressionMethod() != tt.want.LossyCompressionMethod() {
+				t.Fatalf("LossyCompressionMethod() = %q, want %q",
+					got.LossyCompressionMethod(), tt.want.LossyCompressionMethod())
+			}
+		})
+	}
+}
+
 func TestEquals(t *testing.T) {
 	ts1 := transfer.ImplicitVRLittleEndian
 	ts2 := transfer.ImplicitVRLittleEndian
