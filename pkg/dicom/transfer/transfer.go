@@ -111,7 +111,7 @@ var DefaultRegistry = newEmptyRegistry()
 func NewRegistry() *Registry {
 	r := newEmptyRegistry()
 	for _, ts := range standardTransferSyntaxes {
-		r.Register(ts)
+		r.Register(cloneSyntax(ts))
 	}
 	return r
 }
@@ -120,6 +120,15 @@ func newEmptyRegistry() *Registry {
 	return &Registry{
 		items: make(map[string]*Syntax),
 	}
+}
+
+func cloneSyntax(ts *Syntax) *Syntax {
+	if ts == nil {
+		return nil
+	}
+
+	cloned := *ts
+	return &cloned
 }
 
 // New creates a new TransferSyntax with the given UID.

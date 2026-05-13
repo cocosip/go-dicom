@@ -211,6 +211,39 @@ func TestNewRegistryIsolatedFromDefaultRegistryMutation(t *testing.T) {
 	}
 }
 
+func TestNewRegistryBuiltInEntriesDoNotAliasGlobalSyntaxes(t *testing.T) {
+	registry := transfer.NewRegistry()
+
+	ts, err := registry.Lookup(uid.ImplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+
+	if err := ts.Parse(uid.ExplicitVRLittleEndian.UID()); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	global := transfer.ImplicitVRLittleEndian
+	if global.UID().UID() != uid.ImplicitVRLittleEndian.UID() {
+		t.Fatalf("global implicit syntax UID = %q, want %q", global.UID().UID(), uid.ImplicitVRLittleEndian.UID())
+	}
+	if global.IsExplicitVR() {
+		t.Fatal("global implicit syntax should remain implicit after isolated registry mutation")
+	}
+
+	defaultLookup, err := transfer.Lookup(uid.ImplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+	if defaultLookup.UID().UID() != uid.ImplicitVRLittleEndian.UID() {
+		t.Fatalf("default registry implicit syntax UID = %q, want %q",
+			defaultLookup.UID().UID(), uid.ImplicitVRLittleEndian.UID())
+	}
+	if defaultLookup.IsExplicitVR() {
+		t.Fatal("default registry implicit syntax should remain implicit after isolated registry mutation")
+	}
+}
+
 func TestNewRegistryIncludesAllBuiltInTransferSyntaxes(t *testing.T) {
 	registry := transfer.NewRegistry()
 

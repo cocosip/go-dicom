@@ -6,8 +6,8 @@ package parser
 
 import (
 	"bytes"
-	"encoding/binary"
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -505,4 +505,111 @@ func TestReadDefaultLazyBufferHonorsContextAfterParse(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("GetByteRange() error = %v, want context.Canceled", err)
 	}
+}
+
+func TestNestedDefinedLengthLargeElementUsesLazyBuffer(t *testing.T) {
+	largeData := make([]byte, 200*1024)
+	for i := range largeData {
+		largeData[i] = byte(i % 256)
+	}
+
+	tmpFile := writeDefinedLengthSequenceFile(t, largeData)
+
+	tests := []struct {
+		name string
+		opt  ReadOption
+	}{
+		{name: "ReadDefault", opt: ReadDefault},
+		{name: "ReadLargeOnDemand", opt: ReadLargeOnDemand},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, err := os.Open(tmpFile)
+			if err != nil {
+				t.Fatalf("Failed to open temp file: %v", err)
+			}
+			defer func() { _ = file.Close() }()
+
+			result, err := Parse(file,
+				WithReadOption(tt.opt),
+				WithLargeObjectSize(100*1024),
+			)
+			if err != nil {
+				t.Fatalf("Parse() error: %v", err)
+			}
+
+			seq, err := result.Dataset.GetSequence(tag.New(0x0008, 0x1110))
+			if err != nil {
+				t.Fatalf("GetSequence() error: %v", err)
+			}
+
+			item := seq.GetItem(0)
+			if item == nil {
+				t.Fatal("Sequence should contain one item")
+			}
+
+			elem, exists := item.Get(tag.New(0x0011, 0x1010))
+			if !exists {
+				t.Fatal("Nested large element should exist")
+			}
+
+			if _, ok := elem.Buffer().(*buffer.FileByteBuffer); !ok {
+				t.Fatalf("nested buffer = %T, want *buffer.FileByteBuffer", elem.Buffer())
+			}
+			if elem.Length() != uint32(len(largeData)) {
+				t.Fatalf("nested element length = %d, want %d", elem.Length(), len(largeData))
+			}
+		})
+	}
+}
+
+func writeDefinedLengthSequenceFile(t *testing.T, largeData []byte) string {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "nested_defined_length_lazy.dcm")
+
+	f, err := os.Create(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	preamble := make([]byte, 128)
+	_, _ = f.Write(preamble)
+	_, _ = f.WriteString("DICM")
+
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0010))
+	_, _ = f.WriteString("UI")
+	tsUID := testExplicitVRLittleLE + "\x00"
+	_ = binary.Write(f, binary.LittleEndian, uint16(len(tsUID)))
+	_, _ = f.WriteString(tsUID)
+
+	itemPayloadLength := uint32(4 + 2 + 2 + 4 + len(largeData))
+	sequenceLength := uint32(4 + 4 + itemPayloadLength)
+
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0008))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x1110))
+	_, _ = f.WriteString("SQ")
+	_ = binary.Write(f, binary.LittleEndian, uint16(0))
+	_ = binary.Write(f, binary.LittleEndian, sequenceLength)
+
+	_ = binary.Write(f, binary.LittleEndian, uint16(0xFFFE))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0xE000))
+	_ = binary.Write(f, binary.LittleEndian, itemPayloadLength)
+
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x0011))
+	_ = binary.Write(f, binary.LittleEndian, uint16(0x1010))
+	_, _ = f.WriteString("OB")
+	_ = binary.Write(f, binary.LittleEndian, uint16(0))
+	_ = binary.Write(f, binary.LittleEndian, uint32(len(largeData)))
+	_, _ = f.Write(largeData)
+
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close() error: %v", err)
+	}
+
+	return tmpFile
 }

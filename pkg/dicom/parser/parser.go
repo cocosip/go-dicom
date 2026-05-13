@@ -158,6 +158,7 @@ type parseContext struct {
 	file           *os.File      // Set if reader is a file (for FileByteBuffer)
 	lazyReadMu     sync.Mutex    // Serializes seek/read operations for lazy loaders on shared readers
 	datasetCloser  io.Closer     // Closes any wrapper reader created for the dataset stream
+	boundedReaders []*io.LimitedReader
 }
 
 // Option is a functional option for configuring the parser.
@@ -1059,23 +1060,20 @@ func (p *parseContext) updateTextEncoding(elem element.Element) {
 // withBoundedReader runs fn with p.reader limited to the next 'length' bytes.
 // It restores parser state afterward and drains any unread bytes from the bound.
 //
-// Lazy-loading state (seekable reader/file) is disabled inside the bounded scope
-// to keep stream boundaries correct.
+// Lazy-loading state (seekable reader/file) remains available inside the bounded
+// scope. When lazy buffers seek past bytes instead of reading them, bounded
+// readers are adjusted explicitly to keep outer sequence/item lengths aligned.
 func (p *parseContext) withBoundedReader(length uint32, fn func(*io.LimitedReader) error) error {
 	lr := &io.LimitedReader{R: p.reader, N: int64(length)}
 
 	originalReader := p.reader
-	originalSeekableReader := p.seekableReader
-	originalFile := p.file
 
 	p.reader = lr
-	p.seekableReader = nil
-	p.file = nil
+	p.boundedReaders = append(p.boundedReaders, lr)
 
 	defer func() {
 		p.reader = originalReader
-		p.seekableReader = originalSeekableReader
-		p.file = originalFile
+		p.boundedReaders = p.boundedReaders[:len(p.boundedReaders)-1]
 	}()
 
 	if err := fn(lr); err != nil {
@@ -1091,6 +1089,32 @@ func (p *parseContext) withBoundedReader(length uint32, fn func(*io.LimitedReade
 	}
 
 	return nil
+}
+
+func (p *parseContext) ensureBoundedAvailable(length uint32) error {
+	if len(p.boundedReaders) == 0 {
+		return nil
+	}
+
+	required := int64(length)
+	for _, lr := range p.boundedReaders {
+		if lr.N < required {
+			return fmt.Errorf("lazy skip %d exceeds bounded reader remaining %d", length, lr.N)
+		}
+	}
+
+	return nil
+}
+
+func (p *parseContext) consumeBounded(length uint32) {
+	if len(p.boundedReaders) == 0 {
+		return
+	}
+
+	consumed := int64(length)
+	for _, lr := range p.boundedReaders {
+		lr.N -= consumed
+	}
 }
 
 // createElement creates an element from tag, VR, and buffer.
@@ -1154,6 +1178,10 @@ func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer
 func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error) {
 	// Strategy 1: If we have a file, use FileByteBuffer
 	if p.file != nil {
+		if err := p.ensureBoundedAvailable(length); err != nil {
+			return nil, err
+		}
+
 		// Get current position in file
 		currentPos, err := p.file.Seek(0, io.SeekCurrent)
 		if err != nil {
@@ -1170,12 +1198,17 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 		if _, err := p.file.Seek(int64(length), io.SeekCurrent); err != nil {
 			return nil, fmt.Errorf("failed to skip data: %w", err)
 		}
+		p.consumeBounded(length)
 
 		return fb, nil
 	}
 
 	// Strategy 2: If we have a seekable reader, use LazyByteBuffer
 	if p.seekableReader != nil {
+		if err := p.ensureBoundedAvailable(length); err != nil {
+			return nil, err
+		}
+
 		// Get current position
 		currentPos, err := p.seekableReader.Seek(0, io.SeekCurrent)
 		if err != nil {
@@ -1219,6 +1252,7 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 		if _, err := p.seekableReader.Seek(int64(length), io.SeekCurrent); err != nil {
 			return nil, fmt.Errorf("failed to skip data: %w", err)
 		}
+		p.consumeBounded(length)
 
 		return lb, nil
 	}
