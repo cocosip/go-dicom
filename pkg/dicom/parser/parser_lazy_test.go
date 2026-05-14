@@ -588,7 +588,7 @@ func writeDefinedLengthSequenceFile(t *testing.T, largeData []byte) string {
 	_, _ = f.WriteString(tsUID)
 
 	itemPayloadLength := uint32(4 + 2 + 2 + 4 + len(largeData))
-	sequenceLength := uint32(4 + 4 + itemPayloadLength)
+	sequenceLength := 4 + 4 + itemPayloadLength
 
 	_ = binary.Write(f, binary.LittleEndian, uint16(0x0008))
 	_ = binary.Write(f, binary.LittleEndian, uint16(0x1110))
