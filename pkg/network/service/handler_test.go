@@ -92,6 +92,30 @@ func TestHandleCEchoRequest_DefaultHandler(t *testing.T) {
 	}
 }
 
+func TestHandleRequest_DispatchErrorDoesNotDeadlockShutdown(t *testing.T) {
+	service := NewService(nil, nil)
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("Failed to set state: %v", err)
+	}
+
+	command := dimse.CreateCommandDataset(uint16(dimse.CommandNGetRQ), 1)
+	req := &unsupportedServiceRequest{BaseRequest: dimse.NewBaseRequest(command, nil)}
+
+	if err := service.handleRequest(context.Background(), req); err != nil {
+		t.Fatalf("handleRequest failed: %v", err)
+	}
+
+	select {
+	case <-service.shutdownCh:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("dispatch error shutdown deadlocked waiting for the failing request handler")
+	}
+}
+
+type unsupportedServiceRequest struct {
+	*dimse.BaseRequest
+}
+
 func TestHandleCEchoRequest_CustomHandler(t *testing.T) {
 	service, ctx, cancel := setupTestService(t)
 	defer func() { _ = service.Close() }()

@@ -16,8 +16,8 @@ import (
 const testStudyRootMoveUID = "1.2.840.10008.5.1.4.1.2.2.2"
 
 func TestNewCMoveRequest(t *testing.T) {
-    identifier := dataset.New()
-    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	identifier := dataset.New()
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)
 
@@ -43,8 +43,8 @@ func TestNewCMoveRequest(t *testing.T) {
 }
 
 func TestNewCMoveRequestPatientRoot(t *testing.T) {
-    identifier := dataset.New()
-    _ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	identifier := dataset.New()
+	_ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	req := NewCMoveRequestPatientRoot(QueryRetrieveLevelPatient, "DEST_AE", identifier)
 
@@ -126,8 +126,9 @@ func TestNewCMoveResponseSuccess(t *testing.T) {
 
 func TestNewCMoveResponseFromRequest(t *testing.T) {
 	identifier := dataset.New()
-    req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)
-    _ = req.SetMessageID(456)
+	req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	_ = req.SetMessageID(456)
+	req.SetPresentationContextID(9)
 
 	resp := NewCMoveResponseFromRequest(req, status.Success)
 
@@ -138,12 +139,16 @@ func TestNewCMoveResponseFromRequest(t *testing.T) {
 	if resp.AffectedSOPClassUID() != req.AffectedSOPClassUID() {
 		t.Errorf("Expected SOP Class UID '%s', got '%s'", req.AffectedSOPClassUID(), resp.AffectedSOPClassUID())
 	}
+
+	if resp.PresentationContextID() != req.PresentationContextID() {
+		t.Errorf("Expected presentation context ID %d, got %d", req.PresentationContextID(), resp.PresentationContextID())
+	}
 }
 
 func TestCMoveRequest_String(t *testing.T) {
 	identifier := dataset.New()
-    req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)
-    _ = req.SetMessageID(789)
+	req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	_ = req.SetMessageID(789)
 
 	str := req.String()
 	if str == "" {

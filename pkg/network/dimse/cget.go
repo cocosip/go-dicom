@@ -163,7 +163,9 @@ func NewCGetResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID string
 
 // NewCGetResponseFromRequest creates a C-GET-RSP message from the corresponding request.
 func NewCGetResponseFromRequest(req *CGetRequest, s *status.Status) *CGetResponse {
-	return NewCGetResponse(req.MessageID(), s, req.AffectedSOPClassUID())
+	resp := NewCGetResponse(req.MessageID(), s, req.AffectedSOPClassUID())
+	resp.SetPresentationContextID(req.PresentationContextID())
+	return resp
 }
 
 // StatusCode returns the status code.

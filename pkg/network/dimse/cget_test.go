@@ -14,8 +14,8 @@ import (
 )
 
 func TestNewCGetRequest(t *testing.T) {
-    identifier := dataset.New()
-    _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	identifier := dataset.New()
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 
 	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
 
@@ -37,8 +37,8 @@ func TestNewCGetRequest(t *testing.T) {
 }
 
 func TestNewCGetRequestPatientRoot(t *testing.T) {
-    identifier := dataset.New()
-    _ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	identifier := dataset.New()
+	_ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	req := NewCGetRequestPatientRoot(QueryRetrieveLevelPatient, identifier)
 
@@ -120,8 +120,9 @@ func TestNewCGetResponseSuccess(t *testing.T) {
 
 func TestNewCGetResponseFromRequest(t *testing.T) {
 	identifier := dataset.New()
-    req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
-    _ = req.SetMessageID(456)
+	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
+	_ = req.SetMessageID(456)
+	req.SetPresentationContextID(7)
 
 	resp := NewCGetResponseFromRequest(req, status.Success)
 
@@ -132,12 +133,16 @@ func TestNewCGetResponseFromRequest(t *testing.T) {
 	if resp.AffectedSOPClassUID() != req.AffectedSOPClassUID() {
 		t.Errorf("Expected SOP Class UID '%s', got '%s'", req.AffectedSOPClassUID(), resp.AffectedSOPClassUID())
 	}
+
+	if resp.PresentationContextID() != req.PresentationContextID() {
+		t.Errorf("Expected presentation context ID %d, got %d", req.PresentationContextID(), resp.PresentationContextID())
+	}
 }
 
 func TestCGetRequest_String(t *testing.T) {
 	identifier := dataset.New()
-    req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
-    _ = req.SetMessageID(789)
+	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
+	_ = req.SetMessageID(789)
 
 	str := req.String()
 	if str == "" {

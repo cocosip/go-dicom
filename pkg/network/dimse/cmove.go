@@ -202,7 +202,9 @@ func NewCMoveResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID strin
 
 // NewCMoveResponseFromRequest creates a C-MOVE-RSP message from the corresponding request.
 func NewCMoveResponseFromRequest(req *CMoveRequest, s *status.Status) *CMoveResponse {
-	return NewCMoveResponse(req.MessageID(), s, req.AffectedSOPClassUID())
+	resp := NewCMoveResponse(req.MessageID(), s, req.AffectedSOPClassUID())
+	resp.SetPresentationContextID(req.PresentationContextID())
+	return resp
 }
 
 // StatusCode returns the status code.

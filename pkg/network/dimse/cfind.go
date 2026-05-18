@@ -182,12 +182,14 @@ func NewCFindResponseSuccess(messageIDBeingRespondedTo uint16, sopClassUID strin
 //	// When sending the final success response
 //	resp := dimse.NewCFindResponseFromRequest(req, status.Success, nil) // Success
 func NewCFindResponseFromRequest(req *CFindRequest, s *status.Status, identifier *dataset.Dataset) *CFindResponse {
-	return NewCFindResponse(
+	resp := NewCFindResponse(
 		req.MessageID(),
 		s,
 		req.AffectedSOPClassUID(),
 		identifier,
 	)
+	resp.SetPresentationContextID(req.PresentationContextID())
+	return resp
 }
 
 // StatusCode returns the status code.

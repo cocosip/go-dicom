@@ -95,7 +95,9 @@ func NewCEchoResponseSuccess(messageIDBeingRespondedTo uint16) *CEchoResponse {
 //	// When receiving a C-ECHO request
 //	resp := dimse.NewCEchoResponseFromRequest(req, status.Success) // Success
 func NewCEchoResponseFromRequest(req *CEchoRequest, s *status.Status) *CEchoResponse {
-	return NewCEchoResponse(req.MessageID(), s)
+	resp := NewCEchoResponse(req.MessageID(), s)
+	resp.SetPresentationContextID(req.PresentationContextID())
+	return resp
 }
 
 // StatusCode returns the status code.

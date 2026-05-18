@@ -128,14 +128,20 @@ func (s *Service) Err() <-chan error {
 //   - source: Abort source (0=service-user, 2=service-provider)
 //   - reason: Abort reason (0=not-specified, 1=unrecognized-pdu, etc.)
 func (s *Service) Abort(ctx context.Context, source, reason byte) error {
+	return s.abort(ctx, source, reason, nil, true)
+}
+
+func (s *Service) abort(ctx context.Context, source, reason byte, recordErr error, wait bool) error {
 	// Send A-ABORT PDU (ignore errors as connection may already be broken)
 	// This will set state to Aborted
 	_ = s.SendAbort(ctx, source, reason)
 
 	// Close the service resources without changing state
 	// (state is already Aborted from SendAbort)
-	err := s.initiateClose(StateAborted, nil)
-	s.waitForShutdown()
+	err := s.initiateClose(StateAborted, recordErr)
+	if wait {
+		s.waitForShutdown()
+	}
 	return err
 }
 

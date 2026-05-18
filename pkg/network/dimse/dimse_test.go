@@ -10,6 +10,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // Test BaseMessage
@@ -106,20 +107,32 @@ func TestNewCEchoResponse(t *testing.T) {
 	}
 }
 
+func TestNewCEchoResponseFromRequestPreservesPresentationContextID(t *testing.T) {
+	req := NewCEchoRequest()
+	_ = req.SetMessageID(100)
+	req.SetPresentationContextID(5)
+
+	resp := NewCEchoResponseFromRequest(req, status.Success)
+
+	if resp.PresentationContextID() != req.PresentationContextID() {
+		t.Errorf("Expected presentation context ID %d, got %d", req.PresentationContextID(), resp.PresentationContextID())
+	}
+}
+
 // Test C-STORE
 func TestNewCStoreRequest(t *testing.T) {
 	// Create a DICOM dataset
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
 
 	req, err := NewCStoreRequest(ds)
 	if err != nil {
 		t.Fatalf("Failed to create C-STORE-RQ: %v", err)
 	}
 
-    _ = req.SetMessageID(101)
+	_ = req.SetMessageID(101)
 
 	if req.MessageID() != 101 {
 		t.Errorf("Expected MessageID 101, got %d", req.MessageID())
@@ -144,8 +157,8 @@ func TestNewCStoreRequest(t *testing.T) {
 
 func TestCStoreRequest_SetPriority(t *testing.T) {
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	req, _ := NewCStoreRequest(ds)
 	req.SetPriority(uint16(PriorityHigh))
@@ -157,8 +170,8 @@ func TestCStoreRequest_SetPriority(t *testing.T) {
 
 func TestCStoreRequest_SetMoveOriginator(t *testing.T) {
 	ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	req, _ := NewCStoreRequest(ds)
 	req.SetMoveOriginator("MOVE_SCU", 999)
@@ -203,8 +216,8 @@ func TestNewCStoreResponse(t *testing.T) {
 
 func TestNewCStoreRequest_MissingSOPClass(t *testing.T) {
 	// Dataset without SOP Class UID
-    ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
 	_, err := NewCStoreRequest(ds)
 	if err == nil {
@@ -214,8 +227,8 @@ func TestNewCStoreRequest_MissingSOPClass(t *testing.T) {
 
 func TestNewCStoreRequest_MissingSOPInstance(t *testing.T) {
 	// Dataset without SOP Instance UID
-    ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
 
 	_, err := NewCStoreRequest(ds)
 	if err == nil {
@@ -226,8 +239,8 @@ func TestNewCStoreRequest_MissingSOPInstance(t *testing.T) {
 // Test C-FIND
 func TestNewCFindRequest(t *testing.T) {
 	query := dataset.New()
-    _ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^*"}))
-    _ = query.Add(element.NewString(tag.PatientID, vr.LO, []string{""}))
+	_ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^*"}))
+	_ = query.Add(element.NewString(tag.PatientID, vr.LO, []string{""}))
 
 	req := NewCFindRequestPatientRoot(QueryRetrieveLevelPatient, query)
 
@@ -283,8 +296,8 @@ func TestCFindRequest_SetPriority(t *testing.T) {
 
 func TestNewCFindResponsePending(t *testing.T) {
 	identifier := dataset.New()
-    _ = identifier.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
-    _ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"123456"}))
+	_ = identifier.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"123456"}))
 
 	resp := NewCFindResponsePending(300, "1.2.840.10008.5.1.4.1.2.1.1", identifier)
 
@@ -338,6 +351,19 @@ func TestNewCFindResponseSuccess(t *testing.T) {
 
 	if resp.DataDataset() != nil {
 		t.Error("Expected no identifier dataset in final response")
+	}
+}
+
+func TestNewCFindResponseFromRequestPreservesPresentationContextID(t *testing.T) {
+	query := dataset.New()
+	req := NewCFindRequestPatientRoot(QueryRetrieveLevelPatient, query)
+	_ = req.SetMessageID(300)
+	req.SetPresentationContextID(11)
+
+	resp := NewCFindResponseFromRequest(req, status.Success, nil)
+
+	if resp.PresentationContextID() != req.PresentationContextID() {
+		t.Errorf("Expected presentation context ID %d, got %d", req.PresentationContextID(), resp.PresentationContextID())
 	}
 }
 

@@ -23,20 +23,8 @@ func NewMessageIDGenerator() *MessageIDGenerator {
 // MessageIDs range from 1 to 65535 (uint16 range, excluding 0).
 // This method is thread-safe.
 func (g *MessageIDGenerator) Next() uint16 {
-    // Atomically increment the counter
-    val := atomic.AddUint32(&g.counter, 1)
-
-    // Take the lower 16 bits
-    // Safe conversion: mask to 16 bits and compare within uint16 range
-    masked := val & 0xFFFF
-    msgID := uint16(masked) // #nosec G115 -- masked to 16 bits
-
-	// Ensure MessageID is never 0 (0 means unassigned)
-	if msgID == 0 {
-		msgID = 1
-	}
-
-	return msgID
+	val := atomic.AddUint32(&g.counter, 1)
+	return uint16(((val - 1) % 0xFFFF) + 1) // #nosec G115 -- value is in 1..65535
 }
 
 // Reset resets the counter to 0.

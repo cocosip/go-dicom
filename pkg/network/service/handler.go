@@ -71,7 +71,7 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 	go func() {
 		defer s.requestWg.Done()
 		if err := s.dispatchRequest(ctx, req, handlers); err != nil {
-			_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+			_ = s.abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, err, false)
 		}
 	}()
 	return nil
