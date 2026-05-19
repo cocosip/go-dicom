@@ -114,11 +114,17 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	// Fragment command data
 	maxPDULength := s.outgoingMaxPDULength()
 	commandPDVs := FragmentData(commandData, contextID, true, maxPDULength)
+	if len(commandPDVs) == 0 {
+		return fmt.Errorf("maximum PDU length %d is too small to hold a command PDV", maxPDULength)
+	}
 
 	// Fragment dataset data (if present)
 	var datasetPDVs []*PDV
 	if len(datasetData) > 0 {
 		datasetPDVs = FragmentData(datasetData, contextID, false, maxPDULength)
+		if len(datasetPDVs) == 0 {
+			return fmt.Errorf("maximum PDU length %d is too small to hold a dataset PDV", maxPDULength)
+		}
 	}
 
 	// Combine all PDVs

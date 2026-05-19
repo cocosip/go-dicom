@@ -504,6 +504,17 @@ func TestRun_RecvLoopError(t *testing.T) {
 	}
 }
 
+func TestRunReturnsLoopErrorAfterServiceClose(t *testing.T) {
+	conn := &mockConnForLifecycle{closed: true}
+	service := NewService(conn, &association.Association{})
+	defer func() { _ = service.Close() }()
+
+	err := service.Run()
+	if err == nil {
+		t.Fatal("Run() error = nil, want loop error")
+	}
+}
+
 func TestRun_MultipleCallsNotAllowed(_ *testing.T) {
 	conn := &mockConnForLifecycle{
 		blockRead: true,

@@ -190,7 +190,7 @@ func FragmentData(data []byte, contextID byte, isCommand bool, maxPDULength uint
 	maxPDVDataSize := int(maxPDULength) - pduHeaderSize - pdvHeaderSize
 
 	if maxPDVDataSize <= 0 {
-		maxPDVDataSize = 1024 // Fallback to 1KB minimum
+		return nil
 	}
 
 	var pdvs []*PDV

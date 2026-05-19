@@ -39,19 +39,6 @@ func (r *serviceResponder) SendReject(ctx context.Context, result, source, reaso
 	return r.service.SendAssociationReject(ctx, result, source, reason)
 }
 
-// serializeRawPDU converts a RawPDU to complete PDU bytes (header + data).
-func serializeRawPDU(rawPDU *pdu.RawPDU) []byte {
-	pduBytes := make([]byte, 6+len(rawPDU.Data))
-	pduBytes[0] = rawPDU.Type
-	pduBytes[1] = rawPDU.Reserved
-	pduBytes[2] = byte(rawPDU.Length >> 24)
-	pduBytes[3] = byte(rawPDU.Length >> 16)
-	pduBytes[4] = byte(rawPDU.Length >> 8)
-	pduBytes[5] = byte(rawPDU.Length)
-	copy(pduBytes[6:], rawPDU.Data)
-	return pduBytes
-}
-
 // pduEncoder is an interface for PDUs that can be encoded.
 type pduEncoder interface {
 	Encode() (*pdu.RawPDU, error)
@@ -75,7 +62,7 @@ func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pd
 			return fmt.Errorf("failed to set write deadline: %w", err)
 		}
 	}
-	if _, err := s.conn.Write(serializeRawPDU(rawPDU)); err != nil {
+	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write %s: %w", pduName, err)
 	}
 	if err := s.setState(newState); err != nil {
@@ -129,7 +116,7 @@ func (s *Service) SendAssociationReject(ctx context.Context, result, source, rea
 		}
 	}
 
-	if _, err := s.conn.Write(serializeRawPDU(rawPDU)); err != nil {
+	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write A-ASSOCIATE-RJ: %w", err)
 	}
 
@@ -177,7 +164,7 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 		}
 	}
 
-	if _, err := s.conn.Write(serializeRawPDU(rawPDU)); err != nil {
+	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write A-RELEASE-RQ: %w", err)
 	}
 
@@ -219,7 +206,7 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 		}
 	}
 
-	if _, err := s.conn.Write(serializeRawPDU(rawPDU)); err != nil {
+	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write A-RELEASE-RP: %w", err)
 	}
 
@@ -258,7 +245,7 @@ func (s *Service) SendAbort(ctx context.Context, source, reason byte) error {
 		if s.config.writeTimeout > 0 {
 			_ = s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout))
 		}
-		_, _ = s.conn.Write(serializeRawPDU(rawPDU))
+		_ = rawPDU.Write(s.conn)
 	}
 
 	// Transition to Aborted state (ignore errors)

@@ -180,6 +180,27 @@ func TestSendMessageUsesNegotiatedRemoteMaxPDULength(t *testing.T) {
 	}
 }
 
+func TestSendMessageReturnsErrorWhenMaxPDUTooSmall(t *testing.T) {
+	assoc := createTestAssociation()
+	assoc.MaxPDULength = 11
+
+	service := NewService(&recordingConn{}, assoc)
+
+	req := dimse.NewCEchoRequest()
+	if err := req.SetMessageID(1); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	sendReq := &sendRequest{
+		message:  req,
+		resultCh: make(chan error, 1),
+	}
+
+	err := service.sendMessage(sendReq)
+	if err == nil {
+		t.Fatal("sendMessage() error = nil, want max PDU length error")
+	}
+}
+
 type recordingConn struct {
 	writes [][]byte
 }

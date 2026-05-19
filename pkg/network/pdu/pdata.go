@@ -4,11 +4,11 @@
 package pdu
 
 import (
-    "bytes"
-    "encoding/binary"
-    "fmt"
-    "io"
-    "math"
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"math"
 )
 
 // PDataTF represents a P-DATA-TF (Presentation Data Transfer) PDU.
@@ -85,12 +85,12 @@ func (p *PDataTF) Encode() (*RawPDU, error) {
 	// Encode each PDV
 	for i, pdv := range p.PDVs {
 		// PDV Length (4 bytes) - includes Presentation Context ID + Message Control Header + Data
-        pdvLen := 1 + 1 + len(pdv.Data)
-        if pdvLen > int(math.MaxUint32) {
-            return nil, fmt.Errorf("PDV length too large: %d", pdvLen)
-        }
-        // #nosec G115 -- bounded by check above
-        pdvLength := uint32(pdvLen) // Context ID (1) + Header (1) + Data
+		pdvLen := 1 + 1 + len(pdv.Data)
+		if pdvLen > int(math.MaxUint32) {
+			return nil, fmt.Errorf("PDV length too large: %d", pdvLen)
+		}
+		// #nosec G115 -- bounded by check above
+		pdvLength := uint32(pdvLen) // Context ID (1) + Header (1) + Data
 		if err := binary.Write(&buf, binary.BigEndian, pdvLength); err != nil {
 			return nil, fmt.Errorf("encoding PDV %d length: %w", i, err)
 		}
@@ -230,6 +230,11 @@ func FragmentData(presentationContextID byte, isCommand bool, data []byte, maxPD
 		// No fragmentation, return single PDV
 		return []PDV{
 			NewPDV(presentationContextID, isCommand, true, data),
+		}
+	}
+	if len(data) == 0 {
+		return []PDV{
+			NewPDV(presentationContextID, isCommand, true, nil),
 		}
 	}
 

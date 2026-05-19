@@ -324,6 +324,20 @@ func TestFragmentDataNoFragmentation(t *testing.T) {
 	}
 }
 
+func TestFragmentDataEmptyPayloadCreatesLastFragment(t *testing.T) {
+	pdvs := FragmentData(1, true, nil, 300)
+
+	if len(pdvs) != 1 {
+		t.Fatalf("FragmentData() created %d PDVs, want 1", len(pdvs))
+	}
+	if !pdvs[0].IsLastFragment {
+		t.Fatal("empty payload PDV is not marked as last fragment")
+	}
+	if len(pdvs[0].Data) != 0 {
+		t.Fatalf("empty payload PDV data length = %d, want 0", len(pdvs[0].Data))
+	}
+}
+
 func TestReassembleData(t *testing.T) {
 	// Create fragmented data
 	originalData := make([]byte, 1000)

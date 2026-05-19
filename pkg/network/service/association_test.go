@@ -64,6 +64,19 @@ func (m *mockConn) SetDeadline(_ time.Time) error      { return nil }
 func (m *mockConn) SetReadDeadline(_ time.Time) error  { return nil }
 func (m *mockConn) SetWriteDeadline(_ time.Time) error { return nil }
 
+type shortWriteAssociationConn struct {
+	mockConn
+	maxChunk int
+}
+
+func (c *shortWriteAssociationConn) Write(b []byte) (int, error) {
+	if c.maxChunk > 0 && len(b) > c.maxChunk {
+		b = b[:c.maxChunk]
+	}
+	c.writeData = append(c.writeData, b...)
+	return len(b), nil
+}
+
 func TestSendAssociationRequest(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
@@ -101,6 +114,31 @@ func TestSendAssociationRequest(t *testing.T) {
 	// Verify PDU type is A-ASSOCIATE-RQ (0x01)
 	if conn.writeData[0] != pdu.TypeAAssociateRQ {
 		t.Errorf("Expected PDU type 0x01, got 0x%02X", conn.writeData[0])
+	}
+}
+
+func TestSendAssociationRequestCompletesShortWrites(t *testing.T) {
+	conn := &shortWriteAssociationConn{maxChunk: 2}
+	service := NewService(conn, nil)
+	defer func() { _ = service.Close() }()
+
+	rq := &pdu.AAssociateRQ{
+		ProtocolVersion:    1,
+		CalledAETitle:      testCalledAE,
+		CallingAETitle:     testCallingAE,
+		ApplicationContext: "1.2.840.10008.3.1.1.1",
+	}
+	rawPDU, err := rq.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	want := serializeRawPDUForTest(rawPDU)
+
+	if err := service.SendAssociationRequest(context.Background(), rq); err != nil {
+		t.Fatalf("SendAssociationRequest() error = %v", err)
+	}
+	if string(conn.writeData) != string(want) {
+		t.Fatalf("written PDU mismatch: got % X, want % X", conn.writeData, want)
 	}
 }
 

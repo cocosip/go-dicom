@@ -50,10 +50,10 @@ func (s *Service) Run() error {
 		return err
 	case <-s.closeCh:
 		// Service was closed normally
-		return nil
+		return s.shutdownError()
 	case <-s.ctx.Done():
 		// Context was cancelled (normal shutdown)
-		return nil
+		return s.shutdownError()
 	}
 }
 
