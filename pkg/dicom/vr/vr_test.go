@@ -16,7 +16,7 @@ func TestParse(t *testing.T) {
 		want    *vr.VR
 		wantErr bool
 	}{
-		{"valid AE", "AE", vr.AE, false},
+		{testCaseValidAE, "AE", vr.AE, false},
 		{"valid PN", "PN", vr.PN, false},
 		{"valid US", "US", vr.US, false},
 		{"valid SQ", "SQ", vr.SQ, false},
@@ -51,7 +51,7 @@ func TestParseBytes(t *testing.T) {
 		{"valid OB", []byte("OB"), vr.OB, false},
 		{"invalid code", []byte("XX"), nil, true},
 		{"too short", []byte("A"), nil, true},
-		{"empty", []byte(""), nil, true},
+		{testCaseEmpty, []byte(""), nil, true},
 	}
 
 	for _, tt := range tests {

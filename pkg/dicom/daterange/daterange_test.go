@@ -8,6 +8,19 @@ import (
 	"time"
 )
 
+const (
+	testFullRangeName     = "full range"
+	testFullDateRange     = "20240101-20241231"
+	testOpenEndedDate     = "20240101-"
+	testOpenEndedName     = "open-ended"
+	testOpenStartedName   = "open-started"
+	testEmptyRangeName    = "empty"
+	testDateRangeLayout   = "20060102"
+	testRangeStartDate    = "20240101"
+	testRangeEndDate      = "20241231"
+	testInvalidRangeInput = "invalid"
+)
+
 func TestDateRange_Parse(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -37,25 +50,25 @@ func TestDateRange_Parse(t *testing.T) {
 			wantExact: true,
 		},
 		{
-			name:    "full range",
-			input:   "20240101-20241231",
-			wantMin: "20240101",
-			wantMax: "20241231",
+			name:    testFullRangeName,
+			input:   testFullDateRange,
+			wantMin: testRangeStartDate,
+			wantMax: testRangeEndDate,
 		},
 		{
 			name:     "open-ended range",
-			input:    "20240101-",
-			wantMin:  "20240101",
+			input:    testOpenEndedDate,
+			wantMin:  testRangeStartDate,
 			wantOpen: true,
 		},
 		{
 			name:    "open-started range",
 			input:   "-20241231",
-			wantMax: "20241231",
+			wantMax: testRangeEndDate,
 		},
 		{
 			name:    "invalid date",
-			input:   "invalid",
+			input:   testInvalidRangeInput,
 			wantErr: true,
 		},
 	}
@@ -82,14 +95,14 @@ func TestDateRange_Parse(t *testing.T) {
 			}
 
 			if tt.wantMin != "" {
-				wantMin, _ := time.Parse("20060102", tt.wantMin)
+				wantMin, _ := time.Parse(testDateRangeLayout, tt.wantMin)
 				if !r.Minimum.Equal(wantMin) {
 					t.Errorf("Minimum = %v, want %v", r.Minimum, wantMin)
 				}
 			}
 
 			if tt.wantMax != "" {
-				wantMax, _ := time.Parse("20060102", tt.wantMax)
+				wantMax, _ := time.Parse(testDateRangeLayout, tt.wantMax)
 				if !r.Maximum.Equal(wantMax) {
 					t.Errorf("Maximum = %v, want %v", r.Maximum, wantMax)
 				}
@@ -114,21 +127,21 @@ func TestDateRange_String(t *testing.T) {
 		want string
 	}{
 		{
-			name: "full range",
-			min:  "20240101",
-			max:  "20241231",
-			want: "20240101-20241231",
+			name: testFullRangeName,
+			min:  testRangeStartDate,
+			max:  testRangeEndDate,
+			want: testFullDateRange,
 		},
 		{
-			name: "open-ended",
-			min:  "20240101",
+			name: testOpenEndedName,
+			min:  testRangeStartDate,
 			max:  "",
-			want: "20240101-",
+			want: testOpenEndedDate,
 		},
 		{
-			name: "open-started",
+			name: testOpenStartedName,
 			min:  "",
-			max:  "20241231",
+			max:  testRangeEndDate,
 			want: "-20241231",
 		},
 		{
@@ -138,7 +151,7 @@ func TestDateRange_String(t *testing.T) {
 			want: "20240115-20240115",
 		},
 		{
-			name: "empty",
+			name: testEmptyRangeName,
 			min:  "",
 			max:  "",
 			want: "",
@@ -149,10 +162,10 @@ func TestDateRange_String(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := NewDateRangeAll()
 			if tt.min != "" {
-				r.Minimum, _ = time.Parse("20060102", tt.min)
+				r.Minimum, _ = time.Parse(testDateRangeLayout, tt.min)
 			}
 			if tt.max != "" {
-				r.Maximum, _ = time.Parse("20060102", tt.max)
+				r.Maximum, _ = time.Parse(testDateRangeLayout, tt.max)
 			}
 
 			got := r.String()
@@ -164,7 +177,7 @@ func TestDateRange_String(t *testing.T) {
 }
 
 func TestDateRange_Contains(t *testing.T) {
-	r, _ := ParseDateRange("20240101-20241231")
+	r, _ := ParseDateRange(testFullDateRange)
 
 	tests := []struct {
 		date string
@@ -179,7 +192,7 @@ func TestDateRange_Contains(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.date, func(t *testing.T) {
-			date, _ := time.Parse("20060102", tt.date)
+			date, _ := time.Parse(testDateRangeLayout, tt.date)
 			if got := r.Contains(date); got != tt.want {
 				t.Errorf("Contains(%s) = %v, want %v", tt.date, got, tt.want)
 			}
@@ -190,9 +203,9 @@ func TestDateRange_Contains(t *testing.T) {
 func TestDateRange_Join(t *testing.T) {
 	r := NewDateRangeAll()
 
-	date1, _ := time.Parse("20060102", "20240101")
-	date2, _ := time.Parse("20060102", "20241231")
-	date3, _ := time.Parse("20060102", "20240615")
+	date1, _ := time.Parse(testDateRangeLayout, testRangeStartDate)
+	date2, _ := time.Parse(testDateRangeLayout, testRangeEndDate)
+	date3, _ := time.Parse(testDateRangeLayout, "20240615")
 
 	r.Join(date2)
 	if !r.Minimum.Equal(date2) {
@@ -227,19 +240,19 @@ func TestTimeRange_Parse(t *testing.T) {
 			input: "120000",
 		},
 		{
-			name:  "full range",
+			name:  testFullRangeName,
 			input: "080000-170000",
 		},
 		{
-			name:  "open-ended",
+			name:  testOpenEndedName,
 			input: "080000-",
 		},
 		{
-			name:  "open-started",
+			name:  testOpenStartedName,
 			input: "-170000",
 		},
 		{
-			name:  "empty",
+			name:  testEmptyRangeName,
 			input: "",
 		},
 	}
@@ -268,19 +281,19 @@ func TestDateTimeRange_Parse(t *testing.T) {
 			input: "20240115120000",
 		},
 		{
-			name:  "full range",
+			name:  testFullRangeName,
 			input: "20240101080000-20241231170000",
 		},
 		{
-			name:  "open-ended",
+			name:  testOpenEndedName,
 			input: "20240101080000-",
 		},
 		{
-			name:  "open-started",
+			name:  testOpenStartedName,
 			input: "-20241231170000",
 		},
 		{
-			name:  "empty",
+			name:  testEmptyRangeName,
 			input: "",
 		},
 	}
@@ -303,10 +316,10 @@ func TestFindRangeDash(t *testing.T) {
 		input string
 		want  int
 	}{
-		{"20240101-20241231", 8},
-		{"20240101-", 8},
+		{testFullDateRange, 8},
+		{testOpenEndedDate, 8},
 		{"-20241231", 0},
-		{"20240101", -1},
+		{testRangeStartDate, -1},
 		{"", -1},
 		{"-", 0},
 	}
@@ -328,5 +341,5 @@ func TestMustParseDateRange(t *testing.T) {
 		}
 	}()
 
-	MustParseDateRange("invalid")
+	MustParseDateRange(testInvalidRangeInput)
 }

@@ -130,7 +130,7 @@ func TestDialTLS_Success(t *testing.T) {
 	clientConfig := &tls.Config{
 		RootCAs:    rootPool,
 		MinVersion: tls.VersionTLS12,
-		ServerName: "localhost",
+		ServerName: localhostName,
 	}
 
 	conn, err := DialTLS(context.Background(), "tcp", addr, WithTLSConfig(clientConfig))
@@ -173,7 +173,7 @@ func TestDialTLS_HandshakeFailure(t *testing.T) {
 	// Try to connect with TLS (should fail)
 	clientConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
-		ServerName: "localhost",
+		ServerName: localhostName,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -275,7 +275,7 @@ func TestDialTLS_WithMultipleOptions(t *testing.T) {
 	clientConfig := &tls.Config{
 		RootCAs:    rootPool,
 		MinVersion: tls.VersionTLS12,
-		ServerName: "localhost",
+		ServerName: localhostName,
 	}
 
 	conn, err := DialTLS(context.Background(), "tcp", addr,
@@ -329,7 +329,7 @@ func TestDialTLS_DoesNotMutateCallerTLSConfig(t *testing.T) {
 
 	clientConfig := &tls.Config{
 		RootCAs:    rootPool,
-		ServerName: "localhost",
+		ServerName: localhostName,
 	}
 
 	if clientConfig.MinVersion != 0 {

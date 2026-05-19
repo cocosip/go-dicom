@@ -8,7 +8,7 @@ import (
 )
 
 func TestStatus_String(t *testing.T) {
-	s := NewStatus(0x0000, StateSuccess, "Success")
+	s := NewStatus(0x0000, StateSuccess, StateSuccess)
 	expected := "0x0000 (Success): Success"
 	if s.String() != expected {
 		t.Errorf("Expected %s, got %s", expected, s.String())
@@ -21,9 +21,9 @@ func TestStatus_IsSuccess(t *testing.T) {
 		code     uint16
 		expected bool
 	}{
-		{"Success", 0x0000, true},
-		{"Pending", 0xFF00, false},
-		{"Failure", 0x0110, false},
+		{StateSuccess, 0x0000, true},
+		{StatePending, 0xFF00, false},
+		{StateFailure, 0x0110, false},
 		{"Warning", 0x0107, false},
 	}
 
@@ -43,10 +43,10 @@ func TestStatus_IsPending(t *testing.T) {
 		code     uint16
 		expected bool
 	}{
-		{"Pending", 0xFF00, true},
+		{StatePending, 0xFF00, true},
 		{"PendingWarning", 0xFF01, true},
-		{"Success", 0x0000, false},
-		{"Failure", 0x0110, false},
+		{StateSuccess, 0x0000, false},
+		{StateFailure, 0x0110, false},
 	}
 
 	for _, tt := range tests {
@@ -69,10 +69,10 @@ func TestStatus_IsWarning(t *testing.T) {
 		{"Warning 0x00FF", 0x00FF, true},
 		{"Warning 0xB000", 0xB000, true},
 		{"Warning 0xB006", 0xB006, true},
-		{"Success", 0x0000, false},
+		{StateSuccess, 0x0000, false},
 		{"Failure 0x0107", 0x0107, false},
 		{"Failure 0x0110", 0x0110, false},
-		{"Pending", 0xFF00, false},
+		{StatePending, 0xFF00, false},
 	}
 
 	for _, tt := range tests {
@@ -95,10 +95,10 @@ func TestStatus_IsFailure(t *testing.T) {
 		{"Failure 0x0110", 0x0110, true},
 		{"Failure 0xA700", 0xA700, true},
 		{"Failure 0xC000", 0xC000, true},
-		{"Success", 0x0000, false},
+		{StateSuccess, 0x0000, false},
 		{"Warning 0x0001", 0x0001, false},
 		{"Warning 0xB000", 0xB000, false},
-		{"Pending", 0xFF00, false},
+		{StatePending, 0xFF00, false},
 	}
 
 	for _, tt := range tests {
@@ -117,9 +117,9 @@ func TestStatus_IsCancel(t *testing.T) {
 		code     uint16
 		expected bool
 	}{
-		{"Cancel", 0xFE00, true},
-		{"Success", 0x0000, false},
-		{"Pending", 0xFF00, false},
+		{StateCancel, 0xFE00, true},
+		{StateSuccess, 0x0000, false},
+		{StatePending, 0xFF00, false},
 	}
 
 	for _, tt := range tests {
@@ -139,9 +139,9 @@ func TestCommonStatuses(t *testing.T) {
 		code   uint16
 		state  string
 	}{
-		{"Success", Success, 0x0000, StateSuccess},
-		{"Pending", Pending, 0xFF00, StatePending},
-		{"Cancel", Cancel, 0xFE00, StateCancel},
+		{StateSuccess, Success, 0x0000, StateSuccess},
+		{StatePending, Pending, 0xFF00, StatePending},
+		{StateCancel, Cancel, 0xFE00, StateCancel},
 	}
 
 	for _, tt := range tests {
@@ -185,12 +185,12 @@ func TestLookupStatus(t *testing.T) {
 		code          uint16
 		expectedState string
 	}{
-		{"Success", 0x0000, StateSuccess},
-		{"Pending", 0xFF00, StatePending},
+		{StateSuccess, 0x0000, StateSuccess},
+		{StatePending, 0xFF00, StatePending},
 		{"PendingWarning", 0xFF01, StatePending},
-		{"Cancel", 0xFE00, StateCancel},
+		{StateCancel, 0xFE00, StateCancel},
 		{"Warning", 0x0050, StateWarning},
-		{"Failure", 0x0110, StateFailure},
+		{StateFailure, 0x0110, StateFailure},
 		{"Unknown Failure", 0x1234, StateFailure},
 	}
 

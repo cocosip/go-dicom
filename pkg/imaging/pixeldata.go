@@ -403,7 +403,7 @@ func (pd *DicomPixelData) ConvertYBRToRGB() error {
 		return fmt.Errorf("YBR->RGB conversion only implemented for BitsAllocated=8 or 16")
 	}
 	switch pd.Info.PhotometricInterpretation.Value {
-	case "YBR_FULL":
+	case photometricYBRFull:
 		if pd.Info.SamplesPerPixel != 3 {
 			return fmt.Errorf("YBR_FULL expected SamplesPerPixel=3, got %d", pd.Info.SamplesPerPixel)
 		}
@@ -414,7 +414,7 @@ func (pd *DicomPixelData) ConvertYBRToRGB() error {
 			}
 			pd.frames[i] = converted
 		}
-	case "YBR_FULL_422":
+	case ybrFull422:
 		if pd.Info.SamplesPerPixel != 3 {
 			return fmt.Errorf("YBR_FULL_422 expected SamplesPerPixel=3, got %d", pd.Info.SamplesPerPixel)
 		}
@@ -444,7 +444,7 @@ func (pd *DicomPixelData) ConvertYBRToRGB() error {
 			}
 			pd.frames[i] = converted
 		}
-	case "YBR_ICT":
+	case photometricYBRICT:
 		bytesPerSample := pd.Info.BytesAllocated()
 		for i, frame := range pd.frames {
 			converted, err := ConvertYBRICTToRGB(frame, bytesPerSample*8)
@@ -453,7 +453,7 @@ func (pd *DicomPixelData) ConvertYBRToRGB() error {
 			}
 			pd.frames[i] = converted
 		}
-	case "YBR_RCT":
+	case photometricYBRRCT:
 		bytesPerSample := pd.Info.BytesAllocated()
 		for i, frame := range pd.frames {
 			converted, err := ConvertYBRRCTToRGB(frame, bytesPerSample*8)
@@ -661,7 +661,7 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
 		VRCode:                    pd.Info.VRCode,        // Keep original VR
 		Encapsulated:              false,                 // Decoded data is not encapsulated
-		TransferSyntaxUID:         "1.2.840.10008.1.2.1", // Explicit VR Little Endian
+		TransferSyntaxUID:         transferSyntaxExplicitVRLittleEndian,
 		IsLossy:                   pd.Info.IsLossy,
 		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
 		LossyCompressionRatio:     pd.Info.LossyCompressionRatio,
@@ -747,7 +747,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 	// Get photometric interpretation
 	photoInterp, _ := ds.GetString(tag.PhotometricInterpretation)
 	if photoInterp == "" {
-		photoInterp = "MONOCHROME2"
+		photoInterp = monochrome2
 	}
 
 	pi, err := ParsePhotometricInterpretation(photoInterp)
@@ -757,7 +757,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 
 	// Get transfer syntax UID from dataset
 	// Priority: 1) InternalTransferSyntax 2) TransferSyntaxUID tag 3) Default
-	transferSyntaxUID := "1.2.840.10008.1.2.1" // Default: Explicit VR Little Endian
+	transferSyntaxUID := transferSyntaxExplicitVRLittleEndian
 	if ts := ds.InternalTransferSyntax(); ts != nil {
 		transferSyntaxUID = ts.UID().UID()
 	} else if tsUID, ok := ds.GetString(tag.TransferSyntaxUID); ok {
@@ -873,7 +873,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 	}
 
 	// Palette Color handling: convert to RGB if palette LUT present
-	if pi.Value == "PALETTE COLOR" {
+	if pi.Value == photometricPaletteColor {
 		if err := convertPaletteToRGB(ds, pd); err != nil {
 			return nil, fmt.Errorf("palette conversion failed: %w", err)
 		}

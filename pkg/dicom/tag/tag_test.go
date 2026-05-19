@@ -100,11 +100,11 @@ func TestFormat(t *testing.T) {
 		format string
 		want   string
 	}{
-		{"default format", tag.New(0x0028, 0x0010), "G", "(0028,0010)"},
+		{"default format", tag.New(0x0028, 0x0010), "G", testTagRowsString},
 		{"format G", tag.New(0x0010, 0x0010), "G", "(0010,0010)"},
 		{"format g", tag.New(0x0028, 0x0010), "g", "0028,0010"},
 		{"format J", tag.New(0x0028, 0x0010), "J", "00280010"},
-		{"format X", tag.New(0x0028, 0x0010), "X", "(0028,0010)"},
+		{"format X", tag.New(0x0028, 0x0010), "X", testTagRowsString},
 	}
 
 	for _, tt := range tests {
@@ -141,7 +141,7 @@ func TestFormatWithPrivateCreator(t *testing.T) {
 
 func TestString(t *testing.T) {
 	tag := tag.New(0x0028, 0x0010)
-	want := "(0028,0010)"
+	want := testTagRowsString
 	if got := tag.String(); got != want {
 		t.Errorf("String() = %v, want %v", got, want)
 	}
@@ -252,11 +252,11 @@ func TestParse(t *testing.T) {
 		wantE   uint16
 		wantErr bool
 	}{
-		{"with parens", "(0028,0010)", 0x0028, 0x0010, false},
+		{"with parens", testTagRowsString, 0x0028, 0x0010, false},
 		{"without parens", "0028,0010", 0x0028, 0x0010, false},
 		{"compact", "00280010", 0x0028, 0x0010, false},
 		{"with spaces", " (0028,0010) ", 0x0028, 0x0010, false},
-		{"uppercase", "(0028,0010)", 0x0028, 0x0010, false},
+		{"uppercase", testTagRowsString, 0x0028, 0x0010, false},
 		{"lowercase", "(002a,0011)", 0x002a, 0x0011, false},
 		{"too short", "0028", 0, 0, true},
 		{"invalid group", "(XXXX,0010)", 0, 0, true},
@@ -306,7 +306,7 @@ func TestParseWithPrivateCreator(t *testing.T) {
 
 func TestMustParse(t *testing.T) {
 	// Should not panic for valid input
-	result := tag.MustParse("(0028,0010)")
+	result := tag.MustParse(testTagRowsString)
 	if result.Group() != 0x0028 {
 		t.Errorf("Group() = 0x%04x, want 0x0028", result.Group())
 	}

@@ -19,11 +19,11 @@ func TestGetEncoding(t *testing.T) {
 		want    string // encoding name for comparison
 	}{
 		{"Empty string", "", "ISO-8859-1"},
-		{"Latin-1", "ISO_IR 100", "ISO-8859-1"},
+		{"Latin-1", testCharsetLatin1, "ISO-8859-1"},
 		{"Latin-2", "ISO_IR 101", "ISO-8859-2"},
 		{"Greek", "ISO_IR 126", "ISO-8859-7"},
 		{"Cyrillic", "ISO_IR 144", "ISO-8859-5"},
-		{"UTF-8", "ISO_IR 192", "UTF-8"},
+		{testEncodingUTF8, testCharsetUTF8, testEncodingUTF8},
 		{"Chinese GBK", "GBK", "GBK"},
 		{"Chinese GB18030", "GB18030", "GB18030"},
 	}
@@ -47,7 +47,7 @@ func TestGetEncodingMisspellings(t *testing.T) {
 	}{
 		{"ISO-IR format", "ISO-IR 100"},
 		{"ISO IR format", "ISO IR 100"},
-		{"Correct format", "ISO_IR 100"},
+		{"Correct format", testCharsetLatin1},
 	}
 
 	for _, tt := range tests {
@@ -75,7 +75,7 @@ func TestGetEncodings(t *testing.T) {
 	}
 
 	// Test with multiple charsets
-	encs = charset.GetEncodings([]string{"ISO_IR 100", "ISO_IR 192"})
+	encs = charset.GetEncodings([]string{testCharsetLatin1, testCharsetUTF8})
 	if len(encs) != 2 {
 		t.Errorf("GetEncodings() returned %d encodings, want 2", len(encs))
 	}
@@ -87,7 +87,7 @@ func TestGetCharsetName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCharsetName() error = %v", err)
 	}
-	if name != "ISO_IR 100" {
+	if name != testCharsetLatin1 {
 		t.Errorf("GetCharsetName(ISO8859_1) = %q, want ISO_IR 100", name)
 	}
 
@@ -96,7 +96,7 @@ func TestGetCharsetName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCharsetName(UTF8) error = %v", err)
 	}
-	if name != "ISO_IR 192" {
+	if name != testCharsetUTF8 {
 		t.Errorf("GetCharsetName(UTF8) = %q, want ISO_IR 192", name)
 	}
 }
@@ -110,20 +110,20 @@ func TestDecodeString(t *testing.T) {
 	}{
 		{
 			"ASCII text",
-			[]byte("Hello World"),
-			"ISO_IR 100",
-			"Hello World",
+			[]byte(testHelloWorld),
+			testCharsetLatin1,
+			testHelloWorld,
 		},
 		{
 			"UTF-8 text",
 			[]byte("Hello 世界"),
-			"ISO_IR 192",
+			testCharsetUTF8,
 			"Hello 世界",
 		},
 		{
 			"Empty data",
 			[]byte{},
-			"ISO_IR 100",
+			testCharsetLatin1,
 			"",
 		},
 	}
@@ -151,20 +151,20 @@ func TestEncodeString(t *testing.T) {
 	}{
 		{
 			"ASCII text",
-			"Hello World",
-			"ISO_IR 100",
+			testHelloWorld,
+			testCharsetLatin1,
 			false,
 		},
 		{
 			"UTF-8 text",
 			"Hello 世界",
-			"ISO_IR 192",
+			testCharsetUTF8,
 			false,
 		},
 		{
 			"Empty string",
 			"",
-			"ISO_IR 100",
+			testCharsetLatin1,
 			false,
 		},
 	}
@@ -190,9 +190,9 @@ func TestEncodeDecodeRoundtrip(t *testing.T) {
 		text     string
 		encoding string
 	}{
-		{"ASCII", "Hello World", "ISO_IR 100"},
-		{"UTF-8", "Hello 世界 مرحبا Привет", "ISO_IR 192"},
-		{"Latin-1", "Café résumé", "ISO_IR 100"},
+		{"ASCII", testHelloWorld, testCharsetLatin1},
+		{"UTF-8", "Hello 世界 مرحبا Привет", testCharsetUTF8},
+		{"Latin-1", "Café résumé", testCharsetLatin1},
 	}
 
 	for _, tt := range tests {
@@ -213,7 +213,7 @@ func TestEncodeDecodeRoundtrip(t *testing.T) {
 			}
 
 			// For UTF-8, should match exactly
-			if tt.encoding == "ISO_IR 192" && decoded != tt.text {
+			if tt.encoding == testCharsetUTF8 && decoded != tt.text {
 				t.Errorf("Roundtrip failed: got %q, want %q", decoded, tt.text)
 			}
 		})
@@ -229,7 +229,7 @@ func TestKnownCharsets(t *testing.T) {
 	// Should contain at least some basic charsets
 	found := false
 	for _, cs := range charsets {
-		if cs == "ISO_IR 100" {
+		if cs == testCharsetLatin1 {
 			found = true
 			break
 		}
@@ -241,7 +241,7 @@ func TestKnownCharsets(t *testing.T) {
 
 func TestGetCharsetInfo(t *testing.T) {
 	// Test known charset
-	info, ok := charset.GetCharsetInfo("ISO_IR 100")
+	info, ok := charset.GetCharsetInfo(testCharsetLatin1)
 	if !ok {
 		t.Fatal("GetCharsetInfo(ISO_IR 100) returned false")
 	}
@@ -275,7 +275,7 @@ func TestDefaultEncoding(t *testing.T) {
 
 func TestMultipleEncodings(t *testing.T) {
 	// Test with multiple encodings (code extensions scenario)
-	encs := charset.GetEncodings([]string{"ISO_IR 100", "ISO_IR 192", "ISO_IR 126"})
+	encs := charset.GetEncodings([]string{testCharsetLatin1, testCharsetUTF8, "ISO_IR 126"})
 	if len(encs) != 3 {
 		t.Errorf("GetEncodings() returned %d encodings, want 3", len(encs))
 	}

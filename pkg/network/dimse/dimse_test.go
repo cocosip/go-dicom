@@ -13,6 +13,12 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
+const (
+	testCTImageStorageUID = "1.2.840.10008.5.1.4.1.1.2"
+	testSOPInstanceUID    = "1.2.3.4.5.6.7.8.9"
+	testPatientName       = "Test^Patient"
+)
+
 // Test BaseMessage
 func TestBaseMessage_CommandField(t *testing.T) {
 	command := CreateCommandDataset(uint16(CommandCEchoRQ), 123)
@@ -65,7 +71,7 @@ func TestNewCEchoRequest(t *testing.T) {
 		t.Errorf("Expected CommandField 0x%04X, got 0x%04X", CommandCEchoRQ, req.CommandField())
 	}
 
-	if req.AffectedSOPClassUID() != "1.2.840.10008.1.1" {
+	if req.AffectedSOPClassUID() != sopClassUIDVerification {
 		t.Errorf("Expected Verification SOP Class, got %s", req.AffectedSOPClassUID())
 	}
 
@@ -123,9 +129,9 @@ func TestNewCEchoResponseFromRequestPreservesPresentationContextID(t *testing.T)
 func TestNewCStoreRequest(t *testing.T) {
 	// Create a DICOM dataset
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	req, err := NewCStoreRequest(ds)
 	if err != nil {
@@ -142,11 +148,11 @@ func TestNewCStoreRequest(t *testing.T) {
 		t.Errorf("Expected CommandField 0x%04X, got 0x%04X", CommandCStoreRQ, req.CommandField())
 	}
 
-	if req.AffectedSOPClassUID() != "1.2.840.10008.5.1.4.1.1.2" {
+	if req.AffectedSOPClassUID() != testCTImageStorageUID {
 		t.Errorf("Wrong SOP Class UID: %s", req.AffectedSOPClassUID())
 	}
 
-	if req.AffectedSOPInstanceUID() != "1.2.3.4.5.6.7.8.9" {
+	if req.AffectedSOPInstanceUID() != testSOPInstanceUID {
 		t.Errorf("Wrong SOP Instance UID: %s", req.AffectedSOPInstanceUID())
 	}
 
@@ -157,8 +163,8 @@ func TestNewCStoreRequest(t *testing.T) {
 
 func TestCStoreRequest_SetPriority(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 
 	req, _ := NewCStoreRequest(ds)
 	req.SetPriority(uint16(PriorityHigh))
@@ -170,8 +176,8 @@ func TestCStoreRequest_SetPriority(t *testing.T) {
 
 func TestCStoreRequest_SetMoveOriginator(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 
 	req, _ := NewCStoreRequest(ds)
 	req.SetMoveOriginator("MOVE_SCU", 999)
@@ -195,7 +201,7 @@ func TestCStoreRequest_SetMoveOriginator(t *testing.T) {
 }
 
 func TestNewCStoreResponse(t *testing.T) {
-	resp := NewCStoreResponseSuccess(200, "1.2.840.10008.5.1.4.1.1.2", "1.2.3.4.5.6.7.8.9")
+	resp := NewCStoreResponseSuccess(200, testCTImageStorageUID, testSOPInstanceUID)
 
 	if resp.MessageIDBeingRespondedTo() != 200 {
 		t.Errorf("Expected MessageIDBeingRespondedTo 200, got %d", resp.MessageIDBeingRespondedTo())
@@ -217,7 +223,7 @@ func TestNewCStoreResponse(t *testing.T) {
 func TestNewCStoreRequest_MissingSOPClass(t *testing.T) {
 	// Dataset without SOP Class UID
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 
 	_, err := NewCStoreRequest(ds)
 	if err == nil {
@@ -228,7 +234,7 @@ func TestNewCStoreRequest_MissingSOPClass(t *testing.T) {
 func TestNewCStoreRequest_MissingSOPInstance(t *testing.T) {
 	// Dataset without SOP Instance UID
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
 
 	_, err := NewCStoreRequest(ds)
 	if err == nil {
@@ -296,7 +302,7 @@ func TestCFindRequest_SetPriority(t *testing.T) {
 
 func TestNewCFindResponsePending(t *testing.T) {
 	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = identifier.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	_ = identifier.Add(element.NewString(tag.PatientID, vr.LO, []string{"123456"}))
 
 	resp := NewCFindResponsePending(300, "1.2.840.10008.5.1.4.1.2.1.1", identifier)

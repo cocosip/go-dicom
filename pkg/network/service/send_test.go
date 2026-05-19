@@ -150,8 +150,8 @@ func TestSendMessageUsesNegotiatedRemoteMaxPDULength(t *testing.T) {
 	service := NewService(conn, assoc, WithMaxPDULength(4096))
 
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	_ = ds.Add(element.NewOtherByte(tag.PixelData, bytes.Repeat([]byte{0x7f}, 2048)))
 
 	msg, err := dimse.NewCStoreRequest(ds)
@@ -259,7 +259,7 @@ func createTestAssociation() *association.Association {
 	_ = assoc.AddPresentationContext(pc)
 
 	// Add presentation context for CT Image Storage (for C-STORE tests)
-	pc2 := association.NewPresentationContext(3, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
+	pc2 := association.NewPresentationContext(3, testCTImageStorageUID, transfer.ExplicitVRLittleEndian)
 	pc2.AcceptedTransferSyntax = transfer.ExplicitVRLittleEndian
 	pc2.Result = association.ResultAcceptance
 	_ = assoc.AddPresentationContext(pc2)

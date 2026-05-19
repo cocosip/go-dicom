@@ -176,7 +176,7 @@ func TestCreatePixelDataNormalizesBigEndianNativeOW(t *testing.T) {
 	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{15}))
 	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}))
 	_ = ds.Add(element.NewOtherWord(tag.PixelData, []byte{0x12, 0x34}))
 
 	pd, err := CreatePixelData(ds)
@@ -251,7 +251,7 @@ func TestCreatePixelDataStripsTrailingPaddingWithBOT(t *testing.T) {
 	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}))
 	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
 
 	obf := element.NewOtherByteFragment(tag.PixelData)
@@ -826,7 +826,7 @@ func TestCreatePixelData_PaletteToRGB(t *testing.T) {
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, nil, []string{"PALETTE COLOR"}),
+		element.NewString(tag.PhotometricInterpretation, nil, []string{photometricPaletteColor}),
 		// descriptors: number of entries=2, first=0, bits=8
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
@@ -869,7 +869,7 @@ func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, nil, []string{"PALETTE COLOR"}),
+		element.NewString(tag.PhotometricInterpretation, nil, []string{photometricPaletteColor}),
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
@@ -1020,7 +1020,7 @@ func TestDicomPixelData_VOILUTSequence(t *testing.T) {
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, nil, []string{"MONOCHROME2"}),
+		element.NewString(tag.PhotometricInterpretation, nil, []string{monochrome2}),
 	})
 
 	// VOI LUT Sequence with one item
@@ -1349,7 +1349,7 @@ func TestCreatePixelData_TransferSyntax(t *testing.T) {
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}))
 
 				// Add pixel data
 				pixelData := make([]byte, 256*256)
@@ -1374,7 +1374,7 @@ func TestCreatePixelData_TransferSyntax(t *testing.T) {
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{12}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{11}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}))
 
 				// Add pixel data
 				pixelData := make([]byte, 256*256*2)
@@ -1396,7 +1396,7 @@ func TestCreatePixelData_TransferSyntax(t *testing.T) {
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}))
 
 				// Add pixel data
 				pixelData := make([]byte, 128*128)
@@ -1425,7 +1425,7 @@ func TestCreatePixelData_TransferSyntax(t *testing.T) {
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 				_ = ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+				_ = ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}))
 
 				// Add pixel data
 				pixelData := make([]byte, 256*256)

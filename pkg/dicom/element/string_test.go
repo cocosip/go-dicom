@@ -52,7 +52,7 @@ func TestStringElement_Single(t *testing.T) {
 
 // TestStringElement_Multiple tests multi-valued string elements
 func TestStringElement_Multiple(t *testing.T) {
-	elem := element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY", "AXIAL"})
+	elem := element.NewString(tag.ImageType, vr.CS, []string{testImageTypeOriginal, testImageTypePrimary, testImageTypeAXIAL})
 
 	t.Run("Count", func(t *testing.T) {
 		if elem.Count() != 3 {
@@ -62,7 +62,7 @@ func TestStringElement_Multiple(t *testing.T) {
 
 	t.Run("GetString", func(t *testing.T) {
 		got := elem.GetString()
-		want := "ORIGINAL\\PRIMARY\\AXIAL"
+		want := testImageTypeMultiText
 		if got != want {
 			t.Errorf("GetString() = %q, want %q", got, want)
 		}
@@ -73,9 +73,9 @@ func TestStringElement_Multiple(t *testing.T) {
 			index int
 			want  string
 		}{
-			{0, "ORIGINAL"},
-			{1, "PRIMARY"},
-			{2, "AXIAL"},
+			{0, testImageTypeOriginal},
+			{1, testImageTypePrimary},
+			{2, testImageTypeAXIAL},
 		}
 		for _, tt := range tests {
 			got := elem.GetValue(tt.index)
@@ -87,7 +87,7 @@ func TestStringElement_Multiple(t *testing.T) {
 
 	t.Run("GetValues", func(t *testing.T) {
 		values := elem.GetValues()
-		want := []string{"ORIGINAL", "PRIMARY", "AXIAL"}
+		want := []string{testImageTypeOriginal, testImageTypePrimary, testImageTypeAXIAL}
 		if len(values) != len(want) {
 			t.Errorf("len(GetValues()) = %d, want %d", len(values), len(want))
 		}
@@ -265,7 +265,7 @@ func TestStringElement_VRValidation(t *testing.T) {
 			name:      "Multiple values mixed validity",
 			tag:       tag.ImageType,
 			vr:        vr.CS,
-			values:    []string{"ORIGINAL", "primary"},
+			values:    []string{testImageTypeOriginal, "primary"},
 			wantError: true,
 			desc:      "Should fail if any value is invalid",
 		},

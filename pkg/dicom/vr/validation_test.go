@@ -15,12 +15,12 @@ func TestValidateAE(t *testing.T) {
 		value   string
 		wantErr bool
 	}{
-		{"valid AE", "MYAETITLE", false},
+		{testCaseValidAE, "MYAETITLE", false},
 		{"valid with spaces", "MY_AE", false},
-		{"too long", "VERYLONGAETITLE1234", true},
+		{testCaseTooLong, "VERYLONGAETITLE1234", true},
 		{"only spaces", "    ", true},
 		{"contains backslash", "AE\\TITLE", true},
-		{"empty", "", false}, // Empty is typically allowed
+		{testCaseEmpty, "", false}, // Empty is typically allowed
 	}
 
 	for _, tt := range tests {
@@ -43,10 +43,10 @@ func TestValidateAS(t *testing.T) {
 		{"valid months", "006M", false},
 		{"valid weeks", "052W", false},
 		{"valid days", "365D", false},
-		{"invalid format", "25Y", true},
+		{testCaseInvalidFormat, "25Y", true},
 		{"invalid unit", "025X", true},
 		{"not digits", "ABCY", true},
-		{"empty", "", false},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {
@@ -68,10 +68,10 @@ func TestValidateCS(t *testing.T) {
 		{"valid code", "CT", false},
 		{"valid with numbers", "T1", false},
 		{"valid with underscore", "MY_CODE", false},
-		{"too long", "VERYLONGCODESTRIN", true},
+		{testCaseTooLong, "VERYLONGCODESTRIN", true},
 		{"lowercase", "lowercase", true},
 		{"special char", "CODE#1", true},
-		{"empty", "", false},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {
@@ -97,7 +97,7 @@ func TestValidateDA(t *testing.T) {
 		{"invalid day", "20250132", true},
 		{"wrong format", "2025-01-06", true},
 		{"too short", "202501", true},
-		{"empty", "", false},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {
@@ -120,11 +120,11 @@ func TestValidateDS(t *testing.T) {
 		{"decimal", "123.456", false},
 		{"scientific", "1.23e10", false},
 		{"negative", "-123.45", false},
-		{"with spaces", " 123.45 ", false},
-		{"too long", "12345678901234567", true},
-		{"invalid format", "abc", true},
+		{testCaseWithSpaces, " 123.45 ", false},
+		{testCaseTooLong, "12345678901234567", true},
+		{testCaseInvalidFormat, "abc", true},
 		{"multiple dots", "12.34.56", true},
-		{"empty", "", false},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {
@@ -146,12 +146,12 @@ func TestValidateIS(t *testing.T) {
 		{"positive integer", "123", false},
 		{"negative integer", "-456", false},
 		{"with plus", "+789", false},
-		{"with spaces", " 123 ", false},
-		{"too long", "1234567890123", true},
+		{testCaseWithSpaces, " 123 ", false},
+		{testCaseTooLong, "1234567890123", true},
 		{"decimal", "123.45", true},
 		{"not a number", "abc", true},
 		{"too large", "999999999999", true},
-		{"empty", "", false},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {
@@ -170,10 +170,10 @@ func TestValidateLO(t *testing.T) {
 		value   string
 		wantErr bool
 	}{
-		{"valid short", "Patient Name", false},
+		{"valid short", testPatientNameText, false},
 		{"valid max length", "A234567890123456789012345678901234567890123456789012345678901234", false},
-		{"too long", "A2345678901234567890123456789012345678901234567890123456789012345", true},
-		{"empty", "", false},
+		{testCaseTooLong, "A2345678901234567890123456789012345678901234567890123456789012345", true},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {
@@ -196,12 +196,12 @@ func TestValidateTM(t *testing.T) {
 		{"hours minutes", "1430", false},
 		{"full time", "143015", false},
 		{"with fraction", "143015.123", false},
-		{"with spaces", "143015 ", false},
+		{testCaseWithSpaces, "143015 ", false},
 		{"invalid hour", "2530", true},
 		{"invalid minute", "1460", true},
 		{"invalid second", "145061", true},
-		{"invalid format", "14:30", true},
-		{"empty", "", false},
+		{testCaseInvalidFormat, "14:30", true},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {
@@ -222,12 +222,12 @@ func TestValidateUI(t *testing.T) {
 	}{
 		{"valid UID", "1.2.840.10008.1.1", false},
 		{"valid with trailing space", "1.2.3.4 ", false},
-		{"too long", "1.234567890123456789012345678901234567890123456789012345678901234567890", true},
+		{testCaseTooLong, "1.234567890123456789012345678901234567890123456789012345678901234567890", true},
 		{"leading zero", "1.2.01.4", true},
 		{"invalid char", "1.2.3a.4", true},
 		{"trailing dot", "1.2.3.", true},
 		{"leading dot", ".1.2.3", true},
-		{"empty", "", false},
+		{testCaseEmpty, "", false},
 	}
 
 	for _, tt := range tests {

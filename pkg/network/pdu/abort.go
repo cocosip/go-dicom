@@ -38,6 +38,15 @@ type AAbort struct {
 
 // Source codes for AAbort
 const (
+	abortReasonInvalidPDUParameterName      = "invalid-PDU-parameter"
+	abortReasonNotSpecifiedName             = "reason-not-specified"
+	abortReasonUnexpectedPDUName            = "unexpected-PDU"
+	abortReasonUnexpectedPDUParameterName   = "unexpected-PDU-parameter"
+	abortReasonUnrecognizedPDUName          = "unrecognized-PDU"
+	abortReasonUnrecognizedPDUParameterName = "unrecognized-PDU-parameter"
+	dicomULServiceUserName                  = "DICOM UL service-user"
+	unknownFFName                           = "unknown(0xFF)"
+
 	AbortSourceServiceUser     byte = 0
 	AbortSourceServiceProvider byte = 2
 )
@@ -120,7 +129,7 @@ func (a *AAbort) String() string {
 func (a *AAbort) SourceString() string {
 	switch a.Source {
 	case AbortSourceServiceUser:
-		return "DICOM UL service-user"
+		return dicomULServiceUserName
 	case AbortSourceServiceProvider:
 		return "DICOM UL service-provider"
 	default:
@@ -135,7 +144,7 @@ func (a *AAbort) ReasonString() string {
 	case AbortSourceServiceUser:
 		switch a.Reason {
 		case AbortReasonServiceUserNotSpecified:
-			return "reason-not-specified"
+			return abortReasonNotSpecifiedName
 		default:
 			return fmt.Sprintf("unknown(0x%02X)", a.Reason)
 		}
@@ -143,17 +152,17 @@ func (a *AAbort) ReasonString() string {
 	case AbortSourceServiceProvider:
 		switch a.Reason {
 		case AbortReasonServiceProviderNotSpecified:
-			return "reason-not-specified"
+			return abortReasonNotSpecifiedName
 		case AbortReasonServiceProviderUnrecognizedPDU:
-			return "unrecognized-PDU"
+			return abortReasonUnrecognizedPDUName
 		case AbortReasonServiceProviderUnexpectedPDU:
-			return "unexpected-PDU"
+			return abortReasonUnexpectedPDUName
 		case AbortReasonServiceProviderUnrecognizedPDUParam:
-			return "unrecognized-PDU-parameter"
+			return abortReasonUnrecognizedPDUParameterName
 		case AbortReasonServiceProviderUnexpectedPDUParam:
-			return "unexpected-PDU-parameter"
+			return abortReasonUnexpectedPDUParameterName
 		case AbortReasonServiceProviderInvalidPDUParam:
-			return "invalid-PDU-parameter"
+			return abortReasonInvalidPDUParameterName
 		default:
 			return fmt.Sprintf("unknown(0x%02X)", a.Reason)
 		}

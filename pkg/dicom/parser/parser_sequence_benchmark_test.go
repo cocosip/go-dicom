@@ -37,7 +37,7 @@ func buildSequenceBenchmarkDICOM(definedLength bool, itemCount int, payloadSize 
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x0008))
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x1155))
 		itemData.WriteString("UI")
-		sopUID := "1.2.840.10008.5.1.4.1.1.2"
+		sopUID := testCTImageStorageUID
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(len(sopUID)))
 		itemData.WriteString(sopUID)
 

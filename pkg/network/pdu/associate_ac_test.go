@@ -15,6 +15,7 @@ const (
 	testShortAETitle       = "SHORT"
 	testAnotherAETitle     = "ANOTHER"
 	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
+	testImplicitVRLittleLE = "1.2.840.10008.1.2"
 )
 
 func TestNewAAssociateAC(t *testing.T) {
@@ -24,7 +25,7 @@ func TestNewAAssociateAC(t *testing.T) {
 		t.Errorf("Expected protocol version 0x0001, got 0x%04X", ac.ProtocolVersion)
 	}
 
-	if ac.ApplicationContext != "1.2.840.10008.3.1.1.1" {
+	if ac.ApplicationContext != applicationContextUID {
 		t.Errorf("Expected default application context, got %s", ac.ApplicationContext)
 	}
 
@@ -126,7 +127,7 @@ func TestAAssociateAC_EncodeDecodeMultiplePresentationContexts(t *testing.T) {
 		{
 			ID:             5,
 			Result:         ResultAcceptance,
-			TransferSyntax: "1.2.840.10008.1.2",
+			TransferSyntax: testImplicitVRLittleLE,
 		},
 	}
 
@@ -267,14 +268,14 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 			AbstractSyntax: "1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
 			TransferSyntaxes: []string{
 				testExplicitVRLittleLE, // Explicit VR Little Endian
-				"1.2.840.10008.1.2",   // Implicit VR Little Endian
+				testImplicitVRLittleLE, // Implicit VR Little Endian
 			},
 		},
 		{
 			ID:             3,
 			AbstractSyntax: "1.2.840.10008.1.1", // Verification SOP Class
 			TransferSyntaxes: []string{
-				"1.2.840.10008.1.2",
+				testImplicitVRLittleLE,
 			},
 		},
 	}

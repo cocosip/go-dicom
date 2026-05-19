@@ -34,7 +34,7 @@ func TestIsValid(t *testing.T) {
 		uid   string
 		valid bool
 	}{
-		{"valid simple", "1.2.840.10008.1.2", true},
+		{"valid simple", testImplicitVRLittleLE, true},
 		{"valid complex", "1.2.840.10008.5.1.4.1.1.2", true},
 		{"valid single component", "1", true},
 		{"valid zero component", "0", true},
@@ -60,13 +60,13 @@ func TestIsValid(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	// Register a UID
-	registered := uid.New("1.2.840.10008.1.2", "Implicit VR Little Endian", uid.TypeTransferSyntax, false)
+	registered := uid.New(testImplicitVRLittleLE, "Implicit VR Little Endian", uid.TypeTransferSyntax, false)
 	uid.Register(registered)
 
 	// Parse registered UID
-	parsed := uid.Parse("1.2.840.10008.1.2", "Other Name", uid.TypeUnknown)
-	if parsed.UID() != "1.2.840.10008.1.2" {
-		t.Errorf("Parse() UID = %q, want %q", parsed.UID(), "1.2.840.10008.1.2")
+	parsed := uid.Parse(testImplicitVRLittleLE, "Other Name", uid.TypeUnknown)
+	if parsed.UID() != testImplicitVRLittleLE {
+		t.Errorf("Parse() UID = %q, want %q", parsed.UID(), testImplicitVRLittleLE)
 	}
 	if parsed.Name() != "Implicit VR Little Endian" {
 		t.Errorf("Parse() Name = %q, want %q (should use registered name)", parsed.Name(), "Implicit VR Little Endian")
@@ -96,8 +96,8 @@ func TestAppend(t *testing.T) {
 }
 
 func TestEquals(t *testing.T) {
-	u1 := uid.New("1.2.840.10008.1.2", "Name1", uid.TypeTransferSyntax, false)
-	u2 := uid.New("1.2.840.10008.1.2", "Name2", uid.TypeSOPClass, false)
+	u1 := uid.New(testImplicitVRLittleLE, "Name1", uid.TypeTransferSyntax, false)
+	u2 := uid.New(testImplicitVRLittleLE, "Name2", uid.TypeSOPClass, false)
 	u3 := uid.New("1.2.840.10008.1.3", "Name3", uid.TypeTransferSyntax, false)
 
 	if !u1.Equals(u2) {
@@ -134,7 +134,7 @@ func TestStorageCategory(t *testing.T) {
 		},
 		{
 			"not storage",
-			uid.New("1.2.840.10008.1.2", "Implicit VR Little Endian", uid.TypeTransferSyntax, false),
+			uid.New(testImplicitVRLittleLE, "Implicit VR Little Endian", uid.TypeTransferSyntax, false),
 			uid.StorageCategoryNone,
 		},
 		{
@@ -159,7 +159,7 @@ func TestIsImageStorage(t *testing.T) {
 		t.Error("IsImageStorage() = false, want true")
 	}
 
-	transferUID := uid.New("1.2.840.10008.1.2", "Transfer Syntax", uid.TypeTransferSyntax, false)
+	transferUID := uid.New(testImplicitVRLittleLE, "Transfer Syntax", uid.TypeTransferSyntax, false)
 	if transferUID.IsImageStorage() {
 		t.Error("IsImageStorage() = true, want false")
 	}
@@ -194,9 +194,9 @@ func TestRegisterAndEnumerate(t *testing.T) {
 
 func TestMustParse(t *testing.T) {
 	// Should not panic for valid UID
-	u := uid.MustParse("1.2.840.10008.1.2")
-	if u.UID() != "1.2.840.10008.1.2" {
-		t.Errorf("MustParse() = %q, want %q", u.UID(), "1.2.840.10008.1.2")
+	u := uid.MustParse(testImplicitVRLittleLE)
+	if u.UID() != testImplicitVRLittleLE {
+		t.Errorf("MustParse() = %q, want %q", u.UID(), testImplicitVRLittleLE)
 	}
 
 	// Should panic for invalid UID

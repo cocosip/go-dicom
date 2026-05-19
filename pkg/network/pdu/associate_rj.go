@@ -7,6 +7,13 @@ import (
 	"fmt"
 )
 
+const (
+	associateRJReasonApplicationContextNameNotSupportedName = "application-context-name-not-supported"
+	associateRJReasonCalledAETitleNotRecognizedName         = "called-AE-title-not-recognized"
+	associateRJReasonCallingAETitleNotRecognizedName        = "calling-AE-title-not-recognized"
+	associateRJReasonNoReasonGivenName                      = "no-reason-given"
+)
+
 // AAssociateRJ represents an A-ASSOCIATE-RJ (Association Reject) PDU.
 // This PDU is sent to reject an association request.
 //
@@ -140,7 +147,7 @@ func (a *AAssociateRJ) ResultString() string {
 func (a *AAssociateRJ) SourceString() string {
 	switch a.Source {
 	case SourceServiceUser:
-		return "DICOM UL service-user"
+		return dicomULServiceUserName
 	case SourceServiceProviderACSE:
 		return "DICOM UL service-provider (ACSE)"
 	case SourceServiceProviderPresentation:
@@ -157,13 +164,13 @@ func (a *AAssociateRJ) ReasonString() string {
 	case SourceServiceUser:
 		switch a.Reason {
 		case ReasonServiceUserNoReasonGiven:
-			return "no-reason-given"
+			return associateRJReasonNoReasonGivenName
 		case ReasonServiceUserApplicationContextNotSupported:
-			return "application-context-name-not-supported"
+			return associateRJReasonApplicationContextNameNotSupportedName
 		case ReasonServiceUserCallingAETitleNotRecognized:
-			return "calling-AE-title-not-recognized"
+			return associateRJReasonCallingAETitleNotRecognizedName
 		case ReasonServiceUserCalledAETitleNotRecognized:
-			return "called-AE-title-not-recognized"
+			return associateRJReasonCalledAETitleNotRecognizedName
 		default:
 			return fmt.Sprintf("unknown(0x%02X)", a.Reason)
 		}
@@ -171,7 +178,7 @@ func (a *AAssociateRJ) ReasonString() string {
 	case SourceServiceProviderACSE:
 		switch a.Reason {
 		case ReasonServiceProviderACSENoReasonGiven:
-			return "no-reason-given"
+			return associateRJReasonNoReasonGivenName
 		case ReasonServiceProviderACSEProtocolVersionNotSupported:
 			return "protocol-version-not-supported"
 		default:

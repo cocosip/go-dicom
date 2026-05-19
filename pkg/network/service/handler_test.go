@@ -152,8 +152,8 @@ func TestHandleCStoreRequest_DefaultHandler(t *testing.T) {
 
 	// Create dataset with required tags
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID})) // CT Image Storage
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 
 	req, err := dimse.NewCStoreRequest(ds)
 	if err != nil {
@@ -177,8 +177,8 @@ func TestHandleCStoreRequest_CustomHandler(t *testing.T) {
 
 	// Create dataset with required tags
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID})) // CT Image Storage
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 
 	req, err := dimse.NewCStoreRequest(ds)
 	if err != nil {
@@ -316,7 +316,7 @@ func TestHandleCMoveRequest_DefaultHandler(t *testing.T) {
 	defer func() { _ = service.Close() }()
 
 	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
 	if err := req.SetMessageID(1); err != nil {
 		t.Fatalf("SetMessageID failed: %v", err)
@@ -335,7 +335,7 @@ func TestHandleCMoveRequest_CustomHandler(t *testing.T) {
 	defer func() { _ = service.Close() }()
 
 	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
 	if err := req.SetMessageID(1); err != nil {
 		t.Fatalf("SetMessageID failed: %v", err)
@@ -369,7 +369,7 @@ func TestHandleCGetRequest_DefaultHandler(t *testing.T) {
 	defer func() { _ = service.Close() }()
 
 	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	req := dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, identifier)
 	if err := req.SetMessageID(1); err != nil {
 		t.Fatalf("SetMessageID failed: %v", err)
@@ -388,7 +388,7 @@ func TestHandleCGetRequest_CustomHandler(t *testing.T) {
 	defer func() { _ = service.Close() }()
 
 	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	req := dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, identifier)
 	if err := req.SetMessageID(1); err != nil {
 		t.Fatalf("SetMessageID failed: %v", err)

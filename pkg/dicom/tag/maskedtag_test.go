@@ -35,35 +35,35 @@ func TestMaskedTagFormat(t *testing.T) {
 			"no wildcards G",
 			tag.NewMaskedTag(tag.New(0x0028, 0x0010)),
 			"G",
-			"(0028,0010)",
+			testTagRowsString,
 		},
 		{
 			"wildcards in element",
-			tag.MustParseMaskedTag("(0028,xx10)"),
+			tag.MustParseMaskedTag(testMaskedElementRowsString),
 			"G",
-			"(0028,xx10)",
+			testMaskedElementRowsString,
 		},
 		{
 			"wildcards in group",
-			tag.MustParseMaskedTag("(xx28,0010)"),
+			tag.MustParseMaskedTag(testMaskedGroupRowsString),
 			"G",
-			"(xx28,0010)",
+			testMaskedGroupRowsString,
 		},
 		{
 			"wildcards in both",
-			tag.MustParseMaskedTag("(xx28,xx10)"),
+			tag.MustParseMaskedTag(testMaskedGroupElementString),
 			"G",
-			"(xx28,xx10)",
+			testMaskedGroupElementString,
 		},
 		{
 			"group format",
-			tag.MustParseMaskedTag("(xx28,0010)"),
+			tag.MustParseMaskedTag(testMaskedGroupRowsString),
 			"g",
 			"xx28",
 		},
 		{
 			"element format",
-			tag.MustParseMaskedTag("(0028,xx10)"),
+			tag.MustParseMaskedTag(testMaskedElementRowsString),
 			"e",
 			"xx10",
 		},
@@ -79,8 +79,8 @@ func TestMaskedTagFormat(t *testing.T) {
 }
 
 func TestMaskedTagString(t *testing.T) {
-	mt := tag.MustParseMaskedTag("(0028,xx10)")
-	want := "(0028,xx10)"
+	mt := tag.MustParseMaskedTag(testMaskedElementRowsString)
+	want := testMaskedElementRowsString
 	if got := mt.String(); got != want {
 		t.Errorf("String() = %v, want %v", got, want)
 	}
@@ -95,91 +95,91 @@ func TestMaskedTagIsMatch(t *testing.T) {
 	}{
 		{
 			"exact match no wildcards",
-			"(0028,0010)",
+			testTagRowsString,
 			tag.New(0x0028, 0x0010),
 			true,
 		},
 		{
 			"no match no wildcards",
-			"(0028,0010)",
+			testTagRowsString,
 			tag.New(0x0028, 0x0011),
 			false,
 		},
 		{
 			"match with element wildcard",
-			"(0028,xx10)",
+			testMaskedElementRowsString,
 			tag.New(0x0028, 0x0010),
 			true,
 		},
 		{
 			"match with element wildcard 2",
-			"(0028,xx10)",
+			testMaskedElementRowsString,
 			tag.New(0x0028, 0x1010),
 			true,
 		},
 		{
 			"match with element wildcard 3",
-			"(0028,xx10)",
+			testMaskedElementRowsString,
 			tag.New(0x0028, 0xFF10),
 			true,
 		},
 		{
 			"no match with element wildcard",
-			"(0028,xx10)",
+			testMaskedElementRowsString,
 			tag.New(0x0028, 0x0011),
 			false,
 		},
 		{
 			"match with group wildcard",
-			"(xx28,0010)",
+			testMaskedGroupRowsString,
 			tag.New(0x0028, 0x0010),
 			true,
 		},
 		{
 			"match with group wildcard 2",
-			"(xx28,0010)",
+			testMaskedGroupRowsString,
 			tag.New(0x1028, 0x0010),
 			true,
 		},
 		{
 			"no match with group wildcard",
-			"(xx28,0010)",
+			testMaskedGroupRowsString,
 			tag.New(0x0029, 0x0010),
 			false,
 		},
 		{
 			"match with both wildcards",
-			"(xx28,xx10)",
+			testMaskedGroupElementString,
 			tag.New(0x0028, 0x0010),
 			true,
 		},
 		{
 			"match with both wildcards 2",
-			"(xx28,xx10)",
+			testMaskedGroupElementString,
 			tag.New(0x1028, 0xFF10),
 			true,
 		},
 		{
 			"no match with both wildcards",
-			"(xx28,xx10)",
+			testMaskedGroupElementString,
 			tag.New(0x0029, 0x0010),
 			false,
 		},
 		{
 			"multiple wildcard nibbles",
-			"(00xx,00xx)",
+			testMaskedNibblePairTagString,
 			tag.New(0x0028, 0x0010),
 			true,
 		},
 		{
 			"multiple wildcard nibbles 2",
-			"(00xx,00xx)",
+			testMaskedNibblePairTagString,
 			tag.New(0x00FF, 0x00AA),
 			true,
 		},
 		{
 			"no match multiple wildcards",
-			"(00xx,00xx)",
+			testMaskedNibblePairTagString,
 			tag.New(0x0128, 0x0010),
 			false,
 		},
@@ -207,7 +207,7 @@ func TestParseMaskedTag(t *testing.T) {
 	}{
 		{
 			"no wildcards",
-			"(0028,0010)",
+			testTagRowsString,
 			0x0028,
 			0x0010,
 			0xFFFFFFFF,
@@ -215,7 +215,7 @@ func TestParseMaskedTag(t *testing.T) {
 		},
 		{
 			"element wildcard upper byte",
-			"(0028,xx10)",
+			testMaskedElementRowsString,
 			0x0028,
 			0x0010,
 			0xFFFF00FF,
@@ -231,7 +231,7 @@ func TestParseMaskedTag(t *testing.T) {
 		},
 		{
 			"group wildcard",
-			"(xx28,0010)",
+			testMaskedGroupRowsString,
 			0x0028,
 			0x0010,
 			0x00FFFFFF,
@@ -239,7 +239,7 @@ func TestParseMaskedTag(t *testing.T) {
 		},
 		{
 			"multiple wildcards",
-			"(xx28,xx10)",
+			testMaskedGroupElementString,
 			0x0028,
 			0x0010,
 			0x00FF00FF,
@@ -312,7 +312,7 @@ func TestParseMaskedTag(t *testing.T) {
 
 func TestMustParseMaskedTag(t *testing.T) {
 	// Should not panic for valid input
-	result := tag.MustParseMaskedTag("(0028,xx10)")
+	result := tag.MustParseMaskedTag(testMaskedElementRowsString)
 	if result.Group() != 0x0028 {
 		t.Errorf("Group() = 0x%04x, want 0x0028", result.Group())
 	}

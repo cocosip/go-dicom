@@ -17,7 +17,7 @@ const testStudyRootMoveUID = "1.2.840.10008.5.1.4.1.2.2.2"
 
 func TestNewCMoveRequest(t *testing.T) {
 	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyUID}))
 
 	req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)
 

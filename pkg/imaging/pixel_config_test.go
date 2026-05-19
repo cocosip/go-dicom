@@ -25,10 +25,10 @@ func TestPixelRepresentation(t *testing.T) {
 			str:      "Signed",
 		},
 		{
-			name:     "invalid",
+			name:     invalidTestName,
 			pr:       PixelRepresentation(99),
 			isSigned: false,
-			str:      "Unknown",
+			str:      unknownStr,
 		},
 	}
 
@@ -67,11 +67,11 @@ func TestPlanarConfiguration(t *testing.T) {
 			str:           "Planar",
 		},
 		{
-			name:          "invalid",
+			name:          invalidTestName,
 			pc:            PlanarConfiguration(99),
 			isInterleaved: false,
 			isPlanar:      false,
-			str:           "Unknown",
+			str:           unknownStr,
 		},
 	}
 

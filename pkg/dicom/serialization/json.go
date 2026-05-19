@@ -24,8 +24,10 @@ import (
 // personNameComponentGroupDelimiter is the delimiter for PersonName component groups (=)
 const personNameComponentGroupDelimiter = '='
 
+const personNameComponentGroupAlphabetic = "Alphabetic"
+
 // personNameComponentGroupNames are the names of PersonName component groups
-var personNameComponentGroupNames = []string{"Alphabetic", "Ideographic", "Phonetic"}
+var personNameComponentGroupNames = []string{personNameComponentGroupAlphabetic, "Ideographic", "Phonetic"}
 
 // ToJSON serializes a DICOM dataset to JSON format according to DICOM Part 18
 func ToJSON(ds *dataset.Dataset, opts ...JSONOption) ([]byte, error) {

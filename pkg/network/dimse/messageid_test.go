@@ -201,7 +201,7 @@ func TestMessageIDGenerator_AssignMessageID_CFindRequest(t *testing.T) {
 // Helper function to create a test dataset
 func createTestDataset() *dataset.Dataset {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 	return ds
 }

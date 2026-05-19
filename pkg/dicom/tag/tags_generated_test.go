@@ -44,7 +44,7 @@ func TestGeneratedTags(t *testing.T) {
 			tag.Rows,
 			0x0028,
 			0x0010,
-			"(0028,0010)",
+			testTagRowsString,
 		},
 		{
 			"Columns",

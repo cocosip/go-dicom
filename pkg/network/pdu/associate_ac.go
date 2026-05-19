@@ -93,7 +93,7 @@ func ResultString(result byte) string {
 func NewAAssociateAC() *AAssociateAC {
 	return &AAssociateAC{
 		ProtocolVersion:      0x0001,
-		ApplicationContext:   "1.2.840.10008.3.1.1.1", // DICOM Application Context
+		ApplicationContext:   applicationContextUID, // DICOM Application Context
 		PresentationContexts: make([]PresentationContextAC, 0),
 		UserInformation: &UserInformation{
 			MaximumLength:          16384,                         // Default 16KB

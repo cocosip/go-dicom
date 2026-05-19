@@ -54,7 +54,7 @@ func TestDate(t *testing.T) {
 	})
 
 	t.Run("InvalidDate", func(t *testing.T) {
-		elem := element.NewDate(tag.StudyDate, []string{"invalid"})
+		elem := element.NewDate(tag.StudyDate, []string{testInvalidValue})
 
 		_, err := elem.GetDate(0)
 		if err == nil {

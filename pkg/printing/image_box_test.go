@@ -16,7 +16,7 @@ func TestNewImageBox(t *testing.T) {
 	}{
 		{
 			name:           "grayscale image box",
-			sopInstanceUID: "1.2.3.4.5",
+			sopInstanceUID: testSOPInstanceUID,
 			isColor:        false,
 			expectedClass:  SOPClassGrayscaleImageBox,
 		},
@@ -81,7 +81,7 @@ func TestImageBox_SetImageData(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ib := NewImageBox("1.2.3.4.5", tc.isColor)
+			ib := NewImageBox(testSOPInstanceUID, tc.isColor)
 
 			testData := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 			ib.SetImageData(testData)
@@ -112,7 +112,7 @@ func TestImageBox_SetImageData(t *testing.T) {
 
 func TestImageBox_GetImageData(t *testing.T) {
 	// Grayscale
-	grayscaleIB := NewImageBox("1.2.3.4.5", false)
+	grayscaleIB := NewImageBox(testSOPInstanceUID, false)
 	grayscaleData := []byte{10, 20, 30}
 	grayscaleIB.SetImageData(grayscaleData)
 
@@ -139,7 +139,7 @@ func TestImageBox_GetImageData(t *testing.T) {
 }
 
 func TestImageBox_HasImageData(t *testing.T) {
-	ib := NewImageBox("1.2.3.4.5", false)
+	ib := NewImageBox(testSOPInstanceUID, false)
 
 	// Initially empty
 	if ib.HasImageData() {
@@ -161,7 +161,7 @@ func TestImageBox_HasImageData(t *testing.T) {
 
 func TestImageBox_ClearImageData(t *testing.T) {
 	// Test grayscale
-	grayscaleIB := NewImageBox("1.2.3.4.5", false)
+	grayscaleIB := NewImageBox(testSOPInstanceUID, false)
 	grayscaleIB.SetImageData([]byte{1, 2, 3})
 	grayscaleIB.ClearImageData()
 
@@ -186,7 +186,7 @@ func TestImageBox_ClearImageData(t *testing.T) {
 }
 
 func TestImageBox_FilmBox(t *testing.T) {
-	fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+	fb := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
 	ib := NewImageBox("1.2.3.4.5.1", false)
 
 	// Initially no parent
@@ -244,7 +244,7 @@ func TestImageBox_IsValid(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ib := NewImageBox("1.2.3.4.5", false)
+			ib := NewImageBox(testSOPInstanceUID, false)
 			tc.setup(ib)
 
 			result := ib.IsValid()
@@ -295,11 +295,11 @@ func TestImageBox_GetEffectiveMagnificationType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ib := NewImageBox("1.2.3.4.5", false)
+			ib := NewImageBox(testSOPInstanceUID, false)
 			ib.MagnificationType = tc.imageBoxMagnif
 
 			if tc.hasFilmBox {
-				fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+				fb := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
 				fb.MagnificationType = tc.filmBoxMagnif
 				fb.AddImageBox(ib)
 			}
@@ -313,7 +313,7 @@ func TestImageBox_GetEffectiveMagnificationType(t *testing.T) {
 }
 
 func TestImageBox_PolaritySettings(t *testing.T) {
-	ib := NewImageBox("1.2.3.4.5", false)
+	ib := NewImageBox(testSOPInstanceUID, false)
 
 	// Test default
 	if ib.Polarity != PolarityNormal {
@@ -328,7 +328,7 @@ func TestImageBox_PolaritySettings(t *testing.T) {
 }
 
 func TestImageBox_RequestedImageSize(t *testing.T) {
-	ib := NewImageBox("1.2.3.4.5", false)
+	ib := NewImageBox(testSOPInstanceUID, false)
 
 	// Test default
 	if ib.RequestedImageSize != "" {
@@ -343,7 +343,7 @@ func TestImageBox_RequestedImageSize(t *testing.T) {
 }
 
 func TestImageBox_SmoothingType(t *testing.T) {
-	ib := NewImageBox("1.2.3.4.5", false)
+	ib := NewImageBox(testSOPInstanceUID, false)
 
 	// Test default
 	if ib.SmoothingType != "" {

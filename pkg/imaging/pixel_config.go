@@ -24,7 +24,7 @@ func (pr PixelRepresentation) String() string {
 	case SignedPixels:
 		return "Signed"
 	default:
-		return "Unknown"
+		return unknownStr
 	}
 }
 
@@ -59,7 +59,7 @@ func (pc PlanarConfiguration) String() string {
 	case PlanarPlanar:
 		return "Planar"
 	default:
-		return "Unknown"
+		return unknownStr
 	}
 }
 

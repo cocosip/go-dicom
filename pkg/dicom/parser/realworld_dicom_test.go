@@ -168,7 +168,7 @@ func TestSpecificRealWorldFiles(t *testing.T) {
 			},
 		},
 		{
-			filename:    "multiframe.dcm",
+			filename:    testMultiframeFile,
 			description: "Multi-frame DICOM file",
 			checks: func(t *testing.T, result *ParseResult) {
 				if numFrames, exists := result.Dataset.GetString(tag.NumberOfFrames); exists {
@@ -340,7 +340,7 @@ func BenchmarkRealWorldDICOMParsing(b *testing.B) {
 		"CT-MONO2-16-ankle",
 		"CR-MONO1-10-chest",
 		"TestPattern_RGB.dcm",
-		"multiframe.dcm",
+		testMultiframeFile,
 	}
 
 	for _, filename := range benchFiles {

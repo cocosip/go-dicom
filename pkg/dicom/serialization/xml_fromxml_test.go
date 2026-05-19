@@ -48,8 +48,8 @@ func TestFromXML_Basic(t *testing.T) {
 		} else {
 			if pn.Count() == 0 {
 				t.Error("PatientName has no values")
-			} else if pn.GetValue(0) != "Doe^John" {
-				t.Errorf("PatientName = %q, want %q", pn.GetValue(0), "Doe^John")
+			} else if pn.GetValue(0) != testPatientNameJohn {
+				t.Errorf("PatientName = %q, want %q", pn.GetValue(0), testPatientNameJohn)
 			}
 		}
 	}

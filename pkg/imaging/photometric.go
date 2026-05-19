@@ -11,8 +11,13 @@ import (
 // Photometric interpretation string constants
 const (
 	photometricMonochrome1   = "MONOCHROME1"
+	photometricPaletteColor  = "PALETTE COLOR"
+	photometricRGB           = "RGB"
+	photometricYBRFull       = "YBR_FULL"
 	photometricYBRPartial422 = "YBR_PARTIAL_422"
 	photometricYBRPartial420 = "YBR_PARTIAL_420"
+	photometricYBRICT        = "YBR_ICT"
+	photometricYBRRCT        = "YBR_RCT"
 )
 
 // PhotometricInterpretation represents the photometric interpretation of pixel data.
@@ -48,23 +53,23 @@ func ParsePhotometricInterpretation(value string) (*PhotometricInterpretation, e
 	switch value {
 	case photometricMonochrome1:
 		return Monochrome1, nil
-	case "MONOCHROME", "MONOCHROME2":
+	case "MONOCHROME", monochrome2:
 		return Monochrome2, nil
-	case "PALETTE COLOR":
+	case photometricPaletteColor:
 		return PaletteColor, nil
-	case "RGB":
+	case photometricRGB:
 		return RGBPhotometric, nil
-	case "YBR_FULL":
+	case photometricYBRFull:
 		return YbrFull, nil
-	case "YBR_FULL_422":
+	case ybrFull422:
 		return YbrFull422, nil
 	case photometricYBRPartial422:
 		return YbrPartial422, nil
 	case photometricYBRPartial420:
 		return YbrPartial420, nil
-	case "YBR_ICT":
+	case photometricYBRICT:
 		return YbrIct, nil
-	case "YBR_RCT":
+	case photometricYBRRCT:
 		return YbrRct, nil
 	default:
 		return nil, fmt.Errorf("unknown photometric interpretation: %s", value)
@@ -99,7 +104,7 @@ var Monochrome1 = &PhotometricInterpretation{
 // value is intended to be displayed as black after any VOI gray scale transformations.
 // This value may be used only when Samples per Pixel (0028,0002) has a value of 1.
 var Monochrome2 = &PhotometricInterpretation{
-	Value:       "MONOCHROME2",
+	Value:       monochrome2,
 	Description: "Monochrome 2",
 	IsColor:     false,
 	IsPalette:   false,
@@ -111,7 +116,7 @@ var Monochrome2 = &PhotometricInterpretation{
 // The pixel value is used as an index into Red, Blue, and Green Palette Color Lookup Tables.
 // This value may be used only when Samples per Pixel (0028,0002) has a value of 1.
 var PaletteColor = &PhotometricInterpretation{
-	Value:       "PALETTE COLOR",
+	Value:       photometricPaletteColor,
 	Description: "Palette Color",
 	IsColor:     true,
 	IsPalette:   true,
@@ -123,8 +128,8 @@ var PaletteColor = &PhotometricInterpretation{
 // The minimum sample value for each color plane represents minimum intensity of the color.
 // This value may be used only when Samples per Pixel (0028,0002) has a value of 3.
 var RGBPhotometric = &PhotometricInterpretation{
-	Value:       "RGB",
-	Description: "RGB",
+	Value:       photometricRGB,
+	Description: photometricRGB,
 	IsColor:     true,
 	IsPalette:   false,
 	IsYBR:       false,
@@ -141,7 +146,7 @@ var RGBPhotometric = &PhotometricInterpretation{
 //	Cb = -0.1687*R - 0.3313*G + 0.5000*B + 128
 //	Cr = +0.5000*R - 0.4187*G - 0.0813*B + 128
 var YbrFull = &PhotometricInterpretation{
-	Value:       "YBR_FULL",
+	Value:       photometricYBRFull,
 	Description: "YBR Full",
 	IsColor:     true,
 	IsPalette:   false,
@@ -153,7 +158,7 @@ var YbrFull = &PhotometricInterpretation{
 // horizontally at half the Y rate (4:2:2 subsampling).
 // This Photometric Interpretation is only allowed with Planar Configuration equal to 0.
 var YbrFull422 = &PhotometricInterpretation{
-	Value:       "YBR_FULL_422",
+	Value:       ybrFull422,
 	Description: "YBR Full 4:2:2",
 	IsColor:     true,
 	IsPalette:   false,
@@ -202,7 +207,7 @@ var YbrPartial420 = &PhotometricInterpretation{
 //	Cb = -0.16875*R - 0.33126*G + 0.50000*B
 //	Cr = +0.50000*R - 0.41869*G - 0.08131*B
 var YbrIct = &PhotometricInterpretation{
-	Value:       "YBR_ICT",
+	Value:       photometricYBRICT,
 	Description: "YBR Irreversible Color Transformation (JPEG 2000)",
 	IsColor:     true,
 	IsPalette:   false,
@@ -224,7 +229,7 @@ var YbrIct = &PhotometricInterpretation{
 //	G = Y - floor((Cb + Cr) / 4)
 //	B = Cb + G
 var YbrRct = &PhotometricInterpretation{
-	Value:       "YBR_RCT",
+	Value:       photometricYBRRCT,
 	Description: "YBR Reversible Color Transformation (JPEG 2000)",
 	IsColor:     true,
 	IsPalette:   false,

@@ -839,7 +839,7 @@ func (t *Transcoder) buildFrameInfoFromDataset(ds *dataset.Dataset) (*imagetypes
 
 	photometric := ds.TryGetString(tag.PhotometricInterpretation)
 	if photometric == "" {
-		photometric = "MONOCHROME2"
+		photometric = photometricMonochrome2
 	}
 
 	return &imagetypes.FrameInfo{

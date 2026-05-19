@@ -13,9 +13,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
+const testStudyUID = "1.2.3.4.5"
+
 func TestNewCGetRequest(t *testing.T) {
 	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyUID}))
 
 	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)
 
@@ -23,8 +25,8 @@ func TestNewCGetRequest(t *testing.T) {
 		t.Fatal("NewCGetRequest returned nil")
 	}
 
-	if req.AffectedSOPClassUID() != "1.2.840.10008.5.1.4.1.2.2.3" {
-		t.Errorf("Expected SOP Class UID '1.2.840.10008.5.1.4.1.2.2.3', got '%s'", req.AffectedSOPClassUID())
+	if req.AffectedSOPClassUID() != sopClassUIDStudyRootGet {
+		t.Errorf("Expected SOP Class UID '%s', got '%s'", sopClassUIDStudyRootGet, req.AffectedSOPClassUID())
 	}
 
 	if req.QueryLevel() != QueryRetrieveLevelStudy {
@@ -59,7 +61,7 @@ func TestCGetRequest_SetPriority(t *testing.T) {
 }
 
 func TestNewCGetResponse(t *testing.T) {
-	resp := NewCGetResponse(123, status.Success, "1.2.840.10008.5.1.4.1.2.2.3")
+	resp := NewCGetResponse(123, status.Success, sopClassUIDStudyRootGet)
 
 	if resp == nil {
 		t.Fatal("NewCGetResponse returned nil")
@@ -73,13 +75,13 @@ func TestNewCGetResponse(t *testing.T) {
 		t.Errorf("Expected message ID 123, got %d", resp.MessageIDBeingRespondedTo())
 	}
 
-	if resp.AffectedSOPClassUID() != "1.2.840.10008.5.1.4.1.2.2.3" {
-		t.Errorf("Expected SOP Class UID '1.2.840.10008.5.1.4.1.2.2.3', got '%s'", resp.AffectedSOPClassUID())
+	if resp.AffectedSOPClassUID() != sopClassUIDStudyRootGet {
+		t.Errorf("Expected SOP Class UID '%s', got '%s'", sopClassUIDStudyRootGet, resp.AffectedSOPClassUID())
 	}
 }
 
 func TestNewCGetResponsePending(t *testing.T) {
-	resp := NewCGetResponsePending(123, "1.2.840.10008.5.1.4.1.2.2.3", 10, 5, 1, 2)
+	resp := NewCGetResponsePending(123, sopClassUIDStudyRootGet, 10, 5, 1, 2)
 
 	if resp.StatusCode() != 0xFF00 {
 		t.Errorf("Expected status code 0xFF00, got 0x%04X", resp.StatusCode())
@@ -107,7 +109,7 @@ func TestNewCGetResponsePending(t *testing.T) {
 }
 
 func TestNewCGetResponseSuccess(t *testing.T) {
-	resp := NewCGetResponseSuccess(123, "1.2.840.10008.5.1.4.1.2.2.3")
+	resp := NewCGetResponseSuccess(123, sopClassUIDStudyRootGet)
 
 	if resp.StatusCode() != 0x0000 {
 		t.Errorf("Expected status code 0x0000, got 0x%04X", resp.StatusCode())
@@ -156,7 +158,7 @@ func TestCGetRequest_String(t *testing.T) {
 }
 
 func TestCGetResponse_String(t *testing.T) {
-	resp := NewCGetResponsePending(123, "1.2.840.10008.5.1.4.1.2.2.3", 10, 5, 1, 2)
+	resp := NewCGetResponsePending(123, sopClassUIDStudyRootGet, 10, 5, 1, 2)
 
 	str := resp.String()
 	if str == "" {

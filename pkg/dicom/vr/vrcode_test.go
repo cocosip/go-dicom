@@ -106,11 +106,11 @@ func TestVRCodeUsageExample(t *testing.T) {
 
 	// Example 3: Use code constant in a map
 	vrMap := map[string]string{
-		vr.CodePN: "Patient Name",
+		vr.CodePN: testPatientNameText,
 		vr.CodeUI: "Study Instance UID",
 		vr.CodeDA: "Study Date",
 	}
-	if vrMap[vr.CodePN] != "Patient Name" {
+	if vrMap[vr.CodePN] != testPatientNameText {
 		t.Error("Map lookup failed")
 	}
 }

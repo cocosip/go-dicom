@@ -19,7 +19,7 @@ import (
 func TestWriteThenRead(t *testing.T) {
 	// Create dataset with various element types
 	ds := dataset.New()
-	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
 	if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {
@@ -54,8 +54,8 @@ func TestWriteThenRead(t *testing.T) {
 	if !exists {
 		t.Fatal("TransferSyntaxUID not found in FileMetaInformation")
 	}
-	if tsUID != "1.2.840.10008.1.2.1" {
-		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, "1.2.840.10008.1.2.1")
+	if tsUID != testExplicitVRLittleLE {
+		t.Errorf("TransferSyntaxUID = %q, want %q", tsUID, testExplicitVRLittleLE)
 	}
 
 	// Verify main dataset
@@ -63,8 +63,8 @@ func TestWriteThenRead(t *testing.T) {
 	if !exists {
 		t.Fatal("PatientName not found")
 	}
-	if patientName != "Doe^John" {
-		t.Errorf("PatientName = %q, want %q", patientName, "Doe^John")
+	if patientName != testPatientNameJohn {
+		t.Errorf("PatientName = %q, want %q", patientName, testPatientNameJohn)
 	}
 
 	patientID, exists := result.Dataset.GetString(tag.PatientID)
@@ -137,17 +137,17 @@ func TestWriteThenReadDeflatedExplicitVRLittleEndian(t *testing.T) {
 func TestWriteThenReadWithSequence(t *testing.T) {
 	// Create dataset with a sequence
 	ds := dataset.New()
-	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
 
 	// Create a Referenced Image Sequence
 	seq := dataset.NewSequence(tag.New(0x0008, 0x1140))
 	item1 := dataset.New()
-	if err := item1.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.4"})); err != nil {
+	if err := item1.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{testReferencedUID})); err != nil {
 		t.Fatalf("Item.Add() error: %v", err)
 	}
-	if err := item1.Add(element.NewString(tag.New(0x0008, 0x1150), vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"})); err != nil {
+	if err := item1.Add(element.NewString(tag.New(0x0008, 0x1150), vr.UI, []string{testCTImageStorageUID})); err != nil {
 		t.Fatalf("Item.Add() error: %v", err)
 	}
 	seq.AddItem(item1)
@@ -181,8 +181,8 @@ func TestWriteThenReadWithSequence(t *testing.T) {
 	if !exists {
 		t.Fatal("PatientName not found")
 	}
-	if patientName != "Test^Patient" {
-		t.Errorf("PatientName = %q, want %q", patientName, "Test^Patient")
+	if patientName != testPatientName {
+		t.Errorf("PatientName = %q, want %q", patientName, testPatientName)
 	}
 
 	// Verify sequence
@@ -210,8 +210,8 @@ func TestWriteThenReadWithSequence(t *testing.T) {
 	if !exists {
 		t.Fatal("SOP Instance UID not found in first item")
 	}
-	if sopInstanceUID != "1.2.3.4" {
-		t.Errorf("SOP Instance UID = %q, want %q", sopInstanceUID, "1.2.3.4")
+	if sopInstanceUID != testReferencedUID {
+		t.Errorf("SOP Instance UID = %q, want %q", sopInstanceUID, testReferencedUID)
 	}
 
 	// Verify second item

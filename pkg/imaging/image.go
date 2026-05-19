@@ -13,7 +13,12 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 )
 
-const monochrome2 = "MONOCHROME2"
+const (
+	monochrome2                         = "MONOCHROME2"
+	transferSyntaxExplicitVRBigEndian   = "1.2.840.10008.1.2.2"
+	transferSyntaxExplicitVRLittleEndian = "1.2.840.10008.1.2.1"
+	transferSyntaxImplicitVRLittleEndian = "1.2.840.10008.1.2"
+)
 
 // DicomImage represents a DICOM image with rendering capabilities
 type DicomImage struct {
@@ -71,7 +76,7 @@ func (img *DicomImage) IsGrayscale() bool {
 	if pi == nil {
 		return true // Default to grayscale
 	}
-	return pi.Value == "MONOCHROME1" || pi.Value == monochrome2
+	return pi.Value == photometricMonochrome1 || pi.Value == monochrome2
 }
 
 // CurrentFrame returns the current frame index
@@ -255,7 +260,7 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 		)
 	case 3:
 		// RGB/YBR
-		photometric := "RGB"
+		photometric := photometricRGB
 		if img.pixelData.Info.PhotometricInterpretation != nil {
 			photometric = img.pixelData.Info.PhotometricInterpretation.Value
 		}
@@ -285,9 +290,9 @@ func (img *DicomImage) RenderCurrentFrame(writer io.Writer, options *render.Expo
 // DecodeIfNeeded decodes the pixel data if it's in a compressed format
 func (img *DicomImage) DecodeIfNeeded(c codec.Codec, params codec.Parameters) error {
 	// Check if already uncompressed
-	if img.pixelData.Info.TransferSyntaxUID == "1.2.840.10008.1.2" || // Implicit VR Little Endian
-		img.pixelData.Info.TransferSyntaxUID == "1.2.840.10008.1.2.1" || // Explicit VR Little Endian
-		img.pixelData.Info.TransferSyntaxUID == "1.2.840.10008.1.2.2" { // Explicit VR Big Endian
+	if img.pixelData.Info.TransferSyntaxUID == transferSyntaxImplicitVRLittleEndian ||
+		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRLittleEndian ||
+		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRBigEndian {
 		return nil // Already uncompressed
 	}
 

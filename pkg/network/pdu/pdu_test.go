@@ -28,13 +28,13 @@ func TestPDUTypeString(t *testing.T) {
 		pduType  byte
 		expected string
 	}{
-		{"A-ASSOCIATE-RQ", TypeAAssociateRQ, "A-ASSOCIATE-RQ"},
-		{"A-ASSOCIATE-AC", TypeAAssociateAC, "A-ASSOCIATE-AC"},
-		{"A-ASSOCIATE-RJ", TypeAAssociateRJ, "A-ASSOCIATE-RJ"},
-		{"P-DATA-TF", TypePDataTF, "P-DATA-TF"},
-		{"A-RELEASE-RQ", TypeAReleaseRQ, "A-RELEASE-RQ"},
-		{"A-RELEASE-RP", TypeAReleaseRP, "A-RELEASE-RP"},
-		{"A-ABORT", TypeAAbort, "A-ABORT"},
+		{pduTypeAAssociateRQName, TypeAAssociateRQ, pduTypeAAssociateRQName},
+		{pduTypeAAssociateACName, TypeAAssociateAC, pduTypeAAssociateACName},
+		{pduTypeAAssociateRJName, TypeAAssociateRJ, pduTypeAAssociateRJName},
+		{pduTypePDataTFName, TypePDataTF, pduTypePDataTFName},
+		{pduTypeAReleaseRQName, TypeAReleaseRQ, pduTypeAReleaseRQName},
+		{pduTypeAReleaseRPName, TypeAReleaseRP, pduTypeAReleaseRPName},
+		{pduTypeAAbortName, TypeAAbort, pduTypeAAbortName},
 		{"Unknown", 0xFF, "Unknown(0xFF)"},
 	}
 
@@ -68,7 +68,7 @@ func TestNewRawPDU(t *testing.T) {
 
 func TestRawPDU_String(t *testing.T) {
 	pdu := NewRawPDU(TypeAAssociateRQ, []byte{0x01, 0x02})
-	expected := "A-ASSOCIATE-RQ (length=2)"
+	expected := pduTypeAAssociateRQName + " (length=2)"
 	if pdu.String() != expected {
 		t.Errorf("Expected %s, got %s", expected, pdu.String())
 	}

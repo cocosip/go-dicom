@@ -26,7 +26,7 @@ func NewCEchoRequest() *CEchoRequest {
 	command := CreateCommandDataset(uint16(CommandCEchoRQ), 0)
 
 	// Set affected SOP Class UID to Verification SOP Class
-	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{"1.2.840.10008.1.1"}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUIDVerification}))
 
 	// Priority (optional, default to medium)
 	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
@@ -35,7 +35,7 @@ func NewCEchoRequest() *CEchoRequest {
 
 	return &CEchoRequest{
 		BaseRequest:         NewBaseRequest(command, nil),
-		affectedSOPClassUID: "1.2.840.10008.1.1",
+		affectedSOPClassUID: sopClassUIDVerification,
 	}
 }
 
@@ -64,7 +64,7 @@ func NewCEchoResponse(messageIDBeingRespondedTo uint16, s *status.Status) *CEcho
 	command := CreateCommandDataset(uint16(CommandCEchoRSP), 0) // Response doesn't have its own MessageID
 
 	// Set affected SOP Class UID to Verification SOP Class
-	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{"1.2.840.10008.1.1"}))
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUIDVerification}))
 
 	// MessageIDBeingRespondedTo
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
@@ -77,7 +77,7 @@ func NewCEchoResponse(messageIDBeingRespondedTo uint16, s *status.Status) *CEcho
 	return &CEchoResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
 		statusCode:                s.Code,
-		affectedSOPClassUID:       "1.2.840.10008.1.1",
+		affectedSOPClassUID:       sopClassUIDVerification,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,
 	}
 }

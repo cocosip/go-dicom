@@ -6,6 +6,36 @@ package dimse
 // CommandField represents DIMSE command field values.
 type CommandField uint16
 
+const (
+	cStoreRQCommandName        = "C-STORE-RQ"
+	cStoreRSPCommandName       = "C-STORE-RSP"
+	cGetRQCommandName          = "C-GET-RQ"
+	cGetRSPCommandName         = "C-GET-RSP"
+	cFindRQCommandName         = "C-FIND-RQ"
+	cFindRSPCommandName        = "C-FIND-RSP"
+	cMoveRQCommandName         = "C-MOVE-RQ"
+	cMoveRSPCommandName        = "C-MOVE-RSP"
+	cEchoRQCommandName         = "C-ECHO-RQ"
+	cEchoRSPCommandName        = "C-ECHO-RSP"
+	cCancelRQCommandName       = "C-CANCEL-RQ"
+	nEventReportRQCommandName  = "N-EVENT-REPORT-RQ"
+	nEventReportRSPCommandName = "N-EVENT-REPORT-RSP"
+	nGetRQCommandName          = "N-GET-RQ"
+	nGetRSPCommandName         = "N-GET-RSP"
+	nSetRQCommandName          = "N-SET-RQ"
+	nSetRSPCommandName         = "N-SET-RSP"
+	nActionRQCommandName       = "N-ACTION-RQ"
+	nActionRSPCommandName      = "N-ACTION-RSP"
+	nCreateRQCommandName       = "N-CREATE-RQ"
+	nCreateRSPCommandName      = "N-CREATE-RSP"
+	nDeleteRQCommandName       = "N-DELETE-RQ"
+	nDeleteRSPCommandName      = "N-DELETE-RSP"
+	unknownCommandName         = "Unknown"
+
+	sopClassUIDVerification = "1.2.840.10008.1.1"
+	sopClassUIDStudyRootGet = "1.2.840.10008.5.1.4.1.2.2.3"
+)
+
 // DIMSE-C command fields
 const (
 	// C-STORE
@@ -63,53 +93,53 @@ const (
 func (c CommandField) String() string {
 	switch c {
 	case CommandCStoreRQ:
-		return "C-STORE-RQ"
+		return cStoreRQCommandName
 	case CommandCStoreRSP:
-		return "C-STORE-RSP"
+		return cStoreRSPCommandName
 	case CommandCGetRQ:
-		return "C-GET-RQ"
+		return cGetRQCommandName
 	case CommandCGetRSP:
-		return "C-GET-RSP"
+		return cGetRSPCommandName
 	case CommandCFindRQ:
-		return "C-FIND-RQ"
+		return cFindRQCommandName
 	case CommandCFindRSP:
-		return "C-FIND-RSP"
+		return cFindRSPCommandName
 	case CommandCMoveRQ:
-		return "C-MOVE-RQ"
+		return cMoveRQCommandName
 	case CommandCMoveRSP:
-		return "C-MOVE-RSP"
+		return cMoveRSPCommandName
 	case CommandCEchoRQ:
-		return "C-ECHO-RQ"
+		return cEchoRQCommandName
 	case CommandCEchoRSP:
-		return "C-ECHO-RSP"
+		return cEchoRSPCommandName
 	case CommandCCancelRQ:
-		return "C-CANCEL-RQ"
+		return cCancelRQCommandName
 	case CommandNEventReportRQ:
-		return "N-EVENT-REPORT-RQ"
+		return nEventReportRQCommandName
 	case CommandNEventReportRSP:
-		return "N-EVENT-REPORT-RSP"
+		return nEventReportRSPCommandName
 	case CommandNGetRQ:
-		return "N-GET-RQ"
+		return nGetRQCommandName
 	case CommandNGetRSP:
-		return "N-GET-RSP"
+		return nGetRSPCommandName
 	case CommandNSetRQ:
-		return "N-SET-RQ"
+		return nSetRQCommandName
 	case CommandNSetRSP:
-		return "N-SET-RSP"
+		return nSetRSPCommandName
 	case CommandNActionRQ:
-		return "N-ACTION-RQ"
+		return nActionRQCommandName
 	case CommandNActionRSP:
-		return "N-ACTION-RSP"
+		return nActionRSPCommandName
 	case CommandNCreateRQ:
-		return "N-CREATE-RQ"
+		return nCreateRQCommandName
 	case CommandNCreateRSP:
-		return "N-CREATE-RSP"
+		return nCreateRSPCommandName
 	case CommandNDeleteRQ:
-		return "N-DELETE-RQ"
+		return nDeleteRQCommandName
 	case CommandNDeleteRSP:
-		return "N-DELETE-RSP"
+		return nDeleteRSPCommandName
 	default:
-		return "Unknown"
+		return unknownCommandName
 	}
 }
 

@@ -8,17 +8,17 @@ import (
 )
 
 func TestNewFilmBox(t *testing.T) {
-	fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+	fb := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
 
 	if fb == nil {
 		t.Fatal("NewFilmBox returned nil")
 	}
 
-	if fb.SOPInstanceUID != "1.2.3.4.5" {
+	if fb.SOPInstanceUID != testSOPInstanceUID {
 		t.Errorf("Expected SOPInstanceUID='1.2.3.4.5', got '%s'", fb.SOPInstanceUID)
 	}
 
-	if fb.ImageDisplayFormat != "STANDARD\\2,2" {
+	if fb.ImageDisplayFormat != testImageDisplayFormat2x2 {
 		t.Errorf("Expected ImageDisplayFormat='STANDARD\\2,2', got '%s'", fb.ImageDisplayFormat)
 	}
 
@@ -51,7 +51,7 @@ func TestParseImageDisplayFormat(t *testing.T) {
 		expectError   bool
 	}{
 		// STANDARD format
-		{"STANDARD\\2,2", 4, false},
+		{testImageDisplayFormat2x2, 4, false},
 		{"STANDARD\\3,3", 9, false},
 		{"STANDARD\\1,1", 1, false},
 		{"STANDARD\\4,2", 8, false},
@@ -113,7 +113,7 @@ func TestFilmBox_InitializeImageBoxes(t *testing.T) {
 		expectedCount int
 		expectError   bool
 	}{
-		{"2x2 grid", "STANDARD\\2,2", 4, false},
+		{"2x2 grid", testImageDisplayFormat2x2, 4, false},
 		{"3x3 grid", "STANDARD\\3,3", 9, false},
 		{"row format", "ROW\\1,2,1", 4, false},
 		{"invalid format", "INVALID", 0, true},
@@ -121,7 +121,7 @@ func TestFilmBox_InitializeImageBoxes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fb := NewFilmBox("1.2.3.4.5", tc.format)
+			fb := NewFilmBox(testSOPInstanceUID, tc.format)
 			err := fb.InitializeImageBoxes()
 
 			if tc.expectError {
@@ -158,7 +158,7 @@ func TestFilmBox_InitializeImageBoxes(t *testing.T) {
 }
 
 func TestFilmBox_AddImageBox(t *testing.T) {
-	fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+	fb := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
 
 	if fb.ImageBoxCount() != 0 {
 		t.Errorf("Expected initial count=0, got %d", fb.ImageBoxCount())
@@ -192,10 +192,10 @@ func TestFilmBox_AddImageBox(t *testing.T) {
 }
 
 func TestFilmBox_GetImageBox(t *testing.T) {
-    fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
-    if err := fb.InitializeImageBoxes(); err != nil {
-        t.Fatalf("InitializeImageBoxes error: %v", err)
-    }
+	fb := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
+	if err := fb.InitializeImageBoxes(); err != nil {
+		t.Fatalf("InitializeImageBoxes error: %v", err)
+	}
 
 	// Test valid positions (1-based)
 	ib1 := fb.GetImageBox(1)
@@ -232,21 +232,21 @@ func TestFilmBox_IsValid(t *testing.T) {
 	}{
 		{
 			name: "valid film box",
-            setup: func(fb *FilmBox) {
-                if err := fb.InitializeImageBoxes(); err != nil {
-                    t.Fatalf("InitializeImageBoxes error: %v", err)
-                }
-            },
+			setup: func(fb *FilmBox) {
+				if err := fb.InitializeImageBoxes(); err != nil {
+					t.Fatalf("InitializeImageBoxes error: %v", err)
+				}
+			},
 			expected: true,
 		},
 		{
 			name: "invalid: empty image display format",
-            setup: func(fb *FilmBox) {
-                fb.ImageDisplayFormat = ""
-                // InitializeImageBoxes will fail with empty format, which is expected
-                // Just try to initialize, ignore the error as we're testing IsValid()
-                _ = fb.InitializeImageBoxes()
-            },
+			setup: func(fb *FilmBox) {
+				fb.ImageDisplayFormat = ""
+				// InitializeImageBoxes will fail with empty format, which is expected
+				// Just try to initialize, ignore the error as we're testing IsValid()
+				_ = fb.InitializeImageBoxes()
+			},
 			expected: false,
 		},
 		{
@@ -258,22 +258,22 @@ func TestFilmBox_IsValid(t *testing.T) {
 		},
 		{
 			name: "invalid: image box is invalid",
-            setup: func(fb *FilmBox) {
-                if err := fb.InitializeImageBoxes(); err != nil {
-                    t.Fatalf("InitializeImageBoxes error: %v", err)
-                }
-            	// Corrupt an image box
-                if len(fb.BasicImageBoxes) > 0 {
-                    fb.BasicImageBoxes[0].SOPInstanceUID = ""
-                }
-            },
+			setup: func(fb *FilmBox) {
+				if err := fb.InitializeImageBoxes(); err != nil {
+					t.Fatalf("InitializeImageBoxes error: %v", err)
+				}
+				// Corrupt an image box
+				if len(fb.BasicImageBoxes) > 0 {
+					fb.BasicImageBoxes[0].SOPInstanceUID = ""
+				}
+			},
 			expected: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+			fb := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
 			tc.setup(fb)
 
 			result := fb.IsValid()
@@ -286,7 +286,7 @@ func TestFilmBox_IsValid(t *testing.T) {
 
 func TestFilmBox_FilmSession(t *testing.T) {
 	fs := NewFilmSession("", "", false)
-	fb := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+	fb := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
 
 	// Initially no parent
 	if fb.FilmSession() != nil {
@@ -303,11 +303,11 @@ func TestFilmBox_FilmSession(t *testing.T) {
 func TestFilmBox_ColorInheritance(t *testing.T) {
 	// Grayscale session
 	grayscaleFS := NewFilmSession("", "", false)
-	grayscaleFB := NewFilmBox("1.2.3.4.5", "STANDARD\\2,2")
+	grayscaleFB := NewFilmBox(testSOPInstanceUID, testImageDisplayFormat2x2)
 	grayscaleFS.AddFilmBox(grayscaleFB)
-    if err := grayscaleFB.InitializeImageBoxes(); err != nil {
-        t.Fatalf("InitializeImageBoxes error: %v", err)
-    }
+	if err := grayscaleFB.InitializeImageBoxes(); err != nil {
+		t.Fatalf("InitializeImageBoxes error: %v", err)
+	}
 
 	for _, ib := range grayscaleFB.BasicImageBoxes {
 		if ib.IsColor {
@@ -320,11 +320,11 @@ func TestFilmBox_ColorInheritance(t *testing.T) {
 
 	// Color session
 	colorFS := NewFilmSession("", "", true)
-	colorFB := NewFilmBox("1.2.3.4.6", "STANDARD\\2,2")
+	colorFB := NewFilmBox("1.2.3.4.6", testImageDisplayFormat2x2)
 	colorFS.AddFilmBox(colorFB)
-    if err := colorFB.InitializeImageBoxes(); err != nil {
-        t.Fatalf("InitializeImageBoxes error: %v", err)
-    }
+	if err := colorFB.InitializeImageBoxes(); err != nil {
+		t.Fatalf("InitializeImageBoxes error: %v", err)
+	}
 
 	for _, ib := range colorFB.BasicImageBoxes {
 		if !ib.IsColor {

@@ -6,9 +6,9 @@ package imaging
 import "testing"
 
 func TestNewComponent(t *testing.T) {
-	comp := NewComponent("Red", 1, 1)
-	if comp.Name != "Red" {
-		t.Errorf("Name = %q, want %q", comp.Name, "Red")
+	comp := NewComponent(componentRedName, 1, 1)
+	if comp.Name != componentRedName {
+		t.Errorf("Name = %q, want %q", comp.Name, componentRedName)
 	}
 	if comp.SubSampleX != 1 {
 		t.Errorf("SubSampleX = %d, want %d", comp.SubSampleX, 1)
@@ -39,14 +39,14 @@ func TestColorSpace_String(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "RGB",
+			name:     colorSpaceRGBName,
 			cs:       RGB,
-			expected: "RGB",
+			expected: colorSpaceRGBName,
 		},
 		{
-			name:     "Grayscale",
+			name:     colorSpaceGrayscaleName,
 			cs:       Grayscale,
-			expected: "Grayscale",
+			expected: colorSpaceGrayscaleName,
 		},
 		{
 			name:     "YCbCrJPEG",
@@ -99,7 +99,7 @@ func TestColorSpace_Equals(t *testing.T) {
 		{
 			name:     "same name different instance",
 			cs1:      RGB,
-			cs2:      NewColorSpace("RGB", NewComponent("R", 1, 1)),
+			cs2:      NewColorSpace(colorSpaceRGBName, NewComponent("R", 1, 1)),
 			expected: true,
 		},
 	}
@@ -127,28 +127,28 @@ func TestStandardColorSpaces(t *testing.T) {
 			cs:            OneBit,
 			expectedName:  "1-bit",
 			expectedComps: 1,
-			firstCompName: "Value",
+			firstCompName: componentValueName,
 		},
 		{
-			name:          "Grayscale",
+			name:          colorSpaceGrayscaleName,
 			cs:            Grayscale,
-			expectedName:  "Grayscale",
+			expectedName:  colorSpaceGrayscaleName,
 			expectedComps: 1,
-			firstCompName: "Value",
+			firstCompName: componentValueName,
 		},
 		{
 			name:          "Indexed",
 			cs:            Indexed,
 			expectedName:  "Indexed",
 			expectedComps: 1,
-			firstCompName: "Value",
+			firstCompName: componentValueName,
 		},
 		{
-			name:          "RGB",
+			name:          colorSpaceRGBName,
 			cs:            RGB,
-			expectedName:  "RGB",
+			expectedName:  colorSpaceRGBName,
 			expectedComps: 3,
-			firstCompName: "Red",
+			firstCompName: componentRedName,
 		},
 		{
 			name:          "BGR",
@@ -162,7 +162,7 @@ func TestStandardColorSpaces(t *testing.T) {
 			cs:            RGBA,
 			expectedName:  "RGBA",
 			expectedComps: 4,
-			firstCompName: "Red",
+			firstCompName: componentRedName,
 		},
 		{
 			name:          "YCbCrJPEG",

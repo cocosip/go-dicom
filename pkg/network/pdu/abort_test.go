@@ -143,9 +143,9 @@ func TestAAbort_SourceString(t *testing.T) {
 		source   byte
 		expected string
 	}{
-		{AbortSourceServiceUser, "DICOM UL service-user"},
+		{AbortSourceServiceUser, dicomULServiceUserName},
 		{AbortSourceServiceProvider, "DICOM UL service-provider"},
-		{0xFF, "unknown(0xFF)"},
+		{0xFF, unknownFFName},
 	}
 
 	for _, tt := range tests {
@@ -165,14 +165,14 @@ func TestAAbort_ReasonString(t *testing.T) {
 		reason   byte
 		expected string
 	}{
-		{"Service user - not specified", AbortSourceServiceUser, AbortReasonServiceUserNotSpecified, "reason-not-specified"},
-		{"Service provider - not specified", AbortSourceServiceProvider, AbortReasonServiceProviderNotSpecified, "reason-not-specified"},
-		{"Service provider - unrecognized PDU", AbortSourceServiceProvider, AbortReasonServiceProviderUnrecognizedPDU, "unrecognized-PDU"},
-		{"Service provider - unexpected PDU", AbortSourceServiceProvider, AbortReasonServiceProviderUnexpectedPDU, "unexpected-PDU"},
-		{"Service provider - unrecognized PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderUnrecognizedPDUParam, "unrecognized-PDU-parameter"},
-		{"Service provider - unexpected PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderUnexpectedPDUParam, "unexpected-PDU-parameter"},
-		{"Service provider - invalid PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderInvalidPDUParam, "invalid-PDU-parameter"},
-		{"Unknown source and reason", 0xFF, 0xFF, "unknown(0xFF)"},
+		{"Service user - not specified", AbortSourceServiceUser, AbortReasonServiceUserNotSpecified, abortReasonNotSpecifiedName},
+		{"Service provider - not specified", AbortSourceServiceProvider, AbortReasonServiceProviderNotSpecified, abortReasonNotSpecifiedName},
+		{"Service provider - unrecognized PDU", AbortSourceServiceProvider, AbortReasonServiceProviderUnrecognizedPDU, abortReasonUnrecognizedPDUName},
+		{"Service provider - unexpected PDU", AbortSourceServiceProvider, AbortReasonServiceProviderUnexpectedPDU, abortReasonUnexpectedPDUName},
+		{"Service provider - unrecognized PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderUnrecognizedPDUParam, abortReasonUnrecognizedPDUParameterName},
+		{"Service provider - unexpected PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderUnexpectedPDUParam, abortReasonUnexpectedPDUParameterName},
+		{"Service provider - invalid PDU parameter", AbortSourceServiceProvider, AbortReasonServiceProviderInvalidPDUParam, abortReasonInvalidPDUParameterName},
+		{"Unknown source and reason", 0xFF, 0xFF, unknownFFName},
 	}, func(source, reason byte) reasonStringer {
 		return &AAbort{Source: source, Reason: reason}
 	})
@@ -182,7 +182,7 @@ func TestAAbort_String(t *testing.T) {
 	abort := NewAAbortServiceProvider(AbortReasonServiceProviderUnexpectedPDU)
 
 	str := abort.String()
-	expected := "A-ABORT: Source=DICOM UL service-provider, Reason=unexpected-PDU"
+	expected := pduTypeAAbortName + ": Source=DICOM UL service-provider, Reason=" + abortReasonUnexpectedPDUName
 
 	if str != expected {
 		t.Errorf("String() mismatch:\nexpected: %s\ngot:      %s", expected, str)
@@ -195,12 +195,12 @@ func TestAAbort_AllServiceProviderReasons(t *testing.T) {
 		code byte
 		name string
 	}{
-		{AbortReasonServiceProviderNotSpecified, "reason-not-specified"},
-		{AbortReasonServiceProviderUnrecognizedPDU, "unrecognized-PDU"},
-		{AbortReasonServiceProviderUnexpectedPDU, "unexpected-PDU"},
-		{AbortReasonServiceProviderUnrecognizedPDUParam, "unrecognized-PDU-parameter"},
-		{AbortReasonServiceProviderUnexpectedPDUParam, "unexpected-PDU-parameter"},
-		{AbortReasonServiceProviderInvalidPDUParam, "invalid-PDU-parameter"},
+		{AbortReasonServiceProviderNotSpecified, abortReasonNotSpecifiedName},
+		{AbortReasonServiceProviderUnrecognizedPDU, abortReasonUnrecognizedPDUName},
+		{AbortReasonServiceProviderUnexpectedPDU, abortReasonUnexpectedPDUName},
+		{AbortReasonServiceProviderUnrecognizedPDUParam, abortReasonUnrecognizedPDUParameterName},
+		{AbortReasonServiceProviderUnexpectedPDUParam, abortReasonUnexpectedPDUParameterName},
+		{AbortReasonServiceProviderInvalidPDUParam, abortReasonInvalidPDUParameterName},
 	}
 
 	for _, r := range reasons {

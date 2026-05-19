@@ -224,7 +224,7 @@ func TestLazyByteBuffer_GetByteRange(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:     "full range",
+			name:     fullRangeCaseName,
 			offset:   0,
 			count:    10,
 			wantData: []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
@@ -254,7 +254,7 @@ func TestLazyByteBuffer_GetByteRange(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "offset too large",
+			name:      offsetTooLargeCaseName,
 			offset:    20,
 			count:     2,
 			wantError: true,

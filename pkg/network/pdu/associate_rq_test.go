@@ -20,7 +20,7 @@ func TestNewAAssociateRQ(t *testing.T) {
 		t.Errorf("Expected protocol version 0x0001, got 0x%04X", rq.ProtocolVersion)
 	}
 
-	if rq.ApplicationContext != "1.2.840.10008.3.1.1.1" {
+	if rq.ApplicationContext != applicationContextUID {
 		t.Errorf("Expected default application context, got %s", rq.ApplicationContext)
 	}
 
@@ -45,8 +45,8 @@ func TestAAssociateRQ_EncodeDecodeBasic(t *testing.T) {
 			ID:             1,
 			AbstractSyntax: testCTImageStorageUID, // CT Image Storage
 			TransferSyntaxes: []string{
-				"1.2.840.10008.1.2.1", // Explicit VR Little Endian
-				"1.2.840.10008.1.2",   // Implicit VR Little Endian
+				testExplicitVRLittleLE, // Explicit VR Little Endian
+				testImplicitVRLittleLE, // Implicit VR Little Endian
 			},
 		},
 	}
@@ -121,22 +121,22 @@ func TestAAssociateRQ_EncodeDecodeMultiplePresentationContexts(t *testing.T) {
 			ID:             1,
 			AbstractSyntax: testCTImageStorageUID,
 			TransferSyntaxes: []string{
-				"1.2.840.10008.1.2.1",
+				testExplicitVRLittleLE,
 			},
 		},
 		{
 			ID:             3,
 			AbstractSyntax: "1.2.840.10008.5.1.4.1.1.4",
 			TransferSyntaxes: []string{
-				"1.2.840.10008.1.2",
-				"1.2.840.10008.1.2.1",
+				testImplicitVRLittleLE,
+				testExplicitVRLittleLE,
 			},
 		},
 		{
 			ID:             5,
 			AbstractSyntax: "1.2.840.10008.1.1", // Verification SOP Class
 			TransferSyntaxes: []string{
-				"1.2.840.10008.1.2",
+				testImplicitVRLittleLE,
 			},
 		},
 	}
@@ -266,7 +266,7 @@ func TestAAssociateRQ_EncodeDecodeWithExtendedNegotiation(t *testing.T) {
 	// Add extended negotiation
 	rq.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{
 		{
-			SOPClassUID: testCTImageStorageUID,
+			SOPClassUID:         testCTImageStorageUID,
 			ServiceClassAppInfo: []byte{0x01, 0x02, 0x03},
 		},
 	}

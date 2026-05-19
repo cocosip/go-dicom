@@ -64,12 +64,12 @@ var charsetTestCases = []CharsetTestCase{
 		Description:     "Arabic character set test",
 	},
 	{
-		Filename:        "chrFren.dcm",
+		Filename:        testCharsetFrenchFile,
 		ExpectedCharset: "ISO_IR 100", // Latin-1 (French)
 		Description:     "French (Latin-1) character set test",
 	},
 	{
-		Filename:        "chrGB2312.dcm",
+		Filename:        testCharsetGB2312File,
 		ExpectedCharset: "GB18030", // Chinese Simplified
 		Description:     "Chinese Simplified (GB2312) character set test",
 	},
@@ -79,7 +79,7 @@ var charsetTestCases = []CharsetTestCase{
 		Description:     "German (Latin-1) character set test",
 	},
 	{
-		Filename:        "chrGreek.dcm",
+		Filename:        testCharsetGreekFile,
 		ExpectedCharset: "ISO_IR 126", // Greek
 		Description:     "Greek character set test",
 	},
@@ -217,7 +217,7 @@ func TestCharsetParseBasicInfo(t *testing.T) {
 		checkTags []*tag.Tag
 	}{
 		{
-			filename: "chrFren.dcm",
+			filename: testCharsetFrenchFile,
 			checkTags: []*tag.Tag{
 				tag.PatientName,
 				tag.SpecificCharacterSet,
@@ -225,14 +225,14 @@ func TestCharsetParseBasicInfo(t *testing.T) {
 			},
 		},
 		{
-			filename: "chrGreek.dcm",
+			filename: testCharsetGreekFile,
 			checkTags: []*tag.Tag{
 				tag.PatientName,
 				tag.SpecificCharacterSet,
 			},
 		},
 		{
-			filename: "chrGB2312.dcm",
+			filename: testCharsetGB2312File,
 			checkTags: []*tag.Tag{
 				tag.PatientName,
 				tag.SpecificCharacterSet,
@@ -344,7 +344,7 @@ func TestCharsetEncodingDetection(t *testing.T) {
 		expectedCharset string
 	}{
 		{"chrArab.dcm", "ISO_IR 127"},
-		{"chrGreek.dcm", "ISO_IR 126"},
+		{testCharsetGreekFile, "ISO_IR 126"},
 		{"chrRuss.dcm", "ISO_IR 144"},
 		{"chrHbrw.dcm", "ISO_IR 138"},
 	}
@@ -389,9 +389,9 @@ func BenchmarkCharsetParsing(b *testing.B) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data", "charset")
 
 	testFiles := []string{
-		"chrFren.dcm",
-		"chrGreek.dcm",
-		"chrGB2312.dcm",
+		testCharsetFrenchFile,
+		testCharsetGreekFile,
+		testCharsetGB2312File,
 		"chrJapMulti.dcm",
 	}
 

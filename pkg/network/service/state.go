@@ -67,34 +67,36 @@ type StateTransition struct {
 	Event string // Description of the event that triggers this transition
 }
 
+const stateEventSendReceiveAbort = "Send/Receive A-ABORT"
+
 // validTransitions defines all valid state transitions in the DICOM service state machine.
 var validTransitions = []StateTransition{
 	// From Idle
 	{StateIdle, StateAssociationRequested, "Send A-ASSOCIATE-RQ"},
 	{StateIdle, StateAssociationAccepted, "Receive A-ASSOCIATE-RQ and send A-ASSOCIATE-AC"},
 	{StateIdle, StateClosed, "Connection error"},
-	{StateIdle, StateAborted, "Send/Receive A-ABORT"},
+	{StateIdle, StateAborted, stateEventSendReceiveAbort},
 
 	// From AssociationRequested
 	{StateAssociationRequested, StateAssociationAccepted, "Receive A-ASSOCIATE-AC"},
 	{StateAssociationRequested, StateClosed, "Receive A-ASSOCIATE-RJ"},
-	{StateAssociationRequested, StateAborted, "Send/Receive A-ABORT"},
+	{StateAssociationRequested, StateAborted, stateEventSendReceiveAbort},
 	{StateAssociationRequested, StateIdle, "Connection timeout"},
 
 	// From AssociationAccepted
 	{StateAssociationAccepted, StateTransferring, "Send/Receive DIMSE message"},
 	{StateAssociationAccepted, StateReleaseRequested, "Send A-RELEASE-RQ"},
 	{StateAssociationAccepted, StateClosed, "Receive A-RELEASE-RQ and send A-RELEASE-RP"},
-	{StateAssociationAccepted, StateAborted, "Send/Receive A-ABORT"},
+	{StateAssociationAccepted, StateAborted, stateEventSendReceiveAbort},
 
 	// From Transferring
 	{StateTransferring, StateAssociationAccepted, "DIMSE message complete"},
 	{StateTransferring, StateReleaseRequested, "Send A-RELEASE-RQ"},
-	{StateTransferring, StateAborted, "Send/Receive A-ABORT"},
+	{StateTransferring, StateAborted, stateEventSendReceiveAbort},
 
 	// From ReleaseRequested
 	{StateReleaseRequested, StateClosed, "Receive A-RELEASE-RP"},
-	{StateReleaseRequested, StateAborted, "Send/Receive A-ABORT"},
+	{StateReleaseRequested, StateAborted, stateEventSendReceiveAbort},
 	{StateReleaseRequested, StateClosed, "Timeout waiting for A-RELEASE-RP"},
 
 	// Terminal states (can only transition to themselves or stay)

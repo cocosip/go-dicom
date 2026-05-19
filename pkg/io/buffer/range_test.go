@@ -79,7 +79,7 @@ func TestRangeByteBuffer_Data(t *testing.T) {
 		{"middle", 3, 4, []byte{3, 4, 5, 6}},
 		{"end", 7, 3, []byte{7, 8, 9}},
 		{"single byte", 5, 1, []byte{5}},
-		{"empty", 5, 0, nil},
+		{emptyCaseName, 5, 0, nil},
 	}
 
 	for _, tt := range tests {
@@ -112,37 +112,37 @@ func TestRangeByteBuffer_GetByteRange(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:     "full range",
+			name:     fullRangeCaseName,
 			offset:   0,
 			count:    6,
 			wantData: []byte{2, 3, 4, 5, 6, 7},
 		},
 		{
-			name:     "partial from start",
+			name:     partialFromStartCaseName,
 			offset:   0,
 			count:    3,
 			wantData: []byte{2, 3, 4},
 		},
 		{
-			name:     "partial from middle",
+			name:     partialFromMiddleCaseName,
 			offset:   2,
 			count:    3,
 			wantData: []byte{4, 5, 6},
 		},
 		{
-			name:     "partial at end",
+			name:     partialAtEndCaseName,
 			offset:   4,
 			count:    2,
 			wantData: []byte{6, 7},
 		},
 		{
-			name:      "exceeds range",
+			name:      exceedsRangeCaseName,
 			offset:    3,
 			count:     10,
 			wantError: true,
 		},
 		{
-			name:      "offset too large",
+			name:      offsetTooLargeCaseName,
 			offset:    10,
 			count:     1,
 			wantError: true,

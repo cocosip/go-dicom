@@ -58,7 +58,7 @@ func TestToJSON_WrapperStringElementsPreserveValues(t *testing.T) {
 		element.NewDateTime(tag.AcquisitionDateTime, []string{"20250102123456"}),
 		element.NewDecimalString(tag.SliceThickness, []string{"1.25"}),
 		element.NewIntegerString(tag.InstanceNumber, []string{"42"}),
-		element.NewPersonName(tag.PatientName, []string{"Doe^Jane"}),
+		element.NewPersonName(tag.PatientName, []string{testPatientNameJane}),
 	}
 	for _, elem := range elements {
 		if err := ds.Add(elem); err != nil {
@@ -85,7 +85,7 @@ func TestToJSON_WrapperStringElementsPreserveValues(t *testing.T) {
 		{"0008002A", []any{"20250102123456"}},
 		{"00180050", []any{"1.25"}},
 		{"00200013", []any{"42"}},
-		{"00100010", []any{map[string]any{"Alphabetic": "Doe^Jane"}}},
+		{"00100010", []any{map[string]any{personNameComponentGroupAlphabetic: testPatientNameJane}}},
 	}
 	for _, tt := range tests {
 		if !reflect.DeepEqual(got[tt.key]["Value"], tt.want) {
@@ -292,7 +292,7 @@ func TestJSON_BulkDataURI_Roundtrip(t *testing.T) {
 	// Add regular element
 	patientName := tag.New(0x0010, 0x0010)
 	pnVR, _ := vr.Parse(vr.CodePN)
-	_ = ds1.Add(element.NewString(patientName, pnVR, []string{"Doe^John"}))
+	_ = ds1.Add(element.NewString(patientName, pnVR, []string{testPatientNameJohn}))
 
 	// Add BulkDataURI element
 	uri := "http://example.com/dicom/waveform"
@@ -322,7 +322,7 @@ func TestJSON_BulkDataURI_Roundtrip(t *testing.T) {
 		t.Fatalf("PatientName is not String element, got %T", elem1)
 	}
 	values := strElem.GetValues()
-	if len(values) != 1 || values[0] != "Doe^John" {
+	if len(values) != 1 || values[0] != testPatientNameJohn {
 		t.Errorf("PatientName = %v, want [Doe^John]", values)
 	}
 

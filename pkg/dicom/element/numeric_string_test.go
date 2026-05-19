@@ -61,7 +61,7 @@ func TestDecimalString(t *testing.T) {
 	})
 
 	t.Run("InvalidFloat", func(t *testing.T) {
-		elem := element.NewDecimalString(tag.SliceThickness, []string{"invalid"})
+		elem := element.NewDecimalString(tag.SliceThickness, []string{testInvalidValue})
 
 		_, err := elem.GetFloat(0)
 		if err == nil {
@@ -153,7 +153,7 @@ func TestIntegerString(t *testing.T) {
 	})
 
 	t.Run("InvalidInt", func(t *testing.T) {
-		elem := element.NewIntegerString(tag.NumberOfFrames, []string{"invalid"})
+		elem := element.NewIntegerString(tag.NumberOfFrames, []string{testInvalidValue})
 
 		_, err := elem.GetInt(0)
 		if err == nil {

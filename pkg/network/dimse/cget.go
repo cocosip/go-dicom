@@ -33,7 +33,7 @@ func NewCGetRequest(level QueryRetrieveLevel, identifier *dataset.Dataset) *CGet
 	// Patient Root vs Study Root UIDs for GET
 	sopClassUID := sopClassUIDForLevel(level, [2]string{
 		"1.2.840.10008.5.1.4.1.2.1.3", // Patient Root GET
-		"1.2.840.10008.5.1.4.1.2.2.3", // Study Root GET
+		sopClassUIDStudyRootGet,       // Study Root GET
 	})
 	command := createQueryRetrieveRequest(uint16(CommandCGetRQ), sopClassUID, level, identifier)
 	return &CGetRequest{

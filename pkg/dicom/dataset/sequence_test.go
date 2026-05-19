@@ -26,8 +26,8 @@ func TestSequenceBasics(t *testing.T) {
 	})
 
 	t.Run("AddItem", func(t *testing.T) {
-    item := dataset.New()
-    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
+		item := dataset.New()
+		_ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 		seq.AddItem(item)
 
 		if seq.IsEmpty() {
@@ -48,8 +48,8 @@ func TestSequenceBasics(t *testing.T) {
 		if !exists {
 			t.Fatal("Item should contain StudyInstanceUID")
 		}
-		if uid != "1.2.3" {
-			t.Errorf("StudyInstanceUID = %q, want %q", uid, "1.2.3")
+		if uid != testStudyInstanceUID {
+			t.Errorf("StudyInstanceUID = %q, want %q", uid, testStudyInstanceUID)
 		}
 	})
 
@@ -66,11 +66,11 @@ func TestSequenceMultipleItems(t *testing.T) {
 	seq := dataset.NewSequence(tag.ReferencedImageSequence)
 
 	// Add multiple items
-    for i := 0; i < 3; i++ {
-        item := dataset.New()
-        _ = item.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3." + string(rune('0'+i))}))
-        seq.AddItem(item)
-    }
+	for i := 0; i < 3; i++ {
+		item := dataset.New()
+		_ = item.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3." + string(rune('0'+i))}))
+		seq.AddItem(item)
+	}
 
 	if seq.Count() != 3 {
 		t.Errorf("Count() = %d, want 3", seq.Count())
@@ -141,8 +141,8 @@ func TestSequenceClone(t *testing.T) {
 	seq := dataset.NewSequence(tag.ReferencedImageSequence)
 
 	// Add items
-    item := dataset.New()
-    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
+	item := dataset.New()
+	_ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	seq.AddItem(item)
 
 	clone := seq.Clone()
@@ -164,8 +164,8 @@ func TestSequenceInDataset(t *testing.T) {
 
 	// Create sequence
 	seq := dataset.NewSequence(tag.ReferencedImageSequence)
-    item := dataset.New()
-    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
+	item := dataset.New()
+	_ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	seq.AddItem(item)
 
 	// Add sequence to dataset
@@ -187,8 +187,8 @@ func TestSequenceInDataset(t *testing.T) {
 	// Verify item content
 	retrievedItem := retrievedSeq.GetItem(0)
 	uid, _ := retrievedItem.GetString(tag.StudyInstanceUID)
-	if uid != "1.2.3" {
-		t.Errorf("StudyInstanceUID = %q, want %q", uid, "1.2.3")
+	if uid != testStudyInstanceUID {
+		t.Errorf("StudyInstanceUID = %q, want %q", uid, testStudyInstanceUID)
 	}
 }
 
@@ -198,9 +198,9 @@ func TestSequenceFilter(t *testing.T) {
 
 	// Add items with different modalities
 	for i, modality := range []string{"CT", "MR", "CT"} {
-        item := dataset.New()
-        _ = item.Add(element.NewString(tag.Modality, vr.CS, []string{modality}))
-        _ = item.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3." + string(rune('0'+i))}))
+		item := dataset.New()
+		_ = item.Add(element.NewString(tag.Modality, vr.CS, []string{modality}))
+		_ = item.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3." + string(rune('0'+i))}))
 		seq.AddItem(item)
 	}
 

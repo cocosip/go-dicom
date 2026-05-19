@@ -8,9 +8,9 @@ import (
 )
 
 func TestNewPresentationLUT(t *testing.T) {
-	lut := NewPresentationLUT("1.2.3.4.5")
+	lut := NewPresentationLUT(testSOPInstanceUID)
 
-	if lut.SOPInstanceUID != "1.2.3.4.5" {
+	if lut.SOPInstanceUID != testSOPInstanceUID {
 		t.Errorf("Expected SOPInstanceUID='1.2.3.4.5', got '%s'", lut.SOPInstanceUID)
 	}
 
@@ -20,7 +20,7 @@ func TestNewPresentationLUT(t *testing.T) {
 }
 
 func TestPresentationLUT_SetLUT(t *testing.T) {
-	lut := NewPresentationLUT("1.2.3.4.5")
+	lut := NewPresentationLUT(testSOPInstanceUID)
 
 	lutData := []uint16{0, 100, 200, 300, 400}
 	err := lut.SetLUT(5, 0, 10, lutData)
@@ -51,55 +51,55 @@ func TestPresentationLUT_IsValid(t *testing.T) {
 		setup    func(*PresentationLUT)
 		expected bool
 	}{
-        {
-            name: "valid LUT",
-            setup: func(lut *PresentationLUT) {
-                lutData := []uint16{0, 100, 200, 300, 400}
-                if err := lut.SetLUT(5, 0, 12, lutData); err != nil {
-                    t.Fatalf("SetLUT failed: %v", err)
-                }
-            },
-            expected: true,
-        },
+		{
+			name: "valid LUT",
+			setup: func(lut *PresentationLUT) {
+				lutData := []uint16{0, 100, 200, 300, 400}
+				if err := lut.SetLUT(5, 0, 12, lutData); err != nil {
+					t.Fatalf("SetLUT failed: %v", err)
+				}
+			},
+			expected: true,
+		},
 		{
 			name: "invalid: bits per entry too low",
-            setup: func(lut *PresentationLUT) {
-                lutData := []uint16{0, 100, 200}
-                _ = lut.SetLUT(3, 0, 8, lutData) // 8 < 10
-            },
+			setup: func(lut *PresentationLUT) {
+				lutData := []uint16{0, 100, 200}
+				_ = lut.SetLUT(3, 0, 8, lutData) // 8 < 10
+			},
 			expected: false,
 		},
 		{
 			name: "invalid: bits per entry too high",
-            setup: func(lut *PresentationLUT) {
-                lutData := []uint16{0, 100, 200}
-                if err := lut.SetLUT(3, 0, 20, lutData); err == nil {
-                    t.Log("SetLUT accepted bitsPerEntry > 16 as part of invalid case")
-                }
-            },
+			setup: func(lut *PresentationLUT) {
+				lutData := []uint16{0, 100, 200}
+				if err := lut.SetLUT(3, 0, 20, lutData); err == nil {
+					t.Log("SetLUT accepted bitsPerEntry > 16 as part of invalid case")
+				}
+			},
 			expected: false,
 		},
 		{
 			name: "invalid: LUT data size mismatch",
-            setup: func(lut *PresentationLUT) {
-                lutData := []uint16{0, 100}   // Only 2 entries
-                _ = lut.SetLUT(5, 0, 12, lutData) // Intentionally mismatch; ignore error for invalid case
-            },
+			setup: func(lut *PresentationLUT) {
+				lutData := []uint16{0, 100}       // Only 2 entries
+				_ = lut.SetLUT(5, 0, 12, lutData) // Intentionally mismatch; ignore error for invalid case
+			},
 			expected: false,
 		},
 		{
 			name: "invalid: first value mapped not 0",
-            setup: func(lut *PresentationLUT) {
-                lutData := []uint16{0, 100, 200}
-                _ = lut.SetLUT(3, 10, 12, lutData) // First value = 10
-            },
+			setup: func(lut *PresentationLUT) {
+				lutData := []uint16{0, 100, 200}
+				_ = lut.SetLUT(3, 10, 12, lutData) // First value = 10
+			},
 			expected: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			lut := NewPresentationLUT("1.2.3.4.5")
+			lut := NewPresentationLUT(testSOPInstanceUID)
 			tc.setup(lut)
 
 			result := lut.IsValid()
@@ -111,7 +111,7 @@ func TestPresentationLUT_IsValid(t *testing.T) {
 }
 
 func TestPresentationLUT_TransformValue_Identity(t *testing.T) {
-	lut := NewPresentationLUT("1.2.3.4.5")
+	lut := NewPresentationLUT(testSOPInstanceUID)
 	lut.PresentationLUTShape = PresentationLUTShapeIdentity
 
 	testValues := []uint16{0, 100, 500, 1000, 4095}
@@ -125,14 +125,14 @@ func TestPresentationLUT_TransformValue_Identity(t *testing.T) {
 }
 
 func TestPresentationLUT_TransformValue_LUT(t *testing.T) {
-	lut := NewPresentationLUT("1.2.3.4.5")
+	lut := NewPresentationLUT(testSOPInstanceUID)
 	lut.PresentationLUTShape = PresentationLUTShapeLinOD
 
 	// Create a simple LUT: input 0-4 maps to output 0, 100, 200, 300, 400
 	lutData := []uint16{0, 100, 200, 300, 400}
-    if err := lut.SetLUT(5, 0, 12, lutData); err != nil {
-        t.Fatalf("SetLUT failed: %v", err)
-    }
+	if err := lut.SetLUT(5, 0, 12, lutData); err != nil {
+		t.Fatalf("SetLUT failed: %v", err)
+	}
 
 	testCases := []struct {
 		input    uint16
@@ -156,13 +156,13 @@ func TestPresentationLUT_TransformValue_LUT(t *testing.T) {
 }
 
 func TestPresentationLUT_TransformValue_Clamp(t *testing.T) {
-	lut := NewPresentationLUT("1.2.3.4.5")
+	lut := NewPresentationLUT(testSOPInstanceUID)
 	lut.PresentationLUTShape = PresentationLUTShapeLinOD
 
 	lutData := []uint16{100, 200, 300}
-    if err := lut.SetLUT(3, 0, 12, lutData); err != nil {
-        t.Fatalf("SetLUT failed: %v", err)
-    }
+	if err := lut.SetLUT(3, 0, 12, lutData); err != nil {
+		t.Fatalf("SetLUT failed: %v", err)
+	}
 
 	// Test values below range
 	result := lut.TransformValue(0)

@@ -118,7 +118,7 @@ func TestTranscoder_TranscodeUncompressedToUncompressed(t *testing.T) {
 	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}))
 
 	// Create simple pixel data (512x512 = 262144 bytes)
 	pixelData := make([]byte, 512*512)
@@ -158,7 +158,7 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 		_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 		_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 		_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-		_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+		_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}))
 
 		pixelData := make([]byte, 10*10)
 		for i := range pixelData {
@@ -190,7 +190,7 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 		_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 		_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 		_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-		_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+		_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}))
 
 		pixelData := make([]byte, 10*10)
 		_ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
@@ -216,7 +216,7 @@ func TestTranscoder_DecodeFrameUsesBOTFrameBoundaries(t *testing.T) {
 	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}))
 	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
 
 	obf := element.NewOtherByteFragment(tag.PixelData)
@@ -250,7 +250,7 @@ func TestTranscoderDecodeParsesStringNumberOfFrames(t *testing.T) {
 	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}))
 	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
 
 	obf := element.NewOtherByteFragment(tag.PixelData)
@@ -292,7 +292,7 @@ func TestTranscoderDecodeFrameLoadsOnlyRequestedBOTFragments(t *testing.T) {
 	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{7}))
 	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}))
 	_ = ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}))
 
 	first := &countingBuffer{data: []byte("AA")}
@@ -575,7 +575,7 @@ func TestTranscoder_VRSelection(t *testing.T) {
 			_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{tt.bitsAllocated - 1}))
 			_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
 			_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
-			_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+			_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}))
 
 			// Create pixel data
 			bytesPerPixel := (tt.bitsAllocated + 7) / 8

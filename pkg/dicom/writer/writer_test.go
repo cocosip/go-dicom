@@ -46,7 +46,7 @@ func TestWritePreamble(t *testing.T) {
 
 func TestWriteUsesDatasetTransferSyntaxAndSyncsFileMeta(t *testing.T) {
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
 	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Meta^Sync"}))
 
@@ -278,7 +278,7 @@ func TestWriteElement(t *testing.T) {
 		w := New(transfer.ExplicitVRLittleEndian)
 		w.writer = buf
 
-		elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+		elem := element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})
 		if err := w.writeElement(elem); err != nil {
 			t.Fatalf("writeElement() error = %v", err)
 		}
@@ -331,7 +331,7 @@ func TestWriteSimpleDataset(t *testing.T) {
 
 	// Create dataset
 	ds := dataset.New()
-	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
 	if err := ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512})); err != nil {
@@ -399,7 +399,7 @@ func TestWriteSequence(t *testing.T) {
 	// Create a sequence with one item
 	seq := dataset.NewSequence(tag.New(0x0008, 0x1140))
 	item := dataset.New()
-	if err := item.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{"1.2.3.4"})); err != nil {
+	if err := item.Add(element.NewString(tag.New(0x0008, 0x1155), vr.UI, []string{testReferencedUID})); err != nil {
 		t.Fatalf("Item.Add() error: %v", err)
 	}
 	seq.AddItem(item)
@@ -439,7 +439,7 @@ func TestRoundTrip(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	ds := dataset.New()
-	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
 	if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {
@@ -477,7 +477,7 @@ func TestRoundTrip(t *testing.T) {
 func BenchmarkWriteSmallDataset(b *testing.B) {
 	// Create a small dataset
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn}))
 	_ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250106"}))
 	_ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
 
@@ -536,7 +536,7 @@ func BenchmarkWriteTag(b *testing.B) {
 }
 
 func BenchmarkWriteElement(b *testing.B) {
-	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+	elem := element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -46,7 +46,7 @@ func TestNewWithOptions(t *testing.T) {
 		WithConnectTimeout(5*time.Second),
 		WithRequestTimeout(60*time.Second),
 		WithAssociationTimeout(15*time.Second),
-		WithImplementationClassUID("1.2.3.4.5"),
+		WithImplementationClassUID(testImplementationClassUID),
 		WithImplementationVersionName("TEST-1.0"),
 	)
 
@@ -69,7 +69,7 @@ func TestNewWithOptions(t *testing.T) {
 	if opts.AssociationTimeout != 15*time.Second {
 		t.Errorf("Expected AssociationTimeout 15s, got %v", opts.AssociationTimeout)
 	}
-	if opts.ImplementationClassUID != "1.2.3.4.5" {
+	if opts.ImplementationClassUID != testImplementationClassUID {
 		t.Errorf("Expected ImplementationClassUID '1.2.3.4.5', got '%s'", opts.ImplementationClassUID)
 	}
 	if opts.ImplementationVersionName != "TEST-1.0" {
@@ -102,7 +102,7 @@ func TestAddPresentationContext(t *testing.T) {
 	}
 
 	// Add second context
-	client.AddPresentationContext("1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
+	client.AddPresentationContext(testCTImageStorageUID, // CT Image Storage
 		"1.2.840.10008.1.2", // Implicit VR Little Endian
 	)
 
@@ -165,7 +165,7 @@ func TestCloseWhenNotConnected(t *testing.T) {
 func TestBuildUserInformation(t *testing.T) {
 	client := New(
 		WithMaxPDULength(32768),
-		WithImplementationClassUID("1.2.3.4.5"),
+		WithImplementationClassUID(testImplementationClassUID),
 		WithImplementationVersionName("TEST-1.0"),
 	)
 
@@ -174,7 +174,7 @@ func TestBuildUserInformation(t *testing.T) {
 	if userInfo.MaximumLength != 32768 {
 		t.Errorf("Expected MaximumLength 32768, got %d", userInfo.MaximumLength)
 	}
-	if userInfo.ImplementationClassUID != "1.2.3.4.5" {
+	if userInfo.ImplementationClassUID != testImplementationClassUID {
 		t.Errorf("Expected ImplementationClassUID '1.2.3.4.5', got '%s'", userInfo.ImplementationClassUID)
 	}
 	if userInfo.ImplementationVersionName != "TEST-1.0" {

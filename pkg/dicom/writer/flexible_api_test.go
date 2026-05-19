@@ -23,7 +23,7 @@ func TestWriteWithDefaults(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	// Write with defaults (no options)
 	if err := Write(buf, ds); err != nil {
@@ -41,8 +41,8 @@ func TestWriteWithDefaults(t *testing.T) {
 	if !exists {
 		t.Fatal("PatientName not found")
 	}
-	if patientName != "Test^Patient" {
-		t.Errorf("PatientName = %q, want %q", patientName, "Test^Patient")
+	if patientName != testPatientName {
+		t.Errorf("PatientName = %q, want %q", patientName, testPatientName)
 	}
 
 	// Verify Transfer Syntax UID was auto-generated
@@ -65,7 +65,7 @@ func TestWriteWithFileMetaInfo(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	// Write with custom file meta info
 	if err := Write(buf, ds, WithFileMetaInfo(fileMetaInfo)); err != nil {
@@ -94,7 +94,7 @@ func TestWriteWithTransferSyntax(t *testing.T) {
 
 	// Create a dataset
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn}))
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512}))
@@ -115,8 +115,8 @@ func TestWriteWithTransferSyntax(t *testing.T) {
 
 	// Verify all elements
 	patientName, exists := result.Dataset.GetString(tag.PatientName)
-	if !exists || patientName != "Doe^John" {
-		t.Errorf("PatientName = %q, exists = %v, want %q", patientName, exists, "Doe^John")
+	if !exists || patientName != testPatientNameJohn {
+		t.Errorf("PatientName = %q, exists = %v, want %q", patientName, exists, testPatientNameJohn)
 	}
 
 	patientID, exists := result.Dataset.GetString(tag.PatientID)

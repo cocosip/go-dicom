@@ -12,11 +12,22 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const (
+	testKeywordPatientName      = "PatientName"
+	testKeywordStudyInstanceUID = "StudyInstanceUID"
+	testKeywordRows             = "Rows"
+	testKeywordColumns          = "Columns"
+	testKeywordPixelData        = "PixelData"
+	testNamePatientName         = "Patient Name"
+	testNamePatientNameDICOM    = "Patient's Name"
+	testNameGroupLength         = "Group Length"
+)
+
 func TestNewEntry(t *testing.T) {
 	entry := dict.NewEntry(
 		tag.New(0x0010, 0x0010),
-		"Patient Name",
-		"PatientName",
+		testNamePatientName,
+		testKeywordPatientName,
 		vm.VM1,
 		false,
 		vr.PN,
@@ -25,11 +36,11 @@ func TestNewEntry(t *testing.T) {
 	if entry.Tag().Group() != 0x0010 {
 		t.Errorf("Tag().Group() = 0x%04x, want 0x0010", entry.Tag().Group())
 	}
-	if entry.Name() != "Patient Name" {
-		t.Errorf("Name() = %q, want %q", entry.Name(), "Patient Name")
+	if entry.Name() != testNamePatientName {
+		t.Errorf("Name() = %q, want %q", entry.Name(), testNamePatientName)
 	}
-	if entry.Keyword() != "PatientName" {
-		t.Errorf("Keyword() = %q, want %q", entry.Keyword(), "PatientName")
+	if entry.Keyword() != testKeywordPatientName {
+		t.Errorf("Keyword() = %q, want %q", entry.Keyword(), testKeywordPatientName)
 	}
 	if entry.IsRetired() {
 		t.Error("IsRetired() = true, want false")
@@ -43,15 +54,15 @@ func TestNewEntryWithMask(t *testing.T) {
 	mt := tag.MustParseMaskedTag("(xxxx,0000)")
 	entry := dict.NewEntryWithMask(
 		mt,
-		"Group Length",
+		testNameGroupLength,
 		"GroupLength",
 		vm.VM1,
 		false,
 		vr.UL,
 	)
 
-	if entry.Name() != "Group Length" {
-		t.Errorf("Name() = %q, want %q", entry.Name(), "Group Length")
+	if entry.Name() != testNameGroupLength {
+		t.Errorf("Name() = %q, want %q", entry.Name(), testNameGroupLength)
 	}
 	if !entry.IsMasked() {
 		t.Error("IsMasked() = false, want true")
@@ -70,31 +81,31 @@ func TestEntryMatches(t *testing.T) {
 	}{
 		{
 			"exact match",
-			dict.NewEntry(tag.New(0x0010, 0x0010), "Patient's Name", "PatientName", vm.VM1, false, vr.PN),
+			dict.NewEntry(tag.New(0x0010, 0x0010), testNamePatientNameDICOM, testKeywordPatientName, vm.VM1, false, vr.PN),
 			tag.New(0x0010, 0x0010),
 			true,
 		},
 		{
 			"no match",
-			dict.NewEntry(tag.New(0x0010, 0x0010), "Patient's Name", "PatientName", vm.VM1, false, vr.PN),
+			dict.NewEntry(tag.New(0x0010, 0x0010), testNamePatientNameDICOM, testKeywordPatientName, vm.VM1, false, vr.PN),
 			tag.New(0x0010, 0x0020),
 			false,
 		},
 		{
 			"masked match - group length",
-			dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), "Group Length", "GroupLength", vm.VM1, false, vr.UL),
+			dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), testNameGroupLength, "GroupLength", vm.VM1, false, vr.UL),
 			tag.New(0x0010, 0x0000),
 			true,
 		},
 		{
 			"masked match - group length 2",
-			dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), "Group Length", "GroupLength", vm.VM1, false, vr.UL),
+			dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), testNameGroupLength, "GroupLength", vm.VM1, false, vr.UL),
 			tag.New(0x0028, 0x0000),
 			true,
 		},
 		{
 			"masked no match",
-			dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), "Group Length", "GroupLength", vm.VM1, false, vr.UL),
+			dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), testNameGroupLength, "GroupLength", vm.VM1, false, vr.UL),
 			tag.New(0x0010, 0x0010),
 			false,
 		},
@@ -114,8 +125,8 @@ func TestDictionaryAdd(t *testing.T) {
 
 	entry := dict.NewEntry(
 		tag.New(0x0010, 0x0010),
-		"Patient Name",
-		"PatientName",
+		testNamePatientName,
+		testKeywordPatientName,
 		vm.VM1,
 		false,
 		vr.PN,
@@ -128,12 +139,12 @@ func TestDictionaryAdd(t *testing.T) {
 	if found == nil {
 		t.Fatal("Lookup() returned nil, want entry")
 	}
-	if found.Name() != "Patient Name" {
-		t.Errorf("Lookup().Name() = %q, want %q", found.Name(), "Patient Name")
+	if found.Name() != testNamePatientName {
+		t.Errorf("Lookup().Name() = %q, want %q", found.Name(), testNamePatientName)
 	}
 
 	// Lookup by keyword
-	foundTag := d.LookupKeyword("PatientName")
+	foundTag := d.LookupKeyword(testKeywordPatientName)
 	if foundTag == nil {
 		t.Fatal("LookupKeyword() returned nil, want tag")
 	}
@@ -148,7 +159,7 @@ func TestDictionaryMaskedLookup(t *testing.T) {
 	// Add group length masked entry
 	groupLengthEntry := dict.NewEntryWithMask(
 		tag.MustParseMaskedTag("(xxxx,0000)"),
-		"Group Length",
+		testNameGroupLength,
 		"GroupLength",
 		vm.VM1,
 		false,
@@ -177,8 +188,8 @@ func TestDictionaryMaskedLookup(t *testing.T) {
 			if !tt.wantFound && found != nil {
 				t.Errorf("Lookup() returned %v, want nil", found.Name())
 			}
-			if tt.wantFound && found != nil && found.Name() != "Group Length" {
-				t.Errorf("Lookup().Name() = %q, want %q", found.Name(), "Group Length")
+			if tt.wantFound && found != nil && found.Name() != testNameGroupLength {
+				t.Errorf("Lookup().Name() = %q, want %q", found.Name(), testNameGroupLength)
 			}
 		})
 	}
@@ -188,9 +199,9 @@ func TestDictionaryEntries(t *testing.T) {
 	d := dict.New()
 
 	// Add some entries
-	d.Add(dict.NewEntry(tag.New(0x0010, 0x0010), "Patient's Name", "PatientName", vm.VM1, false, vr.PN))
+	d.Add(dict.NewEntry(tag.New(0x0010, 0x0010), testNamePatientNameDICOM, testKeywordPatientName, vm.VM1, false, vr.PN))
 	d.Add(dict.NewEntry(tag.New(0x0010, 0x0020), "Patient ID", "PatientID", vm.VM1, false, vr.LO))
-	d.Add(dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), "Group Length", "GroupLength", vm.VM1, false, vr.UL))
+	d.Add(dict.NewEntryWithMask(tag.MustParseMaskedTag("(xxxx,0000)"), testNameGroupLength, "GroupLength", vm.VM1, false, vr.UL))
 
 	entries := d.Entries()
 	if len(entries) != 3 {
@@ -241,11 +252,11 @@ func TestTagDictionaryEntryIntegration(t *testing.T) {
 		t.Fatalf("Tag.DictionaryEntry() returned %T, want *dict.Entry", dictEntry)
 	}
 
-	if e.Name() != "Patient's Name" {
-		t.Errorf("Entry.Name() = %q, want %q", e.Name(), "Patient's Name")
+	if e.Name() != testNamePatientNameDICOM {
+		t.Errorf("Entry.Name() = %q, want %q", e.Name(), testNamePatientNameDICOM)
 	}
-	if e.Keyword() != "PatientName" {
-		t.Errorf("Entry.Keyword() = %q, want %q", e.Keyword(), "PatientName")
+	if e.Keyword() != testKeywordPatientName {
+		t.Errorf("Entry.Keyword() = %q, want %q", e.Keyword(), testKeywordPatientName)
 	}
 }
 
@@ -357,33 +368,33 @@ func TestDefaultDictionaryInitialization(t *testing.T) {
 		wantName string
 	}{
 		{
-			"PatientName",
+			testKeywordPatientName,
 			tag.New(0x0010, 0x0010),
-			"PatientName",
-			"Patient's Name",
+			testKeywordPatientName,
+			testNamePatientNameDICOM,
 		},
 		{
-			"StudyInstanceUID",
+			testKeywordStudyInstanceUID,
 			tag.New(0x0020, 0x000D),
-			"StudyInstanceUID",
+			testKeywordStudyInstanceUID,
 			"Study Instance UID",
 		},
 		{
-			"Rows",
+			testKeywordRows,
 			tag.New(0x0028, 0x0010),
-			"Rows",
-			"Rows",
+			testKeywordRows,
+			testKeywordRows,
 		},
 		{
-			"Columns",
+			testKeywordColumns,
 			tag.New(0x0028, 0x0011),
-			"Columns",
-			"Columns",
+			testKeywordColumns,
+			testKeywordColumns,
 		},
 		{
-			"PixelData",
+			testKeywordPixelData,
 			tag.New(0x7FE0, 0x0010),
-			"PixelData",
+			testKeywordPixelData,
 			"Pixel Data",
 		},
 	}
@@ -414,11 +425,11 @@ func TestDefaultDictionaryKeywordLookup(t *testing.T) {
 		wantGroup   uint16
 		wantElement uint16
 	}{
-		{"PatientName", 0x0010, 0x0010},
-		{"StudyInstanceUID", 0x0020, 0x000D},
-		{"Rows", 0x0028, 0x0010},
-		{"Columns", 0x0028, 0x0011},
-		{"PixelData", 0x7FE0, 0x0010},
+		{testKeywordPatientName, 0x0010, 0x0010},
+		{testKeywordStudyInstanceUID, 0x0020, 0x000D},
+		{testKeywordRows, 0x0028, 0x0010},
+		{testKeywordColumns, 0x0028, 0x0011},
+		{testKeywordPixelData, 0x7FE0, 0x0010},
 	}
 
 	for _, tc := range testCases {

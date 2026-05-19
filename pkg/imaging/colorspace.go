@@ -47,20 +47,26 @@ func (cs *ColorSpace) Equals(other *ColorSpace) bool {
 }
 
 // Standard color space definitions
+const (
+	colorSpaceRGBName       = "RGB"
+	colorSpaceGrayscaleName = "Grayscale"
+	componentRedName        = "Red"
+	componentValueName      = "Value"
+)
 
 // OneBit represents a 1-bit color space.
-var OneBit = NewColorSpace("1-bit", NewComponent("Value", 1, 1))
+var OneBit = NewColorSpace("1-bit", NewComponent(componentValueName, 1, 1))
 
 // Grayscale represents a grayscale color space.
-var Grayscale = NewColorSpace("Grayscale", NewComponent("Value", 1, 1))
+var Grayscale = NewColorSpace(colorSpaceGrayscaleName, NewComponent(componentValueName, 1, 1))
 
 // Indexed represents an indexed (palette) color space.
-var Indexed = NewColorSpace("Indexed", NewComponent("Value", 1, 1))
+var Indexed = NewColorSpace("Indexed", NewComponent(componentValueName, 1, 1))
 
 // RGB represents an RGB color space with full resolution for all components.
 var RGB = NewColorSpace(
-	"RGB",
-	NewComponent("Red", 1, 1),
+	colorSpaceRGBName,
+	NewComponent(componentRedName, 1, 1),
 	NewComponent("Green", 1, 1),
 	NewComponent("Blue", 1, 1),
 )
@@ -70,13 +76,13 @@ var BGR = NewColorSpace(
 	"BGR",
 	NewComponent("Blue", 1, 1),
 	NewComponent("Green", 1, 1),
-	NewComponent("Red", 1, 1),
+	NewComponent(componentRedName, 1, 1),
 )
 
 // RGBA represents an RGBA color space with alpha channel.
 var RGBA = NewColorSpace(
 	"RGBA",
-	NewComponent("Red", 1, 1),
+	NewComponent(componentRedName, 1, 1),
 	NewComponent("Green", 1, 1),
 	NewComponent("Blue", 1, 1),
 	NewComponent("Alpha", 1, 1),

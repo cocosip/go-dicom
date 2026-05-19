@@ -126,7 +126,7 @@ func TestAAssociateRJ_ResultString(t *testing.T) {
 	}{
 		{ResultRejectedPermanent, "rejected-permanent"},
 		{ResultRejectedTransient, "rejected-transient"},
-		{0xFF, "unknown(0xFF)"},
+		{0xFF, unknownFFName},
 	}
 
 	for _, tt := range tests {
@@ -143,10 +143,10 @@ func TestAAssociateRJ_SourceString(t *testing.T) {
 		source   byte
 		expected string
 	}{
-		{SourceServiceUser, "DICOM UL service-user"},
+		{SourceServiceUser, dicomULServiceUserName},
 		{SourceServiceProviderACSE, "DICOM UL service-provider (ACSE)"},
 		{SourceServiceProviderPresentation, "DICOM UL service-provider (Presentation)"},
-		{0xFF, "unknown(0xFF)"},
+		{0xFF, unknownFFName},
 	}
 
 	for _, tt := range tests {
@@ -166,14 +166,14 @@ func TestAAssociateRJ_ReasonString(t *testing.T) {
 		reason   byte
 		expected string
 	}{
-		{"Service user - no reason", SourceServiceUser, ReasonServiceUserNoReasonGiven, "no-reason-given"},
-		{"Service user - application context not supported", SourceServiceUser, ReasonServiceUserApplicationContextNotSupported, "application-context-name-not-supported"},
-		{"Service user - calling AE not recognized", SourceServiceUser, ReasonServiceUserCallingAETitleNotRecognized, "calling-AE-title-not-recognized"},
-		{"Service user - called AE not recognized", SourceServiceUser, ReasonServiceUserCalledAETitleNotRecognized, "called-AE-title-not-recognized"},
+		{"Service user - no reason", SourceServiceUser, ReasonServiceUserNoReasonGiven, associateRJReasonNoReasonGivenName},
+		{"Service user - application context not supported", SourceServiceUser, ReasonServiceUserApplicationContextNotSupported, associateRJReasonApplicationContextNameNotSupportedName},
+		{"Service user - calling AE not recognized", SourceServiceUser, ReasonServiceUserCallingAETitleNotRecognized, associateRJReasonCallingAETitleNotRecognizedName},
+		{"Service user - called AE not recognized", SourceServiceUser, ReasonServiceUserCalledAETitleNotRecognized, associateRJReasonCalledAETitleNotRecognizedName},
 		{"Service provider ACSE - protocol version not supported", SourceServiceProviderACSE, ReasonServiceProviderACSEProtocolVersionNotSupported, "protocol-version-not-supported"},
 		{"Service provider Presentation - temporary congestion", SourceServiceProviderPresentation, ReasonServiceProviderPresentationTemporaryCongestion, "temporary-congestion"},
 		{"Service provider Presentation - local limit exceeded", SourceServiceProviderPresentation, ReasonServiceProviderPresentationLocalLimitExceeded, "local-limit-exceeded"},
-		{"Unknown source and reason", 0xFF, 0xFF, "unknown(0xFF)"},
+		{"Unknown source and reason", 0xFF, 0xFF, unknownFFName},
 	}, func(source, reason byte) reasonStringer {
 		return &AAssociateRJ{Source: source, Reason: reason}
 	})
@@ -187,7 +187,7 @@ func TestAAssociateRJ_String(t *testing.T) {
 	)
 
 	str := rj.String()
-	expected := "A-ASSOCIATE-RJ: Result=rejected-permanent, Source=DICOM UL service-user, Reason=called-AE-title-not-recognized"
+	expected := pduTypeAAssociateRJName + ": Result=rejected-permanent, Source=" + dicomULServiceUserName + ", Reason=" + associateRJReasonCalledAETitleNotRecognizedName
 
 	if str != expected {
 		t.Errorf("String() mismatch:\nexpected: %s\ngot:      %s", expected, str)
@@ -200,10 +200,10 @@ func TestAAssociateRJ_AllServiceUserReasons(t *testing.T) {
 		code byte
 		name string
 	}{
-		{ReasonServiceUserNoReasonGiven, "no-reason-given"},
-		{ReasonServiceUserApplicationContextNotSupported, "application-context-name-not-supported"},
-		{ReasonServiceUserCallingAETitleNotRecognized, "calling-AE-title-not-recognized"},
-		{ReasonServiceUserCalledAETitleNotRecognized, "called-AE-title-not-recognized"},
+		{ReasonServiceUserNoReasonGiven, associateRJReasonNoReasonGivenName},
+		{ReasonServiceUserApplicationContextNotSupported, associateRJReasonApplicationContextNameNotSupportedName},
+		{ReasonServiceUserCallingAETitleNotRecognized, associateRJReasonCallingAETitleNotRecognizedName},
+		{ReasonServiceUserCalledAETitleNotRecognized, associateRJReasonCalledAETitleNotRecognizedName},
 	}
 
 	for _, r := range reasons {

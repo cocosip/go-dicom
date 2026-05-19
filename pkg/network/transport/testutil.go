@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const localhostName = "localhost"
+
 // generateTestCertificate creates a self-signed certificate for testing purposes.
 func generateTestCertificate() (tls.Certificate, error) {
 	// Generate a private key
@@ -28,14 +30,14 @@ func generateTestCertificate() (tls.Certificate, error) {
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
 			Organization: []string{"go-dicom Test"},
-			CommonName:   "localhost",
+			CommonName:   localhostName,
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(24 * time.Hour),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-		DNSNames:              []string{"localhost"},
+		DNSNames:              []string{localhostName},
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
 	}
 

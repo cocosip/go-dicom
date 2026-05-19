@@ -13,6 +13,14 @@ import (
 
 // PDU type constants as defined in DICOM standard PS3.8
 const (
+	pduTypeAAssociateRQName = "A-ASSOCIATE-RQ"
+	pduTypeAAssociateACName = "A-ASSOCIATE-AC"
+	pduTypeAAssociateRJName = "A-ASSOCIATE-RJ"
+	pduTypePDataTFName      = "P-DATA-TF"
+	pduTypeAReleaseRQName   = "A-RELEASE-RQ"
+	pduTypeAReleaseRPName   = "A-RELEASE-RP"
+	pduTypeAAbortName       = "A-ABORT"
+
 	// TypeAAssociateRQ represents A-ASSOCIATE-RQ PDU (0x01)
 	TypeAAssociateRQ byte = 0x01
 
@@ -42,19 +50,19 @@ const (
 func TypeString(pduType byte) string {
 	switch pduType {
 	case TypeAAssociateRQ:
-		return "A-ASSOCIATE-RQ"
+		return pduTypeAAssociateRQName
 	case TypeAAssociateAC:
-		return "A-ASSOCIATE-AC"
+		return pduTypeAAssociateACName
 	case TypeAAssociateRJ:
-		return "A-ASSOCIATE-RJ"
+		return pduTypeAAssociateRJName
 	case TypePDataTF:
-		return "P-DATA-TF"
+		return pduTypePDataTFName
 	case TypeAReleaseRQ:
-		return "A-RELEASE-RQ"
+		return pduTypeAReleaseRQName
 	case TypeAReleaseRP:
-		return "A-RELEASE-RP"
+		return pduTypeAReleaseRPName
 	case TypeAAbort:
-		return "A-ABORT"
+		return pduTypeAAbortName
 	default:
 		return fmt.Sprintf("Unknown(0x%02X)", pduType)
 	}

@@ -40,7 +40,7 @@ func TestRLECodec_EncodeDecodeSimple(t *testing.T) {
 		SamplesPerPixel:           1,
 		PixelRepresentation:       0, // unsigned
 		PlanarConfiguration:       0, // interleaved
-		PhotometricInterpretation: "MONOCHROME2",
+		PhotometricInterpretation: photometricMonochrome2,
 	}
 
 	src := newTestPixelData(frameInfo)
@@ -96,7 +96,7 @@ func TestRLECodec_EncodeDecodeRepeating(t *testing.T) {
 		SamplesPerPixel:           1,
 		PixelRepresentation:       0,
 		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
+		PhotometricInterpretation: photometricMonochrome2,
 	}
 
 	src := newTestPixelData(frameInfo)
@@ -155,7 +155,7 @@ func TestRLECodec_EncodeDecodeRGB(t *testing.T) {
 		SamplesPerPixel:           samplesPerPixel,
 		PixelRepresentation:       0,
 		PlanarConfiguration:       0, // interleaved
-		PhotometricInterpretation: "RGB",
+		PhotometricInterpretation: photometricRGB,
 	}
 
 	src := newTestPixelData(frameInfo)
@@ -205,7 +205,7 @@ func TestRLECodec_Encode16Bit(t *testing.T) {
 		SamplesPerPixel:           1,
 		PixelRepresentation:       0,
 		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
+		PhotometricInterpretation: photometricMonochrome2,
 	}
 
 	src := newTestPixelData(frameInfo)

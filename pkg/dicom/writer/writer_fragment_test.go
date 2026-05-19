@@ -115,7 +115,7 @@ func TestFragmentSequenceRoundTrip(t *testing.T) {
 		ds := dataset.New()
 
 		// Add some metadata
-		if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Test^Patient"})); err != nil {
+		if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName})); err != nil {
 			t.Fatalf("Add() error: %v", err)
 		}
 		if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"})); err != nil {

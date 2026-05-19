@@ -52,7 +52,7 @@ func TestNativeCodec_EncodeDecode8Bit(t *testing.T) {
 		SamplesPerPixel:           1,
 		PixelRepresentation:       0,
 		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
+		PhotometricInterpretation: photometricMonochrome2,
 	}
 
 	src := newTestPixelData(frameInfo)
@@ -105,7 +105,7 @@ func TestNativeCodec_EncodeDecode16Bit(t *testing.T) {
 		SamplesPerPixel:           1,
 		PixelRepresentation:       0,
 		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
+		PhotometricInterpretation: photometricMonochrome2,
 	}
 
 	src := newTestPixelData(frameInfo)
@@ -156,7 +156,7 @@ func TestNativeCodec_ByteSwapping16Bit(t *testing.T) {
 		SamplesPerPixel:           1,
 		PixelRepresentation:       0,
 		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
+		PhotometricInterpretation: photometricMonochrome2,
 	}
 
 	src := newTestPixelData(frameInfo)
@@ -212,7 +212,7 @@ func TestNativeCodec_BigEndian(t *testing.T) {
 		SamplesPerPixel:           1,
 		PixelRepresentation:       0,
 		PlanarConfiguration:       0,
-		PhotometricInterpretation: "MONOCHROME2",
+		PhotometricInterpretation: photometricMonochrome2,
 	}
 
 	src := newTestPixelData(frameInfo)

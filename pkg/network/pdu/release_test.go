@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	testReleaseRQStr = "A-RELEASE-RQ"
-	testReleaseRPStr = "A-RELEASE-RP"
+	testReleaseRQStr = pduTypeAReleaseRQName
+	testReleaseRPStr = pduTypeAReleaseRPName
 )
 
 func TestNewAReleaseRQ(t *testing.T) {

@@ -26,7 +26,7 @@ func TestGeneratedUIDs(t *testing.T) {
 		{
 			"ImplicitVRLittleEndian",
 			uid.ImplicitVRLittleEndian,
-			"1.2.840.10008.1.2",
+			testImplicitVRLittleLE,
 			uid.TypeTransferSyntax,
 		},
 		{
@@ -70,7 +70,7 @@ func TestGeneratedUIDs(t *testing.T) {
 // Test that UIDs are registered in the global registry
 func TestGeneratedUIDsRegistered(t *testing.T) {
 	// Parse a standard UID - should return the registered instance
-	parsed := uid.Parse("1.2.840.10008.1.2", "Implicit VR Little Endian", uid.TypeUnknown)
+	parsed := uid.Parse(testImplicitVRLittleLE, "Implicit VR Little Endian", uid.TypeUnknown)
 
 	// Verify it equals the registered constant
 	if !parsed.Equals(uid.ImplicitVRLittleEndian) {

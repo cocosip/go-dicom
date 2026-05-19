@@ -163,7 +163,7 @@ func TestSwapByteBuffer_GetByteRange(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:     "full range",
+			name:     fullRangeCaseName,
 			offset:   0,
 			count:    8,
 			wantData: []byte{0x02, 0x01, 0x04, 0x03, 0x06, 0x05, 0x08, 0x07},

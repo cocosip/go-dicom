@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const invalidTestName = "invalid"
+
 func TestParsePhotometricInterpretation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -20,8 +22,8 @@ func TestParsePhotometricInterpretation(t *testing.T) {
 			expected: Monochrome1,
 		},
 		{
-			name:     "MONOCHROME2",
-			input:    "MONOCHROME2",
+			name:     monochrome2,
+			input:    monochrome2,
 			expected: Monochrome2,
 		},
 		{
@@ -30,13 +32,13 @@ func TestParsePhotometricInterpretation(t *testing.T) {
 			expected: Monochrome2,
 		},
 		{
-			name:     "PALETTE COLOR",
-			input:    "PALETTE COLOR",
+			name:     photometricPaletteColor,
+			input:    photometricPaletteColor,
 			expected: PaletteColor,
 		},
 		{
-			name:     "RGB",
-			input:    "RGB",
+			name:     photometricRGB,
+			input:    photometricRGB,
 			expected: RGBPhotometric,
 		},
 		{
@@ -71,16 +73,16 @@ func TestParsePhotometricInterpretation(t *testing.T) {
 		},
 		{
 			name:     "with spaces",
-			input:    "  RGB  ",
+			input:    "  " + photometricRGB + "  ",
 			expected: RGBPhotometric,
 		},
 		{
 			name:     "with null characters",
-			input:    "RGB\x00",
+			input:    photometricRGB + "\x00",
 			expected: RGBPhotometric,
 		},
 		{
-			name:      "invalid",
+			name:      invalidTestName,
 			input:     "INVALID",
 			expectErr: true,
 		},
@@ -149,12 +151,12 @@ func TestPhotometricInterpretation_Properties(t *testing.T) {
 			description: "Palette Color",
 		},
 		{
-			name:        "RGB",
+			name:        photometricRGB,
 			pi:          RGBPhotometric,
 			isColor:     true,
 			isPalette:   false,
 			isYBR:       false,
-			description: "RGB",
+			description: photometricRGB,
 		},
 		{
 			name:        "YbrFull",
@@ -235,14 +237,14 @@ func TestPhotometricInterpretation_Equals(t *testing.T) {
 
 func TestMustParsePhotometricInterpretation(t *testing.T) {
 	t.Run("valid input", func(t *testing.T) {
-		result := MustParsePhotometricInterpretation("RGB")
+		result := MustParsePhotometricInterpretation(photometricRGB)
 		if result != RGBPhotometric {
 			t.Errorf("MustParsePhotometricInterpretation(\"RGB\") = %v, want %v",
 				result, RGBPhotometric)
 		}
 	})
 
-	t.Run("invalid input panics", func(t *testing.T) {
+	t.Run(invalidTestName+" input panics", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Errorf("MustParsePhotometricInterpretation did not panic on invalid input")

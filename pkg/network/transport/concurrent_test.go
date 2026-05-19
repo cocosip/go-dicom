@@ -31,7 +31,7 @@ func TestDial_Concurrent(t *testing.T) {
 			if err != nil {
 				return
 			}
-            _ = conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -100,7 +100,7 @@ func TestListener_ConcurrentAccept(t *testing.T) {
 				cancel()
 
 				if err == nil {
-                    _ = conn.Close()
+					_ = conn.Close()
 					acceptedConns <- acceptorID
 				}
 			}
@@ -136,7 +136,7 @@ func TestListener_ConcurrentAccept(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Close listener to stop acceptors
-    _ = listener.Close()
+	_ = listener.Close()
 	acceptWg.Wait()
 
 	close(acceptedConns)
@@ -182,7 +182,7 @@ func TestDialTLS_Concurrent(t *testing.T) {
 			if err != nil {
 				return
 			}
-            _ = conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -205,7 +205,7 @@ func TestDialTLS_Concurrent(t *testing.T) {
 	clientConfig := &tls.Config{
 		RootCAs:    rootPool,
 		MinVersion: tls.VersionTLS12,
-		ServerName: "localhost",
+		ServerName: localhostName,
 	}
 
 	for i := 0; i < numDials; i++ {
@@ -246,14 +246,14 @@ func TestListener_ConcurrentCloseAndAccept(t *testing.T) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
-            _, _ = listener.Accept(ctx)
+			_, _ = listener.Accept(ctx)
 			// We expect this to fail after Close() is called
 		}()
 	}
 
 	// Close the listener after a short delay
 	time.Sleep(50 * time.Millisecond)
-    _ = listener.Close()
+	_ = listener.Close()
 
 	// Wait for all acceptors to finish
 	wg.Wait()

@@ -46,7 +46,7 @@ func (a *AReleaseRQ) Decode(pdu *RawPDU) error {
 
 // String returns a human-readable representation.
 func (a *AReleaseRQ) String() string {
-	return "A-RELEASE-RQ"
+	return pduTypeAReleaseRQName
 }
 
 // AReleaseRP represents an A-RELEASE-RP (Association Release Response) PDU.
@@ -88,5 +88,5 @@ func (a *AReleaseRP) Decode(pdu *RawPDU) error {
 
 // String returns a human-readable representation.
 func (a *AReleaseRP) String() string {
-	return "A-RELEASE-RP"
+	return pduTypeAReleaseRPName
 }

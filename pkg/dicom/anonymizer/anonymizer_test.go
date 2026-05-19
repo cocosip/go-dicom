@@ -94,9 +94,9 @@ func TestSecurityProfileFindAction(t *testing.T) {
 
 func TestAnonymizerRemoveAction(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-	_ = ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
+	_ = ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{testStudyDescription}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0010,0010", ActionX) // Remove PatientName
@@ -120,7 +120,7 @@ func TestAnonymizerRemoveAction(t *testing.T) {
 
 func TestAnonymizerReplaceString(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	_ = ds.Add(element.NewString(tag.InstitutionName, vr.LO, []string{"Test Hospital"}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
@@ -217,16 +217,16 @@ func TestAnonymizerBlankItemZero(t *testing.T) {
 }
 
 func TestAnonymizerSequence(t *testing.T) {
-    // Create dataset with sequence
-    ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	// Create dataset with sequence
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	seq := dataset.NewSequence(tag.ReferencedStudySequence)
-    item := dataset.New()
-    _ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
-    _ = item.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Test Study"}))
+	item := dataset.New()
+	_ = item.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyUID}))
+	_ = item.Add(element.NewString(tag.StudyDescription, vr.LO, []string{testStudyDescription}))
 	seq.AddItem(item)
-    _ = ds.Add(seq)
+	_ = ds.Add(seq)
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 	_ = profile.AddRule("0010,0010", ActionX) // Remove PatientName
@@ -263,20 +263,20 @@ func TestAnonymizerSequence(t *testing.T) {
 
 	// StudyInstanceUID should be replaced
 	studyUID, _ := itemAnon.GetString(tag.StudyInstanceUID)
-	if studyUID == "1.2.3.4.5" {
+	if studyUID == testStudyUID {
 		t.Error("StudyInstanceUID in sequence should have been replaced")
 	}
 
 	// StudyDescription should be cleaned
 	studyDesc, _ := itemAnon.GetString(tag.StudyDescription)
-	if studyDesc == "Test Study" {
+	if studyDesc == testStudyDescription {
 		t.Error("StudyDescription should have been anonymized")
 	}
 }
 
 func TestAnonymizerCustomPatientInfo(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	profile := NewSecurityProfile(BasicProfile)
@@ -304,7 +304,7 @@ func TestAnonymizerCustomPatientInfo(t *testing.T) {
 
 func TestAnonymizerClone(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	profile := &SecurityProfile{rules: make([]profileRule, 0)}

@@ -147,7 +147,7 @@ func TestListenTLS_Success(t *testing.T) {
 		clientConfig := &tls.Config{
 			RootCAs:    rootPool,
 			MinVersion: tls.VersionTLS12,
-			ServerName: "localhost",
+			ServerName: localhostName,
 		}
 		conn, err := tls.Dial("tcp", addr, clientConfig)
 		if err != nil {

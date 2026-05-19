@@ -30,7 +30,7 @@ func TestHasFragmentSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -124,7 +124,7 @@ func TestMultiFrameFragmentSequences(t *testing.T) {
 			description:    "XA image with 96 frames and fragment sequences",
 		},
 		{
-			filename:       "multiframe.dcm",
+			filename:       testMultiframeFile,
 			expectedFrames: "140",
 			description:    "Secondary Capture with 140 frames",
 		},
@@ -143,7 +143,7 @@ func TestMultiFrameFragmentSequences(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open file: %v", err)
 			}
-            defer func() { _ = file.Close() }()
+			defer func() { _ = file.Close() }()
 
 			result, err := Parse(file)
 			if err != nil {
@@ -194,7 +194,7 @@ func TestFragmentSequenceStructure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -271,4 +271,3 @@ func BenchmarkMultiFrameFragmentParsing(b *testing.B) {
 		_, _ = Parse(reader)
 	}
 }
-

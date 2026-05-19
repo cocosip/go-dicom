@@ -197,7 +197,7 @@ func (w *xmlWriter) writePersonNameValue(elem element.Element) error {
 				continue
 			}
 
-			groupName := "Alphabetic"
+			groupName := personNameComponentGroupAlphabetic
 			switch groupIdx {
 			case 1:
 				groupName = "Ideographic"

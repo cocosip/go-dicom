@@ -9,6 +9,14 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vm"
 )
 
+const (
+	testVMRange12  = "1-2"
+	testVMRange1N  = "1-n"
+	testVMRange22N = "2-2n"
+	testVMRange33N = "3-3n"
+	testVMRange199 = "1-99"
+)
+
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -21,11 +29,11 @@ func TestParse(t *testing.T) {
 		wantErr       bool
 	}{
 		{"single value", "1", 1, 1, 1, false, "1", false},
-		{"fixed range", "1-2", 1, 2, 1, false, "1-2", false},
-		{"unlimited", "1-n", 1, int(^uint(0) >> 1), 1, true, "1-n", false},
-		{"multiplicity 2", "2-2n", 2, int(^uint(0) >> 1), 2, true, "2-2n", false},
-		{"multiplicity 3", "3-3n", 3, int(^uint(0) >> 1), 3, true, "3-3n", false},
-		{"fixed large", "1-99", 1, 99, 1, false, "1-99", false},
+		{"fixed range", testVMRange12, 1, 2, 1, false, testVMRange12, false},
+		{"unlimited", testVMRange1N, 1, int(^uint(0) >> 1), 1, true, testVMRange1N, false},
+		{"multiplicity 2", testVMRange22N, 2, int(^uint(0) >> 1), 2, true, testVMRange22N, false},
+		{"multiplicity 3", testVMRange33N, 3, int(^uint(0) >> 1), 3, true, testVMRange33N, false},
+		{"fixed large", testVMRange199, 1, 99, 1, false, testVMRange199, false},
 		{"single digit", "4", 4, 4, 4, false, "4", false},
 		{"invalid empty", "", 0, 0, 0, false, "", true},
 		{"invalid format", "abc", 0, 0, 0, false, "", true},
@@ -105,18 +113,18 @@ func TestStandardVMConstants(t *testing.T) {
 		want string
 	}{
 		{"VM1", vm.VM1, "1"},
-		{"VM1_2", vm.VM12, "1-2"},
+		{"VM1_2", vm.VM12, testVMRange12},
 		{"VM1_3", vm.VM13, "1-3"},
 		{"VM1_8", vm.VM18, "1-8"},
 		{"VM1_32", vm.VM132, "1-32"},
-		{"VM1_99", vm.VM199, "1-99"},
-		{"VM1_n", vm.VM1N, "1-n"},
+		{"VM1_99", vm.VM199, testVMRange199},
+		{"VM1_n", vm.VM1N, testVMRange1N},
 		{"VM2", vm.VM2, "2"},
 		{"VM2_n", vm.VM2N, "2-n"},
-		{"VM2_2n", vm.VM22N, "2-2n"},
+		{"VM2_2n", vm.VM22N, testVMRange22N},
 		{"VM3", vm.VM3, "3"},
 		{"VM3_n", vm.VM3N, "3-n"},
-		{"VM3_3n", vm.VM33N, "3-3n"},
+		{"VM3_3n", vm.VM33N, testVMRange33N},
 		{"VM4", vm.VM4, "4"},
 		{"VM6", vm.VM6, "6"},
 		{"VM16", vm.VM16, "16"},
@@ -133,8 +141,8 @@ func TestStandardVMConstants(t *testing.T) {
 
 func TestMustParse(t *testing.T) {
 	// Should not panic for valid input
-	result := vm.MustParse("1-2")
-	if result.String() != "1-2" {
+	result := vm.MustParse(testVMRange12)
+	if result.String() != testVMRange12 {
 		t.Errorf("MustParse(\"1-2\") = %v, want 1-2", result.String())
 	}
 
@@ -149,12 +157,12 @@ func TestMustParse(t *testing.T) {
 
 func TestParseCache(t *testing.T) {
 	// Parse the same VM twice
-	vm1, err := vm.Parse("1-2")
+	vm1, err := vm.Parse(testVMRange12)
 	if err != nil {
 		t.Fatalf("Parse(\"1-2\") error = %v", err)
 	}
 
-	vm2, err := vm.Parse("1-2")
+	vm2, err := vm.Parse(testVMRange12)
 	if err != nil {
 		t.Fatalf("Parse(\"1-2\") error = %v", err)
 	}

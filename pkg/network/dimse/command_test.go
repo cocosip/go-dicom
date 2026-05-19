@@ -11,30 +11,30 @@ func TestCommandField_String(t *testing.T) {
 		command  CommandField
 		expected string
 	}{
-		{"C-STORE-RQ", CommandCStoreRQ, "C-STORE-RQ"},
-		{"C-STORE-RSP", CommandCStoreRSP, "C-STORE-RSP"},
-		{"C-FIND-RQ", CommandCFindRQ, "C-FIND-RQ"},
-		{"C-FIND-RSP", CommandCFindRSP, "C-FIND-RSP"},
-		{"C-GET-RQ", CommandCGetRQ, "C-GET-RQ"},
-		{"C-GET-RSP", CommandCGetRSP, "C-GET-RSP"},
-		{"C-MOVE-RQ", CommandCMoveRQ, "C-MOVE-RQ"},
-		{"C-MOVE-RSP", CommandCMoveRSP, "C-MOVE-RSP"},
-		{"C-ECHO-RQ", CommandCEchoRQ, "C-ECHO-RQ"},
-		{"C-ECHO-RSP", CommandCEchoRSP, "C-ECHO-RSP"},
-		{"C-CANCEL-RQ", CommandCCancelRQ, "C-CANCEL-RQ"},
-		{"N-EVENT-REPORT-RQ", CommandNEventReportRQ, "N-EVENT-REPORT-RQ"},
-		{"N-EVENT-REPORT-RSP", CommandNEventReportRSP, "N-EVENT-REPORT-RSP"},
-		{"N-GET-RQ", CommandNGetRQ, "N-GET-RQ"},
-		{"N-GET-RSP", CommandNGetRSP, "N-GET-RSP"},
-		{"N-SET-RQ", CommandNSetRQ, "N-SET-RQ"},
-		{"N-SET-RSP", CommandNSetRSP, "N-SET-RSP"},
-		{"N-ACTION-RQ", CommandNActionRQ, "N-ACTION-RQ"},
-		{"N-ACTION-RSP", CommandNActionRSP, "N-ACTION-RSP"},
-		{"N-CREATE-RQ", CommandNCreateRQ, "N-CREATE-RQ"},
-		{"N-CREATE-RSP", CommandNCreateRSP, "N-CREATE-RSP"},
-		{"N-DELETE-RQ", CommandNDeleteRQ, "N-DELETE-RQ"},
-		{"N-DELETE-RSP", CommandNDeleteRSP, "N-DELETE-RSP"},
-		{"Unknown", CommandField(0x9999), "Unknown"},
+		{cStoreRQCommandName, CommandCStoreRQ, cStoreRQCommandName},
+		{cStoreRSPCommandName, CommandCStoreRSP, cStoreRSPCommandName},
+		{cFindRQCommandName, CommandCFindRQ, cFindRQCommandName},
+		{cFindRSPCommandName, CommandCFindRSP, cFindRSPCommandName},
+		{cGetRQCommandName, CommandCGetRQ, cGetRQCommandName},
+		{cGetRSPCommandName, CommandCGetRSP, cGetRSPCommandName},
+		{cMoveRQCommandName, CommandCMoveRQ, cMoveRQCommandName},
+		{cMoveRSPCommandName, CommandCMoveRSP, cMoveRSPCommandName},
+		{cEchoRQCommandName, CommandCEchoRQ, cEchoRQCommandName},
+		{cEchoRSPCommandName, CommandCEchoRSP, cEchoRSPCommandName},
+		{cCancelRQCommandName, CommandCCancelRQ, cCancelRQCommandName},
+		{nEventReportRQCommandName, CommandNEventReportRQ, nEventReportRQCommandName},
+		{nEventReportRSPCommandName, CommandNEventReportRSP, nEventReportRSPCommandName},
+		{nGetRQCommandName, CommandNGetRQ, nGetRQCommandName},
+		{nGetRSPCommandName, CommandNGetRSP, nGetRSPCommandName},
+		{nSetRQCommandName, CommandNSetRQ, nSetRQCommandName},
+		{nSetRSPCommandName, CommandNSetRSP, nSetRSPCommandName},
+		{nActionRQCommandName, CommandNActionRQ, nActionRQCommandName},
+		{nActionRSPCommandName, CommandNActionRSP, nActionRSPCommandName},
+		{nCreateRQCommandName, CommandNCreateRQ, nCreateRQCommandName},
+		{nCreateRSPCommandName, CommandNCreateRSP, nCreateRSPCommandName},
+		{nDeleteRQCommandName, CommandNDeleteRQ, nDeleteRQCommandName},
+		{nDeleteRSPCommandName, CommandNDeleteRSP, nDeleteRSPCommandName},
+		{unknownCommandName, CommandField(0x9999), unknownCommandName},
 	}
 
 	for _, tt := range tests {
@@ -53,12 +53,12 @@ func TestCommandField_IsRequest(t *testing.T) {
 		command  CommandField
 		expected bool
 	}{
-		{"C-STORE-RQ", CommandCStoreRQ, true},
-		{"C-STORE-RSP", CommandCStoreRSP, false},
-		{"C-ECHO-RQ", CommandCEchoRQ, true},
-		{"C-ECHO-RSP", CommandCEchoRSP, false},
-		{"N-GET-RQ", CommandNGetRQ, true},
-		{"N-GET-RSP", CommandNGetRSP, false},
+		{cStoreRQCommandName, CommandCStoreRQ, true},
+		{cStoreRSPCommandName, CommandCStoreRSP, false},
+		{cEchoRQCommandName, CommandCEchoRQ, true},
+		{cEchoRSPCommandName, CommandCEchoRSP, false},
+		{nGetRQCommandName, CommandNGetRQ, true},
+		{nGetRSPCommandName, CommandNGetRSP, false},
 	}
 
 	for _, tt := range tests {
@@ -77,12 +77,12 @@ func TestCommandField_IsResponse(t *testing.T) {
 		command  CommandField
 		expected bool
 	}{
-		{"C-STORE-RQ", CommandCStoreRQ, false},
-		{"C-STORE-RSP", CommandCStoreRSP, true},
-		{"C-ECHO-RQ", CommandCEchoRQ, false},
-		{"C-ECHO-RSP", CommandCEchoRSP, true},
-		{"N-GET-RQ", CommandNGetRQ, false},
-		{"N-GET-RSP", CommandNGetRSP, true},
+		{cStoreRQCommandName, CommandCStoreRQ, false},
+		{cStoreRSPCommandName, CommandCStoreRSP, true},
+		{cEchoRQCommandName, CommandCEchoRQ, false},
+		{cEchoRSPCommandName, CommandCEchoRSP, true},
+		{nGetRQCommandName, CommandNGetRQ, false},
+		{nGetRSPCommandName, CommandNGetRSP, true},
 	}
 
 	for _, tt := range tests {
@@ -102,17 +102,17 @@ func TestCommandField_Values(t *testing.T) {
 		command  CommandField
 		expected uint16
 	}{
-		{"C-STORE-RQ", CommandCStoreRQ, 0x0001},
-		{"C-STORE-RSP", CommandCStoreRSP, 0x8001},
-		{"C-GET-RQ", CommandCGetRQ, 0x0010},
-		{"C-GET-RSP", CommandCGetRSP, 0x8010},
-		{"C-FIND-RQ", CommandCFindRQ, 0x0020},
-		{"C-FIND-RSP", CommandCFindRSP, 0x8020},
-		{"C-MOVE-RQ", CommandCMoveRQ, 0x0021},
-		{"C-MOVE-RSP", CommandCMoveRSP, 0x8021},
-		{"C-ECHO-RQ", CommandCEchoRQ, 0x0030},
-		{"C-ECHO-RSP", CommandCEchoRSP, 0x8030},
-		{"C-CANCEL-RQ", CommandCCancelRQ, 0x0FFF},
+		{cStoreRQCommandName, CommandCStoreRQ, 0x0001},
+		{cStoreRSPCommandName, CommandCStoreRSP, 0x8001},
+		{cGetRQCommandName, CommandCGetRQ, 0x0010},
+		{cGetRSPCommandName, CommandCGetRSP, 0x8010},
+		{cFindRQCommandName, CommandCFindRQ, 0x0020},
+		{cFindRSPCommandName, CommandCFindRSP, 0x8020},
+		{cMoveRQCommandName, CommandCMoveRQ, 0x0021},
+		{cMoveRSPCommandName, CommandCMoveRSP, 0x8021},
+		{cEchoRQCommandName, CommandCEchoRQ, 0x0030},
+		{cEchoRSPCommandName, CommandCEchoRSP, 0x8030},
+		{cCancelRQCommandName, CommandCCancelRQ, 0x0FFF},
 	}
 
 	for _, tt := range tests {
