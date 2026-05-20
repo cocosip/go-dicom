@@ -36,15 +36,18 @@ func NewCMoveRequest(level QueryRetrieveLevel, moveDestination string, identifie
 	switch level {
 	case QueryRetrieveLevelPatient:
 		// Patient Root Query/Retrieve Information Model - MOVE
-		sopClassUID = "1.2.840.10008.5.1.4.1.2.1.2"
+		sopClassUID = sopClassUIDPatientRootMove
 	case QueryRetrieveLevelStudy, QueryRetrieveLevelSeries, QueryRetrieveLevelImage:
 		// Study Root Query/Retrieve Information Model - MOVE
-		sopClassUID = "1.2.840.10008.5.1.4.1.2.2.2"
+		sopClassUID = sopClassUIDStudyRootMove
 	default:
 		// Default to Study Root
-		sopClassUID = "1.2.840.10008.5.1.4.1.2.2.2"
+		sopClassUID = sopClassUIDStudyRootMove
 	}
+	return newCMoveRequestWithSOPClassUID(level, moveDestination, identifier, sopClassUID)
+}
 
+func newCMoveRequestWithSOPClassUID(level QueryRetrieveLevel, moveDestination string, identifier *dataset.Dataset, sopClassUID string) *CMoveRequest {
 	// Create command dataset with MessageID=0 (unassigned)
 	command := CreateCommandDataset(uint16(CommandCMoveRQ), 0)
 
@@ -79,12 +82,12 @@ func NewCMoveRequest(level QueryRetrieveLevel, moveDestination string, identifie
 
 // NewCMoveRequestPatientRoot creates a C-MOVE-RQ for Patient Root Query/Retrieve.
 func NewCMoveRequestPatientRoot(level QueryRetrieveLevel, moveDestination string, identifier *dataset.Dataset) *CMoveRequest {
-	return NewCMoveRequest(level, moveDestination, identifier)
+	return newCMoveRequestWithSOPClassUID(level, moveDestination, identifier, sopClassUIDPatientRootMove)
 }
 
 // NewCMoveRequestStudyRoot creates a C-MOVE-RQ for Study Root Query/Retrieve.
 func NewCMoveRequestStudyRoot(level QueryRetrieveLevel, moveDestination string, identifier *dataset.Dataset) *CMoveRequest {
-	return NewCMoveRequest(level, moveDestination, identifier)
+	return newCMoveRequestWithSOPClassUID(level, moveDestination, identifier, sopClassUIDStudyRootMove)
 }
 
 // AffectedSOPClassUID returns the affected SOP class UID.

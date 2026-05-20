@@ -32,8 +32,13 @@ const (
 	nDeleteRSPCommandName      = "N-DELETE-RSP"
 	unknownCommandName         = "Unknown"
 
-	sopClassUIDVerification = "1.2.840.10008.1.1"
-	sopClassUIDStudyRootGet = "1.2.840.10008.5.1.4.1.2.2.3"
+	sopClassUIDVerification    = "1.2.840.10008.1.1"
+	sopClassUIDPatientRootFind = "1.2.840.10008.5.1.4.1.2.1.1"
+	sopClassUIDStudyRootFind   = "1.2.840.10008.5.1.4.1.2.2.1"
+	sopClassUIDPatientRootMove = "1.2.840.10008.5.1.4.1.2.1.2"
+	sopClassUIDStudyRootMove   = "1.2.840.10008.5.1.4.1.2.2.2"
+	sopClassUIDPatientRootGet  = "1.2.840.10008.5.1.4.1.2.1.3"
+	sopClassUIDStudyRootGet    = "1.2.840.10008.5.1.4.1.2.2.3"
 )
 
 // DIMSE-C command fields

@@ -134,6 +134,7 @@ type mockServiceForDIMSE struct {
 	echoResponse  *dimse.CEchoResponse
 	storeResponse *dimse.CStoreResponse
 	findResponses []*dimse.CFindResponse
+	findHook      func(*dimse.CFindRequest)
 }
 
 // Association management methods (not used in these tests)
@@ -176,6 +177,9 @@ func (m *mockServiceForDIMSE) SendCStore(_ context.Context, req *dimse.CStoreReq
 func (m *mockServiceForDIMSE) SendCFind(_ context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error) {
 	// Create response channel
 	respCh := make(chan *dimse.CFindResponse, 16)
+	if m.findHook != nil {
+		m.findHook(req)
+	}
 
 	// Simulate async responses
 	go func() {
@@ -418,6 +422,60 @@ func TestCFindWithCallback_StopEarly(t *testing.T) {
 
 	if resultCount != 1 {
 		t.Errorf("Expected 1 result callback (stopped early), got %d", resultCount)
+	}
+}
+
+func TestCFindPatientRoot_UsesPatientRootModel(t *testing.T) {
+	client, mockService := setupMockClient()
+
+	sopClassCh := make(chan string, 1)
+	mockService.findHook = func(req *dimse.CFindRequest) {
+		sopClassCh <- req.AffectedSOPClassUID()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := client.CFindPatientRoot(ctx, dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err != nil {
+		t.Fatalf("CFindPatientRoot failed: %v", err)
+	}
+
+	select {
+	case sopClassUID := <-sopClassCh:
+		const patientRootFind = "1.2.840.10008.5.1.4.1.2.1.1"
+		if sopClassUID != patientRootFind {
+			t.Fatalf("AffectedSOPClassUID = %q, want %q", sopClassUID, patientRootFind)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for captured C-FIND request")
+	}
+}
+
+func TestCFindStudyRoot_UsesStudyRootModel(t *testing.T) {
+	client, mockService := setupMockClient()
+
+	sopClassCh := make(chan string, 1)
+	mockService.findHook = func(req *dimse.CFindRequest) {
+		sopClassCh <- req.AffectedSOPClassUID()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := client.CFindStudyRoot(ctx, dimse.QueryRetrieveLevelPatient, dataset.New())
+	if err != nil {
+		t.Fatalf("CFindStudyRoot failed: %v", err)
+	}
+
+	select {
+	case sopClassUID := <-sopClassCh:
+		const studyRootFind = "1.2.840.10008.5.1.4.1.2.2.1"
+		if sopClassUID != studyRootFind {
+			t.Fatalf("AffectedSOPClassUID = %q, want %q", sopClassUID, studyRootFind)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for captured C-FIND request")
 	}
 }
 

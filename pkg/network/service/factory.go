@@ -226,16 +226,27 @@ func createCFindRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRequest
 		return nil, fmt.Errorf("QueryRetrieveLevel not found in identifier")
 	}
 	level := dimse.QueryRetrieveLevel(levelStr)
+	sopClassUID, err := requiredString(commandDS, "AffectedSOPClassUID", tag.AffectedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create request
-	req := dimse.NewCFindRequest(level, dataDS)
+	var req *dimse.CFindRequest
+	switch sopClassUID {
+	case "1.2.840.10008.5.1.4.1.2.1.1":
+		req = dimse.NewCFindRequestPatientRoot(level, dataDS)
+	case "1.2.840.10008.5.1.4.1.2.2.1":
+		req = dimse.NewCFindRequestStudyRoot(level, dataDS)
+	default:
+		req = dimse.NewCFindRequest(level, dataDS)
+	}
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
 	return req, nil
 }
 
-// createCGetRequest creates a C-GET-RQ from datasets.
 func createCGetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CGetRequest, error) {
 	if dataDS == nil {
 		return nil, fmt.Errorf("C-GET-RQ requires data dataset (identifier)")
@@ -251,8 +262,20 @@ func createCGetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CGetRequest, 
 		return nil, fmt.Errorf("QueryRetrieveLevel not found in identifier")
 	}
 	level := dimse.QueryRetrieveLevel(levelStr)
+	sopClassUID, err := requiredString(commandDS, "AffectedSOPClassUID", tag.AffectedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
 
-	req := dimse.NewCGetRequest(level, dataDS)
+	var req *dimse.CGetRequest
+	switch sopClassUID {
+	case "1.2.840.10008.5.1.4.1.2.1.3":
+		req = dimse.NewCGetRequestPatientRoot(level, dataDS)
+	case "1.2.840.10008.5.1.4.1.2.2.3":
+		req = dimse.NewCGetRequestStudyRoot(level, dataDS)
+	default:
+		req = dimse.NewCGetRequest(level, dataDS)
+	}
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
@@ -315,8 +338,20 @@ func createCMoveRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CMoveRequest
 		return nil, fmt.Errorf("QueryRetrieveLevel not found in identifier")
 	}
 	level := dimse.QueryRetrieveLevel(levelStr)
+	sopClassUID, err := requiredString(commandDS, "AffectedSOPClassUID", tag.AffectedSOPClassUID)
+	if err != nil {
+		return nil, err
+	}
 
-	req := dimse.NewCMoveRequest(level, moveDestination, dataDS)
+	var req *dimse.CMoveRequest
+	switch sopClassUID {
+	case "1.2.840.10008.5.1.4.1.2.1.2":
+		req = dimse.NewCMoveRequestPatientRoot(level, moveDestination, dataDS)
+	case "1.2.840.10008.5.1.4.1.2.2.2":
+		req = dimse.NewCMoveRequestStudyRoot(level, moveDestination, dataDS)
+	default:
+		req = dimse.NewCMoveRequest(level, moveDestination, dataDS)
+	}
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}

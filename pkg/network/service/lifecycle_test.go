@@ -515,7 +515,7 @@ func TestRunReturnsLoopErrorAfterServiceClose(t *testing.T) {
 	}
 }
 
-func TestRun_MultipleCallsNotAllowed(_ *testing.T) {
+func TestRun_MultipleCallsNotAllowed(t *testing.T) {
 	conn := &mockConnForLifecycle{
 		blockRead: true,
 	}
@@ -530,12 +530,11 @@ func TestRun_MultipleCallsNotAllowed(_ *testing.T) {
 	// Give it time to start
 	time.Sleep(50 * time.Millisecond)
 
-	// Try to run again - should just start duplicate goroutines
-	// (This is allowed, though not recommended)
-	// The test just verifies it doesn't panic
-	go func() { _ = service.Run() }()
-
-	time.Sleep(50 * time.Millisecond)
+	// Try to run again - should be rejected to avoid duplicate goroutines
+	err := service.Run()
+	if err != ErrServiceAlreadyStarted {
+		t.Fatalf("Run() error = %v, want %v", err, ErrServiceAlreadyStarted)
+	}
 
 	// Close should stop all
 	_ = service.Close()

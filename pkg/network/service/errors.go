@@ -9,6 +9,9 @@ var (
 	// ErrServiceClosed indicates the service has been closed.
 	ErrServiceClosed = errors.New("service closed")
 
+	// ErrServiceAlreadyStarted indicates Start/Run was called more than once.
+	ErrServiceAlreadyStarted = errors.New("service already started")
+
 	// ErrInvalidState indicates an operation was attempted in an invalid state.
 	ErrInvalidState = errors.New("invalid state for this operation")
 

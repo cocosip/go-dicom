@@ -73,6 +73,8 @@ type Service struct {
 
 	connectionClosedOnce sync.Once
 	shutdownOnce         sync.Once
+	startMu              sync.Mutex
+	started              bool
 }
 
 // sendRequest represents a request to send a DIMSE message.

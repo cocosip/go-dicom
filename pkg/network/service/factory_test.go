@@ -112,3 +112,72 @@ func TestCreateNEventReportResponseAllowsZeroEventTypeID(t *testing.T) {
 		t.Fatalf("expected EventTypeID 0, got %d", decoded.EventTypeID())
 	}
 }
+
+func TestCreateCFindRequestPreservesAffectedSOPClassUID(t *testing.T) {
+	const patientRootFind = "1.2.840.10008.5.1.4.1.2.1.1"
+
+	command := dimse.CreateCommandDataset(uint16(dimse.CommandCFindRQ), 1)
+	if err := command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{patientRootFind})); err != nil {
+		t.Fatalf("failed to add AffectedSOPClassUID: %v", err)
+	}
+
+	identifier := dataset.New()
+	if err := identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(dimse.QueryRetrieveLevelStudy)})); err != nil {
+		t.Fatalf("failed to add QueryRetrieveLevel: %v", err)
+	}
+
+	req, err := createCFindRequest(command, identifier)
+	if err != nil {
+		t.Fatalf("createCFindRequest() error = %v", err)
+	}
+	if req.AffectedSOPClassUID() != patientRootFind {
+		t.Fatalf("AffectedSOPClassUID = %q, want %q", req.AffectedSOPClassUID(), patientRootFind)
+	}
+}
+
+func TestCreateCGetRequestPreservesAffectedSOPClassUID(t *testing.T) {
+	const patientRootGet = "1.2.840.10008.5.1.4.1.2.1.3"
+
+	command := dimse.CreateCommandDataset(uint16(dimse.CommandCGetRQ), 1)
+	if err := command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{patientRootGet})); err != nil {
+		t.Fatalf("failed to add AffectedSOPClassUID: %v", err)
+	}
+
+	identifier := dataset.New()
+	if err := identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(dimse.QueryRetrieveLevelStudy)})); err != nil {
+		t.Fatalf("failed to add QueryRetrieveLevel: %v", err)
+	}
+
+	req, err := createCGetRequest(command, identifier)
+	if err != nil {
+		t.Fatalf("createCGetRequest() error = %v", err)
+	}
+	if req.AffectedSOPClassUID() != patientRootGet {
+		t.Fatalf("AffectedSOPClassUID = %q, want %q", req.AffectedSOPClassUID(), patientRootGet)
+	}
+}
+
+func TestCreateCMoveRequestPreservesAffectedSOPClassUID(t *testing.T) {
+	const patientRootMove = "1.2.840.10008.5.1.4.1.2.1.2"
+
+	command := dimse.CreateCommandDataset(uint16(dimse.CommandCMoveRQ), 1)
+	if err := command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{patientRootMove})); err != nil {
+		t.Fatalf("failed to add AffectedSOPClassUID: %v", err)
+	}
+	if err := command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{"DEST_AE"})); err != nil {
+		t.Fatalf("failed to add MoveDestination: %v", err)
+	}
+
+	identifier := dataset.New()
+	if err := identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(dimse.QueryRetrieveLevelStudy)})); err != nil {
+		t.Fatalf("failed to add QueryRetrieveLevel: %v", err)
+	}
+
+	req, err := createCMoveRequest(command, identifier)
+	if err != nil {
+		t.Fatalf("createCMoveRequest() error = %v", err)
+	}
+	if req.AffectedSOPClassUID() != patientRootMove {
+		t.Fatalf("AffectedSOPClassUID = %q, want %q", req.AffectedSOPClassUID(), patientRootMove)
+	}
+}

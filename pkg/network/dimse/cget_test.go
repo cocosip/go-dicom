@@ -49,6 +49,22 @@ func TestNewCGetRequestPatientRoot(t *testing.T) {
 	}
 }
 
+func TestNewCGetRequestPatientRootPreservesModelForStudyLevel(t *testing.T) {
+	req := NewCGetRequestPatientRoot(QueryRetrieveLevelStudy, dataset.New())
+
+	if req.AffectedSOPClassUID() != "1.2.840.10008.5.1.4.1.2.1.3" {
+		t.Errorf("Expected Patient Root SOP Class UID, got '%s'", req.AffectedSOPClassUID())
+	}
+}
+
+func TestNewCGetRequestStudyRootPreservesModelForPatientLevel(t *testing.T) {
+	req := NewCGetRequestStudyRoot(QueryRetrieveLevelPatient, dataset.New())
+
+	if req.AffectedSOPClassUID() != sopClassUIDStudyRootGet {
+		t.Errorf("Expected Study Root SOP Class UID, got '%s'", req.AffectedSOPClassUID())
+	}
+}
+
 func TestCGetRequest_SetPriority(t *testing.T) {
 	identifier := dataset.New()
 	req := NewCGetRequest(QueryRetrieveLevelStudy, identifier)

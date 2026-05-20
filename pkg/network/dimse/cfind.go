@@ -81,9 +81,13 @@ type CFindRequest struct {
 func NewCFindRequest(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
 	// Patient Root vs Study Root UIDs for FIND
 	sopClassUID := sopClassUIDForLevel(level, [2]string{
-		"1.2.840.10008.5.1.4.1.2.1.1", // Patient Root FIND
-		"1.2.840.10008.5.1.4.1.2.2.1", // Study Root FIND
+		sopClassUIDPatientRootFind, // Patient Root FIND
+		sopClassUIDStudyRootFind,   // Study Root FIND
 	})
+	return newCFindRequestWithSOPClassUID(level, query, sopClassUID)
+}
+
+func newCFindRequestWithSOPClassUID(level QueryRetrieveLevel, query *dataset.Dataset, sopClassUID string) *CFindRequest {
 	command := createQueryRetrieveRequest(uint16(CommandCFindRQ), sopClassUID, level, query)
 	return &CFindRequest{
 		BaseRequest:         NewBaseRequest(command, query),
@@ -94,15 +98,15 @@ func NewCFindRequest(level QueryRetrieveLevel, query *dataset.Dataset) *CFindReq
 }
 
 // NewCFindRequestPatientRoot creates a C-FIND-RQ for Patient Root Query/Retrieve.
-// This is a convenience function that's equivalent to NewCFindRequest(QueryRetrieveLevelPatient, query).
+// This always uses the Patient Root information model regardless of query level.
 func NewCFindRequestPatientRoot(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
-	return NewCFindRequest(level, query)
+	return newCFindRequestWithSOPClassUID(level, query, sopClassUIDPatientRootFind)
 }
 
 // NewCFindRequestStudyRoot creates a C-FIND-RQ for Study Root Query/Retrieve.
-// This is a convenience function that's equivalent to NewCFindRequest(level, query) for Study/Series/Image levels.
+// This always uses the Study Root information model regardless of query level.
 func NewCFindRequestStudyRoot(level QueryRetrieveLevel, query *dataset.Dataset) *CFindRequest {
-	return NewCFindRequest(level, query)
+	return newCFindRequestWithSOPClassUID(level, query, sopClassUIDStudyRootFind)
 }
 
 // SetPriority sets the priority of the request.

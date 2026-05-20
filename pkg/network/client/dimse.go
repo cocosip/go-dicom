@@ -12,6 +12,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
+const (
+	patientRootFindSOPClassUID = "1.2.840.10008.5.1.4.1.2.1.1"
+	studyRootFindSOPClassUID   = "1.2.840.10008.5.1.4.1.2.2.1"
+)
+
 // CEcho sends a C-ECHO request and waits for the response.
 // This is used to verify connectivity and association status.
 //
@@ -122,16 +127,18 @@ func (c *Client) CStore(ctx context.Context, ds *dataset.Dataset) error {
 //	    // Process each result
 //	}
 func (c *Client) CFind(ctx context.Context, level dimse.QueryRetrieveLevel, query *dataset.Dataset) ([]*dataset.Dataset, error) {
+	req := dimse.NewCFindRequest(level, query)
+	return c.cfindWithRequest(ctx, req)
+}
+
+func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) ([]*dataset.Dataset, error) {
 	if !c.connected {
 		return nil, fmt.Errorf("client not connected")
 	}
 
-	if query == nil {
+	if req == nil || req.DataDataset() == nil {
 		return nil, fmt.Errorf("query is nil")
 	}
-
-	// Create C-FIND request
-	req := dimse.NewCFindRequest(level, query)
 
 	// Send request
 	respCh, err := c.service.SendCFind(ctx, req)
@@ -196,20 +203,22 @@ func (c *Client) CFind(ctx context.Context, level dimse.QueryRetrieveLevel, quer
 //	        return true // Continue receiving
 //	    })
 func (c *Client) CFindWithCallback(ctx context.Context, level dimse.QueryRetrieveLevel, query *dataset.Dataset, callback func(*dataset.Dataset) bool) error {
+	req := dimse.NewCFindRequest(level, query)
+	return c.cfindWithRequestAndCallback(ctx, req, callback)
+}
+
+func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFindRequest, callback func(*dataset.Dataset) bool) error {
 	if !c.connected {
 		return fmt.Errorf("client not connected")
 	}
 
-	if query == nil {
+	if req == nil || req.DataDataset() == nil {
 		return fmt.Errorf("query is nil")
 	}
 
 	if callback == nil {
 		return fmt.Errorf("callback is nil")
 	}
-
-	// Create C-FIND request
-	req := dimse.NewCFindRequest(level, query)
 
 	// Send request - returns channel of responses
 	respCh, err := c.service.SendCFind(ctx, req)
@@ -294,14 +303,26 @@ func (c *Client) CStoreWithPriority(ctx context.Context, ds *dataset.Dataset, pr
 
 // CFindPatientRoot is a convenience method for Patient Root Query/Retrieve.
 func (c *Client) CFindPatientRoot(ctx context.Context, level dimse.QueryRetrieveLevel, query *dataset.Dataset) ([]*dataset.Dataset, error) {
-	// TODO: Set SOP Class UID to Patient Root Query/Retrieve (1.2.840.10008.5.1.4.1.2.1.1)
-	return c.CFind(ctx, level, query)
+	if query == nil {
+		return nil, fmt.Errorf("query is nil")
+	}
+	req := dimse.NewCFindRequestPatientRoot(level, query)
+	if req.AffectedSOPClassUID() != patientRootFindSOPClassUID {
+		return nil, fmt.Errorf("failed to create Patient Root C-FIND request")
+	}
+	return c.cfindWithRequest(ctx, req)
 }
 
 // CFindStudyRoot is a convenience method for Study Root Query/Retrieve.
 func (c *Client) CFindStudyRoot(ctx context.Context, level dimse.QueryRetrieveLevel, query *dataset.Dataset) ([]*dataset.Dataset, error) {
-	// TODO: Set SOP Class UID to Study Root Query/Retrieve (1.2.840.10008.5.1.4.1.2.2.1)
-	return c.CFind(ctx, level, query)
+	if query == nil {
+		return nil, fmt.Errorf("query is nil")
+	}
+	req := dimse.NewCFindRequestStudyRoot(level, query)
+	if req.AffectedSOPClassUID() != studyRootFindSOPClassUID {
+		return nil, fmt.Errorf("failed to create Study Root C-FIND request")
+	}
+	return c.cfindWithRequest(ctx, req)
 }
 
 // CStoreMultiple stores multiple datasets in sequence.

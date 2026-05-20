@@ -32,9 +32,13 @@ type CGetRequest struct {
 func NewCGetRequest(level QueryRetrieveLevel, identifier *dataset.Dataset) *CGetRequest {
 	// Patient Root vs Study Root UIDs for GET
 	sopClassUID := sopClassUIDForLevel(level, [2]string{
-		"1.2.840.10008.5.1.4.1.2.1.3", // Patient Root GET
-		sopClassUIDStudyRootGet,       // Study Root GET
+		sopClassUIDPatientRootGet, // Patient Root GET
+		sopClassUIDStudyRootGet,   // Study Root GET
 	})
+	return newCGetRequestWithSOPClassUID(level, identifier, sopClassUID)
+}
+
+func newCGetRequestWithSOPClassUID(level QueryRetrieveLevel, identifier *dataset.Dataset, sopClassUID string) *CGetRequest {
 	command := createQueryRetrieveRequest(uint16(CommandCGetRQ), sopClassUID, level, identifier)
 	return &CGetRequest{
 		BaseRequest:         NewBaseRequest(command, identifier),
@@ -46,12 +50,12 @@ func NewCGetRequest(level QueryRetrieveLevel, identifier *dataset.Dataset) *CGet
 
 // NewCGetRequestPatientRoot creates a C-GET-RQ for Patient Root Query/Retrieve.
 func NewCGetRequestPatientRoot(level QueryRetrieveLevel, identifier *dataset.Dataset) *CGetRequest {
-	return NewCGetRequest(level, identifier)
+	return newCGetRequestWithSOPClassUID(level, identifier, sopClassUIDPatientRootGet)
 }
 
 // NewCGetRequestStudyRoot creates a C-GET-RQ for Study Root Query/Retrieve.
 func NewCGetRequestStudyRoot(level QueryRetrieveLevel, identifier *dataset.Dataset) *CGetRequest {
-	return NewCGetRequest(level, identifier)
+	return newCGetRequestWithSOPClassUID(level, identifier, sopClassUIDStudyRootGet)
 }
 
 // AffectedSOPClassUID returns the affected SOP class UID.

@@ -53,6 +53,22 @@ func TestNewCMoveRequestPatientRoot(t *testing.T) {
 	}
 }
 
+func TestNewCMoveRequestPatientRootPreservesModelForStudyLevel(t *testing.T) {
+	req := NewCMoveRequestPatientRoot(QueryRetrieveLevelStudy, "DEST_AE", dataset.New())
+
+	if req.AffectedSOPClassUID() != "1.2.840.10008.5.1.4.1.2.1.2" {
+		t.Errorf("Expected Patient Root SOP Class UID, got '%s'", req.AffectedSOPClassUID())
+	}
+}
+
+func TestNewCMoveRequestStudyRootPreservesModelForPatientLevel(t *testing.T) {
+	req := NewCMoveRequestStudyRoot(QueryRetrieveLevelPatient, "DEST_AE", dataset.New())
+
+	if req.AffectedSOPClassUID() != testStudyRootMoveUID {
+		t.Errorf("Expected Study Root SOP Class UID, got '%s'", req.AffectedSOPClassUID())
+	}
+}
+
 func TestCMoveRequest_SetPriority(t *testing.T) {
 	identifier := dataset.New()
 	req := NewCMoveRequest(QueryRetrieveLevelStudy, "DEST_AE", identifier)

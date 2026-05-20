@@ -80,6 +80,14 @@ func (s *Service) Start() error {
 		return ErrServiceClosed
 	}
 
+	s.startMu.Lock()
+	if s.started {
+		s.startMu.Unlock()
+		return ErrServiceAlreadyStarted
+	}
+	s.started = true
+	s.startMu.Unlock()
+
 	// Start send loop
 	go func() {
 		err := s.sendLoop(s.ctx)
