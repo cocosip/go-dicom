@@ -120,7 +120,23 @@ type Handlers struct {
 	// op.SendWarning(), or op.SendFailure(code).
 	CGetHandler func(ctx context.Context, op CGetOperation) error
 
-	// Additional handlers for N-* operations can be added here
+	// NEventReportHandler handles N-EVENT-REPORT requests.
+	NEventReportHandler func(context.Context, *dimse.NEventReportRequest) (*dimse.NEventReportResponse, error)
+
+	// NGetHandler handles N-GET requests.
+	NGetHandler func(context.Context, *dimse.NGetRequest) (*dimse.NGetResponse, error)
+
+	// NSetHandler handles N-SET requests.
+	NSetHandler func(context.Context, *dimse.NSetRequest) (*dimse.NSetResponse, error)
+
+	// NActionHandler handles N-ACTION requests.
+	NActionHandler func(context.Context, *dimse.NActionRequest) (*dimse.NActionResponse, error)
+
+	// NCreateHandler handles N-CREATE requests.
+	NCreateHandler func(context.Context, *dimse.NCreateRequest) (*dimse.NCreateResponse, error)
+
+	// NDeleteHandler handles N-DELETE requests.
+	NDeleteHandler func(context.Context, *dimse.NDeleteRequest) (*dimse.NDeleteResponse, error)
 }
 
 // NewService creates a new DICOM service with the given connection and options.
@@ -262,7 +278,25 @@ func (s *Service) initiateClose(targetState State, recordErr error) error {
 func (s *Service) startShutdownFinalizer() {
 	s.shutdownOnce.Do(func() {
 		go func() {
-			s.requestWg.Wait()
+			// Wait for in-flight request handlers with a timeout to prevent
+			// permanent shutdown blocking when a handler never returns.
+			done := make(chan struct{})
+			go func() {
+				s.requestWg.Wait()
+				close(done)
+			}()
+
+			timeout := s.config.dimseTimeout
+			if timeout <= 0 {
+				timeout = 60 * time.Second
+			}
+			select {
+			case <-done:
+				// All handlers completed normally.
+			case <-time.After(timeout):
+				// Handlers timed out; proceed with shutdown to avoid hanging.
+			}
+
 			s.notifyConnectionClosed(s.shutdownError())
 			close(s.shutdownCh)
 		}()

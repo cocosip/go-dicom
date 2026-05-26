@@ -90,9 +90,10 @@ func (e *ImageExporter) ExportGrayscale(
 			case 1:
 				pixelValue = float64(pixelData[pixelIndex])
 			case 2:
-				// 16-bit pixel
+				// 16-bit pixel — use uint16 for low-byte assembly to avoid
+				// sign-extension on unsigned bytes ≥ 128, then cast to signed.
 				if isSigned {
-					pixelValue = float64(int16(pixelData[pixelIndex]) | int16(pixelData[pixelIndex+1])<<8)
+					pixelValue = float64(int16(uint16(pixelData[pixelIndex]) | uint16(pixelData[pixelIndex+1])<<8))
 				} else {
 					pixelValue = float64(uint16(pixelData[pixelIndex]) | uint16(pixelData[pixelIndex+1])<<8)
 				}

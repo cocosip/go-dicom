@@ -744,8 +744,10 @@ func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
 		}
 	}
 
-	// Convert presentation contexts
-	for _, pcAC := range ac.PresentationContexts {
+	// Convert presentation contexts — use index so mutations on the PDU
+	// slice are visible to any later code that re-reads the slice.
+	for i := range ac.PresentationContexts {
+		pcAC := &ac.PresentationContexts[i]
 		var acceptedTS *transfer.Syntax
 
 		// Only set transfer syntax if accepted

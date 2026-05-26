@@ -111,6 +111,45 @@ func (s *Service) dispatchRequest(ctx context.Context, req dimse.Request, handle
 			return fmt.Errorf("expected *CGetRequest for command %s, got %T", cmdField, req)
 		}
 		return s.handleCGetRequest(ctx, r, handlers)
+
+	// DIMSE-N services
+	case dimse.CommandNEventReportRQ:
+		r, ok := req.(*dimse.NEventReportRequest)
+		if !ok {
+			return fmt.Errorf("expected *NEventReportRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleNEventReportRequest(ctx, r, handlers)
+	case dimse.CommandNGetRQ:
+		r, ok := req.(*dimse.NGetRequest)
+		if !ok {
+			return fmt.Errorf("expected *NGetRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleNGetRequest(ctx, r, handlers)
+	case dimse.CommandNSetRQ:
+		r, ok := req.(*dimse.NSetRequest)
+		if !ok {
+			return fmt.Errorf("expected *NSetRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleNSetRequest(ctx, r, handlers)
+	case dimse.CommandNActionRQ:
+		r, ok := req.(*dimse.NActionRequest)
+		if !ok {
+			return fmt.Errorf("expected *NActionRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleNActionRequest(ctx, r, handlers)
+	case dimse.CommandNCreateRQ:
+		r, ok := req.(*dimse.NCreateRequest)
+		if !ok {
+			return fmt.Errorf("expected *NCreateRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleNCreateRequest(ctx, r, handlers)
+	case dimse.CommandNDeleteRQ:
+		r, ok := req.(*dimse.NDeleteRequest)
+		if !ok {
+			return fmt.Errorf("expected *NDeleteRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleNDeleteRequest(ctx, r, handlers)
+
 	default:
 		return fmt.Errorf("unsupported DIMSE command: %s (0x%04X)", cmdField.String(), cmdField)
 	}
@@ -221,6 +260,108 @@ func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest,
 	}
 	// Default: no handler registered — return success with no operations.
 	return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.Success))
+}
+
+// handleNEventReportRequest handles an N-EVENT-REPORT request.
+func (s *Service) handleNEventReportRequest(ctx context.Context, req *dimse.NEventReportRequest, handlers *Handlers) error {
+	var resp *dimse.NEventReportResponse
+	if handlers != nil && handlers.NEventReportHandler != nil {
+		var err error
+		resp, err = handlers.NEventReportHandler(ctx, req)
+		if err != nil {
+			resp = dimse.NewNEventReportResponse(req.MessageID(), status.NEventReportFailureProcessingFailure,
+				req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), req.EventTypeID(), nil)
+		}
+	} else {
+		resp = dimse.NewNEventReportResponseSuccess(req.MessageID(),
+			req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), req.EventTypeID(), nil)
+	}
+	return s.Send(ctx, resp)
+}
+
+// handleNGetRequest handles an N-GET request.
+func (s *Service) handleNGetRequest(ctx context.Context, req *dimse.NGetRequest, handlers *Handlers) error {
+	var resp *dimse.NGetResponse
+	if handlers != nil && handlers.NGetHandler != nil {
+		var err error
+		resp, err = handlers.NGetHandler(ctx, req)
+		if err != nil {
+			resp = dimse.NewNGetResponse(req.MessageID(), status.NGetFailureProcessingFailure,
+				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
+		}
+	} else {
+		resp = dimse.NewNGetResponseSuccess(req.MessageID(),
+			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
+	}
+	return s.Send(ctx, resp)
+}
+
+// handleNSetRequest handles an N-SET request.
+func (s *Service) handleNSetRequest(ctx context.Context, req *dimse.NSetRequest, handlers *Handlers) error {
+	var resp *dimse.NSetResponse
+	if handlers != nil && handlers.NSetHandler != nil {
+		var err error
+		resp, err = handlers.NSetHandler(ctx, req)
+		if err != nil {
+			resp = dimse.NewNSetResponse(req.MessageID(), status.NSetFailureProcessingFailure,
+				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
+		}
+	} else {
+		resp = dimse.NewNSetResponseSuccess(req.MessageID(),
+			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
+	}
+	return s.Send(ctx, resp)
+}
+
+// handleNActionRequest handles an N-ACTION request.
+func (s *Service) handleNActionRequest(ctx context.Context, req *dimse.NActionRequest, handlers *Handlers) error {
+	var resp *dimse.NActionResponse
+	if handlers != nil && handlers.NActionHandler != nil {
+		var err error
+		resp, err = handlers.NActionHandler(ctx, req)
+		if err != nil {
+			resp = dimse.NewNActionResponse(req.MessageID(), status.NActionFailureProcessingFailure,
+				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), req.ActionTypeID(), nil)
+		}
+	} else {
+		resp = dimse.NewNActionResponseSuccess(req.MessageID(),
+			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), req.ActionTypeID(), nil)
+	}
+	return s.Send(ctx, resp)
+}
+
+// handleNCreateRequest handles an N-CREATE request.
+func (s *Service) handleNCreateRequest(ctx context.Context, req *dimse.NCreateRequest, handlers *Handlers) error {
+	var resp *dimse.NCreateResponse
+	if handlers != nil && handlers.NCreateHandler != nil {
+		var err error
+		resp, err = handlers.NCreateHandler(ctx, req)
+		if err != nil {
+			resp = dimse.NewNCreateResponse(req.MessageID(), status.NCreateFailureProcessingFailure,
+				req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil)
+		}
+	} else {
+		resp = dimse.NewNCreateResponseSuccess(req.MessageID(),
+			req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil)
+	}
+	return s.Send(ctx, resp)
+}
+
+// handleNDeleteRequest handles an N-DELETE request.
+func (s *Service) handleNDeleteRequest(ctx context.Context, req *dimse.NDeleteRequest, handlers *Handlers) error {
+	var resp *dimse.NDeleteResponse
+	if handlers != nil && handlers.NDeleteHandler != nil {
+		var err error
+		resp, err = handlers.NDeleteHandler(ctx, req)
+		if err != nil {
+			resp = dimse.NewNDeleteResponse(req.MessageID(), status.NDeleteFailureProcessingFailure,
+				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID())
+		}
+	} else {
+		resp = dimse.NewNDeleteResponseSuccess(req.MessageID(),
+			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID())
+	}
+	return s.Send(ctx, resp)
 }
 
 // SetHandlers sets the DIMSE message handlers for this service.

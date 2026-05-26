@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
@@ -72,6 +73,7 @@ type Client struct {
 	presentationContexts []*pdu.PresentationContextRQ
 
 	// Connection state
+	mu        sync.Mutex
 	connected bool
 }
 
@@ -243,6 +245,8 @@ func (c *Client) GetAssociation() *association.Association {
 
 // IsConnected returns true if the client is connected.
 func (c *Client) IsConnected() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.connected
 }
 
@@ -251,6 +255,9 @@ func (c *Client) IsConnected() bool {
 // If the peer does not acknowledge the release in time, Close returns that
 // error after cleaning up the local connection state.
 func (c *Client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if !c.connected {
 		return nil
 	}
@@ -262,6 +269,8 @@ func (c *Client) Close() error {
 	var err error
 	if c.service != nil {
 		err = c.service.GracefulRelease(ctx)
+		// Service layer closes the connection via GracefulRelease; avoid double close.
+		c.conn = nil
 	}
 
 	// Clean up
@@ -281,6 +290,9 @@ func (c *Client) Close() error {
 
 // Abort aborts the association and closes the connection.
 func (c *Client) Abort(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if !c.connected {
 		return nil
 	}
@@ -290,6 +302,8 @@ func (c *Client) Abort(ctx context.Context) error {
 		// Source: 0 = service-user (SCU initiated)
 		// Reason: 0 = not-specified
 		err = c.service.Abort(ctx, 0, 0)
+		// Service layer closes the connection via Abort; avoid double close.
+		c.conn = nil
 	}
 
 	// Clean up

@@ -45,6 +45,11 @@ const (
 	// ReadAll forces eager loading of all elements including large ones.
 	// LazyByteBuffer is never created; all data is loaded into memory during parsing.
 	ReadAll
+
+	// maxSequenceItems is the maximum number of items (fragments or sequence items)
+	// allowed in an undefined-length sequence or fragment sequence. This prevents
+	// infinite loops on malformed data missing the delimitation item.
+	maxSequenceItems = 100000
 )
 
 // FileFormat represents the structure of a DICOM file.
@@ -896,7 +901,13 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 	// Handle undefined length (0xFFFFFFFF)
 	if length == 0xFFFFFFFF {
 		// Read items until we hit Sequence Delimitation Item
+		itemCount := 0
 		for {
+			if itemCount >= maxSequenceItems {
+				return nil, fmt.Errorf("exceeded maximum sequence items (%d) for tag %s", maxSequenceItems, t)
+			}
+			itemCount++
+
 			itemTag, err := p.readTag()
 			if err != nil {
 				return nil, err
@@ -1275,7 +1286,13 @@ func createEmptyFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element.Element, e
 
 // skipFragmentSequence skips an encapsulated fragment sequence payload.
 func (p *parseContext) skipFragmentSequence() error {
+	fragmentCount := 0
 	for {
+		if fragmentCount >= maxSequenceItems {
+			return fmt.Errorf("exceeded maximum fragment count (%d)", maxSequenceItems)
+		}
+		fragmentCount++
+
 		itemTag, err := p.readTag()
 		if err != nil {
 			if err == io.EOF {
@@ -1347,8 +1364,14 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 
 	// Read fragments until we hit Sequence Delimitation Item (FFFE,E0DD)
 	isFirstItem := true
+	fragmentCount := 0
 
 	for {
+		if fragmentCount >= maxSequenceItems {
+			return nil, fmt.Errorf("exceeded maximum fragment count (%d) for tag %s", maxSequenceItems, t)
+		}
+		fragmentCount++
+
 		// Read item tag (should be FFFE,E000 for item or FFFE,E0DD for delimitation)
 		itemTag, err := p.readTag()
 		if err != nil {

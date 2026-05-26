@@ -248,6 +248,13 @@ func (fb *FilmBox) InitializeImageBoxes() error {
         return err
     }
 
+	// Guard against malformed ImageDisplayFormat producing unreasonably large
+	// allocation (e.g., "STANDARD\\65535,65535" → 4+ billion boxes).
+	const maxImageBoxes = 10000
+	if count < 0 || count > maxImageBoxes {
+		return fmt.Errorf("image display format produces %d boxes, max is %d", count, maxImageBoxes)
+	}
+
     fb.BasicImageBoxes = make([]*ImageBox, count)
     for i := 0; i < count; i++ {
         fb.BasicImageBoxes[i] = NewImageBox(fmt.Sprintf("%s.%d", fb.SOPInstanceUID, i+1), fb.filmSession != nil && fb.filmSession.IsColor)
