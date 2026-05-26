@@ -76,9 +76,13 @@ func NewWithElements(elements []element.Element) *Dataset {
 // Add adds an element to the dataset.
 // If an element with the same tag already exists, it returns an error.
 func (ds *Dataset) Add(elem element.Element) error {
+	if ds == nil {
+		return fmt.Errorf("cannot add to nil Dataset")
+	}
 	if elem == nil {
 		return fmt.Errorf("cannot add nil element")
 	}
+	ds.ensureItems()
 
 	tagValue := elem.Tag().ToUint32()
 	if _, exists := ds.items[tagValue]; exists {
@@ -92,9 +96,13 @@ func (ds *Dataset) Add(elem element.Element) error {
 
 // AddOrUpdate adds an element to the dataset, or updates it if it already exists.
 func (ds *Dataset) AddOrUpdate(elem element.Element) error {
+	if ds == nil {
+		return fmt.Errorf("cannot add to nil Dataset")
+	}
 	if elem == nil {
 		return fmt.Errorf("cannot add nil element")
 	}
+	ds.ensureItems()
 
 	ds.items[elem.Tag().ToUint32()] = elem
 	ds.markDirty()
@@ -104,7 +112,7 @@ func (ds *Dataset) AddOrUpdate(elem element.Element) error {
 // Get retrieves an element by tag.
 // Returns the element and true if found, nil and false otherwise.
 func (ds *Dataset) Get(t *tag.Tag) (element.Element, bool) {
-	if t == nil {
+	if ds == nil || t == nil {
 		return nil, false
 	}
 	elem, exists := ds.items[t.ToUint32()]
@@ -119,7 +127,7 @@ func (ds *Dataset) GetOrNil(t *tag.Tag) element.Element {
 
 // Contains checks if an element with the given tag exists.
 func (ds *Dataset) Contains(t *tag.Tag) bool {
-	if t == nil {
+	if ds == nil || t == nil {
 		return false
 	}
 	_, exists := ds.items[t.ToUint32()]
@@ -129,7 +137,10 @@ func (ds *Dataset) Contains(t *tag.Tag) bool {
 // Remove removes an element by tag.
 // Returns true if the element was removed, false if it didn't exist.
 func (ds *Dataset) Remove(t *tag.Tag) bool {
-	if t == nil {
+	if ds == nil || t == nil {
+		return false
+	}
+	if ds.items == nil {
 		return false
 	}
 	tagValue := t.ToUint32()
@@ -155,18 +166,24 @@ func (ds *Dataset) RemoveAll(tags ...*tag.Tag) int {
 
 // Clear removes all elements from the dataset.
 func (ds *Dataset) Clear() {
+	if ds == nil {
+		return
+	}
 	ds.items = make(map[uint32]element.Element)
 	ds.markDirty()
 }
 
 // Count returns the number of elements in the dataset.
 func (ds *Dataset) Count() int {
+	if ds == nil {
+		return 0
+	}
 	return len(ds.items)
 }
 
 // IsEmpty returns true if the dataset contains no elements.
 func (ds *Dataset) IsEmpty() bool {
-	return len(ds.items) == 0
+	return ds == nil || len(ds.items) == 0
 }
 
 // Elements returns all elements in the dataset, sorted by tag.
@@ -206,6 +223,9 @@ func (ds *Dataset) Tags() []*tag.Tag {
 // Clone creates a deep copy of the dataset.
 // Note: Elements themselves are not cloned, only the dataset structure.
 func (ds *Dataset) Clone() *Dataset {
+	if ds == nil {
+		return New()
+	}
 	clone := New()
 	clone.internalTransferSyntax = ds.internalTransferSyntax // Preserve transfer syntax
 	for tagValue, elem := range ds.items {
@@ -222,9 +242,10 @@ func (ds *Dataset) Clone() *Dataset {
 // If overwrite is true, existing elements are replaced.
 // If overwrite is false, only new elements are added.
 func (ds *Dataset) Merge(other *Dataset, overwrite bool) {
-	if other == nil {
+	if ds == nil || other == nil {
 		return
 	}
+	ds.ensureItems()
 
 	for tagValue, elem := range other.items {
 		if overwrite || !ds.Contains(elem.Tag()) {
@@ -236,6 +257,9 @@ func (ds *Dataset) Merge(other *Dataset, overwrite bool) {
 
 // Filter returns a new dataset containing only elements that match the predicate.
 func (ds *Dataset) Filter(predicate func(element.Element) bool) *Dataset {
+	if ds == nil {
+		return New()
+	}
 	filtered := New()
 	for _, elem := range ds.items {
 		if predicate(elem) {
@@ -267,6 +291,9 @@ func (ds *Dataset) InternalTransferSyntax() *transfer.Syntax {
 // rather than modifying an existing one. However, this setter is provided for
 // scenarios where in-place modification is necessary (e.g., after cloning).
 func (ds *Dataset) SetInternalTransferSyntax(ts *transfer.Syntax) {
+	if ds == nil {
+		return
+	}
 	ds.internalTransferSyntax = ts
 
 	// Update transfer syntax for sequence items (following fo-dicom pattern)
@@ -279,6 +306,15 @@ func (ds *Dataset) SetInternalTransferSyntax(ts *transfer.Syntax) {
 				}
 			}
 		}
+	}
+}
+
+// ensureItems lazily initializes the items map if it is nil.
+// This allows zero-value Datasets (created via &Dataset{} instead of New())
+// to be safely used without panicking on first write.
+func (ds *Dataset) ensureItems() {
+	if ds.items == nil {
+		ds.items = make(map[uint32]element.Element)
 	}
 }
 

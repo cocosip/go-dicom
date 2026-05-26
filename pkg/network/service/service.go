@@ -37,7 +37,6 @@ type Service struct {
 
 	// Goroutine communication
 	sendQueue    chan *sendRequest
-	recvQueue    chan dimse.Message
 	closeOnce    sync.Once
 	closeCh      chan struct{}
 	releaseCh    chan struct{}
@@ -155,7 +154,6 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		assoc:                      assoc,
 		state:                      StateIdle,
 		sendQueue:                  make(chan *sendRequest, config.sendQueueSize),
-		recvQueue:                  make(chan dimse.Message, config.recvQueueSize),
 		closeCh:                    make(chan struct{}),
 		releaseCh:                  make(chan struct{}, 1),
 		shutdownCh:                 make(chan struct{}),

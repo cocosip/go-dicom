@@ -82,15 +82,35 @@ func (s *Service) dispatchRequest(ctx context.Context, req dimse.Request, handle
 	cmdField := dimse.CommandField(req.CommandField())
 	switch cmdField {
 	case dimse.CommandCEchoRQ:
-		return s.handleCEchoRequest(ctx, req.(*dimse.CEchoRequest), handlers)
+		r, ok := req.(*dimse.CEchoRequest)
+		if !ok {
+			return fmt.Errorf("expected *CEchoRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleCEchoRequest(ctx, r, handlers)
 	case dimse.CommandCStoreRQ:
-		return s.handleCStoreRequest(ctx, req.(*dimse.CStoreRequest), handlers)
+		r, ok := req.(*dimse.CStoreRequest)
+		if !ok {
+			return fmt.Errorf("expected *CStoreRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleCStoreRequest(ctx, r, handlers)
 	case dimse.CommandCFindRQ:
-		return s.handleCFindRequest(ctx, req.(*dimse.CFindRequest), handlers)
+		r, ok := req.(*dimse.CFindRequest)
+		if !ok {
+			return fmt.Errorf("expected *CFindRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleCFindRequest(ctx, r, handlers)
 	case dimse.CommandCMoveRQ:
-		return s.handleCMoveRequest(ctx, req.(*dimse.CMoveRequest), handlers)
+		r, ok := req.(*dimse.CMoveRequest)
+		if !ok {
+			return fmt.Errorf("expected *CMoveRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleCMoveRequest(ctx, r, handlers)
 	case dimse.CommandCGetRQ:
-		return s.handleCGetRequest(ctx, req.(*dimse.CGetRequest), handlers)
+		r, ok := req.(*dimse.CGetRequest)
+		if !ok {
+			return fmt.Errorf("expected *CGetRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleCGetRequest(ctx, r, handlers)
 	default:
 		return fmt.Errorf("unsupported DIMSE command: %s (0x%04X)", cmdField.String(), cmdField)
 	}

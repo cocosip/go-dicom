@@ -12,16 +12,16 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
-// TestElementInterface verifies that all element types implement the Element interface
-func TestElementInterface(_ *testing.T) {
-	var _ element.Element = element.NewString(tag.PatientName, vr.PN, []string{"Test"})
-	var _ element.Element = element.NewUnsignedShort(tag.Rows, []uint16{512})
-	var _ element.Element = element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100})
-	var _ element.Element = element.NewSignedShort(tag.SmallestImagePixelValue, []int16{-100})
-	var _ element.Element = element.NewSignedLong(tag.ReferencePixelX0, []int32{-1000})
-	var _ element.Element = element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5})
-	var _ element.Element = element.NewDouble(tag.RealWorldValueSlope, []float64{1.234567890123})
-}
+// Compile-time check: all concrete element types must satisfy the Element interface.
+var (
+	_ element.Element = element.NewString(tag.PatientName, vr.PN, []string{"Test"})
+	_ element.Element = element.NewUnsignedShort(tag.Rows, []uint16{512})
+	_ element.Element = element.NewUnsignedLong(tag.FileMetaInformationGroupLength, []uint32{100})
+	_ element.Element = element.NewSignedShort(tag.SmallestImagePixelValue, []int16{-100})
+	_ element.Element = element.NewSignedLong(tag.ReferencePixelX0, []int32{-1000})
+	_ element.Element = element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5})
+	_ element.Element = element.NewDouble(tag.RealWorldValueSlope, []float64{1.234567890123})
+)
 
 // TestBaseElement tests the base element functionality
 func TestBaseElement(t *testing.T) {

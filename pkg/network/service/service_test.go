@@ -48,10 +48,6 @@ func TestNewService(t *testing.T) {
 		t.Error("sendQueue should not be nil")
 	}
 
-	if service.recvQueue == nil {
-		t.Error("recvQueue should not be nil")
-	}
-
 	if service.closeCh == nil {
 		t.Error("closeCh should not be nil")
 	}
@@ -70,8 +66,7 @@ func TestNewServiceWithCustomOptions(t *testing.T) {
 		WithReadTimeout(10*time.Second),
 		WithWriteTimeout(10*time.Second),
 		WithDIMSETimeout(30*time.Second),
-		WithSendQueueSize(50),
-		WithRecvQueueSize(50))
+		WithSendQueueSize(50))
     defer func() { _ = service.Close() }()
 
 	if service.config.maxPDULength != 32768 {
@@ -86,9 +81,6 @@ func TestNewServiceWithCustomOptions(t *testing.T) {
 		t.Errorf("Expected sendQueue capacity 50, got %d", cap(service.sendQueue))
 	}
 
-	if cap(service.recvQueue) != 50 {
-		t.Errorf("Expected recvQueue capacity 50, got %d", cap(service.recvQueue))
-	}
 }
 
 func TestServiceSetGetAssociation(t *testing.T) {
@@ -296,9 +288,6 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Expected sendQueueSize 100, got %d", config.sendQueueSize)
 	}
 
-	if config.recvQueueSize != 100 {
-		t.Errorf("Expected recvQueueSize 100, got %d", config.recvQueueSize)
-	}
 }
 
 func TestServiceOptions(t *testing.T) {
@@ -334,11 +323,6 @@ func TestServiceOptions(t *testing.T) {
 		t.Errorf("WithSendQueueSize failed")
 	}
 
-	// Test WithRecvQueueSize
-	WithRecvQueueSize(150)(config)
-	if config.recvQueueSize != 150 {
-		t.Errorf("WithRecvQueueSize failed")
-	}
 }
 
 // TestReadTimeoutFromContext verifies the edge-case logic in readTimeoutFromContext.

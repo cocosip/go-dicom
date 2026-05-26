@@ -45,7 +45,11 @@ func NewFileMetaInformation() *FileMetaInformation {
 
 // NewFileMetaInformationFromDataset creates a FileMetaInformation from an existing dataset.
 // This wraps the provided dataset without copying it.
+// If ds is nil, an empty Dataset is created to prevent nil pointer panics.
 func NewFileMetaInformationFromDataset(ds *Dataset) *FileMetaInformation {
+	if ds == nil {
+		ds = New()
+	}
 	return &FileMetaInformation{
 		dataset: ds,
 	}
@@ -112,7 +116,11 @@ func NewFileMetaInformationFromMainDataset(ds *Dataset, ts *transfer.Syntax) (*F
 
 // Dataset returns the underlying dataset.
 // This allows direct access to all dataset operations.
+// Returns an empty Dataset if the FileMetaInformation is nil.
 func (fmi *FileMetaInformation) Dataset() *Dataset {
+	if fmi == nil {
+		return New()
+	}
 	return fmi.dataset
 }
 

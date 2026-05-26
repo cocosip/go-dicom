@@ -330,7 +330,7 @@ func TestToXML_CompactFormat(t *testing.T) {
 	ds := dataset.New()
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
-	xml, err := ToXML(ds, WithXMLCompact(""))
+	xml, err := ToXML(ds, WithXMLCompact())
 	if err != nil {
 		t.Fatalf("ToXML failed: %v", err)
 	}

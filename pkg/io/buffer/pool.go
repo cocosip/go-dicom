@@ -45,13 +45,22 @@ var defaultBufferPool = &bufferPool{
 func GetBuffer(size uint32) []byte {
 	switch {
 	case size <= 4096:
-		bufPtr := defaultBufferPool.small.Get().(*[]byte)
+		bufPtr, ok := defaultBufferPool.small.Get().(*[]byte)
+		if !ok {
+			panic("buffer pool: small pool returned non-*[]byte value")
+		}
 		return (*bufPtr)[:size]
 	case size <= 65536:
-		bufPtr := defaultBufferPool.medium.Get().(*[]byte)
+		bufPtr, ok := defaultBufferPool.medium.Get().(*[]byte)
+		if !ok {
+			panic("buffer pool: medium pool returned non-*[]byte value")
+		}
 		return (*bufPtr)[:size]
 	case size <= 1048576:
-		bufPtr := defaultBufferPool.large.Get().(*[]byte)
+		bufPtr, ok := defaultBufferPool.large.Get().(*[]byte)
+		if !ok {
+			panic("buffer pool: large pool returned non-*[]byte value")
+		}
 		return (*bufPtr)[:size]
 	default:
 		// For very large buffers, allocate directly without pooling
@@ -61,6 +70,9 @@ func GetBuffer(size uint32) []byte {
 
 // PutBuffer returns a buffer to the pool for reuse.
 // The buffer should not be used after calling this function.
+// Only buffers originally obtained from GetBuffer should be returned.
+// Buffers with capacities that don't match a pool size class are discarded
+// to avoid putting incorrectly-sized slices into the pool.
 func PutBuffer(buf []byte) {
 	if buf == nil {
 		return
@@ -68,20 +80,26 @@ func PutBuffer(buf []byte) {
 
 	capacity := cap(buf)
 
+	// Only return to pool if capacity exactly matches one of the pool sizes.
+	// Sub-slices and externally-allocated slices may have mismatched capacities
+	// that would corrupt pool invariants.
+	var pool *sync.Pool
+	switch capacity {
+	case 4096:
+		pool = &defaultBufferPool.small
+	case 65536:
+		pool = &defaultBufferPool.medium
+	case 1048576:
+		pool = &defaultBufferPool.large
+	default:
+		// Capacity doesn't match any pool size — don't pool, let GC handle it
+		return
+	}
+
 	// Clear the buffer before returning to pool
 	full := buf[:capacity]
 	clear(full)
-
-	// Return to appropriate pool based on capacity
-	switch {
-	case capacity <= 4096:
-		defaultBufferPool.small.Put(&full)
-	case capacity <= 65536:
-		defaultBufferPool.medium.Put(&full)
-	case capacity <= 1048576:
-		defaultBufferPool.large.Put(&full)
-		// else: don't pool very large buffers, let GC handle them
-	}
+	pool.Put(&full)
 }
 
 // NewMemoryPooled creates a new MemoryByteBuffer using a pooled buffer.
@@ -163,7 +181,11 @@ var bytesBufferPool = sync.Pool{
 // GetBytesBuffer returns a bytes.Buffer from the pool.
 // The caller should call PutBytesBuffer when done.
 func GetBytesBuffer() *bytes.Buffer {
-	return bytesBufferPool.Get().(*bytes.Buffer)
+	buf, ok := bytesBufferPool.Get().(*bytes.Buffer)
+	if !ok {
+		panic("buffer pool: bytes buffer pool returned non-*bytes.Buffer value")
+	}
+	return buf
 }
 
 // PutBytesBuffer returns a bytes.Buffer to the pool for reuse.

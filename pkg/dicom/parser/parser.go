@@ -143,7 +143,7 @@ type parseContext struct {
 	ctx context.Context
 
 	// Configuration options
-	maxElementSize        uint32           // Maximum element size to read (0 = unlimited)
+	maxElementSize        uint32           // Maximum element size to read (default 500MB, 0 = unlimited)
 	stopAtTag             *tag.Tag         // Stop parsing when this tag is reached
 	readOption            ReadOption       // How to handle large elements
 	largeObjectSize       uint32           // Size threshold for "large" objects (default 64KB)
@@ -239,7 +239,8 @@ func newParseContext(opts ...Option) *parseContext {
 		textEncoding:    charset.Default,
 		textEncodings:   []encoding.Encoding{charset.Default},
 		readOption:      ReadDefault,
-		largeObjectSize: 65536, // Default 64KB
+		largeObjectSize: 65536,         // Default 64KB
+		maxElementSize: 524288000,      // Default 500MB (prevent runaway allocation)
 		detectedFormat:  FormatUnknown,
 	}
 	for _, opt := range opts {
@@ -1389,6 +1390,7 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 		if isFirstItem {
 			// The first item is the Basic Offset Table and must be materialized
 			// so offsets can be parsed before reading fragments.
+			// Zero-length offset table is valid (empty).
 			itemData := make([]byte, itemLength)
 			if _, err := io.ReadFull(p.reader, itemData); err != nil {
 				return nil, fmt.Errorf("failed to read fragment item data: %w", err)
@@ -1413,6 +1415,14 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 			}
 			isFirstItem = false
 		} else {
+			// Per DICOM PS3.5 §7.5, fragment items (non-offset-table) must have
+			// a non-zero, even-length value. Zero-length fragments are invalid.
+			if itemLength == 0 {
+				return nil, fmt.Errorf("fragment %d has zero length (offset table already read)", len(fragSeq.Fragments())+1)
+			}
+			if itemLength%2 != 0 {
+				return nil, fmt.Errorf("fragment %d length %d is not even", len(fragSeq.Fragments())+1, itemLength)
+			}
 			fragBuf, err := p.readFragmentItemBuffer(itemLength)
 			if err != nil {
 				return nil, err

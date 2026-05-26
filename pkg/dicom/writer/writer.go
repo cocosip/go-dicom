@@ -260,7 +260,7 @@ func WithImplementationVersionName(name string) WriteOption {
 	}
 }
 
-// Option is a functional option for Writer (internal use).
+// Option is a functional option for Writer (internal use, primarily for tests).
 type Option func(*Writer)
 
 // New creates a new Writer with the given transfer syntax and options.

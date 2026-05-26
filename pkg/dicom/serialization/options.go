@@ -134,9 +134,9 @@ func WithXMLIndent(indent string) XMLOption {
 	}
 }
 
-// WithXMLCompact disables indentation for compact XML output
-func WithXMLCompact(indent string) XMLOption {
+// WithXMLCompact disables indentation for compact XML output.
+func WithXMLCompact() XMLOption {
 	return func(c *xmlConfig) {
-		c.indent = indent
+		c.indent = ""
 	}
 }

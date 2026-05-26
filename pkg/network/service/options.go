@@ -39,10 +39,6 @@ type serviceConfig struct {
 	// Default: 100
 	sendQueueSize int
 
-	// recvQueueSize is the size of the receive queue channel.
-	// Default: 100
-	recvQueueSize int
-
 	// Lifecycle callbacks (optional)
 	associationNegotiator      AssociationNegotiator
 	associationReleaseHandler  AssociationReleaseHandler
@@ -60,7 +56,6 @@ func defaultServiceConfig() *serviceConfig {
 		writeTimeout:  30 * time.Second,
 		dimseTimeout:  60 * time.Second,
 		sendQueueSize: 100,
-		recvQueueSize: 100,
 	}
 }
 
@@ -104,13 +99,7 @@ func WithSendQueueSize(size int) Option {
 	}
 }
 
-// WithRecvQueueSize sets the size of the receive queue channel.
-// Default: 100.
-func WithRecvQueueSize(size int) Option {
-	return func(c *serviceConfig) {
-		c.recvQueueSize = size
-	}
-}
+
 
 // WithAssociationNegotiator sets the association negotiator callback.
 // The negotiator controls which associations are accepted and how presentation contexts are negotiated.

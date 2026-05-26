@@ -46,6 +46,9 @@ type pduEncoder interface {
 
 // sendAssociationPDU is a helper that sends an association-related PDU and transitions state.
 func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pduName string, newState State) error {
+	if s.conn == nil {
+		return fmt.Errorf("cannot send %s: connection is nil", pduName)
+	}
 	if s.IsClosed() {
 		return ErrServiceClosed
 	}
@@ -92,6 +95,9 @@ func (s *Service) SendAssociationAccept(ctx context.Context, ac *pdu.AAssociateA
 //   - reason: The reason for rejection (depends on source)
 func (s *Service) SendAssociationReject(ctx context.Context, result, source, reason byte) error {
 	// Check if service is closed
+	if s.conn == nil {
+		return fmt.Errorf("cannot send A-ASSOCIATE-RJ: connection is nil")
+	}
 	if s.IsClosed() {
 		return ErrServiceClosed
 	}
@@ -138,6 +144,9 @@ func (s *Service) SendAssociationReject(ctx context.Context, result, source, rea
 // 4. Transitions to ReleaseRequested state
 func (s *Service) SendReleaseRequest(ctx context.Context) error {
 	// Check if service is closed
+	if s.conn == nil {
+		return fmt.Errorf("cannot send A-RELEASE-RQ: connection is nil")
+	}
 	if s.IsClosed() {
 		return ErrServiceClosed
 	}
@@ -186,6 +195,9 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 // 4. Transitions to Closed state
 func (s *Service) SendReleaseResponse(ctx context.Context) error {
 	// Check if service is closed
+	if s.conn == nil {
+		return fmt.Errorf("cannot send A-RELEASE-RP: connection is nil")
+	}
 	if s.IsClosed() {
 		return ErrServiceClosed
 	}
@@ -262,6 +274,9 @@ func (s *Service) SendAbort(ctx context.Context, source, reason byte) error {
 //   - error if association was rejected or other error occurred
 func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssociateAC, error) {
 	// Check if service is closed
+	if s.conn == nil {
+		return nil, fmt.Errorf("cannot receive association response: connection is nil")
+	}
 	if s.IsClosed() {
 		return nil, ErrServiceClosed
 	}
@@ -320,6 +335,9 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 //   - error if failed or wrong PDU type received
 func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociateRQ, error) {
 	// Check if service is closed
+	if s.conn == nil {
+		return nil, fmt.Errorf("cannot receive association request: connection is nil")
+	}
 	if s.IsClosed() {
 		return nil, ErrServiceClosed
 	}
