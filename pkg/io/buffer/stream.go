@@ -61,12 +61,16 @@ func (s *StreamByteBuffer) Data() []byte {
 
 	// Seek to position
 	if _, err := s.stream.Seek(s.position, io.SeekStart); err != nil {
-		// Return empty data on error (best effort)
-		return data
+		// Return nil on error so callers can detect the failure
+		return nil
 	}
 
 	// Read data
-	_, _ = io.ReadFull(s.stream, data)
+	_, err := io.ReadFull(s.stream, data)
+	if err != nil {
+		// Return nil on error so callers can detect the failure
+		return nil
+	}
 	return data
 }
 

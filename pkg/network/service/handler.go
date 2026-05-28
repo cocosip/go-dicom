@@ -150,6 +150,14 @@ func (s *Service) dispatchRequest(ctx context.Context, req dimse.Request, handle
 		}
 		return s.handleNDeleteRequest(ctx, r, handlers)
 
+	// C-CANCEL-RQ — no response per PS3.7 §9.3.5
+	case dimse.CommandCCancelRQ:
+		r, ok := req.(*dimse.CCancelRequest)
+		if !ok {
+			return fmt.Errorf("expected *CCancelRequest for command %s, got %T", cmdField, req)
+		}
+		return s.handleCCancelRequest(r)
+
 	default:
 		return fmt.Errorf("unsupported DIMSE command: %s (0x%04X)", cmdField.String(), cmdField)
 	}
@@ -453,4 +461,28 @@ func (s *Service) GetConnectionLifecycleHandler() ConnectionLifecycleHandler {
 	s.callbacksMu.RLock()
 	defer s.callbacksMu.RUnlock()
 	return s.connectionLifecycleHandler
+}
+
+// handleCCancelRequest handles a C-CANCEL-RQ request.
+// Per DICOM PS3.7 §9.3.5, no response is sent for a cancel request.
+// The method finds the pending request being cancelled and closes its
+// cancel channel to signal the waiting goroutine.
+func (s *Service) handleCCancelRequest(req *dimse.CCancelRequest) error {
+	messageID := req.MessageIDBeingRespondedTo()
+	if messageID == 0 {
+		return fmt.Errorf("C-CANCEL-RQ has no MessageIDBeingRespondedTo")
+	}
+
+	s.pendingRequestsMu.Lock()
+	pending, exists := s.pendingRequests[messageID]
+	if exists {
+		close(pending.cancelCh)
+		delete(s.pendingRequests, messageID)
+	}
+	s.pendingRequestsMu.Unlock()
+
+	// If !exists, the request may have already completed or been cancelled locally;
+	// this is not an error per the DICOM standard.
+
+	return nil
 }

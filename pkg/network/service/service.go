@@ -280,6 +280,12 @@ func (s *Service) startShutdownFinalizer() {
 		go func() {
 			// Wait for in-flight request handlers with a timeout to prevent
 			// permanent shutdown blocking when a handler never returns.
+			//
+			// requestWg.Wait() is called in a separate goroutine so that a
+			// handler calling Close() does not self-deadlock: the handler
+			// goroutine is counted in requestWg, so if Wait() blocked the
+			// finalizer goroutine directly, the handler would be stuck in
+			// waitForShutdown() and never reach requestWg.Done().
 			done := make(chan struct{})
 			go func() {
 				s.requestWg.Wait()
@@ -295,6 +301,9 @@ func (s *Service) startShutdownFinalizer() {
 				// All handlers completed normally.
 			case <-time.After(timeout):
 				// Handlers timed out; proceed with shutdown to avoid hanging.
+				// This also breaks the self-deadlock when a handler calls
+				// Close() — the handler goroutine can't reach Done() while
+				// blocked in waitForShutdown, so the timeout unblocks it.
 			}
 
 			s.notifyConnectionClosed(s.shutdownError())

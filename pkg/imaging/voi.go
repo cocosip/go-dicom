@@ -30,6 +30,8 @@ func applyWindowTo8bit(pd *DicomPixelData, center, width float64, ignorePadding 
 	voiLUT := lut.CreateVOILUT(lut.VOILUTFunctionLinear, center, width)
 
 	// Precalculate within valid input range for faster mapping.
+	// Cap at 16-bit range (65536 entries) to prevent excessive memory allocation
+	// when BitsStored is very large (e.g., 32-bit).
 	var minInput, maxInput int
 	if pd.Info.PixelRepresentation == SignedPixels {
 		maxInput = (1 << (pd.Info.BitsStored - 1)) - 1
@@ -37,6 +39,9 @@ func applyWindowTo8bit(pd *DicomPixelData, center, width float64, ignorePadding 
 	} else {
 		minInput = 0
 		maxInput = (1 << pd.Info.BitsStored) - 1
+	}
+	if maxInput-minInput > 65536 {
+		maxInput = minInput + 65536
 	}
 	precalc := lut.NewPrecalculatedLUT(voiLUT, minInput, maxInput)
 

@@ -190,6 +190,18 @@ func FragmentData(data []byte, contextID byte, isCommand bool, maxPDULength uint
 	maxPDVDataSize := int(maxPDULength) - pduHeaderSize - pdvHeaderSize
 
 	if maxPDVDataSize <= 0 {
+		if maxPDULength == 0 {
+			// No max PDU length configured — return all data in one PDV.
+			return []*PDV{
+				{
+					PresentationContextID: contextID,
+					IsCommand:             isCommand,
+					IsLastFragment:        true,
+					Data:                  data,
+				},
+			}
+		}
+		// maxPDULength is positive but too small to hold even a one-byte PDV.
 		return nil
 	}
 

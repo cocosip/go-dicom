@@ -240,6 +240,8 @@ func (c *Client) GetConfig() *Config {
 // GetAssociation returns the current association.
 // Returns nil if not connected.
 func (c *Client) GetAssociation() *association.Association {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.assoc
 }
 
@@ -426,7 +428,9 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	}
 
 	// Build association object from the accepted response
+	c.mu.Lock()
 	c.assoc = association.FromAAssociateAC(ac)
+	c.mu.Unlock()
 
 	// Map abstract syntaxes from RQ to the accepted contexts in AC
 	// (A-ASSOCIATE-AC doesn't include AbstractSyntax, so we need to restore it from RQ)

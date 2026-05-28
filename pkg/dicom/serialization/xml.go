@@ -492,7 +492,9 @@ func (r *xmlReader) readDataset(xmlData []byte) (*dataset.Dataset, error) {
 			return nil, fmt.Errorf("failed to read attribute %s: %w", attr.Tag, err)
 		}
 		if elem != nil {
-			_ = ds.Add(elem) // Ignore add errors in deserialization
+			if err := ds.Add(elem); err != nil {
+				return nil, fmt.Errorf("failed to add element %s to dataset: %w", attr.Tag, err)
+			}
 		}
 	}
 

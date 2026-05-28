@@ -405,17 +405,32 @@ func (dt *DateTime) GetDateTimeRange() (*daterange.DateTimeRange, error) {
 }
 
 // IsRange returns true if the datetime value represents a range (contains "-").
+// Distinguished from timezone offsets (&ZZXX) which also contain a dash:
+// a timezone dash has exactly 4 digits after it; a range dash continues beyond.
 func (dt *DateTime) IsRange() bool {
 	dtStr := dt.str.GetString()
-	for i := 0; i < len(dtStr); i++ {
-		if dtStr[i] == '-' {
-			if i > 0 && (dtStr[i-1] >= '0' && dtStr[i-1] <= '9') {
-				if i+1 < len(dtStr) && (dtStr[i+1] >= '0' && dtStr[i+1] <= '9') {
+	return findRangeDash(dtStr) != -1
+}
+
+// findRangeDash returns the index of the range-separating dash, or -1 if none.
+// Skips dashes that are part of a timezone offset (digit + '-' + exactly 4 digits,
+// no more digits after). This matches the logic in daterange.findRangeDash.
+func findRangeDash(s string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '-' {
+			if i > 0 && i+4 < len(s) {
+				isDigitBefore := s[i-1] >= '0' && s[i-1] <= '9'
+				isDigitsAfter := (s[i+1] >= '0' && s[i+1] <= '9') &&
+					(s[i+2] >= '0' && s[i+2] <= '9') &&
+					(s[i+3] >= '0' && s[i+3] <= '9') &&
+					(s[i+4] >= '0' && s[i+4] <= '9')
+				hasMoreDigits := i+5 < len(s) && (s[i+5] >= '0' && s[i+5] <= '9')
+				if isDigitBefore && isDigitsAfter && !hasMoreDigits {
 					continue
 				}
 			}
-			return true
+			return i
 		}
 	}
-	return false
+	return -1
 }

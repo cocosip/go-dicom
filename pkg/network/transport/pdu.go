@@ -58,6 +58,11 @@ func ReadPDU(conn net.Conn, timeout time.Duration) (*pdu.RawPDU, error) {
 	// reserved := header[1]  // Reserved byte, not used
 	length := binary.BigEndian.Uint32(header[2:6])
 
+	// Validate PDU type before proceeding
+	if !isValidPDUType(pduType) {
+		return nil, fmt.Errorf("invalid PDU type: 0x%02X", pduType)
+	}
+
 	// Validate length before allocating the PDU data buffer.
 	if length > pdu.MaxPDUDataLength {
 		return nil, fmt.Errorf("PDU length %d exceeds maximum allowed %d", length, pdu.MaxPDUDataLength)
@@ -129,6 +134,16 @@ func WritePDU(conn net.Conn, timeout time.Duration, p *pdu.RawPDU) error {
 	}
 
 	return nil
+}
+
+func isValidPDUType(pduType byte) bool {
+	switch pduType {
+	case pdu.TypeAAssociateRQ, pdu.TypeAAssociateAC, pdu.TypeAAssociateRJ,
+		pdu.TypePDataTF, pdu.TypeAReleaseRQ, pdu.TypeAReleaseRP, pdu.TypeAAbort:
+		return true
+	default:
+		return false
+	}
 }
 
 func writeFull(conn net.Conn, data []byte) error {

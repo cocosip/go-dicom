@@ -62,6 +62,9 @@ func NewStructuredReportFromDataset(ds *dataset.Dataset) *StructuredReport {
 
 // Add adds a content item to the report
 func (sr *StructuredReport) Add(item *ContentItem) error {
+	if sr == nil || sr.ContentItem == nil {
+		return NewError("structured report is nil")
+	}
 	if item == nil {
 		return NewError("cannot add nil item")
 	}

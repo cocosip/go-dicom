@@ -158,7 +158,7 @@ func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
 
 		// Handle sequences - recursively anonymize
 		if seq, ok := elem.(*dataset.Sequence); ok {
-			if !hasAction || action == ActionK {
+			if !hasAction || action == ActionK || action == ActionC {
 				for i := 0; i < seq.Count(); i++ {
 					item := seq.GetItem(i)
 					if err := a.AnonymizeInPlace(item); err != nil {
@@ -177,8 +177,17 @@ func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
 				toRemove = append(toRemove, elem)
 			}
 		}
+	}
 
-		// Handle special replacement fields
+	// Remove marked elements first, so patient name/id replacements
+	// below are not immediately deleted when the profile uses ActionX.
+	for _, elem := range toRemove {
+		ds.Remove(elem.Tag())
+	}
+
+	// Handle special replacement fields (after removals to avoid
+	// the replacement being deleted by ActionX on the same tag).
+	for _, elem := range ds.Elements() {
 		if elem.Tag().Equals(tag.PatientName) && a.Profile.PatientName != "" {
 			if err := a.replaceString(ds, elem, a.Profile.PatientName); err != nil {
 				return fmt.Errorf("failed to replace patient name: %w", err)
@@ -188,11 +197,6 @@ func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
 				return fmt.Errorf("failed to replace patient ID: %w", err)
 			}
 		}
-	}
-
-	// Remove marked elements
-	for _, elem := range toRemove {
-		ds.Remove(elem.Tag())
 	}
 
 	return nil
@@ -291,6 +295,16 @@ func (a *Anonymizer) blankItem(ds *dataset.Dataset, elem element.Element, nonZer
 
 	// Numeric types - replace with zero value or empty array
 	switch vrCode {
+	case vr.CodeSV:
+		if nonZeroLength {
+			return ds.AddOrUpdate(element.NewSignedVeryLong(t, []int64{0}))
+		}
+		return ds.AddOrUpdate(element.NewSignedVeryLong(t, []int64{}))
+	case vr.CodeUV:
+		if nonZeroLength {
+			return ds.AddOrUpdate(element.NewUnsignedVeryLong(t, []uint64{0}))
+		}
+		return ds.AddOrUpdate(element.NewUnsignedVeryLong(t, []uint64{}))
 	case vr.CodeUS:
 		if nonZeroLength {
 			return ds.AddOrUpdate(element.NewUnsignedShort(t, []uint16{0}))

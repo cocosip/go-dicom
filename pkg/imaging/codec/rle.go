@@ -365,12 +365,18 @@ func newRLEDecoder(data []byte) (*rleDecoder, error) {
 	if err := binary.Read(reader, binary.LittleEndian, &numSegments); err != nil {
 		return nil, fmt.Errorf("failed to read number of segments: %w", err)
 	}
+	if numSegments < 1 || numSegments > 15 {
+		return nil, fmt.Errorf("invalid number of RLE segments: %d (must be 1-15)", numSegments)
+	}
 	dec.NumberOfSegments = int(numSegments)
 
 	for i := 0; i < 15; i++ {
 		var offset uint32
 		if err := binary.Read(reader, binary.LittleEndian, &offset); err != nil {
 			return nil, fmt.Errorf("failed to read offset %d: %w", i, err)
+		}
+		if i < int(numSegments) && int(offset) > len(data) {
+			return nil, fmt.Errorf("RLE segment %d offset %d exceeds data length %d", i, offset, len(data))
 		}
 		dec.offsets[i] = int(offset)
 	}

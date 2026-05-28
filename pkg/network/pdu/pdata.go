@@ -240,7 +240,6 @@ func FragmentData(presentationContextID byte, isCommand bool, data []byte, maxPD
 
 	var pdvs []PDV
 	remaining := data
-	offset := 0
 
 	for len(remaining) > 0 {
 		// Determine fragment size
@@ -258,7 +257,6 @@ func FragmentData(presentationContextID byte, isCommand bool, data []byte, maxPD
 		pdv := NewPDV(presentationContextID, isCommand, isLast, fragment)
 		pdvs = append(pdvs, pdv)
 
-		offset += fragmentSize
 	}
 
 	return pdvs

@@ -6,6 +6,7 @@ package printing
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -73,6 +74,7 @@ type PrinterStatusSnapshot struct {
 
 // PrinterStatusManager tracks and updates printer status for DICOM Print Management.
 type PrinterStatusManager struct {
+	mu          sync.Mutex
 	printerName string
 	status      PrinterStatus
 	statusInfo  string
@@ -96,26 +98,36 @@ func (m *PrinterStatusManager) PrinterName() string {
 
 // SetPrinterName updates the printer name.
 func (m *PrinterStatusManager) SetPrinterName(printerName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.printerName = strings.TrimSpace(printerName)
 }
 
 // Status returns the current printer status.
 func (m *PrinterStatusManager) Status() PrinterStatus {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.status
 }
 
 // StatusInfo returns the current status details.
 func (m *PrinterStatusManager) StatusInfo() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.statusInfo
 }
 
 // LastUpdated returns the timestamp of the most recent status update.
 func (m *PrinterStatusManager) LastUpdated() time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.lastUpdated
 }
 
 // Snapshot returns the current status snapshot.
 func (m *PrinterStatusManager) Snapshot() PrinterStatusSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return PrinterStatusSnapshot{
 		PrinterName: m.printerName,
 		Status:      m.status,
@@ -126,6 +138,8 @@ func (m *PrinterStatusManager) Snapshot() PrinterStatusSnapshot {
 
 // History returns a copy of all status snapshots.
 func (m *PrinterStatusManager) History() []PrinterStatusSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	history := make([]PrinterStatusSnapshot, len(m.history))
 	copy(history, m.history)
 	return history
@@ -133,16 +147,22 @@ func (m *PrinterStatusManager) History() []PrinterStatusSnapshot {
 
 // IsAvailable returns true when the printer can still accept print jobs.
 func (m *PrinterStatusManager) IsAvailable() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.status == PrinterStatusNormal || m.status == PrinterStatusWarning
 }
 
 // NeedsAttention returns true when the printer requires operator attention.
 func (m *PrinterStatusManager) NeedsAttention() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.status == PrinterStatusWarning || m.status == PrinterStatusFailure
 }
 
 // HasFailure returns true when the printer is in FAILURE state.
 func (m *PrinterStatusManager) HasFailure() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.status == PrinterStatusFailure
 }
 
@@ -160,6 +180,9 @@ func (m *PrinterStatusManager) UpdateAt(status PrinterStatus, statusInfo string,
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	m.status = status
 	m.statusInfo = strings.TrimSpace(statusInfo)
@@ -180,6 +203,9 @@ func (m *PrinterStatusManager) UpdateFromDataset(ds *dataset.Dataset) error {
 		return fmt.Errorf("dataset is nil")
 	}
 
+	m.mu.Lock()
+	// No defer unlock — the hasStatus path releases the lock early before calling Update().
+
 	if printerName, exists := ds.GetString(tag.PrinterName); exists {
 		m.printerName = strings.TrimSpace(printerName)
 	}
@@ -190,14 +216,18 @@ func (m *PrinterStatusManager) UpdateFromDataset(ds *dataset.Dataset) error {
 	if hasStatus {
 		status, err := ParsePrinterStatus(statusValue)
 		if err != nil {
+			m.mu.Unlock()
 			return err
 		}
 		if status == PrinterStatusUnknown {
+			m.mu.Unlock()
 			return fmt.Errorf("printer status is empty")
 		}
 		if !hasInfo {
 			infoValue = m.statusInfo
 		}
+		// Release lock before calling Update (which acquires it)
+		m.mu.Unlock()
 		return m.Update(status, infoValue)
 	}
 
@@ -212,6 +242,7 @@ func (m *PrinterStatusManager) UpdateFromDataset(ds *dataset.Dataset) error {
 		})
 	}
 
+	m.mu.Unlock()
 	return nil
 }
 
@@ -220,6 +251,9 @@ func (m *PrinterStatusManager) ApplyToDataset(ds *dataset.Dataset) error {
 	if ds == nil {
 		return fmt.Errorf("dataset is nil")
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if m.printerName != "" {
 		if err := ds.AddOrUpdate(element.NewString(tag.PrinterName, vr.LO, []string{m.printerName})); err != nil {

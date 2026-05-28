@@ -1231,6 +1231,9 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 		loader := func() ([]byte, error) {
 			p.lazyReadMu.Lock()
 			defer p.lazyReadMu.Unlock()
+			if p.seekableReader == nil {
+				return nil, fmt.Errorf("seekable reader unavailable: previous lazy-load restore seek failed")
+			}
 
 			// Save current position
 			savedPos, err := p.seekableReader.Seek(0, io.SeekCurrent)
@@ -1243,7 +1246,12 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 				return nil, fmt.Errorf("failed to seek to lazy data position: %w", err)
 			}
 			defer func() {
-				_, _ = p.seekableReader.Seek(savedPos, io.SeekStart)
+				if _, err := p.seekableReader.Seek(savedPos, io.SeekStart); err != nil {
+					// Mark the reader position as corrupt so subsequent reads fail explicitly.
+					// The data for this element was read successfully, but the shared reader
+					// position is now unknown and all future lazy/sequential reads are unsafe.
+					p.seekableReader = nil
+				}
 			}()
 
 			// Read the data

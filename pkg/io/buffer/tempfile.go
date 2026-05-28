@@ -7,15 +7,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 )
 
 // TempFileBuffer represents a buffer backed by a temporary file.
 // This is useful when data is too large to keep in memory.
 // The temporary file is created on initialization and cleaned up when Close() is called.
 type TempFileBuffer struct {
-	file     *os.File // The temporary file
-	size     uint32   // Size of the data
-	filePath string   // Path to the temporary file (for reference)
+	mu       sync.Mutex // Protects concurrent access to file operations
+	file     *os.File   // The temporary file
+	size     uint32     // Size of the data
+	filePath string     // Path to the temporary file (for reference)
 }
 
 // NewTempFile creates a new temporary file buffer and writes the provided data to it.
@@ -71,6 +73,8 @@ func (t *TempFileBuffer) IsMemory() bool {
 
 // Size returns the size of the buffer in bytes.
 func (t *TempFileBuffer) Size() uint32 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.size
 }
 
@@ -78,6 +82,9 @@ func (t *TempFileBuffer) Size() uint32 {
 // For large files, consider using GetByteRange or WriteTo to avoid loading
 // everything into memory at once.
 func (t *TempFileBuffer) Data() []byte {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.size == 0 {
 		return nil
 	}
@@ -112,6 +119,9 @@ func (t *TempFileBuffer) Data() []byte {
 //
 // Returns an error if the range is invalid or if reading fails.
 func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
 	}
@@ -153,6 +163,9 @@ func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error
 //
 // Returns the number of bytes written and any error encountered.
 func (t *TempFileBuffer) WriteTo(w io.Writer) (int64, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if w == nil {
 		return 0, fmt.Errorf("writer cannot be nil")
 	}
@@ -184,12 +197,16 @@ func (t *TempFileBuffer) FilePath() string {
 // Close closes the temporary file and removes it from the filesystem.
 // It's important to call this method to clean up temporary files.
 func (t *TempFileBuffer) Close() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.file == nil {
 		return nil
 	}
 
 	// Close the file first
 	closeErr := t.file.Close()
+	t.file = nil // Mark as closed
 
 	// Then try to remove it
 	removeErr := os.Remove(t.filePath)

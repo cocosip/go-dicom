@@ -3,7 +3,10 @@
 
 package render
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 // ColorSpaceConverter provides color space conversion functions
 type ColorSpaceConverter struct{}
@@ -189,8 +192,13 @@ func (c *ColorSpaceConverter) ConvertToRGB(data []byte, width, height int, photo
 }
 
 func (c *ColorSpaceConverter) convertYBRFullToRGB(data []byte, width, height, planarConfig int) ([]byte, error) {
-	result := make([]byte, len(data))
 	pixelCount := width * height
+	expectedLen := pixelCount * 3
+	if len(data) < expectedLen {
+		return nil, fmt.Errorf("YBR_FULL: data too short: got %d bytes, need at least %d (%dx%d * 3)", len(data), expectedLen, width, height)
+	}
+
+	result := make([]byte, len(data))
 
 	if planarConfig == 0 {
 		// Interleaved: YCBCR YCBCR YCBCR...
@@ -219,6 +227,9 @@ func (c *ColorSpaceConverter) convertYBRFullToRGB(data []byte, width, height, pl
 }
 
 func (c *ColorSpaceConverter) convertYBRFull422ToRGB(data []byte, width, height, planarConfig int) ([]byte, error) {
+	if len(data)%4 != 0 {
+		return nil, fmt.Errorf("YBR_FULL_422: data length %d is not a multiple of 4", len(data))
+	}
 	result := make([]byte, width*height*3)
 
 	if planarConfig == 0 {
@@ -242,6 +253,9 @@ func (c *ColorSpaceConverter) convertYBRFull422ToRGB(data []byte, width, height,
 }
 
 func (c *ColorSpaceConverter) convertYBRPartial422ToRGB(data []byte, width, height, planarConfig int) ([]byte, error) {
+	if len(data)%4 != 0 {
+		return nil, fmt.Errorf("YBR_PARTIAL_422: data length %d is not a multiple of 4", len(data))
+	}
 	result := make([]byte, width*height*3)
 
 	if planarConfig == 0 {

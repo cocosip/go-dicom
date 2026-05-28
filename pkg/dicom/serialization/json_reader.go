@@ -202,12 +202,16 @@ func (r *jsonReader) readNumericStringArray(t *tag.Tag, vrObj *vr.VR, data json.
 	values := make([]string, len(rawValues))
 	for i, raw := range rawValues {
 		// Try as number first
-		var num float64
+		var num json.Number
 		if err := json.Unmarshal(raw, &num); err == nil {
 			if vrObj.Code() == vr.CodeIS {
-				values[i] = strconv.FormatInt(int64(num), 10)
+				values[i] = num.String()
 			} else {
-				values[i] = strconv.FormatFloat(num, 'f', -1, 64)
+				if f, err := num.Float64(); err == nil {
+					values[i] = strconv.FormatFloat(f, 'f', -1, 64)
+				} else {
+					values[i] = num.String()
+				}
 			}
 		} else {
 			// Try as string

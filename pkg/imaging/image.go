@@ -123,6 +123,11 @@ func (img *DicomImage) GetOrCreatePipeline(frame int) render.Pipeline {
 	}
 
 	// Create default pipeline
+	if img.pixelData.Info.BitsStored == 0 {
+		// DICOM requires BitsStored to be at least 1
+		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false)
+	}
+
 	// Use pixel representation to determine min/max input values
 	var minInput, maxInput float64
 	if img.pixelData.Info.PixelRepresentation == SignedPixels {
@@ -160,9 +165,16 @@ func (img *DicomImage) SetPipeline(frame int, pipeline render.Pipeline) error {
 	return nil
 }
 
+// currentFrameSafe returns the current frame index under read lock.
+func (img *DicomImage) currentFrameSafe() int {
+	img.mu.RLock()
+	defer img.mu.RUnlock()
+	return img.currentFrame
+}
+
 // WindowWidth returns the window width for the current frame
 func (img *DicomImage) WindowWidth() float64 {
-	pipeline := img.GetOrCreatePipeline(img.currentFrame)
+	pipeline := img.GetOrCreatePipeline(img.currentFrameSafe())
 	if gp, ok := pipeline.(*render.GrayscalePipeline); ok {
 		return gp.WindowWidth()
 	}
@@ -171,7 +183,7 @@ func (img *DicomImage) WindowWidth() float64 {
 
 // SetWindowWidth sets the window width for the current frame
 func (img *DicomImage) SetWindowWidth(width float64) {
-	pipeline := img.GetOrCreatePipeline(img.currentFrame)
+	pipeline := img.GetOrCreatePipeline(img.currentFrameSafe())
 	if gp, ok := pipeline.(*render.GrayscalePipeline); ok {
 		gp.SetWindowWidth(width)
 	}
@@ -179,7 +191,7 @@ func (img *DicomImage) SetWindowWidth(width float64) {
 
 // WindowCenter returns the window center for the current frame
 func (img *DicomImage) WindowCenter() float64 {
-	pipeline := img.GetOrCreatePipeline(img.currentFrame)
+	pipeline := img.GetOrCreatePipeline(img.currentFrameSafe())
 	if gp, ok := pipeline.(*render.GrayscalePipeline); ok {
 		return gp.WindowCenter()
 	}
@@ -188,7 +200,7 @@ func (img *DicomImage) WindowCenter() float64 {
 
 // SetWindowCenter sets the window center for the current frame
 func (img *DicomImage) SetWindowCenter(center float64) {
-	pipeline := img.GetOrCreatePipeline(img.currentFrame)
+	pipeline := img.GetOrCreatePipeline(img.currentFrameSafe())
 	if gp, ok := pipeline.(*render.GrayscalePipeline); ok {
 		gp.SetWindowCenter(center)
 	}
@@ -196,7 +208,7 @@ func (img *DicomImage) SetWindowCenter(center float64) {
 
 // SetWindow sets both window center and width for the current frame
 func (img *DicomImage) SetWindow(center, width float64) {
-	pipeline := img.GetOrCreatePipeline(img.currentFrame)
+	pipeline := img.GetOrCreatePipeline(img.currentFrameSafe())
 	if gp, ok := pipeline.(*render.GrayscalePipeline); ok {
 		gp.SetWindow(center, width)
 	}
@@ -204,7 +216,7 @@ func (img *DicomImage) SetWindow(center, width float64) {
 
 // Invert returns whether the current frame is inverted
 func (img *DicomImage) Invert() bool {
-	pipeline := img.GetOrCreatePipeline(img.currentFrame)
+	pipeline := img.GetOrCreatePipeline(img.currentFrameSafe())
 	if gp, ok := pipeline.(*render.GrayscalePipeline); ok {
 		return gp.Invert()
 	}
@@ -213,7 +225,7 @@ func (img *DicomImage) Invert() bool {
 
 // SetInvert sets whether to invert the current frame
 func (img *DicomImage) SetInvert(invert bool) {
-	pipeline := img.GetOrCreatePipeline(img.currentFrame)
+	pipeline := img.GetOrCreatePipeline(img.currentFrameSafe())
 	if gp, ok := pipeline.(*render.GrayscalePipeline); ok {
 		gp.SetInvert(invert)
 	}

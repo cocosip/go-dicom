@@ -188,7 +188,7 @@ func (ds *Dataset) IsEmpty() bool {
 
 // Elements returns all elements in the dataset, sorted by tag.
 func (ds *Dataset) Elements() []element.Element {
-	if len(ds.items) == 0 {
+	if ds == nil || len(ds.items) == 0 {
 		return nil
 	}
 
@@ -205,7 +205,7 @@ func (ds *Dataset) Elements() []element.Element {
 
 // Tags returns all tags in the dataset, sorted.
 func (ds *Dataset) Tags() []*tag.Tag {
-	if len(ds.items) == 0 {
+	if ds == nil || len(ds.items) == 0 {
 		return nil
 	}
 
@@ -273,6 +273,9 @@ func (ds *Dataset) Filter(predicate func(element.Element) bool) *Dataset {
 
 // String returns a string representation of the dataset.
 func (ds *Dataset) String() string {
+	if ds == nil {
+		return "Dataset{nil}"
+	}
 	return fmt.Sprintf("Dataset{%d elements}", len(ds.items))
 }
 
@@ -280,6 +283,9 @@ func (ds *Dataset) String() string {
 // This represents the encoding format of pixel data and other elements.
 // Returns nil if no transfer syntax has been set.
 func (ds *Dataset) InternalTransferSyntax() *transfer.Syntax {
+	if ds == nil {
+		return nil
+	}
 	return ds.internalTransferSyntax
 }
 
