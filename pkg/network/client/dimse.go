@@ -131,6 +131,17 @@ func (c *Client) CFind(ctx context.Context, level dimse.QueryRetrieveLevel, quer
 	return c.cfindWithRequest(ctx, req)
 }
 
+// CCancel sends a C-CANCEL-RQ for a pending C-FIND, C-MOVE, or C-GET operation.
+// The messageID parameter must be the Message ID of the original request being
+// cancelled, and presentationContextID must be the presentation context used by
+// that original request.
+func (c *Client) CCancel(ctx context.Context, messageID uint16, presentationContextID byte) error {
+	if !c.connected {
+		return fmt.Errorf("client not connected")
+	}
+	return c.service.SendCCancel(ctx, messageID, presentationContextID)
+}
+
 func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) ([]*dataset.Dataset, error) {
 	if !c.connected {
 		return nil, fmt.Errorf("client not connected")

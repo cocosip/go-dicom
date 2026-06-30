@@ -260,6 +260,62 @@ func TestHandleCFindRequest_CustomHandler(t *testing.T) {
 	}
 }
 
+func TestHandleCCancelRequest_CancelsActiveCFindHandler(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer func() { _ = service.Close() }()
+	defer cancel()
+
+	query := dataset.New()
+	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, query)
+	if err := req.SetMessageID(77); err != nil {
+		t.Fatalf("SetMessageID failed: %v", err)
+	}
+
+	handlerStarted := make(chan struct{})
+	handlerCanceled := make(chan struct{})
+	handlers := &Handlers{
+		CFindHandler: func(ctx context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
+			close(handlerStarted)
+			<-ctx.Done()
+			close(handlerCanceled)
+			return []*dimse.CFindResponse{
+				dimse.NewCFindResponseFromRequest(req, status.Cancel, nil),
+			}, nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- service.handleCFindRequest(ctx, req, handlers)
+	}()
+
+	select {
+	case <-handlerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-FIND handler to start")
+	}
+
+	cancelReq := dimse.NewCCancelRequest(req.MessageID())
+	if err := service.handleCCancelRequest(cancelReq); err != nil {
+		t.Fatalf("handleCCancelRequest() error = %v", err)
+	}
+
+	select {
+	case <-handlerCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("C-FIND handler context was not canceled")
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("handleCFindRequest() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-FIND handler to finish")
+	}
+}
+
 func TestHandleResponse(t *testing.T) {
 	service := NewService(nil, nil)
 	defer func() { _ = service.Close() }()
@@ -363,6 +419,61 @@ func TestHandleCMoveRequest_CustomHandler(t *testing.T) {
 	}
 }
 
+func TestHandleCCancelRequest_CancelsActiveCMoveHandler(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer cancel()
+	defer func() { _ = service.Close() }()
+
+	identifier := dataset.New()
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	if err := req.SetMessageID(88); err != nil {
+		t.Fatalf("SetMessageID failed: %v", err)
+	}
+
+	handlerStarted := make(chan struct{})
+	handlerCanceled := make(chan struct{})
+	handlers := &Handlers{
+		CMoveHandler: func(ctx context.Context, op CMoveOperation) error {
+			close(handlerStarted)
+			<-ctx.Done()
+			close(handlerCanceled)
+			return op.SendFailure(status.Cancel)
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- service.handleCMoveRequest(ctx, req, handlers)
+	}()
+
+	select {
+	case <-handlerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-MOVE handler to start")
+	}
+
+	cancelReq := dimse.NewCCancelRequest(req.MessageID())
+	if err := service.handleCCancelRequest(cancelReq); err != nil {
+		t.Fatalf("handleCCancelRequest() error = %v", err)
+	}
+
+	select {
+	case <-handlerCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("C-MOVE handler context was not canceled")
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("handleCMoveRequest() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-MOVE handler to finish")
+	}
+}
+
 func TestHandleCGetRequest_DefaultHandler(t *testing.T) {
 	service, ctx, cancel := setupTestService(t)
 	defer cancel()
@@ -413,5 +524,60 @@ func TestHandleCGetRequest_CustomHandler(t *testing.T) {
 
 	if !handlerCalled {
 		t.Error("Custom handler was not called")
+	}
+}
+
+func TestHandleCCancelRequest_CancelsActiveCGetHandler(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer cancel()
+	defer func() { _ = service.Close() }()
+
+	identifier := dataset.New()
+	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
+	req := dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, identifier)
+	if err := req.SetMessageID(99); err != nil {
+		t.Fatalf("SetMessageID failed: %v", err)
+	}
+
+	handlerStarted := make(chan struct{})
+	handlerCanceled := make(chan struct{})
+	handlers := &Handlers{
+		CGetHandler: func(ctx context.Context, op CGetOperation) error {
+			close(handlerStarted)
+			<-ctx.Done()
+			close(handlerCanceled)
+			return op.SendFailure(status.Cancel)
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- service.handleCGetRequest(ctx, req, handlers)
+	}()
+
+	select {
+	case <-handlerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-GET handler to start")
+	}
+
+	cancelReq := dimse.NewCCancelRequest(req.MessageID())
+	if err := service.handleCCancelRequest(cancelReq); err != nil {
+		t.Fatalf("handleCCancelRequest() error = %v", err)
+	}
+
+	select {
+	case <-handlerCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("C-GET handler context was not canceled")
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("handleCGetRequest() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-GET handler to finish")
 	}
 }

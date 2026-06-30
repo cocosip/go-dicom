@@ -93,7 +93,7 @@ func createMessageFromDatasets(commandDS, dataDS *dataset.Dataset) (dimse.Messag
 
 	// C-CANCEL
 	case dimse.CommandCCancelRQ:
-		return dimse.NewCCancelRequest(commandDS), nil
+		return dimse.NewCCancelRequestFromCommand(commandDS), nil
 
 	default:
 		return nil, fmt.Errorf("unsupported command type: 0x%04X", commandField)

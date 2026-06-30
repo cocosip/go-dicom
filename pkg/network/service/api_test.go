@@ -306,3 +306,64 @@ func TestSendCMove_SendFailureCleansPendingRequest(t *testing.T) {
 		t.Fatalf("pending request count = %d, want 0", pendingCount)
 	}
 }
+
+func TestSendCCancel_NoAssociation(t *testing.T) {
+	service := NewService(nil, nil)
+	defer func() { _ = service.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := service.SendCCancel(ctx, 123, 1)
+	if err == nil {
+		t.Fatal("SendCCancel() error = nil, want no association error")
+	}
+}
+
+func TestSendCCancel_SendsRequestWithoutRegisteringPendingResponse(t *testing.T) {
+	service := NewService(nil, createTestAssociation())
+	defer func() { _ = service.Close() }()
+
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState failed: %v", err)
+	}
+
+	sent := make(chan dimse.Message, 1)
+	go func() {
+		req := <-service.sendQueue
+		sent <- req.message
+		req.resultCh <- nil
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	const messageIDBeingRespondedTo uint16 = 123
+	const presentationContextID byte = 5
+	if err := service.SendCCancel(ctx, messageIDBeingRespondedTo, presentationContextID); err != nil {
+		t.Fatalf("SendCCancel() error = %v", err)
+	}
+
+	select {
+	case msg := <-sent:
+		req, ok := msg.(*dimse.CCancelRequest)
+		if !ok {
+			t.Fatalf("sent message type = %T, want *dimse.CCancelRequest", msg)
+		}
+		if req.MessageIDBeingRespondedTo() != messageIDBeingRespondedTo {
+			t.Fatalf("MessageIDBeingRespondedTo = %d, want %d", req.MessageIDBeingRespondedTo(), messageIDBeingRespondedTo)
+		}
+		if req.PresentationContextID() != presentationContextID {
+			t.Fatalf("PresentationContextID = %d, want %d", req.PresentationContextID(), presentationContextID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-CANCEL send")
+	}
+
+	service.pendingRequestsMu.RLock()
+	pendingCount := len(service.pendingRequests)
+	service.pendingRequestsMu.RUnlock()
+	if pendingCount != 0 {
+		t.Fatalf("pending request count = %d, want 0", pendingCount)
+	}
+}

@@ -84,6 +84,20 @@ func TestCFind_NotConnected(t *testing.T) {
 	}
 }
 
+func TestCCancel_NotConnected(t *testing.T) {
+	client := New()
+
+	err := client.CCancel(context.Background(), 123, 1)
+	if err == nil {
+		t.Error("Expected error when not connected")
+	}
+
+	expectedMsg := errNotConnected
+	if err.Error() != expectedMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
 func TestCFind_NilQuery(t *testing.T) {
 	client := New()
 	client.connected = true // Fake connection
@@ -135,6 +149,7 @@ type mockServiceForDIMSE struct {
 	storeResponse *dimse.CStoreResponse
 	findResponses []*dimse.CFindResponse
 	findHook      func(*dimse.CFindRequest)
+	cancelHook    func(messageID uint16, presentationContextID byte)
 }
 
 // Association management methods (not used in these tests)
@@ -235,6 +250,13 @@ func (m *mockServiceForDIMSE) SendCGet(_ context.Context, req *dimse.CGetRequest
 	return ch, nil
 }
 
+func (m *mockServiceForDIMSE) SendCCancel(_ context.Context, messageID uint16, presentationContextID byte) error {
+	if m.cancelHook != nil {
+		m.cancelHook(messageID, presentationContextID)
+	}
+	return nil
+}
+
 func setupMockClient() (*Client, *mockServiceForDIMSE) {
 	client := New()
 	client.connected = true
@@ -289,6 +311,40 @@ func TestCFind_Success_NoResults(t *testing.T) {
 
 	if len(results) != 0 {
 		t.Errorf("Expected 0 results, got %d", len(results))
+	}
+}
+
+func TestCCancel_Success(t *testing.T) {
+	client, mockService := setupMockClient()
+
+	captured := make(chan struct {
+		messageID             uint16
+		presentationContextID byte
+	}, 1)
+	mockService.cancelHook = func(messageID uint16, presentationContextID byte) {
+		captured <- struct {
+			messageID             uint16
+			presentationContextID byte
+		}{messageID: messageID, presentationContextID: presentationContextID}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	if err := client.CCancel(ctx, 123, 5); err != nil {
+		t.Fatalf("CCancel() error = %v", err)
+	}
+
+	select {
+	case got := <-captured:
+		if got.messageID != 123 {
+			t.Fatalf("messageID = %d, want 123", got.messageID)
+		}
+		if got.presentationContextID != 5 {
+			t.Fatalf("presentationContextID = %d, want 5", got.presentationContextID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for C-CANCEL send")
 	}
 }
 

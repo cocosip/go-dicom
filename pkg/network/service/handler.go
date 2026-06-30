@@ -55,6 +55,40 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 	return nil
 }
 
+func (s *Service) registerActiveOperation(parent context.Context, messageID uint16) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	token := &struct{}{}
+
+	s.activeOperationsMu.Lock()
+	s.activeOperations[messageID] = &activeOperation{token: token, cancel: cancel}
+	s.activeOperationsMu.Unlock()
+
+	unregister := func() {
+		s.activeOperationsMu.Lock()
+		if op, exists := s.activeOperations[messageID]; exists && op.token == token {
+			delete(s.activeOperations, messageID)
+		}
+		s.activeOperationsMu.Unlock()
+		cancel()
+	}
+
+	return ctx, unregister
+}
+
+func (s *Service) cancelActiveOperation(messageID uint16) bool {
+	s.activeOperationsMu.Lock()
+	op, exists := s.activeOperations[messageID]
+	if exists {
+		delete(s.activeOperations, messageID)
+	}
+	s.activeOperationsMu.Unlock()
+
+	if exists {
+		op.cancel()
+	}
+	return exists
+}
+
 // handleRequest dispatches a request to the appropriate handler.
 //
 // All requests are dispatched in a goroutine so the recv loop stays free to
@@ -207,12 +241,15 @@ func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequ
 
 // handleCFindRequest handles a C-FIND request.
 func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindRequest, handlers *Handlers) error {
+	handlerCtx, unregister := s.registerActiveOperation(ctx, req.MessageID())
+	defer unregister()
+
 	var responses []*dimse.CFindResponse
 
 	// Use custom handler if available
 	if handlers != nil && handlers.CFindHandler != nil {
 		var err error
-		responses, err = handlers.CFindHandler(ctx, req)
+		responses, err = handlers.CFindHandler(handlerCtx, req)
 		if err != nil {
 			// Handler returned error - send failure response
 			resp := dimse.NewCFindResponseFromRequest(req, status.CFindRefusedOutOfResources, nil)
@@ -236,11 +273,14 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 
 // handleCMoveRequest handles a C-MOVE request.
 func (s *Service) handleCMoveRequest(ctx context.Context, req *dimse.CMoveRequest, handlers *Handlers) error {
+	handlerCtx, unregister := s.registerActiveOperation(ctx, req.MessageID())
+	defer unregister()
+
 	if handlers != nil && handlers.CMoveHandler != nil {
 		op := newCMoveOperation(req, func(resp *dimse.CMoveResponse) error {
 			return s.Send(ctx, resp)
 		})
-		if err := handlers.CMoveHandler(ctx, op); err != nil {
+		if err := handlers.CMoveHandler(handlerCtx, op); err != nil {
 			return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.CMoveFailedUnableToProcess))
 		}
 		return nil
@@ -251,6 +291,9 @@ func (s *Service) handleCMoveRequest(ctx context.Context, req *dimse.CMoveReques
 
 // handleCGetRequest handles a C-GET request.
 func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest, handlers *Handlers) error {
+	handlerCtx, unregister := s.registerActiveOperation(ctx, req.MessageID())
+	defer unregister()
+
 	if handlers != nil && handlers.CGetHandler != nil {
 		op := newCGetOperation(
 			req,
@@ -261,7 +304,7 @@ func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest,
 				return s.Send(ctx, resp)
 			},
 		)
-		if err := handlers.CGetHandler(ctx, op); err != nil {
+		if err := handlers.CGetHandler(handlerCtx, op); err != nil {
 			return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.CGetFailedUnableToProcess))
 		}
 		return nil
@@ -480,9 +523,10 @@ func (s *Service) handleCCancelRequest(req *dimse.CCancelRequest) error {
 		delete(s.pendingRequests, messageID)
 	}
 	s.pendingRequestsMu.Unlock()
+	s.cancelActiveOperation(messageID)
 
-	// If !exists, the request may have already completed or been cancelled locally;
-	// this is not an error per the DICOM standard.
+	// Unknown message IDs may already be complete or locally cancelled; that is
+	// not an error per the DICOM standard.
 
 	return nil
 }

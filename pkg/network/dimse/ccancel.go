@@ -5,6 +5,7 @@ package dimse
 
 import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
@@ -15,8 +16,15 @@ type CCancelRequest struct {
 	*BaseRequest
 }
 
-// NewCCancelRequest creates a new C-CANCEL-RQ request.
-func NewCCancelRequest(command *dataset.Dataset) *CCancelRequest {
+// NewCCancelRequest creates a new outgoing C-CANCEL-RQ request.
+func NewCCancelRequest(messageIDBeingRespondedTo uint16) *CCancelRequest {
+	command := CreateCommandDataset(uint16(CommandCCancelRQ), 0)
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
+	return NewCCancelRequestFromCommand(command)
+}
+
+// NewCCancelRequestFromCommand creates a C-CANCEL-RQ request from a decoded command dataset.
+func NewCCancelRequestFromCommand(command *dataset.Dataset) *CCancelRequest {
 	return &CCancelRequest{
 		BaseRequest: NewBaseRequest(command, nil),
 	}

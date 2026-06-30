@@ -84,6 +84,22 @@ func (s *Service) SendWithTimeout(msg dimse.Message, timeout time.Duration) erro
 	return s.Send(ctx, msg)
 }
 
+// SendCCancel sends a C-CANCEL-RQ for a pending C-FIND, C-MOVE, or C-GET request.
+// C-CANCEL has no response; callers must pass the presentation context ID used
+// by the original request because the cancel command has no SOP Class UID.
+func (s *Service) SendCCancel(ctx context.Context, messageIDBeingRespondedTo uint16, presentationContextID byte) error {
+	assoc := s.GetAssociation()
+	if assoc == nil {
+		return fmt.Errorf("no association available")
+	}
+	if presentationContextID == 0 {
+		return fmt.Errorf("presentation context ID is required for C-CANCEL")
+	}
+	req := dimse.NewCCancelRequest(messageIDBeingRespondedTo)
+	req.SetPresentationContextID(presentationContextID)
+	return s.Send(ctx, req)
+}
+
 // SendCEcho sends a C-ECHO request and returns the response.
 // C-ECHO is used to verify connectivity to a DICOM node.
 //

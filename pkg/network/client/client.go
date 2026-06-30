@@ -36,6 +36,7 @@ type serviceInterface interface {
 	SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error)
 	SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error)
 	SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error)
+	SendCCancel(ctx context.Context, messageID uint16, presentationContextID byte) error
 }
 
 // Client represents a DICOM SCU (Service Class User) client.

@@ -50,8 +50,10 @@ type Service struct {
 	config *serviceConfig
 
 	// Message tracking
-	pendingRequests   map[uint16]*pendingRequest
-	pendingRequestsMu sync.RWMutex
+	pendingRequests    map[uint16]*pendingRequest
+	pendingRequestsMu  sync.RWMutex
+	activeOperations   map[uint16]*activeOperation
+	activeOperationsMu sync.RWMutex
 
 	// DIMSE message handlers (optional, for server mode)
 	handlers   *Handlers
@@ -87,6 +89,12 @@ type pendingRequest struct {
 	request    dimse.Request
 	responseCh chan dimse.Response
 	cancelCh   chan struct{}
+}
+
+// activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.
+type activeOperation struct {
+	token  *struct{}
+	cancel context.CancelFunc
 }
 
 // Handlers contains optional DIMSE message handlers for server mode.
@@ -176,6 +184,7 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		errCh:                      make(chan error, 1),
 		config:                     config,
 		pendingRequests:            make(map[uint16]*pendingRequest),
+		activeOperations:           make(map[uint16]*activeOperation),
 		ctx:                        ctx,
 		cancel:                     cancel,
 		handlers:                   config.handlers,
@@ -248,6 +257,17 @@ func (s *Service) cancelPendingRequests() {
 	s.pendingRequests = make(map[uint16]*pendingRequest)
 }
 
+// cancelActiveOperations cancels all incoming operations that can receive C-CANCEL-RQ.
+func (s *Service) cancelActiveOperations() {
+	s.activeOperationsMu.Lock()
+	defer s.activeOperationsMu.Unlock()
+
+	for _, op := range s.activeOperations {
+		op.cancel()
+	}
+	s.activeOperations = make(map[uint16]*activeOperation)
+}
+
 func (s *Service) initiateClose(targetState State, recordErr error) error {
 	if recordErr != nil {
 		s.setCloseError(recordErr)
@@ -263,6 +283,7 @@ func (s *Service) initiateClose(targetState State, recordErr error) error {
 		s.stateMu.Unlock()
 
 		s.cancelPendingRequests()
+		s.cancelActiveOperations()
 
 		if s.conn != nil {
 			err = s.conn.Close()
