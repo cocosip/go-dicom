@@ -155,7 +155,7 @@ func TestWriteWithoutPreambleOption(t *testing.T) {
 func TestWriteUsesDatasetInternalTransferSyntax(t *testing.T) {
 	buf := &bytes.Buffer{}
 
-	ds := dataset.NewWithTransferSyntax(transfer.RLELossless)
+	ds := dataset.NewWithTransferSyntax(transfer.JPEG2000Lossless)
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"TS^FromDataset"}))
 
 	if err := Write(buf, ds); err != nil {
@@ -171,7 +171,7 @@ func TestWriteUsesDatasetInternalTransferSyntax(t *testing.T) {
 	if !exists {
 		t.Fatal("TransferSyntaxUID not found")
 	}
-	if tsUID != transfer.RLELossless.UID().String() {
-		t.Fatalf("TransferSyntaxUID = %q, want %q", tsUID, transfer.RLELossless.UID().String())
+	if tsUID != transfer.JPEG2000Lossless.UID().String() {
+		t.Fatalf("TransferSyntaxUID = %q, want %q", tsUID, transfer.JPEG2000Lossless.UID().String())
 	}
 }

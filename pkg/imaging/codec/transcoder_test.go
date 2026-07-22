@@ -227,7 +227,7 @@ func TestTranscoder_DecodeFrameUsesBOTFrameBoundaries(t *testing.T) {
 	_ = ds.Add(obf)
 
 	transcoder := NewTranscoder(
-		transfer.RLELossless,
+		transfer.JPEG2000Lossless,
 		transfer.ExplicitVRLittleEndian,
 		WithInputCodec(echoDecodeCodec{}),
 	)
@@ -260,7 +260,7 @@ func TestTranscoderDecodeParsesStringNumberOfFrames(t *testing.T) {
 	_ = ds.Add(obf)
 
 	transcoder := NewTranscoder(
-		transfer.RLELossless,
+		transfer.JPEG2000Lossless,
 		transfer.ExplicitVRLittleEndian,
 		WithInputCodec(echoDecodeCodec{}),
 	)
@@ -307,7 +307,7 @@ func TestTranscoderDecodeFrameLoadsOnlyRequestedBOTFragments(t *testing.T) {
 	_ = ds.Add(obf)
 
 	transcoder := NewTranscoder(
-		transfer.RLELossless,
+		transfer.JPEG2000Lossless,
 		transfer.ExplicitVRLittleEndian,
 		WithInputCodec(echoDecodeCodec{}),
 	)
@@ -334,14 +334,23 @@ func (echoDecodeCodec) Name() string {
 }
 
 func (echoDecodeCodec) TransferSyntax() *transfer.Syntax {
-	return transfer.RLELossless
+	return transfer.JPEG2000Lossless
 }
 
 func (echoDecodeCodec) GetDefaultParameters() Parameters {
 	return NewBaseParameters()
 }
 
-func (echoDecodeCodec) Encode(_ imagetypes.PixelData, _ imagetypes.PixelData, _ Parameters) error {
+func (echoDecodeCodec) Encode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, _ Parameters) error {
+	for i := 0; i < oldPixelData.FrameCount(); i++ {
+		frame, err := oldPixelData.GetFrame(i)
+		if err != nil {
+			return err
+		}
+		if err := newPixelData.AddFrame(frame); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -512,10 +521,6 @@ func TestTranscoderManager(t *testing.T) {
 			t.Error("CanTranscode() returned false for uncompressed to uncompressed")
 		}
 
-		// RLE should be supported (registered in global registry)
-		if !manager.CanTranscode(transfer.RLELossless, transfer.ExplicitVRLittleEndian) {
-			t.Error("CanTranscode() returned false for RLE to uncompressed")
-		}
 	})
 }
 
@@ -532,9 +537,6 @@ func TestGetGlobalRegistry(t *testing.T) {
 		t.Error("Global registry does not have ExplicitVRLittleEndian codec")
 	}
 
-	if !registry1.HasCodec(transfer.RLELossless) {
-		t.Error("Global registry does not have RLE codec")
-	}
 }
 
 // TestTranscoder_VRSelection tests that the transcoder correctly uses OB
@@ -591,8 +593,12 @@ func TestTranscoder_VRSelection(t *testing.T) {
 				_ = ds.Add(element.NewOtherWord(tag.PixelData, pixelData))
 			}
 
-			// Create transcoder to encode to RLE
-			transcoder := NewTranscoder(transfer.ExplicitVRLittleEndian, transfer.RLELossless)
+			// Use a test codec to encode to an encapsulated transfer syntax.
+			transcoder := NewTranscoder(
+				transfer.ExplicitVRLittleEndian,
+				transfer.JPEG2000Lossless,
+				WithOutputCodec(echoDecodeCodec{}),
+			)
 
 			// Encode
 			encodedDS, err := transcoder.Transcode(ds)

@@ -15,7 +15,7 @@ This library is currently under active development. The API is not stable and ma
 ### Core Capabilities ✅
 
 - ✅ **DICOM File I/O** - Read and write DICOM files with full standard compliance
-- ✅ **Transfer Syntax Support** - Explicit/Implicit VR, Big/Little Endian (RLE codec implemented, JPEG/JPEG2K planned)
+- ✅ **Transfer Syntax Support** - Explicit/Implicit VR, Big/Little Endian
 - ✅ **Multi-Frame Images** - Full support for multi-frame and video DICOM files
 - ✅ **Character Encoding** - 30+ character sets with auto-detection (UTF-8, Latin, Chinese, Japanese, Korean, Arabic, etc.)
 - ✅ **Fragment Sequences** - Compressed pixel data handling (read/write, codec framework ready)
@@ -38,7 +38,7 @@ This library is currently under active development. The API is not stable and ma
   - [x] Dataset & Sequence (full support with lazy loading)
   - [x] Dictionary (tag/keyword lookup with global default instance)
   - [x] UID (1965 standard UIDs)
-  - [x] Transfer Syntax (15+ syntaxes including JPEG, RLE, MPEG)
+  - [x] Transfer Syntax (15+ syntaxes including JPEG and MPEG)
   - [x] Character Set (30+ encodings with auto-detection)
 
 - [x] **DICOM file reading** (~100% Complete)
@@ -66,7 +66,7 @@ This library is currently under active development. The API is not stable and ma
 
 - [x] **Special Format Support**
   - [x] Multi-frame images (verified up to 100 frames)
-  - [x] Fragment sequences (JPEG, RLE compressed data)
+  - [x] Fragment sequences (compressed pixel data)
   - [x] Video DICOM (MPEG2)
   - [x] RGB color images (planar and interleaved)
   - [x] Structured Reports (SR) with hierarchical content
@@ -138,7 +138,6 @@ This library is currently under active development. The API is not stable and ma
 
 - [x] **Image Codecs** (~100% Complete Other project)
   - [x] Native codecs (uncompressed data - Explicit/Implicit VR, Little/Big Endian)
-  - [x] RLE codec (RLE Lossless encode/decode - fully functional)
   - [x] Transcoder framework for format conversion between transfer syntaxes
   - [x] Codec registry and plugin architecture
   - [x] JPEG Baseline codec (1.2.840.10008.1.2.4.50) - Planned
@@ -971,7 +970,7 @@ func main() {
 }
 ```
 
-### Handling Compressed Images (RLE, JPEG)
+### Handling Compressed Images
 
 ```go
 package main
@@ -987,7 +986,7 @@ import (
 )
 
 func main() {
-    file, err := os.Open("compressed_rle.dcm")
+    file, err := os.Open("compressed.dcm")
     if err != nil {
         log.Fatal(err)
     }
@@ -1003,10 +1002,6 @@ func main() {
         tsUID, _ := result.FileMetaInformation.TransferSyntaxUID()
         fmt.Printf("Transfer Syntax: %s\n", tsUID)
 
-        // 1.2.840.10008.1.2.5 = RLE Lossless
-        if tsUID == "1.2.840.10008.1.2.5" {
-            fmt.Println("This is RLE compressed")
-        }
     }
 
     // Get pixel data
@@ -1617,7 +1612,6 @@ go test -cover ./...
 - Video DICOM (MPEG2)
 
 ✅ **Compression**
-- RLE Lossless (fragment sequences)
 - JPEG compressed (fragment sequences)
 - Uncompressed
 
@@ -1653,7 +1647,7 @@ go-dicom/
 │   │   ├── endian/         # Byte order handling
 │   │   └── testutil/       # Test utilities
 │   ├── imaging/            # Image processing
-│   │   ├── codec/          # Image codecs (RLE, native, transcoder)
+│   │   ├── codec/          # Image codecs (native, transcoder)
 │   │   ├── lut/            # Lookup tables (Modality, VOI, Palette)
 │   │   ├── render/         # Image rendering pipeline
 │   │   └── reconstruction/ # Image reconstruction
@@ -1777,7 +1771,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - ✅ Anonymization with configurable profiles
 - ✅ Image processing (LUT, windowing, color conversion, rendering)
 - ✅ DICOM networking (All C-services + N-services, TLS secure connections)
-- ✅ RLE codec and transcoding framework
+- ✅ Native codec and transcoding framework
 - ✅ DICOM printing (Film Session, Film Box, Image Box, Printer status management)
 
 

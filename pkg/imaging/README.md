@@ -27,7 +27,7 @@ The imaging package handles pixel data representation, image codecs, and basic i
 
 ### Codec Framework
 
-The `codec` subpackage (`pkg/imaging/codec/`) provides image compression and decompression:
+The `codec` subpackage (`pkg/imaging/codec/`) provides codec interfaces and native pixel-data handling. Compressed codecs are supplied by `go-dicom-codecs`.
 
 - **Codec Interface**: Generic interface for image codecs
 - **PixelData**: Lightweight pixel data structure for codec operations
@@ -78,25 +78,19 @@ frameBytes := make([]byte, info.UncompressedFrameSize())
 // ... fill frameBytes ...
 err = pixelData.AddFrame(frameBytes)
 
-// Encode with RLE
-rleCodec := codec.NewRLECodec()
-compressed, err := pixelData.Encode(rleCodec, nil)
-
-// Decode
-decompressed, err := compressed.Decode(rleCodec, nil)
 ```
 
 ### Implemented Codecs
 
-#### RLE Lossless (Run-Length Encoding)
+#### Compressed Codecs
 
-**Implementation**: `codec/rle.go`
+**Implementation**: `go-dicom-codecs`
 
-The RLE codec implements DICOM RLE Lossless compression (Transfer Syntax UID: 1.2.840.10008.1.2.5) according to DICOM Part 5, Annex G.
+Compressed DICOM image codecs are implemented by `go-dicom-codecs`.
 
 **Features**:
-- ✅ Encode pixel data to RLE-compressed format
-- ✅ Decode RLE-compressed pixel data
+- ✅ Encode pixel data to compressed format
+- ✅ Decode compressed pixel data
 - ✅ Support for 8-bit and 16-bit images
 - ✅ Support for grayscale and RGB images
 - ✅ Support for interleaved and planar configurations
@@ -193,7 +187,6 @@ Current test coverage:
 - ✅ PhotometricInterpretation: 100%
 - ✅ PixelConfiguration: 100%
 - ✅ PixelDataInfo/DicomPixelData: 100%
-- ✅ RLE Codec: 100%
 - ✅ Native Codec: 100%
 
 ## Future Work
@@ -219,7 +212,6 @@ Current test coverage:
 ## References
 
 - DICOM Standard Part 5: Data Structures and Encoding
-  - Annex G: RLE Lossless Compression
 - DICOM Standard Part 3: Information Object Definitions
   - Annex C: Image Pixel Module
 - fo-dicom C# library: Reference implementation

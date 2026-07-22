@@ -485,58 +485,6 @@ func TestDicomPixelData_MultiFrame(t *testing.T) {
 	}
 }
 
-func TestDicomPixelData_EncodeDecodeRLE(t *testing.T) {
-	// Create pixel data
-	info := &PixelDataInfo{
-		Width:                     16,
-		Height:                    16,
-		NumberOfFrames:            1,
-		BitsAllocated:             8,
-		BitsStored:                8,
-		HighBit:                   7,
-		SamplesPerPixel:           1,
-		PixelRepresentation:       UnsignedPixels,
-		PlanarConfiguration:       InterleavedPlanar,
-		PhotometricInterpretation: Monochrome2,
-	}
-
-	pd, err := NewDicomPixelData(info)
-	if err != nil {
-		t.Fatalf("NewDicomPixelData() error = %v", err)
-	}
-
-	// Add frame with pattern
-	frameData := make([]byte, 256)
-	for i := range frameData {
-		frameData[i] = byte(i / 16) // Repeating pattern, good for RLE
-	}
-	err = pd.AddFrame(frameData)
-	if err != nil {
-		t.Fatalf("AddFrame() error = %v", err)
-	}
-
-	// Encode with RLE
-	rleCodec := codec.NewRLECodec()
-	encoded, err := pd.Encode(rleCodec, nil)
-	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
-	}
-
-	// Decode
-	decoded, err := encoded.Decode(rleCodec, nil)
-	if err != nil {
-		t.Fatalf("Decode() error = %v", err)
-	}
-
-	// Verify decoded data matches original
-	originalData := pd.GetAllFrames()
-	decodedData := decoded.GetAllFrames()
-
-	if !bytes.Equal(originalData, decodedData) {
-		t.Error("Decoded data does not match original")
-	}
-}
-
 func TestDicomPixelData_EncodeDecodeNative(t *testing.T) {
 	// Create 16-bit pixel data
 	info := &PixelDataInfo{

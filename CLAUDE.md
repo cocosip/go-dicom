@@ -58,7 +58,7 @@ This is a pure-Go port of the C# [fo-dicom](https://github.com/fo-dicom/fo-dicom
 | `writer/` | DICOM file writing |
 
 **Imaging (`pkg/imaging/`)** — image processing on top of core types:
-- `codec/` — codec registry; native (uncompressed) and RLE codecs; transcoder framework
+- `codec/` — codec registry; native (uncompressed) codec and transcoder framework
 - `lut/` — Modality, VOI, and Palette lookup tables
 - `render/` — rendering pipeline
 - `reconstruction/` — pixel data reconstruction

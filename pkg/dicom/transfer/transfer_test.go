@@ -88,20 +88,6 @@ func TestJPEG2000Lossless(t *testing.T) {
 	}
 }
 
-func TestRLELossless(t *testing.T) {
-	ts := transfer.RLELossless
-
-	if !ts.IsExplicitVR() {
-		t.Error("RLELossless should have ExplicitVR")
-	}
-	if !ts.IsEncapsulated() {
-		t.Error("RLELossless should be encapsulated")
-	}
-	if ts.IsLossy() {
-		t.Error("RLELossless should not be lossy")
-	}
-}
-
 func TestDeflatedExplicitVRLittleEndian(t *testing.T) {
 	ts := transfer.DeflatedExplicitVRLittleEndian
 
@@ -369,9 +355,6 @@ func TestIsLosslessCompressed(t *testing.T) {
 	if transfer.IsLosslessCompressed(transfer.ImplicitVRLittleEndian) {
 		t.Error("ImplicitVRLittleEndian should not be lossless compressed")
 	}
-	if !transfer.IsLosslessCompressed(transfer.RLELossless) {
-		t.Error("RLELossless should be lossless compressed")
-	}
 	if transfer.IsLosslessCompressed(transfer.JPEGBaseline8Bit) {
 		t.Error("JPEGBaseline8Bit should not be lossless compressed")
 	}
@@ -380,9 +363,6 @@ func TestIsLosslessCompressed(t *testing.T) {
 func TestIsLossyCompressed(t *testing.T) {
 	if transfer.IsLossyCompressed(transfer.ImplicitVRLittleEndian) {
 		t.Error("ImplicitVRLittleEndian should not be lossy compressed")
-	}
-	if transfer.IsLossyCompressed(transfer.RLELossless) {
-		t.Error("RLELossless should not be lossy compressed")
 	}
 	if !transfer.IsLossyCompressed(transfer.JPEGBaseline8Bit) {
 		t.Error("JPEGBaseline8Bit should be lossy compressed")

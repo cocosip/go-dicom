@@ -20,7 +20,7 @@ var _ parseable.Parseable = (*Syntax)(nil)
 // A transfer syntax defines how DICOM data is encoded, including:
 // - Value Representation (VR) encoding (Explicit or Implicit)
 // - Byte order (Little Endian or Big Endian)
-// - Compression (e.g., JPEG, JPEG 2000, RLE)
+// - Compression (e.g., JPEG, JPEG 2000)
 type Syntax struct {
 	uid                    *uid.UID
 	isRetired              bool

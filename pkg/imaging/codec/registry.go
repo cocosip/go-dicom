@@ -102,11 +102,7 @@ func registerBuiltinCodecs(registry *Registry) {
 	explicitBECodec := NewNativeCodec(transfer.ExplicitVRBigEndian, true)
 	registry.RegisterCodec(transfer.ExplicitVRBigEndian, explicitBECodec)
 
-	// Register RLE codec
-	rleCodec := NewRLECodec()
-	registry.RegisterCodec(transfer.RLELossless, rleCodec)
-
-	// Future: Register JPEG, JPEG 2000, JPEG-LS codecs
+	// Compressed codecs are supplied by go-dicom-codecs.
 }
 
 // TranscoderManager provides high-level transcoding operations.

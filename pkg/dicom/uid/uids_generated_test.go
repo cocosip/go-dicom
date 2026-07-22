@@ -91,7 +91,6 @@ func TestTransferSyntaxUIDs(t *testing.T) {
 		uid.DeflatedExplicitVRLittleEndian,
 		uid.JPEGBaseline8Bit,
 		uid.JPEG2000Lossless,
-		uid.RLELossless,
 	}
 
 	for _, ts := range transferSyntaxes {

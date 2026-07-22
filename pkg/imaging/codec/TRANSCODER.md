@@ -183,22 +183,17 @@ type Transcoder interface {
    - `encodeFrame/decodeFrame` 改为私有方法
    - 处理字节序转换
 
-6. **`pkg/imaging/codec/rle.go`** (重构)
-   - 实现 Codec 接口的 Encode/Decode 方法
-   - `encodeFrame/decodeFrame` 改为私有方法
-   - RLE 压缩/解压缩算法
-
-7. **`pkg/imaging/pixeldata.go`** (更新)
+6. **`pkg/imaging/pixeldata.go`** (更新)
    - DicomPixelData 实现 types.PixelData 接口
    - 新增 Encode/Decode 方法
    - AddFrame 正确处理 encapsulated vs uncompressed 数据
 
-8. **`pkg/imaging/codec/registry.go`** (172 lines)
+7. **`pkg/imaging/codec/registry.go`** (172 lines)
    - CodecRegistry 线程安全实现
    - 全局单例 registry
    - TranscoderManager 高级 API
 
-9. **`pkg/imaging/codec/testhelpers.go`** (新增)
+8. **`pkg/imaging/codec/testhelpers.go`** (新增)
    - 测试专用的 testPixelData 实现
    - 与生产代码 simplePixelData 明确分离
 
@@ -301,7 +296,6 @@ func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, e
   - Explicit VR Little Endian (Native)
   - Implicit VR Little Endian (Native)
   - Explicit VR Big Endian (Native)
-  - RLE Lossless
 - 可扩展：支持动态注册新 codecs
 
 **API**:
@@ -468,7 +462,7 @@ registry := codec.NewCodecRegistry()
 
 // Register codecs
 registry.RegisterCodec(transfer.JPEGBaseline, codec.NewJPEGCodec())
-registry.RegisterCodec(transfer.RLELossless, codec.NewRLECodec())
+// Register compressed codecs provided by go-dicom-codecs here.
 
 // Create manager with custom registry
 manager := codec.NewTranscoderManager(registry)
@@ -719,7 +713,6 @@ func (pd *DicomPixelData) AddFrame(frameData []byte) error {
    - ✅ Transcoder 接口和基础实现
    - ✅ TranscoderManager
    - ✅ 未压缩 ↔ 未压缩转码
-   - ✅ RLE ↔ 未压缩转码
    - ✅ PixelData 接口重构
    - ✅ fo-dicom 模式对齐
 
@@ -757,7 +750,6 @@ func (pd *DicomPixelData) AddFrame(frameData []byte) error {
 - `pkg/imaging/types/pixeldata.go` - PixelData 接口定义
 - `pkg/imaging/codec/codec.go` - Codec 接口
 - `pkg/imaging/codec/native.go` - Native (uncompressed) codec
-- `pkg/imaging/codec/rle.go` - RLE codec
 - `pkg/imaging/codec/transcoder.go` - Transcoder 实现
 - `pkg/imaging/codec/pixeldata_internal.go` - 内部 PixelData 实现
 - `pkg/imaging/pixeldata.go` - DicomPixelData 高级 API
@@ -785,7 +777,6 @@ func (pd *DicomPixelData) AddFrame(frameData []byte) error {
 ✅ TestTranscoderManager (0.00s)
 ✅ TestGetGlobalRegistry (0.00s)
 ✅ TestNativeCodec (0.00s)
-✅ TestRLECodec (0.00s)
 ... 21 tests passed in codec package
 
 === Imaging Tests ===
