@@ -7,14 +7,17 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
 func main() {
+	path := requiredInputPath(os.Args[1:])
+
 	// Parse a DICOM file
-	result, err := parser.ParseFile("input.dcm")
+	result, err := parser.ParseFile(path)
 	if err != nil {
 		log.Fatalf("Failed to parse DICOM file: %v", err)
 	}
@@ -146,4 +149,19 @@ func main() {
 	// === Summary ===
 	fmt.Printf("\n=== Summary ===\n")
 	fmt.Printf("Total elements: %d\n", len(result.Dataset.Elements()))
+}
+
+func inputPath(args []string) (string, error) {
+	if len(args) != 1 {
+		return "", fmt.Errorf("usage: read_dicom <dicom-file>")
+	}
+	return args[0], nil
+}
+
+func requiredInputPath(args []string) string {
+	path, err := inputPath(args)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return path
 }

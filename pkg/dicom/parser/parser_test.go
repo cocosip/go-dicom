@@ -22,6 +22,27 @@ import (
 	"golang.org/x/text/encoding/japanese"
 )
 
+func TestParseIgnoresZeroTrailingPadding(t *testing.T) {
+	var file bytes.Buffer
+	file.Write(make([]byte, 128))
+	file.WriteString("DICM")
+	writeExplicitStringElement(&file, tag.TransferSyntaxUID, "UI", []byte(testExplicitVRLittleLE+"\x00"))
+	writeExplicitStringElement(&file, tag.PatientName, "PN", []byte(testPatientName))
+	file.Write(make([]byte, 16))
+
+	result, err := Parse(bytes.NewReader(file.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	got, ok := result.Dataset.GetString(tag.PatientName)
+	if !ok {
+		t.Fatal("PatientName not found")
+	}
+	if got != testPatientName {
+		t.Fatalf("PatientName = %q, want %q", got, testPatientName)
+	}
+}
+
 const (
 	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
 	testExplicitVRBigE     = "1.2.840.10008.1.2.2"

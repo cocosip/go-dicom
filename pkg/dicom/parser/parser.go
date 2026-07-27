@@ -244,8 +244,8 @@ func newParseContext(opts ...Option) *parseContext {
 		textEncoding:    charset.Default,
 		textEncodings:   []encoding.Encoding{charset.Default},
 		readOption:      ReadDefault,
-		largeObjectSize: 65536,         // Default 64KB
-		maxElementSize: 524288000,      // Default 500MB (prevent runaway allocation)
+		largeObjectSize: 65536,     // Default 64KB
+		maxElementSize:  524288000, // Default 500MB (prevent runaway allocation)
 		detectedFormat:  FormatUnknown,
 	}
 	for _, opt := range opts {
@@ -604,6 +604,12 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 		if err != nil {
 			return nil, err
 		}
+		if t.Group() == 0 && t.Element() == 0 {
+			if err := p.consumeZeroTrailingPadding(); err != nil {
+				return nil, err
+			}
+			break
+		}
 
 		// Stop before reading this element's value payload.
 		if p.stopAtTag != nil && t.ToUint32() >= p.stopAtTag.ToUint32() {
@@ -623,6 +629,27 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	}
 
 	return ds, nil
+}
+
+// consumeZeroTrailingPadding accepts non-conformant zero padding after the dataset.
+// A DICOM data element cannot use tag (0000,0000), so the tag can only represent padding here.
+func (p *parseContext) consumeZeroTrailingPadding() error {
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := p.reader.Read(buf)
+		for _, b := range buf[:n] {
+			if b != 0 {
+				return fmt.Errorf("non-zero data follows trailing padding tag (0000,0000)")
+			}
+		}
+
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read trailing padding: %w", err)
+		}
+	}
 }
 
 // readElementData handles reading element data based on size and read options.
