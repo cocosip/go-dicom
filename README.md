@@ -6,9 +6,10 @@ A pure Go implementation of the DICOM (Digital Imaging and Communications in Med
 [![Go Report Card](https://goreportcard.com/badge/github.com/cocosip/go-dicom)](https://goreportcard.com/report/github.com/cocosip/go-dicom)
 [![License](https://img.shields.io/badge/license-MS--PL-blue.svg)](LICENSE)
 
-## ⚠️ Work in Progress
+## Release Status
 
-This library is currently under active development. The API is not stable and may change significantly.
+`go-dicom` is a released DICOM library.
+This README describes the supported library surface rather than a development roadmap.
 
 ## Features
 
@@ -18,7 +19,7 @@ This library is currently under active development. The API is not stable and ma
 - ✅ **Transfer Syntax Support** - Explicit/Implicit VR, Big/Little Endian
 - ✅ **Multi-Frame Images** - Full support for multi-frame and video DICOM files
 - ✅ **Character Encoding** - 30+ character sets with auto-detection (UTF-8, Latin, Chinese, Japanese, Korean, Arabic, etc.)
-- ✅ **Fragment Sequences** - Compressed pixel data handling (read/write, codec framework ready)
+- ✅ **Fragment Sequences** - Read and write compressed pixel data; compressed transfer syntaxes are handled by [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs)
 - ✅ **Structured Reports (SR)** - Parse and create SR documents with hierarchical content
 - ✅ **Dataset Operations** - Rich API for accessing and manipulating DICOM elements
 - ✅ **JSON/XML Serialization** - Export/Import DICOM data to JSON (Part 18) and XML formats
@@ -28,9 +29,9 @@ This library is currently under active development. The API is not stable and ma
 - ✅ **Image Processing** - Rendering pipeline, windowing, LUT operations, color space conversion
 - ✅ **DICOM Printing** - Film Session, Film Box, Image Box, Printer status management
 
-### Detailed Status
+### Included Capabilities
 
-- [x] **Core DICOM data types** (~100% Complete)
+- [x] **Core DICOM data types**
   - [x] Tag (5338 standard tags + private tag support)
   - [x] VR (35 value representations with validation)
   - [x] VM (15 value multiplicities)
@@ -41,7 +42,7 @@ This library is currently under active development. The API is not stable and ma
   - [x] Transfer Syntax (15+ syntaxes including JPEG and MPEG)
   - [x] Character Set (30+ encodings with auto-detection)
 
-- [x] **DICOM file reading** (~100% Complete)
+- [x] **DICOM file reading**
   - [x] Explicit/Implicit VR parsing
   - [x] Sequence parsing (defined/undefined length)
   - [x] Fragment sequence support (compressed images)
@@ -52,7 +53,7 @@ This library is currently under active development. The API is not stable and ma
   - [x] Automatic character set detection and conversion
   - [x] Byte order handling (Little/Big Endian)
 
-- [x] **DICOM file writing** (~100% Complete)
+- [x] **DICOM file writing**
   - [x] Explicit/Implicit VR writing
   - [x] Auto-generated File Meta Information (FMI)
   - [x] Single and multi-frame image creation
@@ -73,7 +74,7 @@ This library is currently under active development. The API is not stable and ma
   - [x] Modality LUT Sequences
   - [x] Character set variants (17+ tested encodings)
 
-- [x] **JSON/XML Serialization** (~100% Complete)
+- [x] **JSON/XML Serialization**
   - [x] DICOM JSON Model (Part 18 compliant)
   - [x] Native XML format
   - [x] Bulkdata handling with base64 encoding
@@ -81,14 +82,14 @@ This library is currently under active development. The API is not stable and ma
   - [x] PersonName component groups support
   - [x] Sequence nesting support
 
-- [x] **Anonymization** (~95% Complete)
+- [x] **Anonymization**
   - [x] Basic anonymization profile (patient identifiable information)
   - [x] Custom anonymization rules (Remove, Replace, Keep)
   - [x] Patient/Study/Series level anonymization
   - [x] Date shifting and UID remapping
   - [x] Recursive sequence anonymization
 
-- [x] **Imaging Support** (~90% Complete)
+- [x] **Imaging Support**
   - [x] Pixel data extraction and handling
   - [x] Color space conversion (YBR↔RGB)
   - [x] Planar/Interleaved conversion
@@ -100,7 +101,7 @@ This library is currently under active development. The API is not stable and ma
   - [x] Image reconstruction from pixel data
   - [x] Rendering pipeline with configurable options
 
-- [x] **Structured Reports** (~95% Complete)
+- [x] **Structured Reports**
   - [x] SR content items (TEXT, NUM, CODE, CONTAINER, IMAGE, COMPOSITE, etc.)
   - [x] Hierarchical structure with parent-child relationships
   - [x] Code items with coding scheme designators
@@ -109,7 +110,7 @@ This library is currently under active development. The API is not stable and ma
   - [x] Relationship types (CONTAINS, HAS OBS CONTEXT, INFERRED FROM, etc.)
   - [x] Content sequence parsing and creation
 
-- [x] **DICOM Networking** (~95% Complete)
+- [x] **DICOM Networking**
   - [x] PDU (Protocol Data Unit) encoding/decoding (7 PDU types)
   - [x] Association negotiation (A-ASSOCIATE-RQ/AC/RJ, A-RELEASE, A-ABORT)
   - [x] Presentation context negotiation with transfer syntax support
@@ -136,29 +137,22 @@ This library is currently under active development. The API is not stable and ma
   - [x] Extended negotiation items (SOP Class Extended Negotiation)
   - [x] ServiceApplicationInfo helper type
 
-- [x] **Image Codecs** (~100% Complete Other project)
+- [x] **Image Codecs**
   - [x] Native codecs (uncompressed data - Explicit/Implicit VR, Little/Big Endian)
   - [x] Transcoder framework for format conversion between transfer syntaxes
   - [x] Codec registry and plugin architecture
-  - [x] JPEG Baseline codec (1.2.840.10008.1.2.4.50) - Planned
-  - [x] JPEG Lossless codec (1.2.840.10008.1.2.4.57/70) - Planned
-  - [x] JPEG-LS Lossless/Near-Lossless (1.2.840.10008.1.2.4.80/81) - Planned
-  - [x] JPEG 2000 Lossless/Lossy (1.2.840.10008.1.2.4.90/91) - Planned
-  - [x] MPEG-2/MPEG-4 Video codecs - Planned
+  - [x] Compressed transfer syntax codecs supplied by [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs)
 
-  **Note**: The codec framework is complete and extensible. Fragment sequence reading/writing is fully implemented.
-  Images compressed with JPEG/JPEG2K can be read (fragment sequences extracted), but decompression requires
-  codec implementation or external libraries.
+  **Note**: `go-dicom` supplies the codec registry, transcoder, and DICOM encapsulation support.
+  Add the selected [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs) codec package as a blank import to register its compressed transfer syntax.
 
-- [x] **DICOM Printing** (~100% Complete)
+- [x] **DICOM Printing**
   - [x] Film Session management
   - [x] Film Box configuration
   - [x] Image Box handling
   - [x] Presentation LUT
   - [x] Print job creation
   - [x] Printer status management
-
-See [TODO.md](TODO.md) for detailed development roadmap.
 
 ## Performance
 
@@ -828,6 +822,72 @@ func main() {
 }
 ```
 
+### Creating and Updating Sequences
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/element"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/vr"
+)
+
+func mustAdd(ds *dataset.Dataset, elem element.Element) {
+    if err := ds.Add(elem); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func main() {
+    ds := dataset.New()
+
+    // Build ReferencedStudySequence with one study item.
+    studies := dataset.NewSequence(tag.ReferencedStudySequence)
+    study := dataset.New()
+    mustAdd(study, element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+
+    // A sequence item is itself a Dataset, so sequences can be nested.
+    series := dataset.NewSequence(tag.ReferencedSeriesSequence)
+    seriesItem := dataset.New()
+    mustAdd(seriesItem, element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3.4.5.1"}))
+    mustAdd(seriesItem, element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.1.1"}))
+    series.AddItem(seriesItem)
+    mustAdd(study, series)
+
+    studies.AddItem(study)
+    mustAdd(ds, studies)
+
+    // Retrieve the sequence with a typed accessor and update its first item.
+    referencedStudies, err := ds.GetSequence(tag.ReferencedStudySequence)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    firstStudy := referencedStudies.GetItem(0)
+    if firstStudy == nil {
+        log.Fatal("ReferencedStudySequence has no items")
+    }
+    if err := firstStudy.AddOrUpdate(element.NewString(tag.StudyDescription, vr.LO, []string{"Follow-up study"})); err != nil {
+        log.Fatal(err)
+    }
+
+    referencedSeries, err := firstStudy.GetSequence(tag.ReferencedSeriesSequence)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Referenced studies: %d, referenced series: %d\n", referencedStudies.Count(), referencedSeries.Count())
+
+    // Remove an item when it is no longer needed.
+    referencedSeries.RemoveItem(0)
+    fmt.Printf("Referenced series after removal: %d\n", referencedSeries.Count())
+}
+```
+
 ### Modifying and Anonymizing Data
 
 ```go
@@ -1031,8 +1091,9 @@ func main() {
 
         fmt.Printf("Total compressed size: %d bytes\n", totalSize)
 
-        // Note: To decompress, you would need a codec
-        // The raw compressed data is accessible via fragments
+        // To decode or transcode this data, add the selected go-dicom-codecs
+        // package as a blank import so it registers its codec, then use
+        // imaging/codec.NewTranscoder with the required transfer syntaxes.
     }
 }
 ```
@@ -1679,7 +1740,6 @@ go-dicom/
 │   ├── generate_uids/      # Generate UID constants
 │   └── generate_dict/      # Generate dictionary data
 ├── BENCHMARKS.md           # Performance benchmarks
-├── TODO.md                 # Development roadmap (Chinese)
 └── CLAUDE.md               # Development guide for AI assistants
 ```
 
@@ -1716,9 +1776,9 @@ golangci-lint run
 go vet ./...
 ```
 
-## Migration from fo-dicom (C#)
+## Relationship to fo-dicom (C#)
 
-This project is a port of the fo-dicom library from C# to Go. The migration follows an incremental approach:
+This project is a Go port inspired by the fo-dicom library:
 
 1. ✅ Core data types (Tag, VR, Dictionary)
 2. ✅ Data structures (Element, Dataset)
@@ -1755,29 +1815,3 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 2. Write tests for all new functionality
 3. Update documentation as needed
 4. Ensure all tests pass before submitting PRs
-
-## Status
-
-**Current Phase**: Advanced Features (~90% Complete)
-
-**Working Features**:
-- ✅ Complete DICOM file I/O (read/write with all transfer syntaxes)
-- ✅ Multi-frame and single-frame image support
-- ✅ Character encoding (30+ encodings with auto-detection)
-- ✅ Fragment sequences (compressed pixel data)
-- ✅ Structured Reports (SR) with hierarchical content
-- ✅ Dataset manipulation with rich API
-- ✅ JSON/XML serialization (DICOM Part 18 compliant)
-- ✅ Anonymization with configurable profiles
-- ✅ Image processing (LUT, windowing, color conversion, rendering)
-- ✅ DICOM networking (All C-services + N-services, TLS secure connections)
-- ✅ Native codec and transcoding framework
-- ✅ DICOM printing (Film Session, Film Box, Image Box, Printer status management)
-
-
-**Command-Line Tools**:
-- `dicominfo` - Display DICOM file metadata
-- `dicomdump` - Dump complete DICOM file structure
-- `dicom2json` - Convert DICOM to JSON format
-
-See [TODO.md](TODO.md) (Chinese) for complete task list and detailed progress tracking.
