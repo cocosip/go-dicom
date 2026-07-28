@@ -8,6 +8,7 @@ const (
 	testCharsetFrenchFile     = "chrFren.dcm"
 	testCharsetGB2312File     = "chrGB2312.dcm"
 	testCharsetGreekFile      = "chrGreek.dcm"
+	testFragmentSequenceFile  = "HasFragmentSequence.dcm"
 	testMultiframeFile        = "multiframe.dcm"
 	testCTImageStorageUID     = "1.2.840.10008.5.1.4.1.1.2"
 	testPhotometricMonoChrome = "MONOCHROME2"

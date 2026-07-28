@@ -119,7 +119,7 @@ func TestMultiFrameFragmentSequences(t *testing.T) {
 		description    string
 	}{
 		{
-			filename:       "HasFragmentSequence.dcm",
+			filename:       testFragmentSequenceFile,
 			expectedFrames: "96",
 			description:    "XA image with 96 frames and fragment sequences",
 		},

@@ -13,6 +13,18 @@ type recordingFetcher struct {
 	calls []FetchRequest
 }
 
+type benchmarkFetcher struct {
+	data []byte
+}
+
+func (f benchmarkFetcher) Size() int64 {
+	return int64(len(f.data))
+}
+
+func (f benchmarkFetcher) Fetch(_ context.Context, req FetchRequest) ([]byte, error) {
+	return f.data[req.Offset : req.Offset+req.Length], nil
+}
+
 func (f *recordingFetcher) Size() int64 {
 	return int64(len(f.data))
 }
@@ -120,6 +132,43 @@ func TestReadSeekerEOFAndSeekBounds(t *testing.T) {
 	n, err = rs.Read(buf)
 	if n != 0 || err != io.EOF {
 		t.Fatalf("Read() at EOF = %d, %v; want 0, io.EOF", n, err)
+	}
+}
+
+func BenchmarkReadSeekerCacheHit(b *testing.B) {
+	data := make([]byte, 64*1024)
+	reader := NewReadSeeker(benchmarkFetcher{data: data}, WithBlockSize(64*1024))
+	buf := make([]byte, 4*1024)
+	if _, err := reader.Read(buf); err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+	b.SetBytes(int64(len(buf)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := reader.Seek(0, io.SeekStart); err != nil {
+			b.Fatal(err)
+		}
+		if n, err := reader.Read(buf); err != nil || n != len(buf) {
+			b.Fatalf("Read() = %d, %v", n, err)
+		}
+	}
+}
+
+func BenchmarkReadSeekerCrossBlockRead(b *testing.B) {
+	data := make([]byte, 128*1024)
+	fetcher := benchmarkFetcher{data: data}
+	buf := make([]byte, 96*1024)
+
+	b.ReportAllocs()
+	b.SetBytes(int64(len(buf)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reader := NewReadSeeker(fetcher, WithBlockSize(64*1024), WithMaxCachedBlocks(2))
+		if n, err := reader.Read(buf); err != nil || n != len(buf) {
+			b.Fatalf("Read() = %d, %v", n, err)
+		}
 	}
 }
 

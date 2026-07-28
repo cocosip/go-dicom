@@ -1,6 +1,16 @@
 # Go-DICOM Performance Benchmarks
 
-Last Updated: 2025-01-10
+Historical snapshot collected: 2025-01-10
+
+> The tables below are a historical measurement snapshot, not a current performance baseline. Benchmark results vary by commit, Go version, CPU, operating system, and DICOM workload. For a pull request, download the `benchmark-results` CI artifact; for local work, run the commands in [Running Benchmarks](#running-benchmarks).
+
+## Benchmark Coverage
+
+- `pkg/dicom/...`: dataset, parser, writer, endian, UID, and committed real-DICOM fixture benchmarks.
+- `pkg/io/...`: buffer-pool and range-backed `ReadSeeker` cache/cross-block benchmarks.
+- `pkg/imaging/...`: pixel layout and color-conversion benchmarks.
+
+The PR workflow runs all three package trees with `-run=^$` so benchmark results are not mixed with unit-test execution. The resulting `benchmark_results.txt` is uploaded as the `benchmark-results` artifact and retained for 90 days.
 
 ## Overview
 
@@ -138,31 +148,33 @@ This document contains performance benchmark results for the go-dicom library. B
 
 ## Running Benchmarks
 
-To run all benchmarks:
+To run the same benchmark scope as CI:
 
 ```bash
-go test -bench=. -benchmem ./pkg/dicom/...
+go test -bench='.' -benchmem -run='^$' ./pkg/dicom/... ./pkg/io/... ./pkg/imaging/...
 ```
 
 To run specific package benchmarks:
 
 ```bash
-go test -bench=. -benchmem ./pkg/dicom/dataset
-go test -bench=. -benchmem ./pkg/dicom/parser
-go test -bench=. -benchmem ./pkg/dicom/writer
+go test -bench='.' -benchmem ./pkg/dicom/dataset
+go test -bench='.' -benchmem ./pkg/dicom/parser
+go test -bench='.' -benchmem ./pkg/dicom/writer
+go test -bench='.' -benchmem ./pkg/io/rangeio
+go test -bench='.' -benchmem ./pkg/imaging
 ```
 
 To generate CPU profile:
 
 ```bash
-go test -bench=. -cpuprofile=cpu.prof ./pkg/dicom/dataset
+go test -bench='.' -cpuprofile=cpu.prof ./pkg/dicom/dataset
 go tool pprof cpu.prof
 ```
 
 To generate memory profile:
 
 ```bash
-go test -bench=. -memprofile=mem.prof ./pkg/dicom/dataset
+go test -bench='.' -memprofile=mem.prof ./pkg/dicom/dataset
 go tool pprof mem.prof
 ```
 
@@ -172,7 +184,7 @@ go tool pprof mem.prof
 
 ## Notes
 
-- All benchmarks use synthetic data
-- Real-world performance may vary based on DICOM file complexity
+- Most microbenchmarks use synthetic data; parser benchmarks also use committed real DICOM fixtures.
+- Real-world performance varies based on DICOM file complexity and transfer syntax.
 - Transfer syntax and compression can significantly impact parser/writer performance
 - Network operations (when implemented) will have additional overhead

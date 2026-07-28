@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -264,20 +265,18 @@ func TestRLEImageProperties(t *testing.T) {
 // BenchmarkRLEParsing benchmarks parsing performance for RLE compressed DICOM
 func BenchmarkRLEParsing(b *testing.B) {
 	testFile := filepath.Join("..", "..", "..", "test-data", "D_CLUNIE_CT1_RLE_FRAGS.dcm")
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		b.Fatalf("Failed to read benchmark fixture: %v", err)
+	}
 
+	b.ReportAllocs()
+	b.SetBytes(int64(len(data)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		file, err := os.Open(testFile)
-		if err != nil {
-			b.Fatalf("Failed to open file: %v", err)
-		}
-
-		_, err = parser.Parse(file)
-		if err != nil {
-			_ = file.Close()
+		reader := bytes.NewReader(data)
+		if _, err := parser.Parse(reader); err != nil {
 			b.Fatalf("Failed to parse: %v", err)
 		}
-
-		_ = file.Close()
 	}
 }

@@ -5,6 +5,7 @@
 package parser
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,7 +213,7 @@ func TestFragmentSequenceFiles(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data")
 
 	fragmentFiles := []string{
-		"HasFragmentSequence.dcm",
+		testFragmentSequenceFile,
 		"D_CLUNIE_CT1_RLE_FRAGS.dcm",
 	}
 
@@ -332,34 +333,46 @@ func TestDICOMDIRFiles(t *testing.T) {
 	}
 }
 
+var realWorldBenchmarkFiles = []string{
+	"CR-ModalitySequenceLUT.dcm",
+	"TestPattern_RGB.dcm",
+	"TestMultiFrame.dcm",
+	testFragmentSequenceFile,
+}
+
+func TestRealWorldBenchmarkFixturesExist(t *testing.T) {
+	testDataDir := filepath.Join("..", "..", "..", "test-data")
+
+	for _, filename := range realWorldBenchmarkFiles {
+		if _, err := os.Stat(filepath.Join(testDataDir, filename)); err != nil {
+			t.Fatalf("benchmark fixture %q is unavailable: %v", filename, err)
+		}
+	}
+}
+
 // BenchmarkRealWorldDICOMParsing benchmarks parsing of various real DICOM files
 func BenchmarkRealWorldDICOMParsing(b *testing.B) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data")
 
-	benchFiles := []string{
-		"CT-MONO2-16-ankle",
-		"CR-MONO1-10-chest",
-		"TestPattern_RGB.dcm",
-		testMultiframeFile,
-	}
-
-	for _, filename := range benchFiles {
+	for _, filename := range realWorldBenchmarkFiles {
 		b.Run(filename, func(b *testing.B) {
 			filePath := filepath.Join(testDataDir, filename)
 
 			// Read file content once
 			data, err := os.ReadFile(filePath)
 			if err != nil {
-				b.Skipf("Cannot read file: %v", err)
-				return
+				b.Fatalf("Cannot read benchmark fixture: %v", err)
 			}
 
-			b.ResetTimer()
 			b.ReportAllocs()
+			b.SetBytes(int64(len(data)))
+			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				reader := &fileReader{data: data, pos: 0}
-				_, _ = Parse(reader)
+				reader := bytes.NewReader(data)
+				if _, err := Parse(reader); err != nil {
+					b.Fatalf("Parse() error: %v", err)
+				}
 			}
 		})
 	}

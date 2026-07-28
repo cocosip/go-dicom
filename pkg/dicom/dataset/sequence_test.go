@@ -223,3 +223,68 @@ func TestSequenceFilter(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkSequenceAddItem(b *testing.B) {
+	item := dataset.New()
+	_ = item.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testStudyInstanceUID}))
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		seq := dataset.NewSequence(tag.ReferencedImageSequence)
+		seq.AddItem(item)
+	}
+}
+
+func BenchmarkSequenceGetItem(b *testing.B) {
+	seq := dataset.NewSequence(tag.ReferencedImageSequence)
+	for i := 0; i < 100; i++ {
+		seq.AddItem(dataset.New())
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = seq.GetItem(i % seq.Count())
+	}
+}
+
+func BenchmarkDatasetGetSequence(b *testing.B) {
+	ds := dataset.New()
+	seq := dataset.NewSequence(tag.ReferencedImageSequence)
+	seq.AddItem(dataset.New())
+	if err := ds.Add(seq); err != nil {
+		b.Fatal(err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := ds.GetSequence(tag.ReferencedImageSequence); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkNestedSequenceTraversal(b *testing.B) {
+	outer := dataset.NewSequence(tag.ReferencedStudySequence)
+	study := dataset.New()
+	series := dataset.NewSequence(tag.ReferencedSeriesSequence)
+	series.AddItem(dataset.New())
+	if err := study.Add(series); err != nil {
+		b.Fatal(err)
+	}
+	outer.AddItem(study)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		item := outer.GetItem(0)
+		if item == nil {
+			b.Fatal("missing study item")
+		}
+		if _, err := item.GetSequence(tag.ReferencedSeriesSequence); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

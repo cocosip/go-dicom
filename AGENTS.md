@@ -14,10 +14,10 @@ Generated tables and lookup data should be updated with the relevant tool, not b
 ## Build, Test, and Development Commands
 
 - `go build ./...` builds all packages and commands.
-- `go test ./...` runs the full unit test suite.
-- `go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...` matches CI coverage and race checks.
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/...` runs the full unit test suite.
+- `go test -v -race -coverprofile=coverage.txt -covermode=atomic ./cmd/... ./examples/... ./pkg/... ./tools/...` matches CI coverage and race checks.
 - `golangci-lint run` runs the configured linter set from `.golangci.yml`.
-- `go test -bench=. -benchmem ./pkg/dicom/...` runs the main benchmark suite.
+- `go test -bench='.' -benchmem ./pkg/dicom/...` runs the main benchmark suite.
 
 For focused debugging, run a package or test name directly, for example `go test -v ./pkg/dicom/parser -run TestMultiFrame`.
 

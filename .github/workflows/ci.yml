@@ -36,12 +36,12 @@ jobs:
 
       - name: Run tests (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./cmd/... ./examples/... ./pkg/... ./tools/...
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./cmd/... ./examples/... ./pkg/... ./tools/...
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.go == '1.25'
@@ -101,10 +101,11 @@ jobs:
           cache: true
 
       - name: Run benchmarks
-        run: go test -bench=. -benchmem -run=^$ ./pkg/dicom/... > benchmark_results.txt
+        run: go test -bench='.' -benchmem -run='^$' ./pkg/dicom/... ./pkg/io/... ./pkg/imaging/... > benchmark_results.txt
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: benchmark_results.txt
+          retention-days: 90

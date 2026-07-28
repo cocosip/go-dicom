@@ -7,6 +7,7 @@ package parser
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -418,7 +419,18 @@ func BenchmarkCharsetParsing(b *testing.B) {
 	}
 }
 
-// fileReader is a simple reader for benchmarking
+func TestFileReaderReturnsEOFAtEndOfInput(t *testing.T) {
+	reader := &fileReader{data: []byte("a")}
+	buf := make([]byte, 1)
+	if _, err := reader.Read(buf); err != nil {
+		t.Fatalf("first Read() error = %v", err)
+	}
+	if _, err := reader.Read(buf); err != io.EOF {
+		t.Fatalf("Read() at end = %v, want io.EOF", err)
+	}
+}
+
+// fileReader is a simple reader for benchmarks that need an in-memory io.Reader.
 type fileReader struct {
 	data []byte
 	pos  int
@@ -426,7 +438,7 @@ type fileReader struct {
 
 func (r *fileReader) Read(p []byte) (n int, err error) {
 	if r.pos >= len(r.data) {
-		return 0, os.ErrClosed
+		return 0, io.EOF
 	}
 	n = copy(p, r.data[r.pos:])
 	r.pos += n

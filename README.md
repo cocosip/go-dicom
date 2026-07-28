@@ -156,17 +156,13 @@ This README describes the supported library surface rather than a development ro
 
 ## Performance
 
-go-dicom is designed for high performance with minimal memory allocations. See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance metrics.
+go-dicom includes benchmarks for dataset operations, parsing, writing, I/O, and image conversion. See [BENCHMARKS.md](BENCHMARKS.md) for the benchmark scope, historical snapshots, and result provenance. Pull requests publish their full benchmark output as a `benchmark-results` workflow artifact.
 
-**Key Performance Highlights:**
-- Dataset Get/Add operations: ~2-13 ns/op with zero allocations
-- Parser: ~1.4 μs/op for typical datasets
-- Writer: Scales linearly with dataset size (~1.2 μs for small datasets)
-- Zero-allocation endian swapping operations
+Benchmark numbers vary by commit, Go version, CPU, operating system, and DICOM workload. Use the command below to collect a result for the environment being evaluated.
 
 Run benchmarks yourself:
 ```bash
-go test -bench=. -benchmem ./pkg/dicom/...
+go test -bench='.' -benchmem -run='^$' ./pkg/dicom/... ./pkg/io/... ./pkg/imaging/...
 ```
 
 ## Quick Start
@@ -1646,7 +1642,7 @@ The library includes comprehensive test coverage for various DICOM formats:
 
 ```bash
 # Run all tests
-go test ./...
+go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 # Run parser tests
 go test -v ./pkg/dicom/parser
@@ -1655,7 +1651,7 @@ go test -v ./pkg/dicom/parser
 go test -v ./pkg/dicom/parser -run TestMultiFrame
 
 # Run with coverage
-go test -cover ./...
+go test -cover ./cmd/... ./examples/... ./pkg/... ./tools/...
 ```
 
 ### Tested DICOM Formats
@@ -1757,10 +1753,10 @@ go-dicom/
 go build ./...
 
 # Run tests
-go test ./...
+go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 # Run benchmarks
-go test -bench=. -benchmem ./pkg/dicom/...
+go test -bench='.' -benchmem ./pkg/dicom/...
 ```
 
 ### Code Quality
