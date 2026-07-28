@@ -32,7 +32,7 @@ var (
 	callingAE     = flag.String("calling-ae", "NETPUSH", "Calling AE Title (SCU)")
 	calledAE      = flag.String("called-ae", "NETGATE", "Called AE Title (SCP)")
 	dicomFile     = flag.String("file", "", "Single DICOM file to send")
-	dicomDir      = flag.String("dir", "D:\\1", "Directory containing DICOM files to send")
+	dicomDir      = flag.String("dir", "", "Directory containing DICOM files to send")
 	timeout       = flag.Duration("timeout", 30*time.Second, "Connection timeout")
 	verifyOnly    = flag.Bool("verify", false, "Only verify connection with C-ECHO, don't send files")
 	printMetadata = flag.Bool("metadata", false, "Print DICOM file metadata before sending")
@@ -43,7 +43,7 @@ func main() {
 	flag.Parse()
 
 	// Validate parameters
-	if *dicomFile == "" && *dicomDir == "" {
+	if !*verifyOnly && *dicomFile == "" && *dicomDir == "" {
 		fmt.Println("Error: Either -file or -dir must be specified")
 		fmt.Println("Usage:")
 		flag.PrintDefaults()

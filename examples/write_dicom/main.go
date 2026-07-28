@@ -5,8 +5,10 @@
 package main
 
 import (
+	"flag"
 	"log"
 
+	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -16,6 +18,13 @@ import (
 )
 
 func main() {
+	outputPath := flag.String("output", "output.dcm", "Output DICOM file path")
+	flag.Parse()
+
+	if err := examplepath.PrepareOutputFile(*outputPath); err != nil {
+		log.Fatal(err)
+	}
+
 	// Create a new dataset
 	ds := dataset.New()
 
@@ -91,14 +100,14 @@ func main() {
 	_ = ds.Add(element.NewString(tag.SoftwareVersions, vr.LO, []string{"1.0"}))
 
 	// Write to file with explicit VR little endian
-	err := writer.WriteFile("output.dcm", ds,
+	err := writer.WriteFile(*outputPath, ds,
 		writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian))
 
 	if err != nil {
 		log.Fatalf("Failed to write DICOM file: %v", err)
 	}
 
-	log.Println("DICOM file written successfully to output.dcm")
+	log.Printf("DICOM file written successfully to %s", *outputPath)
 	log.Println("The file includes:")
 	log.Println("  - Complete File Meta Information (Group 0002)")
 	log.Println("  - Patient demographics")

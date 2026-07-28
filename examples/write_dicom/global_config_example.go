@@ -10,8 +10,11 @@
 package main
 
 import (
+	"flag"
 	"log"
+	"path/filepath"
 
+	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -20,6 +23,12 @@ import (
 )
 
 func main() {
+	outputDir := flag.String("output-dir", ".", "Directory to write generated DICOM files")
+	flag.Parse()
+	if err := examplepath.PrepareOutputDir(*outputDir); err != nil {
+		log.Fatal(err)
+	}
+
 	// ========================================================================
 	// RECOMMENDED USAGE: Configure implementation information at app startup
 	// This is typically done once in your main() or init() function
@@ -41,21 +50,21 @@ func main() {
 
 	// Create and write first file
 	ds1 := createSampleDataset("Smith^John", "P001")
-	if err := writer.WriteFile("test_file1.dcm", ds1); err != nil {
+	if err := writer.WriteFile(filepath.Join(*outputDir, "test_file1.dcm"), ds1); err != nil {
 		log.Fatalf("Failed to write file1: %v", err)
 	}
 	log.Println("  ✓ test_file1.dcm written")
 
 	// Create and write second file
 	ds2 := createSampleDataset("Doe^Jane", "P002")
-	if err := writer.WriteFile("test_file2.dcm", ds2); err != nil {
+	if err := writer.WriteFile(filepath.Join(*outputDir, "test_file2.dcm"), ds2); err != nil {
 		log.Fatalf("Failed to write file2: %v", err)
 	}
 	log.Println("  ✓ test_file2.dcm written")
 
 	// Create and write third file
 	ds3 := createSampleDataset("Brown^Robert", "P003")
-	if err := writer.WriteFile("test_file3.dcm", ds3); err != nil {
+	if err := writer.WriteFile(filepath.Join(*outputDir, "test_file3.dcm"), ds3); err != nil {
 		log.Fatalf("Failed to write file3: %v", err)
 	}
 	log.Println("  ✓ test_file3.dcm written")

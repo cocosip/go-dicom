@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/imaging"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
@@ -23,8 +24,8 @@ import (
 
 // Command-line flags
 var (
-	inputFile    = flag.String("input", "input.dcm", "Input DICOM file path (required)")
-	outputFile   = flag.String("output", "output.jpeg", "Output image file path (default: input filename with .jpeg extension)")
+	inputFile    = flag.String("input", "", "Input DICOM file path")
+	outputFile   = flag.String("output", "", "Output image file path (default: input filename with format extension)")
 	windowCenter = flag.Float64("window-center", 0, "Window center for display (0 = use DICOM value or auto)")
 	windowWidth  = flag.Float64("window-width", 0, "Window width for display (0 = use DICOM value or auto)")
 	invert       = flag.Bool("invert", false, "Invert grayscale (swap black/white)")
@@ -37,12 +38,8 @@ func main() {
 	flag.Parse()
 
 	// Validate input
-	if *inputFile == "" {
-		fmt.Println("Error: -input is required")
-		fmt.Println("Usage:")
-		flag.PrintDefaults()
-		fmt.Println("\nPress Enter to exit...")
-		_, _ = fmt.Scanln()
+	if err := examplepath.RequireInputFile(*inputFile); err != nil {
+		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
@@ -56,6 +53,10 @@ func main() {
 		} else {
 			output = baseName + ".png"
 		}
+	}
+	if err := examplepath.PrepareOutputFile(output); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
 	}
 
 	fmt.Printf("=== DICOM to Image Converter ===\n")

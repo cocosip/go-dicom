@@ -2,9 +2,12 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
+	"path/filepath"
 
+	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -48,10 +51,17 @@ func writeFile(path string, ds *dataset.Dataset) {
 }
 
 func main() {
+	outputDir := flag.String("output-dir", ".", "Directory to write generated DICOM samples")
+	flag.Parse()
+
+	if err := examplepath.PrepareOutputDir(*outputDir); err != nil {
+		log.Fatal(err)
+	}
+
 	// Single-frame 2x2 image: pixel values 0,64,128,255
 	singlePixels := []byte{0x00, 0x40, 0x80, 0xFF}
 	single := buildDataset("1.2.826.0.1.3680043.10.1142.1001.1", "1.2.826.0.1.3680043.10.1142.1001", "1.2.826.0.1.3680043.10.1142.1000", 2, 2, 1, singlePixels)
-	writeFile("sample-single-frame.dcm", single)
+	writeFile(filepath.Join(*outputDir, "sample-single-frame.dcm"), single)
 
 	// Multi-frame 2 frames, each 2x2: frame0 values 0..3, frame1 values 128..131
 	multiPixels := []byte{
@@ -59,5 +69,5 @@ func main() {
 		0x80, 0x90, 0xA0, 0xB0, // frame 2
 	}
 	multi := buildDataset("1.2.826.0.1.3680043.10.1142.2001.1", "1.2.826.0.1.3680043.10.1142.2001", "1.2.826.0.1.3680043.10.1142.2000", 2, 2, 2, multiPixels)
-	writeFile("sample-multiframe.dcm", multi)
+	writeFile(filepath.Join(*outputDir, "sample-multiframe.dcm"), multi)
 }

@@ -6,23 +6,33 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 
+	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 )
 
 func main() {
-	inputPath := "D:\\2.dcm"
-	outputPath := "D:\\2_transcoded_correct.dcm"
+	inputPath := flag.String("input", "", "Input DICOM file path")
+	outputPath := flag.String("output", "transcoded.dcm", "Output transcoded DICOM file path")
+	flag.Parse()
+
+	if err := examplepath.RequireInputFile(*inputPath); err != nil {
+		log.Fatal(err)
+	}
+	if err := examplepath.PrepareOutputFile(*outputPath); err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Println("=== DICOM Transcoding with Metadata Preservation ===")
 
 	// Step 1: Parse the input file
-	fmt.Printf("Reading input file: %s\n", inputPath)
-	result, err := parser.ParseFile(inputPath)
+	fmt.Printf("Reading input file: %s\n", *inputPath)
+	result, err := parser.ParseFile(*inputPath)
 	if err != nil {
 		log.Fatalf("Failed to parse file: %v", err)
 	}
@@ -66,8 +76,8 @@ func main() {
 	}
 
 	// Step 4: Write output file with preserved metadata
-	fmt.Printf("\nWriting output file: %s\n", outputPath)
-	err = writer.WriteFile(outputPath, newDS,
+	fmt.Printf("\nWriting output file: %s\n", *outputPath)
+	err = writer.WriteFile(*outputPath, newDS,
 		writer.WithFileMetaInfo(newMeta.Dataset())) // Use Dataset() to get the underlying dataset
 	if err != nil {
 		log.Fatalf("Failed to write file: %v", err)
@@ -75,7 +85,7 @@ func main() {
 
 	// Step 5: Verify the result
 	fmt.Println("\nVerifying output file...")
-	verifyResult, err := parser.ParseFile(outputPath)
+	verifyResult, err := parser.ParseFile(*outputPath)
 	if err != nil {
 		log.Fatalf("Failed to parse output file: %v", err)
 	}
