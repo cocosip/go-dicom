@@ -84,6 +84,30 @@ func TestRecvLoopPeerReleaseClosesNormally(t *testing.T) {
 	}
 }
 
+func TestHandleReleaseRequestKeepsConnectionWhenConfigured(t *testing.T) {
+	conn := &mockConn{}
+	service := NewService(conn, nil, WithKeepConnectionOnPeerRelease(true))
+
+	if err := service.handleReleaseRequest(context.Background()); err != nil {
+		t.Fatalf("handleReleaseRequest() error = %v", err)
+	}
+	if conn.closed {
+		t.Fatal("connection closed after peer release with compatibility mode enabled")
+	}
+	select {
+	case <-service.closeCh:
+		t.Fatal("closeCh closed after peer release with compatibility mode enabled")
+	default:
+	}
+	if len(conn.writeData) == 0 || conn.writeData[0] != pdu.TypeAReleaseRP {
+		t.Fatalf("written PDU type = %#v, want A-RELEASE-RP", conn.writeData)
+	}
+
+	if err := service.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
 func TestRecvLoop_ServiceClose(t *testing.T) {
 	// Create a pipe connection
 	server, client := net.Pipe()

@@ -39,6 +39,10 @@ type serviceConfig struct {
 	// Default: 100
 	sendQueueSize int
 
+	// keepConnectionOnPeerRelease keeps the TCP connection open after replying
+	// to a peer A-RELEASE-RQ for compatibility with non-conformant PACS.
+	keepConnectionOnPeerRelease bool
+
 	// Lifecycle callbacks (optional)
 	associationNegotiator      AssociationNegotiator
 	associationReleaseHandler  AssociationReleaseHandler
@@ -99,7 +103,14 @@ func WithSendQueueSize(size int) Option {
 	}
 }
 
-
+// WithKeepConnectionOnPeerRelease controls whether the service closes the TCP
+// connection after responding to an A-RELEASE-RQ from the peer. The default is
+// false, which closes the connection according to the normal release lifecycle.
+func WithKeepConnectionOnPeerRelease(keep bool) Option {
+	return func(c *serviceConfig) {
+		c.keepConnectionOnPeerRelease = keep
+	}
+}
 
 // WithAssociationNegotiator sets the association negotiator callback.
 // The negotiator controls which associations are accepted and how presentation contexts are negotiated.

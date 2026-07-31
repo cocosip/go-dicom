@@ -114,6 +114,11 @@ type Config struct {
 	// Required for C-GET: the SCP sends C-STORE sub-operations back over the
 	// same association, so this handler must be set to receive the images.
 	CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
+
+	// KeepConnectionOnPeerRelease keeps the TCP connection open after replying
+	// to a peer A-RELEASE-RQ for compatibility with non-conformant PACS.
+	// Default: false.
+	KeepConnectionOnPeerRelease bool
 }
 
 // Option is a function that modifies client configuration.
@@ -182,6 +187,16 @@ func WithImplementationVersionName(name string) Option {
 func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)) Option {
 	return func(o *Config) {
 		o.CStoreHandler = handler
+	}
+}
+
+// WithKeepConnectionOnPeerRelease controls whether the client keeps the TCP
+// connection open after responding to an A-RELEASE-RQ from the peer. The
+// default is false, which closes the connection according to the normal
+// release lifecycle.
+func WithKeepConnectionOnPeerRelease(keep bool) Option {
+	return func(o *Config) {
+		o.KeepConnectionOnPeerRelease = keep
 	}
 }
 
@@ -405,6 +420,7 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 		service.WithMaxPDULength(c.config.MaxPDULength),
 		service.WithReadTimeout(c.config.RequestTimeout),
 		service.WithWriteTimeout(c.config.RequestTimeout),
+		service.WithKeepConnectionOnPeerRelease(c.config.KeepConnectionOnPeerRelease),
 	}
 	if c.config.CStoreHandler != nil {
 		svcOpts = append(svcOpts, service.WithCStoreHandler(c.config.CStoreHandler))

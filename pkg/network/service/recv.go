@@ -317,6 +317,9 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 	if err := s.SendReleaseResponse(ctx); err != nil {
 		return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
 	}
+	if s.config.keepConnectionOnPeerRelease {
+		return nil
+	}
 
 	return s.initiateClose(StateClosed, nil)
 }
