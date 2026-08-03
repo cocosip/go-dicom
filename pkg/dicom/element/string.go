@@ -191,10 +191,19 @@ func (s *String) Validate() error {
 		return nil
 	}
 
-	// Check maximum length based on VR
+	// Check the maximum length of each encoded value, excluding separators and
+	// the Value Field's trailing padding.
 	maxLen := s.vr.MaximumLength()
-	if maxLen > 0 && s.Length() > maxLen {
-		return fmt.Errorf("value length %d exceeds maximum %d for VR %s", s.Length(), maxLen, s.vr.Code())
+	if maxLen > 0 {
+		data := []byte(nil)
+		if s.buffer != nil {
+			data = bytes.TrimRight(s.buffer.Data(), string(s.vr.PaddingValue()))
+		}
+		for i, value := range bytes.Split(data, []byte{'\\'}) {
+			if uint32(len(value)) > maxLen {
+				return fmt.Errorf("value[%d] length %d exceeds maximum %d for VR %s", i, len(value), maxLen, s.vr.Code())
+			}
+		}
 	}
 
 	// Perform VR-specific validation on each value

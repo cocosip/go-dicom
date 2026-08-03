@@ -6,9 +6,11 @@ package element_test
 import (
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/charset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 const testPatientName = "Doe^John"
@@ -144,6 +146,84 @@ func TestStringElement_Validation(t *testing.T) {
 	err := elem.Validate()
 	if err == nil {
 		t.Error("Validate() should return error for string exceeding max length")
+	}
+}
+
+// TestStringElement_ValidateAppliesMaximumLengthPerValue verifies that a VR
+// maximum length applies to each value, excluding the Value Field separators
+// and trailing padding.
+func TestStringElement_ValidateAppliesMaximumLengthPerValue(t *testing.T) {
+	tests := []struct {
+		name      string
+		tag       *tag.Tag
+		vr        *vr.VR
+		rawValue  string
+		wantError bool
+	}{
+		{
+			name:     "CS multiple values",
+			tag:      tag.ImageType,
+			vr:       vr.CS,
+			rawValue: "ORIGINAL\\PRIMARY\\AXIAL\\HELICAL",
+		},
+		{
+			name:     "DS multiple values with padding",
+			tag:      tag.SliceLocation,
+			vr:       vr.DS,
+			rawValue: "-211.810811\\-187.648651\\-756.099976 ",
+		},
+		{
+			name:     "DS multiple values exceeding one value limit",
+			tag:      tag.PixelSpacing,
+			vr:       vr.DS,
+			rawValue: "0.767578\\0.767578 ",
+		},
+		{
+			name:      "single DS exceeding maximum length",
+			tag:       tag.SliceLocation,
+			vr:        vr.DS,
+			rawValue:  "12345678901234567",
+			wantError: true,
+		},
+		{
+			name:      "private SH exceeding maximum length",
+			tag:       tag.New(0x01f1, 0x104e),
+			vr:        vr.SH,
+			rawValue:  "Abdomen Routine_Helical ",
+			wantError: true,
+		},
+		{
+			name:     "private DS multiple values use encoded VR",
+			tag:      tag.New(0x01f1, 0x100c),
+			vr:       vr.DS,
+			rawValue: "-0.038959\\-0.022523 ",
+		},
+		{
+			name:      "private DS invalid format uses encoded VR",
+			tag:       tag.New(0x01f1, 0x100c),
+			vr:        vr.DS,
+			rawValue:  "invalid",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			elem := element.NewStringFromBuffer(
+				tt.tag,
+				tt.vr,
+				buffer.NewMemory([]byte(tt.rawValue)),
+				charset.Default,
+			)
+
+			err := elem.Validate()
+			if tt.wantError && err == nil {
+				t.Fatal("Validate() error = nil, want error")
+			}
+			if !tt.wantError && err != nil {
+				t.Fatalf("Validate() error = %v, want nil", err)
+			}
+		})
 	}
 }
 
