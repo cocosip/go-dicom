@@ -1,0 +1,648 @@
+# fo-dicom Capability Gap Analysis
+
+This document tracks capability gaps between `go-dicom` and the reference
+`fo-dicom` implementation. It is a versioned engineering backlog, not a claim
+that every .NET API must be reproduced in Go.
+
+## Audit Baseline
+
+The initial audit was performed on 2026-08-14 against these revisions:
+
+- `go-dicom`: `d5970f342973c0d659c3eab1b7cee8563a7f5dda`
+- `fo-dicom`: `7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2`
+  (`5.2.6-101-g7ea6d424`)
+
+Source code, tests, and examples are the evidence for this comparison. README
+feature lists are not considered implementation evidence.
+
+The following command passed at the audited `go-dicom` revision:
+
+```powershell
+go test ./cmd/... ./examples/... ./pkg/... ./tools/...
+```
+
+Recheck both repositories before implementing an item because either side may
+have changed since this baseline.
+
+## Classification
+
+| Status | Meaning |
+| --- | --- |
+| `Open` | No equivalent domain capability exists in `go-dicom`. |
+| `Partial` | Some layers or value types exist, but the public workflow is incomplete. |
+| `External` | The capability is intentionally supplied by a companion module. |
+| `Not a gap` | The difference is platform-specific or absent from both libraries. |
+| `Complete` | Acceptance criteria were met and current evidence is recorded. |
+
+Priority indicates implementation order, not estimated effort:
+
+- `P0`: correctness, interoperability, or misleading public contract
+- `P1`: major fo-dicom domain workflow required for practical parity
+- `P2`: important supporting API or operational capability
+- `P3`: large or specialized capability that should follow its prerequisites
+
+## Executive Summary
+
+| ID | Priority | Status | Capability |
+| --- | --- | --- | --- |
+| DOC-001 | P0 | Partial | Public capability statements match implemented behavior |
+| NET-001 | P0 | Partial | TLS-enabled high-level DICOM client |
+| NET-002 | P0 | Partial | C-STORE transfer syntax selection and automatic transcoding |
+| STD-001 | P0 | Partial | Reproducible and current generated standard tables |
+| MED-001 | P1 | Open | DICOMDIR media directory model and read/write workflow |
+| NET-003 | P1 | Partial | Advanced association negotiation through the high-level client |
+| NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
+| SR-001 | P1 | Partial | Complete Structured Report value types and file workflow |
+| IMG-001 | P1 | Partial | Dataset-driven image rendering pipeline |
+| CORE-001 | P1 | Partial | Recursive Dataset and Sequence validation |
+| IMG-002 | P2 | Open | Frame geometry, spatial transforms, and interpolation tools |
+| CORE-002 | P2 | Open | Dataset walker, match rules, and transform rules |
+| DICT-001 | P2 | Partial | Runtime XML dictionary loading |
+| ANON-001 | P2 | Partial | Complete custom anonymization profile loading |
+| PRINT-001 | P2 | Partial | Dataset-backed DICOM Print Management models |
+| OBS-001 | P2 | Open | Structured network logging, request events, and metrics hooks |
+| IMG-003 | P3 | Partial | Volume reconstruction and MPR |
+| MED-002 | P3 | Open | DICOM file scanner workflow |
+
+## Detailed Gaps
+
+### DOC-001: Public Capability Statements
+
+**Status:** `Partial`  
+**Priority:** `P0`
+
+Several README statements are broader than the implemented public workflow.
+Examples include complete client TLS, complete SR value types, image
+reconstruction, advanced negotiation through the client, and print job
+creation. The TLS example calls a nonexistent `client.WithTLS` option, and one
+rendering example passes a Dataset to `NewDicomImage` even though the function
+accepts `*DicomPixelData`.
+
+The README's tag and UID totals also do not match the unique generated standard
+entries counted in the audited source.
+
+**Acceptance criteria**
+
+- Every checked capability is backed by a compiling public API and focused test.
+- Partial and external capabilities are labeled explicitly.
+- All README code examples compile in CI.
+- Generated tag and UID totals are derived automatically or omitted.
+
+**Suggested verification**
+
+- Add compile tests for README snippets or move runnable snippets to examples.
+- Run the full Go package tree and documentation link checks.
+
+### NET-001: High-Level Client TLS
+
+**Status:** `Partial`  
+**Priority:** `P0`
+
+The transport package exposes `DialTLS`, and the server accepts a TLS
+configuration. The high-level `client.Client` has no TLS option, and its dial
+path always uses `net.Dialer.DialContext`.
+
+Reference: [fo-dicom DicomClient](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/Client/DicomClient.cs)
+
+**Acceptance criteria**
+
+- The client accepts a caller-owned `*tls.Config` without mutating it.
+- Plain TCP remains the default.
+- TLS handshake, certificate validation, timeout, cancellation, and close paths
+  are covered.
+- The README TLS example compiles and uses the actual public option name.
+
+**Suggested verification**
+
+- Client/server integration tests with a local CA and server certificate.
+- Negative tests for hostname mismatch and untrusted certificates.
+- Race tests for concurrent clients sharing a TLS configuration.
+
+### NET-002: C-STORE Negotiated Transfer Syntax and Transcoding
+
+**Status:** `Partial`  
+**Priority:** `P0`
+
+`go-dicom` has a codec registry and transcoder, but the network send path does
+not invoke them. It selects a presentation context by SOP Class and encodes the
+request using the accepted transfer syntax. This is insufficient when the
+Dataset's pixel data transfer syntax differs from the accepted context.
+`CStoreMultiple` sends each Dataset sequentially and stops at the first error.
+
+Reference: [fo-dicom DicomCStoreRequest](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/DicomCStoreRequest.cs)
+
+**Acceptance criteria**
+
+- Presentation context selection considers both SOP Class and source transfer
+  syntax.
+- The original syntax is preferred when accepted.
+- A registered codec is used for fallback transcoding when necessary.
+- Failure is explicit when no accepted syntax is directly usable or
+  transcodable.
+- The caller's Dataset is not mutated.
+- Batch sending defines ordering, partial-success, cancellation, and concurrency
+  semantics.
+
+**Suggested verification**
+
+- Interoperability tests covering native, RLE, JPEG, JPEG-LS, and JPEG 2000 via
+  registered companion codecs.
+- Verify the wire Dataset transfer syntax and decoded pixels, not only the DIMSE
+  response status.
+
+### STD-001: Generated Standard Tables and Tooling
+
+**Status:** `Partial`  
+**Priority:** `P0`
+
+The audited generated sources contain 5,334 unique standard tags versus 5,343
+in fo-dicom, and 1,906 unique standard UIDs versus 1,928 in fo-dicom.
+
+Missing tags:
+
+- `(0008,001D)` Sensitive Content Code Sequence
+- `(0018,9390)` through `(0018,9392)` Metal Artifact Reduction attributes
+- `(3004,0020)` through `(3004,0024)` RT Dose attributes
+
+Missing UIDs are context group UIDs `1.2.840.10008.6.1.1550` through
+`1.2.840.10008.6.1.1571`.
+
+All three generators depend on a repository-local `fo-dicom-code` directory
+that is not present in a clean checkout. `go run ./tools/generate_tags` fails
+before generation because its source file cannot be opened.
+
+**Acceptance criteria**
+
+- Generator inputs are explicit CLI arguments, a documented checked-out source,
+  or committed standards inputs with acceptable licensing.
+- A clean checkout can reproduce all generated files.
+- Generation is deterministic and checked by CI.
+- Tag, dictionary, and UID sources are updated atomically from one baseline.
+
+**Suggested verification**
+
+- Run all generators in a clean temporary checkout.
+- Run `gofmt`, the full test suite, and a no-diff regeneration check.
+- Compare unique tag and UID sets against the pinned reference revision.
+
+### MED-001: DICOMDIR
+
+**Status:** `Open`  
+**Priority:** `P1`
+
+Generic parsing can read DICOMDIR elements, but there is no media directory
+domain model. fo-dicom provides directory records, hierarchical traversal,
+offset repair, file addition, read/write workflows, and optional icon image
+generation.
+
+Reference: [fo-dicom Media](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Media)
+
+**Acceptance criteria**
+
+- Open and save DICOMDIR files while preserving valid record offsets.
+- Expose patient, study, series, and instance record traversal.
+- Add files with valid Referenced File IDs and deterministic grouping.
+- Support malformed or stale offsets with documented strict/compatible behavior.
+- Make icon generation optional and independent from the directory core.
+
+**Suggested verification**
+
+- Round-trip real DICOMDIR fixtures.
+- Test duplicate/anonymized identifiers, long file IDs, invalid offsets, and
+  missing optional attributes.
+- Cross-open generated DICOMDIR files with fo-dicom.
+
+### NET-003: Advanced Association Negotiation
+
+**Status:** `Partial`  
+**Priority:** `P1`
+
+PDU and association packages already model User Identity, Asynchronous
+Operations Window, SCP/SCU Role Selection, and SOP Class Extended Negotiation.
+The high-level client has no configuration entry points for these values, and
+`buildUserInformation` only sends maximum PDU length and implementation IDs.
+
+**Acceptance criteria**
+
+- High-level client options expose all supported negotiation items.
+- Requested and accepted values are available after association establishment.
+- Positive User Identity responses and required-response failure behavior are
+  defined.
+- Async operation limits are enforced by the request dispatcher rather than
+  merely encoded on the wire.
+- Role Selection affects request and sub-operation behavior where applicable.
+
+**Suggested verification**
+
+- Encode/decode tests plus client/server association integration tests.
+- Concurrent request tests at, below, and above the negotiated async window.
+- Rejection and malformed-response coverage.
+
+### NET-004: SOP Class Common Extended Negotiation
+
+**Status:** `Open`  
+**Priority:** `P1`
+
+The PDU item type constant `0x57` exists, but there is no complete structure,
+encoder, decoder, association representation, or client/server integration for
+Service Class UID and Related General SOP Class UIDs.
+
+Reference: [fo-dicom DicomExtendedNegotiation](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/DicomExtendedNegotiation.cs)
+
+**Acceptance criteria**
+
+- Encode and decode the complete `0x57` item with length validation.
+- Preserve Service Class UID and all Related General SOP Class UIDs.
+- Expose the request through association and high-level client APIs.
+- Reject malformed lengths without panics or partial state.
+
+**Suggested verification**
+
+- Byte-level encode/decode round trips against representative `0x57` payloads.
+- Client/server association tests with multiple related SOP Class UIDs.
+- Interoperability tests with fo-dicom plus malformed and truncated item tests.
+
+### SR-001: Complete Structured Report Workflow
+
+**Status:** `Partial`  
+**Priority:** `P1`
+
+Value type constants exist for the standard SR types, but construction and
+typed reading focus on TEXT, CODE, NUM, and CONTAINER. PNAME, DATE, TIME,
+DATETIME, UIDREF, COMPOSITE, IMAGE, WAVEFORM, SCOORD, and TCOORD lack complete
+typed APIs. SR-specific Open and Save methods remain commented placeholders.
+
+Reference: [fo-dicom StructuredReport](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/StructuredReport)
+
+**Acceptance criteria**
+
+- Every declared Value Type has symmetric constructor and typed reader support.
+- Referenced SOP, spatial coordinate, and temporal coordinate constraints are
+  validated.
+- File and stream open/save workflows preserve SR content trees.
+- Root relationship rules and child relationship rules are validated.
+
+**Suggested verification**
+
+- Table-driven round trips for every Value Type.
+- Nested content tree and invalid relationship tests.
+- Cross-read representative SR documents with fo-dicom.
+
+### IMG-001: Dataset-Driven Rendering
+
+**Status:** `Partial`  
+**Priority:** `P1`
+
+The LUT and overlay primitives exist, but `DicomImage` is constructed from
+`DicomPixelData` rather than directly from a Dataset or file. Its default
+grayscale pipeline fixes rescale slope/intercept to `1/0`, computes an optimal
+window from pixels, and does not fully consume Dataset Modality LUT, VOI LUT,
+window, presentation, and per-frame metadata. Stored `scale` and
+`showOverlays` state do not affect `RenderFrame`.
+
+Reference: [fo-dicom DicomImage](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/DicomImage.cs)
+
+**Acceptance criteria**
+
+- Construct a renderable image from a Dataset and from a parsed file result.
+- Build modality, VOI, presentation, palette, and inversion stages from Dataset
+  and per-frame metadata with documented precedence.
+- Scaling changes output dimensions and uses a defined interpolation mode.
+- Overlay visibility, origin, frame range, and color affect rendered output.
+- Preserve explicit caller overrides for window, LUT, scale, and inversion.
+
+**Suggested verification**
+
+- Golden-image tests for CT rescale/windowing, MONOCHROME1, palette color,
+  overlays, and multi-frame functional groups.
+- Compare representative rendered pixels with fo-dicom within declared
+  tolerance.
+
+### CORE-001: Recursive Validation
+
+**Status:** `Partial`  
+**Priority:** `P1`
+
+Many concrete Element types implement VR validation, but Dataset has no public
+recursive validation workflow. `Sequence.Validate` currently returns `nil`
+without validating its child Datasets.
+
+**Acceptance criteria**
+
+- Dataset validation visits every element and recursively validates sequences.
+- Errors identify the nested tag/item path and original validation cause.
+- Validation can be explicitly enabled or disabled without global data races.
+- VM, VR, required structural fields, and sequence children have defined scope.
+
+**Suggested verification**
+
+- Nested sequence failures with exact path assertions.
+- Multi-value, private explicit-VR, malformed date/time, UID, and numeric tests.
+- Race tests for concurrent validation configuration if global settings remain.
+
+### IMG-002: Geometry and Spatial Image Tools
+
+**Status:** `Open`  
+**Priority:** `P2`
+
+fo-dicom includes FrameGeometry, patient/image coordinate conversion,
+orientation and localization support, spatial transforms, histogram helpers,
+mathematical geometry types, and nearest-neighbor/bilinear interpolation.
+go-dicom has no equivalent cohesive geometry layer.
+
+Reference: [fo-dicom FrameGeometry](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/FrameGeometry.cs)
+
+**Acceptance criteria**
+
+- Parse classic and enhanced multi-frame geometry.
+- Convert between pixel and patient coordinates with documented conventions.
+- Calculate frame orientation, normals, bounding boxes, and localization lines.
+- Provide rotate, flip, translate, scale, and best-fit transforms.
+- Provide tested interpolation primitives reusable by rendering and MPR.
+
+**Suggested verification**
+
+- Synthetic axial, sagittal, coronal, and oblique frame coordinate round trips.
+- Classic and enhanced multi-frame fixtures with known patient-space geometry.
+- Golden tests for transforms and nearest-neighbor/bilinear interpolation.
+
+### CORE-002: Dataset Walker and Rules
+
+**Status:** `Open`  
+**Priority:** `P2`
+
+fo-dicom provides a recursive Dataset walker plus composable match and transform
+rules. go-dicom consumers must currently build this behavior ad hoc.
+
+Reference: [fo-dicom DicomDatasetWalker](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/DicomDatasetWalker.cs)
+
+**Acceptance criteria**
+
+- Visit elements, sequences, items, and fragments with stable path information.
+- Allow early stop and error propagation.
+- Supply composable exists/empty/equality/wildcard/regex match rules.
+- Supply common remove/set/map/copy/regex/case/UID transform rules.
+- Define whether transforms mutate or clone the source Dataset.
+
+**Suggested verification**
+
+- Assert traversal order and paths for nested sequences and pixel fragments.
+- Cover early stop, visitor errors, and rule composition precedence.
+- Verify mutating and cloning transforms preserve all unrelated elements.
+
+### DICT-001: Runtime XML Dictionary Loading
+
+**Status:** `Partial`  
+**Priority:** `P2`
+
+`Dictionary.Add` supports programmatic extension, but there is no runtime reader
+for fo-dicom-compatible XML dictionaries, including private creator
+dictionaries and masked tags.
+
+Reference: [fo-dicom DicomDictionaryReader](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/DicomDictionaryReader.cs)
+
+**Acceptance criteria**
+
+- Load standard and private dictionaries from `io.Reader`.
+- Support exact and masked tags, multiple VRs, VM, keyword, retired flag, and
+  private creator.
+- Reject malformed input with element-level context.
+- Define duplicate-entry and dictionary merge behavior.
+
+**Suggested verification**
+
+- Load representative fo-dicom standard and private XML dictionaries.
+- Test masked-tag lookup precedence, duplicate entries, and merge behavior.
+- Cover malformed XML, invalid VR/VM values, and incomplete private entries.
+
+### ANON-001: Custom Profile Loading
+
+**Status:** `Partial`  
+**Priority:** `P2`
+
+Custom rules can be parsed from a Reader, but `LoadProfileFromFile` always
+returns an error instructing callers to read the file themselves. The simpler
+Reader parser also ignores its profile options argument.
+
+**Acceptance criteria**
+
+- File loading delegates to the same Reader-based parser.
+- Reader APIs accept general `io.Reader`, not only `*strings.Reader`.
+- Profile option semantics are consistent for built-in and custom inputs.
+- Invalid lines and actions return actionable errors instead of being silently
+  skipped unless a lenient mode is explicitly selected.
+
+**Suggested verification**
+
+- Parse the same profile through file and Reader APIs and compare rule output.
+- Exercise each profile option against representative confidentiality tags.
+- Test malformed lines, unknown actions, comments, and strict/lenient behavior.
+
+### PRINT-001: Dataset-Backed Print Management Models
+
+**Status:** `Partial`  
+**Priority:** `P2`
+
+FilmSession, FilmBox, ImageBox, PresentationLUT, and printer status helpers
+exist, but the principal models are simplified Go structs rather than
+Dataset-backed DICOM objects. They cover a subset of attributes and lack the
+fo-dicom clone, load/save, UID lookup/removal, and complete layout behavior.
+Empty UIDs use fixed placeholder values rather than generated UIDs.
+
+Reference: [fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Printing)
+
+**Acceptance criteria**
+
+- Models round-trip all supported DICOM attributes through Dataset objects.
+- Empty SOP Instance UIDs are generated uniquely.
+- Clone, load/save, find, and delete preserve parent/child references.
+- Film layout and image box creation support the standard display formats in
+  the declared scope.
+- N-CREATE/N-SET/N-ACTION integration is demonstrated end to end.
+
+**Suggested verification**
+
+- Dataset round trips for every supported print object and display format.
+- Verify UID uniqueness and parent/child reference integrity across clones.
+- Run an end-to-end print workflow and cross-read generated objects with
+  fo-dicom.
+
+### OBS-001: Network Observability
+
+**Status:** `Open`  
+**Priority:** `P2`
+
+fo-dicom exposes structured logging, request sent/pending/completed/timed-out
+events, and a network metrics collector hook. go-dicom has lifecycle callbacks
+but no cohesive logger or metrics interface; some PDU decoding warnings are
+written directly with `fmt.Printf`.
+
+Reference: [fo-dicom Network Metrics](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Log/Metrics)
+
+**Acceptance criteria**
+
+- Library code never writes directly to stdout/stderr.
+- Client and server accept no-op-by-default structured logging hooks.
+- Request lifecycle events include association, message ID, command, status,
+  duration, and timeout/cancellation outcome.
+- Metrics hooks expose connection, association, DIMSE, byte, error, and latency
+  observations without requiring a specific telemetry vendor.
+
+**Suggested verification**
+
+- Assert the default configuration writes no process output.
+- Integration-test hook ordering for success, pending, timeout, cancellation,
+  rejection, and transport failure paths.
+- Run race tests with concurrent associations and slow or failing observers.
+
+### IMG-003: Volume Reconstruction and MPR
+
+**Status:** `Partial`  
+**Priority:** `P3`
+
+The reconstruction package documents ImageData, VolumeData, Slice, Stack, and
+DicomGenerator but implements them as placeholders. Constructors return
+`ErrNotImplemented`, and `NewDicomGenerator` returns `nil`.
+
+Reference: [fo-dicom Reconstruction](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/Reconstruction)
+
+This item depends on IMG-001 and IMG-002.
+
+**Acceptance criteria**
+
+- Build a volume only from geometrically compatible slices.
+- Sort slices and detect irregular spacing and frame-of-reference mismatches.
+- Generate axial, coronal, sagittal, and arbitrary cuts with defined
+  interpolation and out-of-volume behavior.
+- Generate derived DICOM instances with valid geometry, derivation metadata,
+  UIDs, and pixel representation.
+- Define memory and concurrency behavior for large studies.
+
+**Suggested verification**
+
+- Synthetic volumes with analytically predictable cuts.
+- Irregular spacing, reversed ordering, oblique orientation, and multi-frame
+  datasets.
+- Cross-check geometry and representative pixel values with fo-dicom.
+- Add benchmarks before optimizing volume and cut generation.
+
+### MED-002: DICOM File Scanner
+
+**Status:** `Open`  
+**Priority:** `P3`
+
+fo-dicom provides a scanner that walks files, reports DICOM/non-DICOM results,
+and integrates with media workflows. go-dicom has parsers and CLI examples but
+no reusable scanner abstraction.
+
+Reference: [fo-dicom DicomFileScanner](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Media/DicomFileScanner.cs)
+
+**Acceptance criteria**
+
+- Scan files and directory trees with context cancellation.
+- Report valid DICOM files, invalid files, and read errors independently.
+- Make recursion, symlink, concurrency, and stop-on-error behavior explicit.
+- Avoid loading large pixel data when only classification or metadata is needed.
+
+**Suggested verification**
+
+- Scan a mixed tree containing DICOM, non-DICOM, unreadable, and symlinked files.
+- Test cancellation, bounded concurrency, deterministic result accounting, and
+  both stop-on-error modes.
+- Instrument large fixtures to verify metadata-only scans do not read pixel
+  payloads.
+
+## External Capability Boundary
+
+### Compressed Codecs
+
+**Status:** `External`
+
+The core repository intentionally provides native transfer syntax codecs, the
+registry, transcoder, and encapsulation support. Compressed codecs are supplied
+by `github.com/cocosip/go-dicom-codecs` through blank-import registration.
+
+fo-dicom Core includes RLE and JPEG Lossless decoder implementations, but this
+does not require moving all compressed codecs back into `go-dicom`. Capability
+claims must name the companion module and verification must cover the combined
+runtime.
+
+### Platform Integrations
+
+**Status:** `Not a gap`
+
+WPF, ImageSharp, SkiaSharp, ASP.NET dependency injection, and .NET-specific
+async API shapes are platform integrations. They should not be ported unless a
+separate Go use case and package boundary are approved.
+
+### Whole Slide Imaging
+
+**Status:** `Not a one-sided gap`
+
+Both libraries expose low-level WSI-compatible tags and multi-frame pixel data,
+but neither audited revision provides a complete pyramid/level/coordinate WSI
+domain API or WSI IOD validator. A future WSI proposal should be scoped as a new
+cross-library capability rather than fo-dicom parity work.
+
+## Delivery Phases
+
+### Phase 0: Public Contract and Interoperability
+
+Scope: DOC-001, NET-001, NET-002, STD-001.
+
+Phase acceptance:
+
+- README examples compile and capability wording matches actual public APIs.
+- High-level SCU connections work over plain TCP and validated TLS.
+- C-STORE sends the negotiated transfer syntax or performs verified transcoding.
+- Generated standards data is reproducible from a clean checkout with no diff.
+- Focused tests, full package tests, race tests for changed shared/network code,
+  and relevant interoperability checks pass.
+
+### Phase 1: Major Domain Parity
+
+Scope: MED-001, NET-003, NET-004, SR-001, IMG-001, CORE-001.
+
+Phase acceptance:
+
+- DICOMDIR creation and round trip work with both libraries.
+- Advanced association values are negotiated and enforced by client behavior.
+- All declared SR Value Types round-trip through Dataset and file workflows.
+- Rendering consumes Dataset metadata and produces verified output.
+- Dataset validation reports nested paths and validates sequence children.
+
+Each item should be implemented and released independently; Phase 1 is not a
+single pull request.
+
+### Phase 2: Supporting APIs and Operations
+
+Scope: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, OBS-001.
+
+Phase acceptance:
+
+- Shared geometry and walker APIs are stable before MPR work begins.
+- Runtime dictionaries and anonymization profiles have strict parsing tests.
+- Print objects round-trip through Dataset and the DIMSE N-service workflow.
+- Network diagnostics are injectable, structured, and silent by default.
+
+### Phase 3: Specialized Workflows
+
+Scope: IMG-003 and MED-002.
+
+Phase acceptance:
+
+- MPR geometry and pixels are validated against synthetic and reference cases.
+- Scanner behavior remains bounded and cancellable for large directory trees.
+- Performance benchmarks establish baselines for large studies and scans.
+
+## Maintenance Rules
+
+- Keep IDs stable after publication.
+- Do not delete completed items; mark them `Complete` and record the verifying
+  commit, tests, and any intentionally deferred scope.
+- Update the audit baseline only after rerunning the source comparison.
+- Do not mark an item complete from a README change or type declaration alone.
+- Treat source/unit-test evidence, integration behavior, and cross-library
+  interoperability as separate levels of verification.
+- Add newly discovered gaps to the detailed list and the phase table before
+  beginning implementation.

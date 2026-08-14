@@ -10,6 +10,8 @@ A pure Go implementation of the DICOM (Digital Imaging and Communications in Med
 
 `go-dicom` is a released DICOM library.
 This README describes the supported library surface rather than a development roadmap.
+Known parity gaps and the staged plan for addressing them are tracked in
+[fo-dicom Capability Gap Analysis](docs/FO_DICOM_GAP_ANALYSIS.md).
 
 ## Features
 
