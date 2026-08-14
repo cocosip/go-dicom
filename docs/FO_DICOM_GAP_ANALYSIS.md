@@ -52,7 +52,7 @@ Priority indicates implementation order, not estimated effort:
 | NET-002 | P0 | Complete | C-STORE transfer syntax selection and automatic transcoding |
 | STD-001 | P0 | Complete | Reproducible and current generated standard tables |
 | MED-001 | P1 | Complete | DICOMDIR media directory model and read/write workflow |
-| NET-003 | P1 | Partial | Advanced association negotiation through the high-level client |
+| NET-003 | P1 | Complete | Advanced association negotiation through the high-level client |
 | NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | Complete Structured Report value types and file workflow |
 | IMG-001 | P1 | Partial | Dataset-driven image rendering pipeline |
@@ -70,14 +70,14 @@ Priority indicates implementation order, not estimated effort:
 
 Progress as of 2026-08-15:
 
-- **Complete:** NET-001, NET-002, STD-001, MED-001, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, NET-003,
-  NET-004, SR-001, IMG-001, CORE-001, IMG-002, CORE-002, PRINT-001,
+- **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, NET-004, SR-001, IMG-001, CORE-001,
+  IMG-002, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Recommended next item:** NET-003. Complete the already modeled advanced
-  association negotiation path. DOC-001 remains deferred until the other major
+- **Recommended next item:** NET-004. Complete SOP Class Common Extended
+  Negotiation. DOC-001 remains deferred until the other major
   capability work is complete, so its final audit reflects the finished API.
 
 ## Detailed Gaps
@@ -302,13 +302,21 @@ Reference: [fo-dicom Media](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0
 
 ### NET-003: Advanced Association Negotiation
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P1`
 
-PDU and association packages already model User Identity, Asynchronous
-Operations Window, SCP/SCU Role Selection, and SOP Class Extended Negotiation.
-The high-level client has no configuration entry points for these values, and
-`buildUserInformation` only sends maximum PDU length and implementation IDs.
+The high-level client now exposes Asynchronous Operations Window, SCP/SCU Role
+Selection, SOP Class Extended Negotiation, and User Identity options. User
+Identity supports Username, Username/Password, Kerberos, SAML, and JWT. The
+established association retains both requested and accepted values.
+
+Positive User Identity responses are required by default when requested; a
+compatibility option can explicitly allow an omitted response. The negotiated
+maximum invoked operations limits unfinished DIMSE requests (`0` means
+unlimited), while maximum performed operations remains negotiated metadata,
+matching fo-dicom behavior. Role Selection is bound to Presentation Contexts
+and constrains ordinary requests and reverse C-STORE sub-operations. Common
+Extended Negotiation item `0x57` remains scoped to NET-004.
 
 **Acceptance criteria**
 
@@ -320,11 +328,19 @@ The high-level client has no configuration entry points for these values, and
   merely encoded on the wire.
 - Role Selection affects request and sub-operation behavior where applicable.
 
-**Suggested verification**
+**Verification evidence**
 
-- Encode/decode tests plus client/server association integration tests.
-- Concurrent request tests at, below, and above the negotiated async window.
-- Rejection and malformed-response coverage.
+- A real client/server association integration test round-trips all NET-003
+  negotiation values and verifies the accepted asynchronous request limit.
+- Focused tests cover finite and unlimited request windows, cancellation while
+  waiting, default and negotiated roles, reverse C-STORE rejection, missing
+  positive identity responses, and malformed role responses.
+- PDU round-trip tests cover AC asynchronous window, Role Selection, Extended
+  Negotiation, and present-empty User Identity responses.
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  passed on Go 1.26.6 for Windows/amd64.
+- `CGO_ENABLED=0 go build ./...` passed and `CGO_ENABLED=0 golangci-lint run`
+  reported 0 issues.
 
 ### NET-004: SOP Class Common Extended Negotiation
 
@@ -749,8 +765,8 @@ Phase acceptance:
 
 Scope: MED-001, NET-003, NET-004, SR-001, IMG-001, CORE-001.
 
-Current progress: MED-001 is complete. NET-003, NET-004, SR-001, IMG-001, and
-CORE-001 remain incomplete; therefore Phase 1 is not complete.
+Current progress: MED-001 and NET-003 are complete. NET-004, SR-001, IMG-001,
+and CORE-001 remain incomplete; therefore Phase 1 is not complete.
 
 Phase acceptance:
 

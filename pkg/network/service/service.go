@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
@@ -50,10 +51,12 @@ type Service struct {
 	config *serviceConfig
 
 	// Message tracking
-	pendingRequests    map[uint16]*pendingRequest
-	pendingRequestsMu  sync.RWMutex
-	activeOperations   map[uint16]*activeOperation
-	activeOperationsMu sync.RWMutex
+	pendingRequests       map[uint16]*pendingRequest
+	pendingRequestsMu     sync.RWMutex
+	activeOperations      map[uint16]*activeOperation
+	activeOperationsMu    sync.RWMutex
+	asyncOperationSlots   chan struct{}
+	asyncOperationSlotsMu sync.RWMutex
 
 	// DIMSE message handlers (optional, for server mode)
 	handlers   *Handlers
@@ -192,6 +195,7 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		associationReleaseHandler:  config.associationReleaseHandler,
 		connectionLifecycleHandler: config.connectionLifecycleHandler,
 	}
+	s.configureAsyncOperationSlots(assoc)
 
 	return s
 }
@@ -200,8 +204,9 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 // This should be called after association negotiation is complete.
 func (s *Service) SetAssociation(assoc *association.Association) {
 	s.assocMu.Lock()
-	defer s.assocMu.Unlock()
 	s.assoc = assoc
+	s.assocMu.Unlock()
+	s.configureAsyncOperationSlots(assoc)
 }
 
 // GetAssociation returns the current association.
@@ -210,6 +215,88 @@ func (s *Service) GetAssociation() *association.Association {
 	s.assocMu.RLock()
 	defer s.assocMu.RUnlock()
 	return s.assoc
+}
+
+func (s *Service) configureAsyncOperationSlots(assoc *association.Association) {
+	maxInvoked := uint16(1)
+	if assoc != nil && assoc.AsynchronousOperations != nil {
+		maxInvoked = assoc.AsynchronousOperations.MaxInvokedOperations
+	}
+
+	var slots chan struct{}
+	if maxInvoked > 0 {
+		slots = make(chan struct{}, maxInvoked)
+	}
+	s.asyncOperationSlotsMu.Lock()
+	s.asyncOperationSlots = slots
+	s.asyncOperationSlotsMu.Unlock()
+}
+
+func (s *Service) acquireAsyncOperation(ctx context.Context) (func(), error) {
+	s.asyncOperationSlotsMu.RLock()
+	slots := s.asyncOperationSlots
+	s.asyncOperationSlotsMu.RUnlock()
+	if slots == nil {
+		return func() {}, nil
+	}
+
+	select {
+	case slots <- struct{}{}:
+		var once sync.Once
+		return func() {
+			once.Do(func() { <-slots })
+		}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-s.closeCh:
+		return nil, s.CloseError()
+	}
+}
+
+func (s *Service) requireLocalRole(pc *association.PresentationContext, scu bool) error {
+	localSCU, localSCP := localRoles(pc, s.config.associationRequestor)
+	if (scu && localSCU) || (!scu && localSCP) {
+		return nil
+	}
+	role := "SCP"
+	if scu {
+		role = "SCU"
+	}
+	return fmt.Errorf("local AE did not negotiate the %s role for presentation context %d (SOP Class %s)",
+		role, pc.ID, pc.AbstractSyntax)
+}
+
+func localRoles(pc *association.PresentationContext, associationRequestor bool) (scu, scp bool) {
+	if pc.AcceptedRole == nil {
+		return associationRequestor, !associationRequestor
+	}
+	if associationRequestor {
+		return pc.AcceptedRole.SCURole == 1, pc.AcceptedRole.SCPRole == 1
+	}
+	return pc.AcceptedRole.SCPRole == 1, pc.AcceptedRole.SCURole == 1
+}
+
+func presentationContextForRequest(assoc *association.Association, req dimse.Request) (*association.PresentationContext, error) {
+	if contextID := req.PresentationContextID(); contextID != 0 {
+		pc := assoc.FindPresentationContextByID(contextID)
+		if pc == nil || !pc.IsAccepted() {
+			return nil, fmt.Errorf("presentation context ID %d is not accepted", contextID)
+		}
+		return pc, nil
+	}
+
+	sopClassUID := req.AffectedSOPClassUID()
+	if sopClassUID == "" && req.CommandDataset() != nil {
+		sopClassUID, _ = req.CommandDataset().GetString(tag.RequestedSOPClassUID)
+	}
+	if sopClassUID == "" {
+		return nil, fmt.Errorf("request has no presentation context ID or SOP Class UID")
+	}
+	pc := assoc.FindPresentationContextByAbstractSyntax(sopClassUID)
+	if pc == nil {
+		return nil, fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
+	}
+	return pc, nil
 }
 
 // GetState returns the current state of the service.

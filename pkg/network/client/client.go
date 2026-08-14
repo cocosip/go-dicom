@@ -126,6 +126,22 @@ type Config struct {
 	// to a peer A-RELEASE-RQ for compatibility with non-conformant PACS.
 	// Default: false.
 	KeepConnectionOnPeerRelease bool
+
+	// AsynchronousOperations requests the DIMSE asynchronous operations window.
+	AsynchronousOperations *association.AsynchronousOperationsWindow
+
+	// RoleSelections requests SCU/SCP roles by SOP Class UID.
+	RoleSelections []*association.RoleSelection
+
+	// ExtendedNegotiations contains requested SOP Class application information.
+	ExtendedNegotiations []*association.ExtendedNegotiation
+
+	// UserIdentity contains the optional association user identity request.
+	UserIdentity *association.UserIdentity
+
+	// RequireSuccessfulUserIdentityNegotiation rejects an association when a
+	// requested positive user identity response is omitted.
+	RequireSuccessfulUserIdentityNegotiation bool
 }
 
 // Option is a function that modifies client configuration.
@@ -215,17 +231,58 @@ func WithKeepConnectionOnPeerRelease(keep bool) Option {
 	}
 }
 
+// WithAsynchronousOperations requests an asynchronous operations window.
+// A value of zero means unlimited operations in that direction.
+func WithAsynchronousOperations(maxInvoked, maxPerformed uint16) Option {
+	return func(o *Config) {
+		o.AsynchronousOperations = association.NewAsynchronousOperationsWindow(maxInvoked, maxPerformed)
+	}
+}
+
+// WithRoleSelection adds or replaces the requested roles for a SOP Class UID.
+func WithRoleSelection(selection *association.RoleSelection) Option {
+	return func(o *Config) {
+		o.RoleSelections = upsertRoleSelection(o.RoleSelections, selection)
+	}
+}
+
+// WithExtendedNegotiation adds or replaces application information for a SOP Class UID.
+func WithExtendedNegotiation(negotiation *association.ExtendedNegotiation) Option {
+	return func(o *Config) {
+		o.ExtendedNegotiations = upsertExtendedNegotiation(o.ExtendedNegotiations, negotiation)
+	}
+}
+
+// WithUserIdentity configures association user identity negotiation.
+func WithUserIdentity(identity *association.UserIdentity) Option {
+	return func(o *Config) {
+		o.UserIdentity = identity.Clone()
+	}
+}
+
+// WithRequireSuccessfulUserIdentityNegotiation controls whether an omitted
+// positive identity response rejects association establishment.
+func WithRequireSuccessfulUserIdentityNegotiation(require bool) Option {
+	return func(o *Config) {
+		o.RequireSuccessfulUserIdentityNegotiation = require
+	}
+}
+
 // defaultClientConfig returns the default client configuration.
 func defaultClientConfig() *Config {
 	return &Config{
-		CallingAE:                 "GO_DICOM_SCU",
-		CalledAE:                  "ANY_SCP",
-		MaxPDULength:              16384,
-		ConnectTimeout:            10 * time.Second,
-		RequestTimeout:            30 * time.Second,
-		AssociationTimeout:        10 * time.Second,
-		ImplementationClassUID:    "1.2.826.0.1.3680043.10.854",
-		ImplementationVersionName: "GO-DICOM-1.0",
+		CallingAE:                                "GO_DICOM_SCU",
+		CalledAE:                                 "ANY_SCP",
+		MaxPDULength:                             16384,
+		ConnectTimeout:                           10 * time.Second,
+		RequestTimeout:                           30 * time.Second,
+		AssociationTimeout:                       10 * time.Second,
+		ImplementationClassUID:                   "1.2.826.0.1.3680043.10.854",
+		ImplementationVersionName:                "GO-DICOM-1.0",
+		AsynchronousOperations:                   association.NewAsynchronousOperationsWindow(1, 1),
+		RoleSelections:                           make([]*association.RoleSelection, 0),
+		ExtendedNegotiations:                     make([]*association.ExtendedNegotiation, 0),
+		RequireSuccessfulUserIdentityNegotiation: true,
 	}
 }
 
@@ -261,6 +318,18 @@ func (c *Client) AddPresentationContext(abstractSyntax string, transferSyntaxes 
 	}
 
 	c.presentationContexts = append(c.presentationContexts, pc)
+}
+
+// AddPresentationContextWithRoles adds a presentation context and requests the
+// calling AE's SCU and SCP roles for its abstract syntax.
+func (c *Client) AddPresentationContextWithRoles(
+	abstractSyntax string,
+	scuRole, scpRole bool,
+	transferSyntaxes ...string,
+) {
+	c.AddPresentationContext(abstractSyntax, transferSyntaxes...)
+	selection := association.NewRoleSelection(abstractSyntax, boolByte(scuRole), boolByte(scpRole))
+	c.config.RoleSelections = upsertRoleSelection(c.config.RoleSelections, selection)
 }
 
 // GetConfig returns the client configuration.
@@ -361,8 +430,77 @@ func (c *Client) buildUserInformation() *pdu.UserInformation {
 		ImplementationClassUID:    c.config.ImplementationClassUID,
 		ImplementationVersionName: c.config.ImplementationVersionName,
 	}
+	if async := c.config.AsynchronousOperations; async != nil &&
+		(async.MaxInvokedOperations != 1 || async.MaxPerformedOperations != 1) {
+		userInfo.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
+			MaximumNumberOperationsInvoked:   async.MaxInvokedOperations,
+			MaximumNumberOperationsPerformed: async.MaxPerformedOperations,
+		}
+	}
+	for _, role := range c.config.RoleSelections {
+		if role == nil {
+			continue
+		}
+		userInfo.SCPSCURoleSelections = append(userInfo.SCPSCURoleSelections, pdu.SCPSCURoleSelection{
+			SOPClassUID: role.SOPClassUID,
+			SCURole:     role.SCURole,
+			SCPRole:     role.SCPRole,
+		})
+	}
+	for _, negotiation := range c.config.ExtendedNegotiations {
+		if negotiation == nil || len(negotiation.RequestedApplicationInfo) == 0 {
+			continue
+		}
+		userInfo.ExtendedNegotiations = append(userInfo.ExtendedNegotiations, pdu.ExtendedNegotiation{
+			SOPClassUID:         negotiation.SOPClassUID,
+			ServiceClassAppInfo: append([]byte(nil), negotiation.RequestedApplicationInfo...),
+		})
+	}
+	if identity := c.config.UserIdentity; identity != nil {
+		userInfo.UserIdentity = &pdu.UserIdentityNegotiation{
+			UserIdentityType:          identity.Type,
+			PositiveResponseRequested: boolByte(identity.PositiveResponseRequested),
+			PrimaryField:              append([]byte(nil), identity.PrimaryField...),
+			SecondaryField:            append([]byte(nil), identity.SecondaryField...),
+		}
+	}
 
 	return userInfo
+}
+
+func boolByte(value bool) byte {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func upsertRoleSelection(values []*association.RoleSelection, selection *association.RoleSelection) []*association.RoleSelection {
+	if selection == nil {
+		return values
+	}
+	copySelection := association.NewRoleSelection(selection.SOPClassUID, selection.SCURole, selection.SCPRole)
+	for i, value := range values {
+		if value != nil && value.SOPClassUID == selection.SOPClassUID {
+			values[i] = copySelection
+			return values
+		}
+	}
+	return append(values, copySelection)
+}
+
+func upsertExtendedNegotiation(values []*association.ExtendedNegotiation, negotiation *association.ExtendedNegotiation) []*association.ExtendedNegotiation {
+	if negotiation == nil {
+		return values
+	}
+	copyNegotiation := association.NewExtendedNegotiation(negotiation.SOPClassUID, negotiation.RequestedApplicationInfo)
+	for i, value := range values {
+		if value != nil && value.SOPClassUID == negotiation.SOPClassUID {
+			values[i] = copyNegotiation
+			return values
+		}
+	}
+	return append(values, copyNegotiation)
 }
 
 // buildAssociateRQ builds an A-ASSOCIATE-RQ PDU with the configured
@@ -404,6 +542,22 @@ func (c *Client) validateAssociateAC(ac *pdu.AAssociateAC) error {
 	}
 
 	return nil
+}
+
+func (c *Client) buildAcceptedAssociation(rq *pdu.AAssociateRQ, ac *pdu.AAssociateAC) (*association.Association, error) {
+	if err := c.validateAssociateAC(ac); err != nil {
+		return nil, err
+	}
+	assoc := association.FromAAssociateRQ(rq)
+	if err := association.ApplyAAssociateAC(assoc, ac); err != nil {
+		return nil, err
+	}
+	identity := assoc.UserIdentity
+	if c.config.RequireSuccessfulUserIdentityNegotiation && identity != nil &&
+		identity.PositiveResponseRequested && identity.ServerResponse == nil {
+		return nil, fmt.Errorf("positive user identity response was requested but not returned")
+	}
+	return assoc, nil
 }
 
 // dial establishes a TCP connection to the remote host.
@@ -452,6 +606,7 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 
 	// Create service
 	svcOpts := []service.Option{
+		service.WithAssociationRequestor(true),
 		service.WithMaxPDULength(c.config.MaxPDULength),
 		service.WithReadTimeout(c.config.RequestTimeout),
 		service.WithWriteTimeout(c.config.RequestTimeout),
@@ -474,14 +629,14 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 		return fmt.Errorf("association rejected: %w", err)
 	}
 
-	// Validate the response
-	if err := c.validateAssociateAC(ac); err != nil {
+	// Validate and merge the response with the original request.
+	acceptedAssociation, err := c.buildAcceptedAssociation(rq, ac)
+	if err != nil {
 		return fmt.Errorf("invalid A-ASSOCIATE-AC: %w", err)
 	}
 
-	// Build association object from the accepted response
 	c.mu.Lock()
-	c.assoc = association.FromAAssociateAC(ac)
+	c.assoc = acceptedAssociation
 	c.mu.Unlock()
 
 	// Map abstract syntaxes from RQ to the accepted contexts in AC

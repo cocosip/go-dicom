@@ -97,6 +97,17 @@ func (s *Service) cancelActiveOperation(messageID uint16) bool {
 // the C-STORE responses — blocking the recv loop would cause a deadlock.
 // Dispatching all request types the same way keeps the design consistent.
 func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
+	assoc := s.GetAssociation()
+	if assoc != nil {
+		pc, err := presentationContextForRequest(assoc, req)
+		if err != nil {
+			return err
+		}
+		if err := s.requireLocalRole(pc, false); err != nil {
+			return err
+		}
+	}
+
 	s.handlersMu.RLock()
 	handlers := s.handlers
 	s.handlersMu.RUnlock()

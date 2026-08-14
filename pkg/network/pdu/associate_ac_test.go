@@ -245,6 +245,74 @@ func TestAAssociateAC_EncodeDecodeWithUserIdentityResponse(t *testing.T) {
 	}
 }
 
+func TestAAssociateAC_PreservesPresentEmptyUserIdentityResponse(t *testing.T) {
+	ac := NewAAssociateAC()
+	ac.CalledAETitle = "CALLED"
+	ac.CallingAETitle = "CALLING"
+	ac.UserInformation.UserIdentityResponse = &UserIdentityNegotiationResponse{
+		ServerResponse: []byte{},
+	}
+
+	raw, err := ac.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	decoded := NewAAssociateAC()
+	if err := decoded.Decode(raw); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if decoded.UserInformation.UserIdentityResponse == nil {
+		t.Fatal("empty user identity response was treated as missing")
+	}
+	if decoded.UserInformation.UserIdentityResponse.ServerResponse == nil {
+		t.Fatal("empty user identity response must retain presence with a non-nil value")
+	}
+	if len(decoded.UserInformation.UserIdentityResponse.ServerResponse) != 0 {
+		t.Fatalf("server response length = %d, want 0", len(decoded.UserInformation.UserIdentityResponse.ServerResponse))
+	}
+}
+
+func TestAAssociateAC_EncodeDecodeAdvancedNegotiation(t *testing.T) {
+	ac := NewAAssociateAC()
+	ac.CalledAETitle = "CALLED"
+	ac.CallingAETitle = "CALLING"
+	ac.UserInformation.AsynchronousOperations = &AsynchronousOperationsWindow{
+		MaximumNumberOperationsInvoked:   3,
+		MaximumNumberOperationsPerformed: 2,
+	}
+	ac.UserInformation.SCPSCURoleSelections = []SCPSCURoleSelection{{
+		SOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+		SCURole:     1,
+		SCPRole:     1,
+	}}
+	ac.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{{
+		SOPClassUID:         "1.2.840.10008.5.1.4.1.1.2",
+		ServiceClassAppInfo: []byte{1, 0, 1},
+	}}
+
+	raw, err := ac.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	decoded := NewAAssociateAC()
+	if err := decoded.Decode(raw); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	async := decoded.UserInformation.AsynchronousOperations
+	if async == nil || async.MaximumNumberOperationsInvoked != 3 || async.MaximumNumberOperationsPerformed != 2 {
+		t.Fatalf("decoded async window = %#v", async)
+	}
+	if got := decoded.UserInformation.SCPSCURoleSelections; len(got) != 1 ||
+		got[0].SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" || got[0].SCURole != 1 || got[0].SCPRole != 1 {
+		t.Fatalf("decoded role selections = %#v", got)
+	}
+	if got := decoded.UserInformation.ExtendedNegotiations; len(got) != 1 ||
+		got[0].SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" ||
+		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
+		t.Fatalf("decoded extended negotiations = %#v", got)
+	}
+}
+
 func TestAAssociateAC_DecodeInvalidPDUType(t *testing.T) {
 	pdu := NewRawPDU(TypeAAssociateRQ, []byte{0x00})
 

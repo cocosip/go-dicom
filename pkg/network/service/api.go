@@ -179,6 +179,11 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 	if assoc == nil {
 		return zero, fmt.Errorf("no association available")
 	}
+	release, err := s.acquireAsyncOperation(ctx)
+	if err != nil {
+		return zero, err
+	}
+	defer release()
 	msgID, err := assoc.AssignMessageID(req)
 	if err != nil {
 		return zero, fmt.Errorf("failed to assign message ID: %w", err)
@@ -221,8 +226,13 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	if assoc == nil {
 		return nil, fmt.Errorf("no association available")
 	}
+	release, err := s.acquireAsyncOperation(ctx)
+	if err != nil {
+		return nil, err
+	}
 	msgID, err := assoc.AssignMessageID(req)
 	if err != nil {
+		release()
 		return nil, fmt.Errorf("failed to assign message ID: %w", err)
 	}
 	resultCh := make(chan Resp, 10)
@@ -232,12 +242,14 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	if err := s.Send(ctx, req); err != nil {
 		s.unregisterPendingRequest(msgID)
 		close(resultCh)
+		release()
 		return nil, fmt.Errorf("%s: %w", errMsg, err)
 	}
 
 	go func() {
 		defer close(resultCh)
 		defer s.unregisterPendingRequest(msgID)
+		defer release()
 		for {
 			select {
 			case respMsg, ok := <-respCh:
@@ -299,10 +311,15 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 	if assoc == nil {
 		return nil, fmt.Errorf("no association available")
 	}
+	release, err := s.acquireAsyncOperation(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// Assign message ID from association
 	msgID, err := assoc.AssignMessageID(req)
 	if err != nil {
+		release()
 		return nil, fmt.Errorf("failed to assign message ID: %w", err)
 	}
 
@@ -319,6 +336,7 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 	if err := s.Send(ctx, req); err != nil {
 		s.unregisterPendingRequest(msgID)
 		close(resultCh)
+		release()
 		return nil, err
 	}
 
@@ -326,6 +344,7 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 	go func() {
 		defer close(resultCh)
 		defer s.unregisterPendingRequest(msgID)
+		defer release()
 
 		for {
 			select {

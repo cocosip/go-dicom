@@ -15,6 +15,10 @@ type Option func(*serviceConfig)
 
 // serviceConfig contains configuration options for a DICOM service.
 type serviceConfig struct {
+	// associationRequestor indicates that the local AE initiated the association.
+	// The default is false for services accepting inbound associations.
+	associationRequestor bool
+
 	// maxPDULength is the maximum PDU length in bytes.
 	// Default: 16384 (16 KB)
 	// DICOM standard allows up to 2^32-1, but practical limits are lower.
@@ -109,6 +113,14 @@ func WithSendQueueSize(size int) Option {
 func WithKeepConnectionOnPeerRelease(keep bool) Option {
 	return func(c *serviceConfig) {
 		c.keepConnectionOnPeerRelease = keep
+	}
+}
+
+// WithAssociationRequestor identifies whether the local AE initiated the
+// association. This controls the direction of negotiated SCU/SCP roles.
+func WithAssociationRequestor(requestor bool) Option {
+	return func(c *serviceConfig) {
+		c.associationRequestor = requestor
 	}
 }
 

@@ -44,12 +44,16 @@ type Association struct {
 
 	// SCP/SCU Role Selection (optional)
 	RoleSelections []*RoleSelection
+	// RequestedRoleSelections retains the roles proposed by the requestor.
+	RequestedRoleSelections []*RoleSelection
 
 	// User Identity (optional)
 	UserIdentity *UserIdentity
 
 	// Asynchronous Operations Window (optional)
 	AsynchronousOperations *AsynchronousOperationsWindow
+	// RequestedAsynchronousOperations retains the requestor's proposed values.
+	RequestedAsynchronousOperations *AsynchronousOperationsWindow
 
 	// Association state
 	IsEstablished bool
@@ -75,6 +79,7 @@ func NewAssociation(callingAE, calledAE string) *Association {
 		PresentationContexts:      make([]*PresentationContext, 0),
 		ExtendedNegotiations:      make([]*ExtendedNegotiation, 0),
 		RoleSelections:            make([]*RoleSelection, 0),
+		RequestedRoleSelections:   make([]*RoleSelection, 0),
 		IsEstablished:             false,
 		messageIDGen:              dimse.NewMessageIDGenerator(), // One generator per association
 	}
@@ -250,6 +255,12 @@ type PresentationContext struct {
 	// 3 = abstract-syntax-not-supported (provider rejection)
 	// 4 = transfer-syntaxes-not-supported (provider rejection)
 	Result byte
+
+	// RequestedRole is the role selection proposed for this abstract syntax.
+	RequestedRole *RoleSelection
+
+	// AcceptedRole is the role selection returned by the association acceptor.
+	AcceptedRole *RoleSelection
 }
 
 // Acceptance result codes
@@ -388,15 +399,34 @@ type ExtendedNegotiation struct {
 	SOPClassUID string
 
 	// ServiceClassAppInfo is the application information (SOP Class specific)
+	// Deprecated: use RequestedApplicationInfo and AcceptedApplicationInfo.
 	ServiceClassAppInfo []byte
+
+	// RequestedApplicationInfo is the application information proposed by the requestor.
+	RequestedApplicationInfo []byte
+
+	// AcceptedApplicationInfo is the application information returned by the acceptor.
+	AcceptedApplicationInfo []byte
 }
 
 // NewExtendedNegotiation creates a new extended negotiation item.
 func NewExtendedNegotiation(sopClassUID string, appInfo []byte) *ExtendedNegotiation {
+	requested := append([]byte(nil), appInfo...)
 	return &ExtendedNegotiation{
-		SOPClassUID:         sopClassUID,
-		ServiceClassAppInfo: appInfo,
+		SOPClassUID:              sopClassUID,
+		ServiceClassAppInfo:      requested,
+		RequestedApplicationInfo: requested,
 	}
+}
+
+// AcceptApplicationInfo records the accepted application information while
+// discarding fields that were not present in the request.
+func (e *ExtendedNegotiation) AcceptApplicationInfo(appInfo []byte) {
+	if e == nil || len(e.RequestedApplicationInfo) == 0 {
+		return
+	}
+	length := min(len(appInfo), len(e.RequestedApplicationInfo))
+	e.AcceptedApplicationInfo = append([]byte(nil), appInfo[:length]...)
 }
 
 // ServiceApplicationInfo encapsulates the Service Class Application Information field
@@ -597,19 +627,70 @@ const (
 
 // NewUserIdentityUsername creates a username-only user identity.
 func NewUserIdentityUsername(username string, responseRequested bool) *UserIdentity {
-	return &UserIdentity{
-		Type:                      UserIdentityTypeUsername,
-		PositiveResponseRequested: responseRequested,
-		PrimaryField:              []byte(username),
-	}
+	return NewUserIdentity(UserIdentityTypeUsername, []byte(username), nil, responseRequested)
 }
 
 // NewUserIdentityUsernamePassword creates a username+password user identity.
 func NewUserIdentityUsernamePassword(username, password string) *UserIdentity {
+	return NewUserIdentityUsernamePasswordWithResponse(username, password, false)
+}
+
+// NewUserIdentityUsernamePasswordWithResponse creates a username and password identity.
+func NewUserIdentityUsernamePasswordWithResponse(username, password string, responseRequested bool) *UserIdentity {
+	return NewUserIdentity(UserIdentityTypeUsernamePassword, []byte(username), []byte(password), responseRequested)
+}
+
+// NewUserIdentityKerberos creates a Kerberos service ticket identity.
+func NewUserIdentityKerberos(ticket []byte, responseRequested bool) *UserIdentity {
+	return NewUserIdentity(UserIdentityTypeKerberos, ticket, nil, responseRequested)
+}
+
+// NewUserIdentitySAML creates a SAML assertion identity.
+func NewUserIdentitySAML(assertion []byte, responseRequested bool) *UserIdentity {
+	return NewUserIdentity(UserIdentityTypeSAML, assertion, nil, responseRequested)
+}
+
+// NewUserIdentityJWT creates a JSON Web Token identity.
+func NewUserIdentityJWT(token []byte, responseRequested bool) *UserIdentity {
+	return NewUserIdentity(UserIdentityTypeJWT, token, nil, responseRequested)
+}
+
+// NewUserIdentity creates a user identity from raw fields.
+func NewUserIdentity(identityType byte, primary, secondary []byte, responseRequested bool) *UserIdentity {
 	return &UserIdentity{
-		Type:           UserIdentityTypeUsernamePassword,
-		PrimaryField:   []byte(username),
-		SecondaryField: []byte(password),
+		Type:                      identityType,
+		PositiveResponseRequested: responseRequested,
+		PrimaryField:              append([]byte(nil), primary...),
+		SecondaryField:            append([]byte(nil), secondary...),
+	}
+}
+
+// Validate checks the user identity type and field combination.
+func (u *UserIdentity) Validate() error {
+	if u == nil {
+		return fmt.Errorf("user identity cannot be nil")
+	}
+	if u.Type < UserIdentityTypeUsername || u.Type > UserIdentityTypeJWT {
+		return fmt.Errorf("unsupported user identity type %d", u.Type)
+	}
+	if u.Type != UserIdentityTypeUsernamePassword && len(u.SecondaryField) != 0 {
+		return fmt.Errorf("secondary user identity field is only valid for username and password")
+	}
+	return nil
+
+}
+
+// Clone returns a defensive copy of the identity fields and server response.
+func (u *UserIdentity) Clone() *UserIdentity {
+	if u == nil {
+		return nil
+	}
+	return &UserIdentity{
+		Type:                      u.Type,
+		PositiveResponseRequested: u.PositiveResponseRequested,
+		PrimaryField:              append([]byte(nil), u.PrimaryField...),
+		SecondaryField:            append([]byte(nil), u.SecondaryField...),
+		ServerResponse:            append([]byte(nil), u.ServerResponse...),
 	}
 }
 
@@ -646,27 +727,28 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
 
 		// Asynchronous operations
 		if rq.UserInformation.AsynchronousOperations != nil {
-			assoc.AsynchronousOperations = &AsynchronousOperationsWindow{
+			requested := &AsynchronousOperationsWindow{
 				MaxInvokedOperations:   rq.UserInformation.AsynchronousOperations.MaximumNumberOperationsInvoked,
 				MaxPerformedOperations: rq.UserInformation.AsynchronousOperations.MaximumNumberOperationsPerformed,
 			}
+			assoc.RequestedAsynchronousOperations = requested
+			assoc.AsynchronousOperations = cloneAsynchronousOperationsWindow(requested)
 		}
 
 		// Role selections
 		for _, rs := range rq.UserInformation.SCPSCURoleSelections {
-			assoc.AddRoleSelection(&RoleSelection{
+			requested := &RoleSelection{
 				SOPClassUID: rs.SOPClassUID,
 				SCURole:     rs.SCURole,
 				SCPRole:     rs.SCPRole,
-			})
+			}
+			assoc.RequestedRoleSelections = append(assoc.RequestedRoleSelections, requested)
+			assoc.AddRoleSelection(cloneRoleSelection(requested))
 		}
 
 		// Extended negotiations
 		for _, en := range rq.UserInformation.ExtendedNegotiations {
-			assoc.AddExtendedNegotiation(&ExtendedNegotiation{
-				SOPClassUID:         en.SOPClassUID,
-				ServiceClassAppInfo: en.ServiceClassAppInfo,
-			})
+			assoc.AddExtendedNegotiation(NewExtendedNegotiation(en.SOPClassUID, en.ServiceClassAppInfo))
 		}
 
 		// User identity
@@ -702,8 +784,141 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
 
 		_ = assoc.AddPresentationContext(pc)
 	}
+	for _, role := range assoc.RequestedRoleSelections {
+		for _, pc := range assoc.PresentationContexts {
+			if pc.AbstractSyntax == role.SOPClassUID {
+				pc.RequestedRole = cloneRoleSelection(role)
+			}
+		}
+	}
 
 	return assoc
+}
+
+// ApplyAAssociateAC merges an association acceptance into the original request
+// association so callers can inspect both proposed and accepted values.
+func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC) error {
+	if assoc == nil || ac == nil {
+		return fmt.Errorf("association request and acceptance cannot be nil")
+	}
+	if ac.UserInformation == nil {
+		return fmt.Errorf("A-ASSOCIATE-AC User Information is missing")
+	}
+
+	assoc.ProtocolVersion = ac.ProtocolVersion
+	assoc.MaxPDULength = ac.UserInformation.MaximumLength
+	assoc.ImplementationClassUID = ac.UserInformation.ImplementationClassUID
+	assoc.ImplementationVersionName = ac.UserInformation.ImplementationVersionName
+
+	seenContexts := make(map[byte]struct{}, len(ac.PresentationContexts))
+	for i := range ac.PresentationContexts {
+		accepted := &ac.PresentationContexts[i]
+		if _, duplicate := seenContexts[accepted.ID]; duplicate {
+			return fmt.Errorf("A-ASSOCIATE-AC contains duplicate presentation context ID %d", accepted.ID)
+		}
+		seenContexts[accepted.ID] = struct{}{}
+		pc := assoc.FindPresentationContextByID(accepted.ID)
+		if pc == nil {
+			return fmt.Errorf("A-ASSOCIATE-AC contains unknown presentation context ID %d", accepted.ID)
+		}
+		pc.Result = accepted.Result
+		pc.AcceptedTransferSyntax = nil
+		if accepted.Result == pdu.ResultAcceptance {
+			if accepted.TransferSyntax == "" {
+				return fmt.Errorf("accepted presentation context %d has no transfer syntax", accepted.ID)
+			}
+			syntax, err := transfer.Parse(accepted.TransferSyntax)
+			if err != nil {
+				return fmt.Errorf("accepted presentation context %d transfer syntax: %w", accepted.ID, err)
+			}
+			if !pc.HasTransferSyntax(syntax) {
+				return fmt.Errorf("presentation context %d accepted an unproposed transfer syntax", accepted.ID)
+			}
+			pc.AcceptedTransferSyntax = syntax
+		}
+	}
+	if len(seenContexts) != len(assoc.PresentationContexts) {
+		return fmt.Errorf("A-ASSOCIATE-AC returned %d presentation contexts, want %d", len(seenContexts), len(assoc.PresentationContexts))
+	}
+
+	assoc.AsynchronousOperations = &AsynchronousOperationsWindow{MaxInvokedOperations: 1, MaxPerformedOperations: 1}
+	if async := ac.UserInformation.AsynchronousOperations; async != nil {
+		assoc.AsynchronousOperations = &AsynchronousOperationsWindow{
+			MaxInvokedOperations:   async.MaximumNumberOperationsInvoked,
+			MaxPerformedOperations: async.MaximumNumberOperationsPerformed,
+		}
+	}
+
+	assoc.RoleSelections = assoc.RoleSelections[:0]
+	for _, pc := range assoc.PresentationContexts {
+		pc.AcceptedRole = nil
+	}
+	for _, accepted := range ac.UserInformation.SCPSCURoleSelections {
+		if accepted.SCURole > 1 || accepted.SCPRole > 1 {
+			return fmt.Errorf("A-ASSOCIATE-AC returned invalid role values for SOP Class %s", accepted.SOPClassUID)
+		}
+		requested := findRoleSelection(assoc.RequestedRoleSelections, accepted.SOPClassUID)
+		if requested == nil {
+			return fmt.Errorf("A-ASSOCIATE-AC returned role selection for unrequested SOP Class %s", accepted.SOPClassUID)
+		}
+		if accepted.SCURole > requested.SCURole {
+			return fmt.Errorf("A-ASSOCIATE-AC accepted an unrequested SCU role for SOP Class %s", accepted.SOPClassUID)
+		}
+		if accepted.SCPRole > requested.SCPRole {
+			return fmt.Errorf("A-ASSOCIATE-AC accepted an unrequested SCP role for SOP Class %s", accepted.SOPClassUID)
+		}
+		role := &RoleSelection{SOPClassUID: accepted.SOPClassUID, SCURole: accepted.SCURole, SCPRole: accepted.SCPRole}
+		assoc.RoleSelections = append(assoc.RoleSelections, role)
+		for _, pc := range assoc.PresentationContexts {
+			if pc.AbstractSyntax == accepted.SOPClassUID {
+				pc.AcceptedRole = cloneRoleSelection(role)
+			}
+		}
+	}
+
+	for _, accepted := range ac.UserInformation.ExtendedNegotiations {
+		if requested := assoc.FindExtendedNegotiation(accepted.SOPClassUID); requested != nil {
+			requested.AcceptApplicationInfo(accepted.ServiceClassAppInfo)
+		}
+	}
+	if assoc.UserIdentity != nil {
+		response := ac.UserInformation.UserIdentityResponse
+		if response == nil && ac.UserInformation.UserIdentity != nil && ac.UserInformation.UserIdentity.PositiveResponseRequested == 1 {
+			response = &pdu.UserIdentityNegotiationResponse{ServerResponse: ac.UserInformation.UserIdentity.PrimaryField}
+		}
+		if response != nil {
+			assoc.UserIdentity.ServerResponse = append([]byte{}, response.ServerResponse...)
+		}
+	}
+
+	assoc.IsEstablished = true
+	return nil
+}
+
+func cloneAsynchronousOperationsWindow(value *AsynchronousOperationsWindow) *AsynchronousOperationsWindow {
+	if value == nil {
+		return nil
+	}
+	return &AsynchronousOperationsWindow{
+		MaxInvokedOperations:   value.MaxInvokedOperations,
+		MaxPerformedOperations: value.MaxPerformedOperations,
+	}
+}
+
+func cloneRoleSelection(value *RoleSelection) *RoleSelection {
+	if value == nil {
+		return nil
+	}
+	return &RoleSelection{SOPClassUID: value.SOPClassUID, SCURole: value.SCURole, SCPRole: value.SCPRole}
+}
+
+func findRoleSelection(values []*RoleSelection, sopClassUID string) *RoleSelection {
+	for _, value := range values {
+		if value != nil && value.SOPClassUID == sopClassUID {
+			return value
+		}
+	}
+	return nil
 }
 
 // FromAAssociateAC creates an Association from an A-ASSOCIATE-AC PDU.
@@ -803,25 +1018,51 @@ func ToAAssociateAC(assoc *Association) *pdu.AAssociateAC {
 	}
 
 	// Role selections
+	for _, pc := range assoc.PresentationContexts {
+		pc.AcceptedRole = nil
+	}
 	for _, rs := range assoc.RoleSelections {
-		ac.UserInformation.SCPSCURoleSelections = append(ac.UserInformation.SCPSCURoleSelections, pdu.SCPSCURoleSelection{
+		if rs == nil {
+			continue
+		}
+		requested := findRoleSelection(assoc.RequestedRoleSelections, rs.SOPClassUID)
+		if requested == nil {
+			continue
+		}
+		accepted := &RoleSelection{
 			SOPClassUID: rs.SOPClassUID,
-			SCURole:     rs.SCURole,
-			SCPRole:     rs.SCPRole,
+			SCURole:     rs.SCURole & requested.SCURole,
+			SCPRole:     rs.SCPRole & requested.SCPRole,
+		}
+		for _, pc := range assoc.PresentationContexts {
+			if pc.AbstractSyntax == accepted.SOPClassUID {
+				pc.AcceptedRole = cloneRoleSelection(accepted)
+			}
+		}
+		ac.UserInformation.SCPSCURoleSelections = append(ac.UserInformation.SCPSCURoleSelections, pdu.SCPSCURoleSelection{
+			SOPClassUID: accepted.SOPClassUID,
+			SCURole:     accepted.SCURole,
+			SCPRole:     accepted.SCPRole,
 		})
 	}
 
 	// Extended negotiations
 	for _, en := range assoc.ExtendedNegotiations {
+		if en == nil || en.AcceptedApplicationInfo == nil {
+			continue
+		}
 		ac.UserInformation.ExtendedNegotiations = append(ac.UserInformation.ExtendedNegotiations, pdu.ExtendedNegotiation{
 			SOPClassUID:         en.SOPClassUID,
-			ServiceClassAppInfo: en.ServiceClassAppInfo,
+			ServiceClassAppInfo: append([]byte(nil), en.AcceptedApplicationInfo...),
 		})
 	}
 
-	// User identity response (if applicable)
-	// Note: Server response is typically handled separately in user identity negotiation
-	// and is not included in A-ASSOCIATE-AC in the current implementation
+	// User identity response (if explicitly supplied by the acceptor).
+	if assoc.UserIdentity != nil && assoc.UserIdentity.ServerResponse != nil {
+		ac.UserInformation.UserIdentityResponse = &pdu.UserIdentityNegotiationResponse{
+			ServerResponse: append([]byte{}, assoc.UserIdentity.ServerResponse...),
+		}
+	}
 
 	// Convert presentation contexts
 	for _, pc := range assoc.PresentationContexts {
@@ -892,9 +1133,12 @@ func ToAAssociateRQ(assoc *Association) *pdu.AAssociateRQ {
 
 	// Extended negotiations
 	for _, en := range assoc.ExtendedNegotiations {
+		if en == nil || len(en.RequestedApplicationInfo) == 0 {
+			continue
+		}
 		rq.UserInformation.ExtendedNegotiations = append(rq.UserInformation.ExtendedNegotiations, pdu.ExtendedNegotiation{
 			SOPClassUID:         en.SOPClassUID,
-			ServiceClassAppInfo: en.ServiceClassAppInfo,
+			ServiceClassAppInfo: append([]byte(nil), en.RequestedApplicationInfo...),
 		})
 	}
 

@@ -23,7 +23,7 @@ func TestSend(t *testing.T) {
 	assoc := createTestAssociation()
 
 	// Create service
-	service := NewService(client, assoc)
+	service := NewService(client, assoc, WithAssociationRequestor(true))
 	defer func() { _ = service.Close() }()
 
 	// Set state to allow DIMSE sending
@@ -98,7 +98,7 @@ func TestSend_ContextCancellation(t *testing.T) {
 
 	// Create service (don't start it so send queue blocks)
 	assoc := createTestAssociation()
-	service := NewService(client, assoc)
+	service := NewService(client, assoc, WithAssociationRequestor(true))
 	defer func() { _ = service.Close() }()
 
 	// Set state to allow DIMSE sending
@@ -133,7 +133,7 @@ func TestSendWithTimeout(t *testing.T) {
 	assoc := createTestAssociation()
 
 	// Create service
-	service := NewService(client, assoc)
+	service := NewService(client, assoc, WithAssociationRequestor(true))
 	defer func() { _ = service.Close() }()
 
 	// Set state to allow DIMSE sending
@@ -211,7 +211,7 @@ func TestSend_WrongState(t *testing.T) {
 
 	// Create service
 	assoc := createTestAssociation()
-	service := NewService(client, assoc)
+	service := NewService(client, assoc, WithAssociationRequestor(true))
 	defer func() { _ = service.Close() }()
 
 	// Set state to one that doesn't allow sending

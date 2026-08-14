@@ -203,23 +203,67 @@ func (a *AAssociateAC) encodeUserInformation() ([]byte, error) {
 		}
 	}
 
-	// User Identity Negotiation Response (optional)
-	// In A-ASSOCIATE-AC, this is a response to the RQ's UserIdentity
-	if ui.UserIdentity != nil && ui.UserIdentity.PositiveResponseRequested == 1 {
+	// Asynchronous Operations Window Sub-item (optional)
+	if ui.AsynchronousOperations != nil {
+		asyncData := make([]byte, 4)
+		binary.BigEndian.PutUint16(asyncData[0:2], ui.AsynchronousOperations.MaximumNumberOperationsInvoked)
+		binary.BigEndian.PutUint16(asyncData[2:4], ui.AsynchronousOperations.MaximumNumberOperationsPerformed)
+		if err := writeItem(&buf, ItemTypeAsynchronousOperationsWindow, asyncData); err != nil {
+			return nil, fmt.Errorf("encoding async operations: %w", err)
+		}
+	}
+
+	// SCP/SCU Role Selection Sub-items (optional)
+	for _, role := range ui.SCPSCURoleSelections {
+		if len(role.SOPClassUID) > int(math.MaxUint16) {
+			return nil, fmt.Errorf("SOP Class UID length too large: %d", len(role.SOPClassUID))
+		}
+		var roleData bytes.Buffer
+		_ = binary.Write(&roleData, binary.BigEndian, uint16(len(role.SOPClassUID))) // #nosec G115 -- bounded above
+		roleData.WriteString(role.SOPClassUID)
+		roleData.WriteByte(role.SCURole)
+		roleData.WriteByte(role.SCPRole)
+		if err := writeItem(&buf, ItemTypeSCPSCURoleSelection, roleData.Bytes()); err != nil {
+			return nil, fmt.Errorf("encoding role selection: %w", err)
+		}
+	}
+
+	// SOP Class Extended Negotiation Sub-items (optional)
+	for _, negotiation := range ui.ExtendedNegotiations {
+		if len(negotiation.SOPClassUID) > int(math.MaxUint16) {
+			return nil, fmt.Errorf("extended negotiation SOP Class UID length too large: %d", len(negotiation.SOPClassUID))
+		}
+		var negotiationData bytes.Buffer
+		_ = binary.Write(&negotiationData, binary.BigEndian, uint16(len(negotiation.SOPClassUID))) // #nosec G115 -- bounded above
+		negotiationData.WriteString(negotiation.SOPClassUID)
+		negotiationData.Write(negotiation.ServiceClassAppInfo)
+		if err := writeItem(&buf, ItemTypeExtendedNegotiation, negotiationData.Bytes()); err != nil {
+			return nil, fmt.Errorf("encoding extended negotiation: %w", err)
+		}
+	}
+
+	// User Identity Negotiation Response (optional).
+	response := ui.UserIdentityResponse
+	if response == nil && ui.UserIdentity != nil && ui.UserIdentity.PositiveResponseRequested == 1 {
+		// Preserve compatibility with callers that used the request structure to
+		// represent an AC response before UserIdentityResponse was available.
+		response = &UserIdentityNegotiationResponse{ServerResponse: ui.UserIdentity.PrimaryField}
+	}
+	if response != nil {
 		var uiBuf bytes.Buffer
 
 		// Server response length (2 bytes)
-		if len(ui.UserIdentity.PrimaryField) > int(math.MaxUint16) {
-			return nil, fmt.Errorf("user identity response length too large: %d", len(ui.UserIdentity.PrimaryField))
+		if len(response.ServerResponse) > int(math.MaxUint16) {
+			return nil, fmt.Errorf("user identity response length too large: %d", len(response.ServerResponse))
 		}
-		serverResponseLen := uint16(len(ui.UserIdentity.PrimaryField)) // #nosec G115 -- bounded by check above
+		serverResponseLen := uint16(len(response.ServerResponse)) // #nosec G115 -- bounded by check above
 		if err := binary.Write(&uiBuf, binary.BigEndian, serverResponseLen); err != nil {
 			return nil, fmt.Errorf("encoding user identity response length: %w", err)
 		}
 
 		// Server response data
 		if serverResponseLen > 0 {
-			uiBuf.Write(ui.UserIdentity.PrimaryField)
+			uiBuf.Write(response.ServerResponse)
 		}
 
 		if err := writeItem(&buf, ItemTypeUserIdentityNegotiationResponse, uiBuf.Bytes()); err != nil {
@@ -353,19 +397,42 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 		case ItemTypeImplementationVersionName:
 			ui.ImplementationVersionName = string(itemData)
 
+		case ItemTypeAsynchronousOperationsWindow:
+			if len(itemData) != 4 {
+				return nil, fmt.Errorf("invalid asynchronous operations window: %d bytes", len(itemData))
+			}
+			ui.AsynchronousOperations = &AsynchronousOperationsWindow{
+				MaximumNumberOperationsInvoked:   binary.BigEndian.Uint16(itemData[0:2]),
+				MaximumNumberOperationsPerformed: binary.BigEndian.Uint16(itemData[2:4]),
+			}
+
+		case ItemTypeSCPSCURoleSelection:
+			role, err := decodeRoleSelection(itemData)
+			if err != nil {
+				return nil, fmt.Errorf("decoding role selection: %w", err)
+			}
+			ui.SCPSCURoleSelections = append(ui.SCPSCURoleSelections, *role)
+
+		case ItemTypeExtendedNegotiation:
+			negotiation, err := decodeExtendedNegotiation(itemData)
+			if err != nil {
+				return nil, fmt.Errorf("decoding extended negotiation: %w", err)
+			}
+			ui.ExtendedNegotiations = append(ui.ExtendedNegotiations, *negotiation)
+
 		case ItemTypeUserIdentityNegotiationResponse:
 			// Server response to user identity
 			if len(itemData) < 2 {
 				return nil, fmt.Errorf("invalid user identity response: %d bytes", len(itemData))
 			}
 			serverResponseLen := binary.BigEndian.Uint16(itemData[0:2])
-			var serverResponse []byte
-			if serverResponseLen > 0 {
-				if len(itemData) < int(2+serverResponseLen) {
-					return nil, fmt.Errorf("invalid user identity response length")
-				}
-				serverResponse = itemData[2 : 2+serverResponseLen]
+			if len(itemData) != int(2+serverResponseLen) {
+				return nil, fmt.Errorf("invalid user identity response length")
 			}
+			serverResponse := make([]byte, int(serverResponseLen))
+			copy(serverResponse, itemData[2:])
+			ui.UserIdentityResponse = &UserIdentityNegotiationResponse{ServerResponse: serverResponse}
+			// Preserve the legacy decoded representation.
 			ui.UserIdentity = &UserIdentityNegotiation{
 				PositiveResponseRequested: 1, // Response was provided
 				PrimaryField:              serverResponse,

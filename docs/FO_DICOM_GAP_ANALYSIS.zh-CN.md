@@ -48,7 +48,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | NET-002 | P0 | Complete | C-STORE 传输语法选择与自动转码 |
 | STD-001 | P0 | Complete | 可复现且保持最新的标准生成表 |
 | MED-001 | P1 | Complete | DICOMDIR 介质目录模型及读写工作流 |
-| NET-003 | P1 | Partial | 通过高层客户端执行高级关联协商 |
+| NET-003 | P1 | Complete | 通过高层客户端执行高级关联协商 |
 | NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | 完整的结构化报告值类型和文件工作流 |
 | IMG-001 | P1 | Partial | Dataset 驱动的图像渲染管线 |
@@ -66,13 +66,13 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 截至 2026-08-15：
 
-- **已完成：** NET-001、NET-002、STD-001、MED-001、ANON-001 和 DICT-001。
-- **未完成：** DOC-001、NET-003、NET-004、
+- **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、ANON-001 和 DICT-001。
+- **未完成：** DOC-001、NET-004、
   SR-001、IMG-001、CORE-001、IMG-002、CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **建议下一项：** NET-003。补齐已经建模的高级关联协商路径。DOC-001 继续延后，
+- **建议下一项：** NET-004。补齐 SOP Class Common Extended Negotiation。DOC-001 继续延后，
   等其他主要能力完成后再统一审计，避免文档随新增 API 反复调整。
 
 ## 详细差距
@@ -262,10 +262,19 @@ SERIES、IMAGE、SR DOCUMENT 和 PRESENTATION 记录，并在读取时保留未�
 
 ### NET-003: 高级关联协商
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P1`
 
-PDU 和 association 包已经建模 User Identity、Asynchronous Operations Window、SCP/SCU Role Selection 和 SOP Class Extended Negotiation。高层客户端没有这些值的配置入口，`buildUserInformation` 只发送最大 PDU 长度和实现标识。
+高层客户端现已提供 Asynchronous Operations Window、SCP/SCU Role Selection、
+SOP Class Extended Negotiation 和 User Identity 配置入口。User Identity 支持
+Username、Username/Password、Kerberos、SAML 和 JWT；关联建立后同时保留请求值和
+接受值。
+
+请求 Positive User Identity 响应时，客户端默认要求服务端返回响应；兼容选项可显式
+允许响应缺失。协商后的最大 invoked operations 会实际限制尚未完成的 DIMSE 请求数，
+`0` 表示无限；最大 performed operations 与 fo-dicom 一致，仅协商并暴露，不限制
+接收线程。Role Selection 与 Presentation Context 绑定，并约束普通请求和反向
+C-STORE 子操作。Common Extended Negotiation `0x57` 仍由 NET-004 跟踪。
 
 **验收标准**
 
@@ -275,11 +284,17 @@ PDU 和 association 包已经建模 User Identity、Asynchronous Operations Wind
 - 异步操作限制由请求调度器实际执行，而不只是在线路上编码。
 - Role Selection 在适用时影响请求和子操作行为。
 
-**建议验证**
+**验证证据**
 
-- 执行编码/解码测试以及客户端/服务端关联集成测试。
-- 在协商异步窗口限制之下、等于限制和超过限制时执行并发请求测试。
-- 覆盖拒绝和异常响应。
+- 真实客户端/服务端关联集成测试往返全部 NET-003 协商值，并验证接受后的异步请求限制。
+- 聚焦测试覆盖有限和无限请求窗口、等待时取消、默认和协商角色、反向 C-STORE 拒绝、
+  Positive Identity 响应缺失以及异常 Role 响应。
+- PDU 往返测试覆盖 AC 异步窗口、Role Selection、Extended Negotiation 和存在但为空的
+  User Identity 响应。
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  在 Go 1.26.6 Windows/amd64 上通过。
+- `CGO_ENABLED=0 go build ./...` 通过，`CGO_ENABLED=0 golangci-lint run`
+  报告 0 个问题。
 
 ### NET-004: SOP Class Common Extended Negotiation
 
@@ -634,7 +649,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：MED-001、NET-003、NET-004、SR-001、IMG-001、CORE-001。
 
-当前进度：MED-001 已完成；NET-003、NET-004、SR-001、IMG-001 和 CORE-001
+当前进度：MED-001 和 NET-003 已完成；NET-004、SR-001、IMG-001 和 CORE-001
 仍未完成，因此 Phase 1 尚未完成。
 
 阶段验收：

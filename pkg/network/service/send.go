@@ -116,6 +116,11 @@ func (s *Service) sendMessage(req *sendRequest) error {
 			return fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
 		}
 	}
+	if dimse.CommandField(message.CommandField()).IsRequest() {
+		if err := s.requireLocalRole(pc, true); err != nil {
+			return err
+		}
+	}
 
 	// Get transfer syntax from presentation context
 	transferSyntax := pc.AcceptedTransferSyntax

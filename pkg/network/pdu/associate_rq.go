@@ -33,13 +33,14 @@ type PresentationContextRQ struct {
 
 // UserInformation represents the User Information item.
 type UserInformation struct {
-	MaximumLength             uint32                        // Maximum PDU length (0 = unlimited)
-	ImplementationClassUID    string                        // Implementation Class UID
-	ImplementationVersionName string                        // Implementation Version Name
-	AsynchronousOperations    *AsynchronousOperationsWindow // Optional: Async operations
-	SCPSCURoleSelections      []SCPSCURoleSelection         // Optional: Role selections
-	ExtendedNegotiations      []ExtendedNegotiation         // Optional: Extended negotiations
-	UserIdentity              *UserIdentityNegotiation      // Optional: User identity
+	MaximumLength             uint32                           // Maximum PDU length (0 = unlimited)
+	ImplementationClassUID    string                           // Implementation Class UID
+	ImplementationVersionName string                           // Implementation Version Name
+	AsynchronousOperations    *AsynchronousOperationsWindow    // Optional: Async operations
+	SCPSCURoleSelections      []SCPSCURoleSelection            // Optional: Role selections
+	ExtendedNegotiations      []ExtendedNegotiation            // Optional: Extended negotiations
+	UserIdentity              *UserIdentityNegotiation         // Optional: User identity
+	UserIdentityResponse      *UserIdentityNegotiationResponse // Optional: A-ASSOCIATE-AC identity response
 }
 
 // AsynchronousOperationsWindow represents async operations sub-item.
@@ -67,6 +68,13 @@ type UserIdentityNegotiation struct {
 	PositiveResponseRequested byte   // 0=no response, 1=response requested
 	PrimaryField              []byte // Username or ticket
 	SecondaryField            []byte // Password (only if Type=2)
+}
+
+// UserIdentityNegotiationResponse represents the positive response sub-item
+// carried by A-ASSOCIATE-AC. A non-nil value with an empty ServerResponse is
+// distinct from an omitted response sub-item.
+type UserIdentityNegotiationResponse struct {
+	ServerResponse []byte
 }
 
 // NewAAssociateRQ creates a new A-ASSOCIATE-RQ PDU with default values.

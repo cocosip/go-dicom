@@ -4,6 +4,7 @@
 package association
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
@@ -69,8 +70,8 @@ func TestAssociation_FindPresentationContextByID(t *testing.T) {
 	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian)
 
-    _ = assoc.AddPresentationContext(pc1)
-    _ = assoc.AddPresentationContext(pc3)
+	_ = assoc.AddPresentationContext(pc1)
+	_ = assoc.AddPresentationContext(pc3)
 
 	// Find existing context
 	found := assoc.FindPresentationContextByID(1)
@@ -97,8 +98,8 @@ func TestAssociation_FindPresentationContextByAbstractSyntax(t *testing.T) {
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ImplicitVRLittleEndian)
 	pc3.Reject(ResultAbstractSyntaxNotSupported)
 
-    _ = assoc.AddPresentationContext(pc1)
-    _ = assoc.AddPresentationContext(pc3)
+	_ = assoc.AddPresentationContext(pc1)
+	_ = assoc.AddPresentationContext(pc3)
 
 	// Find accepted context
 	found := assoc.FindPresentationContextByAbstractSyntax("1.2.840.10008.5.1.4.1.1.2")
@@ -125,9 +126,9 @@ func TestAssociation_GetAcceptedPresentationContexts(t *testing.T) {
 	pc5 := NewPresentationContext(5, "1.2.840.10008.5.1.4.1.1.4", transfer.ExplicitVRLittleEndian)
 	pc5.Accept(transfer.ExplicitVRLittleEndian)
 
-    _ = assoc.AddPresentationContext(pc1)
-    _ = assoc.AddPresentationContext(pc3)
-    _ = assoc.AddPresentationContext(pc5)
+	_ = assoc.AddPresentationContext(pc1)
+	_ = assoc.AddPresentationContext(pc3)
+	_ = assoc.AddPresentationContext(pc5)
 
 	accepted := assoc.GetAcceptedPresentationContexts()
 	if len(accepted) != 2 {
@@ -212,8 +213,8 @@ func TestAssociation_String(t *testing.T) {
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ImplicitVRLittleEndian)
 	pc3.Reject(ResultUserRejection)
 
-    _ = assoc.AddPresentationContext(pc1)
-    _ = assoc.AddPresentationContext(pc3)
+	_ = assoc.AddPresentationContext(pc1)
+	_ = assoc.AddPresentationContext(pc3)
 
 	str := assoc.String()
 	expected := "Association[MY_SCU -> PACS_SERVER, 1/2 contexts accepted, MaxPDU=16384]"
@@ -285,6 +286,39 @@ func TestNewUserIdentityUsernamePassword(t *testing.T) {
 	}
 }
 
+func TestUserIdentityTypesValidateWithoutExposingPayloads(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity *UserIdentity
+		wantType byte
+	}{
+		{name: "username", identity: NewUserIdentityUsername("user", true), wantType: UserIdentityTypeUsername},
+		{name: "username and password", identity: NewUserIdentityUsernamePasswordWithResponse("user", "secret", true), wantType: UserIdentityTypeUsernamePassword},
+		{name: "kerberos", identity: NewUserIdentityKerberos([]byte{1, 2, 3}, true), wantType: UserIdentityTypeKerberos},
+		{name: "SAML", identity: NewUserIdentitySAML([]byte("assertion"), true), wantType: UserIdentityTypeSAML},
+		{name: "JWT", identity: NewUserIdentityJWT([]byte("token"), true), wantType: UserIdentityTypeJWT},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.identity.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+			if tt.identity.Type != tt.wantType {
+				t.Fatalf("identity type = %d, want %d", tt.identity.Type, tt.wantType)
+			}
+		})
+	}
+
+	invalid := NewUserIdentity(UserIdentityTypeJWT, []byte("token"), []byte("sensitive-secondary"), true)
+	err := invalid.Validate()
+	if err == nil {
+		t.Fatal("Validate() accepted a JWT secondary field")
+	}
+	if bytes.Contains([]byte(err.Error()), invalid.PrimaryField) || bytes.Contains([]byte(err.Error()), invalid.SecondaryField) {
+		t.Fatalf("validation error exposed identity payload: %v", err)
+	}
+}
+
 func TestNewAsynchronousOperationsWindow(t *testing.T) {
 	async := NewAsynchronousOperationsWindow(5, 10)
 
@@ -303,7 +337,7 @@ func TestAssociation_GetTransferSyntaxForAbstractSyntax(t *testing.T) {
 	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
 	pc1.Accept(transfer.ExplicitVRLittleEndian)
 
-    _ = assoc.AddPresentationContext(pc1)
+	_ = assoc.AddPresentationContext(pc1)
 
 	// Find transfer syntax for accepted context
 	ts := assoc.GetTransferSyntaxForAbstractSyntax("1.2.840.10008.5.1.4.1.1.2")

@@ -144,8 +144,10 @@ Known parity gaps and the staged plan for addressing them are tracked in
   - [x] TLS support (secure DICOM connections)
   - [x] Concurrent-safe operations
   - [x] 401+ unit tests with >85% code coverage
+  - [x] Asynchronous Operations Window negotiation with request throttling
   - [x] Advanced role negotiation (SCP/SCU Role Selection)
   - [x] Extended negotiation items (SOP Class Extended Negotiation)
+  - [x] User Identity negotiation (Username, Username/Password, Kerberos, SAML, JWT)
   - [x] ServiceApplicationInfo helper type
 
 - [x] **Image Codecs**
@@ -1253,6 +1255,60 @@ func main() {
     fmt.Println("C-ECHO successful - DICOM server is alive")
 }
 ```
+
+### DICOM Networking - Advanced Association Negotiation
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+
+    "github.com/cocosip/go-dicom/pkg/network/association"
+    "github.com/cocosip/go-dicom/pkg/network/client"
+)
+
+func main() {
+    const ctImageStorage = "1.2.840.10008.5.1.4.1.1.2"
+
+    c := client.New(
+        client.WithCallingAE("GO-SCU"),
+        client.WithCalledAE("ANY-SCP"),
+        client.WithAsynchronousOperations(4, 2),
+        client.WithExtendedNegotiation(
+            association.NewExtendedNegotiation(ctImageStorage, []byte{1, 1, 0}),
+        ),
+        client.WithUserIdentity(
+            association.NewUserIdentityJWT([]byte(os.Getenv("DICOM_JWT")), true),
+        ),
+    )
+    c.AddPresentationContextWithRoles(
+        ctImageStorage,
+        true, // request the SCU role
+        true, // request the SCP role for C-GET C-STORE sub-operations
+        "1.2.840.10008.1.2.1",
+    )
+
+    ctx := context.Background()
+    if err := c.Connect(ctx, "localhost", 11112); err != nil {
+        log.Fatal(err)
+    }
+    defer c.Close()
+
+    accepted := c.GetAssociation()
+    log.Printf("accepted async window: %d/%d",
+        accepted.AsynchronousOperations.MaxInvokedOperations,
+        accepted.AsynchronousOperations.MaxPerformedOperations,
+    )
+}
+```
+
+When a positive User Identity response is requested, the client rejects an
+association that omits it by default. Use
+`client.WithRequireSuccessfulUserIdentityNegotiation(false)` only when an
+empty response is an intentional compatibility requirement.
 
 ### DICOM Networking - TLS Secure Connection
 
