@@ -159,6 +159,9 @@ type Writer struct {
 	largeObjectSize             uint32 // Threshold for large objects
 	implementationClassUID      string // Implementation Class UID for File Meta Information
 	implementationVersionName   string // Implementation Version Name for File Meta Information
+	sequenceItemObserver        SequenceItemObserver
+	positionWriter              *positionWriter
+	baseOffset                  uint64
 }
 
 // WriteOption is a functional option for Write function.
@@ -176,6 +179,7 @@ type writeConfig struct {
 	largeObjectSize             uint32 // Threshold for large objects (default: 1MB)
 	implementationClassUID      string // Implementation Class UID (default: auto-generated)
 	implementationVersionName   string // Implementation Version Name (default: GO-DICOM_1.0)
+	sequenceItemObserver        SequenceItemObserver
 }
 
 // WithTransferSyntax specifies the transfer syntax to use.
@@ -341,6 +345,9 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	if config.transferSyntax == nil {
 		return fmt.Errorf("transfer syntax cannot be nil")
 	}
+	if config.sequenceItemObserver != nil && config.transferSyntax.IsDeflate() {
+		return fmt.Errorf("sequence item positions are unavailable for deflated transfer syntax")
+	}
 
 	// If largeObjectSize is explicitly set to 0, use default
 	if config.largeObjectSize == 0 {
@@ -357,6 +364,12 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		explicitLengthSequenceItems: config.explicitLengthSequenceItems,
 		keepGroupLengths:            config.keepGroupLengths,
 		largeObjectSize:             config.largeObjectSize,
+		sequenceItemObserver:        config.sequenceItemObserver,
+	}
+	if config.sequenceItemObserver != nil {
+		positioned := &positionWriter{writer: w}
+		writer.writer = positioned
+		writer.positionWriter = positioned
 	}
 
 	// Store implementation info in writer for use in generateFileMetaInformation
@@ -829,17 +842,20 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 		defer buffer.PutBytesBuffer(itemsBuf)
 
 		itemsWriter := &Writer{
-			writer:                      itemsBuf,
 			byteOrder:                   w.byteOrder,
 			isExplicitVR:                w.isExplicitVR,
+			explicitLengthSequences:     w.explicitLengthSequences,
 			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
 			keepGroupLengths:            w.keepGroupLengths,
 			largeObjectSize:             w.largeObjectSize,
+			sequenceItemObserver:        w.sequenceItemObserver,
+			baseOffset:                  w.currentOffset() + 4,
 		}
+		itemsWriter.setOutput(itemsBuf)
 
 		for i := 0; i < seq.Count(); i++ {
 			item := seq.GetItem(i)
-			if err := itemsWriter.writeItem(item); err != nil {
+			if err := itemsWriter.writeItem(seq.Tag(), item); err != nil {
 				return fmt.Errorf("failed to write item %d: %w", i, err)
 			}
 		}
@@ -864,7 +880,7 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 		// Write items
 		for i := 0; i < seq.Count(); i++ {
 			item := seq.GetItem(i)
-			if err := w.writeItem(item); err != nil {
+			if err := w.writeItem(seq.Tag(), item); err != nil {
 				return fmt.Errorf("failed to write item %d: %w", i, err)
 			}
 		}
@@ -883,7 +899,11 @@ func (w *Writer) writeSequence(seq *dataset.Sequence) error {
 }
 
 // writeItem writes a single item within a sequence.
-func (w *Writer) writeItem(item *dataset.Dataset) error {
+func (w *Writer) writeItem(sequenceTag *tag.Tag, item *dataset.Dataset) error {
+	if err := w.observeSequenceItem(sequenceTag, item); err != nil {
+		return err
+	}
+
 	// Write Item tag (FFFE,E000)
 	itemTag := tag.New(0xFFFE, 0xE000)
 	if err := w.writeTag(itemTag); err != nil {
@@ -898,14 +918,16 @@ func (w *Writer) writeItem(item *dataset.Dataset) error {
 		defer buffer.PutBytesBuffer(elementsBuf)
 
 		elementsWriter := &Writer{
-			writer:                      elementsBuf,
 			byteOrder:                   w.byteOrder,
 			isExplicitVR:                w.isExplicitVR,
 			explicitLengthSequences:     w.explicitLengthSequences,
 			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
 			keepGroupLengths:            w.keepGroupLengths,
 			largeObjectSize:             w.largeObjectSize,
+			sequenceItemObserver:        w.sequenceItemObserver,
+			baseOffset:                  w.currentOffset() + 4,
 		}
+		elementsWriter.setOutput(elementsBuf)
 
 		// Write all elements in the item
 		elements := item.Elements()
@@ -950,6 +972,38 @@ func (w *Writer) writeItem(item *dataset.Dataset) error {
 		}
 	}
 
+	return nil
+}
+
+func (w *Writer) setOutput(output io.Writer) {
+	if w.sequenceItemObserver == nil {
+		w.writer = output
+		return
+	}
+	positioned := &positionWriter{writer: output}
+	w.writer = positioned
+	w.positionWriter = positioned
+}
+
+func (w *Writer) currentOffset() uint64 {
+	if w.positionWriter == nil {
+		return w.baseOffset
+	}
+	return w.baseOffset + w.positionWriter.offset
+}
+
+func (w *Writer) observeSequenceItem(sequenceTag *tag.Tag, item *dataset.Dataset) error {
+	if w.sequenceItemObserver == nil {
+		return nil
+	}
+	offset := w.currentOffset()
+	if err := w.sequenceItemObserver(SequenceItemPosition{
+		SequenceTag: sequenceTag,
+		Item:        item,
+		Offset:      offset,
+	}); err != nil {
+		return fmt.Errorf("sequence item observer failed for %s at offset %d: %w", sequenceTag, offset, err)
+	}
 	return nil
 }
 

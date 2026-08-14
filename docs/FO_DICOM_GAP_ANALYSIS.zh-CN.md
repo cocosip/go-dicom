@@ -47,7 +47,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | NET-001 | P0 | Complete | 支持 TLS 的高层 DICOM 客户端 |
 | NET-002 | P0 | Complete | C-STORE 传输语法选择与自动转码 |
 | STD-001 | P0 | Complete | 可复现且保持最新的标准生成表 |
-| MED-001 | P1 | Open | DICOMDIR 介质目录模型及读写工作流 |
+| MED-001 | P1 | Complete | DICOMDIR 介质目录模型及读写工作流 |
 | NET-003 | P1 | Partial | 通过高层客户端执行高级关联协商 |
 | NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | 完整的结构化报告值类型和文件工作流 |
@@ -64,16 +64,16 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 ## 实施进度
 
-截至 2026-08-14：
+截至 2026-08-15：
 
-- **已完成：** NET-001、NET-002、STD-001、ANON-001 和 DICT-001。
-- **未完成：** DOC-001、MED-001、NET-003、NET-004、
+- **已完成：** NET-001、NET-002、STD-001、MED-001、ANON-001 和 DICT-001。
+- **未完成：** DOC-001、NET-003、NET-004、
   SR-001、IMG-001、CORE-001、IMG-002、CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **建议下一项：** DOC-001。在开始 Phase 1 功能开发前，重新审计并修正其余公共
-  能力声明。
+- **建议下一项：** NET-003。补齐已经建模的高级关联协商路径。DOC-001 继续延后，
+  等其他主要能力完成后再统一审计，避免文档随新增 API 反复调整。
 
 ## 详细差距
 
@@ -223,10 +223,17 @@ XML 并重新生成的方式，不提供 fo-dicom 源码下载工具。
 
 ### MED-001: DICOMDIR
 
-**状态：** `Open`  
+**状态：** `Complete`
 **优先级：** `P1`
 
-通用解析可以读取 DICOMDIR 元素，但不存在介质目录领域模型。fo-dicom 提供目录记录、层级遍历、偏移修复、文件添加、读写工作流和可选的图标图像生成。
+已于 2026-08-15 完成。`pkg/media` 现在提供 DICOMDIR 创建、严格/兼容读取、
+层级遍历、确定性文件分组、受限偏移修复和两遍写入。支持 PATIENT、STUDY、
+SERIES、IMAGE、SR DOCUMENT 和 PRESENTATION 记录，并在读取时保留未知记录类型。
+不会扫描、复制、移动、重命名或重写引用文件。
+
+可选图标生成由 `pkg/imaging` 通过结构化接口实现，`pkg/media` 与 `pkg/imaging`
+互不导入。图标使用现有纯 Go codec registry，渲染代表帧、保持宽高比，并生成
+最大 128x128 的 8 位 MONOCHROME2 图像。
 
 参考：[fo-dicom Media](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Media)
 
@@ -238,11 +245,20 @@ XML 并重新生成的方式，不提供 fo-dicom 源码下载工具。
 - 对错误或过期偏移提供有文档说明的严格/兼容行为。
 - 图标生成保持可选，并与目录核心解耦。
 
-**建议验证**
+**验证证据**
 
-- 对真实 DICOMDIR 固件执行往返测试。
-- 测试重复或匿名化标识符、长文件 ID、无效偏移和缺失可选属性。
-- 使用 fo-dicom 交叉打开生成的 DICOMDIR 文件。
+- 聚焦测试覆盖 File ID 校验、重复和匿名化分组、缺失属性、精确偏移、固定差值与
+  类型/物理顺序恢复、歧义、循环、重复引用、不可达记录、writer 错误、源对象不变、
+  代表帧和图标失败。
+- 13,796 字节的 fo-dicom DICOMDIR 固件可在严格模式下读取 80 条记录，并通过
+  两种受支持的目录传输语法往返。
+- fo-dicom 6.0.0-alpha1 成功打开 Go 生成的 Explicit 和 Implicit VR Little
+  Endian DICOMDIR；9 条记录的层级、类型计数和 Referenced File ID 完全一致。
+- `CGO_ENABLED=0 go test ./pkg/media ./pkg/imaging/... -count=1` 通过；未增加 CGo
+  指令、C 导入或原生依赖。
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  通过。
+- `CGO_ENABLED=0 golangci-lint run` 报告 0 个问题。
 
 ### NET-003: 高级关联协商
 
@@ -617,6 +633,9 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 ### Phase 1: 主要领域能力对标
 
 范围：MED-001、NET-003、NET-004、SR-001、IMG-001、CORE-001。
+
+当前进度：MED-001 已完成；NET-003、NET-004、SR-001、IMG-001 和 CORE-001
+仍未完成，因此 Phase 1 尚未完成。
 
 阶段验收：
 

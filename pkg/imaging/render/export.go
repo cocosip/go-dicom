@@ -70,15 +70,39 @@ func (e *ImageExporter) ExportGrayscale(
 	if options == nil {
 		options = DefaultExportOptions()
 	}
+	img, err := e.RenderGrayscaleImage(pixelData, width, height, bitsAllocated, isSigned, photometric)
+	if err != nil {
+		return err
+	}
+	return e.encodeImage(writer, img, options)
+}
 
-	// Create RGBA image
+// RenderGrayscaleImage renders grayscale pixels into an 8-bit image without encoding it.
+func (e *ImageExporter) RenderGrayscaleImage(
+	pixelData []byte,
+	width, height int,
+	bitsAllocated int,
+	isSigned bool,
+	photometric string,
+) (*image.Gray, error) {
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("image dimensions must be positive")
+	}
+	if bitsAllocated != 8 && bitsAllocated != 16 {
+		return nil, fmt.Errorf("unsupported grayscale bits allocated: %d", bitsAllocated)
+	}
+	bytesPerPixel := bitsAllocated / 8
+	required := width * height * bytesPerPixel
+	if len(pixelData) < required {
+		return nil, fmt.Errorf("grayscale pixel data too short: got %d bytes, need %d", len(pixelData), required)
+	}
+
 	img := image.NewGray(image.Rect(0, 0, width, height))
 
 	// Apply pipeline LUT if available
 	lut := e.pipeline.LUT()
 
 	// Process pixels
-	bytesPerPixel := bitsAllocated / 8
 	isMonochrome1 := photometric == "MONOCHROME1"
 
 	for y := 0; y < height; y++ {
@@ -114,7 +138,7 @@ func (e *ImageExporter) ExportGrayscale(
 		}
 	}
 
-	return e.encodeImage(writer, img, options)
+	return img, nil
 }
 
 // ExportRGB exports RGB pixel data to an image format
@@ -129,11 +153,32 @@ func (e *ImageExporter) ExportRGB(
 	if options == nil {
 		options = DefaultExportOptions()
 	}
+	img, err := e.RenderRGBImage(pixelData, width, height, photometric, planarConfig)
+	if err != nil {
+		return err
+	}
+	return e.encodeImage(writer, img, options)
+}
+
+// RenderRGBImage converts supported color pixels into an RGBA image without encoding it.
+func (e *ImageExporter) RenderRGBImage(
+	pixelData []byte,
+	width, height int,
+	photometric string,
+	planarConfig int,
+) (*image.RGBA, error) {
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("image dimensions must be positive")
+	}
 
 	// Convert to RGB if needed
 	rgbData, err := e.converter.ConvertToRGB(pixelData, width, height, photometric, planarConfig)
 	if err != nil {
-		return fmt.Errorf("failed to convert to RGB: %w", err)
+		return nil, fmt.Errorf("failed to convert to RGB: %w", err)
+	}
+	required := width * height * 3
+	if len(rgbData) < required {
+		return nil, fmt.Errorf("RGB pixel data too short: got %d bytes, need %d", len(rgbData), required)
 	}
 
 	// Create RGBA image
@@ -165,7 +210,7 @@ func (e *ImageExporter) ExportRGB(
 		}
 	}
 
-	return e.encodeImage(writer, img, options)
+	return img, nil
 }
 
 func (e *ImageExporter) encodeImage(writer io.Writer, img image.Image, options *ExportOptions) error {

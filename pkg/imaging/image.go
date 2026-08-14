@@ -6,6 +6,7 @@ package imaging
 
 import (
 	"fmt"
+	"image"
 	"io"
 	"sync"
 
@@ -14,8 +15,8 @@ import (
 )
 
 const (
-	monochrome2                         = "MONOCHROME2"
-	transferSyntaxExplicitVRBigEndian   = "1.2.840.10008.1.2.2"
+	monochrome2                          = "MONOCHROME2"
+	transferSyntaxExplicitVRBigEndian    = "1.2.840.10008.1.2.2"
 	transferSyntaxExplicitVRLittleEndian = "1.2.840.10008.1.2.1"
 	transferSyntaxImplicitVRLittleEndian = "1.2.840.10008.1.2"
 )
@@ -288,6 +289,47 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 		)
 	default:
 		return fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Info.SamplesPerPixel)
+	}
+}
+
+// RenderFrameImage renders the specified frame and returns the unencoded Go image.
+func (img *DicomImage) RenderFrameImage(frame int) (image.Image, error) {
+	if frame < 0 || frame >= img.NumberOfFrames() {
+		return nil, fmt.Errorf("frame index out of range: %d", frame)
+	}
+	frameData, err := img.pixelData.GetFrame(frame)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get frame data: %w", err)
+	}
+	exporter := render.NewImageExporter(img.GetOrCreatePipeline(frame))
+	switch img.pixelData.Info.SamplesPerPixel {
+	case 1:
+		photometric := monochrome2
+		if img.pixelData.Info.PhotometricInterpretation != nil {
+			photometric = img.pixelData.Info.PhotometricInterpretation.Value
+		}
+		return exporter.RenderGrayscaleImage(
+			frameData,
+			int(img.Width()),
+			int(img.Height()),
+			int(img.pixelData.Info.BitsAllocated),
+			img.pixelData.Info.PixelRepresentation == SignedPixels,
+			photometric,
+		)
+	case 3:
+		photometric := photometricRGB
+		if img.pixelData.Info.PhotometricInterpretation != nil {
+			photometric = img.pixelData.Info.PhotometricInterpretation.Value
+		}
+		return exporter.RenderRGBImage(
+			frameData,
+			int(img.Width()),
+			int(img.Height()),
+			photometric,
+			int(img.pixelData.Info.PlanarConfiguration),
+		)
+	default:
+		return nil, fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Info.SamplesPerPixel)
 	}
 }
 

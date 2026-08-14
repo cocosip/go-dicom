@@ -153,6 +153,8 @@ type parseContext struct {
 	readOption            ReadOption       // How to handle large elements
 	largeObjectSize       uint32           // Size threshold for "large" objects (default 64KB)
 	assumedTransferSyntax *transfer.Syntax // Transfer syntax to use for raw datasets without file meta
+	sequenceItemObserver  SequenceItemObserver
+	position              *readerPosition
 
 	// File format detection
 	detectedFormat FileFormat
@@ -278,6 +280,44 @@ type ctxReadSeeker struct {
 	rs  io.ReadSeeker
 }
 
+type readerPosition struct {
+	offset uint64
+}
+
+type positionReader struct {
+	r        io.Reader
+	position *readerPosition
+}
+
+func (r *positionReader) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	r.position.offset += uint64(n) // #nosec G115 -- Read never returns a negative count
+	return n, err
+}
+
+type positionReadSeeker struct {
+	rs       io.ReadSeeker
+	position *readerPosition
+}
+
+func (r *positionReadSeeker) Read(p []byte) (int, error) {
+	n, err := r.rs.Read(p)
+	r.position.offset += uint64(n) // #nosec G115 -- Read never returns a negative count
+	return n, err
+}
+
+func (r *positionReadSeeker) Seek(offset int64, whence int) (int64, error) {
+	position, err := r.rs.Seek(offset, whence)
+	if err != nil {
+		return 0, err
+	}
+	if position < 0 {
+		return 0, fmt.Errorf("reader returned negative position %d", position)
+	}
+	r.position.offset = uint64(position)
+	return position, nil
+}
+
 func (c *ctxReadSeeker) Read(p []byte) (int, error) {
 	if err := c.ctx.Err(); err != nil {
 		return 0, err
@@ -330,6 +370,9 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 	if err := p.detectFormatAndPrepareReader(); err != nil {
 		return nil, fmt.Errorf("failed to detect file format: %w", err)
 	}
+	if p.sequenceItemObserver != nil {
+		p.startPositionTracking()
+	}
 
 	// Read File Meta Information (Group 0002)
 	// This is always Explicit VR Little Endian
@@ -366,6 +409,29 @@ func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
 		Format:              p.detectedFormat,
 		IsPartial:           p.isPartial,
 	}, nil
+}
+
+func (p *parseContext) startPositionTracking() {
+	position := &readerPosition{}
+	if p.detectedFormat == FormatDICOM3 {
+		position.offset = 132
+	}
+
+	if p.seekableReader != nil {
+		tracked := &positionReadSeeker{rs: p.seekableReader, position: position}
+		p.seekableReader = tracked
+		p.reader = tracked
+	} else {
+		p.reader = &positionReader{r: p.reader, position: position}
+	}
+	p.position = position
+}
+
+func (p *parseContext) currentPosition() uint64 {
+	if p.position == nil {
+		return 0
+	}
+	return p.position.offset
 }
 
 func (p *parseContext) contextAwareReader(r io.Reader) io.Reader {
@@ -566,6 +632,9 @@ func (p *parseContext) applyTransferSyntax(ts *transfer.Syntax) error {
 	}
 
 	if ts.IsDeflate() {
+		if p.sequenceItemObserver != nil {
+			return fmt.Errorf("sequence item positions are unavailable for deflated transfer syntax")
+		}
 		if p.hasFirstDatasetTag {
 			p.reader = io.MultiReader(bytes.NewReader(p.firstDatasetTagRaw[:]), p.reader)
 			p.hasFirstDatasetTag = false
@@ -948,6 +1017,7 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 			}
 			itemCount++
 
+			itemOffset := p.currentPosition()
 			itemTag, err := p.readTag()
 			if err != nil {
 				return nil, err
@@ -981,12 +1051,16 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 			}
 
 			seq.AddItem(item)
+			if err := p.observeSequenceItem(t, item, itemOffset); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		// Defined-length sequence: parse directly from a bounded stream to avoid
 		// allocating and copying the whole sequence payload.
 		err := p.withBoundedReader(length, func(lr *io.LimitedReader) error {
 			for lr.N > 0 {
+				itemOffset := p.currentPosition()
 				itemTag, err := p.readTag()
 				if err != nil {
 					return err
@@ -1010,6 +1084,9 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 				}
 
 				seq.AddItem(item)
+				if err := p.observeSequenceItem(t, item, itemOffset); err != nil {
+					return err
+				}
 			}
 			return nil
 		})
@@ -1019,6 +1096,20 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 	}
 
 	return seq, nil
+}
+
+func (p *parseContext) observeSequenceItem(sequenceTag *tag.Tag, item *dataset.Dataset, offset uint64) error {
+	if p.sequenceItemObserver == nil {
+		return nil
+	}
+	if err := p.sequenceItemObserver(SequenceItemPosition{
+		SequenceTag: sequenceTag,
+		Item:        item,
+		Offset:      offset,
+	}); err != nil {
+		return fmt.Errorf("sequence item observer failed for %s at offset %d: %w", sequenceTag, offset, err)
+	}
+	return nil
 }
 
 // readItemDataset reads a single item dataset within a sequence.

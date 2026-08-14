@@ -51,7 +51,7 @@ Priority indicates implementation order, not estimated effort:
 | NET-001 | P0 | Complete | TLS-enabled high-level DICOM client |
 | NET-002 | P0 | Complete | C-STORE transfer syntax selection and automatic transcoding |
 | STD-001 | P0 | Complete | Reproducible and current generated standard tables |
-| MED-001 | P1 | Open | DICOMDIR media directory model and read/write workflow |
+| MED-001 | P1 | Complete | DICOMDIR media directory model and read/write workflow |
 | NET-003 | P1 | Partial | Advanced association negotiation through the high-level client |
 | NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | Complete Structured Report value types and file workflow |
@@ -68,16 +68,17 @@ Priority indicates implementation order, not estimated effort:
 
 ## Implementation Progress
 
-Progress as of 2026-08-14:
+Progress as of 2026-08-15:
 
-- **Complete:** NET-001, NET-002, STD-001, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, MED-001, NET-003,
+- **Complete:** NET-001, NET-002, STD-001, MED-001, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, NET-003,
   NET-004, SR-001, IMG-001, CORE-001, IMG-002, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Recommended next item:** DOC-001. Re-audit and correct the remaining public
-  capability statements before starting Phase 1 implementation work.
+- **Recommended next item:** NET-003. Complete the already modeled advanced
+  association negotiation path. DOC-001 remains deferred until the other major
+  capability work is complete, so its final audit reflects the finished API.
 
 ## Detailed Gaps
 
@@ -257,13 +258,20 @@ fo-dicom source downloader is included.
 
 ### MED-001: DICOMDIR
 
-**Status:** `Open`  
+**Status:** `Complete`
 **Priority:** `P1`
 
-Generic parsing can read DICOMDIR elements, but there is no media directory
-domain model. fo-dicom provides directory records, hierarchical traversal,
-offset repair, file addition, read/write workflows, and optional icon image
-generation.
+Completed on 2026-08-15. Package `pkg/media` now provides DICOMDIR creation,
+strict and compatible reading, hierarchical traversal, deterministic file
+grouping, bounded offset recovery, and two-pass writing. It supports PATIENT,
+STUDY, SERIES, IMAGE, SR DOCUMENT, and PRESENTATION records and preserves
+unknown record types. Referenced files are not scanned, copied, moved, renamed,
+or rewritten.
+
+Optional icon generation is implemented by `pkg/imaging` through a structural
+interface, so `pkg/media` and `pkg/imaging` do not import each other. Icons use
+the existing pure-Go codec registry, render a representative frame, preserve
+aspect ratio, and produce 8-bit MONOCHROME2 images no larger than 128x128.
 
 Reference: [fo-dicom Media](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Media)
 
@@ -275,12 +283,22 @@ Reference: [fo-dicom Media](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0
 - Support malformed or stale offsets with documented strict/compatible behavior.
 - Make icon generation optional and independent from the directory core.
 
-**Suggested verification**
+**Verification evidence**
 
-- Round-trip real DICOMDIR fixtures.
-- Test duplicate/anonymized identifiers, long file IDs, invalid offsets, and
-  missing optional attributes.
-- Cross-open generated DICOMDIR files with fo-dicom.
+- Focused tests cover File ID validation, duplicate and anonymized grouping,
+  missing attributes, exact offsets, fixed-delta and type/order recovery,
+  ambiguity, cycles, duplicate references, unreachable records, writer errors,
+  source immutability, representative frames, and icon failures.
+- The 13,796-byte fo-dicom DICOMDIR fixture opens in strict mode with 80 records
+  and round-trips through both supported directory transfer syntaxes.
+- fo-dicom 6.0.0-alpha1 opened Go-generated Explicit and Implicit VR Little
+  Endian DICOMDIR files with identical 9-record hierarchy, type counts, and
+  Referenced File IDs.
+- `CGO_ENABLED=0 go test ./pkg/media ./pkg/imaging/... -count=1` passed. No CGo
+  directives, C imports, or native dependencies were added.
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  passed.
+- `CGO_ENABLED=0 golangci-lint run` reported 0 issues.
 
 ### NET-003: Advanced Association Negotiation
 
@@ -730,6 +748,9 @@ Phase acceptance:
 ### Phase 1: Major Domain Parity
 
 Scope: MED-001, NET-003, NET-004, SR-001, IMG-001, CORE-001.
+
+Current progress: MED-001 is complete. NET-003, NET-004, SR-001, IMG-001, and
+CORE-001 remain incomplete; therefore Phase 1 is not complete.
 
 Phase acceptance:
 

@@ -19,6 +19,7 @@ Known parity gaps and the staged plan for addressing them are tracked in
 ### Core Capabilities ✅
 
 - ✅ **DICOM File I/O** - Read and write DICOM files with full standard compliance
+- ✅ **DICOMDIR Media** - Create, read, traverse, repair, and save media directories with optional image icons
 - ✅ **Transfer Syntax Support** - Explicit/Implicit VR, Big/Little Endian
 - ✅ **Multi-Frame Images** - Full support for multi-frame and video DICOM files
 - ✅ **Character Encoding** - 30+ character sets with auto-detection (UTF-8, Latin, Chinese, Japanese, Korean, Arabic, etc.)
@@ -76,6 +77,13 @@ Known parity gaps and the staged plan for addressing them are tracked in
   - [x] Structured Reports (SR) with hierarchical content
   - [x] Modality LUT Sequences
   - [x] Character set variants (17+ tested encodings)
+
+- [x] **DICOMDIR Media**
+  - [x] Patient/study/series/instance grouping and traversal
+  - [x] Strict validation and bounded compatible offset recovery
+  - [x] Two-pass Explicit/Implicit VR Little Endian writing
+  - [x] Optional pure-Go 8-bit grayscale icon generation
+  - [x] fo-dicom fixture and cross-library interoperability verification
 
 - [x] **JSON/XML Serialization**
   - [x] DICOM JSON Model (Part 18 compliant)
