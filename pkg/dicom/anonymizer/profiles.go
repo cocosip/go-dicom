@@ -4,8 +4,9 @@
 package anonymizer
 
 import (
-	"bufio"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -352,68 +353,40 @@ func mustCompile(pattern string) *regexp.Regexp {
 	return re
 }
 
-// NewProfileFromReader creates a custom security profile from a reader.
-// Format: tag_pattern;action (one per line)
+// NewProfileFromReader creates a custom security profile from reader.
+//
+// It accepts explicit tag_pattern;action rules and fo-dicom-compatible rows
+// containing tag_pattern followed by the 11 SecurityProfileOptions columns.
+// Blank lines and lines beginning with # are ignored; other malformed input
+// returns an error with the source line number.
+//
 // Example:
 //
 //	0010,0010;Z
 //	0010,0020;Z
 //	0008,0018;K
-func NewProfileFromReader(reader *strings.Reader, _ SecurityProfileOptions) (*SecurityProfile, error) {
+func NewProfileFromReader(reader io.Reader, options SecurityProfileOptions) (*SecurityProfile, error) {
 	profile := &SecurityProfile{
 		rules: make([]profileRule, 0),
 	}
-
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.Split(line, ";")
-		if len(parts) != 2 {
-			continue
-		}
-
-		pattern := strings.TrimSpace(parts[0])
-		actionStr := strings.TrimSpace(parts[1])
-
-		var action SecurityProfileAction
-		switch actionStr {
-		case "D":
-			action = ActionD
-		case "Z":
-			action = ActionZ
-		case "X":
-			action = ActionX
-		case "K":
-			action = ActionK
-		case "C":
-			action = ActionC
-		case "U":
-			action = ActionU
-		default:
-			continue
-		}
-
-		if err := profile.AddRule(pattern, action); err != nil {
-			return nil, err
-		}
+	if err := profile.LoadFromReader(reader, options); err != nil {
+		return nil, err
 	}
-
-	return profile, scanner.Err()
+	return profile, nil
 }
 
-// LoadProfileFromFile loads a custom profile from a file.
-// Format: tag_pattern;action (one per line)
-// This function is provided for reference - actual implementation
-// would need to use os.Open which requires the "os" import.
-// Users should create their own file loading function as needed.
-func LoadProfileFromFile(_ string, _ SecurityProfileOptions) (*SecurityProfile, error) {
-	// Note: This is a placeholder. To load from file, use:
-	// 1. Read file contents into a string
-	// 2. Create strings.NewReader with the contents
-	// 3. Call NewProfileFromReader
-	return nil, fmt.Errorf("use NewProfileFromReader with file contents instead")
+// LoadProfileFromFile loads a custom profile from path using
+// NewProfileFromReader.
+func LoadProfileFromFile(path string, options SecurityProfileOptions) (*SecurityProfile, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open profile %q: %w", path, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	profile, err := NewProfileFromReader(file, options)
+	if err != nil {
+		return nil, fmt.Errorf("load profile %q: %w", path, err)
+	}
+	return profile, nil
 }

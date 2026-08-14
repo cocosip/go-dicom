@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 )
 
@@ -16,66 +17,112 @@ func (sp *SecurityProfile) loadDefaultProfile(options SecurityProfileOptions) {
 	_ = sp.LoadFromReader(reader, options)
 }
 
-// LoadFromReader loads a security profile from a reader
+// LoadFromReader appends security profile rules from reader.
+//
+// Each non-comment line must contain either an explicit "pattern;action" rule
+// or a pattern followed by the 11 option action columns defined by
+// SecurityProfileOptions. Parsing is strict and errors include the source line.
 func (sp *SecurityProfile) LoadFromReader(reader io.Reader, options SecurityProfileOptions) error {
 	scanner := bufio.NewScanner(reader)
 
-	optionsCount := 11 // Total number of profile options
+	const optionsCount = 11
+	lineNumber := 0
 
 	for scanner.Scan() {
+		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
 		parts := strings.Split(line, ";")
-		if len(parts) < optionsCount+1 {
-			continue
+		if len(parts) != 2 && len(parts) != optionsCount+1 {
+			return fmt.Errorf("profile line %d: got %d columns, want 2 or %d", lineNumber, len(parts), optionsCount+1)
 		}
 
-		tagPattern := parts[0]
+		tagPattern := strings.TrimSpace(parts[0])
+		if tagPattern == "" {
+			return fmt.Errorf("profile line %d: pattern is empty", lineNumber)
+		}
 
-		// Check each option flag
+		if len(parts) == 2 {
+			action, ok := parseSecurityProfileAction(parts[1])
+			if !ok {
+				return fmt.Errorf("profile line %d: invalid action %q", lineNumber, strings.TrimSpace(parts[1]))
+			}
+			if err := sp.AddRule(tagPattern, action); err != nil {
+				return fmt.Errorf("profile line %d: invalid pattern %q: %w", lineNumber, tagPattern, err)
+			}
+			continue
+		}
+		if _, err := regexp.Compile("(?i)" + tagPattern); err != nil {
+			return fmt.Errorf("profile line %d: invalid pattern %q: %w", lineNumber, tagPattern, err)
+		}
+
+		var selectedAction SecurityProfileAction
+		hasSelectedAction := false
+
 		for i := 0; i < optionsCount; i++ {
+			actionValue := strings.TrimSpace(parts[i+1])
+			if actionValue == "" {
+				continue
+			}
+			action, ok := parseSecurityProfileAction(actionValue)
+			if !ok {
+				return fmt.Errorf("profile line %d: invalid action %q in option column %d", lineNumber, actionValue, i+1)
+			}
+
 			flag := SecurityProfileOptions(1 << i)
-
 			if (options & flag) == flag {
-				actionStr := strings.TrimSpace(parts[i+1])
-				if actionStr == "" {
-					continue
-				}
-
-				// Parse action (can be combined like "X/Z" - use first one)
-				actionParts := strings.Split(actionStr, "/")
-				actionChar := actionParts[0]
-
-				var action SecurityProfileAction
-				switch actionChar {
-				case "D":
-					action = ActionD
-				case "Z":
-					action = ActionZ
-				case "X":
-					action = ActionX
-				case "K":
-					action = ActionK
-				case "C":
-					action = ActionC
-				case "U":
-					action = ActionU
-				default:
-					continue
-				}
-
-				if err := sp.AddRule(tagPattern, action); err != nil {
-					return fmt.Errorf("failed to add rule for pattern %q: %w", tagPattern, err)
-				}
-				break // Only add one action per tag
+				selectedAction = action
+				hasSelectedAction = true
+			}
+		}
+		if hasSelectedAction {
+			if err := sp.AddRule(tagPattern, selectedAction); err != nil {
+				return fmt.Errorf("profile line %d: invalid pattern %q: %w", lineNumber, tagPattern, err)
 			}
 		}
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read profile after line %d: %w", lineNumber, err)
+	}
+	return nil
+}
+
+func parseSecurityProfileAction(value string) (SecurityProfileAction, bool) {
+	components := strings.Split(strings.TrimSpace(value), "/")
+	var selected SecurityProfileAction
+	for index, component := range components {
+		action, ok := parseSingleSecurityProfileAction(strings.TrimSpace(component))
+		if !ok {
+			return 0, false
+		}
+		if index == 0 {
+			selected = action
+		}
+	}
+	return selected, true
+}
+
+func parseSingleSecurityProfileAction(action string) (SecurityProfileAction, bool) {
+	switch action {
+	case "D":
+		return ActionD, true
+	case "Z":
+		return ActionZ, true
+	case "X":
+		return ActionX, true
+	case "K":
+		return ActionK, true
+	case "C":
+		return ActionC, true
+	case "U":
+		return ActionU, true
+	default:
+		return 0, false
+	}
 }
 
 // defaultProfileCSV contains the de-identification map from DICOM PS 3.15

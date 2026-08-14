@@ -56,7 +56,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | IMG-002 | P2 | Open | 帧几何、空间变换和插值工具 |
 | CORE-002 | P2 | Open | Dataset 遍历器、匹配规则和转换规则 |
 | DICT-001 | P2 | Partial | 运行时 XML 字典加载 |
-| ANON-001 | P2 | Partial | 完整的自定义匿名化配置加载 |
+| ANON-001 | P2 | Complete | 完整的自定义匿名化配置加载 |
 | PRINT-001 | P2 | Partial | 基于 Dataset 的 DICOM 打印管理模型 |
 | OBS-001 | P2 | Open | 结构化网络日志、请求事件和指标钩子 |
 | IMG-003 | P3 | Partial | 体数据重建和 MPR |
@@ -66,10 +66,10 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 截至 2026-08-14：
 
-- **已完成：** NET-001。
+- **已完成：** NET-001 和 ANON-001。
 - **未完成：** DOC-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  SR-001、IMG-001、CORE-001、IMG-002、CORE-002、DICT-001、ANON-001、
-  PRINT-001、OBS-001、IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
+  SR-001、IMG-001、CORE-001、IMG-002、CORE-002、DICT-001、PRINT-001、
+  OBS-001、IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001 已完成，DOC-001 中与 TLS 相关的部分已经修复；
   其余 Phase 0 工作仍由 DOC-001、NET-002 和 STD-001 跟踪。
 
@@ -130,7 +130,7 @@ transport 层会在应用默认值前克隆由调用方持有的 TLS 配置。
 - `go test -race ./pkg/network/... -count=1` 通过。
 - `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` 通过。
 - `golangci-lint run` 报告 0 个问题；分析完成后，沙箱环境输出了缓存持久化警告。
-- 当前验证对应工作区代码，尚未创建实现提交。
+- 实现和上述验证证据已提交于 `e8e44ef`。
 
 ### NET-002: C-STORE 协商传输语法与转码
 
@@ -385,10 +385,17 @@ fo-dicom 提供递归 Dataset 遍历器，以及可组合的匹配规则和转�
 
 ### ANON-001: 自定义配置加载
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P2`
 
-可以从 Reader 解析自定义规则，但 `LoadProfileFromFile` 总是返回错误，要求调用方自行读取文件。较简单的 Reader 解析器还会忽略其 profile options 参数。
+已于 2026-08-14 完成。`NewProfileFromReader` 现在接受任意 `io.Reader`；
+`LoadProfileFromFile` 会打开指定路径并委托给同一个解析器。现有两列
+`pattern;action` 配置保持兼容，同时支持 fo-dicom 兼容的 12 列配置，且全部
+11 个 `SecurityProfileOptions` 列与内置 profile 加载器采用相同的优先级语义。
+
+解析现在默认为严格模式：非注释输入必须使用两种受支持的列布局之一，pattern
+和 action 都会被验证，错误包含源文件行号。空行和以 `#` 开头的注释仍受支持。
+当前未提供宽松模式。
 
 **验收标准**
 
@@ -397,11 +404,17 @@ fo-dicom 提供递归 Dataset 遍历器，以及可组合的匹配规则和转�
 - 内置输入和自定义输入采用一致的 profile option 语义。
 - 对无效行和 action 返回可操作的错误；除非显式选择宽松模式，否则不能静默跳过。
 
-**建议验证**
+**验证证据**
 
-- 通过文件 API 和 Reader API 解析同一配置，并比较规则输出。
-- 针对代表性的保密标签测试每个 profile option。
-- 测试异常行、未知 action、注释以及严格/宽松行为。
+- 文件 API 和 Reader API 已使用相同输入比较规则输出。
+- 测试覆盖通用 `io.Reader`、每个 profile option 列、组合 option 优先级、
+  注释、异常列数、未知 action、空 pattern 和无效正则表达式。
+- `ExampleNewProfileFromReader` 由 Go 测试套件编译并执行。
+- `go test ./pkg/dicom/anonymizer -count=1` 通过。
+- `go test -race ./pkg/dicom/anonymizer -count=1` 通过。
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` 通过。
+- `golangci-lint run` 报告 0 个问题。
+- 当前验证对应工作区代码，尚未创建 ANON-001 实现提交。
 
 ### PRINT-001: 基于 Dataset 的打印管理模型
 
@@ -552,6 +565,9 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 ### Phase 2: 支撑 API 与运维能力
 
 范围：IMG-002、CORE-002、DICT-001、ANON-001、PRINT-001、OBS-001。
+
+当前进度：ANON-001 已完成；IMG-002、CORE-002、DICT-001、PRINT-001 和
+OBS-001 尚未完成，因此 Phase 2 尚未完成。
 
 阶段验收：
 

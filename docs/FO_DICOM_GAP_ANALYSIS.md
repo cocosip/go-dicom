@@ -60,7 +60,7 @@ Priority indicates implementation order, not estimated effort:
 | IMG-002 | P2 | Open | Frame geometry, spatial transforms, and interpolation tools |
 | CORE-002 | P2 | Open | Dataset walker, match rules, and transform rules |
 | DICT-001 | P2 | Partial | Runtime XML dictionary loading |
-| ANON-001 | P2 | Partial | Complete custom anonymization profile loading |
+| ANON-001 | P2 | Complete | Complete custom anonymization profile loading |
 | PRINT-001 | P2 | Partial | Dataset-backed DICOM Print Management models |
 | OBS-001 | P2 | Open | Structured network logging, request events, and metrics hooks |
 | IMG-003 | P3 | Partial | Volume reconstruction and MPR |
@@ -70,11 +70,11 @@ Priority indicates implementation order, not estimated effort:
 
 Progress as of 2026-08-14:
 
-- **Complete:** NET-001.
+- **Complete:** NET-001 and ANON-001.
 - **Not complete:** DOC-001, NET-002, STD-001, MED-001, NET-003,
   NET-004, SR-001, IMG-001, CORE-001, IMG-002, CORE-002, DICT-001,
-  ANON-001, PRINT-001, OBS-001, IMG-003, and MED-002 retain their `Partial`
-  or `Open` status.
+  PRINT-001, OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open`
+  status.
 - Phase 0 is not complete. NET-001 is complete, the TLS-related portion of
   DOC-001 is repaired, and the remaining Phase 0 work is still tracked by
   DOC-001, NET-002, and STD-001.
@@ -146,8 +146,8 @@ Reference: [fo-dicom DicomClient](https://github.com/fo-dicom/fo-dicom/blob/7ea6
 - `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` passed.
 - `golangci-lint run` reported 0 issues; the sandbox emitted cache-persistence
   warnings after analysis completed.
-- Verification currently refers to the working tree; no implementation commit
-  has been created yet.
+- The implementation and this verification evidence were committed in
+  `e8e44ef`.
 
 ### NET-002: C-STORE Negotiated Transfer Syntax and Transcoding
 
@@ -448,12 +448,20 @@ Reference: [fo-dicom DicomDictionaryReader](https://github.com/fo-dicom/fo-dicom
 
 ### ANON-001: Custom Profile Loading
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P2`
 
-Custom rules can be parsed from a Reader, but `LoadProfileFromFile` always
-returns an error instructing callers to read the file themselves. The simpler
-Reader parser also ignores its profile options argument.
+Completed on 2026-08-14. `NewProfileFromReader` now accepts any `io.Reader`,
+and `LoadProfileFromFile` opens the requested path and delegates to that same
+parser. Existing two-column `pattern;action` profiles remain supported. The
+parser also accepts fo-dicom-compatible 12-column profiles and applies all 11
+`SecurityProfileOptions` columns with the same precedence as the built-in
+profile loader.
+
+Parsing is strict: non-comment input must use one of the two supported column
+layouts, patterns and actions are validated, and errors include the source line
+number. Blank lines and lines beginning with `#` remain supported. No lenient
+mode is currently exposed.
 
 **Acceptance criteria**
 
@@ -463,11 +471,19 @@ Reader parser also ignores its profile options argument.
 - Invalid lines and actions return actionable errors instead of being silently
   skipped unless a lenient mode is explicitly selected.
 
-**Suggested verification**
+**Verification evidence**
 
-- Parse the same profile through file and Reader APIs and compare rule output.
-- Exercise each profile option against representative confidentiality tags.
-- Test malformed lines, unknown actions, comments, and strict/lenient behavior.
+- File and Reader APIs are tested against identical input and rule output.
+- Tests cover a general `io.Reader`, every profile option column, combined
+  option precedence, comments, malformed column counts, unknown actions, empty
+  patterns, and invalid regular expressions.
+- `ExampleNewProfileFromReader` is compiled and executed by the Go test suite.
+- `go test ./pkg/dicom/anonymizer -count=1` passes.
+- `go test -race ./pkg/dicom/anonymizer -count=1` passes.
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` passes.
+- `golangci-lint run` reports 0 issues.
+- Current verification applies to the working tree; no ANON-001 implementation
+  commit has been created yet.
 
 ### PRINT-001: Dataset-Backed Print Management Models
 
@@ -651,6 +667,9 @@ single pull request.
 ### Phase 2: Supporting APIs and Operations
 
 Scope: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, OBS-001.
+
+Current progress: ANON-001 is complete. IMG-002, CORE-002, DICT-001,
+PRINT-001, and OBS-001 remain incomplete; therefore Phase 2 is not complete.
 
 Phase acceptance:
 
