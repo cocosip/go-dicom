@@ -160,6 +160,16 @@ if err != nil {
 }
 ```
 
+`CStore` prefers an accepted presentation context matching the Dataset's source
+transfer syntax. If the peer accepts only another syntax, a registered codec is
+used to transcode a copy; the caller's Dataset is not modified. Parsed Datasets
+already retain their source syntax. For a programmatically constructed Dataset
+containing Pixel Data, use `dataset.NewWithTransferSyntax` so the byte order or
+encapsulation is known.
+
+`CStoreMultiple` sends in slice order without concurrency. It stops at the first
+failure or cancellation, and `count` reports only completed successful stores.
+
 #### C-FIND（查询）
 
 ```go

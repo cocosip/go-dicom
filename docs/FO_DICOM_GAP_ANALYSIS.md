@@ -49,7 +49,7 @@ Priority indicates implementation order, not estimated effort:
 | --- | --- | --- | --- |
 | DOC-001 | P0 | Partial | Public capability statements match implemented behavior |
 | NET-001 | P0 | Complete | TLS-enabled high-level DICOM client |
-| NET-002 | P0 | Partial | C-STORE transfer syntax selection and automatic transcoding |
+| NET-002 | P0 | Complete | C-STORE transfer syntax selection and automatic transcoding |
 | STD-001 | P0 | Complete | Reproducible and current generated standard tables |
 | MED-001 | P1 | Open | DICOMDIR media directory model and read/write workflow |
 | NET-003 | P1 | Partial | Advanced association negotiation through the high-level client |
@@ -70,13 +70,14 @@ Priority indicates implementation order, not estimated effort:
 
 Progress as of 2026-08-14:
 
-- **Complete:** NET-001, STD-001, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, NET-002, MED-001, NET-003,
+- **Complete:** NET-001, NET-002, STD-001, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, MED-001, NET-003,
   NET-004, SR-001, IMG-001, CORE-001, IMG-002, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
-- Phase 0 is not complete. NET-001 is complete, the TLS-related portion of
-  DOC-001 is repaired, and the remaining Phase 0 work is still tracked by
-  DOC-001 and NET-002.
+- Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
+  remaining Phase 0 work is tracked by DOC-001.
+- **Recommended next item:** DOC-001. Re-audit and correct the remaining public
+  capability statements before starting Phase 1 implementation work.
 
 ## Detailed Gaps
 
@@ -96,10 +97,11 @@ At the audit baseline, the README's tag and UID totals did not match the unique
 generated standard entries counted in the audited source.
 
 Progress on 2026-08-14: NET-001 repaired the high-level client TLS API and its
-README examples. STD-001 corrected the generated Tag and UID totals and the
-tooling description. The remaining SR, rendering, advanced negotiation, print,
-and other public capability statements have not been re-audited or repaired,
-so DOC-001 remains `Partial`.
+README examples. NET-002 aligned C-STORE transfer syntax selection and
+transcoding claims with the implemented send path. STD-001 corrected the
+generated Tag and UID totals and the tooling description. The remaining SR,
+rendering, advanced negotiation, print, and other public capability statements
+have not been re-audited or repaired, so DOC-001 remains `Partial`.
 
 **Acceptance criteria**
 
@@ -151,14 +153,27 @@ Reference: [fo-dicom DicomClient](https://github.com/fo-dicom/fo-dicom/blob/7ea6
 
 ### NET-002: C-STORE Negotiated Transfer Syntax and Transcoding
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P0`
 
-`go-dicom` has a codec registry and transcoder, but the network send path does
-not invoke them. It selects a presentation context by SOP Class and encodes the
-request using the accepted transfer syntax. This is insufficient when the
-Dataset's pixel data transfer syntax differs from the accepted context.
-`CStoreMultiple` sends each Dataset sequentially and stops at the first error.
+Completed on 2026-08-14. The shared DIMSE send path now selects C-STORE
+presentation contexts by SOP Class and source transfer syntax. An exact source
+syntax match is preferred. Otherwise, the first accepted syntax that the codec
+registry can transcode to is selected deterministically and a transcoded copy
+is sent. Explicit presentation context IDs remain authoritative and are
+validated before use.
+
+Datasets containing Pixel Data must identify their source transfer syntax;
+parsed and DIMSE-received Datasets do so automatically, which also supports
+receive-and-forward workflows. Missing source syntax and unavailable codec
+paths fail before any network write with SOP Class and transfer syntax context.
+Datasets without Pixel Data can be re-encoded directly and do not require image
+codecs, while explicit context IDs are still validated. Caller-owned Dataset
+and codec input frames are isolated from transcoding mutations.
+
+`CStore`, `CStoreWithPriority`, and C-GET C-STORE sub-operations all use the
+shared service path. `CStoreMultiple` remains sequential, stops at the first
+failure or cancellation, and returns the number of completed successful stores.
 
 Reference: [fo-dicom DicomCStoreRequest](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/DicomCStoreRequest.cs)
 
@@ -174,12 +189,23 @@ Reference: [fo-dicom DicomCStoreRequest](https://github.com/fo-dicom/fo-dicom/bl
 - Batch sending defines ordering, partial-success, cancellation, and concurrency
   semantics.
 
-**Suggested verification**
+**Verification evidence**
 
-- Interoperability tests covering native, RLE, JPEG, JPEG-LS, and JPEG 2000 via
-  registered companion codecs.
-- Verify the wire Dataset transfer syntax and decoded pixels, not only the DIMSE
-  response status.
+- Service tests inspect the actual PDV presentation context and decode the wire
+  Dataset to verify exact-syntax selection and Little/Big Endian transcoding.
+- Tests cover registered compressed-codec fallback, unavailable codecs, unknown
+  source syntax, explicit context IDs (including rejected and wrong-SOP
+  contexts), non-pixel objects, receive-and-forward behavior, and caller
+  Dataset immutability against mutating codecs.
+- Client tests define sequential batch ordering, partial-success count, first
+  failure, and cancellation behavior.
+- `CGO_ENABLED=0 go test ./pkg/imaging/... ./pkg/network/... -count=1` passed.
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  passed.
+- `CGO_ENABLED=0 golangci-lint run` reported 0 issues. The implementation adds
+  no CGo directives, C imports, native dependencies, or module changes.
+- Cross-process interoperability with the real companion RLE, JPEG, JPEG-LS,
+  and JPEG 2000 codecs remains a separate verification level.
 
 ### STD-001: Generated Standard Tables and Tooling
 
@@ -224,8 +250,8 @@ fo-dicom source downloader is included.
   creators, and 4,678 private entries.
 - A generator integration test regenerates all four outputs from the bundled
   XML in a temporary directory, asserts the exact counts, and compares each
-  file byte for byte with the committed output. It runs through the existing
-  CI `./tools/...` test scope.
+  file with the committed output after normalizing platform line endings. It
+  runs through the existing CI `./tools/...` test scope.
 - Focused tests cover the fo-dicom retired-identifier convention and current
   `vm` symbol mappings.
 
@@ -497,8 +523,7 @@ Reference: [fo-dicom DicomDictionaryReader](https://github.com/fo-dicom/fo-dicom
 - `go test -race ./pkg/dicom/dict -count=1` passes.
 - `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` passes.
 - `golangci-lint run` reports 0 issues.
-- Current verification applies to the working tree; no DICT-001 implementation
-  commit has been created yet.
+- Implemented in commit `6dc89f7`.
 
 ### ANON-001: Custom Profile Loading
 
@@ -690,8 +715,8 @@ cross-library capability rather than fo-dicom parity work.
 
 Scope: DOC-001, NET-001, NET-002, STD-001.
 
-Current progress: NET-001 is complete. DOC-001 remains partial, and NET-002 and
-STD-001 remain incomplete; therefore Phase 0 is not complete.
+Current progress: NET-001, NET-002, and STD-001 are complete. DOC-001 remains
+partial; therefore Phase 0 is not complete.
 
 Phase acceptance:
 

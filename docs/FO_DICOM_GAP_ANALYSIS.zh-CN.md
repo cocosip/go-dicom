@@ -45,7 +45,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | --- | --- | --- | --- |
 | DOC-001 | P0 | Partial | 公共能力声明与实际实现行为一致 |
 | NET-001 | P0 | Complete | 支持 TLS 的高层 DICOM 客户端 |
-| NET-002 | P0 | Partial | C-STORE 传输语法选择与自动转码 |
+| NET-002 | P0 | Complete | C-STORE 传输语法选择与自动转码 |
 | STD-001 | P0 | Complete | 可复现且保持最新的标准生成表 |
 | MED-001 | P1 | Open | DICOMDIR 介质目录模型及读写工作流 |
 | NET-003 | P1 | Partial | 通过高层客户端执行高级关联协商 |
@@ -66,12 +66,14 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 截至 2026-08-14：
 
-- **已完成：** NET-001、STD-001、ANON-001 和 DICT-001。
-- **未完成：** DOC-001、NET-002、MED-001、NET-003、NET-004、
+- **已完成：** NET-001、NET-002、STD-001、ANON-001 和 DICT-001。
+- **未完成：** DOC-001、MED-001、NET-003、NET-004、
   SR-001、IMG-001、CORE-001、IMG-002、CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
-- Phase 0 尚未完成。NET-001 已完成，DOC-001 中与 TLS 相关的部分已经修复；
-  其余 Phase 0 工作仍由 DOC-001 和 NET-002 跟踪。
+- Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
+  工作由 DOC-001 跟踪。
+- **建议下一项：** DOC-001。在开始 Phase 1 功能开发前，重新审计并修正其余公共
+  能力声明。
 
 ## 详细差距
 
@@ -85,8 +87,9 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 在审计基线中，README 的标签和 UID 数量与被审计源码中去重后的标准生成条目数不一致。
 
 2026-08-14 进度：NET-001 已补齐高层客户端 TLS API，并修复 README 中的
-TLS 示例；STD-001 已修正生成 Tag、UID 的数量和工具说明。SR、渲染、高级协商、
-打印及其他公共能力声明尚未重新审计或修复，因此 DOC-001 仍为 `Partial`。
+TLS 示例；NET-002 已使 C-STORE 传输语法选择与转码声明和实际发送路径一致；
+STD-001 已修正生成 Tag、UID 的数量和工具说明。SR、渲染、高级协商、打印及
+其他公共能力声明尚未重新审计或修复，因此 DOC-001 仍为 `Partial`。
 
 **验收标准**
 
@@ -134,10 +137,23 @@ transport 层会在应用默认值前克隆由调用方持有的 TLS 配置。
 
 ### NET-002: C-STORE 协商传输语法与转码
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P0`
 
-`go-dicom` 已有编解码器注册表和转码器，但网络发送路径不会调用它们。该路径按 SOP Class 选择表示上下文，并使用被接受的传输语法编码请求。当 Dataset 的像素数据传输语法与被接受的上下文不同时，这种处理并不充分。`CStoreMultiple` 会顺序发送每个 Dataset，并在第一个错误处停止。
+已于 2026-08-14 完成。共享 DIMSE 发送路径现在同时依据 SOP Class 和 Dataset
+源传输语法选择 C-STORE 表示上下文，并优先使用与源语法完全匹配的上下文。
+没有精确匹配时，会按确定性顺序选择 codec registry 可转码的第一个已接受语法，
+并发送转码副本。显式指定的 Presentation Context ID 保持优先，并会在使用前验证。
+
+包含 Pixel Data 的 Dataset 必须声明源传输语法；解析及 DIMSE 接收到的 Dataset
+都会自动保留该语法，因此也支持接收后直接转发。源语法缺失或没有可用 codec 时，
+会在写入网络前返回包含 SOP Class 和传输语法上下文的明确错误。没有 Pixel Data
+的对象可以直接重新编码，不需要图像 codec，但显式 context ID 仍会被验证。
+调用方 Dataset 和 codec 输入帧均与转码过程中的修改隔离。
+
+`CStore`、`CStoreWithPriority` 和 C-GET 的 C-STORE 子操作均复用同一 service
+路径。`CStoreMultiple` 保持顺序发送，在首次失败或取消时停止，并返回已经完成且
+成功的对象数量。
 
 参考：[fo-dicom DicomCStoreRequest](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/DicomCStoreRequest.cs)
 
@@ -150,10 +166,21 @@ transport 层会在应用默认值前克隆由调用方持有的 TLS 配置。
 - 不修改调用方的 Dataset。
 - 批量发送明确定义顺序、部分成功、取消和并发语义。
 
-**建议验证**
+**验证证据**
 
-- 通过已注册的配套编解码器，执行覆盖原生、RLE、JPEG、JPEG-LS 和 JPEG 2000 的互操作测试。
-- 验证线上 Dataset 的传输语法和解码后像素，而不只是 DIMSE 响应状态。
+- Service 测试检查实际 PDV 的 Presentation Context，并解码线上 Dataset，验证
+  原语法选择和 Little/Big Endian 转码。
+- 测试覆盖已注册压缩 codec 回退、codec 缺失、源语法未知、显式上下文 ID
+  （包括已拒绝和 SOP Class 不匹配的 context）、无 Pixel Data 对象、接收后转发，
+  以及面对会修改输入帧的 codec 时调用方 Dataset 仍保持不变。
+- Client 测试明确覆盖顺序批量发送、部分成功计数、首次失败和取消语义。
+- `CGO_ENABLED=0 go test ./pkg/imaging/... ./pkg/network/... -count=1` 通过。
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  通过。
+- `CGO_ENABLED=0 golangci-lint run` 报告 0 个问题。实现未增加 CGo 指令、C 导入、
+  原生依赖或模块变更。
+- 与真实配套 RLE、JPEG、JPEG-LS 和 JPEG 2000 codec 的跨进程互操作仍属于独立
+  验证层级。
 
 ### STD-001: 标准表生成与工具链
 
@@ -190,8 +217,8 @@ XML 并重新生成的方式，不提供 fo-dicom 源码下载工具。
 - 仓库内两份 XML 的 SHA-256 与本地 fo-dicom 2026b 源文件逐字节一致。
 - 独立解析 XML 确认 5,347 个 Tag、1,928 个 UID、235 个 private creator 和
   4,678 个私有条目。
-- 生成器集成测试会在临时目录中用仓库 XML 重新生成四个输出，断言精确数量，并与
-  已提交文件逐字节比较；该测试位于现有 CI 的 `./tools/...` 测试范围内。
+- 生成器集成测试会在临时目录中用仓库 XML 重新生成四个输出，断言精确数量，并在
+  归一化平台换行符后与已提交文件比较；该测试位于现有 CI 的 `./tools/...` 测试范围内。
 - 聚焦测试覆盖 fo-dicom retired 标识符规则和当前 `vm` 符号映射。
 
 ### MED-001: DICOMDIR
@@ -420,7 +447,7 @@ retired 标志、UTF-8 BOM，以及组合源文件中已知但不属于字典条
 - `go test -race ./pkg/dicom/dict -count=1` 通过。
 - `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` 通过。
 - `golangci-lint run` 报告 0 个问题。
-- 当前验证对应工作区代码，尚未创建 DICT-001 实现提交。
+- 已实现于提交 `6dc89f7`。
 
 ### ANON-001: 自定义配置加载
 
@@ -576,8 +603,8 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：DOC-001、NET-001、NET-002、STD-001。
 
-当前进度：NET-001 已完成；DOC-001 仍为部分完成，NET-002 和 STD-001 尚未
-完成，因此 Phase 0 尚未完成。
+当前进度：NET-001、NET-002 和 STD-001 已完成；DOC-001 仍为部分完成，
+因此 Phase 0 尚未完成。
 
 阶段验收：
 

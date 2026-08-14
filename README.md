@@ -1305,9 +1305,10 @@ import (
     "context"
     "log"
 
-    "github.com/cocosip/go-dicom/pkg/dicom"
+    "github.com/cocosip/go-dicom/pkg/dicom/parser"
+    "github.com/cocosip/go-dicom/pkg/dicom/transfer"
+    "github.com/cocosip/go-dicom/pkg/dicom/uid"
     "github.com/cocosip/go-dicom/pkg/network/client"
-    "github.com/cocosip/go-dicom/pkg/uid"
 )
 
 func main() {
@@ -1318,9 +1319,9 @@ func main() {
 
     // Propose CT Image Storage with common transfer syntaxes
     c.AddPresentationContext(
-        uid.CTImageStorage,
-        uid.ExplicitVRLittleEndian,
-        uid.ImplicitVRLittleEndian,
+        uid.CTImageStorage.UID(),
+        transfer.ExplicitVRLittleEndian.UID().UID(),
+        transfer.ImplicitVRLittleEndian.UID().UID(),
     )
 
     ctx := context.Background()
@@ -1330,18 +1331,24 @@ func main() {
     defer c.Close()
 
     // Read DICOM file
-    f, err := dicom.OpenFile("scan.dcm", nil)
+    result, err := parser.ParseFile("scan.dcm")
     if err != nil {
         log.Fatalf("open: %v", err)
     }
 
     // Send via C-STORE
-    if err := c.CStore(ctx, f.Dataset()); err != nil {
+    if err := c.CStore(ctx, result.Dataset); err != nil {
         log.Fatalf("C-STORE: %v", err)
     }
     log.Println("C-STORE successful")
 }
 ```
+
+The client prefers the Dataset's original transfer syntax when the peer accepts
+it. Otherwise it transcodes a copy to the first accepted syntax supported by the
+registered codecs. Parsed Datasets retain their source syntax automatically;
+programmatically constructed Datasets with Pixel Data must set it with
+`dataset.NewWithTransferSyntax`.
 
 ### DICOM Networking - C-FIND SCU (Query)
 

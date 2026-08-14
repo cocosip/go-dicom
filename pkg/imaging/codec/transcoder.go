@@ -269,7 +269,7 @@ func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, e
 
 	// Create temporary PixelData with only this frame (fo-dicom pattern)
 	oldPixelData := newSimplePixelData(frameInfo, true) // encapsulated=true
-	if err := oldPixelData.AddFrame(compressedFrame); err != nil {
+	if err := oldPixelData.AddFrame(append([]byte(nil), compressedFrame...)); err != nil {
 		return nil, fmt.Errorf("failed to add frame: %w", err)
 	}
 
@@ -369,7 +369,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 //
 // Note: This method requires imagetypes.PixelData implementations that also support conversion
 // back to DICOM elements (e.g., DicomPixelData from the imaging package).
-func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.Dataset, error) {
+func (t *Transcoder) decode(ds *dataset.Dataset, outputSyntax *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.inputCodec == nil {
 		return nil, fmt.Errorf("no codec available for decoding %s", t.inputSyntax.UID().UID())
 	}
@@ -417,7 +417,7 @@ func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.D
 	// Create old PixelData with all compressed frames
 	oldPixelData := newSimplePixelData(frameInfo, true) // encapsulated=true
 	for _, frame := range compressedFrames {
-		if err := oldPixelData.AddFrame(frame); err != nil {
+		if err := oldPixelData.AddFrame(append([]byte(nil), frame...)); err != nil {
 			return nil, fmt.Errorf("failed to add frame to oldPixelData: %w", err)
 		}
 	}
@@ -440,8 +440,10 @@ func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.D
 		uncompressedData = append(uncompressedData, frameData...)
 	}
 
-	// Create new dataset with the output transfer syntax
-	newDS := dataset.NewWithTransferSyntax(t.outputSyntax)
+	// Codec output frames use the native little-endian pixel representation.
+	// Build that intermediate Dataset first, then convert it to the requested
+	// native syntax so 16-bit pixels are swapped when Big Endian was negotiated.
+	newDS := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
 
 	// Copy all elements except PixelData
 	for _, elem := range ds.Elements() {
@@ -457,7 +459,12 @@ func (t *Transcoder) decode(ds *dataset.Dataset, _ *transfer.Syntax) (*dataset.D
 		_ = newDS.Add(element.NewOtherWord(tag.PixelData, uncompressedData))
 	}
 
-	return newDS, nil
+	if outputSyntax.UID().UID() == transfer.ExplicitVRLittleEndian.UID().UID() {
+		return newDS, nil
+	}
+
+	nativeTranscoder := NewTranscoder(transfer.ExplicitVRLittleEndian, outputSyntax)
+	return nativeTranscoder.Transcode(newDS)
 }
 
 // encode compresses pixel data from a dataset using the high-level codec.Encode method.
@@ -468,14 +475,28 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 		return nil, fmt.Errorf("no codec available for encoding to %s", outputTS.UID().UID())
 	}
 
+	sourceDS := ds
+	sourceSyntax := ds.InternalTransferSyntax()
+	if sourceSyntax == nil {
+		sourceSyntax = t.inputSyntax
+	}
+	if sourceSyntax != nil && sourceSyntax.UID().UID() != transfer.ExplicitVRLittleEndian.UID().UID() {
+		nativeTranscoder := NewTranscoder(sourceSyntax, transfer.ExplicitVRLittleEndian)
+		normalizedDS, err := nativeTranscoder.Transcode(ds)
+		if err != nil {
+			return nil, fmt.Errorf("failed to normalize pixel data for encoding: %w", err)
+		}
+		sourceDS = normalizedDS
+	}
+
 	// Build frame info from dataset
-	frameInfo, err := t.buildFrameInfoFromDataset(ds)
+	frameInfo, err := t.buildFrameInfoFromDataset(sourceDS)
 	if err != nil {
 		return nil, err
 	}
 
 	// Extract uncompressed pixel data
-	pixelDataElem, _ := ds.Get(tag.PixelData)
+	pixelDataElem, _ := sourceDS.Get(tag.PixelData)
 	var pixelData []byte
 	switch elem := pixelDataElem.(type) {
 	case *element.OtherByte:
@@ -488,7 +509,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 
 	// Determine frame count
 	// Note: NumberOfFrames has VR of IS (Integer String) per DICOM standard
-	frameCount := frameCountFromDataset(ds)
+	frameCount := frameCountFromDataset(sourceDS)
 
 	// Calculate frame size
 	bytesAllocated := int((frameInfo.BitsAllocated-1)/8 + 1)
@@ -506,7 +527,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 			end = len(pixelData)
 		}
 		if start < len(pixelData) {
-			frameData := pixelData[start:end]
+			frameData := append([]byte(nil), pixelData[start:end]...)
 			if err := oldPixelData.AddFrame(frameData); err != nil {
 				return nil, fmt.Errorf("failed to add frame to oldPixelData: %w", err)
 			}
@@ -541,7 +562,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	newDS := dataset.NewWithTransferSyntax(outputTS)
 
 	// Copy all elements except PixelData
-	for _, elem := range ds.Elements() {
+	for _, elem := range sourceDS.Elements() {
 		if elem.Tag().ToUint32() != tag.PixelData.ToUint32() {
 			_ = newDS.Add(elem)
 		}

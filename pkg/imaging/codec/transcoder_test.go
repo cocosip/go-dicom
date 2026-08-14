@@ -108,6 +108,148 @@ func TestTranscodeNoPixelDataSetsOutputTransferSyntax(t *testing.T) {
 	}
 }
 
+func TestTranscoderEncodeNormalizesBigEndianPixelsForCodec(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}),
+		element.NewOtherWord(tag.PixelData, []byte{0x12, 0x34}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+
+	transcoder := NewTranscoder(
+		transfer.ExplicitVRBigEndian,
+		transfer.JPEG2000Lossless,
+		WithOutputCodec(echoDecodeCodec{}),
+	)
+	result, err := transcoder.Transcode(ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	pixelData, ok := result.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("transcoded dataset has no PixelData")
+	}
+	var fragments []buffer.ByteBuffer
+	switch value := pixelData.(type) {
+	case *element.OtherByteFragment:
+		fragments = value.Fragments()
+	case *element.OtherWordFragment:
+		fragments = value.Fragments()
+	default:
+		t.Fatalf("transcoded PixelData = %T, want fragment sequence", pixelData)
+	}
+	if len(fragments) != 1 {
+		t.Fatalf("fragment count = %d, want 1", len(fragments))
+	}
+	if got := fragments[0].Data(); !bytes.Equal(got, []byte{0x34, 0x12}) {
+		t.Fatalf("codec input bytes = %v, want normalized Little Endian bytes [52 18]", got)
+	}
+}
+
+func TestTranscoderCodecCannotMutateSourceDataset(t *testing.T) {
+	t.Run("encode", func(t *testing.T) {
+		ds := newCodecTestDataset(t, transfer.ExplicitVRLittleEndian)
+		original := []byte{0x34, 0x12}
+		if err := ds.Add(element.NewOtherWord(tag.PixelData, append([]byte(nil), original...))); err != nil {
+			t.Fatalf("Dataset.Add(PixelData) error = %v", err)
+		}
+
+		transcoder := NewTranscoder(
+			transfer.ExplicitVRLittleEndian,
+			transfer.JPEG2000Lossless,
+			WithOutputCodec(mutatingCodec{}),
+		)
+		if _, err := transcoder.Transcode(ds); err != nil {
+			t.Fatalf("Transcode() error = %v", err)
+		}
+		pixelData, _ := ds.Get(tag.PixelData)
+		if got := pixelData.(*element.OtherWord).GetData(); !bytes.Equal(got, original) {
+			t.Fatalf("source PixelData = %v, want unchanged %v", got, original)
+		}
+	})
+
+	t.Run("decode", func(t *testing.T) {
+		ds := newCodecTestDataset(t, transfer.JPEG2000Lossless)
+		if err := ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"})); err != nil {
+			t.Fatalf("Dataset.Add(NumberOfFrames) error = %v", err)
+		}
+		original := []byte{0xff, 0x4f, 0xff, 0x51}
+		fragments := element.NewOtherByteFragment(tag.PixelData)
+		fragments.AddFragment(buffer.NewMemory(append([]byte(nil), original...)))
+		fragments.AddFragment(buffer.NewMemory([]byte{0xff, 0x4f, 0xff, 0x52}))
+		if err := ds.Add(fragments); err != nil {
+			t.Fatalf("Dataset.Add(PixelData) error = %v", err)
+		}
+
+		transcoder := NewTranscoder(
+			transfer.JPEG2000Lossless,
+			transfer.ExplicitVRLittleEndian,
+			WithInputCodec(mutatingCodec{}),
+		)
+		if _, err := transcoder.Transcode(ds); err != nil {
+			t.Fatalf("Transcode() error = %v", err)
+		}
+		if got := fragments.Fragments()[0].Data(); !bytes.Equal(got, original) {
+			t.Fatalf("source fragment = %v, want unchanged %v", got, original)
+		}
+	})
+}
+
+func newCodecTestDataset(t *testing.T, ts *transfer.Syntax) *dataset.Dataset {
+	t.Helper()
+	ds := dataset.NewWithTransferSyntax(ts)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+	return ds
+}
+
+type mutatingCodec struct{}
+
+func (mutatingCodec) Name() string { return "mutating" }
+
+func (mutatingCodec) TransferSyntax() *transfer.Syntax { return transfer.JPEG2000Lossless }
+
+func (mutatingCodec) GetDefaultParameters() Parameters { return NewBaseParameters() }
+
+func (mutatingCodec) Encode(oldPixelData, newPixelData imagetypes.PixelData, _ Parameters) error {
+	return mutateAndCopyFrame(oldPixelData, newPixelData)
+}
+
+func (mutatingCodec) Decode(oldPixelData, newPixelData imagetypes.PixelData, _ Parameters) error {
+	return mutateAndCopyFrame(oldPixelData, newPixelData)
+}
+
+func mutateAndCopyFrame(oldPixelData, newPixelData imagetypes.PixelData) error {
+	frame, err := oldPixelData.GetFrame(0)
+	if err != nil {
+		return err
+	}
+	frame[0] = 0
+	return newPixelData.AddFrame(frame)
+}
+
 func TestTranscoder_TranscodeUncompressedToUncompressed(t *testing.T) {
 	// Create dataset with uncompressed pixel data
 	ds := dataset.New()

@@ -53,6 +53,11 @@ func (c *Client) CEcho(ctx context.Context) error {
 }
 
 // CStore sends a C-STORE request to store a DICOM dataset on the server.
+// It prefers an accepted presentation context matching the Dataset's source
+// transfer syntax. If no exact match exists, it transcodes a copy to the first
+// accepted syntax supported by the registered codecs. A Dataset containing
+// Pixel Data must have an InternalTransferSyntax; parsed Datasets have this set
+// automatically.
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout
@@ -275,6 +280,7 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 }
 
 // CStoreWithPriority stores a dataset with a specific priority.
+// Presentation context selection and transcoding follow CStore.
 //
 // Priority values:
 //   - dimse.PriorityLow (0x0002)
@@ -336,9 +342,9 @@ func (c *Client) CFindStudyRoot(ctx context.Context, level dimse.QueryRetrieveLe
 	return c.cfindWithRequest(ctx, req)
 }
 
-// CStoreMultiple stores multiple datasets in sequence.
-// This is a convenience method that calls CStore for each dataset.
-// It stops at the first error and returns the number of successfully stored datasets.
+// CStoreMultiple stores multiple datasets sequentially, without concurrent
+// sends. It stops at the first error or cancellation and returns the number of
+// datasets whose C-STORE response completed successfully.
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout

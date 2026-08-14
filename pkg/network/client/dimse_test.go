@@ -5,6 +5,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -147,6 +148,7 @@ func TestCStoreWithPriority_NotConnected(t *testing.T) {
 type mockServiceForDIMSE struct {
 	echoResponse  *dimse.CEchoResponse
 	storeResponse *dimse.CStoreResponse
+	storeHook     func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
 	findResponses []*dimse.CFindResponse
 	findHook      func(*dimse.CFindRequest)
 	cancelHook    func(messageID uint16, presentationContextID byte)
@@ -177,9 +179,13 @@ func (m *mockServiceForDIMSE) SendCEcho(_ context.Context, req *dimse.CEchoReque
 	return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 }
 
-func (m *mockServiceForDIMSE) SendCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+func (m *mockServiceForDIMSE) SendCStore(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
 	// Simulate processing delay
 	time.Sleep(10 * time.Millisecond)
+
+	if m.storeHook != nil {
+		return m.storeHook(ctx, req)
+	}
 
 	if m.storeResponse != nil {
 		return m.storeResponse, nil
@@ -574,6 +580,67 @@ func TestCStoreMultiple_Success(t *testing.T) {
 
 	if count != 3 {
 		t.Errorf("Expected 3 datasets stored, got %d", count)
+	}
+}
+
+func TestCStoreMultipleStopsAtFirstFailure(t *testing.T) {
+	client, mockService := setupMockClient()
+	datasets := make([]*dataset.Dataset, 3)
+	for i := range datasets {
+		ds := dataset.New()
+		_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+		_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{fmt.Sprintf("1.2.3.%d", i)}))
+		datasets[i] = ds
+	}
+
+	calls := 0
+	mockService.storeHook = func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+		calls++
+		if calls == 2 {
+			return nil, errors.New("store failed")
+		}
+		return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
+	}
+
+	count, err := client.CStoreMultiple(context.Background(), datasets)
+	if err == nil {
+		t.Fatal("CStoreMultiple() error = nil, want second-item failure")
+	}
+	if count != 1 {
+		t.Fatalf("CStoreMultiple() count = %d, want 1 completed dataset", count)
+	}
+	if calls != 2 {
+		t.Fatalf("SendCStore() calls = %d, want 2", calls)
+	}
+}
+
+func TestCStoreMultipleStopsAfterCancellation(t *testing.T) {
+	client, mockService := setupMockClient()
+	datasets := make([]*dataset.Dataset, 3)
+	for i := range datasets {
+		ds := dataset.New()
+		_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+		_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{fmt.Sprintf("1.2.4.%d", i)}))
+		datasets[i] = ds
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	mockService.storeHook = func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+		calls++
+		cancel()
+		return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
+	}
+
+	count, err := client.CStoreMultiple(ctx, datasets)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CStoreMultiple() error = %v, want context.Canceled", err)
+	}
+	if count != 1 {
+		t.Fatalf("CStoreMultiple() count = %d, want 1 completed dataset", count)
+	}
+	if calls != 1 {
+		t.Fatalf("SendCStore() calls = %d, want 1", calls)
 	}
 }
 

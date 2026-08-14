@@ -6,12 +6,25 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
+	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
+
+type dataDatasetMessage struct {
+	dimse.Message
+	data *dataset.Dataset
+}
+
+func (m *dataDatasetMessage) DataDataset() *dataset.Dataset {
+	return m.data
+}
 
 // sendLoop runs the send goroutine that processes outgoing DIMSE messages.
 // It reads from the sendQueue channel, encodes messages, fragments them into PDVs,
@@ -75,8 +88,17 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	// use the stored ID directly — the DICOM standard requires that a response is
 	// sent on the same presentation context as its request.
 	// For outgoing requests, fall back to an abstract-syntax lookup.
+	message := req.message
 	var pc *association.PresentationContext
-	if contextID := req.message.PresentationContextID(); contextID != 0 {
+	if req.message.CommandField() == uint16(dimse.CommandCStoreRQ) {
+		var err error
+		pc, message, err = prepareCStoreMessage(assoc, req.message)
+		if err != nil {
+			return err
+		}
+	}
+	if pc == nil && req.message.PresentationContextID() != 0 {
+		contextID := req.message.PresentationContextID()
 		pc = assoc.FindPresentationContextByID(contextID)
 	}
 	if pc == nil {
@@ -103,7 +125,7 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	}
 
 	// Encode message
-	commandData, datasetData, err := EncodeDIMSEMessage(req.message, transferSyntax)
+	commandData, datasetData, err := EncodeDIMSEMessage(message, transferSyntax)
 	if err != nil {
 		return fmt.Errorf("failed to encode message: %w", err)
 	}
@@ -149,6 +171,82 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	}
 
 	return nil
+}
+
+func prepareCStoreMessage(assoc *association.Association, message dimse.Message) (*association.PresentationContext, dimse.Message, error) {
+	dataDS := message.DataDataset()
+	if dataDS == nil {
+		return nil, message, nil
+	}
+
+	sopClassUID, _ := message.CommandDataset().GetString(tag.AffectedSOPClassUID)
+	var candidates []*association.PresentationContext
+	if contextID := message.PresentationContextID(); contextID != 0 {
+		candidate := assoc.FindPresentationContextByID(contextID)
+		if candidate == nil || !candidate.IsAccepted() || candidate.AcceptedTransferSyntax == nil {
+			return nil, nil, fmt.Errorf("C-STORE presentation context ID %d is not accepted", contextID)
+		}
+		if candidate.AbstractSyntax != sopClassUID {
+			return nil, nil, fmt.Errorf(
+				"C-STORE presentation context ID %d is for SOP Class %s, not %s",
+				contextID, candidate.AbstractSyntax, sopClassUID)
+		}
+		candidates = append(candidates, candidate)
+	} else {
+		for _, candidate := range assoc.GetAcceptedPresentationContexts() {
+			if candidate.AbstractSyntax == sopClassUID && candidate.AcceptedTransferSyntax != nil {
+				candidates = append(candidates, candidate)
+			}
+		}
+	}
+
+	sourceSyntax := dataDS.InternalTransferSyntax()
+	if sourceSyntax == nil {
+		if dataDS.Contains(tag.PixelData) {
+			return nil, nil, fmt.Errorf(
+				"cannot send C-STORE SOP Class %s with Pixel Data because its source transfer syntax is unknown",
+				sopClassUID)
+		}
+		if len(candidates) > 0 {
+			return candidates[0], message, nil
+		}
+		return nil, message, nil
+	}
+
+	for _, candidate := range candidates {
+		if candidate.AcceptedTransferSyntax.UID().UID() == sourceSyntax.UID().UID() {
+			return candidate, message, nil
+		}
+	}
+	if !dataDS.Contains(tag.PixelData) && len(candidates) > 0 {
+		return candidates[0], message, nil
+	}
+
+	manager := codec.GetDefaultManager()
+	for _, candidate := range candidates {
+		if !manager.CanTranscode(sourceSyntax, candidate.AcceptedTransferSyntax) {
+			continue
+		}
+		transcoder, err := manager.CreateTranscoder(sourceSyntax, candidate.AcceptedTransferSyntax)
+		if err != nil {
+			return nil, nil, fmt.Errorf("create C-STORE transcoder from %s to %s: %w",
+				sourceSyntax.UID().UID(), candidate.AcceptedTransferSyntax.UID().UID(), err)
+		}
+		transcoded, err := transcoder.Transcode(dataDS)
+		if err != nil {
+			return nil, nil, fmt.Errorf("transcode C-STORE dataset from %s to %s: %w",
+				sourceSyntax.UID().UID(), candidate.AcceptedTransferSyntax.UID().UID(), err)
+		}
+		return candidate, &dataDatasetMessage{Message: message, data: transcoded}, nil
+	}
+
+	acceptedSyntaxes := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		acceptedSyntaxes = append(acceptedSyntaxes, candidate.AcceptedTransferSyntax.UID().UID())
+	}
+	return nil, nil, fmt.Errorf(
+		"no accepted transfer syntax for C-STORE SOP Class %s is directly usable or transcodable from %s; accepted transfer syntaxes: %s",
+		sopClassUID, sourceSyntax.UID().UID(), strings.Join(acceptedSyntaxes, ", "))
 }
 
 // groupPDVsIntoPDUs groups PDVs into PDUs, packing multiple PDVs per PDU when possible.

@@ -108,6 +108,7 @@ func DecodeDIMSEMessage(commandData, datasetData []byte, transferSyntax *transfe
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to decode data dataset: %w", err)
 		}
+		dataDS.SetInternalTransferSyntax(transferSyntax)
 	}
 
 	return commandDS, dataDS, nil
