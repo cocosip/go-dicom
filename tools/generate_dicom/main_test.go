@@ -175,9 +175,25 @@ func TestBundled2026bRegeneratesCommittedData(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReadFile(generated %s) error = %v", output, err)
 		}
-		if !bytes.Equal(generated, committed) {
+		if !bytes.Equal(normalizeLineEndings(generated), normalizeLineEndings(committed)) {
 			t.Errorf("generated %s differs from committed data", output)
 		}
+	}
+}
+
+func normalizeLineEndings(data []byte) []byte {
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+}
+
+func TestNormalizeLineEndings(t *testing.T) {
+	lf := []byte("package generated\n\nconst Value = 1\n")
+	crlf := []byte("package generated\r\n\r\nconst Value = 1\r\n")
+	if !bytes.Equal(normalizeLineEndings(lf), normalizeLineEndings(crlf)) {
+		t.Fatal("LF and CRLF generated sources should compare equally")
+	}
+	different := []byte("package generated\r\n\r\nconst Value = 2\r\n")
+	if bytes.Equal(normalizeLineEndings(lf), normalizeLineEndings(different)) {
+		t.Fatal("line-ending normalization masked a content difference")
 	}
 }
 
