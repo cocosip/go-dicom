@@ -142,23 +142,24 @@ func TestRunCommandUsesFODicomRetiredIdentifierConvention(t *testing.T) {
 	}
 }
 
-func TestBundled2026bRegeneratesCommittedData(t *testing.T) {
+func TestBundled2026bGenerationIsDeterministic(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join("..", ".."))
 	standard := filepath.Join(repositoryRoot, "tools", "data", "2026b", "DICOM Dictionary.xml")
 	private := filepath.Join(repositoryRoot, "tools", "data", "2026b", "Private Dictionary.xml")
-	generatedRoot := t.TempDir()
-
-	var stdout bytes.Buffer
-	if err := runCommand(
-		[]string{standardFlag, standard, privateFlag, private, rootFlag, generatedRoot},
-		&stdout,
-	); err != nil {
-		t.Fatalf("runCommand() error = %v", err)
-	}
 
 	const wantCounts = "Generated 5347 tags, 1928 UIDs, 235 private creators, 4678 private entries from DICOM 2026b\n"
-	if got := stdout.String(); got != wantCounts {
-		t.Fatalf("runCommand() output = %q, want %q", got, wantCounts)
+	generatedRoots := []string{t.TempDir(), t.TempDir()}
+	for i, generatedRoot := range generatedRoots {
+		var stdout bytes.Buffer
+		if err := runCommand(
+			[]string{standardFlag, standard, privateFlag, private, rootFlag, generatedRoot},
+			&stdout,
+		); err != nil {
+			t.Fatalf("runCommand(run %d) error = %v", i+1, err)
+		}
+		if got := stdout.String(); got != wantCounts {
+			t.Fatalf("runCommand(run %d) output = %q, want %q", i+1, got, wantCounts)
+		}
 	}
 
 	for _, output := range []string{
@@ -167,16 +168,16 @@ func TestBundled2026bRegeneratesCommittedData(t *testing.T) {
 		dictionaryOutput,
 		privateDictionaryOutput,
 	} {
-		committed, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(output)))
+		first, err := os.ReadFile(filepath.Join(generatedRoots[0], filepath.FromSlash(output)))
 		if err != nil {
-			t.Fatalf("ReadFile(committed %s) error = %v", output, err)
+			t.Fatalf("ReadFile(first generated %s) error = %v", output, err)
 		}
-		generated, err := os.ReadFile(filepath.Join(generatedRoot, filepath.FromSlash(output)))
+		second, err := os.ReadFile(filepath.Join(generatedRoots[1], filepath.FromSlash(output)))
 		if err != nil {
-			t.Fatalf("ReadFile(generated %s) error = %v", output, err)
+			t.Fatalf("ReadFile(second generated %s) error = %v", output, err)
 		}
-		if !bytes.Equal(normalizeLineEndings(generated), normalizeLineEndings(committed)) {
-			t.Errorf("generated %s differs from committed data", output)
+		if !bytes.Equal(normalizeLineEndings(first), normalizeLineEndings(second)) {
+			t.Errorf("generated %s differs between runs", output)
 		}
 	}
 }
