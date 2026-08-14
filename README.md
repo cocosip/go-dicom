@@ -35,13 +35,13 @@ Known parity gaps and the staged plan for addressing them are tracked in
 ### Included Capabilities
 
 - [x] **Core DICOM data types**
-  - [x] Tag (5338 standard tags + private tag support)
+  - [x] Tag (5347 standard tags + private tag support)
   - [x] VR (35 value representations with validation)
   - [x] VM (15 value multiplicities)
   - [x] Element (string, numeric, binary, date, person name types)
   - [x] Dataset & Sequence (full support with lazy loading)
   - [x] Dictionary (tag/keyword lookup with global default instance)
-  - [x] UID (1965 standard UIDs)
+  - [x] UID (1928 standard UIDs + 59 private UIDs)
   - [x] Transfer Syntax (15+ syntaxes including JPEG and MPEG)
   - [x] Character Set (30+ encodings with auto-detection)
 
@@ -1692,7 +1692,7 @@ go test -cover ./cmd/... ./examples/... ./pkg/... ./tools/...
 go-dicom/
 ├── pkg/
 │   ├── dicom/              # Core DICOM types
-│   │   ├── tag/            # DICOM tags (5338 standard tags)
+│   │   ├── tag/            # DICOM tags (5347 standard tags)
 │   │   ├── vr/             # Value representations (35 VRs)
 │   │   ├── vm/             # Value multiplicities
 │   │   ├── element/        # DICOM elements (all VR types)
@@ -1701,7 +1701,7 @@ go-dicom/
 │   │   ├── writer/         # DICOM file writing
 │   │   ├── dict/           # Tag dictionary
 │   │   ├── transfer/       # Transfer syntaxes
-│   │   ├── uid/            # Standard UIDs (1965 UIDs)
+│   │   ├── uid/            # Standard UIDs (1928 UIDs)
 │   │   ├── charset/        # Character encoding (30+ charsets)
 │   │   ├── serialization/  # JSON/XML conversion
 │   │   ├── anonymizer/     # Anonymization profiles
@@ -1736,9 +1736,8 @@ go-dicom/
 │   └── anonymize/          # Anonymization examples
 ├── test-data/              # Test DICOM files
 ├── tools/                  # Code generation tools
-│   ├── generate_tags/      # Generate tag constants
-│   ├── generate_uids/      # Generate UID constants
-│   └── generate_dict/      # Generate dictionary data
+│   ├── data/2026b/         # Pinned fo-dicom dictionary XML inputs
+│   └── generate_dicom/     # Generate tags, UIDs, and dictionaries
 ├── BENCHMARKS.md           # Performance benchmarks
 └── CLAUDE.md               # Development guide for AI assistants
 ```
@@ -1762,6 +1761,27 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 # Run benchmarks
 go test -bench='.' -benchmem ./pkg/dicom/...
 ```
+
+### Regenerating DICOM Data
+
+The repository pins fo-dicom's standard and manually maintained private
+dictionary XML files under `tools/data/2026b`. Regenerate all XML-derived data
+with the unified tool:
+
+```powershell
+go run ./tools/generate_dicom `
+  -standard "tools/data/2026b/DICOM Dictionary.xml" `
+  -private "tools/data/2026b/Private Dictionary.xml" `
+  -root "."
+```
+
+The command derives in one run the standard Tag constants, standard UID
+constants, standard dictionary, and private dictionary from one pinned
+baseline. To update the baseline, copy both XML files from the selected
+fo-dicom release into a new versioned directory, run the command with those
+paths, and commit the XML and all four generated outputs together. Private UIDs
+in `pkg/dicom/uid/uids_private.go` are not present in either XML input and are
+therefore outside this generator.
 
 ### Code Quality
 

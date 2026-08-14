@@ -1,7 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
-// Code generated from DicomUIDGenerated.cs. DO NOT EDIT.
+// Code generated from DICOM Dictionary.xml (version 2026b). DO NOT EDIT.
 
 package uid
 
@@ -494,7 +494,7 @@ var (
 	EnhancedUSVolumeStorage = New("1.2.840.10008.5.1.4.1.1.6.2", "Enhanced US Volume Storage", TypeSOPClass, false)
 
 	// PhotoacousticImageStorage Photoacoustic Image Storage
-	PhotoacousticImageStorage = New("1.2.840.10008.5.1.4.1.1.6.3", "Photoacoustic Image Storage ", TypeSOPClass, false)
+	PhotoacousticImageStorage = New("1.2.840.10008.5.1.4.1.1.6.3", "Photoacoustic Image Storage", TypeSOPClass, false)
 
 	// SecondaryCaptureImageStorage Secondary Capture Image Storage
 	SecondaryCaptureImageStorage = New("1.2.840.10008.5.1.4.1.1.7", "Secondary Capture Image Storage", TypeSOPClass, false)
@@ -5539,20 +5539,20 @@ var (
 	// WaveformAnnotationClassification3047 Waveform Annotation Classification (3047)
 	WaveformAnnotationClassification3047 = New("1.2.840.10008.6.1.1487", "Waveform Annotation Classification (3047)", TypeContextGroupName, false)
 
-	// WaveformAnnotationsDocumentTitle3048 Waveform Annotations Document Title  (3048)
-	WaveformAnnotationsDocumentTitle3048 = New("1.2.840.10008.6.1.1488", "Waveform Annotations Document Title  (3048)", TypeContextGroupName, false)
+	// WaveformAnnotationsDocumentTitle3048 Waveform Annotations Document Title (3048)
+	WaveformAnnotationsDocumentTitle3048 = New("1.2.840.10008.6.1.1488", "Waveform Annotations Document Title (3048)", TypeContextGroupName, false)
 
-	// EEGProcedure3049 EEG Procedure  (3049)
-	EEGProcedure3049 = New("1.2.840.10008.6.1.1489", "EEG Procedure  (3049)", TypeContextGroupName, false)
+	// EEGProcedure3049 EEG Procedure (3049)
+	EEGProcedure3049 = New("1.2.840.10008.6.1.1489", "EEG Procedure (3049)", TypeContextGroupName, false)
 
-	// PatientConsciousness3050 Patient Consciousness  (3050)
-	PatientConsciousness3050 = New("1.2.840.10008.6.1.1490", "Patient Consciousness  (3050)", TypeContextGroupName, false)
+	// PatientConsciousness3050 Patient Consciousness (3050)
+	PatientConsciousness3050 = New("1.2.840.10008.6.1.1490", "Patient Consciousness (3050)", TypeContextGroupName, false)
 
 	// FollicleType12010 Follicle Type (12010)
 	FollicleType12010 = New("1.2.840.10008.6.1.1491", "Follicle Type (12010)", TypeContextGroupName, false)
 
-	// BreastSegmentationTypes7163 Breast Segmentation Types (7163)
-	BreastSegmentationTypes7163 = New("1.2.840.10008.6.1.1492", "Breast Segmentation Types (7163)", TypeContextGroupName, false)
+	// BreastTissueSegmentationType7163 Breast Tissue Segmentation Type (7163)
+	BreastTissueSegmentationType7163 = New("1.2.840.10008.6.1.1492", "Breast Tissue Segmentation Type (7163)", TypeContextGroupName, false)
 
 	// ImplantedDevice3779 Implanted Device (3779)
 	ImplantedDevice3779 = New("1.2.840.10008.6.1.1493", "Implanted Device (3779)", TypeContextGroupName, false)
@@ -5724,10 +5724,75 @@ var (
 
 	// UltrasoundAttenuationImagingSite12036 Ultrasound Attenuation Imaging Site (12036)
 	UltrasoundAttenuationImagingSite12036 = New("1.2.840.10008.6.1.1549", "Ultrasound Attenuation Imaging Site (12036)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessment12040 Fetal Anatomy Survey Assessment (12040)
+	FetalAnatomySurveyAssessment12040 = New("1.2.840.10008.6.1.1550", "Fetal Anatomy Survey Assessment (12040)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentHead12041 Fetal Anatomy Survey Assessment - Head (12041)
+	FetalAnatomySurveyAssessmentHead12041 = New("1.2.840.10008.6.1.1551", "Fetal Anatomy Survey Assessment - Head (12041)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentFaceAndNeck12042 Fetal Anatomy Survey Assessment - Face and Neck (12042)
+	FetalAnatomySurveyAssessmentFaceAndNeck12042 = New("1.2.840.10008.6.1.1552", "Fetal Anatomy Survey Assessment - Face and Neck (12042)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentChest12043 Fetal Anatomy Survey Assessment - Chest (12043)
+	FetalAnatomySurveyAssessmentChest12043 = New("1.2.840.10008.6.1.1553", "Fetal Anatomy Survey Assessment - Chest (12043)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentHeart12044 Fetal Anatomy Survey Assessment - Heart (12044)
+	FetalAnatomySurveyAssessmentHeart12044 = New("1.2.840.10008.6.1.1554", "Fetal Anatomy Survey Assessment - Heart (12044)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentAbdomenAndPelvis12045 Fetal Anatomy Survey Assessment - Abdomen and Pelvis (12045)
+	FetalAnatomySurveyAssessmentAbdomenAndPelvis12045 = New("1.2.840.10008.6.1.1555", "Fetal Anatomy Survey Assessment - Abdomen and Pelvis (12045)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentSpine12046 Fetal Anatomy Survey Assessment - Spine (12046)
+	FetalAnatomySurveyAssessmentSpine12046 = New("1.2.840.10008.6.1.1556", "Fetal Anatomy Survey Assessment - Spine (12046)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentExtremities12047 Fetal Anatomy Survey Assessment - Extremities (12047)
+	FetalAnatomySurveyAssessmentExtremities12047 = New("1.2.840.10008.6.1.1557", "Fetal Anatomy Survey Assessment - Extremities (12047)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyAssessmentMaternal12048 Fetal Anatomy Survey Assessment - Maternal (12048)
+	FetalAnatomySurveyAssessmentMaternal12048 = New("1.2.840.10008.6.1.1558", "Fetal Anatomy Survey Assessment - Maternal (12048)", TypeContextGroupName, false)
+
+	// FetalAnatomySurveyPracticeGuideline12049 Fetal Anatomy Survey Practice Guideline (12049)
+	FetalAnatomySurveyPracticeGuideline12049 = New("1.2.840.10008.6.1.1559", "Fetal Anatomy Survey Practice Guideline (12049)", TypeContextGroupName, false)
+
+	// SensitiveContentCategory900 Sensitive Content Category (900)
+	SensitiveContentCategory900 = New("1.2.840.10008.6.1.1560", "Sensitive Content Category (900)", TypeContextGroupName, false)
+
+	// SensitiveContentDetail901 Sensitive Content Detail (901)
+	SensitiveContentDetail901 = New("1.2.840.10008.6.1.1561", "Sensitive Content Detail (901)", TypeContextGroupName, false)
+
+	// ApplicationTypeCode406 Application Type Code (406)
+	ApplicationTypeCode406 = New("1.2.840.10008.6.1.1562", "Application Type Code (406)", TypeContextGroupName, false)
+
+	// XRayModulationType10035 X-Ray Modulation Type (10035)
+	XRayModulationType10035 = New("1.2.840.10008.6.1.1563", "X-Ray Modulation Type (10035)", TypeContextGroupName, false)
+
+	// RadiotherapyDoseRealWorldUnits9586 Radiotherapy Dose Real World Units (9586)
+	RadiotherapyDoseRealWorldUnits9586 = New("1.2.840.10008.6.1.1564", "Radiotherapy Dose Real World Units (9586)", TypeContextGroupName, false)
+
+	// RadiotherapyDoseInterpretedTypeCodes9587 Radiotherapy Dose Interpreted Type Codes (9587)
+	RadiotherapyDoseInterpretedTypeCodes9587 = New("1.2.840.10008.6.1.1565", "Radiotherapy Dose Interpreted Type Codes (9587)", TypeContextGroupName, false)
+
+	// RadiotherapyDoseInterpretedTypeModifierCodes9588 Radiotherapy Dose Interpreted Type Modifier Codes (9588)
+	RadiotherapyDoseInterpretedTypeModifierCodes9588 = New("1.2.840.10008.6.1.1566", "Radiotherapy Dose Interpreted Type Modifier Codes (9588)", TypeContextGroupName, false)
+
+	// RadiotherapyDoseIntentCodes9589 Radiotherapy Dose Intent Codes (9589)
+	RadiotherapyDoseIntentCodes9589 = New("1.2.840.10008.6.1.1567", "Radiotherapy Dose Intent Codes (9589)", TypeContextGroupName, false)
+
+	// QualitySegmentationPropertyType7164 Quality Segmentation Property Type (7164)
+	QualitySegmentationPropertyType7164 = New("1.2.840.10008.6.1.1568", "Quality Segmentation Property Type (7164)", TypeContextGroupName, false)
+
+	// UltrasoundZScorePopulationIndex12027 Ultrasound Z-Score Population Index (12027)
+	UltrasoundZScorePopulationIndex12027 = New("1.2.840.10008.6.1.1569", "Ultrasound Z-Score Population Index (12027)", TypeContextGroupName, false)
+
+	// FetalUltrasoundZScoreReferenceAuthority12028 Fetal Ultrasound Z-Score Reference Authority (12028)
+	FetalUltrasoundZScoreReferenceAuthority12028 = New("1.2.840.10008.6.1.1570", "Fetal Ultrasound Z-Score Reference Authority (12028)", TypeContextGroupName, false)
+
+	// MetalArtifactReductionAlgorithmFamily10036 Metal Artifact Reduction Algorithm Family (10036)
+	MetalArtifactReductionAlgorithmFamily10036 = New("1.2.840.10008.6.1.1571", "Metal Artifact Reduction Algorithm Family (10036)", TypeContextGroupName, false)
 )
 
 func init() {
-	// Register all standard UIDs
 	Register(Verification)
 	Register(ImplicitVRLittleEndian)
 	Register(ExplicitVRLittleEndian)
@@ -7576,7 +7641,7 @@ func init() {
 	Register(EEGProcedure3049)
 	Register(PatientConsciousness3050)
 	Register(FollicleType12010)
-	Register(BreastSegmentationTypes7163)
+	Register(BreastTissueSegmentationType7163)
 	Register(ImplantedDevice3779)
 	Register(SimilarityMeasure281)
 	Register(WaveformAcquisitionModality34)
@@ -7634,4 +7699,26 @@ func init() {
 	Register(RTDoseCalculationAlgorithmFamily9585)
 	Register(DoseIndexForDoseCalibration10012)
 	Register(UltrasoundAttenuationImagingSite12036)
+	Register(FetalAnatomySurveyAssessment12040)
+	Register(FetalAnatomySurveyAssessmentHead12041)
+	Register(FetalAnatomySurveyAssessmentFaceAndNeck12042)
+	Register(FetalAnatomySurveyAssessmentChest12043)
+	Register(FetalAnatomySurveyAssessmentHeart12044)
+	Register(FetalAnatomySurveyAssessmentAbdomenAndPelvis12045)
+	Register(FetalAnatomySurveyAssessmentSpine12046)
+	Register(FetalAnatomySurveyAssessmentExtremities12047)
+	Register(FetalAnatomySurveyAssessmentMaternal12048)
+	Register(FetalAnatomySurveyPracticeGuideline12049)
+	Register(SensitiveContentCategory900)
+	Register(SensitiveContentDetail901)
+	Register(ApplicationTypeCode406)
+	Register(XRayModulationType10035)
+	Register(RadiotherapyDoseRealWorldUnits9586)
+	Register(RadiotherapyDoseInterpretedTypeCodes9587)
+	Register(RadiotherapyDoseInterpretedTypeModifierCodes9588)
+	Register(RadiotherapyDoseIntentCodes9589)
+	Register(QualitySegmentationPropertyType7164)
+	Register(UltrasoundZScorePopulationIndex12027)
+	Register(FetalUltrasoundZScoreReferenceAuthority12028)
+	Register(MetalArtifactReductionAlgorithmFamily10036)
 }

@@ -46,7 +46,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | DOC-001 | P0 | Partial | 公共能力声明与实际实现行为一致 |
 | NET-001 | P0 | Complete | 支持 TLS 的高层 DICOM 客户端 |
 | NET-002 | P0 | Partial | C-STORE 传输语法选择与自动转码 |
-| STD-001 | P0 | Partial | 可复现且保持最新的标准生成表 |
+| STD-001 | P0 | Complete | 可复现且保持最新的标准生成表 |
 | MED-001 | P1 | Open | DICOMDIR 介质目录模型及读写工作流 |
 | NET-003 | P1 | Partial | 通过高层客户端执行高级关联协商 |
 | NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
@@ -55,7 +55,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | CORE-001 | P1 | Partial | Dataset 和 Sequence 递归验证 |
 | IMG-002 | P2 | Open | 帧几何、空间变换和插值工具 |
 | CORE-002 | P2 | Open | Dataset 遍历器、匹配规则和转换规则 |
-| DICT-001 | P2 | Partial | 运行时 XML 字典加载 |
+| DICT-001 | P2 | Complete | 运行时 XML 字典加载 |
 | ANON-001 | P2 | Complete | 完整的自定义匿名化配置加载 |
 | PRINT-001 | P2 | Partial | 基于 Dataset 的 DICOM 打印管理模型 |
 | OBS-001 | P2 | Open | 结构化网络日志、请求事件和指标钩子 |
@@ -66,12 +66,12 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 截至 2026-08-14：
 
-- **已完成：** NET-001 和 ANON-001。
-- **未完成：** DOC-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  SR-001、IMG-001、CORE-001、IMG-002、CORE-002、DICT-001、PRINT-001、
-  OBS-001、IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
+- **已完成：** NET-001、STD-001、ANON-001 和 DICT-001。
+- **未完成：** DOC-001、NET-002、MED-001、NET-003、NET-004、
+  SR-001、IMG-001、CORE-001、IMG-002、CORE-002、PRINT-001、OBS-001、
+  IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001 已完成，DOC-001 中与 TLS 相关的部分已经修复；
-  其余 Phase 0 工作仍由 DOC-001、NET-002 和 STD-001 跟踪。
+  其余 Phase 0 工作仍由 DOC-001 和 NET-002 跟踪。
 
 ## 详细差距
 
@@ -82,11 +82,11 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 在审计基线中，README 的若干声明超出了当时已实现的公共工作流，包括完整的客户端 TLS、完整的 SR 值类型、图像重建、通过客户端进行高级协商，以及打印任务创建。TLS 示例调用了不存在的 `client.WithTLS` 选项；另一个渲染示例向 `NewDicomImage` 传入 Dataset，但该函数实际接收 `*DicomPixelData`。
 
-README 中的标签和 UID 数量也与被审计源码中去重后的标准生成条目数不一致。
+在审计基线中，README 的标签和 UID 数量与被审计源码中去重后的标准生成条目数不一致。
 
 2026-08-14 进度：NET-001 已补齐高层客户端 TLS API，并修复 README 中的
-TLS 示例。SR、渲染、高级协商、打印、生成条目数量及其他公共能力声明尚未
-重新审计或修复，因此 DOC-001 仍为 `Partial`。
+TLS 示例；STD-001 已修正生成 Tag、UID 的数量和工具说明。SR、渲染、高级协商、
+打印及其他公共能力声明尚未重新审计或修复，因此 DOC-001 仍为 `Partial`。
 
 **验收标准**
 
@@ -157,20 +157,26 @@ transport 层会在应用默认值前克隆由调用方持有的 TLS 配置。
 
 ### STD-001: 标准表生成与工具链
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P0`
 
-被审计的生成源码包含 5,334 个唯一标准标签，fo-dicom 中为 5,343 个；包含 1,906 个唯一标准 UID，fo-dicom 中为 1,928 个。
+已于 2026-08-14 完成。旧生成数据包含 5,338 个 Tag、5,338 个标准字典条目和
+1,906 个标准 UID；三个一次性工具还通过硬编码读取仓库中并不存在的
+`fo-dicom-code` 目录。
 
-缺失标签：
+现在将 fo-dicom 2026b 的 `DICOM Dictionary.xml` 和人工维护的
+`Private Dictionary.xml` 固定保存在 `tools/data/2026b`。统一的
+`tools/generate_dicom` 命令接收两个输入路径和仓库根目录，一次性重新生成四类数据：
 
-- `(0008,001D)` Sensitive Content Code Sequence
-- `(0018,9390)` 至 `(0018,9392)` Metal Artifact Reduction 属性
-- `(3004,0020)` 至 `(3004,0024)` RT Dose 属性
+- 5,347 个标准 Tag 常量
+- 1,928 个标准 UID 常量
+- 5,347 个标准字典条目
+- 235 个 private creator，共 4,678 个私有条目
 
-缺失的 UID 是上下文组 UID `1.2.840.10008.6.1.1550` 至 `1.2.840.10008.6.1.1571`。
-
-三个生成器都依赖仓库本地的 `fo-dicom-code` 目录，但干净检出中不存在该目录。`go run ./tools/generate_tags` 会因为无法打开源文件而在生成前失败。
+生成器按 fo-dicom 规则为 retired Tag 和 UID 的生成标识符追加 `RETIRED`，字典
+keyword 则保持 XML 原值。`pkg/dicom/uid/uids_private.go` 中的 59 个私有 UID
+在这两份权威 XML 中没有来源，因此本工具不会重新生成它们。更新基线采用显式复制
+XML 并重新生成的方式，不提供 fo-dicom 源码下载工具。
 
 **验收标准**
 
@@ -179,11 +185,14 @@ transport 层会在应用默认值前克隆由调用方持有的 TLS 配置。
 - 生成过程确定且由 CI 执行检查。
 - 标签、字典和 UID 源从同一基线原子更新。
 
-**建议验证**
+**验证证据**
 
-- 在干净的临时检出中运行所有生成器。
-- 运行 `gofmt`、完整测试套件以及再生成无差异检查。
-- 与固定参考版本比较唯一标签集和 UID 集。
+- 仓库内两份 XML 的 SHA-256 与本地 fo-dicom 2026b 源文件逐字节一致。
+- 独立解析 XML 确认 5,347 个 Tag、1,928 个 UID、235 个 private creator 和
+  4,678 个私有条目。
+- 生成器集成测试会在临时目录中用仓库 XML 重新生成四个输出，断言精确数量，并与
+  已提交文件逐字节比较；该测试位于现有 CI 的 `./tools/...` 测试范围内。
+- 聚焦测试覆盖 fo-dicom retired 标识符规则和当前 `vm` 符号映射。
 
 ### MED-001: DICOMDIR
 
@@ -363,10 +372,28 @@ fo-dicom 提供递归 Dataset 遍历器，以及可组合的匹配规则和转�
 
 ### DICT-001: 运行时 XML 字典加载
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P2`
 
-`Dictionary.Add` 支持编程式扩展，但没有运行时读取 fo-dicom 兼容 XML 字典的能力，包括私有创建者字典和掩码标签。
+已于 2026-08-14 完成。`NewFromXML` 可以从任意 `io.Reader` 创建字典；
+`Dictionary.LoadXML` 会先验证完整文档，再将其合并到已有字典。fo-dicom 使用的
+单个 `<dictionary>` 标准布局和包含多个 creator 的 `<dictionaries>` 私有布局均受支持。
+
+实现支持精确标签、掩码标签、fo-dicom 的全部 VR 分隔符、备选 VM、keyword、
+retired 标志、UTF-8 BOM，以及组合源文件中已知但不属于字典条目的 `<uid>` 节点。
+私有条目按 Private Creator 隔离到不同子字典；查询标签带 creator 时会自动路由。
+精确标签优先于掩码标签；精确和掩码重复项均采用后加载覆盖语义。异常输入会尽可能
+报告 creator、条目序号和标签值，加载失败不会向目标字典留下部分修改。
+
+运行时加载的私有字典也已接入 Implicit VR 解析。Private Creator 预留元素固定按
+`LO` 解码；后续私有元素按 group、已分配 block 和 creator 解析。Creator 预留关系在
+根数据集以及每个序列 Item 中分别维护，因此不同 Item 可以安全地复用同一 block 来
+表示不同 creator。
+
+精确私有条目使用 group 和 element 低字节作为键，不依赖数据集中实际分配的 block。
+程序化 `Add` 会把带 creator 的条目路由到对应私有子字典，并在应用该字典的 creator
+前克隆条目，避免修改调用方持有的对象。即使 XML 语法错误发生在 `<tag>` 内部，错误
+信息仍会保留 creator、条目序号和标签上下文。
 
 参考：[fo-dicom DicomDictionaryReader](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/DicomDictionaryReader.cs)
 
@@ -377,11 +404,23 @@ fo-dicom 提供递归 Dataset 遍历器，以及可组合的匹配规则和转�
 - 拒绝异常输入，并提供元素级上下文。
 - 明确定义重复条目和字典合并行为。
 
-**建议验证**
+**验证证据**
 
-- 加载具有代表性的 fo-dicom 标准和私有 XML 字典。
-- 测试掩码标签查找优先级、重复条目和合并行为。
-- 覆盖异常 XML、无效 VR/VM 值和不完整私有条目。
+- 本地 fo-dicom 2026b 的完整 `DICOM Dictionary.xml` 和
+  `Private Dictionary.xml` 均成功加载；已验证 `MED NM` 的已知私有掩码标签可通过
+  creator 子字典查询。
+- 测试覆盖标准/私有布局、精确/掩码优先级、重复项覆盖、失败时原子合并、
+  fo-dicom 的全部 VR 分隔符、备选 VM、BOM、组合源 UID 节点、异常 XML、
+  XML 标签上下文、无效 VR/VM、缺失字段、私有精确标签 block 归一化、creator 不匹配
+  拒绝、程序化私有条目路由、调用方条目不可变性和并发创建私有字典。
+- Implicit VR 解析器测试覆盖 Private Creator 预留元素解码、私有 VR 查询，以及多个
+  序列 Item 复用同一已分配 block 时的 creator 隔离。
+- `ExampleNewFromXML` 由 Go 测试套件编译并执行。
+- `go test ./pkg/dicom/dict -count=1` 通过。
+- `go test -race ./pkg/dicom/dict -count=1` 通过。
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` 通过。
+- `golangci-lint run` 报告 0 个问题。
+- 当前验证对应工作区代码，尚未创建 DICT-001 实现提交。
 
 ### ANON-001: 自定义配置加载
 
@@ -414,7 +453,7 @@ fo-dicom 提供递归 Dataset 遍历器，以及可组合的匹配规则和转�
 - `go test -race ./pkg/dicom/anonymizer -count=1` 通过。
 - `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` 通过。
 - `golangci-lint run` 报告 0 个问题。
-- 当前验证对应工作区代码，尚未创建 ANON-001 实现提交。
+- 已在提交 `a9e4301` 中实现。
 
 ### PRINT-001: 基于 Dataset 的打印管理模型
 
@@ -566,7 +605,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：IMG-002、CORE-002、DICT-001、ANON-001、PRINT-001、OBS-001。
 
-当前进度：ANON-001 已完成；IMG-002、CORE-002、DICT-001、PRINT-001 和
+当前进度：DICT-001 和 ANON-001 已完成；IMG-002、CORE-002、PRINT-001 和
 OBS-001 尚未完成，因此 Phase 2 尚未完成。
 
 阶段验收：

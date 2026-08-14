@@ -50,7 +50,7 @@ Priority indicates implementation order, not estimated effort:
 | DOC-001 | P0 | Partial | Public capability statements match implemented behavior |
 | NET-001 | P0 | Complete | TLS-enabled high-level DICOM client |
 | NET-002 | P0 | Partial | C-STORE transfer syntax selection and automatic transcoding |
-| STD-001 | P0 | Partial | Reproducible and current generated standard tables |
+| STD-001 | P0 | Complete | Reproducible and current generated standard tables |
 | MED-001 | P1 | Open | DICOMDIR media directory model and read/write workflow |
 | NET-003 | P1 | Partial | Advanced association negotiation through the high-level client |
 | NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
@@ -59,7 +59,7 @@ Priority indicates implementation order, not estimated effort:
 | CORE-001 | P1 | Partial | Recursive Dataset and Sequence validation |
 | IMG-002 | P2 | Open | Frame geometry, spatial transforms, and interpolation tools |
 | CORE-002 | P2 | Open | Dataset walker, match rules, and transform rules |
-| DICT-001 | P2 | Partial | Runtime XML dictionary loading |
+| DICT-001 | P2 | Complete | Runtime XML dictionary loading |
 | ANON-001 | P2 | Complete | Complete custom anonymization profile loading |
 | PRINT-001 | P2 | Partial | Dataset-backed DICOM Print Management models |
 | OBS-001 | P2 | Open | Structured network logging, request events, and metrics hooks |
@@ -70,14 +70,13 @@ Priority indicates implementation order, not estimated effort:
 
 Progress as of 2026-08-14:
 
-- **Complete:** NET-001 and ANON-001.
-- **Not complete:** DOC-001, NET-002, STD-001, MED-001, NET-003,
-  NET-004, SR-001, IMG-001, CORE-001, IMG-002, CORE-002, DICT-001,
-  PRINT-001, OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open`
-  status.
+- **Complete:** NET-001, STD-001, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, NET-002, MED-001, NET-003,
+  NET-004, SR-001, IMG-001, CORE-001, IMG-002, CORE-002, PRINT-001,
+  OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001 is complete, the TLS-related portion of
   DOC-001 is repaired, and the remaining Phase 0 work is still tracked by
-  DOC-001, NET-002, and STD-001.
+  DOC-001 and NET-002.
 
 ## Detailed Gaps
 
@@ -93,13 +92,14 @@ and print job creation. The TLS example called a nonexistent `client.WithTLS`
 option, and one rendering example passed a Dataset to `NewDicomImage` even
 though the function accepts `*DicomPixelData`.
 
-The README's tag and UID totals also do not match the unique generated standard
-entries counted in the audited source.
+At the audit baseline, the README's tag and UID totals did not match the unique
+generated standard entries counted in the audited source.
 
-Progress on 2026-08-14: the high-level client TLS API and README TLS examples
-were repaired by NET-001. The remaining SR, rendering, advanced negotiation,
-print, generated-count, and other public capability statements have not been
-re-audited or repaired, so DOC-001 remains `Partial`.
+Progress on 2026-08-14: NET-001 repaired the high-level client TLS API and its
+README examples. STD-001 corrected the generated Tag and UID totals and the
+tooling description. The remaining SR, rendering, advanced negotiation, print,
+and other public capability statements have not been re-audited or repaired,
+so DOC-001 remains `Partial`.
 
 **Acceptance criteria**
 
@@ -183,24 +183,30 @@ Reference: [fo-dicom DicomCStoreRequest](https://github.com/fo-dicom/fo-dicom/bl
 
 ### STD-001: Generated Standard Tables and Tooling
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P0`
 
-The audited generated sources contain 5,334 unique standard tags versus 5,343
-in fo-dicom, and 1,906 unique standard UIDs versus 1,928 in fo-dicom.
+Completed on 2026-08-14. The previous generated sources contained 5,338 tags,
+5,338 standard dictionary entries, and 1,906 standard UIDs. Three separate
+one-off tools also read hard-coded files from an absent repository-local
+`fo-dicom-code` directory.
 
-Missing tags:
+The fo-dicom 2026b `DICOM Dictionary.xml` and manually maintained
+`Private Dictionary.xml` are now pinned under `tools/data/2026b`. One
+`tools/generate_dicom` command accepts both input paths and the repository root,
+then regenerates all four XML-derived outputs together:
 
-- `(0008,001D)` Sensitive Content Code Sequence
-- `(0018,9390)` through `(0018,9392)` Metal Artifact Reduction attributes
-- `(3004,0020)` through `(3004,0024)` RT Dose attributes
+- 5,347 standard Tag constants
+- 1,928 standard UID constants
+- 5,347 standard dictionary entries
+- 235 private creators containing 4,678 private entries
 
-Missing UIDs are context group UIDs `1.2.840.10008.6.1.1550` through
-`1.2.840.10008.6.1.1571`.
-
-All three generators depend on a repository-local `fo-dicom-code` directory
-that is not present in a clean checkout. `go run ./tools/generate_tags` fails
-before generation because its source file cannot be opened.
+The generator preserves fo-dicom's `RETIRED` suffix convention for generated
+Tag and UID identifiers while retaining the original XML keyword in dictionary
+entries. The 59 private UIDs in `pkg/dicom/uid/uids_private.go` have no source
+in either authoritative XML file and are intentionally not regenerated by this
+tool. Updating the baseline is an explicit copy-and-regenerate operation; no
+fo-dicom source downloader is included.
 
 **Acceptance criteria**
 
@@ -210,11 +216,18 @@ before generation because its source file cannot be opened.
 - Generation is deterministic and checked by CI.
 - Tag, dictionary, and UID sources are updated atomically from one baseline.
 
-**Suggested verification**
+**Verification evidence**
 
-- Run all generators in a clean temporary checkout.
-- Run `gofmt`, the full test suite, and a no-diff regeneration check.
-- Compare unique tag and UID sets against the pinned reference revision.
+- SHA-256 hashes of both committed XML files match the local fo-dicom 2026b
+  source files byte for byte.
+- Independent XML parsing confirms 5,347 tags, 1,928 UIDs, 235 private
+  creators, and 4,678 private entries.
+- A generator integration test regenerates all four outputs from the bundled
+  XML in a temporary directory, asserts the exact counts, and compares each
+  file byte for byte with the committed output. It runs through the existing
+  CI `./tools/...` test scope.
+- Focused tests cover the fo-dicom retired-identifier convention and current
+  `vm` symbol mappings.
 
 ### MED-001: DICOMDIR
 
@@ -423,12 +436,36 @@ Reference: [fo-dicom DicomDatasetWalker](https://github.com/fo-dicom/fo-dicom/bl
 
 ### DICT-001: Runtime XML Dictionary Loading
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P2`
 
-`Dictionary.Add` supports programmatic extension, but there is no runtime reader
-for fo-dicom-compatible XML dictionaries, including private creator
-dictionaries and masked tags.
+Completed on 2026-08-14. `NewFromXML` creates a dictionary from any `io.Reader`,
+and `Dictionary.LoadXML` validates an entire document before merging it into an
+existing dictionary. Both the single `<dictionary>` standard layout and the
+multi-creator `<dictionaries>` private layout used by fo-dicom are supported.
+
+Exact and masked tags, all fo-dicom VR separators, alternative VM values,
+keywords, retired flags, UTF-8 BOM input, and known combined-source `<uid>`
+elements are handled. Private creator entries are isolated in creator-specific
+sub-dictionaries and are selected automatically when a lookup tag carries a
+private creator. Exact entries take precedence over masked entries; exact and
+masked duplicates use last-loaded-wins semantics. Malformed input reports the
+dictionary creator, tag index, and tag value when available, and a failed load
+does not partially modify the target dictionary.
+
+Runtime-loaded private dictionaries are also used during implicit VR parsing.
+Private Creator reservation elements are decoded as `LO`; subsequent private
+elements are resolved by group, allocated block, and creator. Creator
+reservations are scoped independently for the root dataset and for every
+sequence item, so the same block may safely identify different creators in
+different items.
+
+Exact private entries are keyed by their group and low element byte, making
+them independent of the block allocated in a dataset. Programmatic `Add` calls
+route creator-tagged entries into the matching private sub-dictionary and clone
+entries before applying that dictionary's creator, leaving caller-owned entries
+unchanged. XML syntax errors inside a `<tag>` retain creator, entry index, and
+tag context.
 
 Reference: [fo-dicom DicomDictionaryReader](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/DicomDictionaryReader.cs)
 
@@ -440,11 +477,28 @@ Reference: [fo-dicom DicomDictionaryReader](https://github.com/fo-dicom/fo-dicom
 - Reject malformed input with element-level context.
 - Define duplicate-entry and dictionary merge behavior.
 
-**Suggested verification**
+**Verification evidence**
 
-- Load representative fo-dicom standard and private XML dictionaries.
-- Test masked-tag lookup precedence, duplicate entries, and merge behavior.
-- Cover malformed XML, invalid VR/VM values, and incomplete private entries.
+- The complete local fo-dicom 2026b `DICOM Dictionary.xml` and
+  `Private Dictionary.xml` files load successfully; a known `MED NM` private
+  masked tag resolves through its creator dictionary.
+- Tests cover standard and private layouts, exact and masked lookup precedence,
+  duplicate replacement, atomic merge failure, every fo-dicom VR separator,
+  alternative VM values, BOM input, combined-source UID elements, malformed
+  XML with tag context, invalid VR/VM values, missing fields, private exact-tag
+  block normalization, creator-mismatch rejection, programmatic private-entry
+  routing, caller entry immutability, and concurrent private dictionary
+  creation.
+- Implicit VR parser tests cover Private Creator reservation decoding, private
+  VR lookup, and creator isolation between sequence items that reuse the same
+  allocated block.
+- `ExampleNewFromXML` is compiled and executed by the Go test suite.
+- `go test ./pkg/dicom/dict -count=1` passes.
+- `go test -race ./pkg/dicom/dict -count=1` passes.
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` passes.
+- `golangci-lint run` reports 0 issues.
+- Current verification applies to the working tree; no DICT-001 implementation
+  commit has been created yet.
 
 ### ANON-001: Custom Profile Loading
 
@@ -482,8 +536,7 @@ mode is currently exposed.
 - `go test -race ./pkg/dicom/anonymizer -count=1` passes.
 - `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` passes.
 - `golangci-lint run` reports 0 issues.
-- Current verification applies to the working tree; no ANON-001 implementation
-  commit has been created yet.
+- Implemented in commit `a9e4301`.
 
 ### PRINT-001: Dataset-Backed Print Management Models
 
@@ -668,7 +721,7 @@ single pull request.
 
 Scope: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, OBS-001.
 
-Current progress: ANON-001 is complete. IMG-002, CORE-002, DICT-001,
+Current progress: DICT-001 and ANON-001 are complete. IMG-002, CORE-002,
 PRINT-001, and OBS-001 remain incomplete; therefore Phase 2 is not complete.
 
 Phase acceptance:

@@ -166,6 +166,8 @@ type parseContext struct {
 	boundedReaders []*io.LimitedReader
 }
 
+type privateCreatorScope map[uint32]*tag.PrivateCreator
+
 // Option is a functional option for configuring the parser.
 type Option func(*parseContext)
 
@@ -581,6 +583,7 @@ func (p *parseContext) applyTransferSyntax(ts *transfer.Syntax) error {
 // readDataset reads a dataset (collection of elements).
 func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	ds := dataset.New()
+	privateCreators := make(privateCreatorScope)
 
 	var firstTag *tag.Tag
 	if p.hasFirstDatasetTag {
@@ -617,6 +620,7 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 			break
 		}
 
+		p.attachPrivateCreator(t, privateCreators)
 		elem, err := p.readElementWithTag(t)
 		if err != nil {
 			return nil, err
@@ -625,6 +629,7 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 		if err := ds.Add(elem); err != nil {
 			return nil, fmt.Errorf("failed to add element to dataset: %w", err)
 		}
+		p.updatePrivateCreator(elem, privateCreators)
 		p.updateTextEncoding(elem)
 	}
 
@@ -721,11 +726,16 @@ func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buf
 
 // readElement reads a single DICOM element.
 func (p *parseContext) readElement() (element.Element, error) {
+	return p.readElementWithPrivateCreators(nil)
+}
+
+func (p *parseContext) readElementWithPrivateCreators(privateCreators privateCreatorScope) (element.Element, error) {
 	// Read tag (4 bytes: group + element)
 	t, err := p.readTag()
 	if err != nil {
 		return nil, err
 	}
+	p.attachPrivateCreator(t, privateCreators)
 
 	// Read VR (Value Representation)
 	vrValue, err := p.readVR(t)
@@ -865,6 +875,9 @@ func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 			return nil, err
 		}
 		return vr.ParseBytes(vrBytes)
+	}
+	if isPrivateCreatorTag(t) {
+		return vr.LO, nil
 	}
 
 	// Implicit VR: look up in dictionary
@@ -1011,6 +1024,7 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 // readItemDataset reads a single item dataset within a sequence.
 func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) {
 	item := dataset.New()
+	privateCreators := make(privateCreatorScope)
 	savedEncoding := p.textEncoding
 	savedEncodings := append([]encoding.Encoding(nil), p.textEncodings...)
 	defer func() {
@@ -1041,6 +1055,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 			}
 
 			// Read the rest of the element
+			p.attachPrivateCreator(itemTag, privateCreators)
 			elem, err := p.readElementWithTag(itemTag)
 			if err != nil {
 				return nil, err
@@ -1049,6 +1064,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 			if err := item.Add(elem); err != nil {
 				return nil, fmt.Errorf("failed to add element to item: %w", err)
 			}
+			p.updatePrivateCreator(elem, privateCreators)
 			p.updateTextEncoding(elem)
 		}
 	} else {
@@ -1056,7 +1072,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 		// allocating and copying the whole item payload.
 		err := p.withBoundedReader(length, func(lr *io.LimitedReader) error {
 			for lr.N > 0 {
-				elem, err := p.readElement()
+				elem, err := p.readElementWithPrivateCreators(privateCreators)
 				if err != nil {
 					return err
 				}
@@ -1064,6 +1080,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 				if err := item.Add(elem); err != nil {
 					return fmt.Errorf("failed to add element to item: %w", err)
 				}
+				p.updatePrivateCreator(elem, privateCreators)
 				p.updateTextEncoding(elem)
 			}
 			return nil
@@ -1074,6 +1091,46 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 	}
 
 	return item, nil
+}
+
+func isPrivateCreatorTag(t *tag.Tag) bool {
+	return t != nil && t.IsPrivate() && t.Element() >= 0x0010 && t.Element() <= 0x00FF
+}
+
+func privateCreatorScopeKey(group, block uint16) uint32 {
+	return (uint32(group) << 16) | uint32(block)
+}
+
+func (p *parseContext) attachPrivateCreator(t *tag.Tag, creators privateCreatorScope) {
+	if t == nil || !t.IsPrivate() || t.Element() < 0x1000 {
+		return
+	}
+	block := t.Element() >> 8
+	if creator := creators[privateCreatorScopeKey(t.Group(), block)]; creator != nil {
+		t.SetPrivateCreator(creator)
+	}
+}
+
+func (p *parseContext) updatePrivateCreator(elem element.Element, creators privateCreatorScope) {
+	if elem == nil || !isPrivateCreatorTag(elem.Tag()) {
+		return
+	}
+	stringElement, ok := elem.(*element.String)
+	if !ok {
+		return
+	}
+
+	key := privateCreatorScopeKey(elem.Tag().Group(), elem.Tag().Element())
+	creatorName := stringElement.GetString()
+	if creatorName == "" {
+		delete(creators, key)
+		return
+	}
+	dictionary := p.dictionary
+	if dictionary == nil {
+		dictionary = dict.Default()
+	}
+	creators[key] = dictionary.GetPrivateCreator(creatorName)
 }
 
 func (p *parseContext) updateTextEncoding(elem element.Element) {

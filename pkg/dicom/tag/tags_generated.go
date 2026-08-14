@@ -1,7 +1,7 @@
 // Copyright (c) 2025 go-dicom contributors.
 // Licensed under the Microsoft Public License (MS-PL).
 
-// Code generated from DicomTagGenerated.cs. DO NOT EDIT.
+// Code generated from DICOM Dictionary.xml (version 2026b). DO NOT EDIT.
 
 package tag
 
@@ -250,7 +250,7 @@ var (
 	// ReferencedFileID (0004,1500) VR=CS VM=1-8 Referenced File ID
 	ReferencedFileID = New(0x0004, 0x1500)
 
-	// MRDRDirectoryRecordOffsetRETIRED (0004,1504) VR=UL VM=1 MRDR Directory Record Offset (RETIRED)
+	// MRDRDirectoryRecordOffsetRETIRED (0004,1504) VR=UL VM=1 MRDR Directory Record Offset
 	MRDRDirectoryRecordOffsetRETIRED = New(0x0004, 0x1504)
 
 	// ReferencedSOPClassUIDInFile (0004,1510) VR=UI VM=1 Referenced SOP Class UID in File
@@ -265,10 +265,10 @@ var (
 	// ReferencedRelatedGeneralSOPClassUIDInFile (0004,151A) VR=UI VM=1-n Referenced Related General SOP Class UID in File
 	ReferencedRelatedGeneralSOPClassUIDInFile = New(0x0004, 0x151A)
 
-	// NumberOfReferencesRETIRED (0004,1600) VR=UL VM=1 Number of References (RETIRED)
+	// NumberOfReferencesRETIRED (0004,1600) VR=UL VM=1 Number of References
 	NumberOfReferencesRETIRED = New(0x0004, 0x1600)
 
-	// LengthToEndRETIRED (0008,0001) VR=UL VM=1 Length to End (RETIRED)
+	// LengthToEndRETIRED (0008,0001) VR=UL VM=1 Length to End
 	LengthToEndRETIRED = New(0x0008, 0x0001)
 
 	// SpecificCharacterSet (0008,0005) VR=CS VM=1-n Specific Character Set
@@ -280,7 +280,7 @@ var (
 	// ImageType (0008,0008) VR=CS VM=2-n Image Type
 	ImageType = New(0x0008, 0x0008)
 
-	// RecognitionCodeRETIRED (0008,0010) VR=SH VM=1 Recognition Code (RETIRED)
+	// RecognitionCodeRETIRED (0008,0010) VR=SH VM=1 Recognition Code
 	RecognitionCodeRETIRED = New(0x0008, 0x0010)
 
 	// InstanceCreationDate (0008,0012) VR=DA VM=1 Instance Creation Date
@@ -316,6 +316,9 @@ var (
 	// SyntheticData (0008,001C) VR=CS VM=1 Synthetic Data
 	SyntheticData = New(0x0008, 0x001C)
 
+	// SensitiveContentCodeSequence (0008,001D) VR=SQ VM=1 Sensitive Content Code Sequence
+	SensitiveContentCodeSequence = New(0x0008, 0x001D)
+
 	// StudyDate (0008,0020) VR=DA VM=1 Study Date
 	StudyDate = New(0x0008, 0x0020)
 
@@ -328,10 +331,10 @@ var (
 	// ContentDate (0008,0023) VR=DA VM=1 Content Date
 	ContentDate = New(0x0008, 0x0023)
 
-	// OverlayDateRETIRED (0008,0024) VR=DA VM=1 Overlay Date (RETIRED)
+	// OverlayDateRETIRED (0008,0024) VR=DA VM=1 Overlay Date
 	OverlayDateRETIRED = New(0x0008, 0x0024)
 
-	// CurveDateRETIRED (0008,0025) VR=DA VM=1 Curve Date (RETIRED)
+	// CurveDateRETIRED (0008,0025) VR=DA VM=1 Curve Date
 	CurveDateRETIRED = New(0x0008, 0x0025)
 
 	// AcquisitionDateTime (0008,002A) VR=DT VM=1 Acquisition DateTime
@@ -349,19 +352,19 @@ var (
 	// ContentTime (0008,0033) VR=TM VM=1 Content Time
 	ContentTime = New(0x0008, 0x0033)
 
-	// OverlayTimeRETIRED (0008,0034) VR=TM VM=1 Overlay Time (RETIRED)
+	// OverlayTimeRETIRED (0008,0034) VR=TM VM=1 Overlay Time
 	OverlayTimeRETIRED = New(0x0008, 0x0034)
 
-	// CurveTimeRETIRED (0008,0035) VR=TM VM=1 Curve Time (RETIRED)
+	// CurveTimeRETIRED (0008,0035) VR=TM VM=1 Curve Time
 	CurveTimeRETIRED = New(0x0008, 0x0035)
 
-	// DataSetTypeRETIRED (0008,0040) VR=US VM=1 Data Set Type (RETIRED)
+	// DataSetTypeRETIRED (0008,0040) VR=US VM=1 Data Set Type
 	DataSetTypeRETIRED = New(0x0008, 0x0040)
 
-	// DataSetSubtypeRETIRED (0008,0041) VR=LO VM=1 Data Set Subtype (RETIRED)
+	// DataSetSubtypeRETIRED (0008,0041) VR=LO VM=1 Data Set Subtype
 	DataSetSubtypeRETIRED = New(0x0008, 0x0041)
 
-	// NuclearMedicineSeriesTypeRETIRED (0008,0042) VR=CS VM=1 Nuclear Medicine Series Type (RETIRED)
+	// NuclearMedicineSeriesTypeRETIRED (0008,0042) VR=CS VM=1 Nuclear Medicine Series Type
 	NuclearMedicineSeriesTypeRETIRED = New(0x0008, 0x0042)
 
 	// AccessionNumber (0008,0050) VR=SH VM=1 Accession Number
@@ -712,7 +715,7 @@ var (
 	// MaximumNumberOfRecords (0008,0429) VR=UV VM=1 Maximum Number of Records
 	MaximumNumberOfRecords = New(0x0008, 0x0429)
 
-	// NetworkIDRETIRED (0008,1000) VR=AE VM=1 Network ID (RETIRED)
+	// NetworkIDRETIRED (0008,1000) VR=AE VM=1 Network ID
 	NetworkIDRETIRED = New(0x0008, 0x1000)
 
 	// StationName (0008,1010) VR=SH VM=1 Station Name
@@ -772,7 +775,7 @@ var (
 	// ManufacturerModelName (0008,1090) VR=LO VM=1 Manufacturer's Model Name
 	ManufacturerModelName = New(0x0008, 0x1090)
 
-	// ReferencedResultsSequenceRETIRED (0008,1100) VR=SQ VM=1 Referenced Results Sequence (RETIRED)
+	// ReferencedResultsSequenceRETIRED (0008,1100) VR=SQ VM=1 Referenced Results Sequence
 	ReferencedResultsSequenceRETIRED = New(0x0008, 0x1100)
 
 	// ReferencedStudySequence (0008,1110) VR=SQ VM=1 Referenced Study Sequence
@@ -793,7 +796,7 @@ var (
 	// ReferencedVisitSequence (0008,1125) VR=SQ VM=1 Referenced Visit Sequence
 	ReferencedVisitSequence = New(0x0008, 0x1125)
 
-	// ReferencedOverlaySequenceRETIRED (0008,1130) VR=SQ VM=1 Referenced Overlay Sequence (RETIRED)
+	// ReferencedOverlaySequenceRETIRED (0008,1130) VR=SQ VM=1 Referenced Overlay Sequence
 	ReferencedOverlaySequenceRETIRED = New(0x0008, 0x1130)
 
 	// ReferencedStereometricInstanceSequence (0008,1134) VR=SQ VM=1 Referenced Stereometric Instance Sequence
@@ -805,7 +808,7 @@ var (
 	// ReferencedImageSequence (0008,1140) VR=SQ VM=1 Referenced Image Sequence
 	ReferencedImageSequence = New(0x0008, 0x1140)
 
-	// ReferencedCurveSequenceRETIRED (0008,1145) VR=SQ VM=1 Referenced Curve Sequence (RETIRED)
+	// ReferencedCurveSequenceRETIRED (0008,1145) VR=SQ VM=1 Referenced Curve Sequence
 	ReferencedCurveSequenceRETIRED = New(0x0008, 0x1145)
 
 	// ReferencedInstanceSequence (0008,114A) VR=SQ VM=1 Referenced Instance Sequence
@@ -892,7 +895,7 @@ var (
 	// HistologicalDiagnosesCodeSequence (0008,1304) VR=SQ VM=1 Histological Diagnoses Code Sequence
 	HistologicalDiagnosesCodeSequence = New(0x0008, 0x1304)
 
-	// LossyImageCompressionRetiredRETIRED (0008,2110) VR=CS VM=1 Lossy Image Compression (Retired) (RETIRED)
+	// LossyImageCompressionRetiredRETIRED (0008,2110) VR=CS VM=1 Lossy Image Compression (Retired)
 	LossyImageCompressionRetiredRETIRED = New(0x0008, 0x2110)
 
 	// DerivationDescription (0008,2111) VR=ST VM=1 Derivation Description
@@ -946,13 +949,13 @@ var (
 	// RecommendedDisplayFrameRate (0008,2144) VR=IS VM=1 Recommended Display Frame Rate
 	RecommendedDisplayFrameRate = New(0x0008, 0x2144)
 
-	// TransducerPositionRETIRED (0008,2200) VR=CS VM=1 Transducer Position (RETIRED)
+	// TransducerPositionRETIRED (0008,2200) VR=CS VM=1 Transducer Position
 	TransducerPositionRETIRED = New(0x0008, 0x2200)
 
-	// TransducerOrientationRETIRED (0008,2204) VR=CS VM=1 Transducer Orientation (RETIRED)
+	// TransducerOrientationRETIRED (0008,2204) VR=CS VM=1 Transducer Orientation
 	TransducerOrientationRETIRED = New(0x0008, 0x2204)
 
-	// AnatomicStructureRETIRED (0008,2208) VR=CS VM=1 Anatomic Structure (RETIRED)
+	// AnatomicStructureRETIRED (0008,2208) VR=CS VM=1 Anatomic Structure
 	AnatomicStructureRETIRED = New(0x0008, 0x2208)
 
 	// AnatomicRegionSequence (0008,2218) VR=SQ VM=1 Anatomic Region Sequence
@@ -964,49 +967,49 @@ var (
 	// PrimaryAnatomicStructureSequence (0008,2228) VR=SQ VM=1 Primary Anatomic Structure Sequence
 	PrimaryAnatomicStructureSequence = New(0x0008, 0x2228)
 
-	// AnatomicStructureSpaceOrRegionSequenceRETIRED (0008,2229) VR=SQ VM=1 Anatomic Structure, Space or Region Sequence (RETIRED)
+	// AnatomicStructureSpaceOrRegionSequenceRETIRED (0008,2229) VR=SQ VM=1 Anatomic Structure, Space or Region Sequence
 	AnatomicStructureSpaceOrRegionSequenceRETIRED = New(0x0008, 0x2229)
 
 	// PrimaryAnatomicStructureModifierSequence (0008,2230) VR=SQ VM=1 Primary Anatomic Structure Modifier Sequence
 	PrimaryAnatomicStructureModifierSequence = New(0x0008, 0x2230)
 
-	// TransducerPositionSequenceRETIRED (0008,2240) VR=SQ VM=1 Transducer Position Sequence (RETIRED)
+	// TransducerPositionSequenceRETIRED (0008,2240) VR=SQ VM=1 Transducer Position Sequence
 	TransducerPositionSequenceRETIRED = New(0x0008, 0x2240)
 
-	// TransducerPositionModifierSequenceRETIRED (0008,2242) VR=SQ VM=1 Transducer Position Modifier Sequence (RETIRED)
+	// TransducerPositionModifierSequenceRETIRED (0008,2242) VR=SQ VM=1 Transducer Position Modifier Sequence
 	TransducerPositionModifierSequenceRETIRED = New(0x0008, 0x2242)
 
-	// TransducerOrientationSequenceRETIRED (0008,2244) VR=SQ VM=1 Transducer Orientation Sequence (RETIRED)
+	// TransducerOrientationSequenceRETIRED (0008,2244) VR=SQ VM=1 Transducer Orientation Sequence
 	TransducerOrientationSequenceRETIRED = New(0x0008, 0x2244)
 
-	// TransducerOrientationModifierSequenceRETIRED (0008,2246) VR=SQ VM=1 Transducer Orientation Modifier Sequence (RETIRED)
+	// TransducerOrientationModifierSequenceRETIRED (0008,2246) VR=SQ VM=1 Transducer Orientation Modifier Sequence
 	TransducerOrientationModifierSequenceRETIRED = New(0x0008, 0x2246)
 
-	// AnatomicStructureSpaceOrRegionCodeSequenceTrialRETIRED (0008,2251) VR=SQ VM=1 Anatomic Structure Space Or Region Code Sequence (Trial) (RETIRED)
+	// AnatomicStructureSpaceOrRegionCodeSequenceTrialRETIRED (0008,2251) VR=SQ VM=1 Anatomic Structure Space Or Region Code Sequence (Trial)
 	AnatomicStructureSpaceOrRegionCodeSequenceTrialRETIRED = New(0x0008, 0x2251)
 
-	// AnatomicPortalOfEntranceCodeSequenceTrialRETIRED (0008,2253) VR=SQ VM=1 Anatomic Portal Of Entrance Code Sequence (Trial) (RETIRED)
+	// AnatomicPortalOfEntranceCodeSequenceTrialRETIRED (0008,2253) VR=SQ VM=1 Anatomic Portal Of Entrance Code Sequence (Trial)
 	AnatomicPortalOfEntranceCodeSequenceTrialRETIRED = New(0x0008, 0x2253)
 
-	// AnatomicApproachDirectionCodeSequenceTrialRETIRED (0008,2255) VR=SQ VM=1 Anatomic Approach Direction Code Sequence (Trial) (RETIRED)
+	// AnatomicApproachDirectionCodeSequenceTrialRETIRED (0008,2255) VR=SQ VM=1 Anatomic Approach Direction Code Sequence (Trial)
 	AnatomicApproachDirectionCodeSequenceTrialRETIRED = New(0x0008, 0x2255)
 
-	// AnatomicPerspectiveDescriptionTrialRETIRED (0008,2256) VR=ST VM=1 Anatomic Perspective Description (Trial) (RETIRED)
+	// AnatomicPerspectiveDescriptionTrialRETIRED (0008,2256) VR=ST VM=1 Anatomic Perspective Description (Trial)
 	AnatomicPerspectiveDescriptionTrialRETIRED = New(0x0008, 0x2256)
 
-	// AnatomicPerspectiveCodeSequenceTrialRETIRED (0008,2257) VR=SQ VM=1 Anatomic Perspective Code Sequence (Trial) (RETIRED)
+	// AnatomicPerspectiveCodeSequenceTrialRETIRED (0008,2257) VR=SQ VM=1 Anatomic Perspective Code Sequence (Trial)
 	AnatomicPerspectiveCodeSequenceTrialRETIRED = New(0x0008, 0x2257)
 
-	// AnatomicLocationOfExaminingInstrumentDescriptionTrialRETIRED (0008,2258) VR=ST VM=1 Anatomic Location Of Examining Instrument Description (Trial) (RETIRED)
+	// AnatomicLocationOfExaminingInstrumentDescriptionTrialRETIRED (0008,2258) VR=ST VM=1 Anatomic Location Of Examining Instrument Description (Trial)
 	AnatomicLocationOfExaminingInstrumentDescriptionTrialRETIRED = New(0x0008, 0x2258)
 
-	// AnatomicLocationOfExaminingInstrumentCodeSequenceTrialRETIRED (0008,2259) VR=SQ VM=1 Anatomic Location Of Examining Instrument Code Sequence (Trial) (RETIRED)
+	// AnatomicLocationOfExaminingInstrumentCodeSequenceTrialRETIRED (0008,2259) VR=SQ VM=1 Anatomic Location Of Examining Instrument Code Sequence (Trial)
 	AnatomicLocationOfExaminingInstrumentCodeSequenceTrialRETIRED = New(0x0008, 0x2259)
 
-	// AnatomicStructureSpaceOrRegionModifierCodeSequenceTrialRETIRED (0008,225A) VR=SQ VM=1 Anatomic Structure Space Or Region Modifier Code Sequence (Trial) (RETIRED)
+	// AnatomicStructureSpaceOrRegionModifierCodeSequenceTrialRETIRED (0008,225A) VR=SQ VM=1 Anatomic Structure Space Or Region Modifier Code Sequence (Trial)
 	AnatomicStructureSpaceOrRegionModifierCodeSequenceTrialRETIRED = New(0x0008, 0x225A)
 
-	// OnAxisBackgroundAnatomicStructureCodeSequenceTrialRETIRED (0008,225C) VR=SQ VM=1 On Axis Background Anatomic Structure Code Sequence (Trial) (RETIRED)
+	// OnAxisBackgroundAnatomicStructureCodeSequenceTrialRETIRED (0008,225C) VR=SQ VM=1 On Axis Background Anatomic Structure Code Sequence (Trial)
 	OnAxisBackgroundAnatomicStructureCodeSequenceTrialRETIRED = New(0x0008, 0x225C)
 
 	// AlternateRepresentationSequence (0008,3001) VR=SQ VM=1 Alternate Representation Sequence
@@ -1024,7 +1027,7 @@ var (
 	// RadiopharmaceuticalAdministrationEventUID (0008,3012) VR=UI VM=1 Radiopharmaceutical Administration Event UID
 	RadiopharmaceuticalAdministrationEventUID = New(0x0008, 0x3012)
 
-	// IdentifyingCommentsRETIRED (0008,4000) VR=LT VM=1 Identifying Comments (RETIRED)
+	// IdentifyingCommentsRETIRED (0008,4000) VR=LT VM=1 Identifying Comments
 	IdentifyingCommentsRETIRED = New(0x0008, 0x4000)
 
 	// FrameType (0008,9007) VR=CS VM=4-5 Frame Type
@@ -1210,7 +1213,7 @@ var (
 	// GeneticModificationsCodeSequence (0010,0229) VR=SQ VM=1 Genetic Modifications Code Sequence
 	GeneticModificationsCodeSequence = New(0x0010, 0x0229)
 
-	// OtherPatientIDsRETIRED (0010,1000) VR=LO VM=1-n Other Patient IDs (RETIRED)
+	// OtherPatientIDsRETIRED (0010,1000) VR=LO VM=1-n Other Patient IDs
 	OtherPatientIDsRETIRED = New(0x0010, 0x1000)
 
 	// OtherPatientNames (0010,1001) VR=PN VM=1-n Other Patient Names
@@ -1246,7 +1249,7 @@ var (
 	// PatientAddress (0010,1040) VR=LO VM=1 Patient's Address
 	PatientAddress = New(0x0010, 0x1040)
 
-	// InsurancePlanIdentificationRETIRED (0010,1050) VR=LO VM=1-n Insurance Plan Identification (RETIRED)
+	// InsurancePlanIdentificationRETIRED (0010,1050) VR=LO VM=1-n Insurance Plan Identification
 	InsurancePlanIdentificationRETIRED = New(0x0010, 0x1050)
 
 	// PatientMotherBirthName (0010,1060) VR=PN VM=1 Patient's Mother's Birth Name
@@ -1258,7 +1261,7 @@ var (
 	// BranchOfService (0010,1081) VR=LO VM=1 Branch of Service
 	BranchOfService = New(0x0010, 0x1081)
 
-	// MedicalRecordLocatorRETIRED (0010,1090) VR=LO VM=1 Medical Record Locator (RETIRED)
+	// MedicalRecordLocatorRETIRED (0010,1090) VR=LO VM=1 Medical Record Locator
 	MedicalRecordLocatorRETIRED = New(0x0010, 0x1090)
 
 	// ReferencedPatientPhotoSequence (0010,1100) VR=SQ VM=1 Referenced Patient Photo Sequence
@@ -1282,7 +1285,7 @@ var (
 	// PatientTelecomInformation (0010,2155) VR=LT VM=1 Patient's Telecom Information
 	PatientTelecomInformation = New(0x0010, 0x2155)
 
-	// EthnicGroupRETIRED (0010,2160) VR=SH VM=1 Ethnic Group (RETIRED)
+	// EthnicGroupRETIRED (0010,2160) VR=SH VM=1 Ethnic Group
 	EthnicGroupRETIRED = New(0x0010, 0x2160)
 
 	// EthnicGroupCodeSequence (0010,2161) VR=SQ VM=1 Ethnic Group Code Sequence
@@ -1447,10 +1450,10 @@ var (
 	// EthicsCommitteeApprovalEffectivenessEndDate (0012,0087) VR=DA VM=1 Ethics Committee Approval Effectiveness End Date
 	EthicsCommitteeApprovalEffectivenessEndDate = New(0x0012, 0x0087)
 
-	// CADFileFormatRETIRED (0014,0023) VR=ST VM=1 CAD File Format (RETIRED)
+	// CADFileFormatRETIRED (0014,0023) VR=ST VM=1 CAD File Format
 	CADFileFormatRETIRED = New(0x0014, 0x0023)
 
-	// ComponentReferenceSystemRETIRED (0014,0024) VR=ST VM=1 Component Reference System (RETIRED)
+	// ComponentReferenceSystemRETIRED (0014,0024) VR=ST VM=1 Component Reference System
 	ComponentReferenceSystemRETIRED = New(0x0014, 0x0024)
 
 	// ComponentManufacturingProcedure (0014,0025) VR=ST VM=1 Component Manufacturing Procedure
@@ -1474,7 +1477,7 @@ var (
 	// MaterialPropertiesDescription (0014,0044) VR=ST VM=1 Material Properties Description
 	MaterialPropertiesDescription = New(0x0014, 0x0044)
 
-	// MaterialPropertiesFileFormatRetiredRETIRED (0014,0045) VR=ST VM=1 Material Properties File Format (Retired) (RETIRED)
+	// MaterialPropertiesFileFormatRetiredRETIRED (0014,0045) VR=ST VM=1 Material Properties File Format (Retired)
 	MaterialPropertiesFileFormatRetiredRETIRED = New(0x0014, 0x0045)
 
 	// MaterialNotes (0014,0046) VR=LT VM=1 Material Notes
@@ -1660,11 +1663,13 @@ var (
 	// DarkCurrentSequence (0014,3040) VR=SQ VM=1 Dark Current Sequence
 	DarkCurrentSequence = New(0x0014, 0x3040)
 
+	// DarkCurrentCounts (0014,3050) VR=OB/OW VM=1 Dark Current Counts
 	DarkCurrentCounts = New(0x0014, 0x3050)
 
 	// GainCorrectionReferenceSequence (0014,3060) VR=SQ VM=1 Gain Correction Reference Sequence
 	GainCorrectionReferenceSequence = New(0x0014, 0x3060)
 
+	// AirCounts (0014,3070) VR=OB/OW VM=1 Air Counts
 	AirCounts = New(0x0014, 0x3070)
 
 	// KVUsedInGainCalibration (0014,3071) VR=DS VM=1 KV Used in Gain Calibration
@@ -2324,7 +2329,7 @@ var (
 	// MovingWindowPaddingScheme (0014,6050) VR=CS VM=1 Moving Window Padding Scheme
 	MovingWindowPaddingScheme = New(0x0014, 0x6050)
 
-	// MovingWindowPaddingLength (0014,6051) VR=DS VM=1 Moving Window Padding Sength
+	// MovingWindowPaddingLength (0014,6051) VR=DS VM=1 Moving Window Padding Length
 	MovingWindowPaddingLength = New(0x0014, 0x6051)
 
 	// SpatialFilteringParametersSequence (0014,6052) VR=SQ VM=1 Spatial Filtering Parameters Sequence
@@ -2741,16 +2746,16 @@ var (
 	// AdditionalDrugSequence (0018,002A) VR=SQ VM=1 Additional Drug Sequence
 	AdditionalDrugSequence = New(0x0018, 0x002A)
 
-	// RadionuclideRETIRED (0018,0030) VR=LO VM=1-n Radionuclide (RETIRED)
+	// RadionuclideRETIRED (0018,0030) VR=LO VM=1-n Radionuclide
 	RadionuclideRETIRED = New(0x0018, 0x0030)
 
 	// Radiopharmaceutical (0018,0031) VR=LO VM=1 Radiopharmaceutical
 	Radiopharmaceutical = New(0x0018, 0x0031)
 
-	// EnergyWindowCenterlineRETIRED (0018,0032) VR=DS VM=1 Energy Window Centerline (RETIRED)
+	// EnergyWindowCenterlineRETIRED (0018,0032) VR=DS VM=1 Energy Window Centerline
 	EnergyWindowCenterlineRETIRED = New(0x0018, 0x0032)
 
-	// EnergyWindowTotalWidthRETIRED (0018,0033) VR=DS VM=1-n Energy Window Total Width (RETIRED)
+	// EnergyWindowTotalWidthRETIRED (0018,0033) VR=DS VM=1-n Energy Window Total Width
 	EnergyWindowTotalWidthRETIRED = New(0x0018, 0x0033)
 
 	// InterventionDrugName (0018,0034) VR=LO VM=1 Intervention Drug Name
@@ -2762,13 +2767,13 @@ var (
 	// InterventionSequence (0018,0036) VR=SQ VM=1 Intervention Sequence
 	InterventionSequence = New(0x0018, 0x0036)
 
-	// TherapyTypeRETIRED (0018,0037) VR=CS VM=1 Therapy Type (RETIRED)
+	// TherapyTypeRETIRED (0018,0037) VR=CS VM=1 Therapy Type
 	TherapyTypeRETIRED = New(0x0018, 0x0037)
 
 	// InterventionStatus (0018,0038) VR=CS VM=1 Intervention Status
 	InterventionStatus = New(0x0018, 0x0038)
 
-	// TherapyDescriptionRETIRED (0018,0039) VR=CS VM=1 Therapy Description (RETIRED)
+	// TherapyDescriptionRETIRED (0018,0039) VR=CS VM=1 Therapy Description
 	TherapyDescriptionRETIRED = New(0x0018, 0x0039)
 
 	// InterventionDescription (0018,003A) VR=ST VM=1 Intervention Description
@@ -2885,7 +2890,7 @@ var (
 	// SecondaryCaptureDeviceID (0018,1010) VR=LO VM=1 Secondary Capture Device ID
 	SecondaryCaptureDeviceID = New(0x0018, 0x1010)
 
-	// HardcopyCreationDeviceIDRETIRED (0018,1011) VR=LO VM=1 Hardcopy Creation Device ID (RETIRED)
+	// HardcopyCreationDeviceIDRETIRED (0018,1011) VR=LO VM=1 Hardcopy Creation Device ID
 	HardcopyCreationDeviceIDRETIRED = New(0x0018, 0x1011)
 
 	// DateOfSecondaryCapture (0018,1012) VR=DA VM=1 Date of Secondary Capture
@@ -2897,7 +2902,7 @@ var (
 	// SecondaryCaptureDeviceManufacturer (0018,1016) VR=LO VM=1 Secondary Capture Device Manufacturer
 	SecondaryCaptureDeviceManufacturer = New(0x0018, 0x1016)
 
-	// HardcopyDeviceManufacturerRETIRED (0018,1017) VR=LO VM=1 Hardcopy Device Manufacturer (RETIRED)
+	// HardcopyDeviceManufacturerRETIRED (0018,1017) VR=LO VM=1 Hardcopy Device Manufacturer
 	HardcopyDeviceManufacturerRETIRED = New(0x0018, 0x1017)
 
 	// SecondaryCaptureDeviceManufacturerModelName (0018,1018) VR=LO VM=1 Secondary Capture Device Manufacturer's Model Name
@@ -2906,10 +2911,10 @@ var (
 	// SecondaryCaptureDeviceSoftwareVersions (0018,1019) VR=LO VM=1-n Secondary Capture Device Software Versions
 	SecondaryCaptureDeviceSoftwareVersions = New(0x0018, 0x1019)
 
-	// HardcopyDeviceSoftwareVersionRETIRED (0018,101A) VR=LO VM=1-n Hardcopy Device Software Version (RETIRED)
+	// HardcopyDeviceSoftwareVersionRETIRED (0018,101A) VR=LO VM=1-n Hardcopy Device Software Version
 	HardcopyDeviceSoftwareVersionRETIRED = New(0x0018, 0x101A)
 
-	// HardcopyDeviceManufacturerModelNameRETIRED (0018,101B) VR=LO VM=1 Hardcopy Device Manufacturer's Model Name (RETIRED)
+	// HardcopyDeviceManufacturerModelNameRETIRED (0018,101B) VR=LO VM=1 Hardcopy Device Manufacturer's Model Name
 	HardcopyDeviceManufacturerModelNameRETIRED = New(0x0018, 0x101B)
 
 	// SoftwareVersions (0018,1020) VR=LO VM=1-n Software Versions
@@ -3101,7 +3106,7 @@ var (
 	// RotationDirection (0018,1140) VR=CS VM=1 Rotation Direction
 	RotationDirection = New(0x0018, 0x1140)
 
-	// AngularPositionRETIRED (0018,1141) VR=DS VM=1 Angular Position (RETIRED)
+	// AngularPositionRETIRED (0018,1141) VR=DS VM=1 Angular Position
 	AngularPositionRETIRED = New(0x0018, 0x1141)
 
 	// RadialPosition (0018,1142) VR=DS VM=1-n Radial Position
@@ -3116,7 +3121,7 @@ var (
 	// CenterOfRotationOffset (0018,1145) VR=DS VM=1 Center of Rotation Offset
 	CenterOfRotationOffset = New(0x0018, 0x1145)
 
-	// RotationOffsetRETIRED (0018,1146) VR=DS VM=1-n Rotation Offset (RETIRED)
+	// RotationOffsetRETIRED (0018,1146) VR=DS VM=1-n Rotation Offset
 	RotationOffsetRETIRED = New(0x0018, 0x1146)
 
 	// FieldOfViewShape (0018,1147) VR=CS VM=1 Field of View Shape
@@ -3281,7 +3286,7 @@ var (
 	// ConvolutionKernel (0018,1210) VR=SH VM=1-n Convolution Kernel
 	ConvolutionKernel = New(0x0018, 0x1210)
 
-	// UpperLowerPixelValuesRETIRED (0018,1240) VR=IS VM=1-n Upper/Lower Pixel Values (RETIRED)
+	// UpperLowerPixelValuesRETIRED (0018,1240) VR=IS VM=1-n Upper/Lower Pixel Values
 	UpperLowerPixelValuesRETIRED = New(0x0018, 0x1240)
 
 	// ActualFrameDuration (0018,1242) VR=IS VM=1 Actual Frame Duration
@@ -3572,7 +3577,7 @@ var (
 	// LesionNumber (0018,3105) VR=IS VM=1-n Lesion Number
 	LesionNumber = New(0x0018, 0x3105)
 
-	// AcquisitionCommentsRETIRED (0018,4000) VR=LT VM=1 Acquisition Comments (RETIRED)
+	// AcquisitionCommentsRETIRED (0018,4000) VR=LT VM=1 Acquisition Comments
 	AcquisitionCommentsRETIRED = New(0x0018, 0x4000)
 
 	// OutputPower (0018,5000) VR=SH VM=1-n Output Power
@@ -3590,7 +3595,7 @@ var (
 	// ProcessingFunction (0018,5020) VR=LO VM=1 Processing Function
 	ProcessingFunction = New(0x0018, 0x5020)
 
-	// PostprocessingFunctionRETIRED (0018,5021) VR=LO VM=1 Postprocessing Function (RETIRED)
+	// PostprocessingFunctionRETIRED (0018,5021) VR=LO VM=1 Postprocessing Function
 	PostprocessingFunctionRETIRED = New(0x0018, 0x5021)
 
 	// MechanicalIndex (0018,5022) VR=DS VM=1 Mechanical Index
@@ -3611,10 +3616,10 @@ var (
 	// SoftTissueSurfaceThermalIndex (0018,5029) VR=DS VM=1 Soft Tissue-surface Thermal Index
 	SoftTissueSurfaceThermalIndex = New(0x0018, 0x5029)
 
-	// DynamicRangeRETIRED (0018,5030) VR=DS VM=1 Dynamic Range (RETIRED)
+	// DynamicRangeRETIRED (0018,5030) VR=DS VM=1 Dynamic Range
 	DynamicRangeRETIRED = New(0x0018, 0x5030)
 
-	// TotalGainRETIRED (0018,5040) VR=DS VM=1 Total Gain (RETIRED)
+	// TotalGainRETIRED (0018,5040) VR=DS VM=1 Total Gain
 	TotalGainRETIRED = New(0x0018, 0x5040)
 
 	// DepthOfScanField (0018,5050) VR=IS VM=1 Depth of Scan Field
@@ -3629,10 +3634,10 @@ var (
 	// ProjectionEponymousNameCodeSequence (0018,5104) VR=SQ VM=1 Projection Eponymous Name Code Sequence
 	ProjectionEponymousNameCodeSequence = New(0x0018, 0x5104)
 
-	// ImageTransformationMatrixRETIRED (0018,5210) VR=DS VM=6 Image Transformation Matrix (RETIRED)
+	// ImageTransformationMatrixRETIRED (0018,5210) VR=DS VM=6 Image Transformation Matrix
 	ImageTransformationMatrixRETIRED = New(0x0018, 0x5210)
 
-	// ImageTranslationVectorRETIRED (0018,5212) VR=DS VM=3 Image Translation Vector (RETIRED)
+	// ImageTranslationVectorRETIRED (0018,5212) VR=DS VM=3 Image Translation Vector
 	ImageTranslationVectorRETIRED = New(0x0018, 0x5212)
 
 	// Sensitivity (0018,6000) VR=DS VM=1 Sensitivity
@@ -3701,37 +3706,37 @@ var (
 	// SteeringAngle (0018,6036) VR=FD VM=1 Steering Angle
 	SteeringAngle = New(0x0018, 0x6036)
 
-	// DopplerSampleVolumeXPositionRetiredRETIRED (0018,6038) VR=UL VM=1 Doppler Sample Volume X Position (Retired) (RETIRED)
+	// DopplerSampleVolumeXPositionRetiredRETIRED (0018,6038) VR=UL VM=1 Doppler Sample Volume X Position (Retired)
 	DopplerSampleVolumeXPositionRetiredRETIRED = New(0x0018, 0x6038)
 
 	// DopplerSampleVolumeXPosition (0018,6039) VR=SL VM=1 Doppler Sample Volume X Position
 	DopplerSampleVolumeXPosition = New(0x0018, 0x6039)
 
-	// DopplerSampleVolumeYPositionRetiredRETIRED (0018,603A) VR=UL VM=1 Doppler Sample Volume Y Position (Retired) (RETIRED)
+	// DopplerSampleVolumeYPositionRetiredRETIRED (0018,603A) VR=UL VM=1 Doppler Sample Volume Y Position (Retired)
 	DopplerSampleVolumeYPositionRetiredRETIRED = New(0x0018, 0x603A)
 
 	// DopplerSampleVolumeYPosition (0018,603B) VR=SL VM=1 Doppler Sample Volume Y Position
 	DopplerSampleVolumeYPosition = New(0x0018, 0x603B)
 
-	// TMLinePositionX0RetiredRETIRED (0018,603C) VR=UL VM=1 TM-Line Position X0 (Retired) (RETIRED)
+	// TMLinePositionX0RetiredRETIRED (0018,603C) VR=UL VM=1 TM-Line Position X0 (Retired)
 	TMLinePositionX0RetiredRETIRED = New(0x0018, 0x603C)
 
 	// TMLinePositionX0 (0018,603D) VR=SL VM=1 TM-Line Position X0
 	TMLinePositionX0 = New(0x0018, 0x603D)
 
-	// TMLinePositionY0RetiredRETIRED (0018,603E) VR=UL VM=1 TM-Line Position Y0 (Retired) (RETIRED)
+	// TMLinePositionY0RetiredRETIRED (0018,603E) VR=UL VM=1 TM-Line Position Y0 (Retired)
 	TMLinePositionY0RetiredRETIRED = New(0x0018, 0x603E)
 
 	// TMLinePositionY0 (0018,603F) VR=SL VM=1 TM-Line Position Y0
 	TMLinePositionY0 = New(0x0018, 0x603F)
 
-	// TMLinePositionX1RetiredRETIRED (0018,6040) VR=UL VM=1 TM-Line Position X1 (Retired) (RETIRED)
+	// TMLinePositionX1RetiredRETIRED (0018,6040) VR=UL VM=1 TM-Line Position X1 (Retired)
 	TMLinePositionX1RetiredRETIRED = New(0x0018, 0x6040)
 
 	// TMLinePositionX1 (0018,6041) VR=SL VM=1 TM-Line Position X1
 	TMLinePositionX1 = New(0x0018, 0x6041)
 
-	// TMLinePositionY1RetiredRETIRED (0018,6042) VR=UL VM=1 TM-Line Position Y1 (Retired) (RETIRED)
+	// TMLinePositionY1RetiredRETIRED (0018,6042) VR=UL VM=1 TM-Line Position Y1 (Retired)
 	TMLinePositionY1RetiredRETIRED = New(0x0018, 0x6042)
 
 	// TMLinePositionY1 (0018,6043) VR=SL VM=1 TM-Line Position Y1
@@ -4145,7 +4150,7 @@ var (
 	// SpectroscopyAcquisitionPhaseRows (0018,9095) VR=UL VM=1 Spectroscopy Acquisition Phase Rows
 	SpectroscopyAcquisitionPhaseRows = New(0x0018, 0x9095)
 
-	// ParallelReductionFactorInPlaneRetiredRETIRED (0018,9096) VR=FD VM=1 Parallel Reduction Factor In-plane (Retired) (RETIRED)
+	// ParallelReductionFactorInPlaneRetiredRETIRED (0018,9096) VR=FD VM=1 Parallel Reduction Factor In-plane (Retired)
 	ParallelReductionFactorInPlaneRetiredRETIRED = New(0x0018, 0x9096)
 
 	// TransmitterFrequency (0018,9098) VR=FD VM=1-2 Transmitter Frequency
@@ -4214,7 +4219,7 @@ var (
 	// SpectroscopyAcquisitionOutOfPlanePhaseSteps (0018,9159) VR=UL VM=1 Spectroscopy Acquisition Out-of-plane Phase Steps
 	SpectroscopyAcquisitionOutOfPlanePhaseSteps = New(0x0018, 0x9159)
 
-	// BulkMotionStatusRETIRED (0018,9166) VR=CS VM=1 Bulk Motion Status (RETIRED)
+	// BulkMotionStatusRETIRED (0018,9166) VR=CS VM=1 Bulk Motion Status
 	BulkMotionStatusRETIRED = New(0x0018, 0x9166)
 
 	// ParallelReductionFactorSecondInPlane (0018,9168) VR=FD VM=1 Parallel Reduction Factor Second In-plane
@@ -4274,10 +4279,10 @@ var (
 	// RespiratorySignalSourceID (0018,9186) VR=SH VM=1 Respiratory Signal Source ID
 	RespiratorySignalSourceID = New(0x0018, 0x9186)
 
-	// ChemicalShiftMinimumIntegrationLimitInHzRETIRED (0018,9195) VR=FD VM=1 Chemical Shift Minimum Integration Limit in Hz (RETIRED)
+	// ChemicalShiftMinimumIntegrationLimitInHzRETIRED (0018,9195) VR=FD VM=1 Chemical Shift Minimum Integration Limit in Hz
 	ChemicalShiftMinimumIntegrationLimitInHzRETIRED = New(0x0018, 0x9195)
 
-	// ChemicalShiftMaximumIntegrationLimitInHzRETIRED (0018,9196) VR=FD VM=1 Chemical Shift Maximum Integration Limit in Hz (RETIRED)
+	// ChemicalShiftMaximumIntegrationLimitInHzRETIRED (0018,9196) VR=FD VM=1 Chemical Shift Maximum Integration Limit in Hz
 	ChemicalShiftMaximumIntegrationLimitInHzRETIRED = New(0x0018, 0x9196)
 
 	// MRVelocityEncodingSequence (0018,9197) VR=SQ VM=1 MR Velocity Encoding Sequence
@@ -4466,7 +4471,7 @@ var (
 	// ExposureModulationType (0018,9323) VR=CS VM=1-n Exposure Modulation Type
 	ExposureModulationType = New(0x0018, 0x9323)
 
-	// EstimatedDoseSavingRETIRED (0018,9324) VR=FD VM=1 Estimated Dose Saving (RETIRED)
+	// EstimatedDoseSavingRETIRED (0018,9324) VR=FD VM=1 Estimated Dose Saving
 	EstimatedDoseSavingRETIRED = New(0x0018, 0x9324)
 
 	// CTXRayDetailsSequence (0018,9325) VR=SQ VM=1 CT X-Ray Details Sequence
@@ -4645,6 +4650,15 @@ var (
 
 	// XRayMassAttenuationCoefficient (0018,9384) VR=DS VM=1 X-Ray Mass Attenuation Coefficient
 	XRayMassAttenuationCoefficient = New(0x0018, 0x9384)
+
+	// MetalArtifactReductionSequence (0018,9390) VR=SQ VM=1 Metal Artifact Reduction Sequence
+	MetalArtifactReductionSequence = New(0x0018, 0x9390)
+
+	// MetalArtifactReductionApplied (0018,9391) VR=CS VM=1 Metal Artifact Reduction Applied
+	MetalArtifactReductionApplied = New(0x0018, 0x9391)
+
+	// MetalArtifactReductionAlgorithmIdentificationSequence (0018,9392) VR=SQ VM=1 Metal Artifact Reduction Algorithm Identification Sequence
+	MetalArtifactReductionAlgorithmIdentificationSequence = New(0x0018, 0x9392)
 
 	// ProjectionPixelCalibrationSequence (0018,9401) VR=SQ VM=1 Projection Pixel Calibration Sequence
 	ProjectionPixelCalibrationSequence = New(0x0018, 0x9401)
@@ -5126,6 +5140,7 @@ var (
 	// TransducerApplicationCodeSequence (0018,980F) VR=SQ VM=1 Transducer Application Code Sequence
 	TransducerApplicationCodeSequence = New(0x0018, 0x980F)
 
+	// ZeroVelocityPixelValue (0018,9810) VR=US/SS VM=1 Zero Velocity Pixel Value
 	ZeroVelocityPixelValue = New(0x0018, 0x9810)
 
 	// PhotoacousticExcitationCharacteristicsSequence (0018,9821) VR=SQ VM=1 Photoacoustic Excitation Characteristics Sequence
@@ -5395,19 +5410,19 @@ var (
 	// InstanceNumber (0020,0013) VR=IS VM=1 Instance Number
 	InstanceNumber = New(0x0020, 0x0013)
 
-	// IsotopeNumberRETIRED (0020,0014) VR=IS VM=1 Isotope Number (RETIRED)
+	// IsotopeNumberRETIRED (0020,0014) VR=IS VM=1 Isotope Number
 	IsotopeNumberRETIRED = New(0x0020, 0x0014)
 
-	// PhaseNumberRETIRED (0020,0015) VR=IS VM=1 Phase Number (RETIRED)
+	// PhaseNumberRETIRED (0020,0015) VR=IS VM=1 Phase Number
 	PhaseNumberRETIRED = New(0x0020, 0x0015)
 
-	// IntervalNumberRETIRED (0020,0016) VR=IS VM=1 Interval Number (RETIRED)
+	// IntervalNumberRETIRED (0020,0016) VR=IS VM=1 Interval Number
 	IntervalNumberRETIRED = New(0x0020, 0x0016)
 
-	// TimeSlotNumberRETIRED (0020,0017) VR=IS VM=1 Time Slot Number (RETIRED)
+	// TimeSlotNumberRETIRED (0020,0017) VR=IS VM=1 Time Slot Number
 	TimeSlotNumberRETIRED = New(0x0020, 0x0017)
 
-	// AngleNumberRETIRED (0020,0018) VR=IS VM=1 Angle Number (RETIRED)
+	// AngleNumberRETIRED (0020,0018) VR=IS VM=1 Angle Number
 	AngleNumberRETIRED = New(0x0020, 0x0018)
 
 	// ItemNumber (0020,0019) VR=IS VM=1 Item Number
@@ -5416,31 +5431,31 @@ var (
 	// PatientOrientation (0020,0020) VR=CS VM=2 Patient Orientation
 	PatientOrientation = New(0x0020, 0x0020)
 
-	// OverlayNumberRETIRED (0020,0022) VR=IS VM=1 Overlay Number (RETIRED)
+	// OverlayNumberRETIRED (0020,0022) VR=IS VM=1 Overlay Number
 	OverlayNumberRETIRED = New(0x0020, 0x0022)
 
-	// CurveNumberRETIRED (0020,0024) VR=IS VM=1 Curve Number (RETIRED)
+	// CurveNumberRETIRED (0020,0024) VR=IS VM=1 Curve Number
 	CurveNumberRETIRED = New(0x0020, 0x0024)
 
-	// LUTNumberRETIRED (0020,0026) VR=IS VM=1 LUT Number (RETIRED)
+	// LUTNumberRETIRED (0020,0026) VR=IS VM=1 LUT Number
 	LUTNumberRETIRED = New(0x0020, 0x0026)
 
 	// PyramidLabel (0020,0027) VR=LO VM=1 Pyramid Label
 	PyramidLabel = New(0x0020, 0x0027)
 
-	// ImagePositionRETIRED (0020,0030) VR=DS VM=3 Image Position (RETIRED)
+	// ImagePositionRETIRED (0020,0030) VR=DS VM=3 Image Position
 	ImagePositionRETIRED = New(0x0020, 0x0030)
 
 	// ImagePositionPatient (0020,0032) VR=DS VM=3 Image Position (Patient)
 	ImagePositionPatient = New(0x0020, 0x0032)
 
-	// ImageOrientationRETIRED (0020,0035) VR=DS VM=6 Image Orientation (RETIRED)
+	// ImageOrientationRETIRED (0020,0035) VR=DS VM=6 Image Orientation
 	ImageOrientationRETIRED = New(0x0020, 0x0035)
 
 	// ImageOrientationPatient (0020,0037) VR=DS VM=6 Image Orientation (Patient)
 	ImageOrientationPatient = New(0x0020, 0x0037)
 
-	// LocationRETIRED (0020,0050) VR=DS VM=1 Location (RETIRED)
+	// LocationRETIRED (0020,0050) VR=DS VM=1 Location
 	LocationRETIRED = New(0x0020, 0x0050)
 
 	// FrameOfReferenceUID (0020,0052) VR=UI VM=1 Frame of Reference UID
@@ -5452,13 +5467,13 @@ var (
 	// ImageLaterality (0020,0062) VR=CS VM=1 Image Laterality
 	ImageLaterality = New(0x0020, 0x0062)
 
-	// ImageGeometryTypeRETIRED (0020,0070) VR=LO VM=1 Image Geometry Type (RETIRED)
+	// ImageGeometryTypeRETIRED (0020,0070) VR=LO VM=1 Image Geometry Type
 	ImageGeometryTypeRETIRED = New(0x0020, 0x0070)
 
-	// MaskingImageRETIRED (0020,0080) VR=CS VM=1-n Masking Image (RETIRED)
+	// MaskingImageRETIRED (0020,0080) VR=CS VM=1-n Masking Image
 	MaskingImageRETIRED = New(0x0020, 0x0080)
 
-	// ReportNumberRETIRED (0020,00AA) VR=IS VM=1 Report Number (RETIRED)
+	// ReportNumberRETIRED (0020,00AA) VR=IS VM=1 Report Number
 	ReportNumberRETIRED = New(0x0020, 0x00AA)
 
 	// TemporalPositionIdentifier (0020,0100) VR=IS VM=1 Temporal Position Identifier
@@ -5476,25 +5491,25 @@ var (
 	// SOPInstanceUIDOfConcatenationSource (0020,0242) VR=UI VM=1 SOP Instance UID of Concatenation Source
 	SOPInstanceUIDOfConcatenationSource = New(0x0020, 0x0242)
 
-	// SeriesInStudyRETIRED (0020,1000) VR=IS VM=1 Series in Study (RETIRED)
+	// SeriesInStudyRETIRED (0020,1000) VR=IS VM=1 Series in Study
 	SeriesInStudyRETIRED = New(0x0020, 0x1000)
 
-	// AcquisitionsInSeriesRETIRED (0020,1001) VR=IS VM=1 Acquisitions in Series (RETIRED)
+	// AcquisitionsInSeriesRETIRED (0020,1001) VR=IS VM=1 Acquisitions in Series
 	AcquisitionsInSeriesRETIRED = New(0x0020, 0x1001)
 
 	// ImagesInAcquisition (0020,1002) VR=IS VM=1 Images in Acquisition
 	ImagesInAcquisition = New(0x0020, 0x1002)
 
-	// ImagesInSeriesRETIRED (0020,1003) VR=IS VM=1 Images in Series (RETIRED)
+	// ImagesInSeriesRETIRED (0020,1003) VR=IS VM=1 Images in Series
 	ImagesInSeriesRETIRED = New(0x0020, 0x1003)
 
-	// AcquisitionsInStudyRETIRED (0020,1004) VR=IS VM=1 Acquisitions in Study (RETIRED)
+	// AcquisitionsInStudyRETIRED (0020,1004) VR=IS VM=1 Acquisitions in Study
 	AcquisitionsInStudyRETIRED = New(0x0020, 0x1004)
 
-	// ImagesInStudyRETIRED (0020,1005) VR=IS VM=1 Images in Study (RETIRED)
+	// ImagesInStudyRETIRED (0020,1005) VR=IS VM=1 Images in Study
 	ImagesInStudyRETIRED = New(0x0020, 0x1005)
 
-	// ReferenceRETIRED (0020,1020) VR=LO VM=1-n Reference (RETIRED)
+	// ReferenceRETIRED (0020,1020) VR=LO VM=1-n Reference
 	ReferenceRETIRED = New(0x0020, 0x1020)
 
 	// TargetPositionReferenceIndicator (0020,103F) VR=LO VM=1 Target Position Reference Indicator
@@ -5506,7 +5521,7 @@ var (
 	// SliceLocation (0020,1041) VR=DS VM=1 Slice Location
 	SliceLocation = New(0x0020, 0x1041)
 
-	// OtherStudyNumbersRETIRED (0020,1070) VR=IS VM=1-n Other Study Numbers (RETIRED)
+	// OtherStudyNumbersRETIRED (0020,1070) VR=IS VM=1-n Other Study Numbers
 	OtherStudyNumbersRETIRED = New(0x0020, 0x1070)
 
 	// NumberOfPatientRelatedStudies (0020,1200) VR=IS VM=1 Number of Patient Related Studies
@@ -5527,33 +5542,34 @@ var (
 	// NumberOfSeriesRelatedInstances (0020,1209) VR=IS VM=1 Number of Series Related Instances
 	NumberOfSeriesRelatedInstances = New(0x0020, 0x1209)
 
+	// SourceImageIDsRETIRED (0020,31xx) VR=CS VM=1-n Source Image IDs
 	SourceImageIDsRETIRED = New(0x0020, 0x3100)
 
-	// ModifyingDeviceIDRETIRED (0020,3401) VR=CS VM=1 Modifying Device ID (RETIRED)
+	// ModifyingDeviceIDRETIRED (0020,3401) VR=CS VM=1 Modifying Device ID
 	ModifyingDeviceIDRETIRED = New(0x0020, 0x3401)
 
-	// ModifiedImageIDRETIRED (0020,3402) VR=CS VM=1 Modified Image ID (RETIRED)
+	// ModifiedImageIDRETIRED (0020,3402) VR=CS VM=1 Modified Image ID
 	ModifiedImageIDRETIRED = New(0x0020, 0x3402)
 
-	// ModifiedImageDateRETIRED (0020,3403) VR=DA VM=1 Modified Image Date (RETIRED)
+	// ModifiedImageDateRETIRED (0020,3403) VR=DA VM=1 Modified Image Date
 	ModifiedImageDateRETIRED = New(0x0020, 0x3403)
 
-	// ModifyingDeviceManufacturerRETIRED (0020,3404) VR=LO VM=1 Modifying Device Manufacturer (RETIRED)
+	// ModifyingDeviceManufacturerRETIRED (0020,3404) VR=LO VM=1 Modifying Device Manufacturer
 	ModifyingDeviceManufacturerRETIRED = New(0x0020, 0x3404)
 
-	// ModifiedImageTimeRETIRED (0020,3405) VR=TM VM=1 Modified Image Time (RETIRED)
+	// ModifiedImageTimeRETIRED (0020,3405) VR=TM VM=1 Modified Image Time
 	ModifiedImageTimeRETIRED = New(0x0020, 0x3405)
 
-	// ModifiedImageDescriptionRETIRED (0020,3406) VR=LO VM=1 Modified Image Description (RETIRED)
+	// ModifiedImageDescriptionRETIRED (0020,3406) VR=LO VM=1 Modified Image Description
 	ModifiedImageDescriptionRETIRED = New(0x0020, 0x3406)
 
 	// ImageComments (0020,4000) VR=LT VM=1 Image Comments
 	ImageComments = New(0x0020, 0x4000)
 
-	// OriginalImageIdentificationRETIRED (0020,5000) VR=AT VM=1-n Original Image Identification (RETIRED)
+	// OriginalImageIdentificationRETIRED (0020,5000) VR=AT VM=1-n Original Image Identification
 	OriginalImageIdentificationRETIRED = New(0x0020, 0x5000)
 
-	// OriginalImageIdentificationNomenclatureRETIRED (0020,5002) VR=LO VM=1-n Original Image Identification Nomenclature (RETIRED)
+	// OriginalImageIdentificationNomenclatureRETIRED (0020,5002) VR=LO VM=1-n Original Image Identification Nomenclature
 	OriginalImageIdentificationNomenclatureRETIRED = New(0x0020, 0x5002)
 
 	// StackID (0020,9056) VR=SH VM=1 Stack ID
@@ -5997,7 +6013,7 @@ var (
 	// IOLManufacturer (0022,1093) VR=LO VM=1 IOL Manufacturer
 	IOLManufacturer = New(0x0022, 0x1093)
 
-	// LensConstantDescriptionRETIRED (0022,1094) VR=LO VM=1 Lens Constant Description (RETIRED)
+	// LensConstantDescriptionRETIRED (0022,1094) VR=LO VM=1 Lens Constant Description
 	LensConstantDescriptionRETIRED = New(0x0022, 0x1094)
 
 	// ImplantName (0022,1095) VR=LO VM=1 Implant Name
@@ -6066,7 +6082,7 @@ var (
 	// OphthalmicAxialLengthDataSourceCodeSequence (0022,1150) VR=SQ VM=1 Ophthalmic Axial Length Data Source Code Sequence
 	OphthalmicAxialLengthDataSourceCodeSequence = New(0x0022, 0x1150)
 
-	// OphthalmicAxialLengthAcquisitionMethodCodeSequenceRETIRED (0022,1153) VR=SQ VM=1 Ophthalmic Axial Length Acquisition Method Code Sequence (RETIRED)
+	// OphthalmicAxialLengthAcquisitionMethodCodeSequenceRETIRED (0022,1153) VR=SQ VM=1 Ophthalmic Axial Length Acquisition Method Code Sequence
 	OphthalmicAxialLengthAcquisitionMethodCodeSequenceRETIRED = New(0x0022, 0x1153)
 
 	// SignalToNoiseRatio (0022,1155) VR=FL VM=1 Signal to Noise Ratio
@@ -6108,10 +6124,10 @@ var (
 	// OphthalmicAxialLengthQualityMetricSequence (0022,1262) VR=SQ VM=1 Ophthalmic Axial Length Quality Metric Sequence
 	OphthalmicAxialLengthQualityMetricSequence = New(0x0022, 0x1262)
 
-	// OphthalmicAxialLengthQualityMetricTypeCodeSequenceRETIRED (0022,1265) VR=SQ VM=1 Ophthalmic Axial Length Quality Metric Type Code Sequence (RETIRED)
+	// OphthalmicAxialLengthQualityMetricTypeCodeSequenceRETIRED (0022,1265) VR=SQ VM=1 Ophthalmic Axial Length Quality Metric Type Code Sequence
 	OphthalmicAxialLengthQualityMetricTypeCodeSequenceRETIRED = New(0x0022, 0x1265)
 
-	// OphthalmicAxialLengthQualityMetricTypeDescriptionRETIRED (0022,1273) VR=LO VM=1 Ophthalmic Axial Length Quality Metric Type Description (RETIRED)
+	// OphthalmicAxialLengthQualityMetricTypeDescriptionRETIRED (0022,1273) VR=LO VM=1 Ophthalmic Axial Length Quality Metric Type Description
 	OphthalmicAxialLengthQualityMetricTypeDescriptionRETIRED = New(0x0022, 0x1273)
 
 	// IntraocularLensCalculationsRightEyeSequence (0022,1300) VR=SQ VM=1 Intraocular Lens Calculations Right Eye Sequence
@@ -6144,6 +6160,7 @@ var (
 	// PixelValueMappingToCodedConceptSequence (0022,1450) VR=SQ VM=1 Pixel Value Mapping to Coded Concept Sequence
 	PixelValueMappingToCodedConceptSequence = New(0x0022, 0x1450)
 
+	// MappedPixelValue (0022,1452) VR=US/SS VM=1 Mapped Pixel Value
 	MappedPixelValue = New(0x0022, 0x1452)
 
 	// PixelValueMappingExplanation (0022,1454) VR=LO VM=1 Pixel Value Mapping Explanation
@@ -6599,7 +6616,7 @@ var (
 	// PhotometricInterpretation (0028,0004) VR=CS VM=1 Photometric Interpretation
 	PhotometricInterpretation = New(0x0028, 0x0004)
 
-	// ImageDimensionsRETIRED (0028,0005) VR=US VM=1 Image Dimensions (RETIRED)
+	// ImageDimensionsRETIRED (0028,0005) VR=US VM=1 Image Dimensions
 	ImageDimensionsRETIRED = New(0x0028, 0x0005)
 
 	// PlanarConfiguration (0028,0006) VR=US VM=1 Planar Configuration
@@ -6620,7 +6637,7 @@ var (
 	// Columns (0028,0011) VR=US VM=1 Columns
 	Columns = New(0x0028, 0x0011)
 
-	// PlanesRETIRED (0028,0012) VR=US VM=1 Planes (RETIRED)
+	// PlanesRETIRED (0028,0012) VR=US VM=1 Planes
 	PlanesRETIRED = New(0x0028, 0x0012)
 
 	// UltrasoundColorDataPresent (0028,0014) VR=US VM=1 Ultrasound Color Data Present
@@ -6638,69 +6655,70 @@ var (
 	// PixelAspectRatio (0028,0034) VR=IS VM=2 Pixel Aspect Ratio
 	PixelAspectRatio = New(0x0028, 0x0034)
 
-	// ImageFormatRETIRED (0028,0040) VR=CS VM=1 Image Format (RETIRED)
+	// ImageFormatRETIRED (0028,0040) VR=CS VM=1 Image Format
 	ImageFormatRETIRED = New(0x0028, 0x0040)
 
-	// ManipulatedImageRETIRED (0028,0050) VR=LO VM=1-n Manipulated Image (RETIRED)
+	// ManipulatedImageRETIRED (0028,0050) VR=LO VM=1-n Manipulated Image
 	ManipulatedImageRETIRED = New(0x0028, 0x0050)
 
 	// CorrectedImage (0028,0051) VR=CS VM=1-n Corrected Image
 	CorrectedImage = New(0x0028, 0x0051)
 
-	// CompressionRecognitionCodeRETIRED (0028,005F) VR=LO VM=1 Compression Recognition Code (RETIRED)
+	// CompressionRecognitionCodeRETIRED (0028,005F) VR=LO VM=1 Compression Recognition Code
 	CompressionRecognitionCodeRETIRED = New(0x0028, 0x005F)
 
-	// CompressionCodeRETIRED (0028,0060) VR=CS VM=1 Compression Code (RETIRED)
+	// CompressionCodeRETIRED (0028,0060) VR=CS VM=1 Compression Code
 	CompressionCodeRETIRED = New(0x0028, 0x0060)
 
-	// CompressionOriginatorRETIRED (0028,0061) VR=SH VM=1 Compression Originator (RETIRED)
+	// CompressionOriginatorRETIRED (0028,0061) VR=SH VM=1 Compression Originator
 	CompressionOriginatorRETIRED = New(0x0028, 0x0061)
 
-	// CompressionLabelRETIRED (0028,0062) VR=LO VM=1 Compression Label (RETIRED)
+	// CompressionLabelRETIRED (0028,0062) VR=LO VM=1 Compression Label
 	CompressionLabelRETIRED = New(0x0028, 0x0062)
 
-	// CompressionDescriptionRETIRED (0028,0063) VR=SH VM=1 Compression Description (RETIRED)
+	// CompressionDescriptionRETIRED (0028,0063) VR=SH VM=1 Compression Description
 	CompressionDescriptionRETIRED = New(0x0028, 0x0063)
 
-	// CompressionSequenceRETIRED (0028,0065) VR=CS VM=1-n Compression Sequence (RETIRED)
+	// CompressionSequenceRETIRED (0028,0065) VR=CS VM=1-n Compression Sequence
 	CompressionSequenceRETIRED = New(0x0028, 0x0065)
 
-	// CompressionStepPointersRETIRED (0028,0066) VR=AT VM=1-n Compression Step Pointers (RETIRED)
+	// CompressionStepPointersRETIRED (0028,0066) VR=AT VM=1-n Compression Step Pointers
 	CompressionStepPointersRETIRED = New(0x0028, 0x0066)
 
-	// RepeatIntervalRETIRED (0028,0068) VR=US VM=1 Repeat Interval (RETIRED)
+	// RepeatIntervalRETIRED (0028,0068) VR=US VM=1 Repeat Interval
 	RepeatIntervalRETIRED = New(0x0028, 0x0068)
 
-	// BitsGroupedRETIRED (0028,0069) VR=US VM=1 Bits Grouped (RETIRED)
+	// BitsGroupedRETIRED (0028,0069) VR=US VM=1 Bits Grouped
 	BitsGroupedRETIRED = New(0x0028, 0x0069)
 
-	// PerimeterTableRETIRED (0028,0070) VR=US VM=1-n Perimeter Table (RETIRED)
+	// PerimeterTableRETIRED (0028,0070) VR=US VM=1-n Perimeter Table
 	PerimeterTableRETIRED = New(0x0028, 0x0070)
 
+	// PerimeterValueRETIRED (0028,0071) VR=US/SS VM=1 Perimeter Value
 	PerimeterValueRETIRED = New(0x0028, 0x0071)
 
-	// PredictorRowsRETIRED (0028,0080) VR=US VM=1 Predictor Rows (RETIRED)
+	// PredictorRowsRETIRED (0028,0080) VR=US VM=1 Predictor Rows
 	PredictorRowsRETIRED = New(0x0028, 0x0080)
 
-	// PredictorColumnsRETIRED (0028,0081) VR=US VM=1 Predictor Columns (RETIRED)
+	// PredictorColumnsRETIRED (0028,0081) VR=US VM=1 Predictor Columns
 	PredictorColumnsRETIRED = New(0x0028, 0x0081)
 
-	// PredictorConstantsRETIRED (0028,0082) VR=US VM=1-n Predictor Constants (RETIRED)
+	// PredictorConstantsRETIRED (0028,0082) VR=US VM=1-n Predictor Constants
 	PredictorConstantsRETIRED = New(0x0028, 0x0082)
 
-	// BlockedPixelsRETIRED (0028,0090) VR=CS VM=1 Blocked Pixels (RETIRED)
+	// BlockedPixelsRETIRED (0028,0090) VR=CS VM=1 Blocked Pixels
 	BlockedPixelsRETIRED = New(0x0028, 0x0090)
 
-	// BlockRowsRETIRED (0028,0091) VR=US VM=1 Block Rows (RETIRED)
+	// BlockRowsRETIRED (0028,0091) VR=US VM=1 Block Rows
 	BlockRowsRETIRED = New(0x0028, 0x0091)
 
-	// BlockColumnsRETIRED (0028,0092) VR=US VM=1 Block Columns (RETIRED)
+	// BlockColumnsRETIRED (0028,0092) VR=US VM=1 Block Columns
 	BlockColumnsRETIRED = New(0x0028, 0x0092)
 
-	// RowOverlapRETIRED (0028,0093) VR=US VM=1 Row Overlap (RETIRED)
+	// RowOverlapRETIRED (0028,0093) VR=US VM=1 Row Overlap
 	RowOverlapRETIRED = New(0x0028, 0x0093)
 
-	// ColumnOverlapRETIRED (0028,0094) VR=US VM=1 Column Overlap (RETIRED)
+	// ColumnOverlapRETIRED (0028,0094) VR=US VM=1 Column Overlap
 	ColumnOverlapRETIRED = New(0x0028, 0x0094)
 
 	// BitsAllocated (0028,0100) VR=US VM=1 Bits Allocated
@@ -6715,24 +6733,34 @@ var (
 	// PixelRepresentation (0028,0103) VR=US VM=1 Pixel Representation
 	PixelRepresentation = New(0x0028, 0x0103)
 
+	// SmallestValidPixelValueRETIRED (0028,0104) VR=US/SS VM=1 Smallest Valid Pixel Value
 	SmallestValidPixelValueRETIRED = New(0x0028, 0x0104)
 
+	// LargestValidPixelValueRETIRED (0028,0105) VR=US/SS VM=1 Largest Valid Pixel Value
 	LargestValidPixelValueRETIRED = New(0x0028, 0x0105)
 
+	// SmallestImagePixelValue (0028,0106) VR=US/SS VM=1 Smallest Image Pixel Value
 	SmallestImagePixelValue = New(0x0028, 0x0106)
 
+	// LargestImagePixelValue (0028,0107) VR=US/SS VM=1 Largest Image Pixel Value
 	LargestImagePixelValue = New(0x0028, 0x0107)
 
+	// SmallestPixelValueInSeries (0028,0108) VR=US/SS VM=1 Smallest Pixel Value in Series
 	SmallestPixelValueInSeries = New(0x0028, 0x0108)
 
+	// LargestPixelValueInSeries (0028,0109) VR=US/SS VM=1 Largest Pixel Value in Series
 	LargestPixelValueInSeries = New(0x0028, 0x0109)
 
+	// SmallestImagePixelValueInPlaneRETIRED (0028,0110) VR=US/SS VM=1 Smallest Image Pixel Value in Plane
 	SmallestImagePixelValueInPlaneRETIRED = New(0x0028, 0x0110)
 
+	// LargestImagePixelValueInPlaneRETIRED (0028,0111) VR=US/SS VM=1 Largest Image Pixel Value in Plane
 	LargestImagePixelValueInPlaneRETIRED = New(0x0028, 0x0111)
 
+	// PixelPaddingValue (0028,0120) VR=US/SS VM=1 Pixel Padding Value
 	PixelPaddingValue = New(0x0028, 0x0120)
 
+	// PixelPaddingRangeLimit (0028,0121) VR=US/SS VM=1 Pixel Padding Range Limit
 	PixelPaddingRangeLimit = New(0x0028, 0x0121)
 
 	// FloatPixelPaddingValue (0028,0122) VR=FL VM=1 Float Pixel Padding Value
@@ -6747,7 +6775,7 @@ var (
 	// DoubleFloatPixelPaddingRangeLimit (0028,0125) VR=FD VM=1 Double Float Pixel Padding Range Limit
 	DoubleFloatPixelPaddingRangeLimit = New(0x0028, 0x0125)
 
-	// ImageLocationRETIRED (0028,0200) VR=US VM=1 Image Location (RETIRED)
+	// ImageLocationRETIRED (0028,0200) VR=US VM=1 Image Location
 	ImageLocationRETIRED = New(0x0028, 0x0200)
 
 	// QualityControlImage (0028,0300) VR=CS VM=1 Quality Control Image
@@ -6765,64 +6793,73 @@ var (
 	// ReferencedColorPaletteInstanceUID (0028,0304) VR=UI VM=1 Referenced Color Palette Instance UID
 	ReferencedColorPaletteInstanceUID = New(0x0028, 0x0304)
 
-	// TransformLabelRETIRED (0028,0400) VR=LO VM=1 Transform Label (RETIRED)
+	// TransformLabelRETIRED (0028,0400) VR=LO VM=1 Transform Label
 	TransformLabelRETIRED = New(0x0028, 0x0400)
 
-	// TransformVersionNumberRETIRED (0028,0401) VR=LO VM=1 Transform Version Number (RETIRED)
+	// TransformVersionNumberRETIRED (0028,0401) VR=LO VM=1 Transform Version Number
 	TransformVersionNumberRETIRED = New(0x0028, 0x0401)
 
-	// NumberOfTransformStepsRETIRED (0028,0402) VR=US VM=1 Number of Transform Steps (RETIRED)
+	// NumberOfTransformStepsRETIRED (0028,0402) VR=US VM=1 Number of Transform Steps
 	NumberOfTransformStepsRETIRED = New(0x0028, 0x0402)
 
-	// SequenceOfCompressedDataRETIRED (0028,0403) VR=LO VM=1-n Sequence of Compressed Data (RETIRED)
+	// SequenceOfCompressedDataRETIRED (0028,0403) VR=LO VM=1-n Sequence of Compressed Data
 	SequenceOfCompressedDataRETIRED = New(0x0028, 0x0403)
 
-	// DetailsOfCoefficientsRETIRED (0028,0404) VR=AT VM=1-n Details of Coefficients (RETIRED)
+	// DetailsOfCoefficientsRETIRED (0028,0404) VR=AT VM=1-n Details of Coefficients
 	DetailsOfCoefficientsRETIRED = New(0x0028, 0x0404)
 
+	// RowsForNthOrderCoefficientsRETIRED (0028,04x0) VR=US VM=1 Rows For Nth Order Coefficients
 	RowsForNthOrderCoefficientsRETIRED = New(0x0028, 0x0400)
 
+	// ColumnsForNthOrderCoefficientsRETIRED (0028,04x1) VR=US VM=1 Columns For Nth Order Coefficients
 	ColumnsForNthOrderCoefficientsRETIRED = New(0x0028, 0x0401)
 
+	// CoefficientCodingRETIRED (0028,04x2) VR=LO VM=1-n Coefficient Coding
 	CoefficientCodingRETIRED = New(0x0028, 0x0402)
 
+	// CoefficientCodingPointersRETIRED (0028,04x3) VR=AT VM=1-n Coefficient Coding Pointers
 	CoefficientCodingPointersRETIRED = New(0x0028, 0x0403)
 
-	// DCTLabelRETIRED (0028,0700) VR=LO VM=1 DCT Label (RETIRED)
+	// DCTLabelRETIRED (0028,0700) VR=LO VM=1 DCT Label
 	DCTLabelRETIRED = New(0x0028, 0x0700)
 
-	// DataBlockDescriptionRETIRED (0028,0701) VR=CS VM=1-n Data Block Description (RETIRED)
+	// DataBlockDescriptionRETIRED (0028,0701) VR=CS VM=1-n Data Block Description
 	DataBlockDescriptionRETIRED = New(0x0028, 0x0701)
 
-	// DataBlockRETIRED (0028,0702) VR=AT VM=1-n Data Block (RETIRED)
+	// DataBlockRETIRED (0028,0702) VR=AT VM=1-n Data Block
 	DataBlockRETIRED = New(0x0028, 0x0702)
 
-	// NormalizationFactorFormatRETIRED (0028,0710) VR=US VM=1 Normalization Factor Format (RETIRED)
+	// NormalizationFactorFormatRETIRED (0028,0710) VR=US VM=1 Normalization Factor Format
 	NormalizationFactorFormatRETIRED = New(0x0028, 0x0710)
 
-	// ZonalMapNumberFormatRETIRED (0028,0720) VR=US VM=1 Zonal Map Number Format (RETIRED)
+	// ZonalMapNumberFormatRETIRED (0028,0720) VR=US VM=1 Zonal Map Number Format
 	ZonalMapNumberFormatRETIRED = New(0x0028, 0x0720)
 
-	// ZonalMapLocationRETIRED (0028,0721) VR=AT VM=1-n Zonal Map Location (RETIRED)
+	// ZonalMapLocationRETIRED (0028,0721) VR=AT VM=1-n Zonal Map Location
 	ZonalMapLocationRETIRED = New(0x0028, 0x0721)
 
-	// ZonalMapFormatRETIRED (0028,0722) VR=US VM=1 Zonal Map Format (RETIRED)
+	// ZonalMapFormatRETIRED (0028,0722) VR=US VM=1 Zonal Map Format
 	ZonalMapFormatRETIRED = New(0x0028, 0x0722)
 
-	// AdaptiveMapFormatRETIRED (0028,0730) VR=US VM=1 Adaptive Map Format (RETIRED)
+	// AdaptiveMapFormatRETIRED (0028,0730) VR=US VM=1 Adaptive Map Format
 	AdaptiveMapFormatRETIRED = New(0x0028, 0x0730)
 
-	// CodeNumberFormatRETIRED (0028,0740) VR=US VM=1 Code Number Format (RETIRED)
+	// CodeNumberFormatRETIRED (0028,0740) VR=US VM=1 Code Number Format
 	CodeNumberFormatRETIRED = New(0x0028, 0x0740)
 
+	// CodeLabelRETIRED (0028,08x0) VR=CS VM=1-n Code Label
 	CodeLabelRETIRED = New(0x0028, 0x0800)
 
+	// NumberOfTablesRETIRED (0028,08x2) VR=US VM=1 Number of Tables
 	NumberOfTablesRETIRED = New(0x0028, 0x0802)
 
+	// CodeTableLocationRETIRED (0028,08x3) VR=AT VM=1-n Code Table Location
 	CodeTableLocationRETIRED = New(0x0028, 0x0803)
 
+	// BitsForCodeWordRETIRED (0028,08x4) VR=US VM=1 Bits For Code Word
 	BitsForCodeWordRETIRED = New(0x0028, 0x0804)
 
+	// ImageDataLocationRETIRED (0028,08x8) VR=AT VM=1-n Image Data Location
 	ImageDataLocationRETIRED = New(0x0028, 0x0808)
 
 	// PixelSpacingCalibrationType (0028,0A02) VR=CS VM=1 Pixel Spacing Calibration Type
@@ -6852,38 +6889,46 @@ var (
 	// RescaleType (0028,1054) VR=LO VM=1 Rescale Type
 	RescaleType = New(0x0028, 0x1054)
 
-	// WindowCenterWidthExplanation (0028,1055) VR=LO VM=1-n Window Center &amp; Width Explanation
+	// WindowCenterWidthExplanation (0028,1055) VR=LO VM=1-n Window Center & Width Explanation
 	WindowCenterWidthExplanation = New(0x0028, 0x1055)
 
 	// VOILUTFunction (0028,1056) VR=CS VM=1 VOI LUT Function
 	VOILUTFunction = New(0x0028, 0x1056)
 
-	// GrayScaleRETIRED (0028,1080) VR=CS VM=1 Gray Scale (RETIRED)
+	// GrayScaleRETIRED (0028,1080) VR=CS VM=1 Gray Scale
 	GrayScaleRETIRED = New(0x0028, 0x1080)
 
 	// RecommendedViewingMode (0028,1090) VR=CS VM=1 Recommended Viewing Mode
 	RecommendedViewingMode = New(0x0028, 0x1090)
 
+	// GrayLookupTableDescriptorRETIRED (0028,1100) VR=US/SS VM=3 Gray Lookup Table Descriptor
 	GrayLookupTableDescriptorRETIRED = New(0x0028, 0x1100)
 
+	// RedPaletteColorLookupTableDescriptor (0028,1101) VR=US/SS VM=3 Red Palette Color Lookup Table Descriptor
 	RedPaletteColorLookupTableDescriptor = New(0x0028, 0x1101)
 
+	// GreenPaletteColorLookupTableDescriptor (0028,1102) VR=US/SS VM=3 Green Palette Color Lookup Table Descriptor
 	GreenPaletteColorLookupTableDescriptor = New(0x0028, 0x1102)
 
+	// BluePaletteColorLookupTableDescriptor (0028,1103) VR=US/SS VM=3 Blue Palette Color Lookup Table Descriptor
 	BluePaletteColorLookupTableDescriptor = New(0x0028, 0x1103)
 
 	// AlphaPaletteColorLookupTableDescriptor (0028,1104) VR=US VM=3 Alpha Palette Color Lookup Table Descriptor
 	AlphaPaletteColorLookupTableDescriptor = New(0x0028, 0x1104)
 
+	// LargeRedPaletteColorLookupTableDescriptorRETIRED (0028,1111) VR=US/SS VM=4 Large Red Palette Color Lookup Table Descriptor
 	LargeRedPaletteColorLookupTableDescriptorRETIRED = New(0x0028, 0x1111)
 
+	// LargeGreenPaletteColorLookupTableDescriptorRETIRED (0028,1112) VR=US/SS VM=4 Large Green Palette Color Lookup Table Descriptor
 	LargeGreenPaletteColorLookupTableDescriptorRETIRED = New(0x0028, 0x1112)
 
+	// LargeBluePaletteColorLookupTableDescriptorRETIRED (0028,1113) VR=US/SS VM=4 Large Blue Palette Color Lookup Table Descriptor
 	LargeBluePaletteColorLookupTableDescriptorRETIRED = New(0x0028, 0x1113)
 
 	// PaletteColorLookupTableUID (0028,1199) VR=UI VM=1 Palette Color Lookup Table UID
 	PaletteColorLookupTableUID = New(0x0028, 0x1199)
 
+	// GrayLookupTableDataRETIRED (0028,1200) VR=US/SS/OW VM=1-n or 1 Gray Lookup Table Data
 	GrayLookupTableDataRETIRED = New(0x0028, 0x1200)
 
 	// RedPaletteColorLookupTableData (0028,1201) VR=OW VM=1 Red Palette Color Lookup Table Data
@@ -6898,16 +6943,16 @@ var (
 	// AlphaPaletteColorLookupTableData (0028,1204) VR=OW VM=1 Alpha Palette Color Lookup Table Data
 	AlphaPaletteColorLookupTableData = New(0x0028, 0x1204)
 
-	// LargeRedPaletteColorLookupTableDataRETIRED (0028,1211) VR=OW VM=1 Large Red Palette Color Lookup Table Data (RETIRED)
+	// LargeRedPaletteColorLookupTableDataRETIRED (0028,1211) VR=OW VM=1 Large Red Palette Color Lookup Table Data
 	LargeRedPaletteColorLookupTableDataRETIRED = New(0x0028, 0x1211)
 
-	// LargeGreenPaletteColorLookupTableDataRETIRED (0028,1212) VR=OW VM=1 Large Green Palette Color Lookup Table Data (RETIRED)
+	// LargeGreenPaletteColorLookupTableDataRETIRED (0028,1212) VR=OW VM=1 Large Green Palette Color Lookup Table Data
 	LargeGreenPaletteColorLookupTableDataRETIRED = New(0x0028, 0x1212)
 
-	// LargeBluePaletteColorLookupTableDataRETIRED (0028,1213) VR=OW VM=1 Large Blue Palette Color Lookup Table Data (RETIRED)
+	// LargeBluePaletteColorLookupTableDataRETIRED (0028,1213) VR=OW VM=1 Large Blue Palette Color Lookup Table Data
 	LargeBluePaletteColorLookupTableDataRETIRED = New(0x0028, 0x1213)
 
-	// LargePaletteColorLookupTableUIDRETIRED (0028,1214) VR=UI VM=1 Large Palette Color Lookup Table UID (RETIRED)
+	// LargePaletteColorLookupTableUIDRETIRED (0028,1214) VR=UI VM=1 Large Palette Color Lookup Table UID
 	LargePaletteColorLookupTableUIDRETIRED = New(0x0028, 0x1214)
 
 	// SegmentedRedPaletteColorLookupTableData (0028,1221) VR=OW VM=1 Segmented Red Palette Color Lookup Table Data
@@ -7009,6 +7054,7 @@ var (
 	// VariableModalityLUTSequence (0028,3001) VR=SQ VM=1 Variable Modality LUT Sequence
 	VariableModalityLUTSequence = New(0x0028, 0x3001)
 
+	// LUTDescriptor (0028,3002) VR=US/SS VM=3 LUT Descriptor
 	LUTDescriptor = New(0x0028, 0x3002)
 
 	// LUTExplanation (0028,3003) VR=LO VM=1 LUT Explanation
@@ -7017,6 +7063,7 @@ var (
 	// ModalityLUTType (0028,3004) VR=LO VM=1 Modality LUT Type
 	ModalityLUTType = New(0x0028, 0x3004)
 
+	// LUTData (0028,3006) VR=US/OW VM=1-n or 1 LUT Data
 	LUTData = New(0x0028, 0x3006)
 
 	// VOILUTSequence (0028,3010) VR=SQ VM=1 VOI LUT Sequence
@@ -7025,10 +7072,10 @@ var (
 	// SoftcopyVOILUTSequence (0028,3110) VR=SQ VM=1 Softcopy VOI LUT Sequence
 	SoftcopyVOILUTSequence = New(0x0028, 0x3110)
 
-	// ImagePresentationCommentsRETIRED (0028,4000) VR=LT VM=1 Image Presentation Comments (RETIRED)
+	// ImagePresentationCommentsRETIRED (0028,4000) VR=LT VM=1 Image Presentation Comments
 	ImagePresentationCommentsRETIRED = New(0x0028, 0x4000)
 
-	// BiPlaneAcquisitionSequenceRETIRED (0028,5000) VR=SQ VM=1 Bi-Plane Acquisition Sequence (RETIRED)
+	// BiPlaneAcquisitionSequenceRETIRED (0028,5000) VR=SQ VM=1 Bi-Plane Acquisition Sequence
 	BiPlaneAcquisitionSequenceRETIRED = New(0x0028, 0x5000)
 
 	// RepresentativeFrameNumber (0028,6010) VR=US VM=1 Representative Frame Number
@@ -7043,7 +7090,7 @@ var (
 	// FrameOfInterestType (0028,6023) VR=CS VM=1-n Frame of Interest Type
 	FrameOfInterestType = New(0x0028, 0x6023)
 
-	// MaskPointersRETIRED (0028,6030) VR=US VM=1-n Mask Pointer(s) (RETIRED)
+	// MaskPointersRETIRED (0028,6030) VR=US VM=1-n Mask Pointer(s)
 	MaskPointersRETIRED = New(0x0028, 0x6030)
 
 	// RWavePointer (0028,6040) VR=US VM=1-n R Wave Pointer
@@ -7226,7 +7273,7 @@ var (
 	// SignalDomainColumns (0028,9003) VR=CS VM=1 Signal Domain Columns
 	SignalDomainColumns = New(0x0028, 0x9003)
 
-	// LargestMonochromePixelValueRETIRED (0028,9099) VR=US VM=1 Largest Monochrome Pixel Value (RETIRED)
+	// LargestMonochromePixelValueRETIRED (0028,9099) VR=US VM=1 Largest Monochrome Pixel Value
 	LargestMonochromePixelValueRETIRED = New(0x0028, 0x9099)
 
 	// DataRepresentation (0028,9108) VR=CS VM=1 Data Representation
@@ -7301,46 +7348,46 @@ var (
 	// EquipmentCoordinateSystemIdentification (0028,9537) VR=CS VM=1 Equipment Coordinate System Identification
 	EquipmentCoordinateSystemIdentification = New(0x0028, 0x9537)
 
-	// StudyStatusIDRETIRED (0032,000A) VR=CS VM=1 Study Status ID (RETIRED)
+	// StudyStatusIDRETIRED (0032,000A) VR=CS VM=1 Study Status ID
 	StudyStatusIDRETIRED = New(0x0032, 0x000A)
 
-	// StudyPriorityIDRETIRED (0032,000C) VR=CS VM=1 Study Priority ID (RETIRED)
+	// StudyPriorityIDRETIRED (0032,000C) VR=CS VM=1 Study Priority ID
 	StudyPriorityIDRETIRED = New(0x0032, 0x000C)
 
-	// StudyIDIssuerRETIRED (0032,0012) VR=LO VM=1 Study ID Issuer (RETIRED)
+	// StudyIDIssuerRETIRED (0032,0012) VR=LO VM=1 Study ID Issuer
 	StudyIDIssuerRETIRED = New(0x0032, 0x0012)
 
-	// StudyVerifiedDateRETIRED (0032,0032) VR=DA VM=1 Study Verified Date (RETIRED)
+	// StudyVerifiedDateRETIRED (0032,0032) VR=DA VM=1 Study Verified Date
 	StudyVerifiedDateRETIRED = New(0x0032, 0x0032)
 
-	// StudyVerifiedTimeRETIRED (0032,0033) VR=TM VM=1 Study Verified Time (RETIRED)
+	// StudyVerifiedTimeRETIRED (0032,0033) VR=TM VM=1 Study Verified Time
 	StudyVerifiedTimeRETIRED = New(0x0032, 0x0033)
 
-	// StudyReadDateRETIRED (0032,0034) VR=DA VM=1 Study Read Date (RETIRED)
+	// StudyReadDateRETIRED (0032,0034) VR=DA VM=1 Study Read Date
 	StudyReadDateRETIRED = New(0x0032, 0x0034)
 
-	// StudyReadTimeRETIRED (0032,0035) VR=TM VM=1 Study Read Time (RETIRED)
+	// StudyReadTimeRETIRED (0032,0035) VR=TM VM=1 Study Read Time
 	StudyReadTimeRETIRED = New(0x0032, 0x0035)
 
-	// ScheduledStudyStartDateRETIRED (0032,1000) VR=DA VM=1 Scheduled Study Start Date (RETIRED)
+	// ScheduledStudyStartDateRETIRED (0032,1000) VR=DA VM=1 Scheduled Study Start Date
 	ScheduledStudyStartDateRETIRED = New(0x0032, 0x1000)
 
-	// ScheduledStudyStartTimeRETIRED (0032,1001) VR=TM VM=1 Scheduled Study Start Time (RETIRED)
+	// ScheduledStudyStartTimeRETIRED (0032,1001) VR=TM VM=1 Scheduled Study Start Time
 	ScheduledStudyStartTimeRETIRED = New(0x0032, 0x1001)
 
-	// ScheduledStudyStopDateRETIRED (0032,1010) VR=DA VM=1 Scheduled Study Stop Date (RETIRED)
+	// ScheduledStudyStopDateRETIRED (0032,1010) VR=DA VM=1 Scheduled Study Stop Date
 	ScheduledStudyStopDateRETIRED = New(0x0032, 0x1010)
 
-	// ScheduledStudyStopTimeRETIRED (0032,1011) VR=TM VM=1 Scheduled Study Stop Time (RETIRED)
+	// ScheduledStudyStopTimeRETIRED (0032,1011) VR=TM VM=1 Scheduled Study Stop Time
 	ScheduledStudyStopTimeRETIRED = New(0x0032, 0x1011)
 
-	// ScheduledStudyLocationRETIRED (0032,1020) VR=LO VM=1 Scheduled Study Location (RETIRED)
+	// ScheduledStudyLocationRETIRED (0032,1020) VR=LO VM=1 Scheduled Study Location
 	ScheduledStudyLocationRETIRED = New(0x0032, 0x1020)
 
-	// ScheduledStudyLocationAETitleRETIRED (0032,1021) VR=AE VM=1-n Scheduled Study Location AE Title (RETIRED)
+	// ScheduledStudyLocationAETitleRETIRED (0032,1021) VR=AE VM=1-n Scheduled Study Location AE Title
 	ScheduledStudyLocationAETitleRETIRED = New(0x0032, 0x1021)
 
-	// ReasonForStudyRETIRED (0032,1030) VR=LO VM=1 Reason for Study (RETIRED)
+	// ReasonForStudyRETIRED (0032,1030) VR=LO VM=1 Reason for Study
 	ReasonForStudyRETIRED = New(0x0032, 0x1030)
 
 	// RequestingPhysicianIdentificationSequence (0032,1031) VR=SQ VM=1 Requesting Physician Identification Sequence
@@ -7355,19 +7402,19 @@ var (
 	// RequestingServiceCodeSequence (0032,1034) VR=SQ VM=1 Requesting Service Code Sequence
 	RequestingServiceCodeSequence = New(0x0032, 0x1034)
 
-	// StudyArrivalDateRETIRED (0032,1040) VR=DA VM=1 Study Arrival Date (RETIRED)
+	// StudyArrivalDateRETIRED (0032,1040) VR=DA VM=1 Study Arrival Date
 	StudyArrivalDateRETIRED = New(0x0032, 0x1040)
 
-	// StudyArrivalTimeRETIRED (0032,1041) VR=TM VM=1 Study Arrival Time (RETIRED)
+	// StudyArrivalTimeRETIRED (0032,1041) VR=TM VM=1 Study Arrival Time
 	StudyArrivalTimeRETIRED = New(0x0032, 0x1041)
 
-	// StudyCompletionDateRETIRED (0032,1050) VR=DA VM=1 Study Completion Date (RETIRED)
+	// StudyCompletionDateRETIRED (0032,1050) VR=DA VM=1 Study Completion Date
 	StudyCompletionDateRETIRED = New(0x0032, 0x1050)
 
-	// StudyCompletionTimeRETIRED (0032,1051) VR=TM VM=1 Study Completion Time (RETIRED)
+	// StudyCompletionTimeRETIRED (0032,1051) VR=TM VM=1 Study Completion Time
 	StudyCompletionTimeRETIRED = New(0x0032, 0x1051)
 
-	// StudyComponentStatusIDRETIRED (0032,1055) VR=CS VM=1 Study Component Status ID (RETIRED)
+	// StudyComponentStatusIDRETIRED (0032,1055) VR=CS VM=1 Study Component Status ID
 	StudyComponentStatusIDRETIRED = New(0x0032, 0x1055)
 
 	// RequestedProcedureDescription (0032,1060) VR=LO VM=1 Requested Procedure Description
@@ -7388,7 +7435,7 @@ var (
 	// RequestedContrastAgent (0032,1070) VR=LO VM=1 Requested Contrast Agent
 	RequestedContrastAgent = New(0x0032, 0x1070)
 
-	// StudyCommentsRETIRED (0032,4000) VR=LT VM=1 Study Comments (RETIRED)
+	// StudyCommentsRETIRED (0032,4000) VR=LT VM=1 Study Comments
 	StudyCommentsRETIRED = New(0x0032, 0x4000)
 
 	// FlowIdentifierSequence (0034,0001) VR=SQ VM=1 Flow Identifier Sequence
@@ -7427,7 +7474,7 @@ var (
 	// TimeOfFrameGroupSequence (0034,000D) VR=SQ VM=1 Time of Frame Group Sequence
 	TimeOfFrameGroupSequence = New(0x0034, 0x000D)
 
-	// ReferencedPatientAliasSequenceRETIRED (0038,0004) VR=SQ VM=1 Referenced Patient Alias Sequence (RETIRED)
+	// ReferencedPatientAliasSequenceRETIRED (0038,0004) VR=SQ VM=1 Referenced Patient Alias Sequence
 	ReferencedPatientAliasSequenceRETIRED = New(0x0038, 0x0004)
 
 	// VisitStatusID (0038,0008) VR=CS VM=1 Visit Status ID
@@ -7436,7 +7483,7 @@ var (
 	// AdmissionID (0038,0010) VR=LO VM=1 Admission ID
 	AdmissionID = New(0x0038, 0x0010)
 
-	// IssuerOfAdmissionIDRETIRED (0038,0011) VR=LO VM=1 Issuer of Admission ID (RETIRED)
+	// IssuerOfAdmissionIDRETIRED (0038,0011) VR=LO VM=1 Issuer of Admission ID
 	IssuerOfAdmissionIDRETIRED = New(0x0038, 0x0011)
 
 	// IssuerOfAdmissionIDSequence (0038,0014) VR=SQ VM=1 Issuer of Admission ID Sequence
@@ -7445,19 +7492,19 @@ var (
 	// RouteOfAdmissions (0038,0016) VR=LO VM=1 Route of Admissions
 	RouteOfAdmissions = New(0x0038, 0x0016)
 
-	// ScheduledAdmissionDateRETIRED (0038,001A) VR=DA VM=1 Scheduled Admission Date (RETIRED)
+	// ScheduledAdmissionDateRETIRED (0038,001A) VR=DA VM=1 Scheduled Admission Date
 	ScheduledAdmissionDateRETIRED = New(0x0038, 0x001A)
 
-	// ScheduledAdmissionTimeRETIRED (0038,001B) VR=TM VM=1 Scheduled Admission Time (RETIRED)
+	// ScheduledAdmissionTimeRETIRED (0038,001B) VR=TM VM=1 Scheduled Admission Time
 	ScheduledAdmissionTimeRETIRED = New(0x0038, 0x001B)
 
-	// ScheduledDischargeDateRETIRED (0038,001C) VR=DA VM=1 Scheduled Discharge Date (RETIRED)
+	// ScheduledDischargeDateRETIRED (0038,001C) VR=DA VM=1 Scheduled Discharge Date
 	ScheduledDischargeDateRETIRED = New(0x0038, 0x001C)
 
-	// ScheduledDischargeTimeRETIRED (0038,001D) VR=TM VM=1 Scheduled Discharge Time (RETIRED)
+	// ScheduledDischargeTimeRETIRED (0038,001D) VR=TM VM=1 Scheduled Discharge Time
 	ScheduledDischargeTimeRETIRED = New(0x0038, 0x001D)
 
-	// ScheduledPatientInstitutionResidenceRETIRED (0038,001E) VR=LO VM=1 Scheduled Patient Institution Residence (RETIRED)
+	// ScheduledPatientInstitutionResidenceRETIRED (0038,001E) VR=LO VM=1 Scheduled Patient Institution Residence
 	ScheduledPatientInstitutionResidenceRETIRED = New(0x0038, 0x001E)
 
 	// AdmittingDate (0038,0020) VR=DA VM=1 Admitting Date
@@ -7466,16 +7513,16 @@ var (
 	// AdmittingTime (0038,0021) VR=TM VM=1 Admitting Time
 	AdmittingTime = New(0x0038, 0x0021)
 
-	// DischargeDateRETIRED (0038,0030) VR=DA VM=1 Discharge Date (RETIRED)
+	// DischargeDateRETIRED (0038,0030) VR=DA VM=1 Discharge Date
 	DischargeDateRETIRED = New(0x0038, 0x0030)
 
-	// DischargeTimeRETIRED (0038,0032) VR=TM VM=1 Discharge Time (RETIRED)
+	// DischargeTimeRETIRED (0038,0032) VR=TM VM=1 Discharge Time
 	DischargeTimeRETIRED = New(0x0038, 0x0032)
 
-	// DischargeDiagnosisDescriptionRETIRED (0038,0040) VR=LO VM=1 Discharge Diagnosis Description (RETIRED)
+	// DischargeDiagnosisDescriptionRETIRED (0038,0040) VR=LO VM=1 Discharge Diagnosis Description
 	DischargeDiagnosisDescriptionRETIRED = New(0x0038, 0x0040)
 
-	// DischargeDiagnosisCodeSequenceRETIRED (0038,0044) VR=SQ VM=1 Discharge Diagnosis Code Sequence (RETIRED)
+	// DischargeDiagnosisCodeSequenceRETIRED (0038,0044) VR=SQ VM=1 Discharge Diagnosis Code Sequence
 	DischargeDiagnosisCodeSequenceRETIRED = New(0x0038, 0x0044)
 
 	// SpecialNeeds (0038,0050) VR=LO VM=1 Special Needs
@@ -7484,7 +7531,7 @@ var (
 	// ServiceEpisodeID (0038,0060) VR=LO VM=1 Service Episode ID
 	ServiceEpisodeID = New(0x0038, 0x0060)
 
-	// IssuerOfServiceEpisodeIDRETIRED (0038,0061) VR=LO VM=1 Issuer of Service Episode ID (RETIRED)
+	// IssuerOfServiceEpisodeIDRETIRED (0038,0061) VR=LO VM=1 Issuer of Service Episode ID
 	IssuerOfServiceEpisodeIDRETIRED = New(0x0038, 0x0061)
 
 	// ServiceEpisodeDescription (0038,0062) VR=LO VM=1 Service Episode Description
@@ -7847,10 +7894,10 @@ var (
 	// BillingItemSequence (0040,0296) VR=SQ VM=1 Billing Item Sequence
 	BillingItemSequence = New(0x0040, 0x0296)
 
-	// TotalTimeOfFluoroscopyRETIRED (0040,0300) VR=US VM=1 Total Time of Fluoroscopy (RETIRED)
+	// TotalTimeOfFluoroscopyRETIRED (0040,0300) VR=US VM=1 Total Time of Fluoroscopy
 	TotalTimeOfFluoroscopyRETIRED = New(0x0040, 0x0300)
 
-	// TotalNumberOfExposuresRETIRED (0040,0301) VR=US VM=1 Total Number of Exposures (RETIRED)
+	// TotalNumberOfExposuresRETIRED (0040,0301) VR=US VM=1 Total Number of Exposures
 	TotalNumberOfExposuresRETIRED = New(0x0040, 0x0301)
 
 	// EntranceDose (0040,0302) VR=US VM=1 Entrance Dose
@@ -7862,10 +7909,10 @@ var (
 	// DistanceSourceToEntrance (0040,0306) VR=DS VM=1 Distance Source to Entrance
 	DistanceSourceToEntrance = New(0x0040, 0x0306)
 
-	// DistanceSourceToSupportRETIRED (0040,0307) VR=DS VM=1 Distance Source to Support (RETIRED)
+	// DistanceSourceToSupportRETIRED (0040,0307) VR=DS VM=1 Distance Source to Support
 	DistanceSourceToSupportRETIRED = New(0x0040, 0x0307)
 
-	// ExposureDoseSequenceRETIRED (0040,030E) VR=SQ VM=1 Exposure Dose Sequence (RETIRED)
+	// ExposureDoseSequenceRETIRED (0040,030E) VR=SQ VM=1 Exposure Dose Sequence
 	ExposureDoseSequenceRETIRED = New(0x0040, 0x030E)
 
 	// CommentsOnRadiationDose (0040,0310) VR=ST VM=1 Comments on Radiation Dose
@@ -7892,7 +7939,7 @@ var (
 	// BillingSuppliesAndDevicesSequence (0040,0324) VR=SQ VM=1 Billing Supplies and Devices Sequence
 	BillingSuppliesAndDevicesSequence = New(0x0040, 0x0324)
 
-	// ReferencedProcedureStepSequenceRETIRED (0040,0330) VR=SQ VM=1 Referenced Procedure Step Sequence (RETIRED)
+	// ReferencedProcedureStepSequenceRETIRED (0040,0330) VR=SQ VM=1 Referenced Procedure Step Sequence
 	ReferencedProcedureStepSequenceRETIRED = New(0x0040, 0x0330)
 
 	// PerformedSeriesSequence (0040,0340) VR=SQ VM=1 Performed Series Sequence
@@ -7910,7 +7957,7 @@ var (
 	// ScheduledSpecimenSequence (0040,0500) VR=SQ VM=1 Scheduled Specimen Sequence
 	ScheduledSpecimenSequence = New(0x0040, 0x0500)
 
-	// SpecimenAccessionNumberRETIRED (0040,050A) VR=LO VM=1 Specimen Accession Number (RETIRED)
+	// SpecimenAccessionNumberRETIRED (0040,050A) VR=LO VM=1 Specimen Accession Number
 	SpecimenAccessionNumberRETIRED = New(0x0040, 0x050A)
 
 	// ContainerIdentifier (0040,0512) VR=LO VM=1 Container Identifier
@@ -7931,16 +7978,16 @@ var (
 	// ContainerComponentSequence (0040,0520) VR=SQ VM=1 Container Component Sequence
 	ContainerComponentSequence = New(0x0040, 0x0520)
 
-	// SpecimenSequenceRETIRED (0040,0550) VR=SQ VM=1 Specimen Sequence (RETIRED)
+	// SpecimenSequenceRETIRED (0040,0550) VR=SQ VM=1 Specimen Sequence
 	SpecimenSequenceRETIRED = New(0x0040, 0x0550)
 
 	// SpecimenIdentifier (0040,0551) VR=LO VM=1 Specimen Identifier
 	SpecimenIdentifier = New(0x0040, 0x0551)
 
-	// SpecimenDescriptionSequenceTrialRETIRED (0040,0552) VR=SQ VM=1 Specimen Description Sequence (Trial) (RETIRED)
+	// SpecimenDescriptionSequenceTrialRETIRED (0040,0552) VR=SQ VM=1 Specimen Description Sequence (Trial)
 	SpecimenDescriptionSequenceTrialRETIRED = New(0x0040, 0x0552)
 
-	// SpecimenDescriptionTrialRETIRED (0040,0553) VR=ST VM=1 Specimen Description (Trial) (RETIRED)
+	// SpecimenDescriptionTrialRETIRED (0040,0553) VR=ST VM=1 Specimen Description (Trial)
 	SpecimenDescriptionTrialRETIRED = New(0x0040, 0x0553)
 
 	// SpecimenUID (0040,0554) VR=UI VM=1 Specimen UID
@@ -7976,7 +8023,7 @@ var (
 	// SpecimenLocalizationContentItemSequence (0040,0620) VR=SQ VM=1 Specimen Localization Content Item Sequence
 	SpecimenLocalizationContentItemSequence = New(0x0040, 0x0620)
 
-	// SlideIdentifierRETIRED (0040,06FA) VR=LO VM=1 Slide Identifier (RETIRED)
+	// SlideIdentifierRETIRED (0040,06FA) VR=LO VM=1 Slide Identifier
 	SlideIdentifierRETIRED = New(0x0040, 0x06FA)
 
 	// WholeSlideMicroscopyImageFrameTypeSequence (0040,0710) VR=SQ VM=1 Whole Slide Microscopy Image Frame Type Sequence
@@ -7994,16 +8041,16 @@ var (
 	// ZOffsetInSlideCoordinateSystem (0040,074A) VR=DS VM=1 Z Offset in Slide Coordinate System
 	ZOffsetInSlideCoordinateSystem = New(0x0040, 0x074A)
 
-	// PixelSpacingSequenceRETIRED (0040,08D8) VR=SQ VM=1 Pixel Spacing Sequence (RETIRED)
+	// PixelSpacingSequenceRETIRED (0040,08D8) VR=SQ VM=1 Pixel Spacing Sequence
 	PixelSpacingSequenceRETIRED = New(0x0040, 0x08D8)
 
-	// CoordinateSystemAxisCodeSequenceRETIRED (0040,08DA) VR=SQ VM=1 Coordinate System Axis Code Sequence (RETIRED)
+	// CoordinateSystemAxisCodeSequenceRETIRED (0040,08DA) VR=SQ VM=1 Coordinate System Axis Code Sequence
 	CoordinateSystemAxisCodeSequenceRETIRED = New(0x0040, 0x08DA)
 
 	// MeasurementUnitsCodeSequence (0040,08EA) VR=SQ VM=1 Measurement Units Code Sequence
 	MeasurementUnitsCodeSequence = New(0x0040, 0x08EA)
 
-	// VitalStainCodeSequenceTrialRETIRED (0040,09F8) VR=SQ VM=1 Vital Stain Code Sequence (Trial) (RETIRED)
+	// VitalStainCodeSequenceTrialRETIRED (0040,09F8) VR=SQ VM=1 Vital Stain Code Sequence (Trial)
 	VitalStainCodeSequenceTrialRETIRED = New(0x0040, 0x09F8)
 
 	// RequestedProcedureID (0040,1001) VR=SH VM=1 Requested Procedure ID
@@ -8021,10 +8068,10 @@ var (
 	// RequestedProcedureLocation (0040,1005) VR=LO VM=1 Requested Procedure Location
 	RequestedProcedureLocation = New(0x0040, 0x1005)
 
-	// PlacerOrderNumberProcedureRETIRED (0040,1006) VR=SH VM=1 Placer Order Number / Procedure (RETIRED)
+	// PlacerOrderNumberProcedureRETIRED (0040,1006) VR=SH VM=1 Placer Order Number / Procedure
 	PlacerOrderNumberProcedureRETIRED = New(0x0040, 0x1006)
 
-	// FillerOrderNumberProcedureRETIRED (0040,1007) VR=SH VM=1 Filler Order Number / Procedure (RETIRED)
+	// FillerOrderNumberProcedureRETIRED (0040,1007) VR=SH VM=1 Filler Order Number / Procedure
 	FillerOrderNumberProcedureRETIRED = New(0x0040, 0x1007)
 
 	// ConfidentialityCode (0040,1008) VR=LO VM=1 Confidentiality Code
@@ -8045,7 +8092,7 @@ var (
 	// ReasonForPerformedProcedureCodeSequence (0040,1012) VR=SQ VM=1 Reason For Performed Procedure Code Sequence
 	ReasonForPerformedProcedureCodeSequence = New(0x0040, 0x1012)
 
-	// RequestedProcedureDescriptionTrialRETIRED (0040,1060) VR=LO VM=1 Requested Procedure Description (Trial) (RETIRED)
+	// RequestedProcedureDescriptionTrialRETIRED (0040,1060) VR=LO VM=1 Requested Procedure Description (Trial)
 	RequestedProcedureDescriptionTrialRETIRED = New(0x0040, 0x1060)
 
 	// PersonIdentificationCodeSequence (0040,1101) VR=SQ VM=1 Person Identification Code Sequence
@@ -8063,7 +8110,7 @@ var (
 	// RequestedProcedureComments (0040,1400) VR=LT VM=1 Requested Procedure Comments
 	RequestedProcedureComments = New(0x0040, 0x1400)
 
-	// ReasonForTheImagingServiceRequestRETIRED (0040,2001) VR=LO VM=1 Reason for the Imaging Service Request (RETIRED)
+	// ReasonForTheImagingServiceRequestRETIRED (0040,2001) VR=LO VM=1 Reason for the Imaging Service Request
 	ReasonForTheImagingServiceRequestRETIRED = New(0x0040, 0x2001)
 
 	// IssueDateOfImagingServiceRequest (0040,2004) VR=DA VM=1 Issue Date of Imaging Service Request
@@ -8072,10 +8119,10 @@ var (
 	// IssueTimeOfImagingServiceRequest (0040,2005) VR=TM VM=1 Issue Time of Imaging Service Request
 	IssueTimeOfImagingServiceRequest = New(0x0040, 0x2005)
 
-	// PlacerOrderNumberImagingServiceRequestRetiredRETIRED (0040,2006) VR=SH VM=1 Placer Order Number / Imaging Service Request (Retired) (RETIRED)
+	// PlacerOrderNumberImagingServiceRequestRetiredRETIRED (0040,2006) VR=SH VM=1 Placer Order Number / Imaging Service Request (Retired)
 	PlacerOrderNumberImagingServiceRequestRetiredRETIRED = New(0x0040, 0x2006)
 
-	// FillerOrderNumberImagingServiceRequestRetiredRETIRED (0040,2007) VR=SH VM=1 Filler Order Number / Imaging Service Request (Retired) (RETIRED)
+	// FillerOrderNumberImagingServiceRequestRetiredRETIRED (0040,2007) VR=SH VM=1 Filler Order Number / Imaging Service Request (Retired)
 	FillerOrderNumberImagingServiceRequestRetiredRETIRED = New(0x0040, 0x2007)
 
 	// OrderEnteredBy (0040,2008) VR=PN VM=1 Order Entered By
@@ -8102,25 +8149,25 @@ var (
 	// ConfidentialityConstraintOnPatientDataDescription (0040,3001) VR=LO VM=1 Confidentiality Constraint on Patient Data Description
 	ConfidentialityConstraintOnPatientDataDescription = New(0x0040, 0x3001)
 
-	// GeneralPurposeScheduledProcedureStepStatusRETIRED (0040,4001) VR=CS VM=1 General Purpose Scheduled Procedure Step Status (RETIRED)
+	// GeneralPurposeScheduledProcedureStepStatusRETIRED (0040,4001) VR=CS VM=1 General Purpose Scheduled Procedure Step Status
 	GeneralPurposeScheduledProcedureStepStatusRETIRED = New(0x0040, 0x4001)
 
-	// GeneralPurposePerformedProcedureStepStatusRETIRED (0040,4002) VR=CS VM=1 General Purpose Performed Procedure Step Status (RETIRED)
+	// GeneralPurposePerformedProcedureStepStatusRETIRED (0040,4002) VR=CS VM=1 General Purpose Performed Procedure Step Status
 	GeneralPurposePerformedProcedureStepStatusRETIRED = New(0x0040, 0x4002)
 
-	// GeneralPurposeScheduledProcedureStepPriorityRETIRED (0040,4003) VR=CS VM=1 General Purpose Scheduled Procedure Step Priority (RETIRED)
+	// GeneralPurposeScheduledProcedureStepPriorityRETIRED (0040,4003) VR=CS VM=1 General Purpose Scheduled Procedure Step Priority
 	GeneralPurposeScheduledProcedureStepPriorityRETIRED = New(0x0040, 0x4003)
 
-	// ScheduledProcessingApplicationsCodeSequenceRETIRED (0040,4004) VR=SQ VM=1 Scheduled Processing Applications Code Sequence (RETIRED)
+	// ScheduledProcessingApplicationsCodeSequenceRETIRED (0040,4004) VR=SQ VM=1 Scheduled Processing Applications Code Sequence
 	ScheduledProcessingApplicationsCodeSequenceRETIRED = New(0x0040, 0x4004)
 
 	// ScheduledProcedureStepStartDateTime (0040,4005) VR=DT VM=1 Scheduled Procedure Step Start DateTime
 	ScheduledProcedureStepStartDateTime = New(0x0040, 0x4005)
 
-	// MultipleCopiesFlagRETIRED (0040,4006) VR=CS VM=1 Multiple Copies Flag (RETIRED)
+	// MultipleCopiesFlagRETIRED (0040,4006) VR=CS VM=1 Multiple Copies Flag
 	MultipleCopiesFlagRETIRED = New(0x0040, 0x4006)
 
-	// PerformedProcessingApplicationsCodeSequenceRETIRED (0040,4007) VR=SQ VM=1 Performed Processing Applications Code Sequence (RETIRED)
+	// PerformedProcessingApplicationsCodeSequenceRETIRED (0040,4007) VR=SQ VM=1 Performed Processing Applications Code Sequence
 	PerformedProcessingApplicationsCodeSequenceRETIRED = New(0x0040, 0x4007)
 
 	// ScheduledProcedureStepExpirationDateTime (0040,4008) VR=DT VM=1 Scheduled Procedure Step Expiration DateTime
@@ -8135,10 +8182,10 @@ var (
 	// ExpectedCompletionDateTime (0040,4011) VR=DT VM=1 Expected Completion DateTime
 	ExpectedCompletionDateTime = New(0x0040, 0x4011)
 
-	// ResultingGeneralPurposePerformedProcedureStepsSequenceRETIRED (0040,4015) VR=SQ VM=1 Resulting General Purpose Performed Procedure Steps Sequence (RETIRED)
+	// ResultingGeneralPurposePerformedProcedureStepsSequenceRETIRED (0040,4015) VR=SQ VM=1 Resulting General Purpose Performed Procedure Steps Sequence
 	ResultingGeneralPurposePerformedProcedureStepsSequenceRETIRED = New(0x0040, 0x4015)
 
-	// ReferencedGeneralPurposeScheduledProcedureStepSequenceRETIRED (0040,4016) VR=SQ VM=1 Referenced General Purpose Scheduled Procedure Step Sequence (RETIRED)
+	// ReferencedGeneralPurposeScheduledProcedureStepSequenceRETIRED (0040,4016) VR=SQ VM=1 Referenced General Purpose Scheduled Procedure Step Sequence
 	ReferencedGeneralPurposeScheduledProcedureStepSequenceRETIRED = New(0x0040, 0x4016)
 
 	// ScheduledWorkitemCodeSequence (0040,4018) VR=SQ VM=1 Scheduled Workitem Code Sequence
@@ -8147,16 +8194,16 @@ var (
 	// PerformedWorkitemCodeSequence (0040,4019) VR=SQ VM=1 Performed Workitem Code Sequence
 	PerformedWorkitemCodeSequence = New(0x0040, 0x4019)
 
-	// InputAvailabilityFlagRETIRED (0040,4020) VR=CS VM=1 Input Availability Flag (RETIRED)
+	// InputAvailabilityFlagRETIRED (0040,4020) VR=CS VM=1 Input Availability Flag
 	InputAvailabilityFlagRETIRED = New(0x0040, 0x4020)
 
 	// InputInformationSequence (0040,4021) VR=SQ VM=1 Input Information Sequence
 	InputInformationSequence = New(0x0040, 0x4021)
 
-	// RelevantInformationSequenceRETIRED (0040,4022) VR=SQ VM=1 Relevant Information Sequence (RETIRED)
+	// RelevantInformationSequenceRETIRED (0040,4022) VR=SQ VM=1 Relevant Information Sequence
 	RelevantInformationSequenceRETIRED = New(0x0040, 0x4022)
 
-	// ReferencedGeneralPurposeScheduledProcedureStepTransactionUIDRETIRED (0040,4023) VR=UI VM=1 Referenced General Purpose Scheduled Procedure Step Transaction UID (RETIRED)
+	// ReferencedGeneralPurposeScheduledProcedureStepTransactionUIDRETIRED (0040,4023) VR=UI VM=1 Referenced General Purpose Scheduled Procedure Step Transaction UID
 	ReferencedGeneralPurposeScheduledProcedureStepTransactionUIDRETIRED = New(0x0040, 0x4023)
 
 	// ScheduledStationNameCodeSequence (0040,4025) VR=SQ VM=1 Scheduled Station Name Code Sequence
@@ -8177,10 +8224,10 @@ var (
 	// PerformedStationGeographicLocationCodeSequence (0040,4030) VR=SQ VM=1 Performed Station Geographic Location Code Sequence
 	PerformedStationGeographicLocationCodeSequence = New(0x0040, 0x4030)
 
-	// RequestedSubsequentWorkitemCodeSequenceRETIRED (0040,4031) VR=SQ VM=1 Requested Subsequent Workitem Code Sequence (RETIRED)
+	// RequestedSubsequentWorkitemCodeSequenceRETIRED (0040,4031) VR=SQ VM=1 Requested Subsequent Workitem Code Sequence
 	RequestedSubsequentWorkitemCodeSequenceRETIRED = New(0x0040, 0x4031)
 
-	// NonDICOMOutputCodeSequenceRETIRED (0040,4032) VR=SQ VM=1 Non-DICOM Output Code Sequence (RETIRED)
+	// NonDICOMOutputCodeSequenceRETIRED (0040,4032) VR=SQ VM=1 Non-DICOM Output Code Sequence
 	NonDICOMOutputCodeSequenceRETIRED = New(0x0040, 0x4032)
 
 	// OutputInformationSequence (0040,4033) VR=SQ VM=1 Output Information Sequence
@@ -8249,6 +8296,7 @@ var (
 	// LUTLabel (0040,9210) VR=SH VM=1 LUT Label
 	LUTLabel = New(0x0040, 0x9210)
 
+	// RealWorldValueLastValueMapped (0040,9211) VR=US/SS VM=1 Real World Value Last Value Mapped
 	RealWorldValueLastValueMapped = New(0x0040, 0x9211)
 
 	// RealWorldValueLUTData (0040,9212) VR=FD VM=1-n Real World Value LUT Data
@@ -8260,6 +8308,7 @@ var (
 	// DoubleFloatRealWorldValueFirstValueMapped (0040,9214) VR=FD VM=1 Double Float Real World Value First Value Mapped
 	DoubleFloatRealWorldValueFirstValueMapped = New(0x0040, 0x9214)
 
+	// RealWorldValueFirstValueMapped (0040,9216) VR=US/SS VM=1 Real World Value First Value Mapped
 	RealWorldValueFirstValueMapped = New(0x0040, 0x9216)
 
 	// QuantityDefinitionSequence (0040,9220) VR=SQ VM=1 Quantity Definition Sequence
@@ -8271,34 +8320,34 @@ var (
 	// RealWorldValueSlope (0040,9225) VR=FD VM=1 Real World Value Slope
 	RealWorldValueSlope = New(0x0040, 0x9225)
 
-	// FindingsFlagTrialRETIRED (0040,A007) VR=CS VM=1 Findings Flag (Trial) (RETIRED)
+	// FindingsFlagTrialRETIRED (0040,A007) VR=CS VM=1 Findings Flag (Trial)
 	FindingsFlagTrialRETIRED = New(0x0040, 0xA007)
 
 	// RelationshipType (0040,A010) VR=CS VM=1 Relationship Type
 	RelationshipType = New(0x0040, 0xA010)
 
-	// FindingsSequenceTrialRETIRED (0040,A020) VR=SQ VM=1 Findings Sequence (Trial) (RETIRED)
+	// FindingsSequenceTrialRETIRED (0040,A020) VR=SQ VM=1 Findings Sequence (Trial)
 	FindingsSequenceTrialRETIRED = New(0x0040, 0xA020)
 
-	// FindingsGroupUIDTrialRETIRED (0040,A021) VR=UI VM=1 Findings Group UID (Trial) (RETIRED)
+	// FindingsGroupUIDTrialRETIRED (0040,A021) VR=UI VM=1 Findings Group UID (Trial)
 	FindingsGroupUIDTrialRETIRED = New(0x0040, 0xA021)
 
-	// ReferencedFindingsGroupUIDTrialRETIRED (0040,A022) VR=UI VM=1 Referenced Findings Group UID (Trial) (RETIRED)
+	// ReferencedFindingsGroupUIDTrialRETIRED (0040,A022) VR=UI VM=1 Referenced Findings Group UID (Trial)
 	ReferencedFindingsGroupUIDTrialRETIRED = New(0x0040, 0xA022)
 
-	// FindingsGroupRecordingDateTrialRETIRED (0040,A023) VR=DA VM=1 Findings Group Recording Date (Trial) (RETIRED)
+	// FindingsGroupRecordingDateTrialRETIRED (0040,A023) VR=DA VM=1 Findings Group Recording Date (Trial)
 	FindingsGroupRecordingDateTrialRETIRED = New(0x0040, 0xA023)
 
-	// FindingsGroupRecordingTimeTrialRETIRED (0040,A024) VR=TM VM=1 Findings Group Recording Time (Trial) (RETIRED)
+	// FindingsGroupRecordingTimeTrialRETIRED (0040,A024) VR=TM VM=1 Findings Group Recording Time (Trial)
 	FindingsGroupRecordingTimeTrialRETIRED = New(0x0040, 0xA024)
 
-	// FindingsSourceCategoryCodeSequenceTrialRETIRED (0040,A026) VR=SQ VM=1 Findings Source Category Code Sequence (Trial) (RETIRED)
+	// FindingsSourceCategoryCodeSequenceTrialRETIRED (0040,A026) VR=SQ VM=1 Findings Source Category Code Sequence (Trial)
 	FindingsSourceCategoryCodeSequenceTrialRETIRED = New(0x0040, 0xA026)
 
 	// VerifyingOrganization (0040,A027) VR=LO VM=1 Verifying Organization
 	VerifyingOrganization = New(0x0040, 0xA027)
 
-	// DocumentingOrganizationIdentifierCodeSequenceTrialRETIRED (0040,A028) VR=SQ VM=1 Documenting Organization Identifier Code Sequence (Trial) (RETIRED)
+	// DocumentingOrganizationIdentifierCodeSequenceTrialRETIRED (0040,A028) VR=SQ VM=1 Documenting Organization Identifier Code Sequence (Trial)
 	DocumentingOrganizationIdentifierCodeSequenceTrialRETIRED = New(0x0040, 0xA028)
 
 	// VerificationDateTime (0040,A030) VR=DT VM=1 Verification DateTime
@@ -8322,40 +8371,40 @@ var (
 	// ConceptNameCodeSequence (0040,A043) VR=SQ VM=1 Concept Name Code Sequence
 	ConceptNameCodeSequence = New(0x0040, 0xA043)
 
-	// MeasurementPrecisionDescriptionTrialRETIRED (0040,A047) VR=LO VM=1 Measurement Precision Description (Trial) (RETIRED)
+	// MeasurementPrecisionDescriptionTrialRETIRED (0040,A047) VR=LO VM=1 Measurement Precision Description (Trial)
 	MeasurementPrecisionDescriptionTrialRETIRED = New(0x0040, 0xA047)
 
 	// ContinuityOfContent (0040,A050) VR=CS VM=1 Continuity Of Content
 	ContinuityOfContent = New(0x0040, 0xA050)
 
-	// UrgencyOrPriorityAlertsTrialRETIRED (0040,A057) VR=CS VM=1-n Urgency or Priority Alerts (Trial) (RETIRED)
+	// UrgencyOrPriorityAlertsTrialRETIRED (0040,A057) VR=CS VM=1-n Urgency or Priority Alerts (Trial)
 	UrgencyOrPriorityAlertsTrialRETIRED = New(0x0040, 0xA057)
 
-	// SequencingIndicatorTrialRETIRED (0040,A060) VR=LO VM=1 Sequencing Indicator (Trial) (RETIRED)
+	// SequencingIndicatorTrialRETIRED (0040,A060) VR=LO VM=1 Sequencing Indicator (Trial)
 	SequencingIndicatorTrialRETIRED = New(0x0040, 0xA060)
 
-	// DocumentIdentifierCodeSequenceTrialRETIRED (0040,A066) VR=SQ VM=1 Document Identifier Code Sequence (Trial) (RETIRED)
+	// DocumentIdentifierCodeSequenceTrialRETIRED (0040,A066) VR=SQ VM=1 Document Identifier Code Sequence (Trial)
 	DocumentIdentifierCodeSequenceTrialRETIRED = New(0x0040, 0xA066)
 
-	// DocumentAuthorTrialRETIRED (0040,A067) VR=PN VM=1 Document Author (Trial) (RETIRED)
+	// DocumentAuthorTrialRETIRED (0040,A067) VR=PN VM=1 Document Author (Trial)
 	DocumentAuthorTrialRETIRED = New(0x0040, 0xA067)
 
-	// DocumentAuthorIdentifierCodeSequenceTrialRETIRED (0040,A068) VR=SQ VM=1 Document Author Identifier Code Sequence (Trial) (RETIRED)
+	// DocumentAuthorIdentifierCodeSequenceTrialRETIRED (0040,A068) VR=SQ VM=1 Document Author Identifier Code Sequence (Trial)
 	DocumentAuthorIdentifierCodeSequenceTrialRETIRED = New(0x0040, 0xA068)
 
-	// IdentifierCodeSequenceTrialRETIRED (0040,A070) VR=SQ VM=1 Identifier Code Sequence (Trial) (RETIRED)
+	// IdentifierCodeSequenceTrialRETIRED (0040,A070) VR=SQ VM=1 Identifier Code Sequence (Trial)
 	IdentifierCodeSequenceTrialRETIRED = New(0x0040, 0xA070)
 
 	// VerifyingObserverSequence (0040,A073) VR=SQ VM=1 Verifying Observer Sequence
 	VerifyingObserverSequence = New(0x0040, 0xA073)
 
-	// ObjectBinaryIdentifierTrialRETIRED (0040,A074) VR=OB VM=1 Object Binary Identifier (Trial) (RETIRED)
+	// ObjectBinaryIdentifierTrialRETIRED (0040,A074) VR=OB VM=1 Object Binary Identifier (Trial)
 	ObjectBinaryIdentifierTrialRETIRED = New(0x0040, 0xA074)
 
 	// VerifyingObserverName (0040,A075) VR=PN VM=1 Verifying Observer Name
 	VerifyingObserverName = New(0x0040, 0xA075)
 
-	// DocumentingObserverIdentifierCodeSequenceTrialRETIRED (0040,A076) VR=SQ VM=1 Documenting Observer Identifier Code Sequence (Trial) (RETIRED)
+	// DocumentingObserverIdentifierCodeSequenceTrialRETIRED (0040,A076) VR=SQ VM=1 Documenting Observer Identifier Code Sequence (Trial)
 	DocumentingObserverIdentifierCodeSequenceTrialRETIRED = New(0x0040, 0xA076)
 
 	// AuthorObserverSequence (0040,A078) VR=SQ VM=1 Author Observer Sequence
@@ -8376,25 +8425,25 @@ var (
 	// ObserverType (0040,A084) VR=CS VM=1 Observer Type
 	ObserverType = New(0x0040, 0xA084)
 
-	// ProcedureIdentifierCodeSequenceTrialRETIRED (0040,A085) VR=SQ VM=1 Procedure Identifier Code Sequence (Trial) (RETIRED)
+	// ProcedureIdentifierCodeSequenceTrialRETIRED (0040,A085) VR=SQ VM=1 Procedure Identifier Code Sequence (Trial)
 	ProcedureIdentifierCodeSequenceTrialRETIRED = New(0x0040, 0xA085)
 
 	// VerifyingObserverIdentificationCodeSequence (0040,A088) VR=SQ VM=1 Verifying Observer Identification Code Sequence
 	VerifyingObserverIdentificationCodeSequence = New(0x0040, 0xA088)
 
-	// ObjectDirectoryBinaryIdentifierTrialRETIRED (0040,A089) VR=OB VM=1 Object Directory Binary Identifier (Trial) (RETIRED)
+	// ObjectDirectoryBinaryIdentifierTrialRETIRED (0040,A089) VR=OB VM=1 Object Directory Binary Identifier (Trial)
 	ObjectDirectoryBinaryIdentifierTrialRETIRED = New(0x0040, 0xA089)
 
-	// EquivalentCDADocumentSequenceRETIRED (0040,A090) VR=SQ VM=1 Equivalent CDA Document Sequence (RETIRED)
+	// EquivalentCDADocumentSequenceRETIRED (0040,A090) VR=SQ VM=1 Equivalent CDA Document Sequence
 	EquivalentCDADocumentSequenceRETIRED = New(0x0040, 0xA090)
 
 	// ReferencedWaveformChannels (0040,A0B0) VR=US VM=2-2n Referenced Waveform Channels
 	ReferencedWaveformChannels = New(0x0040, 0xA0B0)
 
-	// DateOfDocumentOrVerbalTransactionTrialRETIRED (0040,A110) VR=DA VM=1 Date of Document or Verbal Transaction (Trial) (RETIRED)
+	// DateOfDocumentOrVerbalTransactionTrialRETIRED (0040,A110) VR=DA VM=1 Date of Document or Verbal Transaction (Trial)
 	DateOfDocumentOrVerbalTransactionTrialRETIRED = New(0x0040, 0xA110)
 
-	// TimeOfDocumentCreationOrVerbalTransactionTrialRETIRED (0040,A112) VR=TM VM=1 Time of Document Creation or Verbal Transaction (Trial) (RETIRED)
+	// TimeOfDocumentCreationOrVerbalTransactionTrialRETIRED (0040,A112) VR=TM VM=1 Time of Document Creation or Verbal Transaction (Trial)
 	TimeOfDocumentCreationOrVerbalTransactionTrialRETIRED = New(0x0040, 0xA112)
 
 	// DateTime (0040,A120) VR=DT VM=1 DateTime
@@ -8412,7 +8461,7 @@ var (
 	// UID (0040,A124) VR=UI VM=1 UID
 	UID = New(0x0040, 0xA124)
 
-	// ReportStatusIDTrialRETIRED (0040,A125) VR=CS VM=2 Report Status ID (Trial) (RETIRED)
+	// ReportStatusIDTrialRETIRED (0040,A125) VR=CS VM=2 Report Status ID (Trial)
 	ReportStatusIDTrialRETIRED = New(0x0040, 0xA125)
 
 	// TemporalRangeType (0040,A130) VR=CS VM=1 Temporal Range Type
@@ -8421,7 +8470,7 @@ var (
 	// ReferencedSamplePositions (0040,A132) VR=UL VM=1-n Referenced Sample Positions
 	ReferencedSamplePositions = New(0x0040, 0xA132)
 
-	// ReferencedFrameNumbersRETIRED (0040,A136) VR=US VM=1-n Referenced Frame Numbers (RETIRED)
+	// ReferencedFrameNumbersRETIRED (0040,A136) VR=US VM=1-n Referenced Frame Numbers
 	ReferencedFrameNumbersRETIRED = New(0x0040, 0xA136)
 
 	// ReferencedTimeOffsets (0040,A138) VR=DS VM=1-n Referenced Time Offsets
@@ -8442,13 +8491,13 @@ var (
 	// RationalDenominatorValue (0040,A163) VR=UL VM=1-n Rational Denominator Value
 	RationalDenominatorValue = New(0x0040, 0xA163)
 
-	// ObservationCategoryCodeSequenceTrialRETIRED (0040,A167) VR=SQ VM=1 Observation Category Code Sequence (Trial) (RETIRED)
+	// ObservationCategoryCodeSequenceTrialRETIRED (0040,A167) VR=SQ VM=1 Observation Category Code Sequence (Trial)
 	ObservationCategoryCodeSequenceTrialRETIRED = New(0x0040, 0xA167)
 
 	// ConceptCodeSequence (0040,A168) VR=SQ VM=1 Concept Code Sequence
 	ConceptCodeSequence = New(0x0040, 0xA168)
 
-	// BibliographicCitationTrialRETIRED (0040,A16A) VR=ST VM=1 Bibliographic Citation (Trial) (RETIRED)
+	// BibliographicCitationTrialRETIRED (0040,A16A) VR=ST VM=1 Bibliographic Citation (Trial)
 	BibliographicCitationTrialRETIRED = New(0x0040, 0xA16A)
 
 	// PurposeOfReferenceCodeSequence (0040,A170) VR=SQ VM=1 Purpose of Reference Code Sequence
@@ -8457,43 +8506,43 @@ var (
 	// ObservationUID (0040,A171) VR=UI VM=1 Observation UID
 	ObservationUID = New(0x0040, 0xA171)
 
-	// ReferencedObservationUIDTrialRETIRED (0040,A172) VR=UI VM=1 Referenced Observation UID (Trial) (RETIRED)
+	// ReferencedObservationUIDTrialRETIRED (0040,A172) VR=UI VM=1 Referenced Observation UID (Trial)
 	ReferencedObservationUIDTrialRETIRED = New(0x0040, 0xA172)
 
-	// ReferencedObservationClassTrialRETIRED (0040,A173) VR=CS VM=1 Referenced Observation Class (Trial) (RETIRED)
+	// ReferencedObservationClassTrialRETIRED (0040,A173) VR=CS VM=1 Referenced Observation Class (Trial)
 	ReferencedObservationClassTrialRETIRED = New(0x0040, 0xA173)
 
-	// ReferencedObjectObservationClassTrialRETIRED (0040,A174) VR=CS VM=1 Referenced Object Observation Class (Trial) (RETIRED)
+	// ReferencedObjectObservationClassTrialRETIRED (0040,A174) VR=CS VM=1 Referenced Object Observation Class (Trial)
 	ReferencedObjectObservationClassTrialRETIRED = New(0x0040, 0xA174)
 
 	// AnnotationGroupNumber (0040,A180) VR=US VM=1 Annotation Group Number
 	AnnotationGroupNumber = New(0x0040, 0xA180)
 
-	// ObservationDateTrialRETIRED (0040,A192) VR=DA VM=1 Observation Date (Trial) (RETIRED)
+	// ObservationDateTrialRETIRED (0040,A192) VR=DA VM=1 Observation Date (Trial)
 	ObservationDateTrialRETIRED = New(0x0040, 0xA192)
 
-	// ObservationTimeTrialRETIRED (0040,A193) VR=TM VM=1 Observation Time (Trial) (RETIRED)
+	// ObservationTimeTrialRETIRED (0040,A193) VR=TM VM=1 Observation Time (Trial)
 	ObservationTimeTrialRETIRED = New(0x0040, 0xA193)
 
-	// MeasurementAutomationTrialRETIRED (0040,A194) VR=CS VM=1 Measurement Automation (Trial) (RETIRED)
+	// MeasurementAutomationTrialRETIRED (0040,A194) VR=CS VM=1 Measurement Automation (Trial)
 	MeasurementAutomationTrialRETIRED = New(0x0040, 0xA194)
 
 	// ModifierCodeSequence (0040,A195) VR=SQ VM=1 Modifier Code Sequence
 	ModifierCodeSequence = New(0x0040, 0xA195)
 
-	// IdentificationDescriptionTrialRETIRED (0040,A224) VR=ST VM=1 Identification Description (Trial) (RETIRED)
+	// IdentificationDescriptionTrialRETIRED (0040,A224) VR=ST VM=1 Identification Description (Trial)
 	IdentificationDescriptionTrialRETIRED = New(0x0040, 0xA224)
 
-	// CoordinatesSetGeometricTypeTrialRETIRED (0040,A290) VR=CS VM=1 Coordinates Set Geometric Type (Trial) (RETIRED)
+	// CoordinatesSetGeometricTypeTrialRETIRED (0040,A290) VR=CS VM=1 Coordinates Set Geometric Type (Trial)
 	CoordinatesSetGeometricTypeTrialRETIRED = New(0x0040, 0xA290)
 
-	// AlgorithmCodeSequenceTrialRETIRED (0040,A296) VR=SQ VM=1 Algorithm Code Sequence (Trial) (RETIRED)
+	// AlgorithmCodeSequenceTrialRETIRED (0040,A296) VR=SQ VM=1 Algorithm Code Sequence (Trial)
 	AlgorithmCodeSequenceTrialRETIRED = New(0x0040, 0xA296)
 
-	// AlgorithmDescriptionTrialRETIRED (0040,A297) VR=ST VM=1 Algorithm Description (Trial) (RETIRED)
+	// AlgorithmDescriptionTrialRETIRED (0040,A297) VR=ST VM=1 Algorithm Description (Trial)
 	AlgorithmDescriptionTrialRETIRED = New(0x0040, 0xA297)
 
-	// PixelCoordinatesSetTrialRETIRED (0040,A29A) VR=SL VM=2-2n Pixel Coordinates Set (Trial) (RETIRED)
+	// PixelCoordinatesSetTrialRETIRED (0040,A29A) VR=SL VM=2-2n Pixel Coordinates Set (Trial)
 	PixelCoordinatesSetTrialRETIRED = New(0x0040, 0xA29A)
 
 	// MeasuredValueSequence (0040,A300) VR=SQ VM=1 Measured Value Sequence
@@ -8502,31 +8551,31 @@ var (
 	// NumericValueQualifierCodeSequence (0040,A301) VR=SQ VM=1 Numeric Value Qualifier Code Sequence
 	NumericValueQualifierCodeSequence = New(0x0040, 0xA301)
 
-	// CurrentObserverTrialRETIRED (0040,A307) VR=PN VM=1 Current Observer (Trial) (RETIRED)
+	// CurrentObserverTrialRETIRED (0040,A307) VR=PN VM=1 Current Observer (Trial)
 	CurrentObserverTrialRETIRED = New(0x0040, 0xA307)
 
 	// NumericValue (0040,A30A) VR=DS VM=1-n Numeric Value
 	NumericValue = New(0x0040, 0xA30A)
 
-	// ReferencedAccessionSequenceTrialRETIRED (0040,A313) VR=SQ VM=1 Referenced Accession Sequence (Trial) (RETIRED)
+	// ReferencedAccessionSequenceTrialRETIRED (0040,A313) VR=SQ VM=1 Referenced Accession Sequence (Trial)
 	ReferencedAccessionSequenceTrialRETIRED = New(0x0040, 0xA313)
 
-	// ReportStatusCommentTrialRETIRED (0040,A33A) VR=ST VM=1 Report Status Comment (Trial) (RETIRED)
+	// ReportStatusCommentTrialRETIRED (0040,A33A) VR=ST VM=1 Report Status Comment (Trial)
 	ReportStatusCommentTrialRETIRED = New(0x0040, 0xA33A)
 
-	// ProcedureContextSequenceTrialRETIRED (0040,A340) VR=SQ VM=1 Procedure Context Sequence (Trial) (RETIRED)
+	// ProcedureContextSequenceTrialRETIRED (0040,A340) VR=SQ VM=1 Procedure Context Sequence (Trial)
 	ProcedureContextSequenceTrialRETIRED = New(0x0040, 0xA340)
 
-	// VerbalSourceTrialRETIRED (0040,A352) VR=PN VM=1 Verbal Source (Trial) (RETIRED)
+	// VerbalSourceTrialRETIRED (0040,A352) VR=PN VM=1 Verbal Source (Trial)
 	VerbalSourceTrialRETIRED = New(0x0040, 0xA352)
 
-	// AddressTrialRETIRED (0040,A353) VR=ST VM=1 Address (Trial) (RETIRED)
+	// AddressTrialRETIRED (0040,A353) VR=ST VM=1 Address (Trial)
 	AddressTrialRETIRED = New(0x0040, 0xA353)
 
-	// TelephoneNumberTrialRETIRED (0040,A354) VR=LO VM=1 Telephone Number (Trial) (RETIRED)
+	// TelephoneNumberTrialRETIRED (0040,A354) VR=LO VM=1 Telephone Number (Trial)
 	TelephoneNumberTrialRETIRED = New(0x0040, 0xA354)
 
-	// VerbalSourceIdentifierCodeSequenceTrialRETIRED (0040,A358) VR=SQ VM=1 Verbal Source Identifier Code Sequence (Trial) (RETIRED)
+	// VerbalSourceIdentifierCodeSequenceTrialRETIRED (0040,A358) VR=SQ VM=1 Verbal Source Identifier Code Sequence (Trial)
 	VerbalSourceIdentifierCodeSequenceTrialRETIRED = New(0x0040, 0xA358)
 
 	// PredecessorDocumentsSequence (0040,A360) VR=SQ VM=1 Predecessor Documents Sequence
@@ -8541,7 +8590,7 @@ var (
 	// CurrentRequestedProcedureEvidenceSequence (0040,A375) VR=SQ VM=1 Current Requested Procedure Evidence Sequence
 	CurrentRequestedProcedureEvidenceSequence = New(0x0040, 0xA375)
 
-	// ReportDetailSequenceTrialRETIRED (0040,A380) VR=SQ VM=1 Report Detail Sequence (Trial) (RETIRED)
+	// ReportDetailSequenceTrialRETIRED (0040,A380) VR=SQ VM=1 Report Detail Sequence (Trial)
 	ReportDetailSequenceTrialRETIRED = New(0x0040, 0xA380)
 
 	// PertinentOtherEvidenceSequence (0040,A385) VR=SQ VM=1 Pertinent Other Evidence Sequence
@@ -8550,13 +8599,13 @@ var (
 	// HL7StructuredDocumentReferenceSequence (0040,A390) VR=SQ VM=1 HL7 Structured Document Reference Sequence
 	HL7StructuredDocumentReferenceSequence = New(0x0040, 0xA390)
 
-	// ObservationSubjectUIDTrialRETIRED (0040,A402) VR=UI VM=1 Observation Subject UID (Trial) (RETIRED)
+	// ObservationSubjectUIDTrialRETIRED (0040,A402) VR=UI VM=1 Observation Subject UID (Trial)
 	ObservationSubjectUIDTrialRETIRED = New(0x0040, 0xA402)
 
-	// ObservationSubjectClassTrialRETIRED (0040,A403) VR=CS VM=1 Observation Subject Class (Trial) (RETIRED)
+	// ObservationSubjectClassTrialRETIRED (0040,A403) VR=CS VM=1 Observation Subject Class (Trial)
 	ObservationSubjectClassTrialRETIRED = New(0x0040, 0xA403)
 
-	// ObservationSubjectTypeCodeSequenceTrialRETIRED (0040,A404) VR=SQ VM=1 Observation Subject Type Code Sequence (Trial) (RETIRED)
+	// ObservationSubjectTypeCodeSequenceTrialRETIRED (0040,A404) VR=SQ VM=1 Observation Subject Type Code Sequence (Trial)
 	ObservationSubjectTypeCodeSequenceTrialRETIRED = New(0x0040, 0xA404)
 
 	// CompletionFlag (0040,A491) VR=CS VM=1 Completion Flag
@@ -8580,25 +8629,25 @@ var (
 	// IdenticalDocumentsSequence (0040,A525) VR=SQ VM=1 Identical Documents Sequence
 	IdenticalDocumentsSequence = New(0x0040, 0xA525)
 
-	// ObservationSubjectContextFlagTrialRETIRED (0040,A600) VR=CS VM=1 Observation Subject Context Flag (Trial) (RETIRED)
+	// ObservationSubjectContextFlagTrialRETIRED (0040,A600) VR=CS VM=1 Observation Subject Context Flag (Trial)
 	ObservationSubjectContextFlagTrialRETIRED = New(0x0040, 0xA600)
 
-	// ObserverContextFlagTrialRETIRED (0040,A601) VR=CS VM=1 Observer Context Flag (Trial) (RETIRED)
+	// ObserverContextFlagTrialRETIRED (0040,A601) VR=CS VM=1 Observer Context Flag (Trial)
 	ObserverContextFlagTrialRETIRED = New(0x0040, 0xA601)
 
-	// ProcedureContextFlagTrialRETIRED (0040,A603) VR=CS VM=1 Procedure Context Flag (Trial) (RETIRED)
+	// ProcedureContextFlagTrialRETIRED (0040,A603) VR=CS VM=1 Procedure Context Flag (Trial)
 	ProcedureContextFlagTrialRETIRED = New(0x0040, 0xA603)
 
 	// ContentSequence (0040,A730) VR=SQ VM=1 Content Sequence
 	ContentSequence = New(0x0040, 0xA730)
 
-	// RelationshipSequenceTrialRETIRED (0040,A731) VR=SQ VM=1 Relationship Sequence (Trial) (RETIRED)
+	// RelationshipSequenceTrialRETIRED (0040,A731) VR=SQ VM=1 Relationship Sequence (Trial)
 	RelationshipSequenceTrialRETIRED = New(0x0040, 0xA731)
 
-	// RelationshipTypeCodeSequenceTrialRETIRED (0040,A732) VR=SQ VM=1 Relationship Type Code Sequence (Trial) (RETIRED)
+	// RelationshipTypeCodeSequenceTrialRETIRED (0040,A732) VR=SQ VM=1 Relationship Type Code Sequence (Trial)
 	RelationshipTypeCodeSequenceTrialRETIRED = New(0x0040, 0xA732)
 
-	// LanguageCodeSequenceTrialRETIRED (0040,A744) VR=SQ VM=1 Language Code Sequence (Trial) (RETIRED)
+	// LanguageCodeSequenceTrialRETIRED (0040,A744) VR=SQ VM=1 Language Code Sequence (Trial)
 	LanguageCodeSequenceTrialRETIRED = New(0x0040, 0xA744)
 
 	// TabulatedValuesSequence (0040,A801) VR=SQ VM=1 Tabulated Values Sequence
@@ -8625,7 +8674,7 @@ var (
 	// CellValuesSequence (0040,A808) VR=SQ VM=1 Cell Values Sequence
 	CellValuesSequence = New(0x0040, 0xA808)
 
-	// UniformResourceLocatorTrialRETIRED (0040,A992) VR=ST VM=1 Uniform Resource Locator (Trial) (RETIRED)
+	// UniformResourceLocatorTrialRETIRED (0040,A992) VR=ST VM=1 Uniform Resource Locator (Trial)
 	UniformResourceLocatorTrialRETIRED = New(0x0040, 0xA992)
 
 	// WaveformAnnotationSequence (0040,B020) VR=SQ VM=1 Waveform Annotation Sequence
@@ -8691,19 +8740,19 @@ var (
 	// TemplateIdentifier (0040,DB00) VR=CS VM=1 Template Identifier
 	TemplateIdentifier = New(0x0040, 0xDB00)
 
-	// TemplateVersionRETIRED (0040,DB06) VR=DT VM=1 Template Version (RETIRED)
+	// TemplateVersionRETIRED (0040,DB06) VR=DT VM=1 Template Version
 	TemplateVersionRETIRED = New(0x0040, 0xDB06)
 
-	// TemplateLocalVersionRETIRED (0040,DB07) VR=DT VM=1 Template Local Version (RETIRED)
+	// TemplateLocalVersionRETIRED (0040,DB07) VR=DT VM=1 Template Local Version
 	TemplateLocalVersionRETIRED = New(0x0040, 0xDB07)
 
-	// TemplateExtensionFlagRETIRED (0040,DB0B) VR=CS VM=1 Template Extension Flag (RETIRED)
+	// TemplateExtensionFlagRETIRED (0040,DB0B) VR=CS VM=1 Template Extension Flag
 	TemplateExtensionFlagRETIRED = New(0x0040, 0xDB0B)
 
-	// TemplateExtensionOrganizationUIDRETIRED (0040,DB0C) VR=UI VM=1 Template Extension Organization UID (RETIRED)
+	// TemplateExtensionOrganizationUIDRETIRED (0040,DB0C) VR=UI VM=1 Template Extension Organization UID
 	TemplateExtensionOrganizationUIDRETIRED = New(0x0040, 0xDB0C)
 
-	// TemplateExtensionCreatorUIDRETIRED (0040,DB0D) VR=UI VM=1 Template Extension Creator UID (RETIRED)
+	// TemplateExtensionCreatorUIDRETIRED (0040,DB0D) VR=UI VM=1 Template Extension Creator UID
 	TemplateExtensionCreatorUIDRETIRED = New(0x0040, 0xDB0D)
 
 	// ReferencedContentItemIdentifier (0040,DB73) VR=UL VM=1-n Referenced Content Item Identifier
@@ -9195,13 +9244,13 @@ var (
 	// PaletteColorLookupTableSequence (0048,0120) VR=SQ VM=1 Palette Color Lookup Table Sequence
 	PaletteColorLookupTableSequence = New(0x0048, 0x0120)
 
-	// ReferencedImageNavigationSequenceRETIRED (0048,0200) VR=SQ VM=1 Referenced Image Navigation Sequence (RETIRED)
+	// ReferencedImageNavigationSequenceRETIRED (0048,0200) VR=SQ VM=1 Referenced Image Navigation Sequence
 	ReferencedImageNavigationSequenceRETIRED = New(0x0048, 0x0200)
 
-	// TopLeftHandCornerOfLocalizerAreaRETIRED (0048,0201) VR=US VM=2 Top Left Hand Corner of Localizer Area (RETIRED)
+	// TopLeftHandCornerOfLocalizerAreaRETIRED (0048,0201) VR=US VM=2 Top Left Hand Corner of Localizer Area
 	TopLeftHandCornerOfLocalizerAreaRETIRED = New(0x0048, 0x0201)
 
-	// BottomRightHandCornerOfLocalizerAreaRETIRED (0048,0202) VR=US VM=2 Bottom Right Hand Corner of Localizer Area (RETIRED)
+	// BottomRightHandCornerOfLocalizerAreaRETIRED (0048,0202) VR=US VM=2 Bottom Right Hand Corner of Localizer Area
 	BottomRightHandCornerOfLocalizerAreaRETIRED = New(0x0048, 0x0202)
 
 	// OpticalPathIdentificationSequence (0048,0207) VR=SQ VM=1 Optical Path Identification Sequence
@@ -9594,10 +9643,10 @@ var (
 	// ImageIndex (0054,1330) VR=US VM=1 Image Index
 	ImageIndex = New(0x0054, 0x1330)
 
-	// CountsIncludedRETIRED (0054,1400) VR=CS VM=1-n Counts Included (RETIRED)
+	// CountsIncludedRETIRED (0054,1400) VR=CS VM=1-n Counts Included
 	CountsIncludedRETIRED = New(0x0054, 0x1400)
 
-	// DeadTimeCorrectionFlagRETIRED (0054,1401) VR=CS VM=1 Dead Time Correction Flag (RETIRED)
+	// DeadTimeCorrectionFlagRETIRED (0054,1401) VR=CS VM=1 Dead Time Correction Flag
 	DeadTimeCorrectionFlagRETIRED = New(0x0054, 0x1401)
 
 	// HistogramSequence (0060,3000) VR=SQ VM=1 Histogram Sequence
@@ -9606,8 +9655,10 @@ var (
 	// HistogramNumberOfBins (0060,3002) VR=US VM=1 Histogram Number of Bins
 	HistogramNumberOfBins = New(0x0060, 0x3002)
 
+	// HistogramFirstBinValue (0060,3004) VR=US/SS VM=1 Histogram First Bin Value
 	HistogramFirstBinValue = New(0x0060, 0x3004)
 
+	// HistogramLastBinValue (0060,3006) VR=US/SS VM=1 Histogram Last Bin Value
 	HistogramLastBinValue = New(0x0060, 0x3006)
 
 	// HistogramBinWidth (0060,3008) VR=US VM=1 Histogram Bin Width
@@ -9790,13 +9841,13 @@ var (
 	// DoublePointCoordinatesData (0066,0022) VR=OD VM=1 Double Point Coordinates Data
 	DoublePointCoordinatesData = New(0x0066, 0x0022)
 
-	// TrianglePointIndexListRETIRED (0066,0023) VR=OW VM=1 Triangle Point Index List (RETIRED)
+	// TrianglePointIndexListRETIRED (0066,0023) VR=OW VM=1 Triangle Point Index List
 	TrianglePointIndexListRETIRED = New(0x0066, 0x0023)
 
-	// EdgePointIndexListRETIRED (0066,0024) VR=OW VM=1 Edge Point Index List (RETIRED)
+	// EdgePointIndexListRETIRED (0066,0024) VR=OW VM=1 Edge Point Index List
 	EdgePointIndexListRETIRED = New(0x0066, 0x0024)
 
-	// VertexPointIndexListRETIRED (0066,0025) VR=OW VM=1 Vertex Point Index List (RETIRED)
+	// VertexPointIndexListRETIRED (0066,0025) VR=OW VM=1 Vertex Point Index List
 	VertexPointIndexListRETIRED = New(0x0066, 0x0025)
 
 	// TriangleStripSequence (0066,0026) VR=SQ VM=1 Triangle Strip Sequence
@@ -9808,7 +9859,7 @@ var (
 	// LineSequence (0066,0028) VR=SQ VM=1 Line Sequence
 	LineSequence = New(0x0066, 0x0028)
 
-	// PrimitivePointIndexListRETIRED (0066,0029) VR=OW VM=1 Primitive Point Index List (RETIRED)
+	// PrimitivePointIndexListRETIRED (0066,0029) VR=OW VM=1 Primitive Point Index List
 	PrimitivePointIndexListRETIRED = New(0x0066, 0x0029)
 
 	// SurfaceCount (0066,002A) VR=UL VM=1 Surface Count
@@ -10240,7 +10291,7 @@ var (
 	// GraphicFilled (0070,0024) VR=CS VM=1 Graphic Filled
 	GraphicFilled = New(0x0070, 0x0024)
 
-	// ImageRotationRetiredRETIRED (0070,0040) VR=IS VM=1 Image Rotation (Retired) (RETIRED)
+	// ImageRotationRetiredRETIRED (0070,0040) VR=IS VM=1 Image Rotation (Retired)
 	ImageRotationRetiredRETIRED = New(0x0070, 0x0040)
 
 	// ImageHorizontalFlip (0070,0041) VR=CS VM=1 Image Horizontal Flip
@@ -10249,10 +10300,10 @@ var (
 	// ImageRotation (0070,0042) VR=US VM=1 Image Rotation
 	ImageRotation = New(0x0070, 0x0042)
 
-	// DisplayedAreaTopLeftHandCornerTrialRETIRED (0070,0050) VR=US VM=2 Displayed Area Top Left Hand Corner (Trial) (RETIRED)
+	// DisplayedAreaTopLeftHandCornerTrialRETIRED (0070,0050) VR=US VM=2 Displayed Area Top Left Hand Corner (Trial)
 	DisplayedAreaTopLeftHandCornerTrialRETIRED = New(0x0070, 0x0050)
 
-	// DisplayedAreaBottomRightHandCornerTrialRETIRED (0070,0051) VR=US VM=2 Displayed Area Bottom Right Hand Corner (Trial) (RETIRED)
+	// DisplayedAreaBottomRightHandCornerTrialRETIRED (0070,0051) VR=US VM=2 Displayed Area Bottom Right Hand Corner (Trial)
 	DisplayedAreaBottomRightHandCornerTrialRETIRED = New(0x0070, 0x0051)
 
 	// DisplayedAreaTopLeftHandCorner (0070,0052) VR=SL VM=2 Displayed Area Top Left Hand Corner
@@ -10273,7 +10324,7 @@ var (
 	// GraphicLayerRecommendedDisplayGrayscaleValue (0070,0066) VR=US VM=1 Graphic Layer Recommended Display Grayscale Value
 	GraphicLayerRecommendedDisplayGrayscaleValue = New(0x0070, 0x0066)
 
-	// GraphicLayerRecommendedDisplayRGBValueRETIRED (0070,0067) VR=US VM=3 Graphic Layer Recommended Display RGB Value (RETIRED)
+	// GraphicLayerRecommendedDisplayRGBValueRETIRED (0070,0067) VR=US VM=3 Graphic Layer Recommended Display RGB Value
 	GraphicLayerRecommendedDisplayRGBValueRETIRED = New(0x0070, 0x0067)
 
 	// GraphicLayerDescription (0070,0068) VR=LO VM=1 Graphic Layer Description
@@ -10543,7 +10594,7 @@ var (
 	// CroppingSpecificationIndex (0070,1205) VR=US VM=1-n Cropping Specification Index
 	CroppingSpecificationIndex = New(0x0070, 0x1205)
 
-	// CompositingMethodRETIRED (0070,1206) VR=CS VM=1 Compositing Method (RETIRED)
+	// CompositingMethodRETIRED (0070,1206) VR=CS VM=1 Compositing Method
 	CompositingMethodRETIRED = New(0x0070, 0x1206)
 
 	// VolumetricPresentationInputNumber (0070,1207) VR=US VM=1 Volumetric Presentation Input Number
@@ -10672,10 +10723,10 @@ var (
 	// WeightingTransferFunctionSequence (0070,1806) VR=SQ VM=1 Weighting Transfer Function Sequence
 	WeightingTransferFunctionSequence = New(0x0070, 0x1806)
 
-	// WeightingLookupTableDescriptorRETIRED (0070,1807) VR=US VM=3 Weighting Lookup Table Descriptor (RETIRED)
+	// WeightingLookupTableDescriptorRETIRED (0070,1807) VR=US VM=3 Weighting Lookup Table Descriptor
 	WeightingLookupTableDescriptorRETIRED = New(0x0070, 0x1807)
 
-	// WeightingLookupTableDataRETIRED (0070,1808) VR=OB VM=1 Weighting Lookup Table Data (RETIRED)
+	// WeightingLookupTableDataRETIRED (0070,1808) VR=OB VM=1 Weighting Lookup Table Data
 	WeightingLookupTableDataRETIRED = New(0x0070, 0x1808)
 
 	// VolumetricAnnotationSequence (0070,1901) VR=SQ VM=1 Volumetric Annotation Sequence
@@ -11161,7 +11212,7 @@ var (
 	// BeamTaskType (0074,1022) VR=CS VM=1 Beam Task Type
 	BeamTaskType = New(0x0074, 0x1022)
 
-	// BeamOrderIndexTrialRETIRED (0074,1024) VR=IS VM=1 Beam Order Index (Trial) (RETIRED)
+	// BeamOrderIndexTrialRETIRED (0074,1024) VR=IS VM=1 Beam Order Index (Trial)
 	BeamOrderIndexTrialRETIRED = New(0x0074, 0x1024)
 
 	// AutosequenceFlag (0074,1025) VR=CS VM=1 Autosequence Flag
@@ -11200,10 +11251,10 @@ var (
 	// DoubleExposureOrdering (0074,1036) VR=CS VM=1 Double Exposure Ordering
 	DoubleExposureOrdering = New(0x0074, 0x1036)
 
-	// DoubleExposureMetersetTrialRETIRED (0074,1038) VR=DS VM=1 Double Exposure Meterset (Trial) (RETIRED)
+	// DoubleExposureMetersetTrialRETIRED (0074,1038) VR=DS VM=1 Double Exposure Meterset (Trial)
 	DoubleExposureMetersetTrialRETIRED = New(0x0074, 0x1038)
 
-	// DoubleExposureFieldDeltaTrialRETIRED (0074,103A) VR=DS VM=4 Double Exposure Field Delta (Trial) (RETIRED)
+	// DoubleExposureFieldDeltaTrialRETIRED (0074,103A) VR=DS VM=4 Double Exposure Field Delta (Trial)
 	DoubleExposureFieldDeltaTrialRETIRED = New(0x0074, 0x103A)
 
 	// RelatedReferenceRTImageSequence (0074,1040) VR=SQ VM=1 Related Reference RT Image Sequence
@@ -11263,10 +11314,10 @@ var (
 	// UnifiedProcedureStepPerformedProcedureSequence (0074,1216) VR=SQ VM=1 Unified Procedure Step Performed Procedure Sequence
 	UnifiedProcedureStepPerformedProcedureSequence = New(0x0074, 0x1216)
 
-	// RelatedProcedureStepSequenceRETIRED (0074,1220) VR=SQ VM=1 Related Procedure Step Sequence (RETIRED)
+	// RelatedProcedureStepSequenceRETIRED (0074,1220) VR=SQ VM=1 Related Procedure Step Sequence
 	RelatedProcedureStepSequenceRETIRED = New(0x0074, 0x1220)
 
-	// ProcedureStepRelationshipTypeRETIRED (0074,1222) VR=LO VM=1 Procedure Step Relationship Type (RETIRED)
+	// ProcedureStepRelationshipTypeRETIRED (0074,1222) VR=LO VM=1 Procedure Step Relationship Type
 	ProcedureStepRelationshipTypeRETIRED = New(0x0074, 0x1222)
 
 	// ReplacedProcedureStepSequence (0074,1224) VR=SQ VM=1 Replaced Procedure Step Sequence
@@ -11587,16 +11638,16 @@ var (
 	// IconImageSequence (0088,0200) VR=SQ VM=1 Icon Image Sequence
 	IconImageSequence = New(0x0088, 0x0200)
 
-	// TopicTitleRETIRED (0088,0904) VR=LO VM=1 Topic Title (RETIRED)
+	// TopicTitleRETIRED (0088,0904) VR=LO VM=1 Topic Title
 	TopicTitleRETIRED = New(0x0088, 0x0904)
 
-	// TopicSubjectRETIRED (0088,0906) VR=ST VM=1 Topic Subject (RETIRED)
+	// TopicSubjectRETIRED (0088,0906) VR=ST VM=1 Topic Subject
 	TopicSubjectRETIRED = New(0x0088, 0x0906)
 
-	// TopicAuthorRETIRED (0088,0910) VR=LO VM=1 Topic Author (RETIRED)
+	// TopicAuthorRETIRED (0088,0910) VR=LO VM=1 Topic Author
 	TopicAuthorRETIRED = New(0x0088, 0x0910)
 
-	// TopicKeywordsRETIRED (0088,0912) VR=LO VM=1-32 Topic Keywords (RETIRED)
+	// TopicKeywordsRETIRED (0088,0912) VR=LO VM=1-32 Topic Keywords
 	TopicKeywordsRETIRED = New(0x0088, 0x0912)
 
 	// SOPInstanceStatus (0100,0410) VR=CS VM=1 SOP Instance Status
@@ -11692,18 +11743,25 @@ var (
 	// InstanceOriginStatus (0400,0600) VR=CS VM=1 Instance Origin Status
 	InstanceOriginStatus = New(0x0400, 0x0600)
 
+	// EscapeTripletRETIRED (1000,xxx0) VR=US VM=3 Escape Triplet
 	EscapeTripletRETIRED = New(0x1000, 0x0000)
 
+	// RunLengthTripletRETIRED (1000,xxx1) VR=US VM=3 Run Length Triplet
 	RunLengthTripletRETIRED = New(0x1000, 0x0001)
 
+	// HuffmanTableSizeRETIRED (1000,xxx2) VR=US VM=1 Huffman Table Size
 	HuffmanTableSizeRETIRED = New(0x1000, 0x0002)
 
+	// HuffmanTableTripletRETIRED (1000,xxx3) VR=US VM=3 Huffman Table Triplet
 	HuffmanTableTripletRETIRED = New(0x1000, 0x0003)
 
+	// ShiftTableSizeRETIRED (1000,xxx4) VR=US VM=1 Shift Table Size
 	ShiftTableSizeRETIRED = New(0x1000, 0x0004)
 
+	// ShiftTableTripletRETIRED (1000,xxx5) VR=US VM=3 Shift Table Triplet
 	ShiftTableTripletRETIRED = New(0x1000, 0x0005)
 
+	// ZonalMapRETIRED (1010,xxxx) VR=US VM=1-n Zonal Map
 	ZonalMapRETIRED = New(0x1010, 0x0000)
 
 	// NumberOfCopies (2000,0010) VR=IS VM=1 Number of Copies
@@ -11730,22 +11788,22 @@ var (
 	// MaximumMemoryAllocation (2000,0061) VR=IS VM=1 Maximum Memory Allocation
 	MaximumMemoryAllocation = New(0x2000, 0x0061)
 
-	// ColorImagePrintingFlagRETIRED (2000,0062) VR=CS VM=1 Color Image Printing Flag (RETIRED)
+	// ColorImagePrintingFlagRETIRED (2000,0062) VR=CS VM=1 Color Image Printing Flag
 	ColorImagePrintingFlagRETIRED = New(0x2000, 0x0062)
 
-	// CollationFlagRETIRED (2000,0063) VR=CS VM=1 Collation Flag (RETIRED)
+	// CollationFlagRETIRED (2000,0063) VR=CS VM=1 Collation Flag
 	CollationFlagRETIRED = New(0x2000, 0x0063)
 
-	// AnnotationFlagRETIRED (2000,0065) VR=CS VM=1 Annotation Flag (RETIRED)
+	// AnnotationFlagRETIRED (2000,0065) VR=CS VM=1 Annotation Flag
 	AnnotationFlagRETIRED = New(0x2000, 0x0065)
 
-	// ImageOverlayFlagRETIRED (2000,0067) VR=CS VM=1 Image Overlay Flag (RETIRED)
+	// ImageOverlayFlagRETIRED (2000,0067) VR=CS VM=1 Image Overlay Flag
 	ImageOverlayFlagRETIRED = New(0x2000, 0x0067)
 
-	// PresentationLUTFlagRETIRED (2000,0069) VR=CS VM=1 Presentation LUT Flag (RETIRED)
+	// PresentationLUTFlagRETIRED (2000,0069) VR=CS VM=1 Presentation LUT Flag
 	PresentationLUTFlagRETIRED = New(0x2000, 0x0069)
 
-	// ImageBoxPresentationLUTFlagRETIRED (2000,006A) VR=CS VM=1 Image Box Presentation LUT Flag (RETIRED)
+	// ImageBoxPresentationLUTFlagRETIRED (2000,006A) VR=CS VM=1 Image Box Presentation LUT Flag
 	ImageBoxPresentationLUTFlagRETIRED = New(0x2000, 0x006A)
 
 	// MemoryBitDepth (2000,00A0) VR=US VM=1 Memory Bit Depth
@@ -11766,7 +11824,7 @@ var (
 	// ReferencedFilmBoxSequence (2000,0500) VR=SQ VM=1 Referenced Film Box Sequence
 	ReferencedFilmBoxSequence = New(0x2000, 0x0500)
 
-	// ReferencedStoredPrintSequenceRETIRED (2000,0510) VR=SQ VM=1 Referenced Stored Print Sequence (RETIRED)
+	// ReferencedStoredPrintSequenceRETIRED (2000,0510) VR=SQ VM=1 Referenced Stored Print Sequence
 	ReferencedStoredPrintSequenceRETIRED = New(0x2000, 0x0510)
 
 	// ImageDisplayFormat (2010,0010) VR=ST VM=1 Image Display Format
@@ -11874,10 +11932,10 @@ var (
 	// BasicColorImageSequence (2020,0111) VR=SQ VM=1 Basic Color Image Sequence
 	BasicColorImageSequence = New(0x2020, 0x0111)
 
-	// ReferencedImageOverlayBoxSequenceRETIRED (2020,0130) VR=SQ VM=1 Referenced Image Overlay Box Sequence (RETIRED)
+	// ReferencedImageOverlayBoxSequenceRETIRED (2020,0130) VR=SQ VM=1 Referenced Image Overlay Box Sequence
 	ReferencedImageOverlayBoxSequenceRETIRED = New(0x2020, 0x0130)
 
-	// ReferencedVOILUTBoxSequenceRETIRED (2020,0140) VR=SQ VM=1 Referenced VOI LUT Box Sequence (RETIRED)
+	// ReferencedVOILUTBoxSequenceRETIRED (2020,0140) VR=SQ VM=1 Referenced VOI LUT Box Sequence
 	ReferencedVOILUTBoxSequenceRETIRED = New(0x2020, 0x0140)
 
 	// AnnotationPosition (2030,0010) VR=US VM=1 Annotation Position
@@ -11886,40 +11944,40 @@ var (
 	// TextString (2030,0020) VR=LO VM=1 Text String
 	TextString = New(0x2030, 0x0020)
 
-	// ReferencedOverlayPlaneSequenceRETIRED (2040,0010) VR=SQ VM=1 Referenced Overlay Plane Sequence (RETIRED)
+	// ReferencedOverlayPlaneSequenceRETIRED (2040,0010) VR=SQ VM=1 Referenced Overlay Plane Sequence
 	ReferencedOverlayPlaneSequenceRETIRED = New(0x2040, 0x0010)
 
-	// ReferencedOverlayPlaneGroupsRETIRED (2040,0011) VR=US VM=1-99 Referenced Overlay Plane Groups (RETIRED)
+	// ReferencedOverlayPlaneGroupsRETIRED (2040,0011) VR=US VM=1-99 Referenced Overlay Plane Groups
 	ReferencedOverlayPlaneGroupsRETIRED = New(0x2040, 0x0011)
 
-	// OverlayPixelDataSequenceRETIRED (2040,0020) VR=SQ VM=1 Overlay Pixel Data Sequence (RETIRED)
+	// OverlayPixelDataSequenceRETIRED (2040,0020) VR=SQ VM=1 Overlay Pixel Data Sequence
 	OverlayPixelDataSequenceRETIRED = New(0x2040, 0x0020)
 
-	// OverlayMagnificationTypeRETIRED (2040,0060) VR=CS VM=1 Overlay Magnification Type (RETIRED)
+	// OverlayMagnificationTypeRETIRED (2040,0060) VR=CS VM=1 Overlay Magnification Type
 	OverlayMagnificationTypeRETIRED = New(0x2040, 0x0060)
 
-	// OverlaySmoothingTypeRETIRED (2040,0070) VR=CS VM=1 Overlay Smoothing Type (RETIRED)
+	// OverlaySmoothingTypeRETIRED (2040,0070) VR=CS VM=1 Overlay Smoothing Type
 	OverlaySmoothingTypeRETIRED = New(0x2040, 0x0070)
 
-	// OverlayOrImageMagnificationRETIRED (2040,0072) VR=CS VM=1 Overlay or Image Magnification (RETIRED)
+	// OverlayOrImageMagnificationRETIRED (2040,0072) VR=CS VM=1 Overlay or Image Magnification
 	OverlayOrImageMagnificationRETIRED = New(0x2040, 0x0072)
 
-	// MagnifyToNumberOfColumnsRETIRED (2040,0074) VR=US VM=1 Magnify to Number of Columns (RETIRED)
+	// MagnifyToNumberOfColumnsRETIRED (2040,0074) VR=US VM=1 Magnify to Number of Columns
 	MagnifyToNumberOfColumnsRETIRED = New(0x2040, 0x0074)
 
-	// OverlayForegroundDensityRETIRED (2040,0080) VR=CS VM=1 Overlay Foreground Density (RETIRED)
+	// OverlayForegroundDensityRETIRED (2040,0080) VR=CS VM=1 Overlay Foreground Density
 	OverlayForegroundDensityRETIRED = New(0x2040, 0x0080)
 
-	// OverlayBackgroundDensityRETIRED (2040,0082) VR=CS VM=1 Overlay Background Density (RETIRED)
+	// OverlayBackgroundDensityRETIRED (2040,0082) VR=CS VM=1 Overlay Background Density
 	OverlayBackgroundDensityRETIRED = New(0x2040, 0x0082)
 
-	// OverlayModeRETIRED (2040,0090) VR=CS VM=1 Overlay Mode (RETIRED)
+	// OverlayModeRETIRED (2040,0090) VR=CS VM=1 Overlay Mode
 	OverlayModeRETIRED = New(0x2040, 0x0090)
 
-	// ThresholdDensityRETIRED (2040,0100) VR=CS VM=1 Threshold Density (RETIRED)
+	// ThresholdDensityRETIRED (2040,0100) VR=CS VM=1 Threshold Density
 	ThresholdDensityRETIRED = New(0x2040, 0x0100)
 
-	// ReferencedImageBoxSequenceRetiredRETIRED (2040,0500) VR=SQ VM=1 Referenced Image Box Sequence (Retired) (RETIRED)
+	// ReferencedImageBoxSequenceRetiredRETIRED (2040,0500) VR=SQ VM=1 Referenced Image Box Sequence (Retired)
 	ReferencedImageBoxSequenceRetiredRETIRED = New(0x2040, 0x0500)
 
 	// PresentationLUTSequence (2050,0010) VR=SQ VM=1 Presentation LUT Sequence
@@ -11931,7 +11989,7 @@ var (
 	// ReferencedPresentationLUTSequence (2050,0500) VR=SQ VM=1 Referenced Presentation LUT Sequence
 	ReferencedPresentationLUTSequence = New(0x2050, 0x0500)
 
-	// PrintJobIDRETIRED (2100,0010) VR=SH VM=1 Print Job ID (RETIRED)
+	// PrintJobIDRETIRED (2100,0010) VR=SH VM=1 Print Job ID
 	PrintJobIDRETIRED = New(0x2100, 0x0010)
 
 	// ExecutionStatus (2100,0020) VR=CS VM=1 Execution Status
@@ -11958,7 +12016,7 @@ var (
 	// NumberOfFilms (2100,0170) VR=IS VM=1 Number of Films
 	NumberOfFilms = New(0x2100, 0x0170)
 
-	// ReferencedPrintJobSequencePullStoredPrintRETIRED (2100,0500) VR=SQ VM=1 Referenced Print Job Sequence (Pull Stored Print) (RETIRED)
+	// ReferencedPrintJobSequencePullStoredPrintRETIRED (2100,0500) VR=SQ VM=1 Referenced Print Job Sequence (Pull Stored Print)
 	ReferencedPrintJobSequencePullStoredPrintRETIRED = New(0x2100, 0x0500)
 
 	// PrinterStatus (2110,0010) VR=CS VM=1 Printer Status
@@ -11970,37 +12028,37 @@ var (
 	// PrinterName (2110,0030) VR=LO VM=1 Printer Name
 	PrinterName = New(0x2110, 0x0030)
 
-	// PrintQueueIDRETIRED (2110,0099) VR=SH VM=1 Print Queue ID (RETIRED)
+	// PrintQueueIDRETIRED (2110,0099) VR=SH VM=1 Print Queue ID
 	PrintQueueIDRETIRED = New(0x2110, 0x0099)
 
-	// QueueStatusRETIRED (2120,0010) VR=CS VM=1 Queue Status (RETIRED)
+	// QueueStatusRETIRED (2120,0010) VR=CS VM=1 Queue Status
 	QueueStatusRETIRED = New(0x2120, 0x0010)
 
-	// PrintJobDescriptionSequenceRETIRED (2120,0050) VR=SQ VM=1 Print Job Description Sequence (RETIRED)
+	// PrintJobDescriptionSequenceRETIRED (2120,0050) VR=SQ VM=1 Print Job Description Sequence
 	PrintJobDescriptionSequenceRETIRED = New(0x2120, 0x0050)
 
-	// ReferencedPrintJobSequenceRETIRED (2120,0070) VR=SQ VM=1 Referenced Print Job Sequence (RETIRED)
+	// ReferencedPrintJobSequenceRETIRED (2120,0070) VR=SQ VM=1 Referenced Print Job Sequence
 	ReferencedPrintJobSequenceRETIRED = New(0x2120, 0x0070)
 
-	// PrintManagementCapabilitiesSequenceRETIRED (2130,0010) VR=SQ VM=1 Print Management Capabilities Sequence (RETIRED)
+	// PrintManagementCapabilitiesSequenceRETIRED (2130,0010) VR=SQ VM=1 Print Management Capabilities Sequence
 	PrintManagementCapabilitiesSequenceRETIRED = New(0x2130, 0x0010)
 
-	// PrinterCharacteristicsSequenceRETIRED (2130,0015) VR=SQ VM=1 Printer Characteristics Sequence (RETIRED)
+	// PrinterCharacteristicsSequenceRETIRED (2130,0015) VR=SQ VM=1 Printer Characteristics Sequence
 	PrinterCharacteristicsSequenceRETIRED = New(0x2130, 0x0015)
 
-	// FilmBoxContentSequenceRETIRED (2130,0030) VR=SQ VM=1 Film Box Content Sequence (RETIRED)
+	// FilmBoxContentSequenceRETIRED (2130,0030) VR=SQ VM=1 Film Box Content Sequence
 	FilmBoxContentSequenceRETIRED = New(0x2130, 0x0030)
 
-	// ImageBoxContentSequenceRETIRED (2130,0040) VR=SQ VM=1 Image Box Content Sequence (RETIRED)
+	// ImageBoxContentSequenceRETIRED (2130,0040) VR=SQ VM=1 Image Box Content Sequence
 	ImageBoxContentSequenceRETIRED = New(0x2130, 0x0040)
 
-	// AnnotationContentSequenceRETIRED (2130,0050) VR=SQ VM=1 Annotation Content Sequence (RETIRED)
+	// AnnotationContentSequenceRETIRED (2130,0050) VR=SQ VM=1 Annotation Content Sequence
 	AnnotationContentSequenceRETIRED = New(0x2130, 0x0050)
 
-	// ImageOverlayBoxContentSequenceRETIRED (2130,0060) VR=SQ VM=1 Image Overlay Box Content Sequence (RETIRED)
+	// ImageOverlayBoxContentSequenceRETIRED (2130,0060) VR=SQ VM=1 Image Overlay Box Content Sequence
 	ImageOverlayBoxContentSequenceRETIRED = New(0x2130, 0x0060)
 
-	// PresentationLUTContentSequenceRETIRED (2130,0080) VR=SQ VM=1 Presentation LUT Content Sequence (RETIRED)
+	// PresentationLUTContentSequenceRETIRED (2130,0080) VR=SQ VM=1 Presentation LUT Content Sequence
 	PresentationLUTContentSequenceRETIRED = New(0x2130, 0x0080)
 
 	// ProposedStudySequence (2130,00A0) VR=SQ VM=1 Proposed Study Sequence
@@ -12324,7 +12382,7 @@ var (
 	// DoseGridScaling (3004,000E) VR=DS VM=1 Dose Grid Scaling
 	DoseGridScaling = New(0x3004, 0x000E)
 
-	// RTDoseROISequenceRETIRED (3004,0010) VR=SQ VM=1 RT Dose ROI Sequence (RETIRED)
+	// RTDoseROISequenceRETIRED (3004,0010) VR=SQ VM=1 RT Dose ROI Sequence
 	RTDoseROISequenceRETIRED = New(0x3004, 0x0010)
 
 	// DoseValue (3004,0012) VR=DS VM=1 Dose Value
@@ -12335,6 +12393,21 @@ var (
 
 	// RecommendedIsodoseLevelSequence (3004,0016) VR=SQ VM=1 Recommended Isodose Level Sequence
 	RecommendedIsodoseLevelSequence = New(0x3004, 0x0016)
+
+	// DoseUnitCodeSequence (3004,0020) VR=SQ VM=1 Dose Unit Code Sequence
+	DoseUnitCodeSequence = New(0x3004, 0x0020)
+
+	// RTDoseInterpretedTypeCodeSequence (3004,0021) VR=SQ VM=1 RT Dose Interpreted Type Code Sequence
+	RTDoseInterpretedTypeCodeSequence = New(0x3004, 0x0021)
+
+	// RTDoseInterpretedTypeCodeModifierSequence (3004,0022) VR=SQ VM=1 RT Dose Interpreted Type Code Modifier Sequence
+	RTDoseInterpretedTypeCodeModifierSequence = New(0x3004, 0x0022)
+
+	// DoseRadiobiologicalInterpretationSequence (3004,0023) VR=SQ VM=1 Dose Radiobiological Interpretation Sequence
+	DoseRadiobiologicalInterpretationSequence = New(0x3004, 0x0023)
+
+	// RTDoseIntentCodeSequence (3004,0024) VR=SQ VM=1 RT Dose Intent Code Sequence
+	RTDoseIntentCodeSequence = New(0x3004, 0x0024)
 
 	// DVHNormalizationPoint (3004,0040) VR=DS VM=3 DVH Normalization Point
 	DVHNormalizationPoint = New(0x3004, 0x0040)
@@ -12468,10 +12541,10 @@ var (
 	// ContourGeometricType (3006,0042) VR=CS VM=1 Contour Geometric Type
 	ContourGeometricType = New(0x3006, 0x0042)
 
-	// ContourSlabThicknessRETIRED (3006,0044) VR=DS VM=1 Contour Slab Thickness (RETIRED)
+	// ContourSlabThicknessRETIRED (3006,0044) VR=DS VM=1 Contour Slab Thickness
 	ContourSlabThicknessRETIRED = New(0x3006, 0x0044)
 
-	// ContourOffsetVectorRETIRED (3006,0045) VR=DS VM=3 Contour Offset Vector (RETIRED)
+	// ContourOffsetVectorRETIRED (3006,0045) VR=DS VM=3 Contour Offset Vector
 	ContourOffsetVectorRETIRED = New(0x3006, 0x0045)
 
 	// NumberOfContourPoints (3006,0046) VR=IS VM=1 Number of Contour Points
@@ -12480,7 +12553,7 @@ var (
 	// ContourNumber (3006,0048) VR=IS VM=1 Contour Number
 	ContourNumber = New(0x3006, 0x0048)
 
-	// AttachedContoursRETIRED (3006,0049) VR=IS VM=1-n Attached Contours (RETIRED)
+	// AttachedContoursRETIRED (3006,0049) VR=IS VM=1-n Attached Contours
 	AttachedContoursRETIRED = New(0x3006, 0x0049)
 
 	// SourcePixelPlanesCharacteristicsSequence (3006,004A) VR=SQ VM=1 Source Pixel Planes Characteristics Sequence
@@ -12513,13 +12586,13 @@ var (
 	// ReferencedROINumber (3006,0084) VR=IS VM=1 Referenced ROI Number
 	ReferencedROINumber = New(0x3006, 0x0084)
 
-	// ROIObservationLabelRETIRED (3006,0085) VR=SH VM=1 ROI Observation Label (RETIRED)
+	// ROIObservationLabelRETIRED (3006,0085) VR=SH VM=1 ROI Observation Label
 	ROIObservationLabelRETIRED = New(0x3006, 0x0085)
 
 	// RTROIIdentificationCodeSequence (3006,0086) VR=SQ VM=1 RT ROI Identification Code Sequence
 	RTROIIdentificationCodeSequence = New(0x3006, 0x0086)
 
-	// ROIObservationDescriptionRETIRED (3006,0088) VR=ST VM=1 ROI Observation Description (RETIRED)
+	// ROIObservationDescriptionRETIRED (3006,0088) VR=ST VM=1 ROI Observation Description
 	ROIObservationDescriptionRETIRED = New(0x3006, 0x0088)
 
 	// RelatedRTROIObservationsSequence (3006,00A0) VR=SQ VM=1 Related RT ROI Observations Sequence
@@ -12549,16 +12622,16 @@ var (
 	// ROIElementalCompositionAtomicMassFraction (3006,00B8) VR=FL VM=1 ROI Elemental Composition Atomic Mass Fraction
 	ROIElementalCompositionAtomicMassFraction = New(0x3006, 0x00B8)
 
-	// AdditionalRTROIIdentificationCodeSequenceRETIRED (3006,00B9) VR=SQ VM=1 Additional RT ROI Identification Code Sequence (RETIRED)
+	// AdditionalRTROIIdentificationCodeSequenceRETIRED (3006,00B9) VR=SQ VM=1 Additional RT ROI Identification Code Sequence
 	AdditionalRTROIIdentificationCodeSequenceRETIRED = New(0x3006, 0x00B9)
 
-	// FrameOfReferenceRelationshipSequenceRETIRED (3006,00C0) VR=SQ VM=1 Frame of Reference Relationship Sequence (RETIRED)
+	// FrameOfReferenceRelationshipSequenceRETIRED (3006,00C0) VR=SQ VM=1 Frame of Reference Relationship Sequence
 	FrameOfReferenceRelationshipSequenceRETIRED = New(0x3006, 0x00C0)
 
-	// RelatedFrameOfReferenceUIDRETIRED (3006,00C2) VR=UI VM=1 Related Frame of Reference UID (RETIRED)
+	// RelatedFrameOfReferenceUIDRETIRED (3006,00C2) VR=UI VM=1 Related Frame of Reference UID
 	RelatedFrameOfReferenceUIDRETIRED = New(0x3006, 0x00C2)
 
-	// FrameOfReferenceTransformationTypeRETIRED (3006,00C4) VR=CS VM=1 Frame of Reference Transformation Type (RETIRED)
+	// FrameOfReferenceTransformationTypeRETIRED (3006,00C4) VR=CS VM=1 Frame of Reference Transformation Type
 	FrameOfReferenceTransformationTypeRETIRED = New(0x3006, 0x00C4)
 
 	// FrameOfReferenceTransformationMatrix (3006,00C6) VR=DS VM=16 Frame of Reference Transformation Matrix
@@ -12606,7 +12679,7 @@ var (
 	// TreatmentTerminationStatus (3008,002A) VR=CS VM=1 Treatment Termination Status
 	TreatmentTerminationStatus = New(0x3008, 0x002A)
 
-	// TreatmentTerminationCodeRETIRED (3008,002B) VR=SH VM=1 Treatment Termination Code (RETIRED)
+	// TreatmentTerminationCodeRETIRED (3008,002B) VR=SH VM=1 Treatment Termination Code
 	TreatmentTerminationCodeRETIRED = New(0x3008, 0x002B)
 
 	// TreatmentVerificationStatus (3008,002C) VR=CS VM=1 Treatment Verification Status
@@ -12897,7 +12970,7 @@ var (
 	// PlanIntent (300A,000A) VR=CS VM=1 Plan Intent
 	PlanIntent = New(0x300A, 0x000A)
 
-	// TreatmentSitesRETIRED (300A,000B) VR=LO VM=1-n Treatment Sites (RETIRED)
+	// TreatmentSitesRETIRED (300A,000B) VR=LO VM=1-n Treatment Sites
 	TreatmentSitesRETIRED = New(0x300A, 0x000B)
 
 	// RTPlanGeometry (300A,000C) VR=CS VM=1 RT Plan Geometry
@@ -13041,7 +13114,7 @@ var (
 	// NumberOfBeams (300A,0080) VR=IS VM=1 Number of Beams
 	NumberOfBeams = New(0x300A, 0x0080)
 
-	// BeamDoseSpecificationPointRETIRED (300A,0082) VR=DS VM=3 Beam Dose Specification Point (RETIRED)
+	// BeamDoseSpecificationPointRETIRED (300A,0082) VR=DS VM=3 Beam Dose Specification Point
 	BeamDoseSpecificationPointRETIRED = New(0x300A, 0x0082)
 
 	// ReferencedDoseReferenceUID (300A,0083) VR=UI VM=1 Referenced Dose Reference UID
@@ -13068,13 +13141,13 @@ var (
 	// BeamDoseVerificationControlPointSequence (300A,008C) VR=SQ VM=1 Beam Dose Verification Control Point Sequence
 	BeamDoseVerificationControlPointSequence = New(0x300A, 0x008C)
 
-	// AverageBeamDosePointDepthRETIRED (300A,008D) VR=FL VM=1 Average Beam Dose Point Depth (RETIRED)
+	// AverageBeamDosePointDepthRETIRED (300A,008D) VR=FL VM=1 Average Beam Dose Point Depth
 	AverageBeamDosePointDepthRETIRED = New(0x300A, 0x008D)
 
-	// AverageBeamDosePointEquivalentDepthRETIRED (300A,008E) VR=FL VM=1 Average Beam Dose Point Equivalent Depth (RETIRED)
+	// AverageBeamDosePointEquivalentDepthRETIRED (300A,008E) VR=FL VM=1 Average Beam Dose Point Equivalent Depth
 	AverageBeamDosePointEquivalentDepthRETIRED = New(0x300A, 0x008E)
 
-	// AverageBeamDosePointSSDRETIRED (300A,008F) VR=FL VM=1 Average Beam Dose Point SSD (RETIRED)
+	// AverageBeamDosePointSSDRETIRED (300A,008F) VR=FL VM=1 Average Beam Dose Point SSD
 	AverageBeamDosePointSSDRETIRED = New(0x300A, 0x008F)
 
 	// BeamDoseType (300A,0090) VR=CS VM=1 Beam Dose Type
@@ -14247,7 +14320,7 @@ var (
 	// ReferencedRTInstanceSequence (300A,0631) VR=SQ VM=1 Referenced RT Instance Sequence
 	ReferencedRTInstanceSequence = New(0x300A, 0x0631)
 
-	// ReferencedRTPatientSetupSequenceRETIRED (300A,0632) VR=SQ VM=1 Referenced RT Patient Setup Sequence (RETIRED)
+	// ReferencedRTPatientSetupSequenceRETIRED (300A,0632) VR=SQ VM=1 Referenced RT Patient Setup Sequence
 	ReferencedRTPatientSetupSequenceRETIRED = New(0x300A, 0x0632)
 
 	// SourceToPatientSurfaceDistance (300A,0634) VR=FD VM=1 Source to Patient Surface Distance
@@ -14334,7 +14407,7 @@ var (
 	// ParallelRTBeamDelimiterLeafMountingSide (300A,064F) VR=CS VM=1-n Parallel RT Beam Delimiter Leaf Mounting Side
 	ParallelRTBeamDelimiterLeafMountingSide = New(0x300A, 0x064F)
 
-	// PatientSetupUIDRETIRED (300A,0650) VR=UI VM=1 Patient Setup UID (RETIRED)
+	// PatientSetupUIDRETIRED (300A,0650) VR=UI VM=1 Patient Setup UID
 	PatientSetupUIDRETIRED = New(0x300A, 0x0650)
 
 	// WedgeDefinitionSequence (300A,0651) VR=SQ VM=1 Wedge Definition Sequence
@@ -15297,7 +15370,7 @@ var (
 	// TreatmentSiteModifierCodeSequence (3010,0089) VR=SQ VM=1 Treatment Site Modifier Code Sequence
 	TreatmentSiteModifierCodeSequence = New(0x3010, 0x0089)
 
-	// RoboticBaseLocationIndicatorRETIRED (3010,0090) VR=CS VM=1 Robotic Base Location Indicator (RETIRED)
+	// RoboticBaseLocationIndicatorRETIRED (3010,0090) VR=CS VM=1 Robotic Base Location Indicator
 	RoboticBaseLocationIndicatorRETIRED = New(0x3010, 0x0090)
 
 	// RoboticPathNodeSetCodeSequence (3010,0091) VR=SQ VM=1 Robotic Path Node Set Code Sequence
@@ -15333,94 +15406,94 @@ var (
 	// ConceptualVolumeIdentificationSequence (3010,00A0) VR=SQ VM=1 Conceptual Volume Identification Sequence
 	ConceptualVolumeIdentificationSequence = New(0x3010, 0x00A0)
 
-	// ArbitraryRETIRED (4000,0010) VR=LT VM=1 Arbitrary (RETIRED)
+	// ArbitraryRETIRED (4000,0010) VR=LT VM=1 Arbitrary
 	ArbitraryRETIRED = New(0x4000, 0x0010)
 
-	// TextCommentsRETIRED (4000,4000) VR=LT VM=1 Text Comments (RETIRED)
+	// TextCommentsRETIRED (4000,4000) VR=LT VM=1 Text Comments
 	TextCommentsRETIRED = New(0x4000, 0x4000)
 
-	// ResultsIDRETIRED (4008,0040) VR=SH VM=1 Results ID (RETIRED)
+	// ResultsIDRETIRED (4008,0040) VR=SH VM=1 Results ID
 	ResultsIDRETIRED = New(0x4008, 0x0040)
 
-	// ResultsIDIssuerRETIRED (4008,0042) VR=LO VM=1 Results ID Issuer (RETIRED)
+	// ResultsIDIssuerRETIRED (4008,0042) VR=LO VM=1 Results ID Issuer
 	ResultsIDIssuerRETIRED = New(0x4008, 0x0042)
 
-	// ReferencedInterpretationSequenceRETIRED (4008,0050) VR=SQ VM=1 Referenced Interpretation Sequence (RETIRED)
+	// ReferencedInterpretationSequenceRETIRED (4008,0050) VR=SQ VM=1 Referenced Interpretation Sequence
 	ReferencedInterpretationSequenceRETIRED = New(0x4008, 0x0050)
 
-	// ReportProductionStatusTrialRETIRED (4008,00FF) VR=CS VM=1 Report Production Status (Trial) (RETIRED)
+	// ReportProductionStatusTrialRETIRED (4008,00FF) VR=CS VM=1 Report Production Status (Trial)
 	ReportProductionStatusTrialRETIRED = New(0x4008, 0x00FF)
 
-	// InterpretationRecordedDateRETIRED (4008,0100) VR=DA VM=1 Interpretation Recorded Date (RETIRED)
+	// InterpretationRecordedDateRETIRED (4008,0100) VR=DA VM=1 Interpretation Recorded Date
 	InterpretationRecordedDateRETIRED = New(0x4008, 0x0100)
 
-	// InterpretationRecordedTimeRETIRED (4008,0101) VR=TM VM=1 Interpretation Recorded Time (RETIRED)
+	// InterpretationRecordedTimeRETIRED (4008,0101) VR=TM VM=1 Interpretation Recorded Time
 	InterpretationRecordedTimeRETIRED = New(0x4008, 0x0101)
 
-	// InterpretationRecorderRETIRED (4008,0102) VR=PN VM=1 Interpretation Recorder (RETIRED)
+	// InterpretationRecorderRETIRED (4008,0102) VR=PN VM=1 Interpretation Recorder
 	InterpretationRecorderRETIRED = New(0x4008, 0x0102)
 
-	// ReferenceToRecordedSoundRETIRED (4008,0103) VR=LO VM=1 Reference to Recorded Sound (RETIRED)
+	// ReferenceToRecordedSoundRETIRED (4008,0103) VR=LO VM=1 Reference to Recorded Sound
 	ReferenceToRecordedSoundRETIRED = New(0x4008, 0x0103)
 
-	// InterpretationTranscriptionDateRETIRED (4008,0108) VR=DA VM=1 Interpretation Transcription Date (RETIRED)
+	// InterpretationTranscriptionDateRETIRED (4008,0108) VR=DA VM=1 Interpretation Transcription Date
 	InterpretationTranscriptionDateRETIRED = New(0x4008, 0x0108)
 
-	// InterpretationTranscriptionTimeRETIRED (4008,0109) VR=TM VM=1 Interpretation Transcription Time (RETIRED)
+	// InterpretationTranscriptionTimeRETIRED (4008,0109) VR=TM VM=1 Interpretation Transcription Time
 	InterpretationTranscriptionTimeRETIRED = New(0x4008, 0x0109)
 
-	// InterpretationTranscriberRETIRED (4008,010A) VR=PN VM=1 Interpretation Transcriber (RETIRED)
+	// InterpretationTranscriberRETIRED (4008,010A) VR=PN VM=1 Interpretation Transcriber
 	InterpretationTranscriberRETIRED = New(0x4008, 0x010A)
 
-	// InterpretationTextRETIRED (4008,010B) VR=ST VM=1 Interpretation Text (RETIRED)
+	// InterpretationTextRETIRED (4008,010B) VR=ST VM=1 Interpretation Text
 	InterpretationTextRETIRED = New(0x4008, 0x010B)
 
-	// InterpretationAuthorRETIRED (4008,010C) VR=PN VM=1 Interpretation Author (RETIRED)
+	// InterpretationAuthorRETIRED (4008,010C) VR=PN VM=1 Interpretation Author
 	InterpretationAuthorRETIRED = New(0x4008, 0x010C)
 
-	// InterpretationApproverSequenceRETIRED (4008,0111) VR=SQ VM=1 Interpretation Approver Sequence (RETIRED)
+	// InterpretationApproverSequenceRETIRED (4008,0111) VR=SQ VM=1 Interpretation Approver Sequence
 	InterpretationApproverSequenceRETIRED = New(0x4008, 0x0111)
 
-	// InterpretationApprovalDateRETIRED (4008,0112) VR=DA VM=1 Interpretation Approval Date (RETIRED)
+	// InterpretationApprovalDateRETIRED (4008,0112) VR=DA VM=1 Interpretation Approval Date
 	InterpretationApprovalDateRETIRED = New(0x4008, 0x0112)
 
-	// InterpretationApprovalTimeRETIRED (4008,0113) VR=TM VM=1 Interpretation Approval Time (RETIRED)
+	// InterpretationApprovalTimeRETIRED (4008,0113) VR=TM VM=1 Interpretation Approval Time
 	InterpretationApprovalTimeRETIRED = New(0x4008, 0x0113)
 
-	// PhysicianApprovingInterpretationRETIRED (4008,0114) VR=PN VM=1 Physician Approving Interpretation (RETIRED)
+	// PhysicianApprovingInterpretationRETIRED (4008,0114) VR=PN VM=1 Physician Approving Interpretation
 	PhysicianApprovingInterpretationRETIRED = New(0x4008, 0x0114)
 
-	// InterpretationDiagnosisDescriptionRETIRED (4008,0115) VR=LT VM=1 Interpretation Diagnosis Description (RETIRED)
+	// InterpretationDiagnosisDescriptionRETIRED (4008,0115) VR=LT VM=1 Interpretation Diagnosis Description
 	InterpretationDiagnosisDescriptionRETIRED = New(0x4008, 0x0115)
 
-	// InterpretationDiagnosisCodeSequenceRETIRED (4008,0117) VR=SQ VM=1 Interpretation Diagnosis Code Sequence (RETIRED)
+	// InterpretationDiagnosisCodeSequenceRETIRED (4008,0117) VR=SQ VM=1 Interpretation Diagnosis Code Sequence
 	InterpretationDiagnosisCodeSequenceRETIRED = New(0x4008, 0x0117)
 
-	// ResultsDistributionListSequenceRETIRED (4008,0118) VR=SQ VM=1 Results Distribution List Sequence (RETIRED)
+	// ResultsDistributionListSequenceRETIRED (4008,0118) VR=SQ VM=1 Results Distribution List Sequence
 	ResultsDistributionListSequenceRETIRED = New(0x4008, 0x0118)
 
-	// DistributionNameRETIRED (4008,0119) VR=PN VM=1 Distribution Name (RETIRED)
+	// DistributionNameRETIRED (4008,0119) VR=PN VM=1 Distribution Name
 	DistributionNameRETIRED = New(0x4008, 0x0119)
 
-	// DistributionAddressRETIRED (4008,011A) VR=LO VM=1 Distribution Address (RETIRED)
+	// DistributionAddressRETIRED (4008,011A) VR=LO VM=1 Distribution Address
 	DistributionAddressRETIRED = New(0x4008, 0x011A)
 
-	// InterpretationIDRETIRED (4008,0200) VR=SH VM=1 Interpretation ID (RETIRED)
+	// InterpretationIDRETIRED (4008,0200) VR=SH VM=1 Interpretation ID
 	InterpretationIDRETIRED = New(0x4008, 0x0200)
 
-	// InterpretationIDIssuerRETIRED (4008,0202) VR=LO VM=1 Interpretation ID Issuer (RETIRED)
+	// InterpretationIDIssuerRETIRED (4008,0202) VR=LO VM=1 Interpretation ID Issuer
 	InterpretationIDIssuerRETIRED = New(0x4008, 0x0202)
 
-	// InterpretationTypeIDRETIRED (4008,0210) VR=CS VM=1 Interpretation Type ID (RETIRED)
+	// InterpretationTypeIDRETIRED (4008,0210) VR=CS VM=1 Interpretation Type ID
 	InterpretationTypeIDRETIRED = New(0x4008, 0x0210)
 
-	// InterpretationStatusIDRETIRED (4008,0212) VR=CS VM=1 Interpretation Status ID (RETIRED)
+	// InterpretationStatusIDRETIRED (4008,0212) VR=CS VM=1 Interpretation Status ID
 	InterpretationStatusIDRETIRED = New(0x4008, 0x0212)
 
-	// ImpressionsRETIRED (4008,0300) VR=ST VM=1 Impressions (RETIRED)
+	// ImpressionsRETIRED (4008,0300) VR=ST VM=1 Impressions
 	ImpressionsRETIRED = New(0x4008, 0x0300)
 
-	// ResultsCommentsRETIRED (4008,4000) VR=ST VM=1 Results Comments (RETIRED)
+	// ResultsCommentsRETIRED (4008,4000) VR=ST VM=1 Results Comments
 	ResultsCommentsRETIRED = New(0x4008, 0x4000)
 
 	// LowEnergyDetectors (4010,0001) VR=CS VM=1 Low Energy Detectors
@@ -15684,56 +15757,82 @@ var (
 	// MACParametersSequence (4FFE,0001) VR=SQ VM=1 MAC Parameters Sequence
 	MACParametersSequence = New(0x4FFE, 0x0001)
 
+	// CurveDimensionsRETIRED (50xx,0005) VR=US VM=1 Curve Dimensions
 	CurveDimensionsRETIRED = New(0x5000, 0x0005)
 
+	// NumberOfPointsRETIRED (50xx,0010) VR=US VM=1 Number of Points
 	NumberOfPointsRETIRED = New(0x5000, 0x0010)
 
+	// TypeOfDataRETIRED (50xx,0020) VR=CS VM=1 Type of Data
 	TypeOfDataRETIRED = New(0x5000, 0x0020)
 
+	// CurveDescriptionRETIRED (50xx,0022) VR=LO VM=1 Curve Description
 	CurveDescriptionRETIRED = New(0x5000, 0x0022)
 
+	// AxisUnitsRETIRED (50xx,0030) VR=SH VM=1-n Axis Units
 	AxisUnitsRETIRED = New(0x5000, 0x0030)
 
+	// AxisLabelsRETIRED (50xx,0040) VR=SH VM=1-n Axis Labels
 	AxisLabelsRETIRED = New(0x5000, 0x0040)
 
+	// DataValueRepresentationRETIRED (50xx,0103) VR=US VM=1 Data Value Representation
 	DataValueRepresentationRETIRED = New(0x5000, 0x0103)
 
+	// MinimumCoordinateValueRETIRED (50xx,0104) VR=US VM=1-n Minimum Coordinate Value
 	MinimumCoordinateValueRETIRED = New(0x5000, 0x0104)
 
+	// MaximumCoordinateValueRETIRED (50xx,0105) VR=US VM=1-n Maximum Coordinate Value
 	MaximumCoordinateValueRETIRED = New(0x5000, 0x0105)
 
+	// CurveRangeRETIRED (50xx,0106) VR=SH VM=1-n Curve Range
 	CurveRangeRETIRED = New(0x5000, 0x0106)
 
+	// CurveDataDescriptorRETIRED (50xx,0110) VR=US VM=1-n Curve Data Descriptor
 	CurveDataDescriptorRETIRED = New(0x5000, 0x0110)
 
+	// CoordinateStartValueRETIRED (50xx,0112) VR=US VM=1-n Coordinate Start Value
 	CoordinateStartValueRETIRED = New(0x5000, 0x0112)
 
+	// CoordinateStepValueRETIRED (50xx,0114) VR=US VM=1-n Coordinate Step Value
 	CoordinateStepValueRETIRED = New(0x5000, 0x0114)
 
+	// CurveActivationLayerRETIRED (50xx,1001) VR=CS VM=1 Curve Activation Layer
 	CurveActivationLayerRETIRED = New(0x5000, 0x1001)
 
+	// AudioTypeRETIRED (50xx,2000) VR=US VM=1 Audio Type
 	AudioTypeRETIRED = New(0x5000, 0x2000)
 
+	// AudioSampleFormatRETIRED (50xx,2002) VR=US VM=1 Audio Sample Format
 	AudioSampleFormatRETIRED = New(0x5000, 0x2002)
 
+	// NumberOfChannelsRETIRED (50xx,2004) VR=US VM=1 Number of Channels
 	NumberOfChannelsRETIRED = New(0x5000, 0x2004)
 
+	// NumberOfSamplesRETIRED (50xx,2006) VR=UL VM=1 Number of Samples
 	NumberOfSamplesRETIRED = New(0x5000, 0x2006)
 
+	// SampleRateRETIRED (50xx,2008) VR=UL VM=1 Sample Rate
 	SampleRateRETIRED = New(0x5000, 0x2008)
 
+	// TotalTimeRETIRED (50xx,200A) VR=UL VM=1 Total Time
 	TotalTimeRETIRED = New(0x5000, 0x200A)
 
+	// AudioSampleDataRETIRED (50xx,200C) VR=OB/OW VM=1 Audio Sample Data
 	AudioSampleDataRETIRED = New(0x5000, 0x200C)
 
+	// AudioCommentsRETIRED (50xx,200E) VR=LT VM=1 Audio Comments
 	AudioCommentsRETIRED = New(0x5000, 0x200E)
 
+	// CurveLabelRETIRED (50xx,2500) VR=LO VM=1 Curve Label
 	CurveLabelRETIRED = New(0x5000, 0x2500)
 
+	// CurveReferencedOverlaySequenceRETIRED (50xx,2600) VR=SQ VM=1 Curve Referenced Overlay Sequence
 	CurveReferencedOverlaySequenceRETIRED = New(0x5000, 0x2600)
 
+	// CurveReferencedOverlayGroupRETIRED (50xx,2610) VR=US VM=1 Curve Referenced Overlay Group
 	CurveReferencedOverlayGroupRETIRED = New(0x5000, 0x2610)
 
+	// CurveDataRETIRED (50xx,3000) VR=OB/OW VM=1 Curve Data
 	CurveDataRETIRED = New(0x5000, 0x3000)
 
 	// SharedFunctionalGroupsSequence (5200,9229) VR=SQ VM=1 Shared Functional Groups Sequence
@@ -15745,8 +15844,10 @@ var (
 	// WaveformSequence (5400,0100) VR=SQ VM=1 Waveform Sequence
 	WaveformSequence = New(0x5400, 0x0100)
 
+	// ChannelMinimumValue (5400,0110) VR=OB/OW VM=1 Channel Minimum Value
 	ChannelMinimumValue = New(0x5400, 0x0110)
 
+	// ChannelMaximumValue (5400,0112) VR=OB/OW VM=1 Channel Maximum Value
 	ChannelMaximumValue = New(0x5400, 0x0112)
 
 	// WaveformBitsAllocated (5400,1004) VR=US VM=1 Waveform Bits Allocated
@@ -15755,8 +15856,10 @@ var (
 	// WaveformSampleInterpretation (5400,1006) VR=CS VM=1 Waveform Sample Interpretation
 	WaveformSampleInterpretation = New(0x5400, 0x1006)
 
+	// WaveformPaddingValue (5400,100A) VR=OB/OW VM=1 Waveform Padding Value
 	WaveformPaddingValue = New(0x5400, 0x100A)
 
+	// WaveformData (5400,1010) VR=OB/OW VM=1 Waveform Data
 	WaveformData = New(0x5400, 0x1010)
 
 	// FirstOrderPhaseCorrectionAngle (5600,0010) VR=OF VM=1 First Order Phase Correction Angle
@@ -15765,84 +15868,124 @@ var (
 	// SpectroscopyData (5600,0020) VR=OF VM=1 Spectroscopy Data
 	SpectroscopyData = New(0x5600, 0x0020)
 
+	// OverlayRows (60xx,0010) VR=US VM=1 Overlay Rows
 	OverlayRows = New(0x6000, 0x0010)
 
+	// OverlayColumns (60xx,0011) VR=US VM=1 Overlay Columns
 	OverlayColumns = New(0x6000, 0x0011)
 
+	// OverlayPlanesRETIRED (60xx,0012) VR=US VM=1 Overlay Planes
 	OverlayPlanesRETIRED = New(0x6000, 0x0012)
 
+	// NumberOfFramesInOverlay (60xx,0015) VR=IS VM=1 Number of Frames in Overlay
 	NumberOfFramesInOverlay = New(0x6000, 0x0015)
 
+	// OverlayDescription (60xx,0022) VR=LO VM=1 Overlay Description
 	OverlayDescription = New(0x6000, 0x0022)
 
+	// OverlayType (60xx,0040) VR=CS VM=1 Overlay Type
 	OverlayType = New(0x6000, 0x0040)
 
+	// OverlaySubtype (60xx,0045) VR=LO VM=1 Overlay Subtype
 	OverlaySubtype = New(0x6000, 0x0045)
 
+	// OverlayOrigin (60xx,0050) VR=SS VM=2 Overlay Origin
 	OverlayOrigin = New(0x6000, 0x0050)
 
+	// ImageFrameOrigin (60xx,0051) VR=US VM=1 Image Frame Origin
 	ImageFrameOrigin = New(0x6000, 0x0051)
 
+	// OverlayPlaneOriginRETIRED (60xx,0052) VR=US VM=1 Overlay Plane Origin
 	OverlayPlaneOriginRETIRED = New(0x6000, 0x0052)
 
+	// OverlayCompressionCodeRETIRED (60xx,0060) VR=CS VM=1 Overlay Compression Code
 	OverlayCompressionCodeRETIRED = New(0x6000, 0x0060)
 
+	// OverlayCompressionOriginatorRETIRED (60xx,0061) VR=SH VM=1 Overlay Compression Originator
 	OverlayCompressionOriginatorRETIRED = New(0x6000, 0x0061)
 
+	// OverlayCompressionLabelRETIRED (60xx,0062) VR=SH VM=1 Overlay Compression Label
 	OverlayCompressionLabelRETIRED = New(0x6000, 0x0062)
 
+	// OverlayCompressionDescriptionRETIRED (60xx,0063) VR=CS VM=1 Overlay Compression Description
 	OverlayCompressionDescriptionRETIRED = New(0x6000, 0x0063)
 
+	// OverlayCompressionStepPointersRETIRED (60xx,0066) VR=AT VM=1-n Overlay Compression Step Pointers
 	OverlayCompressionStepPointersRETIRED = New(0x6000, 0x0066)
 
+	// OverlayRepeatIntervalRETIRED (60xx,0068) VR=US VM=1 Overlay Repeat Interval
 	OverlayRepeatIntervalRETIRED = New(0x6000, 0x0068)
 
+	// OverlayBitsGroupedRETIRED (60xx,0069) VR=US VM=1 Overlay Bits Grouped
 	OverlayBitsGroupedRETIRED = New(0x6000, 0x0069)
 
+	// OverlayBitsAllocated (60xx,0100) VR=US VM=1 Overlay Bits Allocated
 	OverlayBitsAllocated = New(0x6000, 0x0100)
 
+	// OverlayBitPosition (60xx,0102) VR=US VM=1 Overlay Bit Position
 	OverlayBitPosition = New(0x6000, 0x0102)
 
+	// OverlayFormatRETIRED (60xx,0110) VR=CS VM=1 Overlay Format
 	OverlayFormatRETIRED = New(0x6000, 0x0110)
 
+	// OverlayLocationRETIRED (60xx,0200) VR=US VM=1 Overlay Location
 	OverlayLocationRETIRED = New(0x6000, 0x0200)
 
+	// OverlayCodeLabelRETIRED (60xx,0800) VR=CS VM=1-n Overlay Code Label
 	OverlayCodeLabelRETIRED = New(0x6000, 0x0800)
 
+	// OverlayNumberOfTablesRETIRED (60xx,0802) VR=US VM=1 Overlay Number of Tables
 	OverlayNumberOfTablesRETIRED = New(0x6000, 0x0802)
 
+	// OverlayCodeTableLocationRETIRED (60xx,0803) VR=AT VM=1-n Overlay Code Table Location
 	OverlayCodeTableLocationRETIRED = New(0x6000, 0x0803)
 
+	// OverlayBitsForCodeWordRETIRED (60xx,0804) VR=US VM=1 Overlay Bits For Code Word
 	OverlayBitsForCodeWordRETIRED = New(0x6000, 0x0804)
 
+	// OverlayActivationLayer (60xx,1001) VR=CS VM=1 Overlay Activation Layer
 	OverlayActivationLayer = New(0x6000, 0x1001)
 
+	// OverlayDescriptorGrayRETIRED (60xx,1100) VR=US VM=1 Overlay Descriptor - Gray
 	OverlayDescriptorGrayRETIRED = New(0x6000, 0x1100)
 
+	// OverlayDescriptorRedRETIRED (60xx,1101) VR=US VM=1 Overlay Descriptor - Red
 	OverlayDescriptorRedRETIRED = New(0x6000, 0x1101)
 
+	// OverlayDescriptorGreenRETIRED (60xx,1102) VR=US VM=1 Overlay Descriptor - Green
 	OverlayDescriptorGreenRETIRED = New(0x6000, 0x1102)
 
+	// OverlayDescriptorBlueRETIRED (60xx,1103) VR=US VM=1 Overlay Descriptor - Blue
 	OverlayDescriptorBlueRETIRED = New(0x6000, 0x1103)
 
+	// OverlaysGrayRETIRED (60xx,1200) VR=US VM=1-n Overlays - Gray
 	OverlaysGrayRETIRED = New(0x6000, 0x1200)
 
+	// OverlaysRedRETIRED (60xx,1201) VR=US VM=1-n Overlays - Red
 	OverlaysRedRETIRED = New(0x6000, 0x1201)
 
+	// OverlaysGreenRETIRED (60xx,1202) VR=US VM=1-n Overlays - Green
 	OverlaysGreenRETIRED = New(0x6000, 0x1202)
 
+	// OverlaysBlueRETIRED (60xx,1203) VR=US VM=1-n Overlays - Blue
 	OverlaysBlueRETIRED = New(0x6000, 0x1203)
 
+	// ROIArea (60xx,1301) VR=IS VM=1 ROI Area
 	ROIArea = New(0x6000, 0x1301)
 
+	// ROIMean (60xx,1302) VR=DS VM=1 ROI Mean
 	ROIMean = New(0x6000, 0x1302)
 
+	// ROIStandardDeviation (60xx,1303) VR=DS VM=1 ROI Standard Deviation
 	ROIStandardDeviation = New(0x6000, 0x1303)
 
+	// OverlayLabel (60xx,1500) VR=LO VM=1 Overlay Label
 	OverlayLabel = New(0x6000, 0x1500)
 
+	// OverlayData (60xx,3000) VR=OB/OW VM=1 Overlay Data
 	OverlayData = New(0x6000, 0x3000)
 
+	// OverlayCommentsRETIRED (60xx,4000) VR=LT VM=1 Overlay Comments
 	OverlayCommentsRETIRED = New(0x6000, 0x4000)
 
 	// ExtendedOffsetTable (7FE0,0001) VR=OV VM=1 Extended Offset Table
@@ -15860,25 +16003,31 @@ var (
 	// DoubleFloatPixelData (7FE0,0009) VR=OD VM=1 Double Float Pixel Data
 	DoubleFloatPixelData = New(0x7FE0, 0x0009)
 
+	// PixelData (7FE0,0010) VR=OB/OW VM=1 Pixel Data
 	PixelData = New(0x7FE0, 0x0010)
 
-	// CoefficientsSDVNRETIRED (7FE0,0020) VR=OW VM=1 Coefficients SDVN (RETIRED)
+	// CoefficientsSDVNRETIRED (7FE0,0020) VR=OW VM=1 Coefficients SDVN
 	CoefficientsSDVNRETIRED = New(0x7FE0, 0x0020)
 
-	// CoefficientsSDHNRETIRED (7FE0,0030) VR=OW VM=1 Coefficients SDHN (RETIRED)
+	// CoefficientsSDHNRETIRED (7FE0,0030) VR=OW VM=1 Coefficients SDHN
 	CoefficientsSDHNRETIRED = New(0x7FE0, 0x0030)
 
-	// CoefficientsSDDNRETIRED (7FE0,0040) VR=OW VM=1 Coefficients SDDN (RETIRED)
+	// CoefficientsSDDNRETIRED (7FE0,0040) VR=OW VM=1 Coefficients SDDN
 	CoefficientsSDDNRETIRED = New(0x7FE0, 0x0040)
 
+	// VariablePixelDataRETIRED (7Fxx,0010) VR=OB/OW VM=1 Variable Pixel Data
 	VariablePixelDataRETIRED = New(0x7F00, 0x0010)
 
+	// VariableNextDataGroupRETIRED (7Fxx,0011) VR=US VM=1 Variable Next Data Group
 	VariableNextDataGroupRETIRED = New(0x7F00, 0x0011)
 
+	// VariableCoefficientsSDVNRETIRED (7Fxx,0020) VR=OW VM=1 Variable Coefficients SDVN
 	VariableCoefficientsSDVNRETIRED = New(0x7F00, 0x0020)
 
+	// VariableCoefficientsSDHNRETIRED (7Fxx,0030) VR=OW VM=1 Variable Coefficients SDHN
 	VariableCoefficientsSDHNRETIRED = New(0x7F00, 0x0030)
 
+	// VariableCoefficientsSDDNRETIRED (7Fxx,0040) VR=OW VM=1 Variable Coefficients SDDN
 	VariableCoefficientsSDDNRETIRED = New(0x7F00, 0x0040)
 
 	// DigitalSignaturesSequence (FFFA,FFFA) VR=SQ VM=1 Digital Signatures Sequence
@@ -15887,13 +16036,13 @@ var (
 	// DataSetTrailingPadding (FFFC,FFFC) VR=OB VM=1 Data Set Trailing Padding
 	DataSetTrailingPadding = New(0xFFFC, 0xFFFC)
 
-	// Item (FFFE,E000) VR=NONE VM=1 Item
+	// Item (FFFE,E000) VR= VM=1 Item
 	Item = New(0xFFFE, 0xE000)
 
-	// ItemDelimitationItem (FFFE,E00D) VR=NONE VM=1 Item Delimitation Item
+	// ItemDelimitationItem (FFFE,E00D) VR= VM=1 Item Delimitation Item
 	ItemDelimitationItem = New(0xFFFE, 0xE00D)
 
-	// SequenceDelimitationItem (FFFE,E0DD) VR=NONE VM=1 Sequence Delimitation Item
+	// SequenceDelimitationItem (FFFE,E0DD) VR= VM=1 Sequence Delimitation Item
 	SequenceDelimitationItem = New(0xFFFE, 0xE0DD)
 
 	// CurrentFrameFunctionalGroupsSequence (0006,0001) VR=SQ VM=1 Current Frame Functional Groups Sequence
