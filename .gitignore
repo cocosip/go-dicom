@@ -42,3 +42,4 @@ Thumbs.db
 # fo-dicom source code (reference only, not part of the Go project)
 fo-dicom-code/
 .gocache/
+docs/superpowers/

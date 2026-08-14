@@ -7,6 +7,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/service"
+	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
 // serviceInterface defines the interface for DIMSE service operations.
@@ -102,6 +104,11 @@ type Config struct {
 	// Default: 10 seconds
 	AssociationTimeout time.Duration
 
+	// TLSConfig enables TLS when non-nil. The configuration is caller-owned
+	// and is cloned by the transport layer before use.
+	// Default: nil (plain TCP)
+	TLSConfig *tls.Config
+
 	// ImplementationClassUID identifies the implementation
 	// Default: "1.2.826.0.1.3680043.10.854"
 	ImplementationClassUID string
@@ -163,6 +170,14 @@ func WithRequestTimeout(timeout time.Duration) Option {
 func WithAssociationTimeout(timeout time.Duration) Option {
 	return func(o *Config) {
 		o.AssociationTimeout = timeout
+	}
+}
+
+// WithTLSConfig sets the TLS configuration for secure connections.
+// A nil configuration keeps plain TCP as the default.
+func WithTLSConfig(tlsConfig *tls.Config) Option {
+	return func(o *Config) {
+		o.TLSConfig = tlsConfig
 	}
 }
 
@@ -394,6 +409,26 @@ func (c *Client) validateAssociateAC(ac *pdu.AAssociateAC) error {
 // dial establishes a TCP connection to the remote host.
 func (c *Client) dial(ctx context.Context, host string, port int) error {
 	address := fmt.Sprintf("%s:%d", host, port)
+
+	if c.config.TLSConfig != nil {
+		dialCtx := ctx
+		if c.config.ConnectTimeout > 0 {
+			var cancel context.CancelFunc
+			dialCtx, cancel = context.WithTimeout(ctx, c.config.ConnectTimeout)
+			defer cancel()
+		}
+
+		conn, err := transport.DialTLS(dialCtx, "tcp", address,
+			transport.WithTimeout(c.config.ConnectTimeout),
+			transport.WithTLSConfig(c.config.TLSConfig),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to connect to %s: %w", address, err)
+		}
+
+		c.conn = conn
+		return nil
+	}
 
 	// Create dialer with timeout
 	dialer := &net.Dialer{

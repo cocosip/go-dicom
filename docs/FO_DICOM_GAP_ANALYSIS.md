@@ -1,5 +1,7 @@
 # fo-dicom Capability Gap Analysis
 
+[简体中文](FO_DICOM_GAP_ANALYSIS.zh-CN.md)
+
 This document tracks capability gaps between `go-dicom` and the reference
 `fo-dicom` implementation. It is a versioned engineering backlog, not a claim
 that every .NET API must be reproduced in Go.
@@ -46,7 +48,7 @@ Priority indicates implementation order, not estimated effort:
 | ID | Priority | Status | Capability |
 | --- | --- | --- | --- |
 | DOC-001 | P0 | Partial | Public capability statements match implemented behavior |
-| NET-001 | P0 | Partial | TLS-enabled high-level DICOM client |
+| NET-001 | P0 | Complete | TLS-enabled high-level DICOM client |
 | NET-002 | P0 | Partial | C-STORE transfer syntax selection and automatic transcoding |
 | STD-001 | P0 | Partial | Reproducible and current generated standard tables |
 | MED-001 | P1 | Open | DICOMDIR media directory model and read/write workflow |
@@ -64,6 +66,19 @@ Priority indicates implementation order, not estimated effort:
 | IMG-003 | P3 | Partial | Volume reconstruction and MPR |
 | MED-002 | P3 | Open | DICOM file scanner workflow |
 
+## Implementation Progress
+
+Progress as of 2026-08-14:
+
+- **Complete:** NET-001.
+- **Not complete:** DOC-001, NET-002, STD-001, MED-001, NET-003,
+  NET-004, SR-001, IMG-001, CORE-001, IMG-002, CORE-002, DICT-001,
+  ANON-001, PRINT-001, OBS-001, IMG-003, and MED-002 retain their `Partial`
+  or `Open` status.
+- Phase 0 is not complete. NET-001 is complete, the TLS-related portion of
+  DOC-001 is repaired, and the remaining Phase 0 work is still tracked by
+  DOC-001, NET-002, and STD-001.
+
 ## Detailed Gaps
 
 ### DOC-001: Public Capability Statements
@@ -71,15 +86,20 @@ Priority indicates implementation order, not estimated effort:
 **Status:** `Partial`  
 **Priority:** `P0`
 
-Several README statements are broader than the implemented public workflow.
-Examples include complete client TLS, complete SR value types, image
-reconstruction, advanced negotiation through the client, and print job
-creation. The TLS example calls a nonexistent `client.WithTLS` option, and one
-rendering example passes a Dataset to `NewDicomImage` even though the function
-accepts `*DicomPixelData`.
+At the audit baseline, several README statements were broader than the
+implemented public workflow. Examples included complete client TLS, complete
+SR value types, image reconstruction, advanced negotiation through the client,
+and print job creation. The TLS example called a nonexistent `client.WithTLS`
+option, and one rendering example passed a Dataset to `NewDicomImage` even
+though the function accepts `*DicomPixelData`.
 
 The README's tag and UID totals also do not match the unique generated standard
 entries counted in the audited source.
+
+Progress on 2026-08-14: the high-level client TLS API and README TLS examples
+were repaired by NET-001. The remaining SR, rendering, advanced negotiation,
+print, generated-count, and other public capability statements have not been
+re-audited or repaired, so DOC-001 remains `Partial`.
 
 **Acceptance criteria**
 
@@ -95,12 +115,16 @@ entries counted in the audited source.
 
 ### NET-001: High-Level Client TLS
 
-**Status:** `Partial`  
+**Status:** `Complete`
+
 **Priority:** `P0`
 
-The transport package exposes `DialTLS`, and the server accepts a TLS
-configuration. The high-level `client.Client` has no TLS option, and its dial
-path always uses `net.Dialer.DialContext`.
+Completed on 2026-08-14. The high-level client now exposes
+`client.WithTLSConfig(*tls.Config)`. A nil configuration preserves the existing
+plain-TCP path, while a non-nil configuration uses `transport.DialTLS` before
+DICOM association negotiation. `ConnectTimeout` covers both TCP establishment
+and the TLS handshake, caller cancellation is preserved, and the transport
+layer clones the caller-owned TLS configuration before applying defaults.
 
 Reference: [fo-dicom DicomClient](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/Client/DicomClient.cs)
 
@@ -112,11 +136,18 @@ Reference: [fo-dicom DicomClient](https://github.com/fo-dicom/fo-dicom/blob/7ea6
   are covered.
 - The README TLS example compiles and uses the actual public option name.
 
-**Suggested verification**
+**Verification evidence**
 
-- Client/server integration tests with a local CA and server certificate.
-- Negative tests for hostname mismatch and untrusted certificates.
-- Race tests for concurrent clients sharing a TLS configuration.
+- Focused tests cover plain TCP, a verified TLS handshake, a complete TLS
+  association, hostname mismatch, untrusted certificates, handshake timeout,
+  caller cancellation, and concurrent clients sharing one `tls.Config`.
+- `go test ./pkg/network/... -count=1` passed.
+- `go test -race ./pkg/network/... -count=1` passed.
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1` passed.
+- `golangci-lint run` reported 0 issues; the sandbox emitted cache-persistence
+  warnings after analysis completed.
+- Verification currently refers to the working tree; no implementation commit
+  has been created yet.
 
 ### NET-002: C-STORE Negotiated Transfer Syntax and Transcoding
 
@@ -589,6 +620,9 @@ cross-library capability rather than fo-dicom parity work.
 ### Phase 0: Public Contract and Interoperability
 
 Scope: DOC-001, NET-001, NET-002, STD-001.
+
+Current progress: NET-001 is complete. DOC-001 remains partial, and NET-002 and
+STD-001 remain incomplete; therefore Phase 0 is not complete.
 
 Phase acceptance:
 

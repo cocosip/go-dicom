@@ -5,6 +5,7 @@ package client_test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"time"
@@ -16,6 +17,31 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/client"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
+
+// ExampleClient_tlsConfig demonstrates TLS configuration for a DICOM association.
+func ExampleClient_tlsConfig() {
+	c := client.New(
+		client.WithCallingAE("SECURE_SCU"),
+		client.WithCalledAE("SECURE_SCP"),
+		client.WithTLSConfig(&tls.Config{
+			ServerName: "pacs.example.com",
+			MinVersion: tls.VersionTLS12,
+		}),
+		client.WithConnectTimeout(10*time.Second),
+	)
+	c.AddPresentationContext(
+		"1.2.840.10008.1.1",
+		"1.2.840.10008.1.2.1",
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := c.Connect(ctx, "pacs.example.com", 11112); err != nil {
+		log.Printf("TLS connection failed: %v", err)
+		return
+	}
+	defer func() { _ = c.Close() }()
+}
 
 // ExampleClient_CEcho demonstrates how to verify connectivity with C-ECHO.
 func ExampleClient_CEcho() {

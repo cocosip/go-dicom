@@ -419,17 +419,20 @@ func searchDatabase(query *dataset.Dataset, level dimse.QueryRetrieveLevel) []*d
 ```go
 import "crypto/tls"
 
-// TLS 配置
-tlsConfig := &tls.Config{
-    InsecureSkipVerify: false, // 生产环境应该验证证书
-    ServerName:         "pacs.hospital.com",
-}
-
-// 使用自定义 dialer
-conn, err := transport.DialTLS(ctx, "tcp", "pacs.hospital.com:11112",
-    transport.WithTLSConfig(tlsConfig),
-    transport.WithTimeout(10*time.Second),
+// 高层客户端会完成 TLS 握手和 DICOM Association 协商
+c := client.New(
+    client.WithCallingAE("SECURE_SCU"),
+    client.WithCalledAE("SECURE_SCP"),
+    client.WithTLSConfig(&tls.Config{
+        ServerName: "pacs.hospital.com",
+        MinVersion: tls.VersionTLS12,
+    }),
 )
+c.AddPresentationContext(
+    "1.2.840.10008.1.1",
+    "1.2.840.10008.1.2.1",
+)
+err := c.Connect(ctx, "pacs.hospital.com", 11112)
 ```
 
 #### 服务器使用 TLS

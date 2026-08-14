@@ -11,7 +11,8 @@ A pure Go implementation of the DICOM (Digital Imaging and Communications in Med
 `go-dicom` is a released DICOM library.
 This README describes the supported library surface rather than a development roadmap.
 Known parity gaps and the staged plan for addressing them are tracked in
-[fo-dicom Capability Gap Analysis](docs/FO_DICOM_GAP_ANALYSIS.md).
+[fo-dicom Capability Gap Analysis](docs/FO_DICOM_GAP_ANALYSIS.md)
+([简体中文](docs/FO_DICOM_GAP_ANALYSIS.zh-CN.md)).
 
 ## Features
 
@@ -1263,13 +1264,14 @@ func main() {
     tlsConfig := &tls.Config{
         ServerName:         "pacs.example.com",
         InsecureSkipVerify: false, // Set to true only for testing
+        MinVersion:         tls.VersionTLS12,
     }
 
     // Create DICOM client with TLS
     c := client.New(
         client.WithCallingAE("SECURE-SCU"),
         client.WithCalledAE("SECURE-SCP"),
-        client.WithTLS(tlsConfig),
+        client.WithTLSConfig(tlsConfig),
     )
 
     // Add presentation context
