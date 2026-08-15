@@ -111,6 +111,12 @@ func (v *VR) ValidateString(value string) error {
 	if !PerformValidation {
 		return nil
 	}
+	return v.ValidateStringValue(value)
+}
+
+// ValidateStringValue validates a string value regardless of the legacy
+// package-level validation switch.
+func (v *VR) ValidateStringValue(value string) error {
 	if v.stringValidator != nil {
 		return v.stringValidator(value)
 	}
@@ -124,6 +130,10 @@ func (v *VR) String() string {
 
 // PerformValidation controls whether VR validation is performed.
 // Set to false to disable validation (e.g., for performance or when reading non-compliant files).
+//
+// This switch is retained for legacy direct Element.Validate calls. New code
+// should use Dataset-level automatic validation control; Dataset validation
+// does not read this package-level switch.
 var PerformValidation = true
 
 // Padding constants

@@ -765,7 +765,7 @@ func TestDicomPixelData_ConvertYBRFull422ToRGB(t *testing.T) {
 
 func TestCreatePixelData_PaletteToRGB(t *testing.T) {
 	// Palette with 2 entries: index 0 -> black, 1 -> red(255,0,0)
-	ds := dataset.NewWithElements([]element.Element{
+	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
 		element.NewUnsignedShort(tag.Columns, []uint16{2}),
 		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
@@ -774,7 +774,7 @@ func TestCreatePixelData_PaletteToRGB(t *testing.T) {
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, nil, []string{photometricPaletteColor}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricPaletteColor}),
 		// descriptors: number of entries=2, first=0, bits=8
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
@@ -786,6 +786,9 @@ func TestCreatePixelData_PaletteToRGB(t *testing.T) {
 		// pixel data: indices [0,1]
 		element.NewOtherByte(tag.PixelData, []byte{0, 1}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 
 	pd, err := CreatePixelData(ds)
 	if err != nil {
@@ -808,7 +811,7 @@ func TestCreatePixelData_PaletteToRGB(t *testing.T) {
 
 func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
 	// Use segmented LUT: two segments, values 0 and 255
-	ds := dataset.NewWithElements([]element.Element{
+	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
 		element.NewUnsignedShort(tag.Columns, []uint16{2}),
 		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
@@ -817,7 +820,7 @@ func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, nil, []string{photometricPaletteColor}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricPaletteColor}),
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
@@ -827,6 +830,9 @@ func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
 		element.NewOtherWord(tag.SegmentedBluePaletteColorLookupTableData, []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00}),
 		element.NewOtherByte(tag.PixelData, []byte{0, 1}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 
 	pd, err := CreatePixelData(ds)
 	if err != nil {
@@ -959,7 +965,7 @@ func TestDicomPixelData_ConvertYBRRCTToRGB(t *testing.T) {
 
 func TestDicomPixelData_VOILUTSequence(t *testing.T) {
 	// Build dataset with LUT Descriptor [3 entries, first=0, bits=8], LUT data [0,128,255]
-	ds := dataset.NewWithElements([]element.Element{
+	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
 		element.NewUnsignedShort(tag.Columns, []uint16{3}),
 		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
@@ -968,8 +974,11 @@ func TestDicomPixelData_VOILUTSequence(t *testing.T) {
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, nil, []string{monochrome2}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 
 	// VOI LUT Sequence with one item
 	lutItem := dataset.New()

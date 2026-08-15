@@ -13,6 +13,26 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+func TestFromXMLPreservesInvalidValueForExplicitValidation(t *testing.T) {
+	input := []byte(`<?xml version="1.0" encoding="utf-8"?>
+<NativeDicomModel>
+  <DicomAttribute tag="0020000D" vr="UI" keyword="StudyInstanceUID">
+    <Value number="1">1.2..3</Value>
+  </DicomAttribute>
+</NativeDicomModel>`)
+
+	ds, err := FromXML(input)
+	if err != nil {
+		t.Fatalf("FromXML() error = %v, want invalid value to remain readable", err)
+	}
+	if !ds.AutoValidate() {
+		t.Fatal("deserialized Dataset should restore automatic validation")
+	}
+	if err := ds.Validate(); err == nil {
+		t.Fatal("Validate() should reject the deserialized invalid UID")
+	}
+}
+
 func TestToXML_EmptyDataset(t *testing.T) {
 	ds := dataset.New()
 	xml, err := ToXML(ds)

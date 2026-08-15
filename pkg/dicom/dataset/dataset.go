@@ -21,10 +21,10 @@ import (
 // and efficient lookup. Elements are stored in a map indexed by tag.
 //
 // Dataset is NOT goroutine-safe. All mutations (Add, AddOrUpdate, Remove, Clear,
-// Merge, SetInternalTransferSyntax) and any reads that may race with mutations
-// must be externally synchronized by the caller. Concurrent read-only access
-// (e.g., Get, Contains, Elements, Tags) is safe as long as no concurrent writes
-// are in progress.
+// Merge, SetAutoValidate, SetInternalTransferSyntax) and any reads that may
+// race with mutations must be externally synchronized by the caller.
+// Concurrent read-only access (e.g., Get, Contains, Elements, Tags) is safe as
+// long as no concurrent writes are in progress.
 type Dataset struct {
 	// items stores elements indexed by tag
 	items map[uint32]element.Element
@@ -33,6 +33,10 @@ type Dataset struct {
 	// It is invalidated on structural mutations (add/remove/clear/merge/filter).
 	sortedTags []uint32
 	cacheDirty bool
+
+	// skipValidation is the inverse of AutoValidate so a zero-value Dataset
+	// retains the default automatic-validation behavior.
+	skipValidation bool
 
 	// internalTransferSyntax represents the transfer syntax of this dataset.
 	// This is used to track the encoding format of pixel data and other elements.
@@ -62,15 +66,31 @@ func NewWithTransferSyntax(ts *transfer.Syntax) *Dataset {
 // NewWithElements creates a dataset initialized with the given elements.
 // Later elements replace earlier ones when the same tag appears multiple times.
 // Nil elements are ignored.
-func NewWithElements(elements []element.Element) *Dataset {
+func NewWithElements(elements []element.Element) (*Dataset, error) {
 	ds := New()
 	for _, elem := range elements {
 		if elem == nil {
 			continue
 		}
-		_ = ds.AddOrUpdate(elem)
+		if err := ds.AddOrUpdate(elem); err != nil {
+			return nil, err
+		}
 	}
-	return ds
+	return ds, nil
+}
+
+// AutoValidate reports whether Dataset mutations validate values before
+// insertion. Explicit Validate calls are unaffected by this setting.
+func (ds *Dataset) AutoValidate() bool {
+	return ds != nil && !ds.skipValidation
+}
+
+// SetAutoValidate controls validation performed by subsequent mutations.
+func (ds *Dataset) SetAutoValidate(enabled bool) {
+	if ds == nil {
+		return
+	}
+	ds.skipValidation = !enabled
 }
 
 // Add adds an element to the dataset.
@@ -82,11 +102,19 @@ func (ds *Dataset) Add(elem element.Element) error {
 	if elem == nil {
 		return fmt.Errorf("cannot add nil element")
 	}
+	if elem.Tag() == nil {
+		return validationError(ValidationStructural, nil, fmt.Errorf("element tag is nil"))
+	}
 	ds.ensureItems()
 
 	tagValue := elem.Tag().ToUint32()
 	if _, exists := ds.items[tagValue]; exists {
 		return fmt.Errorf("element with tag %s already exists", elem.Tag())
+	}
+	if ds.AutoValidate() {
+		if err := validateElement(elem, nil); err != nil {
+			return err
+		}
 	}
 
 	ds.items[tagValue] = elem
@@ -102,7 +130,15 @@ func (ds *Dataset) AddOrUpdate(elem element.Element) error {
 	if elem == nil {
 		return fmt.Errorf("cannot add nil element")
 	}
+	if elem.Tag() == nil {
+		return validationError(ValidationStructural, nil, fmt.Errorf("element tag is nil"))
+	}
 	ds.ensureItems()
+	if ds.AutoValidate() {
+		if err := validateElement(elem, nil); err != nil {
+			return err
+		}
+	}
 
 	ds.items[elem.Tag().ToUint32()] = elem
 	ds.markDirty()
@@ -228,6 +264,7 @@ func (ds *Dataset) Clone() *Dataset {
 	}
 	clone := New()
 	clone.internalTransferSyntax = ds.internalTransferSyntax // Preserve transfer syntax
+	clone.skipValidation = ds.skipValidation
 	for tagValue, elem := range ds.items {
 		clone.items[tagValue] = elem
 	}
@@ -241,18 +278,33 @@ func (ds *Dataset) Clone() *Dataset {
 // Merge merges elements from another dataset into this one.
 // If overwrite is true, existing elements are replaced.
 // If overwrite is false, only new elements are added.
-func (ds *Dataset) Merge(other *Dataset, overwrite bool) {
+// Validation happens before mutation so a failure leaves the Dataset unchanged.
+func (ds *Dataset) Merge(other *Dataset, overwrite bool) error {
 	if ds == nil || other == nil {
-		return
+		return nil
 	}
 	ds.ensureItems()
 
-	for tagValue, elem := range other.items {
+	candidates := make([]element.Element, 0, other.Count())
+	for _, elem := range other.Elements() {
 		if overwrite || !ds.Contains(elem.Tag()) {
-			ds.items[tagValue] = elem
-			ds.markDirty()
+			candidates = append(candidates, elem)
 		}
 	}
+	if ds.AutoValidate() {
+		for _, elem := range candidates {
+			if err := validateElement(elem, nil); err != nil {
+				return err
+			}
+		}
+	}
+	for _, elem := range candidates {
+		ds.items[elem.Tag().ToUint32()] = elem
+	}
+	if len(candidates) > 0 {
+		ds.markDirty()
+	}
+	return nil
 }
 
 // Filter returns a new dataset containing only elements that match the predicate.
@@ -261,13 +313,14 @@ func (ds *Dataset) Filter(predicate func(element.Element) bool) *Dataset {
 		return New()
 	}
 	filtered := New()
+	filtered.internalTransferSyntax = ds.internalTransferSyntax
+	filtered.skipValidation = ds.skipValidation
 	for _, elem := range ds.items {
 		if predicate(elem) {
-			if err := filtered.Add(elem); err != nil {
-				continue
-			}
+			filtered.items[elem.Tag().ToUint32()] = elem
 		}
 	}
+	filtered.markDirty()
 	return filtered
 }
 

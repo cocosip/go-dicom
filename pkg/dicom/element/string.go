@@ -190,7 +190,10 @@ func (s *String) Validate() error {
 	if !vr.PerformValidation {
 		return nil
 	}
+	return s.validateValue()
+}
 
+func (s *String) validateValue() error {
 	// Check the maximum length of each encoded value, excluding separators and
 	// the Value Field's trailing padding.
 	maxLen := s.vr.MaximumLength()
@@ -209,7 +212,7 @@ func (s *String) Validate() error {
 	// Perform VR-specific validation on each value
 	values := s.GetValues()
 	for i, value := range values {
-		if err := s.vr.ValidateString(value); err != nil {
+		if err := s.vr.ValidateStringValue(value); err != nil {
 			return fmt.Errorf("value[%d] validation failed for VR %s: %w", i, s.vr.Code(), err)
 		}
 	}

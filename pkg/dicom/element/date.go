@@ -86,6 +86,10 @@ func (d *Date) Validate() error {
 	return d.str.Validate()
 }
 
+func (d *Date) validateValue() error {
+	return d.str.validateValue()
+}
+
 // GetValue returns the string value at the specified index.
 func (d *Date) GetValue(index int) string {
 	return d.str.GetValue(index)
@@ -200,6 +204,10 @@ func (tm *Time) String() string {
 // Validate performs validation.
 func (tm *Time) Validate() error {
 	return tm.str.Validate()
+}
+
+func (tm *Time) validateValue() error {
+	return tm.str.validateValue()
 }
 
 // GetValue returns the string value at the specified index.
@@ -337,6 +345,10 @@ func (dt *DateTime) String() string {
 // Validate performs validation.
 func (dt *DateTime) Validate() error {
 	return dt.str.Validate()
+}
+
+func (dt *DateTime) validateValue() error {
+	return dt.str.validateValue()
 }
 
 // GetValue returns the string value at the specified index.

@@ -18,6 +18,21 @@ import (
 
 const testBulkDataURI = "http://example.com/dicom/pixeldata"
 
+func TestFromJSONPreservesInvalidValueForExplicitValidation(t *testing.T) {
+	input := []byte(`{"0020000D":{"vr":"UI","Value":["1.2..3"]}}`)
+
+	ds, err := FromJSON(input)
+	if err != nil {
+		t.Fatalf("FromJSON() error = %v, want invalid value to remain readable", err)
+	}
+	if !ds.AutoValidate() {
+		t.Fatal("deserialized Dataset should restore automatic validation")
+	}
+	if err := ds.Validate(); err == nil {
+		t.Fatal("Validate() should reject the deserialized invalid UID")
+	}
+}
+
 func TestToJSON_AsNumberRejectsInvalidJSONNumber(t *testing.T) {
 	ds := dataset.New()
 	if err := ds.Add(element.NewString(tag.New(0x0020, 0x0013), vr.IS, []string{"+1"})); err != nil {

@@ -117,11 +117,14 @@ func TestPrinterStatusManagerUpdateRejectsUnknown(t *testing.T) {
 
 func TestPrinterStatusManagerUpdateFromDataset(t *testing.T) {
 	manager := NewPrinterStatusManager("OLD-NAME")
-	ds := dataset.NewWithElements([]element.Element{
+	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.PrinterName, vr.LO, []string{"NEW-NAME"}),
 		element.NewString(tag.PrinterStatus, vr.CS, []string{"WARNING"}),
 		element.NewString(tag.PrinterStatusInfo, vr.CS, []string{"CHECK TONER"}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 
 	if err := manager.UpdateFromDataset(ds); err != nil {
 		t.Fatalf("UpdateFromDataset returned error: %v", err)
@@ -147,9 +150,12 @@ func TestPrinterStatusManagerUpdateFromDatasetInfoOnly(t *testing.T) {
 		t.Fatalf("UpdateAt returned error: %v", err)
 	}
 
-	ds := dataset.NewWithElements([]element.Element{
+	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.PrinterStatusInfo, vr.CS, []string{"TRAY LOW"}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 
 	if err := manager.UpdateFromDataset(ds); err != nil {
 		t.Fatalf("UpdateFromDataset returned error: %v", err)
@@ -168,9 +174,12 @@ func TestPrinterStatusManagerUpdateFromDatasetInfoOnly(t *testing.T) {
 
 func TestPrinterStatusManagerUpdateFromDatasetInvalidStatus(t *testing.T) {
 	manager := NewPrinterStatusManager("PRINTER-A")
-	ds := dataset.NewWithElements([]element.Element{
+	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.PrinterStatus, vr.CS, []string{"OFFLINE"}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 
 	if err := manager.UpdateFromDataset(ds); err == nil {
 		t.Fatal("expected error for invalid status")
@@ -183,9 +192,12 @@ func TestPrinterStatusManagerApplyToDataset(t *testing.T) {
 		t.Fatalf("UpdateAt returned error: %v", err)
 	}
 
-	ds := dataset.NewWithElements([]element.Element{
+	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.PrinterStatus, vr.CS, []string{"NORMAL"}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 	if err := manager.ApplyToDataset(ds); err != nil {
 		t.Fatalf("ApplyToDataset returned error: %v", err)
 	}

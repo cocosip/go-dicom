@@ -56,7 +56,7 @@ Priority indicates implementation order, not estimated effort:
 | NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | Complete Structured Report value types and file workflow |
 | IMG-001 | P1 | Partial | Dataset-driven image rendering pipeline |
-| CORE-001 | P1 | Partial | Recursive Dataset and Sequence validation |
+| CORE-001 | P1 | Complete | Recursive Dataset and Sequence validation |
 | IMG-002 | P2 | Open | Frame geometry, spatial transforms, and interpolation tools |
 | CORE-002 | P2 | Open | Dataset walker, match rules, and transform rules |
 | DICT-001 | P2 | Complete | Runtime XML dictionary loading |
@@ -71,13 +71,12 @@ Priority indicates implementation order, not estimated effort:
 Progress as of 2026-08-15:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
-  ANON-001, and DICT-001.
-- **Not complete:** DOC-001, SR-001, IMG-001, CORE-001,
-  IMG-002, CORE-002, PRINT-001,
+  CORE-001, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, SR-001, IMG-001, IMG-002, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** CORE-001, the first incomplete item in the planned development
+- **Next item:** SR-001, the first incomplete item in the planned development
   order below.
 
 ## Planned Development Order
@@ -91,7 +90,7 @@ recorded in this document.
 | Order | ID | Priority | Current status | Ordering rationale |
 | ---: | --- | --- | --- | --- |
 | 1 | NET-004 | P1 | Complete | Complete the NET-003 negotiation family while its association APIs and tests are current. |
-| 2 | CORE-001 | P1 | Partial | Establish recursive Dataset and Sequence correctness before completing nested domain workflows. |
+| 2 | CORE-001 | P1 | Complete | Establish recursive Dataset and Sequence correctness before completing nested domain workflows. |
 | 3 | SR-001 | P1 | Partial | Build typed SR trees and file workflows on the recursive validation behavior from CORE-001. |
 | 4 | IMG-001 | P1 | Partial | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
 | 5 | IMG-002 | P2 | Open | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
@@ -465,12 +464,15 @@ Reference: [fo-dicom DicomImage](https://github.com/fo-dicom/fo-dicom/blob/7ea6d
 
 ### CORE-001: Recursive Validation
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P1`
 
-Many concrete Element types implement VR validation, but Dataset has no public
-recursive validation workflow. `Sequence.Validate` currently returns `nil`
-without validating its child Datasets.
+Dataset now provides explicit recursive validation and default automatic
+validation for insertion APIs. Dataset and Sequence validation use one
+fail-fast engine with deterministic tag/item traversal, actual-VR value
+validation before dictionary VM validation, fo-dicom VM exceptions, nested
+path errors, and retained original causes. Binary, JSON, and XML hydration can
+still read invalid values and restore automatic validation before returning.
 
 **Acceptance criteria**
 
@@ -479,11 +481,16 @@ without validating its child Datasets.
 - Validation can be explicitly enabled or disabled without global data races.
 - VM, VR, required structural fields, and sequence children have defined scope.
 
-**Suggested verification**
+**Verification performed**
 
-- Nested sequence failures with exact path assertions.
-- Multi-value, private explicit-VR, malformed date/time, UID, and numeric tests.
-- Race tests for concurrent validation configuration if global settings remain.
+- Nested sequence, exact path, VM, private/unknown tag, malformed value,
+  automatic insertion, mutation rollback, and hydration regression tests pass.
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`,
+  `go build ./...`, and `golangci-lint run` pass.
+- The affected-package race command cannot start on this Windows host and
+  exits with `0xc0000139`; the same failure occurs for `go test -race fmt`, so
+  the race runtime remains an environment gate for CI rather than a passing
+  local result.
 
 ### IMG-002: Geometry and Spatial Image Tools
 
@@ -806,8 +813,8 @@ Phase acceptance:
 
 Scope: MED-001, NET-003, NET-004, SR-001, IMG-001, CORE-001.
 
-Current progress: MED-001, NET-003, and NET-004 are complete. SR-001, IMG-001,
-and CORE-001 remain incomplete; therefore Phase 1 is not complete.
+Current progress: MED-001, NET-003, NET-004, and CORE-001 are complete. SR-001
+and IMG-001 remain incomplete; therefore Phase 1 is not complete.
 
 Phase acceptance:
 

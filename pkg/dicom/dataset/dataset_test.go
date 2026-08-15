@@ -206,7 +206,9 @@ func TestDatasetMerge(t *testing.T) {
 
 	t.Run("MergeWithoutOverwrite", func(t *testing.T) {
 		merged := ds1.Clone()
-		merged.Merge(ds2, false)
+		if err := merged.Merge(ds2, false); err != nil {
+			t.Fatalf("Merge() error = %v", err)
+		}
 
 		// Should have 3 elements (PatientName not overwritten)
 		if merged.Count() != 3 {
@@ -222,7 +224,9 @@ func TestDatasetMerge(t *testing.T) {
 
 	t.Run("MergeWithOverwrite", func(t *testing.T) {
 		merged := ds1.Clone()
-		merged.Merge(ds2, true)
+		if err := merged.Merge(ds2, true); err != nil {
+			t.Fatalf("Merge() error = %v", err)
+		}
 
 		// Should have 3 elements
 		if merged.Count() != 3 {
@@ -356,7 +360,7 @@ func BenchmarkDatasetMerge(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		merged := ds1.Clone()
-		merged.Merge(ds2, false)
+		_ = merged.Merge(ds2, false)
 	}
 }
 

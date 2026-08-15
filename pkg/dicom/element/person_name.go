@@ -99,6 +99,10 @@ func (p *PersonName) Validate() error {
 	return p.str.Validate()
 }
 
+func (p *PersonName) validateValue() error {
+	return p.str.validateValue()
+}
+
 // GetValue returns the string value at the specified index.
 func (p *PersonName) GetValue(index int) string {
 	return p.str.GetValue(index)

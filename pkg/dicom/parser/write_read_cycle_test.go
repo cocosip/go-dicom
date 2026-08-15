@@ -17,6 +17,35 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
 
+func TestParsePreservesInvalidValueForExplicitValidation(t *testing.T) {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	for _, elem := range []element.Element{
+		element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}),
+		element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4"}),
+		element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2..3"}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var encoded bytes.Buffer
+	if err := writer.Write(&encoded, ds); err != nil {
+		t.Fatalf("writer.Write() error = %v", err)
+	}
+	result, err := Parse(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want invalid value to remain readable", err)
+	}
+	if !result.Dataset.AutoValidate() {
+		t.Fatal("parsed Dataset should restore automatic validation")
+	}
+	if err := result.Dataset.Validate(); err == nil {
+		t.Fatal("Validate() should reject the parsed invalid UID")
+	}
+}
+
 // TestWriteReadSingleFrame tests writing and reading a single frame DICOM image
 func TestWriteReadSingleFrame(t *testing.T) {
 	t.Log("=== Testing Single Frame Image Write/Read Cycle ===")

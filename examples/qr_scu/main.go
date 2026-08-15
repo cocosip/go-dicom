@@ -265,7 +265,10 @@ func performCFind(ctx context.Context, level dimse.QueryRetrieveLevel) ([]*datas
 	}
 	defer func() { _ = c.Close() }()
 
-	query := buildQueryDataset(level)
+	query, err := buildQueryDataset(level)
+	if err != nil {
+		return nil, fmt.Errorf("build query dataset: %w", err)
+	}
 	return c.CFind(ctx, level, query)
 }
 
@@ -283,9 +286,12 @@ func performCMove(ctx context.Context, studyUID string) error {
 	}
 	defer func() { _ = c.Close() }()
 
-	identifier := dataset.NewWithElements([]element.Element{
+	identifier, err := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
 	})
+	if err != nil {
+		return fmt.Errorf("build C-MOVE identifier: %w", err)
+	}
 
 	return c.CMove(ctx, dimse.QueryRetrieveLevelStudy, strings.TrimSpace(*moveDestination), identifier,
 		func(remaining, completed, failed, warning uint16) bool {
@@ -310,9 +316,12 @@ func performCGet(ctx context.Context, studyUID string) error {
 	}
 	defer func() { _ = c.Close() }()
 
-	identifier := dataset.NewWithElements([]element.Element{
+	identifier, err := dataset.NewWithElements([]element.Element{
 		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
 	})
+	if err != nil {
+		return fmt.Errorf("build C-GET identifier: %w", err)
+	}
 
 	return c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
 		func(remaining, completed, failed, warning uint16) bool {
@@ -385,8 +394,8 @@ func addPresentationContexts(c *client.Client) {
 	}
 }
 
-func buildQueryDataset(level dimse.QueryRetrieveLevel) *dataset.Dataset {
-	ds := dataset.NewWithElements([]element.Element{
+func buildQueryDataset(level dimse.QueryRetrieveLevel) (*dataset.Dataset, error) {
+	return dataset.NewWithElements([]element.Element{
 		element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}),
 		element.NewString(tag.PatientName, vr.PN, []string{strings.TrimSpace(*patientName)}),
 		element.NewString(tag.PatientID, vr.LO, []string{strings.TrimSpace(*patientID)}),
@@ -398,8 +407,6 @@ func buildQueryDataset(level dimse.QueryRetrieveLevel) *dataset.Dataset {
 		element.NewString(tag.SOPInstanceUID, vr.UI, []string{""}),
 		element.NewString(tag.RetrieveAETitle, vr.AE, []string{""}),
 	})
-
-	return ds
 }
 
 func printFindResults(level dimse.QueryRetrieveLevel, results []*dataset.Dataset) {

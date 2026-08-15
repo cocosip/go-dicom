@@ -12,10 +12,13 @@ import (
 )
 
 func TestNewWithElementsDuplicateTagUsesLatestValue(t *testing.T) {
-	ds := NewWithElements([]element.Element{
+	ds, err := NewWithElements([]element.Element{
 		element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}),
 		element.NewString(tag.PatientName, vr.PN, []string{"Smith^Jane"}),
 	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 
 	got, ok := ds.GetString(tag.PatientName)
 	if !ok {
@@ -33,7 +36,10 @@ func TestNewWithElementsIgnoresNilElement(t *testing.T) {
 		}
 	}()
 
-	ds := NewWithElements([]element.Element{nil})
+	ds, err := NewWithElements([]element.Element{nil})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
 	if ds == nil {
 		t.Fatal("expected dataset to be created")
 	}

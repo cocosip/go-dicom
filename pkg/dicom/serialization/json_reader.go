@@ -45,6 +45,8 @@ func (r *jsonReader) readDataset(data []byte) (*dataset.Dataset, error) {
 	}
 
 	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	defer ds.SetAutoValidate(true)
 
 	for tagStr, valueRaw := range raw {
 		// Parse tag

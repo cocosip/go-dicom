@@ -44,6 +44,23 @@ type Element interface {
 	Validate() error
 }
 
+type valueValidator interface {
+	validateValue() error
+}
+
+// ValidateValue validates an element's value regardless of the legacy global
+// VR validation switch. External Element implementations fall back to their
+// public Validate method.
+func ValidateValue(elem Element) error {
+	if elem == nil {
+		return fmt.Errorf("cannot validate nil element")
+	}
+	if validator, ok := elem.(valueValidator); ok {
+		return validator.validateValue()
+	}
+	return elem.Validate()
+}
+
 // base provides common functionality for all DICOM elements.
 type base struct {
 	tag    *tag.Tag
@@ -109,6 +126,10 @@ func (e *base) Validate() error {
 	// Check if VR matches the tag's expected VR
 	// (This would require dictionary lookup, which we'll add later)
 	return nil
+}
+
+func (e *base) validateValue() error {
+	return e.Validate()
 }
 
 // Count returns the number of values in this element.

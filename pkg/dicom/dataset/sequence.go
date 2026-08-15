@@ -77,9 +77,9 @@ func (s *Sequence) String() string {
 	return fmt.Sprintf("Sequence{Tag: %s, Items: %d}", s.tag.String(), len(s.items))
 }
 
-// Validate validates the sequence (placeholder for future validation logic).
+// Validate recursively validates the sequence item Datasets in item order.
 func (s *Sequence) Validate() error {
-	return nil
+	return validateSequence(s, nil)
 }
 
 // AddItem adds a dataset item to the sequence.

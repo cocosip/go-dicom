@@ -52,7 +52,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | 完整的结构化报告值类型和文件工作流 |
 | IMG-001 | P1 | Partial | Dataset 驱动的图像渲染管线 |
-| CORE-001 | P1 | Partial | Dataset 和 Sequence 递归验证 |
+| CORE-001 | P1 | Complete | Dataset 和 Sequence 递归验证 |
 | IMG-002 | P2 | Open | 帧几何、空间变换和插值工具 |
 | CORE-002 | P2 | Open | Dataset 遍历器、匹配规则和转换规则 |
 | DICT-001 | P2 | Complete | 运行时 XML 字典加载 |
@@ -67,13 +67,13 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 截至 2026-08-15：
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  ANON-001 和 DICT-001。
+  CORE-001、ANON-001 和 DICT-001。
 - **未完成：** DOC-001、
-  SR-001、IMG-001、CORE-001、IMG-002、CORE-002、PRINT-001、OBS-001、
+  SR-001、IMG-001、IMG-002、CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **下一项：** CORE-001，即下方计划开发顺序中的第一个未完成条目。
+- **下一项：** SR-001，即下方计划开发顺序中的第一个未完成条目。
 
 ## 计划开发顺序
 
@@ -84,7 +84,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 顺序 | ID | 优先级 | 当前状态 | 排序理由 |
 | ---: | --- | --- | --- | --- |
 | 1 | NET-004 | P1 | Complete | 趁 NET-003 的 Association API 和测试上下文仍然清晰，补完整个协商能力族。 |
-| 2 | CORE-001 | P1 | Partial | 在完成嵌套领域工作流之前，先建立 Dataset 和 Sequence 的递归正确性保障。 |
+| 2 | CORE-001 | P1 | Complete | 在完成嵌套领域工作流之前，先建立 Dataset 和 Sequence 的递归正确性保障。 |
 | 3 | SR-001 | P1 | Partial | 基于 CORE-001 的递归验证行为完成强类型 SR 树和文件工作流。 |
 | 4 | IMG-001 | P1 | Partial | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
 | 5 | IMG-002 | P2 | Open | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
@@ -398,10 +398,13 @@ LUT 和 overlay 基础能力已存在，但 `DicomImage` 由 `DicomPixelData` �
 
 ### CORE-001: 递归验证
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P1`
 
-很多具体 Element 类型实现了 VR 验证，但 Dataset 没有公共递归验证工作流。`Sequence.Validate` 当前直接返回 `nil`，不会验证子 Dataset。
+Dataset 现在提供显式递归验证和默认开启的写入自动验证。Dataset 与 Sequence
+共用一套遇错即停的验证引擎，按确定的标签和条目顺序遍历，先验证实际 VR 值再验证字典
+VM，并保留 fo-dicom 的 VM 例外、完整嵌套路径和原始错误原因。二进制、JSON 和 XML
+装载仍可读取无效值，并在返回前恢复自动验证。
 
 **验收标准**
 
@@ -410,11 +413,15 @@ LUT 和 overlay 基础能力已存在，但 `DicomImage` 由 `DicomPixelData` �
 - 可以显式启用或禁用验证，且不会产生全局数据竞态。
 - 明确定义 VM、VR、必需结构字段和 sequence 子项的验证范围。
 
-**建议验证**
+**已执行验证**
 
-- 构造嵌套 sequence 失败，并精确断言错误路径。
-- 测试多值、私有显式 VR、异常日期/时间、UID 和数值。
-- 如果保留全局配置，对并发验证配置执行竞态测试。
+- 嵌套 sequence、精确路径、VM、私有/未知标签、异常值、自动写入、失败回滚和装载
+  回归测试均通过。
+- `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`、
+  `go build ./...` 和 `golangci-lint run` 通过。
+- 受影响包的 race 命令在当前 Windows 主机上以 `0xc0000139` 无法启动；
+  `go test -race fmt` 也以相同状态失败，因此 race runtime 仍需由 CI 验证，不能记为
+  本地通过。
 
 ### IMG-002: 几何与空间图像工具
 
@@ -683,7 +690,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：MED-001、NET-003、NET-004、SR-001、IMG-001、CORE-001。
 
-当前进度：MED-001、NET-003 和 NET-004 已完成；SR-001、IMG-001 和 CORE-001
+当前进度：MED-001、NET-003、NET-004 和 CORE-001 已完成；SR-001 和 IMG-001
 仍未完成，因此 Phase 1 尚未完成。
 
 阶段验收：

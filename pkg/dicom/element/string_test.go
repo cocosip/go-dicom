@@ -4,6 +4,7 @@
 package element_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/charset"
@@ -384,5 +385,46 @@ func TestStringElement_ValidationDisabled(t *testing.T) {
 	err := elem.Validate()
 	if err != nil {
 		t.Errorf("Validate() error = %v, want nil when validation disabled", err)
+	}
+}
+
+func TestValidateValueIgnoresGlobalSwitch(t *testing.T) {
+	oldValidation := vr.PerformValidation
+	t.Cleanup(func() { vr.PerformValidation = oldValidation })
+
+	vr.PerformValidation = false
+	elem := element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2..3"})
+
+	if err := elem.Validate(); err != nil {
+		t.Fatalf("legacy Validate() should honor the disabled global switch, got %v", err)
+	}
+	if err := element.ValidateValue(elem); err == nil {
+		t.Fatal("ValidateValue() should reject an invalid UID regardless of the global switch")
+	}
+}
+
+func TestValidateValueIgnoresGlobalSwitchForStringWrappers(t *testing.T) {
+	oldValidation := vr.PerformValidation
+	t.Cleanup(func() { vr.PerformValidation = oldValidation })
+	vr.PerformValidation = false
+
+	tests := []struct {
+		name string
+		elem element.Element
+	}{
+		{name: "date", elem: element.NewDate(tag.StudyDate, []string{"20241301"})},
+		{name: "time", elem: element.NewTime(tag.StudyTime, []string{"250000"})},
+		{name: "date time", elem: element.NewDateTime(tag.AcquisitionDateTime, []string{"202"})},
+		{name: "decimal string", elem: element.NewDecimalString(tag.SliceThickness, []string{"abc"})},
+		{name: "integer string", elem: element.NewIntegerString(tag.SeriesNumber, []string{"abc"})},
+		{name: "person name", elem: element.NewPersonName(tag.PatientName, []string{strings.Repeat("A", 65)})},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := element.ValidateValue(tt.elem); err == nil {
+				t.Fatal("ValidateValue() should reject the invalid value regardless of the global switch")
+			}
+		})
 	}
 }

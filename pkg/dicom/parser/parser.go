@@ -530,6 +530,8 @@ func (p *parseContext) readPreamble() error {
 // readFileMetaInformation reads Group 0002 elements (File Meta Information).
 func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	defer ds.SetAutoValidate(true)
 
 	// Read elements until we leave Group 0002
 	for {
@@ -652,6 +654,8 @@ func (p *parseContext) applyTransferSyntax(ts *transfer.Syntax) error {
 // readDataset reads a dataset (collection of elements).
 func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	defer ds.SetAutoValidate(true)
 	privateCreators := make(privateCreatorScope)
 
 	var firstTag *tag.Tag
@@ -1115,6 +1119,8 @@ func (p *parseContext) observeSequenceItem(sequenceTag *tag.Tag, item *dataset.D
 // readItemDataset reads a single item dataset within a sequence.
 func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) {
 	item := dataset.New()
+	item.SetAutoValidate(false)
+	defer item.SetAutoValidate(true)
 	privateCreators := make(privateCreatorScope)
 	savedEncoding := p.textEncoding
 	savedEncodings := append([]encoding.Encoding(nil), p.textEncodings...)

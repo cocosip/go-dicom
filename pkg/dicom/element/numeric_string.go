@@ -77,6 +77,10 @@ func (ds *DecimalString) Validate() error {
 	return ds.str.Validate()
 }
 
+func (ds *DecimalString) validateValue() error {
+	return ds.str.validateValue()
+}
+
 // GetValue returns the string value at the specified index.
 func (ds *DecimalString) GetValue(index int) string {
 	return ds.str.GetValue(index)
@@ -209,6 +213,10 @@ func (is *IntegerString) String() string {
 // Validate performs validation.
 func (is *IntegerString) Validate() error {
 	return is.str.Validate()
+}
+
+func (is *IntegerString) validateValue() error {
+	return is.str.validateValue()
 }
 
 // GetValue returns the string value at the specified index.

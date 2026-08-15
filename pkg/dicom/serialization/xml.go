@@ -486,6 +486,8 @@ func (r *xmlReader) readDataset(xmlData []byte) (*dataset.Dataset, error) {
 	}
 
 	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	defer ds.SetAutoValidate(true)
 	for _, attr := range model.DicomAttributes {
 		elem, err := r.readAttribute(attr)
 		if err != nil {
@@ -588,15 +590,19 @@ func (r *xmlReader) readSequence(t *tag.Tag, items []xmlItem) (*dataset.Sequence
 
 	for _, item := range items {
 		itemDS := dataset.New()
+		itemDS.SetAutoValidate(false)
 		for _, attr := range item.Attributes {
 			elem, err := r.readAttribute(attr)
 			if err != nil {
 				return nil, err
 			}
 			if elem != nil {
-				_ = itemDS.Add(elem) // Ignore add errors in deserialization
+				if err := itemDS.Add(elem); err != nil {
+					return nil, fmt.Errorf("failed to add element %s to sequence item: %w", attr.Tag, err)
+				}
 			}
 		}
+		itemDS.SetAutoValidate(true)
 		seq.AddItem(itemDS)
 	}
 
