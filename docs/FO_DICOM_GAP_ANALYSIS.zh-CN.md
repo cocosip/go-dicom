@@ -53,7 +53,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | SR-001 | P1 | Complete | 完整的结构化报告值类型和文件工作流 |
 | IMG-001 | P1 | Complete | Dataset 驱动的图像渲染管线 |
 | CORE-001 | P1 | Complete | Dataset 和 Sequence 递归验证 |
-| IMG-002 | P2 | Open | 帧几何、空间变换和插值工具 |
+| IMG-002 | P2 | Complete | 帧几何、空间变换和插值工具 |
 | CORE-002 | P2 | Open | Dataset 遍历器、匹配规则和转换规则 |
 | DICT-001 | P2 | Complete | 运行时 XML 字典加载 |
 | ANON-001 | P2 | Complete | 完整的自定义匿名化配置加载 |
@@ -67,13 +67,13 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 截至 2026-08-15：
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  SR-001、IMG-001、CORE-001、ANON-001 和 DICT-001。
+  SR-001、IMG-001、IMG-002、CORE-001、ANON-001 和 DICT-001。
 - **未完成：** DOC-001、
-  IMG-002、CORE-002、PRINT-001、OBS-001、
+  CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **下一项：** IMG-002，即下方计划开发顺序中的第一个未完成条目。
+- **下一项：** CORE-002，即下方计划开发顺序中的第一个未完成条目。
 
 ## 计划开发顺序
 
@@ -87,7 +87,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 2 | CORE-001 | P1 | Complete | 在完成嵌套领域工作流之前，先建立 Dataset 和 Sequence 的递归正确性保障。 |
 | 3 | SR-001 | P1 | Complete | 基于 CORE-001 的递归验证行为完成强类型 SR 树和文件工作流。 |
 | 4 | IMG-001 | P1 | Complete | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
-| 5 | IMG-002 | P2 | Open | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
+| 5 | IMG-002 | P2 | Complete | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
 | 6 | CORE-002 | P2 | Open | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
 | 7 | PRINT-001 | P2 | Partial | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
 | 8 | OBS-001 | P2 | Open | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
@@ -461,10 +461,18 @@ VM，并保留 fo-dicom 的 VM 例外、完整嵌套路径和原始错误原因�
 
 ### IMG-002: 几何与空间图像工具
 
-**状态：** `Open`  
+**状态：** `Complete`
 **优先级：** `P2`
 
-fo-dicom 包含 FrameGeometry、患者/图像坐标转换、方向和定位支持、空间变换、直方图辅助工具、数学几何类型以及最近邻/双线性插值。go-dicom 没有等价的内聚几何层。
+已于 2026-08-15 完成。`pkg/imaging/geometry` 现在可按与 fo-dicom 一致的
+spacing 和功能组优先级提取经典及增强多帧几何，提供方向、法向量、像素中心角点、
+包围盒、投影/相交定位线，以及患者坐标与图像坐标互转。图像坐标采用零基像素中心约定：
+`(0,0)` 是首像素中心，末像素中心是 `(columns-1, rows-1)`。
+
+`pkg/imaging/math3d`、`pkg/imaging/transform` 和
+`pkg/imaging/interpolation` 分别提供有限值校验的几何/4x4 矩阵、可组合 affine 与
+viewer 空间变换及最佳适配，以及支持 stride 的标量最近邻/双线性采样与缩放。
+imaging 包同时提供已修正窗口累计行为的整数直方图。
 
 参考：[fo-dicom FrameGeometry](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/FrameGeometry.cs)
 
@@ -481,6 +489,20 @@ fo-dicom 包含 FrameGeometry、患者/图像坐标转换、方向和定位支�
 - 对合成的轴位、矢状位、冠状位和斜位帧执行坐标往返测试。
 - 使用具有已知患者空间几何的经典和增强多帧固件。
 - 为变换和最近邻/双线性插值增加黄金测试。
+
+**已执行验证**
+
+- 合成轴位、矢状位、冠状位和斜位帧覆盖坐标往返、方向、法向量、零基像素中心角点、
+  包围盒、投影定位框和相交定位线。
+- 经典及增强多帧 Dataset 覆盖顶层/共享/逐帧优先级、帧边界、缺失几何、非法值和
+  非有限值。
+- 确定性测试覆盖向量、平面、矩阵、直方图、affine、最佳适配、最近邻、双线性、
+  stride、端点及单像素场景。
+- 可执行 Go 示例覆盖 Dataset 几何提取和坐标转换、定位线、affine/viewer 变换、
+  插值及直方图窗口；详细约定与错误行为记录在 `pkg/imaging/README.md`。
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`、
+  `CGO_ENABLED=0 go build ./...` 和 `CGO_ENABLED=0 golangci-lint run` 均通过。
+  本地验收固定禁用 CGO，因此未运行 race 命令。
 
 ### CORE-002: Dataset 遍历器与规则
 
@@ -644,7 +666,7 @@ reconstruction 包记录了 ImageData、VolumeData、Slice、Stack 和 DicomGene
 
 参考：[fo-dicom Reconstruction](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/Reconstruction)
 
-本条目依赖 IMG-001 和 IMG-002。
+本条目依赖 IMG-001 和 IMG-002；两个前置项现均已完成。
 
 **验收标准**
 
@@ -743,7 +765,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：IMG-002、CORE-002、DICT-001、ANON-001、PRINT-001、OBS-001。
 
-当前进度：DICT-001 和 ANON-001 已完成；IMG-002、CORE-002、PRINT-001 和
+当前进度：IMG-002、DICT-001 和 ANON-001 已完成；CORE-002、PRINT-001 和
 OBS-001 尚未完成，因此 Phase 2 尚未完成。
 
 阶段验收：

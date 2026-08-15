@@ -57,7 +57,7 @@ Priority indicates implementation order, not estimated effort:
 | SR-001 | P1 | Complete | Complete Structured Report value types and file workflow |
 | IMG-001 | P1 | Complete | Dataset-driven image rendering pipeline |
 | CORE-001 | P1 | Complete | Recursive Dataset and Sequence validation |
-| IMG-002 | P2 | Open | Frame geometry, spatial transforms, and interpolation tools |
+| IMG-002 | P2 | Complete | Frame geometry, spatial transforms, and interpolation tools |
 | CORE-002 | P2 | Open | Dataset walker, match rules, and transform rules |
 | DICT-001 | P2 | Complete | Runtime XML dictionary loading |
 | ANON-001 | P2 | Complete | Complete custom anonymization profile loading |
@@ -71,12 +71,12 @@ Priority indicates implementation order, not estimated effort:
 Progress as of 2026-08-15:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
-  SR-001, IMG-001, CORE-001, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, IMG-002, CORE-002, PRINT-001,
+  SR-001, IMG-001, IMG-002, CORE-001, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** IMG-002, the first incomplete item in the planned development
+- **Next item:** CORE-002, the first incomplete item in the planned development
   order below.
 
 ## Planned Development Order
@@ -93,7 +93,7 @@ recorded in this document.
 | 2 | CORE-001 | P1 | Complete | Establish recursive Dataset and Sequence correctness before completing nested domain workflows. |
 | 3 | SR-001 | P1 | Complete | Build typed SR trees and file workflows on the recursive validation behavior from CORE-001. |
 | 4 | IMG-001 | P1 | Complete | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
-| 5 | IMG-002 | P2 | Open | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
+| 5 | IMG-002 | P2 | Complete | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
 | 6 | CORE-002 | P2 | Open | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
 | 7 | PRINT-001 | P2 | Partial | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
 | 8 | OBS-001 | P2 | Open | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
@@ -534,13 +534,21 @@ still read invalid values and restore automatic validation before returning.
 
 ### IMG-002: Geometry and Spatial Image Tools
 
-**Status:** `Open`  
+**Status:** `Complete`
 **Priority:** `P2`
 
-fo-dicom includes FrameGeometry, patient/image coordinate conversion,
-orientation and localization support, spatial transforms, histogram helpers,
-mathematical geometry types, and nearest-neighbor/bilinear interpolation.
-go-dicom has no equivalent cohesive geometry layer.
+Completed on 2026-08-15. Package `pkg/imaging/geometry` now extracts classic
+and enhanced multi-frame geometry with fo-dicom spacing and functional-group
+precedence. It exposes orientation, normal and pixel-center corners, bounding
+boxes, projection and intersection localizers, and patient/image coordinate
+conversion. Image coordinates are zero-based pixel centers: `(0,0)` is the
+center of the first pixel and the last center is `(columns-1, rows-1)`.
+
+Packages `pkg/imaging/math3d`, `pkg/imaging/transform`, and
+`pkg/imaging/interpolation` provide finite-checked geometry and 4x4 matrices,
+composable affine and viewer transforms with best-fit placement, and
+stride-aware scalar nearest-neighbor/bilinear sampling and resizing. The
+imaging package also provides a corrected reusable integer histogram window.
 
 Reference: [fo-dicom FrameGeometry](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/FrameGeometry.cs)
 
@@ -557,6 +565,24 @@ Reference: [fo-dicom FrameGeometry](https://github.com/fo-dicom/fo-dicom/blob/7e
 - Synthetic axial, sagittal, coronal, and oblique frame coordinate round trips.
 - Classic and enhanced multi-frame fixtures with known patient-space geometry.
 - Golden tests for transforms and nearest-neighbor/bilinear interpolation.
+
+**Verification performed**
+
+- Synthetic axial, sagittal, coronal, and oblique frames cover coordinate
+  round trips, orientation, normals, zero-based pixel-center corners, bounds,
+  projection localizers, and intersection localizers.
+- Classic and enhanced multi-frame Datasets cover top-level/shared/per-frame
+  precedence, frame bounds, missing geometry, and malformed or non-finite
+  values.
+- Deterministic tests cover vector, plane, matrix, histogram, affine,
+  best-fit, nearest-neighbor, bilinear, stride, endpoint, and one-pixel cases.
+- Executable Go examples cover Dataset geometry extraction and coordinate
+  conversion, localizers, affine and viewer transforms, interpolation, and
+  histogram windows; detailed conventions and error behavior are documented in
+  `pkg/imaging/README.md`.
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`,
+  `CGO_ENABLED=0 go build ./...`, and `CGO_ENABLED=0 golangci-lint run` pass.
+  No local race command was run because local verification is CGO-disabled.
 
 ### CORE-002: Dataset Walker and Rules
 
@@ -753,7 +779,7 @@ DicomGenerator but implements them as placeholders. Constructors return
 
 Reference: [fo-dicom Reconstruction](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/Reconstruction)
 
-This item depends on IMG-001 and IMG-002.
+This item depends on IMG-001 and IMG-002; both prerequisites are complete.
 
 **Acceptance criteria**
 
@@ -871,7 +897,7 @@ single pull request.
 
 Scope: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, OBS-001.
 
-Current progress: DICT-001 and ANON-001 are complete. IMG-002, CORE-002,
+Current progress: IMG-002, DICT-001, and ANON-001 are complete. CORE-002,
 PRINT-001, and OBS-001 remain incomplete; therefore Phase 2 is not complete.
 
 Phase acceptance:

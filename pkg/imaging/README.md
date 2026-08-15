@@ -4,7 +4,9 @@ This package provides DICOM image processing functionality for the go-dicom libr
 
 ## Overview
 
-The imaging package handles pixel data representation, image codecs, and basic image processing operations for DICOM files.
+The imaging package handles Dataset-driven rendering, pixel data, codecs,
+patient-space frame geometry, spatial transforms, and interpolation for DICOM
+files.
 
 ## Components
 
@@ -24,6 +26,168 @@ The imaging package handles pixel data representation, image codecs, and basic i
 - **PixelConfiguration** (`pixel_config.go`): Pixel representation and planar configuration
   - PixelRepresentation: Unsigned vs Signed integers
   - PlanarConfiguration: Interleaved vs Planar color data
+
+### Geometry and Spatial Tools
+
+- **geometry**: Classic and enhanced multi-frame geometry, orientation,
+  patient/image coordinate conversion, bounds, and localizers
+- **math3d**: Point, vector, plane, segment, bounding-box, rectangle, and 4x4
+  matrix primitives
+- **transform**: Composable affine transforms and scale/rotate/flip/pan viewer
+  state with best-fit placement
+- **interpolation**: Stride-aware scalar grids with nearest-neighbor and
+  bilinear sampling and resizing
+- **Histogram**: Integer-bin counting and explicit or percentage windows
+
+## Geometry and Spatial Usage
+
+### Extract Frame Geometry
+
+Use `geometry.NewFrameGeometry` with a parsed `*dataset.Dataset`. The frame
+index is zero-based for both classic and enhanced multi-frame datasets:
+
+```go
+frameGeometry, err := geometry.NewFrameGeometry(ds, frameIndex)
+if err != nil {
+    return err
+}
+
+switch frameGeometry.Type {
+case geometry.GeometryVolume:
+    // Complete patient position, orientation, and spacing are available.
+case geometry.GeometryPlane:
+    // Pixel spacing is available, but patient position/orientation are not.
+case geometry.GeometryNone:
+    // Dimensions are available, but spatial transforms cannot be performed.
+}
+```
+
+For enhanced multi-frame datasets, shared functional-group values are loaded
+first and matching per-frame values override them. Top-level spacing follows
+fo-dicom precedence: Imager Pixel Spacing, Pixel Spacing, Nominal Scanned Pixel
+Spacing, then functional-group spacing.
+
+The complete Dataset construction and coordinate round-trip are compiled as
+part of [`ExampleNewFrameGeometry`](geometry/example_test.go).
+
+### Coordinate Convention
+
+Image coordinates are zero-based pixel centers. `(0,0)` is the center of the
+first pixel and `(columns-1, rows-1)` is the center of the last pixel. `X`
+advances across columns and uses `PixelSpacingColumns`; `Y` advances across
+rows and uses `PixelSpacingRows`. DICOM Pixel Spacing values are supplied in
+`[row, column]` order.
+
+```go
+patientPoint, err := frameGeometry.ImageToPatient(math3d.Point2{X: 12, Y: 8})
+if err != nil {
+    return err
+}
+imagePoint, err := frameGeometry.PatientToImage(patientPoint)
+if err != nil {
+    return err
+}
+```
+
+`TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`, and `BoundingBox()` describe
+pixel centers, not the outer physical edges of the pixels. Require
+`GeometryVolume` when the result must represent a real DICOM patient-space
+location.
+
+### Localizers
+
+Localizers require source and destination frames from the same Frame of
+Reference and with different orientations. Check compatibility before drawing:
+
+```go
+if geometry.CanDrawLocalizer(source, destination) {
+    start, end, ok := geometry.IntersectionLocalizer(source, destination)
+    if ok {
+        drawLine(start, end)
+    }
+}
+```
+
+`IntersectionLocalizer` returns the clipped intersection line in destination
+image coordinates. `ProjectionLocalizer` projects all four source corners into
+destination image coordinates. See the executable
+[`ExampleIntersectionLocalizer`](geometry/example_test.go).
+
+### Affine and Viewer Transforms
+
+`Affine2D.Then` composes in execution order: `a.Then(b)` applies `a` first and
+`b` second.
+
+```go
+matrix := transform.Identity().
+    Then(transform.Scale(2, 2)).
+    Then(transform.Rotate(90)).
+    Then(transform.Translate(100, 50))
+screenPoint := matrix.Apply(imagePoint)
+```
+
+Use `SpatialTransform` for viewer state and `BestFit` to center an image while
+preserving its aspect ratio. Invalid or empty rectangles and non-positive
+scales return errors. The executable examples cover
+[`Affine2D.Then`](transform/example_test.go),
+[`SpatialTransform.Affine`](transform/example_test.go), and
+[`BestFit`](transform/example_test.go).
+
+### Interpolation
+
+`interpolation.Grid` is a read-only view over row-major `float64` samples.
+Stride is measured in values, not bytes, and can be larger than the image
+width. Sampling uses the same zero-based pixel-center convention as geometry:
+
+```go
+grid, err := interpolation.NewGrid(samples, width, height, stride)
+if err != nil {
+    return err
+}
+value, inside := grid.Bilinear(x, y)
+resized, err := grid.Resize(outputWidth, outputHeight, interpolation.ModeBilinear)
+```
+
+`Nearest` and `Bilinear` return `inside=false` for non-finite or out-of-bounds
+coordinates. `Resize` returns tightly packed output and aligns source and
+destination endpoints. See the stride-aware executable
+[`ExampleGrid.Resize`](interpolation/example_test.go).
+
+### Histogram Windows
+
+`Histogram` counts integer values in an inclusive range. Values outside that
+range are ignored. A percentage window removes less-populated edge bins while
+retaining the requested share of the total count; an explicit window selects
+an inclusive absolute bin range:
+
+```go
+histogram, err := imaging.NewHistogram(minimum, maximum)
+if err != nil {
+    return err
+}
+for _, value := range samples {
+    histogram.Add(value)
+}
+if err := histogram.ApplyPercentWindow(95); err != nil {
+    return err
+}
+start, end := histogram.WindowStart(), histogram.WindowEnd()
+```
+
+See executable [`ExampleHistogram.ApplyPercentWindow`](histogram_example_test.go).
+
+### Errors and Reconstruction Boundary
+
+`NewFrameGeometry` returns errors for invalid frame indices, dimensions,
+malformed values, incomplete position/orientation pairs, and invalid direction
+cosines. Missing spacing is not an error; it produces `GeometryNone`, and
+coordinate conversion then returns an error. Constructors and resizing methods
+also reject non-finite or invalid dimensions instead of silently repairing
+them.
+
+These APIs provide the spatial and sampling foundation for IMG-003. Volume
+assembly, slice sorting, trilinear MPR sampling, and derived DICOM generation
+remain in the `reconstruction` package and are not implemented by IMG-002.
 
 ### Codec Framework
 
@@ -192,22 +356,21 @@ Current test coverage:
 ## Future Work
 
 ### Short Term
-1. Integrate codec with DicomDataset for full read/write operations
-2. Add DicomPixelData wrapper class for easier dataset integration
-3. Implement palette color LUT support
+1. Build `reconstruction.ImageData` and volume validation on the completed
+   geometry and interpolation APIs
+2. Implement volume slice sorting and trilinear sampling for MPR
+3. Generate DICOM datasets from reformatted stacks
 
 ### Medium Term
 1. Research and evaluate JPEG codec options:
    - Pure Go implementation
    - CGO bindings to libjpeg/libjpeg-turbo
-2. Implement basic image rendering (VOI LUT, modality LUT)
-3. Add image export to standard formats (PNG, JPEG)
+2. Add further rendering performance benchmarks
 
 ### Long Term
 1. JPEG-LS codec (pending library availability)
 2. JPEG 2000 codec (likely via CGO)
-3. Advanced rendering features
-4. GPU-accelerated processing
+3. GPU-accelerated processing
 
 ## References
 

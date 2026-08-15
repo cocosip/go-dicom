@@ -359,5 +359,5 @@ var (
 type NotImplementedError struct{}
 
 func (e *NotImplementedError) Error() string {
-	return "reconstruction: feature not yet implemented - requires 3D geometry library, FrameGeometry, and IPixelData implementation"
+	return "reconstruction: volume, pixel access, MPR, and DICOM generation are not yet implemented"
 }

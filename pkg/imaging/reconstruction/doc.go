@@ -9,13 +9,15 @@
 //   - Creating Axial, Coronal, and Sagittal reformatted series
 //   - Interpolation between slices for smooth reconstructions
 //
-// # Dependencies
+// # Available Foundations
 //
-// This package requires several components that need to be implemented:
-//   - 3D geometry library (Point3D, Vector3D, Plane3D)
-//   - FrameGeometry for image plane definitions
-//   - IPixelData interface for pixel access
-//   - PixelDataFactory for creating pixel data readers
+// The shared prerequisites are available in:
+//   - pkg/imaging/math3d for point, vector, plane, bounds, and matrix operations
+//   - pkg/imaging/geometry for classic and enhanced multi-frame geometry
+//   - pkg/imaging/interpolation for scalar nearest-neighbor and bilinear sampling
+//
+// Reconstruction still needs pixel-access integration, volume construction,
+// slice generation, DICOM output, and their end-to-end tests.
 //
 // # Basic Usage (Planned)
 //
@@ -40,11 +42,9 @@
 // # TODO
 //
 // This package is currently a placeholder. Full implementation requires:
-//  1. Implement 3D geometry library (pkg/imaging/math3d)
-//  2. Implement FrameGeometry (pkg/imaging/geometry)
-//  3. Implement IPixelData interface and PixelDataFactory
-//  4. Implement volume reconstruction algorithms
-//  5. Implement MPR (Multi-Planar Reformation) with interpolation
-//  6. Add parallel processing for performance
-//  7. Comprehensive testing with various image orientations
+//  1. Implement pixel access for reconstruction source frames
+//  2. Implement volume reconstruction algorithms
+//  3. Implement MPR (Multi-Planar Reformation) with trilinear interpolation
+//  4. Implement DICOM output for generated stacks
+//  5. Add performance benchmarks and end-to-end orientation tests
 package reconstruction

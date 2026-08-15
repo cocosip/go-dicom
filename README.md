@@ -30,7 +30,7 @@ Known parity gaps and the staged plan for addressing them are tracked in
 - ✅ **Anonymization** - Remove/Replace patient identifiable information with configurable profiles
 - ✅ **Pixel Data Processing** - Access raw pixel data, color space conversion, LUT operations, image rendering
 - ✅ **DICOM Networking** - Complete DIMSE services (C-ECHO/STORE/FIND/MOVE/GET + N-CREATE/GET/SET/DELETE/ACTION/EVENT-REPORT), TLS support
-- ✅ **Image Processing** - Rendering pipeline, windowing, LUT operations, color space conversion
+- ✅ **Image Processing** - Dataset rendering, frame geometry, spatial transforms, interpolation, LUT operations, and color conversion ([geometry and spatial usage](pkg/imaging/README.md#geometry-and-spatial-usage))
 - ✅ **DICOM Printing** - Film Session, Film Box, Image Box, Printer status management
 
 ### Included Capabilities
@@ -109,8 +109,11 @@ Known parity gaps and the staged plan for addressing them are tracked in
   - [x] Overlay data extraction
   - [x] Palette color LUT support
   - [x] Bit depth conversion and scaling
-  - [x] Image reconstruction from pixel data
+  - [x] Dataset-driven image rendering
   - [x] Rendering pipeline with configurable options
+  - [x] Classic and enhanced multi-frame geometry
+  - [x] Patient/image coordinate conversion and localization
+  - [x] Spatial transforms and reusable interpolation
 
 - [x] **Structured Reports**
   - [x] Typed content items (TEXT, NUM, CODE, CONTAINER, PNAME, DATE, TIME, DATETIME, UIDREF)
@@ -1723,9 +1726,13 @@ go-dicom/
 │   │   └── testutil/       # Test utilities
 │   ├── imaging/            # Image processing
 │   │   ├── codec/          # Image codecs (native, transcoder)
+│   │   ├── geometry/       # DICOM frame geometry and localization
+│   │   ├── interpolation/  # Nearest-neighbor and bilinear sampling
 │   │   ├── lut/            # Lookup tables (Modality, VOI, Palette)
+│   │   ├── math3d/         # Geometry and matrix primitives
 │   │   ├── render/         # Image rendering pipeline
-│   │   └── reconstruction/ # Image reconstruction
+│   │   ├── transform/      # Affine and viewer spatial transforms
+│   │   └── reconstruction/ # Planned volume reconstruction and MPR
 │   ├── network/            # DICOM networking
 │   │   ├── pdu/            # Protocol Data Units
 │   │   ├── dimse/          # DIMSE messages

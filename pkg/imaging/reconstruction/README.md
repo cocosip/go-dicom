@@ -39,51 +39,23 @@ MPR allows viewing a 3D volume from different perspectives by extracting slices 
 - Update geometric tags (Image Position, Orientation)
 - Maintain DICOM conformance
 
-## Dependencies Required
+## Foundation Status
 
-Before this package can be fully implemented, the following components need to be developed:
+The shared spatial foundations are now available:
 
-### 1. 3D Geometry Library (`pkg/imaging/math3d`)
-```go
-type Point3D struct {
-    X, Y, Z float64
-}
+- `pkg/imaging/math3d`: points, vectors, planes, bounds, rectangles, and matrices
+- `pkg/imaging/geometry`: classic and enhanced multi-frame geometry, coordinate conversion, and localizers
+- `pkg/imaging/interpolation`: reusable scalar nearest-neighbor and bilinear sampling
 
-type Vector3D struct {
-    X, Y, Z float64
-}
-
-type Plane3D struct {
-    Normal Vector3D
-    Point  Point3D
-}
-```
-
-### 2. Frame Geometry (`pkg/imaging/geometry`)
-```go
-type FrameGeometry struct {
-    ImagePositionPatient    Point3D
-    ImageOrientationPatient [6]float64
-    PixelSpacing           [2]float64
-    SliceThickness         float64
-}
-```
-
-### 3. Pixel Data Interface (`pkg/imaging`)
-```go
-type IPixelData interface {
-    Width() int
-    Height() int
-    GetPixel(x, y int) float64
-}
-```
+This package still needs reconstruction-specific pixel access, volume
+construction, slice generation, and DICOM output.
 
 ## Implementation Roadmap
 
-### Phase 1: Foundation (0%)
-- [ ] Implement 3D geometry library (Point3D, Vector3D, Plane3D, Matrix3D)
-- [ ] Implement geometric helper functions (dot product, cross product, interpolation)
-- [ ] Add FrameGeometry for image plane definitions
+### Phase 1: Foundation
+- [x] Implement 3D geometry library and matrices
+- [x] Implement geometric helper functions and interpolation primitives
+- [x] Add FrameGeometry for classic and enhanced image planes
 - [ ] Create IPixelData interface and implementations
 
 ### Phase 2: Volume Reconstruction (0%)
@@ -95,7 +67,7 @@ type IPixelData interface {
 
 ### Phase 3: MPR (0%)
 - [ ] Implement Slice extraction
-- [ ] Add trilinear interpolation
+- [ ] Compose the available bilinear primitives with between-slice interpolation
 - [ ] Implement Stack generation (Axial, Coronal, Sagittal)
 - [ ] Support arbitrary plane orientations
 - [ ] Optimize with parallel processing
@@ -126,10 +98,10 @@ For reference, see these implementations in other languages:
 
 This is a complex feature that requires significant implementation effort. Contributions are welcome, especially for:
 
-1. 3D geometry math library
-2. Interpolation algorithms
-3. Performance optimization
-4. Testing with various scanner types
+1. Volume construction and validation
+2. Slice and stack generation
+3. DICOM output for reformatted stacks
+4. Performance optimization and scanner-specific testing
 
 ## License
 
