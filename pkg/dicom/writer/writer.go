@@ -161,7 +161,6 @@ type Writer struct {
 	implementationVersionName   string // Implementation Version Name for File Meta Information
 	sequenceItemObserver        SequenceItemObserver
 	positionWriter              *positionWriter
-	baseOffset                  uint64
 }
 
 // WriteOption is a functional option for Write function.
@@ -632,41 +631,21 @@ func (w *Writer) writeDataset(ds *dataset.Dataset) error {
 	if ds == nil {
 		return nil
 	}
-
-	elements := ds.Elements()
-	for _, elem := range elements {
-		// Skip Group 0002 elements (they're written in File Meta Information)
-		if elem.Tag().Group() == 0x0002 {
-			continue
-		}
-
-		// Skip group length tags unless explicitly requested to keep them
-		// Group length tags have element number 0x0000
-		if !w.keepGroupLengths && elem.Tag().Element() == 0x0000 {
-			continue
-		}
-
-		if err := w.writeElement(elem); err != nil {
-			return err
-		}
+	lengths, err := w.calculateWalkLengths(ds)
+	if err != nil {
+		return err
 	}
-
-	return nil
+	return w.writeDatasetWithWalk(ds, lengths)
 }
 
 // writeElement writes a single DICOM element.
 func (w *Writer) writeElement(elem element.Element) error {
-	// Check if this is a sequence (handle specially)
-	if seq, ok := elem.(*dataset.Sequence); ok {
-		return w.writeSequence(seq)
+	if elem == nil {
+		return fmt.Errorf("cannot write nil element")
 	}
-
-	// Check if this is a fragment sequence (encapsulated pixel data)
-	if obf, ok := elem.(*element.OtherByteFragment); ok {
-		return w.writeFragmentSequence(obf.FragmentSequence)
-	}
-	if owf, ok := elem.(*element.OtherWordFragment); ok {
-		return w.writeFragmentSequence(owf.FragmentSequence)
+	switch elem.(type) {
+	case *dataset.Sequence, *element.FragmentSequence, *element.OtherByteFragment, *element.OtherWordFragment:
+		return fmt.Errorf("container element %s must be written through Dataset Walk", elem.Tag())
 	}
 
 	// Write tag
@@ -816,180 +795,22 @@ func (w *Writer) writeLength(v *vr.VR, length uint32) error {
 
 // writeSequence writes a sequence element (VR=SQ).
 func (w *Writer) writeSequence(seq *dataset.Sequence) error {
-	// Write the sequence tag first
-	if err := w.writeTag(seq.Tag()); err != nil {
-		return fmt.Errorf("failed to write sequence tag %s: %w", seq.Tag(), err)
+	if seq == nil {
+		return fmt.Errorf("cannot write nil sequence")
 	}
-
-	// Write VR (if explicit)
-	if w.isExplicitVR {
-		if err := w.writeVR(vr.SQ); err != nil {
-			return fmt.Errorf("failed to write SQ VR: %w", err)
-		}
-
-		// Write reserved bytes for 32-bit length
-		reserved := uint16(0)
-		if err := binary.Write(w.writer, w.byteOrder, reserved); err != nil {
-			return err
-		}
-	}
-
-	// Choose between explicit and undefined length
-	if w.explicitLengthSequences {
-		// Write sequence with explicit length
-		// Need to write items to a buffer first to calculate length
-		itemsBuf := buffer.GetBytesBuffer()
-		defer buffer.PutBytesBuffer(itemsBuf)
-
-		itemsWriter := &Writer{
-			byteOrder:                   w.byteOrder,
-			isExplicitVR:                w.isExplicitVR,
-			explicitLengthSequences:     w.explicitLengthSequences,
-			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
-			keepGroupLengths:            w.keepGroupLengths,
-			largeObjectSize:             w.largeObjectSize,
-			sequenceItemObserver:        w.sequenceItemObserver,
-			baseOffset:                  w.currentOffset() + 4,
-		}
-		itemsWriter.setOutput(itemsBuf)
-
-		for i := 0; i < seq.Count(); i++ {
-			item := seq.GetItem(i)
-			if err := itemsWriter.writeItem(seq.Tag(), item); err != nil {
-				return fmt.Errorf("failed to write item %d: %w", i, err)
-			}
-		}
-
-		// Write the explicit length
-		seqLength := uint32(itemsBuf.Len()) // #nosec G115 -- DICOM sequence length within uint32 range
-		if err := binary.Write(w.writer, w.byteOrder, seqLength); err != nil {
-			return err
-		}
-
-		// Write the items data
-		if _, err := w.writer.Write(itemsBuf.Bytes()); err != nil {
-			return err
-		}
-	} else {
-		// Write undefined length
-		undefinedLength := uint32(0xFFFFFFFF)
-		if err := binary.Write(w.writer, w.byteOrder, undefinedLength); err != nil {
-			return err
-		}
-
-		// Write items
-		for i := 0; i < seq.Count(); i++ {
-			item := seq.GetItem(i)
-			if err := w.writeItem(seq.Tag(), item); err != nil {
-				return fmt.Errorf("failed to write item %d: %w", i, err)
-			}
-		}
-
-		// Write Sequence Delimitation Item (FFFE,E0DD)
-		delimTag := tag.New(0xFFFE, 0xE0DD)
-		if err := w.writeTag(delimTag); err != nil {
-			return err
-		}
-		if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// writeItem writes a single item within a sequence.
-func (w *Writer) writeItem(sequenceTag *tag.Tag, item *dataset.Dataset) error {
-	if err := w.observeSequenceItem(sequenceTag, item); err != nil {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	if err := ds.Add(seq); err != nil {
 		return err
 	}
-
-	// Write Item tag (FFFE,E000)
-	itemTag := tag.New(0xFFFE, 0xE000)
-	if err := w.writeTag(itemTag); err != nil {
-		return err
-	}
-
-	// Choose between explicit and undefined length
-	if w.explicitLengthSequenceItems {
-		// Write item with explicit length
-		// Need to write elements to a buffer first to calculate length
-		elementsBuf := buffer.GetBytesBuffer()
-		defer buffer.PutBytesBuffer(elementsBuf)
-
-		elementsWriter := &Writer{
-			byteOrder:                   w.byteOrder,
-			isExplicitVR:                w.isExplicitVR,
-			explicitLengthSequences:     w.explicitLengthSequences,
-			explicitLengthSequenceItems: w.explicitLengthSequenceItems,
-			keepGroupLengths:            w.keepGroupLengths,
-			largeObjectSize:             w.largeObjectSize,
-			sequenceItemObserver:        w.sequenceItemObserver,
-			baseOffset:                  w.currentOffset() + 4,
-		}
-		elementsWriter.setOutput(elementsBuf)
-
-		// Write all elements in the item
-		elements := item.Elements()
-		for _, elem := range elements {
-			if err := elementsWriter.writeElement(elem); err != nil {
-				return err
-			}
-		}
-
-		// Write the explicit length
-		itemLength := uint32(elementsBuf.Len()) // #nosec G115 -- DICOM item length within uint32 range
-		if err := binary.Write(w.writer, w.byteOrder, itemLength); err != nil {
-			return err
-		}
-
-		// Write the elements data
-		if _, err := w.writer.Write(elementsBuf.Bytes()); err != nil {
-			return err
-		}
-	} else {
-		// Write undefined length for item
-		undefinedLength := uint32(0xFFFFFFFF)
-		if err := binary.Write(w.writer, w.byteOrder, undefinedLength); err != nil {
-			return err
-		}
-
-		// Write all elements in the item
-		elements := item.Elements()
-		for _, elem := range elements {
-			if err := w.writeElement(elem); err != nil {
-				return err
-			}
-		}
-
-		// Write Item Delimitation Item (FFFE,E00D)
-		delimTag := tag.New(0xFFFE, 0xE00D)
-		if err := w.writeTag(delimTag); err != nil {
-			return err
-		}
-		if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (w *Writer) setOutput(output io.Writer) {
-	if w.sequenceItemObserver == nil {
-		w.writer = output
-		return
-	}
-	positioned := &positionWriter{writer: output}
-	w.writer = positioned
-	w.positionWriter = positioned
+	return w.writeDataset(ds)
 }
 
 func (w *Writer) currentOffset() uint64 {
 	if w.positionWriter == nil {
-		return w.baseOffset
+		return 0
 	}
-	return w.baseOffset + w.positionWriter.offset
+	return w.positionWriter.offset
 }
 
 func (w *Writer) observeSequenceItem(sequenceTag *tag.Tag, item *dataset.Dataset) error {
@@ -1016,115 +837,13 @@ func (w *Writer) observeSequenceItem(sequenceTag *tag.Tag, item *dataset.Dataset
 // - Items (FFFE,E000): Fragments
 // - Sequence Delimitation Item (FFFE,E0DD)
 func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
-	// Write tag
-	if err := w.writeTag(fs.Tag()); err != nil {
-		return fmt.Errorf("failed to write fragment sequence tag: %w", err)
+	if fs == nil {
+		return fmt.Errorf("cannot write nil fragment sequence")
 	}
-
-	// Write VR (if Explicit VR)
-	if w.isExplicitVR {
-		if err := w.writeVR(fs.ValueRepresentation()); err != nil {
-			return fmt.Errorf("failed to write fragment sequence VR: %w", err)
-		}
-
-		// For OB/OW with undefined length, write reserved bytes
-		reserved := make([]byte, 2)
-		if _, err := w.writer.Write(reserved); err != nil {
-			return fmt.Errorf("failed to write reserved bytes: %w", err)
-		}
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	if err := ds.Add(fs); err != nil {
+		return err
 	}
-
-	// Write undefined length (0xFFFFFFFF)
-	if err := binary.Write(w.writer, w.byteOrder, uint32(0xFFFFFFFF)); err != nil {
-		return fmt.Errorf("failed to write undefined length: %w", err)
-	}
-
-	fragCount := fs.FragmentCount()
-
-	// Build Basic Offset Table.
-	// Priority:
-	//   1) Use caller-supplied offset table if present (preserve as-is).
-	//   2) If no offsets provided and there is exactly one fragment, emit a single 0 offset (per DICOM recommendation).
-	//   3) If multiple fragments and no offsets provided, write an empty offset table (safer than per-fragment offsets).
-	offsets := fs.OffsetTable()
-	if len(offsets) == 0 && fragCount == 1 {
-		offsets = []uint32{0}
-	}
-
-	// Write Item for Offset Table (FFFE,E000)
-	itemTag := tag.New(0xFFFE, 0xE000)
-	if err := w.writeTag(itemTag); err != nil {
-		return fmt.Errorf("failed to write offset table item tag: %w", err)
-	}
-
-	// Write offset table
-	offsetCount := len(offsets)
-	// Each offset is 4 bytes; verify the multiplication does not overflow uint32.
-	if offsetCount > int(math.MaxUint32/4) {
-		return fmt.Errorf("offset table too large: %d entries", offsetCount)
-	}
-	offsetTableLength := uint32(offsetCount) * 4
-	if err := binary.Write(w.writer, w.byteOrder, offsetTableLength); err != nil {
-		return fmt.Errorf("failed to write offset table length: %w", err)
-	}
-
-	// Write offset values
-	for _, offset := range offsets {
-		if err := binary.Write(w.writer, w.byteOrder, offset); err != nil {
-			return fmt.Errorf("failed to write offset value: %w", err)
-		}
-	}
-
-	// Write fragments
-	padByte := []byte{0}
-	for i := 0; i < fragCount; i++ {
-		frag, err := fs.GetFragment(i)
-		if err != nil {
-			return fmt.Errorf("failed to get fragment %d: %w", i, err)
-		}
-		fragLen := frag.Size()
-		paddedLen := fragLen
-		needsPadding := fragLen%2 != 0
-		if needsPadding {
-			if fragLen == math.MaxUint32 {
-				return fmt.Errorf("fragment %d is too large to pad", i)
-			}
-			paddedLen++
-		}
-
-		// Write Item tag (FFFE,E000)
-		if err := w.writeTag(itemTag); err != nil {
-			return fmt.Errorf("failed to write fragment item tag: %w", err)
-		}
-
-		// Write fragment length
-		if err := binary.Write(w.writer, w.byteOrder, paddedLen); err != nil {
-			return fmt.Errorf("failed to write fragment length: %w", err)
-		}
-
-		// Write fragment data
-		written, err := frag.WriteTo(w.writer)
-		if err != nil {
-			return fmt.Errorf("failed to write fragment data: %w", err)
-		}
-		if written != int64(fragLen) {
-			return fmt.Errorf("short write for fragment %d: wrote %d bytes, expected %d", i, written, fragLen)
-		}
-		if needsPadding {
-			if err := writeAll(w.writer, padByte); err != nil {
-				return fmt.Errorf("failed to write fragment padding: %w", err)
-			}
-		}
-	}
-
-	// Write Sequence Delimitation Item (FFFE,E0DD)
-	delimTag := tag.New(0xFFFE, 0xE0DD)
-	if err := w.writeTag(delimTag); err != nil {
-		return fmt.Errorf("failed to write sequence delimitation tag: %w", err)
-	}
-	if err := binary.Write(w.writer, w.byteOrder, uint32(0)); err != nil {
-		return fmt.Errorf("failed to write sequence delimitation length: %w", err)
-	}
-
-	return nil
+	return w.writeDataset(ds)
 }

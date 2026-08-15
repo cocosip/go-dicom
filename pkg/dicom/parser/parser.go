@@ -680,7 +680,7 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 		if err != nil {
 			return nil, err
 		}
-		if t.Group() == 0 && t.Element() == 0 {
+		if t.Group() == 0 && t.Element() == 0 && !p.isRawImplicitCommandDataset() {
 			if err := p.consumeZeroTrailingPadding(); err != nil {
 				return nil, err
 			}
@@ -707,6 +707,12 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	}
 
 	return ds, nil
+}
+
+func (p *parseContext) isRawImplicitCommandDataset() bool {
+	return p.detectedFormat == FormatDICOM3NoFileMetaInfo &&
+		p.assumedTransferSyntax != nil &&
+		p.assumedTransferSyntax.Equals(transfer.ImplicitVRLittleEndian)
 }
 
 // consumeZeroTrailingPadding accepts non-conformant zero padding after the dataset.

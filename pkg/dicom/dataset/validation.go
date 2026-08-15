@@ -4,12 +4,11 @@
 package dataset
 
 import (
+	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
@@ -25,13 +24,6 @@ const (
 	ValidationVM ValidationKind = "vm"
 )
 
-// ValidationPathSegment identifies an element or a Sequence item in a nested
-// Dataset path. ItemIndex is set only for Sequence item segments.
-type ValidationPathSegment struct {
-	Tag       *tag.Tag
-	ItemIndex *int
-}
-
 // ValidationError reports a Dataset validation failure and retains its cause.
 type ValidationError struct {
 	Kind  ValidationKind
@@ -43,7 +35,7 @@ func (e *ValidationError) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
-	path := formatValidationPath(e.Path)
+	path := FormatPath(e.Path)
 	if e.Cause == nil {
 		return fmt.Sprintf("DICOM %s validation failed at %s", e.Kind, path)
 	}
@@ -62,7 +54,27 @@ func (e *ValidationError) Unwrap() error {
 // operation always validates, regardless of the Dataset automatic-validation
 // setting.
 func (ds *Dataset) Validate() error {
-	return validateDataset(ds, nil)
+	err := Walk(ds, func(event WalkEvent) (WalkAction, error) {
+		switch event.Kind {
+		case WalkElement, WalkFragmentBegin:
+			if err := validateElementAtPath(event.Element, event.Path); err != nil {
+				return WalkContinue, err
+			}
+		}
+		return WalkContinue, nil
+	})
+	if err == nil {
+		return nil
+	}
+	var validationErr *ValidationError
+	if errors.As(err, &validationErr) {
+		return validationErr
+	}
+	var walkErr *WalkError
+	if errors.As(err, &walkErr) {
+		return validationError(ValidationStructural, walkErr.Path, walkErr.Cause)
+	}
+	return validationError(ValidationStructural, nil, err)
 }
 
 func validateDataset(ds *Dataset, path []ValidationPathSegment) error {
@@ -89,7 +101,11 @@ func validateElement(elem element.Element, path []ValidationPathSegment) error {
 		return validateSequence(sequence, path)
 	}
 
-	elementPath := appendValidationPath(path, ValidationPathSegment{Tag: t})
+	elementPath := appendPath(path, PathSegment{Tag: t})
+	return validateElementAtPath(elem, elementPath)
+}
+
+func validateElementAtPath(elem element.Element, elementPath Path) error {
 	valueRepresentation := elem.ValueRepresentation()
 	if valueRepresentation == nil {
 		return validationError(ValidationStructural, elementPath, fmt.Errorf("element VR is nil"))
@@ -115,7 +131,7 @@ func validateSequence(sequence *Sequence, path []ValidationPathSegment) error {
 			continue
 		}
 		itemIndex := index
-		itemPath := appendValidationPath(path, ValidationPathSegment{
+		itemPath := appendPath(path, PathSegment{
 			Tag:       sequence.tag,
 			ItemIndex: &itemIndex,
 		})
@@ -153,31 +169,7 @@ func isVMExempt(valueRepresentation *vr.VR) bool {
 func validationError(kind ValidationKind, path []ValidationPathSegment, cause error) error {
 	return &ValidationError{
 		Kind:  kind,
-		Path:  append([]ValidationPathSegment(nil), path...),
+		Path:  ClonePath(path),
 		Cause: cause,
 	}
-}
-
-func appendValidationPath(path []ValidationPathSegment, segment ValidationPathSegment) []ValidationPathSegment {
-	result := make([]ValidationPathSegment, len(path), len(path)+1)
-	copy(result, path)
-	return append(result, segment)
-}
-
-func formatValidationPath(path []ValidationPathSegment) string {
-	if len(path) == 0 {
-		return "<dataset>"
-	}
-	parts := make([]string, 0, len(path))
-	for _, segment := range path {
-		part := "<unknown-tag>"
-		if segment.Tag != nil {
-			part = segment.Tag.String()
-		}
-		if segment.ItemIndex != nil {
-			part += fmt.Sprintf("[%d]", *segment.ItemIndex)
-		}
-		parts = append(parts, part)
-	}
-	return strings.Join(parts, "/")
 }

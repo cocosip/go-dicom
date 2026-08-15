@@ -48,7 +48,7 @@ func NewUnsignedShortWithEndian(t *tag.Tag, values []uint16, e endian.Endian) *U
 
 	buf := buffer.NewMemory(data)
 	return &UnsignedShort{
-		base: newBase(t, vr.US, buf),
+		base: newBaseWithByteOrder(t, vr.US, buf, e.ByteOrder()),
 	}
 }
 
@@ -121,7 +121,7 @@ func NewUnsignedLongWithEndian(t *tag.Tag, values []uint32, e endian.Endian) *Un
 
 	buf := buffer.NewMemory(data)
 	return &UnsignedLong{
-		base: newBase(t, vr.UL, buf),
+		base: newBaseWithByteOrder(t, vr.UL, buf, e.ByteOrder()),
 	}
 }
 
@@ -194,7 +194,7 @@ func NewSignedShortWithEndian(t *tag.Tag, values []int16, e endian.Endian) *Sign
 
 	buf := buffer.NewMemory(data)
 	return &SignedShort{
-		base: newBase(t, vr.SS, buf),
+		base: newBaseWithByteOrder(t, vr.SS, buf, e.ByteOrder()),
 	}
 }
 
@@ -267,7 +267,7 @@ func NewSignedLongWithEndian(t *tag.Tag, values []int32, e endian.Endian) *Signe
 
 	buf := buffer.NewMemory(data)
 	return &SignedLong{
-		base: newBase(t, vr.SL, buf),
+		base: newBaseWithByteOrder(t, vr.SL, buf, e.ByteOrder()),
 	}
 }
 
@@ -341,7 +341,7 @@ func NewFloatWithEndian(t *tag.Tag, values []float32, e endian.Endian) *Float {
 
 	buf := buffer.NewMemory(data)
 	return &Float{
-		base: newBase(t, vr.FL, buf),
+		base: newBaseWithByteOrder(t, vr.FL, buf, e.ByteOrder()),
 	}
 }
 
@@ -416,7 +416,7 @@ func NewDoubleWithEndian(t *tag.Tag, values []float64, e endian.Endian) *Double 
 
 	buf := buffer.NewMemory(data)
 	return &Double{
-		base: newBase(t, vr.FD, buf),
+		base: newBaseWithByteOrder(t, vr.FD, buf, e.ByteOrder()),
 	}
 }
 
@@ -490,7 +490,7 @@ func NewSignedVeryLongWithEndian(t *tag.Tag, values []int64, e endian.Endian) *S
 
 	buf := buffer.NewMemory(data)
 	return &SignedVeryLong{
-		base: newBase(t, vr.SV, buf),
+		base: newBaseWithByteOrder(t, vr.SV, buf, e.ByteOrder()),
 	}
 }
 
@@ -563,7 +563,7 @@ func NewUnsignedVeryLongWithEndian(t *tag.Tag, values []uint64, e endian.Endian)
 
 	buf := buffer.NewMemory(data)
 	return &UnsignedVeryLong{
-		base: newBase(t, vr.UV, buf),
+		base: newBaseWithByteOrder(t, vr.UV, buf, e.ByteOrder()),
 	}
 }
 

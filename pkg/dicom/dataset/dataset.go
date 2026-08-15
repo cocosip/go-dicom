@@ -298,6 +298,28 @@ func (ds *Dataset) DeepClone() *Dataset {
 	return clone
 }
 
+// ReplaceFrom atomically replaces this Dataset's elements and transfer syntax
+// with an independent deep copy of source. The receiver pointer and its
+// automatic-validation mode are preserved. Callers must provide the same
+// external synchronization required by other Dataset mutations.
+func (ds *Dataset) ReplaceFrom(source *Dataset) error {
+	if ds == nil {
+		return fmt.Errorf("cannot replace nil Dataset")
+	}
+	if source == nil {
+		return fmt.Errorf("cannot replace Dataset from nil source")
+	}
+
+	replacement := source.DeepClone()
+	skipValidation := ds.skipValidation
+	ds.items = replacement.items
+	ds.sortedTags = replacement.sortedTags
+	ds.cacheDirty = replacement.cacheDirty
+	ds.internalTransferSyntax = replacement.internalTransferSyntax
+	ds.skipValidation = skipValidation
+	return nil
+}
+
 // Merge merges elements from another dataset into this one.
 // If overwrite is true, existing elements are replaced.
 // If overwrite is false, only new elements are added.

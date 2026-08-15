@@ -46,7 +46,7 @@ func NewAttributeTagWithEndian(t *tag.Tag, values []*tag.Tag, e endian.Endian) *
 
 	buf := buffer.NewMemory(data)
 	return &AttributeTag{
-		base: newBase(t, vr.AT, buf),
+		base: newBaseWithByteOrder(t, vr.AT, buf, e.ByteOrder()),
 	}
 }
 

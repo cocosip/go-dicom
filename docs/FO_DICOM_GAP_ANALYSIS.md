@@ -58,7 +58,7 @@ Priority indicates implementation order, not estimated effort:
 | IMG-001 | P1 | Complete | Dataset-driven image rendering pipeline |
 | CORE-001 | P1 | Complete | Recursive Dataset and Sequence validation |
 | IMG-002 | P2 | Complete | Frame geometry, spatial transforms, and interpolation tools |
-| CORE-002 | P2 | Open | Dataset walker, match rules, and transform rules |
+| CORE-002 | P2 | Complete | Dataset walker, match rules, and transform rules |
 | DICT-001 | P2 | Complete | Runtime XML dictionary loading |
 | ANON-001 | P2 | Complete | Complete custom anonymization profile loading |
 | PRINT-001 | P2 | Partial | Dataset-backed DICOM Print Management models |
@@ -68,15 +68,15 @@ Priority indicates implementation order, not estimated effort:
 
 ## Implementation Progress
 
-Progress as of 2026-08-15:
+Progress as of 2026-08-16:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
-  SR-001, IMG-001, IMG-002, IMG-003, CORE-001, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, CORE-002, PRINT-001,
+  SR-001, IMG-001, IMG-002, IMG-003, CORE-001, CORE-002, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, PRINT-001,
   OBS-001, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** CORE-002, the first incomplete item in the planned development
+- **Next item:** PRINT-001, the first incomplete item in the planned development
   order below.
 
 ## Planned Development Order
@@ -94,7 +94,7 @@ recorded in this document.
 | 3 | SR-001 | P1 | Complete | Build typed SR trees and file workflows on the recursive validation behavior from CORE-001. |
 | 4 | IMG-001 | P1 | Complete | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
 | 5 | IMG-002 | P2 | Complete | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
-| 6 | CORE-002 | P2 | Open | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
+| 6 | CORE-002 | P2 | Complete | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
 | 7 | PRINT-001 | P2 | Partial | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
 | 8 | OBS-001 | P2 | Open | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
 | 9 | MED-002 | P3 | Open | Deliver the independent, bounded scanner workflow before the larger reconstruction item. |
@@ -586,11 +586,29 @@ Reference: [fo-dicom FrameGeometry](https://github.com/fo-dicom/fo-dicom/blob/7e
 
 ### CORE-002: Dataset Walker and Rules
 
-**Status:** `Open`  
+**Status:** `Complete`
 **Priority:** `P2`
 
-fo-dicom provides a recursive Dataset walker plus composable match and transform
-rules. go-dicom consumers must currently build this behavior ad hoc.
+Completed on 2026-08-16. `pkg/dicom/dataset` now provides a deterministic,
+iterative Dataset walker with shared immutable paths, balanced Sequence/item
+and fragment events, continue/skip/stop control, visitor error context, cycle
+detection, container snapshots, and defined empty-item handling. Dataset
+validation, writer length calculation and encoding, and `dicomdump` all consume
+the walker. The writer preserves explicit and undefined lengths, streaming,
+fragments, group handling, deflate, and Sequence item offsets without a second
+recursive traversal.
+
+`pkg/dicom/dataset/rules` provides composable presence/content/boolean match
+rules and ordered conditional transforms for remove, set, map, copy, regex,
+case, trim, pad, truncate, and UID operations. Default application returns an
+independent clone; in-place application commits only a successful transformed
+clone. Ordered `ChangeSet` snapshots and staged errors retain paths and causes.
+
+fo-dicom's read-time observer is a separate pipeline from its Dataset walker.
+Accordingly, go-dicom did not add a public Reader Walker: DIMSE Dataset decoding
+now reuses `pkg/dicom/parser` with the assumed transfer syntax and eager reads,
+covering Sequences, fragments, character sets, private creators, and big endian
+through one parser implementation.
 
 Reference: [fo-dicom DicomDatasetWalker](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/DicomDatasetWalker.cs)
 
@@ -602,11 +620,21 @@ Reference: [fo-dicom DicomDatasetWalker](https://github.com/fo-dicom/fo-dicom/bl
 - Supply common remove/set/map/copy/regex/case/UID transform rules.
 - Define whether transforms mutate or clone the source Dataset.
 
-**Suggested verification**
+**Verification performed**
 
-- Assert traversal order and paths for nested sequences and pixel fragments.
-- Cover early stop, visitor errors, and rule composition precedence.
-- Verify mutating and cloning transforms preserve all unrelated elements.
+- Focused Dataset, rules, element, writer, parser, network service, media, and
+  `dicomdump` tests passed, including examples.
+- The full `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/...
+  -count=1` suite and `CGO_ENABLED=0 go build ./...` passed.
+- `golangci-lint run --allow-parallel-runners` reported 0 issues using a
+  repository-local cache.
+- Walker, match, and transform benchmarks completed with allocation reports.
+- Local race tests were not run because Windows acceptance used
+  `CGO_ENABLED=0`.
+
+**Intentional boundary:** `SplitFormat`, implicit recursive rule application,
+a public Reader Walker/Observer, parser state-machine replacement, and DIMSE
+streaming redesign remain outside CORE-002.
 
 ### DICT-001: Runtime XML Dictionary Loading
 
@@ -929,8 +957,8 @@ single pull request.
 
 Scope: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, OBS-001.
 
-Current progress: IMG-002, DICT-001, and ANON-001 are complete. CORE-002,
-PRINT-001, and OBS-001 remain incomplete; therefore Phase 2 is not complete.
+Current progress: IMG-002, CORE-002, DICT-001, and ANON-001 are complete.
+PRINT-001 and OBS-001 remain incomplete; therefore Phase 2 is not complete.
 
 Phase acceptance:
 

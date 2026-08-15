@@ -54,7 +54,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | IMG-001 | P1 | Complete | Dataset 驱动的图像渲染管线 |
 | CORE-001 | P1 | Complete | Dataset 和 Sequence 递归验证 |
 | IMG-002 | P2 | Complete | 帧几何、空间变换和插值工具 |
-| CORE-002 | P2 | Open | Dataset 遍历器、匹配规则和转换规则 |
+| CORE-002 | P2 | Complete | Dataset 遍历器、匹配规则和转换规则 |
 | DICT-001 | P2 | Complete | 运行时 XML 字典加载 |
 | ANON-001 | P2 | Complete | 完整的自定义匿名化配置加载 |
 | PRINT-001 | P2 | Partial | 基于 Dataset 的 DICOM 打印管理模型 |
@@ -64,16 +64,16 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 ## 实施进度
 
-截至 2026-08-15：
+截至 2026-08-16：
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  SR-001、IMG-001、IMG-002、IMG-003、CORE-001、ANON-001 和 DICT-001。
+  SR-001、IMG-001、IMG-002、IMG-003、CORE-001、CORE-002、ANON-001 和 DICT-001。
 - **未完成：** DOC-001、
-  CORE-002、PRINT-001、OBS-001、
+  PRINT-001、OBS-001、
   MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **下一项：** CORE-002，即下方计划开发顺序中的第一个未完成条目。
+- **下一项：** PRINT-001，即下方计划开发顺序中的第一个未完成条目。
 
 ## 计划开发顺序
 
@@ -88,7 +88,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 3 | SR-001 | P1 | Complete | 基于 CORE-001 的递归验证行为完成强类型 SR 树和文件工作流。 |
 | 4 | IMG-001 | P1 | Complete | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
 | 5 | IMG-002 | P2 | Complete | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
-| 6 | CORE-002 | P2 | Open | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
+| 6 | CORE-002 | P2 | Complete | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
 | 7 | PRINT-001 | P2 | Partial | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
 | 8 | OBS-001 | P2 | Open | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
 | 9 | MED-002 | P3 | Open | 在更大型的重建工作之前，先交付独立且边界明确的扫描器工作流。 |
@@ -506,10 +506,25 @@ imaging 包同时提供已修正窗口累计行为的整数直方图。
 
 ### CORE-002: Dataset 遍历器与规则
 
-**状态：** `Open`  
+**状态：** `Complete`
 **优先级：** `P2`
 
-fo-dicom 提供递归 Dataset 遍历器，以及可组合的匹配规则和转换规则。go-dicom 使用方目前必须自行构建这些行为。
+已于 2026-08-16 完成。`pkg/dicom/dataset` 现提供确定性、迭代式 Dataset
+walker，包含共享不可变路径、成对的 Sequence/item 与 fragment 事件、
+continue/skip/stop 控制、visitor 错误上下文、循环检测、容器快照和明确的空 item
+处理。Dataset 验证、writer 长度计算与编码、`dicomdump` 均复用该 walker。
+writer 在不保留第二套递归遍历的前提下，继续支持显式/未定义长度、流式值、fragment、
+group 处理、deflate 和 Sequence item offset observer。
+
+`pkg/dicom/dataset/rules` 提供可组合的存在/内容/布尔匹配规则，以及按顺序执行的
+条件转换，包括 remove、set、map、copy、regex、大小写、trim、pad、truncate 和
+UID 操作。默认应用返回独立 clone；原地应用仅提交成功完成的转换 clone。按顺序记录的
+`ChangeSet` 快照与分阶段错误会保留路径和原始原因。
+
+fo-dicom 的读取期 observer 与 Dataset walker 是两条独立管线。因此 go-dicom 未增加
+公开 Reader Walker；DIMSE Dataset 解码改为使用 assumed transfer syntax 和 eager read
+复用 `pkg/dicom/parser`，由同一 parser 覆盖 Sequence、fragment、字符集、private creator
+和 big endian。
 
 参考：[fo-dicom DicomDatasetWalker](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/DicomDatasetWalker.cs)
 
@@ -521,11 +536,18 @@ fo-dicom 提供递归 Dataset 遍历器，以及可组合的匹配规则和转�
 - 提供常用的删除、设置、映射、复制、正则、大小写和 UID 转换规则。
 - 明确定义转换是修改源 Dataset 还是克隆 Dataset。
 
-**建议验证**
+**已执行验证**
 
-- 对嵌套 sequence 和像素 fragment 断言遍历顺序及路径。
-- 覆盖提前停止、访问器错误和规则组合优先级。
-- 验证修改型和克隆型转换都保留所有无关元素。
+- Dataset、rules、element、writer、parser、network service、media 和
+  `dicomdump` 聚焦测试及示例均通过。
+- 完整 `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/...
+  -count=1` 与 `CGO_ENABLED=0 go build ./...` 均通过。
+- 使用仓库本地缓存执行 `golangci-lint run --allow-parallel-runners`，报告 0 个问题。
+- Walker、match 和 transform benchmark 均完成并输出 allocation 数据。
+- Windows 本地验收使用 `CGO_ENABLED=0`，未运行 race 测试。
+
+**有意边界：** `SplitFormat`、隐式递归规则应用、公开 Reader Walker/Observer、
+parser 状态机替换和 DIMSE streaming 重构不属于 CORE-002。
 
 ### DICT-001: 运行时 XML 字典加载
 
@@ -772,7 +794,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：IMG-002、CORE-002、DICT-001、ANON-001、PRINT-001、OBS-001。
 
-当前进度：IMG-002、DICT-001 和 ANON-001 已完成；CORE-002、PRINT-001 和
+当前进度：IMG-002、CORE-002、DICT-001 和 ANON-001 已完成；PRINT-001 和
 OBS-001 尚未完成，因此 Phase 2 尚未完成。
 
 阶段验收：

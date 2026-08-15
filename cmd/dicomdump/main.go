@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -52,13 +53,19 @@ func main() {
 	// Dump file meta information
 	if result.FileMetaInformation != nil {
 		fmt.Println("# File Meta Information")
-		dumpDataset(result.FileMetaInformation.Dataset(), 0, *maxDepth, *showValues, *compact)
+		if err := dumpDataset(os.Stdout, result.FileMetaInformation.Dataset(), *maxDepth, *showValues, *compact); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to dump File Meta Information: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Println()
 	}
 
 	// Dump main dataset
 	fmt.Println("# Main Dataset")
-	dumpDataset(result.Dataset, 0, *maxDepth, *showValues, *compact)
+	if err := dumpDataset(os.Stdout, result.Dataset, *maxDepth, *showValues, *compact); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to dump Dataset: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func printUsage() {
@@ -78,59 +85,83 @@ func printUsage() {
 	fmt.Println("  dicomdump -depth 2 -compact image.dcm")
 }
 
-func dumpDataset(ds *dataset.Dataset, depth int, maxDepth int, showValues bool, compact bool) {
-	if maxDepth >= 0 && depth > maxDepth {
-		return
-	}
+func dumpDataset(output io.Writer, ds *dataset.Dataset, maxDepth int, showValues bool, compact bool) error {
+	return dataset.Walk(ds, func(event dataset.WalkEvent) (dataset.WalkAction, error) {
+		depth := walkDepth(event.Path)
+		switch event.Kind {
+		case dataset.WalkElement, dataset.WalkFragmentBegin:
+			if err := writeDumpElement(output, event.Element, depth, showValues, compact); err != nil {
+				return dataset.WalkContinue, err
+			}
 
-	indent := strings.Repeat("  ", depth)
+		case dataset.WalkSequenceBegin:
+			sequence := event.Element.(*dataset.Sequence)
+			if err := writeDumpSequence(output, sequence, depth, compact); err != nil {
+				return dataset.WalkContinue, err
+			}
+			if maxDepth >= 0 && depth >= maxDepth {
+				return dataset.WalkSkipChildren, nil
+			}
 
-	for _, elem := range ds.Elements() {
-		tag := elem.Tag()
-		vr := elem.ValueRepresentation()
-
-		// Print tag and VR
-		if compact {
-			fmt.Printf("%s%s %s ", indent, tag.String(), vr.Code())
-		} else {
-			fmt.Printf("%s%-20s %s  ", indent, tag.String(), vr.Code())
-		}
-
-		// Check if it's a sequence
-		if seq, ok := elem.(*dataset.Sequence); ok {
-			itemCount := seq.Count()
+		case dataset.WalkSequenceItemBegin:
+			itemIndex := event.Path[len(event.Path)-1].ItemIndex
+			if itemIndex == nil {
+				return dataset.WalkContinue, fmt.Errorf("sequence item path has no item index")
+			}
+			indent := strings.Repeat("  ", depth)
 			if compact {
-				fmt.Printf("(Sequence with %d item(s))\n", itemCount)
-			} else {
-				fmt.Printf("(Sequence with %d item(s))\n", itemCount)
+				_, err := fmt.Fprintf(output, "%sItem #%d:\n", indent, *itemIndex+1)
+				return dataset.WalkContinue, err
 			}
+			_, err := fmt.Fprintf(output, "%s--- Item #%d ---\n", indent, *itemIndex+1)
+			return dataset.WalkContinue, err
+		}
+		return dataset.WalkContinue, nil
+	})
+}
 
-			// Dump sequence items
-			if maxDepth < 0 || depth < maxDepth {
-				for i := 0; i < itemCount; i++ {
-					item := seq.GetItem(i)
-					if compact {
-						fmt.Printf("%s  Item #%d:\n", indent, i+1)
-					} else {
-						fmt.Printf("%s  --- Item #%d ---\n", indent, i+1)
-					}
-					dumpDataset(item, depth+1, maxDepth, showValues, compact)
-				}
-			}
-		} else {
-			// Print value
-			if showValues {
-				value := formatElementValue(elem, compact)
-				if compact {
-					fmt.Printf("%s\n", value)
-				} else {
-					fmt.Printf("%-40s\n", value)
-				}
-			} else {
-				fmt.Printf("\n")
-			}
+func walkDepth(path dataset.Path) int {
+	depth := 0
+	for _, segment := range path {
+		if segment.ItemIndex != nil {
+			depth++
 		}
 	}
+	return depth
+}
+
+func writeDumpSequence(output io.Writer, sequence *dataset.Sequence, depth int, compact bool) error {
+	indent := strings.Repeat("  ", depth)
+	if compact {
+		_, err := fmt.Fprintf(output, "%s%s %s (Sequence with %d item(s))\n",
+			indent, sequence.Tag(), sequence.ValueRepresentation().Code(), sequence.Count())
+		return err
+	}
+	_, err := fmt.Fprintf(output, "%s%-20s %s  (Sequence with %d item(s))\n",
+		indent, sequence.Tag(), sequence.ValueRepresentation().Code(), sequence.Count())
+	return err
+}
+
+func writeDumpElement(output io.Writer, elem element.Element, depth int, showValues bool, compact bool) error {
+	indent := strings.Repeat("  ", depth)
+	if compact {
+		if _, err := fmt.Fprintf(output, "%s%s %s ", indent, elem.Tag(), elem.ValueRepresentation().Code()); err != nil {
+			return err
+		}
+	} else if _, err := fmt.Fprintf(output, "%s%-20s %s  ", indent, elem.Tag(), elem.ValueRepresentation().Code()); err != nil {
+		return err
+	}
+	if !showValues {
+		_, err := fmt.Fprintln(output)
+		return err
+	}
+	value := formatElementValue(elem, compact)
+	if compact {
+		_, err := fmt.Fprintln(output, value)
+		return err
+	}
+	_, err := fmt.Fprintf(output, "%-40s\n", value)
+	return err
 }
 
 func formatElementValue(elem element.Element, compact bool) string {
@@ -153,15 +184,28 @@ func formatElementValue(elem element.Element, compact bool) string {
 }
 
 func tryFormatString(elem element.Element, compact bool) string {
-	if strElem, ok := elem.(interface{ GetValue() (string, error) }); ok {
-		if val, err := strElem.GetValue(); err == nil {
-			if compact && len(val) > 60 {
-				return val[:60] + "..."
-			}
-			return val
-		}
+	if !isTextVR(elem.ValueRepresentation().Code()) {
+		return ""
 	}
-	return ""
+	values, err := element.CanonicalStrings(elem)
+	if err != nil {
+		return ""
+	}
+	value := strings.Join(values, "\\")
+	if compact && len(value) > 60 {
+		return value[:60] + "..."
+	}
+	return value
+}
+
+func isTextVR(code string) bool {
+	switch code {
+	case "AE", "AS", "CS", "DA", "DS", "DT", "IS", "LO", "LT", "PN",
+		"SH", "ST", "TM", "UC", "UI", "UR", "UT":
+		return true
+	default:
+		return false
+	}
 }
 
 func tryFormatNumeric(elem element.Element, compact bool) string {
