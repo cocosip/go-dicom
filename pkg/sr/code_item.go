@@ -5,6 +5,8 @@ package sr
 
 import (
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -22,7 +24,8 @@ import (
 //
 // Reference: DICOM Part 3, Section 8.8
 type CodeItem struct {
-	dataset *dataset.Dataset
+	dataset  *dataset.Dataset
+	buildErr error
 }
 
 // NewCodeItem creates a new code item
@@ -33,22 +36,36 @@ func NewCodeItem(value, scheme, meaning string) *CodeItem {
 // NewCodeItemWithVersion creates a new code item with a specific version
 func NewCodeItemWithVersion(value, scheme, meaning, version string) *CodeItem {
 	ds := dataset.New()
+	item := &CodeItem{dataset: ds}
 
-	// Add code value (0008,0100) VR=SH
-	_ = ds.AddOrUpdate(element.NewString(tag.CodeValue, vr.SH, []string{value}))
+	lowerValue := strings.ToLower(value)
+	switch {
+	case strings.HasPrefix(lowerValue, "http") || strings.HasPrefix(lowerValue, "urn:"):
+		item.setBuildError("set URN Code Value", ds.AddOrUpdate(element.NewString(tag.URNCodeValue, vr.UR, []string{value})))
+	case utf8.RuneCountInString(value) > 16:
+		item.setBuildError("set Long Code Value", ds.AddOrUpdate(element.NewString(tag.LongCodeValue, vr.UC, []string{value})))
+	default:
+		item.setBuildError("set Code Value", ds.AddOrUpdate(element.NewString(tag.CodeValue, vr.SH, []string{value})))
+	}
 
-	// Add coding scheme designator (0008,0102) VR=SH
-	_ = ds.AddOrUpdate(element.NewString(tag.CodingSchemeDesignator, vr.SH, []string{scheme}))
+	if scheme != "" {
+		item.setBuildError("set Coding Scheme Designator", ds.AddOrUpdate(element.NewString(tag.CodingSchemeDesignator, vr.SH, []string{scheme})))
+	}
 
-	// Add code meaning (0008,0104) VR=LO
-	_ = ds.AddOrUpdate(element.NewString(tag.CodeMeaning, vr.LO, []string{meaning}))
+	item.setBuildError("set Code Meaning", ds.AddOrUpdate(element.NewString(tag.CodeMeaning, vr.LO, []string{meaning})))
 
 	// Add coding scheme version if provided (0008,0103) VR=SH
 	if version != "" {
-		_ = ds.AddOrUpdate(element.NewString(tag.CodingSchemeVersion, vr.SH, []string{version}))
+		item.setBuildError("set Coding Scheme Version", ds.AddOrUpdate(element.NewString(tag.CodingSchemeVersion, vr.SH, []string{version})))
 	}
 
-	return &CodeItem{dataset: ds}
+	return item
+}
+
+func (c *CodeItem) setBuildError(context string, err error) {
+	if c.buildErr == nil && err != nil {
+		c.buildErr = WrapError(context, err)
+	}
 }
 
 // NewCodeItemFromDataset creates a CodeItem from an existing dataset
@@ -78,8 +95,12 @@ func (c *CodeItem) Value() string {
 	if c == nil || c.dataset == nil {
 		return ""
 	}
-	val, _ := c.dataset.GetString(tag.CodeValue)
-	return val
+	for _, valueTag := range []*tag.Tag{tag.CodeValue, tag.LongCodeValue, tag.URNCodeValue} {
+		if value, ok := c.dataset.GetString(valueTag); ok {
+			return value
+		}
+	}
+	return ""
 }
 
 // Scheme returns the coding scheme designator
@@ -117,9 +138,8 @@ func (c *CodeItem) Dataset() *dataset.Dataset {
 	return c.dataset
 }
 
-// Equals checks if two code items are equal.
-// Two code items are equal if they have the same value and scheme.
-// The meaning and version do not affect equality per DICOM standard.
+// Equals checks if two code items have the same value, scheme, and scheme version.
+// Code meaning is descriptive and does not affect equality.
 func (c *CodeItem) Equals(other *CodeItem) bool {
 	if c == nil && other == nil {
 		return true
@@ -127,7 +147,7 @@ func (c *CodeItem) Equals(other *CodeItem) bool {
 	if c == nil || other == nil {
 		return false
 	}
-	return c.Value() == other.Value() && c.Scheme() == other.Scheme()
+	return c.Value() == other.Value() && c.Scheme() == other.Scheme() && c.Version() == other.Version()
 }
 
 // String returns a string representation of the code item

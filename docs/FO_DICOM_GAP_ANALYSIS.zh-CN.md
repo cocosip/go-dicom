@@ -50,7 +50,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | MED-001 | P1 | Complete | DICOMDIR 介质目录模型及读写工作流 |
 | NET-003 | P1 | Complete | 通过高层客户端执行高级关联协商 |
 | NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
-| SR-001 | P1 | Partial | 完整的结构化报告值类型和文件工作流 |
+| SR-001 | P1 | Complete | 完整的结构化报告值类型和文件工作流 |
 | IMG-001 | P1 | Partial | Dataset 驱动的图像渲染管线 |
 | CORE-001 | P1 | Complete | Dataset 和 Sequence 递归验证 |
 | IMG-002 | P2 | Open | 帧几何、空间变换和插值工具 |
@@ -67,13 +67,13 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 截至 2026-08-15：
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  CORE-001、ANON-001 和 DICT-001。
+  SR-001、CORE-001、ANON-001 和 DICT-001。
 - **未完成：** DOC-001、
-  SR-001、IMG-001、IMG-002、CORE-002、PRINT-001、OBS-001、
+  IMG-001、IMG-002、CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **下一项：** SR-001，即下方计划开发顺序中的第一个未完成条目。
+- **下一项：** IMG-001，即下方计划开发顺序中的第一个未完成条目。
 
 ## 计划开发顺序
 
@@ -85,7 +85,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | ---: | --- | --- | --- | --- |
 | 1 | NET-004 | P1 | Complete | 趁 NET-003 的 Association API 和测试上下文仍然清晰，补完整个协商能力族。 |
 | 2 | CORE-001 | P1 | Complete | 在完成嵌套领域工作流之前，先建立 Dataset 和 Sequence 的递归正确性保障。 |
-| 3 | SR-001 | P1 | Partial | 基于 CORE-001 的递归验证行为完成强类型 SR 树和文件工作流。 |
+| 3 | SR-001 | P1 | Complete | 基于 CORE-001 的递归验证行为完成强类型 SR 树和文件工作流。 |
 | 4 | IMG-001 | P1 | Partial | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
 | 5 | IMG-002 | P2 | Open | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
 | 6 | CORE-002 | P2 | Open | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
@@ -354,10 +354,14 @@ Common Extended Negotiation 仍然只用于请求：A-ASSOCIATE-AC 既不发送�
 
 ### SR-001: 完整结构化报告工作流
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P1`
 
-标准 SR 类型均已有值类型常量，但构造和类型化读取主要集中在 TEXT、CODE、NUM 和 CONTAINER。PNAME、DATE、TIME、DATETIME、UIDREF、COMPOSITE、IMAGE、WAVEFORM、SCOORD 和 TCOORD 缺少完整的类型化 API。SR 专用的 Open 和 Save 方法仍是被注释的占位实现。
+SR 包现在为全部已声明值类型提供类型化构造和读取，包括 SCOORD/TCOORD 基数约束、
+引用 SOP 校验、长代码值与 URN 代码值、解析 by-reference 内容，以及带完整路径的递归
+语义校验。Open、Read、Write 和 Save 会保留解析得到的 File Meta Information 与传输
+语法，拒绝 partial 或非法报告，并强制使用显式 Sequence 和 Item 长度，与 fo-dicom 的
+SR 输出行为保持一致。
 
 参考：[fo-dicom StructuredReport](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/StructuredReport)
 
@@ -368,11 +372,16 @@ Common Extended Negotiation 仍然只用于请求：A-ASSOCIATE-AC 既不发送�
 - 文件和流的打开/保存工作流保持 SR 内容树。
 - 校验根关系规则和子关系规则。
 
-**建议验证**
+**已执行验证**
 
-- 对每个 Value Type 执行表驱动往返测试。
-- 测试嵌套内容树和非法关系。
-- 使用 fo-dicom 交叉读取具有代表性的 SR 文档。
+- 构造器/getter 往返覆盖全部已声明 Value Type、代码值标签选择、坐标选择/基数和切片隔离。
+- 递归测试覆盖根与子关系、冲突值标签、损坏 sequence、by-reference 条目、引用 UID 和嵌套路径。
+- `test-data/test_SR.dcm` 与 fo-dicom fixture 字节完全一致，并完成 UIDREF、SCOORD、
+  TCOORD、by-reference 和深层嵌套内容的往返，同时保留 File Meta Information 与传输语法。
+- SR/parser/writer 聚焦测试、仓库完整测试、`go build ./...` 和
+  `golangci-lint run` 均通过。
+- Windows race runtime 对受影响包以及 `go test -race fmt -run '^$'` 都以
+  `0xc0000139` 退出；race 仍需由 CI 验证，不能记为本地通过。
 
 ### IMG-001: Dataset 驱动的渲染
 
@@ -690,7 +699,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：MED-001、NET-003、NET-004、SR-001、IMG-001、CORE-001。
 
-当前进度：MED-001、NET-003、NET-004 和 CORE-001 已完成；SR-001 和 IMG-001
+当前进度：MED-001、NET-003、NET-004、SR-001 和 CORE-001 已完成；IMG-001
 仍未完成，因此 Phase 1 尚未完成。
 
 阶段验收：

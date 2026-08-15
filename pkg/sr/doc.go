@@ -22,9 +22,12 @@
 //   - CONTAINER: Grouping of other content items
 //   - IMAGE: Reference to an image SOP instance
 //   - COMPOSITE: Reference to a composite SOP instance
+//   - WAVEFORM: Reference to a waveform SOP instance
 //   - PNAME: Person name
 //   - DATE, TIME, DATETIME: Temporal values
 //   - UIDREF: UID reference
+//   - SCOORD: Two-dimensional spatial coordinates
+//   - TCOORD: Temporal coordinates
 //
 // **Relationship Types**:
 //   - CONTAINS: Parent-child containment
@@ -39,17 +42,24 @@
 //
 //	// Create a new structured report
 //	rootCode := sr.NewCodeItem("113704", "DCM", "SR Document")
-//	report := sr.NewStructuredReport(rootCode)
+//	report, err := sr.NewStructuredReport(rootCode)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
 //
 //	// Add a text finding
 //	findingCode := sr.NewCodeItem("121071", "DCM", "Finding")
-//	report.Add(findingCode, sr.RelationshipContains, sr.ValueTypeText, "No abnormalities detected")
+//	if err := report.AddText(findingCode, sr.RelationshipContains, "No abnormalities detected"); err != nil {
+//		log.Fatal(err)
+//	}
 //
 //	// Add a numeric measurement
 //	measureCode := sr.NewCodeItem("33728-7", "LN", "Size")
 //	units := sr.NewCodeItem("mm", "UCUM", "millimeter")
 //	value := sr.NewMeasuredValue(25.5, units)
-//	report.Add(measureCode, sr.RelationshipContains, value)
+//	if err := report.AddNumeric(measureCode, sr.RelationshipContains, value); err != nil {
+//		log.Fatal(err)
+//	}
 //
 //	// Save to file
 //	err := report.Save("report.dcm")

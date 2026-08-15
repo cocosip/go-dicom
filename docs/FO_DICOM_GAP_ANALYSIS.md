@@ -54,7 +54,7 @@ Priority indicates implementation order, not estimated effort:
 | MED-001 | P1 | Complete | DICOMDIR media directory model and read/write workflow |
 | NET-003 | P1 | Complete | Advanced association negotiation through the high-level client |
 | NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
-| SR-001 | P1 | Partial | Complete Structured Report value types and file workflow |
+| SR-001 | P1 | Complete | Complete Structured Report value types and file workflow |
 | IMG-001 | P1 | Partial | Dataset-driven image rendering pipeline |
 | CORE-001 | P1 | Complete | Recursive Dataset and Sequence validation |
 | IMG-002 | P2 | Open | Frame geometry, spatial transforms, and interpolation tools |
@@ -71,12 +71,12 @@ Priority indicates implementation order, not estimated effort:
 Progress as of 2026-08-15:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
-  CORE-001, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, SR-001, IMG-001, IMG-002, CORE-002, PRINT-001,
+  SR-001, CORE-001, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, IMG-001, IMG-002, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** SR-001, the first incomplete item in the planned development
+- **Next item:** IMG-001, the first incomplete item in the planned development
   order below.
 
 ## Planned Development Order
@@ -91,7 +91,7 @@ recorded in this document.
 | ---: | --- | --- | --- | --- |
 | 1 | NET-004 | P1 | Complete | Complete the NET-003 negotiation family while its association APIs and tests are current. |
 | 2 | CORE-001 | P1 | Complete | Establish recursive Dataset and Sequence correctness before completing nested domain workflows. |
-| 3 | SR-001 | P1 | Partial | Build typed SR trees and file workflows on the recursive validation behavior from CORE-001. |
+| 3 | SR-001 | P1 | Complete | Build typed SR trees and file workflows on the recursive validation behavior from CORE-001. |
 | 4 | IMG-001 | P1 | Partial | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
 | 5 | IMG-002 | P2 | Open | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
 | 6 | CORE-002 | P2 | Open | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
@@ -408,13 +408,15 @@ Reference: [fo-dicom DicomExtendedNegotiation](https://github.com/fo-dicom/fo-di
 
 ### SR-001: Complete Structured Report Workflow
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P1`
 
-Value type constants exist for the standard SR types, but construction and
-typed reading focus on TEXT, CODE, NUM, and CONTAINER. PNAME, DATE, TIME,
-DATETIME, UIDREF, COMPOSITE, IMAGE, WAVEFORM, SCOORD, and TCOORD lack complete
-typed APIs. SR-specific Open and Save methods remain commented placeholders.
+The SR package now provides typed construction and reading for all declared
+value types, including SCOORD and TCOORD cardinality checks, referenced SOP
+validation, long and URN code values, parsed by-reference content, and recursive
+path-aware semantic validation. Open, Read, Write, and Save preserve parsed File
+Meta Information and transfer syntax, reject partial or invalid reports, and
+force explicit Sequence and Item lengths to match fo-dicom SR output behavior.
 
 Reference: [fo-dicom StructuredReport](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/StructuredReport)
 
@@ -426,11 +428,20 @@ Reference: [fo-dicom StructuredReport](https://github.com/fo-dicom/fo-dicom/tree
 - File and stream open/save workflows preserve SR content trees.
 - Root relationship rules and child relationship rules are validated.
 
-**Suggested verification**
+**Verification performed**
 
-- Table-driven round trips for every Value Type.
-- Nested content tree and invalid relationship tests.
-- Cross-read representative SR documents with fo-dicom.
+- Constructor/getter round trips cover every declared Value Type, code-value
+  encoding choice, coordinate choice/cardinality, and slice isolation.
+- Recursive tests cover root and child relationships, conflicting value tags,
+  malformed sequences, by-reference items, referenced UIDs, and nested paths.
+- `test-data/test_SR.dcm` is byte-identical to fo-dicom's fixture and round-trips
+  UIDREF, SCOORD, TCOORD, by-reference, and deeply nested content while
+  preserving File Meta Information and transfer syntax.
+- Focused SR/parser/writer tests, the full repository test suite, `go build
+  ./...`, and `golangci-lint run` pass.
+- The Windows race runtime exits with status `0xc0000139` for both the affected
+  packages and `go test -race fmt -run '^$'`; race remains a CI verification
+  requirement rather than a local pass.
 
 ### IMG-001: Dataset-Driven Rendering
 
@@ -813,8 +824,8 @@ Phase acceptance:
 
 Scope: MED-001, NET-003, NET-004, SR-001, IMG-001, CORE-001.
 
-Current progress: MED-001, NET-003, NET-004, and CORE-001 are complete. SR-001
-and IMG-001 remain incomplete; therefore Phase 1 is not complete.
+Current progress: MED-001, NET-003, NET-004, SR-001, and CORE-001 are complete.
+IMG-001 remains incomplete; therefore Phase 1 is not complete.
 
 Phase acceptance:
 

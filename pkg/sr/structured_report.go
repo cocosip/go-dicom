@@ -4,10 +4,15 @@
 package sr
 
 import (
+	"io"
+
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
 
 // StructuredReport represents a DICOM Structured Report.
@@ -18,6 +23,8 @@ import (
 // Reference: DICOM Part 3, Annex A.35
 type StructuredReport struct {
 	*ContentItem
+	fileMeta       *dataset.Dataset
+	transferSyntax *transfer.Syntax
 }
 
 // NewStructuredReport creates a new structured report with the given root code
@@ -69,16 +76,18 @@ func (sr *StructuredReport) Add(item *ContentItem) error {
 		return NewError("cannot add nil item")
 	}
 
-	// Get existing content sequence or create new one
+	// Get the existing content sequence or create a new one. A present but
+	// malformed sequence must not be silently replaced.
+	if !sr.dataset.Contains(tag.ContentSequence) {
+		// Create new sequence with this item
+		seq := dataset.NewSequenceWithItems(tag.ContentSequence, []*dataset.Dataset{item.Dataset()})
+		return sr.dataset.AddOrUpdate(seq)
+	}
 	seq, err := sr.dataset.GetSequence(tag.ContentSequence)
 	if err != nil {
-		// Create new sequence with this item
-		seq = dataset.NewSequenceWithItems(tag.ContentSequence, []*dataset.Dataset{item.Dataset()})
-		_ = sr.dataset.AddOrUpdate(seq)
-	} else {
-		// Append to existing sequence
-		seq.AddItem(item.Dataset())
+		return WrapError("get Content Sequence", err)
 	}
+	seq.AddItem(item.Dataset())
 
 	return nil
 }
@@ -119,19 +128,83 @@ func (sr *StructuredReport) AddContainer(code *CodeItem, relationship Relationsh
 	return sr.Add(item)
 }
 
-// TODO: The following methods require full dicom.File implementation
+// Open reads and validates a structured report from a file.
+func Open(path string, options ...parser.Option) (*StructuredReport, error) {
+	result, err := parser.ParseFile(path, options...)
+	if err != nil {
+		return nil, WrapError("open structured report", err)
+	}
+	return structuredReportFromParseResult(result)
+}
 
-// Open opens a structured report from a file
-// func Open(filename string) (*StructuredReport, error) {
-// 	file, err := dicom.ReadFile(filename)
-// 	if err != nil {
-// 		return nil, WrapError("failed to read DICOM file", err)
-// 	}
-// 	return NewStructuredReportFromDataset(file.Dataset()), nil
-// }
+// Read parses and validates a structured report from a stream.
+func Read(input io.Reader, options ...parser.Option) (*StructuredReport, error) {
+	if input == nil {
+		return nil, NewError("structured report reader is nil")
+	}
+	result, err := parser.Parse(input, options...)
+	if err != nil {
+		return nil, WrapError("read structured report", err)
+	}
+	return structuredReportFromParseResult(result)
+}
 
-// Save saves the structured report to a file
-// func (sr *StructuredReport) Save(filename string) error {
-// 	file := dicom.NewFile(sr.dataset)
-// 	return file.Save(filename)
-// }
+func structuredReportFromParseResult(result *parser.ParseResult) (*StructuredReport, error) {
+	if result == nil || result.Dataset == nil {
+		return nil, NewError("parsed structured report dataset is nil")
+	}
+	if result.IsPartial {
+		return nil, NewError("partial structured report parse is not accepted")
+	}
+	report := NewStructuredReportFromDataset(result.Dataset)
+	if result.FileMetaInformation != nil {
+		report.fileMeta = result.FileMetaInformation.Dataset()
+	}
+	report.transferSyntax = result.TransferSyntax
+	if err := report.Validate(); err != nil {
+		return nil, WrapError("validate structured report", err)
+	}
+	return report, nil
+}
+
+// Write validates and writes the structured report to a stream.
+// Sequences and sequence items always use explicit lengths for fo-dicom parity.
+func (sr *StructuredReport) Write(output io.Writer, options ...writer.WriteOption) error {
+	if output == nil {
+		return NewError("structured report writer is nil")
+	}
+	if err := sr.Validate(); err != nil {
+		return WrapError("validate structured report", err)
+	}
+	if err := writer.Write(output, sr.Dataset(), sr.writeOptions(options)...); err != nil {
+		return WrapError("write structured report", err)
+	}
+	return nil
+}
+
+// Save validates and writes the structured report to a file.
+func (sr *StructuredReport) Save(path string, options ...writer.WriteOption) error {
+	if err := sr.Validate(); err != nil {
+		return WrapError("validate structured report", err)
+	}
+	if err := writer.WriteFile(path, sr.Dataset(), sr.writeOptions(options)...); err != nil {
+		return WrapError("save structured report", err)
+	}
+	return nil
+}
+
+func (sr *StructuredReport) writeOptions(options []writer.WriteOption) []writer.WriteOption {
+	result := make([]writer.WriteOption, 0, len(options)+4)
+	if sr.fileMeta != nil {
+		result = append(result, writer.WithFileMetaInfo(sr.fileMeta))
+	}
+	if sr.transferSyntax != nil {
+		result = append(result, writer.WithTransferSyntax(sr.transferSyntax))
+	}
+	result = append(result, options...)
+	result = append(result,
+		writer.WithExplicitLengthSequences(true),
+		writer.WithExplicitLengthSequenceItems(),
+	)
+	return result
+}

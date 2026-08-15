@@ -113,13 +113,15 @@ Known parity gaps and the staged plan for addressing them are tracked in
   - [x] Rendering pipeline with configurable options
 
 - [x] **Structured Reports**
-  - [x] SR content items (TEXT, NUM, CODE, CONTAINER, IMAGE, COMPOSITE, etc.)
+  - [x] Typed content items (TEXT, NUM, CODE, CONTAINER, PNAME, DATE, TIME, DATETIME, UIDREF)
+  - [x] IMAGE, COMPOSITE, WAVEFORM, SCOORD, and TCOORD values
   - [x] Hierarchical structure with parent-child relationships
-  - [x] Code items with coding scheme designators
+  - [x] Code Value, Long Code Value, and URN Code Value support
   - [x] Measured values with units
   - [x] Referenced SOP instances
   - [x] Relationship types (CONTAINS, HAS OBS CONTEXT, INFERRED FROM, etc.)
-  - [x] Content sequence parsing and creation
+  - [x] Recursive semantic validation with nested content paths
+  - [x] Validated file and stream I/O with preserved File Meta and transfer syntax
 
 - [x] **DICOM Networking**
   - [x] PDU (Protocol Data Unit) encoding/decoding (7 PDU types)
@@ -968,73 +970,28 @@ package main
 import (
     "fmt"
     "log"
-    "os"
 
-    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
-    "github.com/cocosip/go-dicom/pkg/dicom/parser"
-    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/sr"
 )
 
 func main() {
-    file, err := os.Open("sr_report.dcm")
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer file.Close()
-
-    result, err := parser.Parse(file)
+    report, err := sr.Open("sr_report.dcm")
     if err != nil {
         log.Fatal(err)
     }
 
-    // Verify it's a Structured Report
-    sopClassUID, _ := result.Dataset.GetString(tag.SOPClassUID)
-    modality, _ := result.Dataset.GetString(tag.Modality)
-
-    fmt.Printf("SOP Class: %s\n", sopClassUID)
-    fmt.Printf("Modality: %s\n", modality)
-
-    // Get SR document info
-    verificationFlag, _ := result.Dataset.GetString(tag.VerificationFlag)
-    completionFlag, _ := result.Dataset.GetString(tag.CompletionFlag)
-
-    fmt.Printf("Verification: %s\n", verificationFlag)
-    fmt.Printf("Completion: %s\n", completionFlag)
-
-    // Access Content Sequence (main SR data structure)
-    contentSeqElem, exists := result.Dataset.Get(tag.ContentSequence)
-    if !exists {
-        log.Fatal("Content Sequence not found")
+    children, err := report.Children()
+    if err != nil {
+        log.Fatal(err)
     }
-
-    contentSeq := contentSeqElem.(*dataset.Sequence)
-    fmt.Printf("\nContent Sequence has %d items\n", contentSeq.Count())
-
-    // Process each content item
-    for i := 0; i < contentSeq.Count(); i++ {
-        item := contentSeq.GetItem(i)
-
-        relType, _ := item.GetString(tag.RelationshipType)
-        valueType, _ := item.GetString(tag.ValueType)
-
-        fmt.Printf("\nItem %d:\n", i)
-        fmt.Printf("  Relationship: %s\n", relType)
-        fmt.Printf("  Value Type: %s\n", valueType)
-
-        switch valueType {
-        case "TEXT":
-            if text, exists := item.GetString(tag.TextValue); exists {
-                fmt.Printf("  Text: %s\n", text)
-            }
-        case "CODE":
-            if codeSeq, exists := item.Get(tag.ConceptCodeSequence); exists {
-                fmt.Printf("  [Code Sequence]\n")
-            }
-        case "NUM":
-            fmt.Printf("  [Numeric Measurement]\n")
-        case "CONTAINER":
-            fmt.Printf("  [Container]\n")
+    for i, item := range children {
+        valueType, err := item.ValueType()
+        if err != nil {
+            // By-reference items intentionally have no Value Type.
+            fmt.Printf("Item %d: by-reference\n", i)
+            continue
         }
+        fmt.Printf("Item %d: %s\n", i, valueType)
     }
 }
 ```

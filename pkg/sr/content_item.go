@@ -4,6 +4,8 @@
 package sr
 
 import (
+	"time"
+
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -22,6 +24,23 @@ import (
 // Reference: DICOM Part 3, Section C.17.3
 type ContentItem struct {
 	dataset *dataset.Dataset
+}
+
+func newContentItemDataset(code *CodeItem, relationship Relationship, valueType ValueType) (*dataset.Dataset, error) {
+	if code == nil || code.Dataset() == nil {
+		return nil, ErrMissingCode
+	}
+	ds := dataset.New()
+	if err := setConceptNameCode(ds, code); err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.ValueType, vr.CS, []string{string(valueType)})); err != nil {
+		return nil, WrapError("set value type", err)
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)})); err != nil {
+		return nil, WrapError("set relationship type", err)
+	}
+	return ds, nil
 }
 
 // NewContentItemText creates a text content item
@@ -125,6 +144,95 @@ func NewContentItemContainer(code *CodeItem, relationship Relationship, continui
 	}
 
 	return &ContentItem{dataset: ds}, nil
+}
+
+// NewContentItemPersonName creates a person-name content item.
+func NewContentItemPersonName(code *CodeItem, relationship Relationship, value string) (*ContentItem, error) {
+	ds, err := newContentItemDataset(code, relationship, ValueTypePersonName)
+	if err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(element.NewPersonName(tag.PersonName, []string{value})); err != nil {
+		return nil, WrapError("set person name", err)
+	}
+	return &ContentItem{dataset: ds}, nil
+}
+
+// NewContentItemDate creates a date content item.
+func NewContentItemDate(code *CodeItem, relationship Relationship, value time.Time) (*ContentItem, error) {
+	ds, err := newContentItemDataset(code, relationship, ValueTypeDate)
+	if err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(element.NewDateFromTime(tag.Date, []time.Time{value})); err != nil {
+		return nil, WrapError("set date", err)
+	}
+	return &ContentItem{dataset: ds}, nil
+}
+
+// NewContentItemTime creates a time content item.
+func NewContentItemTime(code *CodeItem, relationship Relationship, value time.Time) (*ContentItem, error) {
+	ds, err := newContentItemDataset(code, relationship, ValueTypeTime)
+	if err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(element.NewTimeFromTime(tag.Time, []time.Time{value})); err != nil {
+		return nil, WrapError("set time", err)
+	}
+	return &ContentItem{dataset: ds}, nil
+}
+
+// NewContentItemDateTime creates a date-time content item.
+func NewContentItemDateTime(code *CodeItem, relationship Relationship, value time.Time) (*ContentItem, error) {
+	ds, err := newContentItemDataset(code, relationship, ValueTypeDateTime)
+	if err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(element.NewDateTimeFromTime(tag.DateTime, []time.Time{value})); err != nil {
+		return nil, WrapError("set date time", err)
+	}
+	return &ContentItem{dataset: ds}, nil
+}
+
+// NewContentItemUIDReference creates a UID-reference content item.
+func NewContentItemUIDReference(code *CodeItem, relationship Relationship, value string) (*ContentItem, error) {
+	ds, err := newContentItemDataset(code, relationship, ValueTypeUIDReference)
+	if err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.UID, vr.UI, []string{value})); err != nil {
+		return nil, WrapError("set UID reference", err)
+	}
+	return &ContentItem{dataset: ds}, nil
+}
+
+func newContentItemReferencedSOP(code *CodeItem, relationship Relationship, valueType ValueType, value *ReferencedSOP) (*ContentItem, error) {
+	if value == nil || value.Dataset() == nil {
+		return nil, NewError("referenced SOP is nil")
+	}
+	ds, err := newContentItemDataset(code, relationship, valueType)
+	if err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(dataset.NewSequenceWithItems(tag.ReferencedSOPSequence, []*dataset.Dataset{value.Dataset()})); err != nil {
+		return nil, WrapError("set referenced SOP", err)
+	}
+	return &ContentItem{dataset: ds}, nil
+}
+
+// NewContentItemComposite creates a composite-reference content item.
+func NewContentItemComposite(code *CodeItem, relationship Relationship, value *ReferencedSOP) (*ContentItem, error) {
+	return newContentItemReferencedSOP(code, relationship, ValueTypeComposite, value)
+}
+
+// NewContentItemImage creates an image-reference content item.
+func NewContentItemImage(code *CodeItem, relationship Relationship, value *ReferencedSOP) (*ContentItem, error) {
+	return newContentItemReferencedSOP(code, relationship, ValueTypeImage, value)
+}
+
+// NewContentItemWaveform creates a waveform-reference content item.
+func NewContentItemWaveform(code *CodeItem, relationship Relationship, value *ReferencedSOP) (*ContentItem, error) {
+	return newContentItemReferencedSOP(code, relationship, ValueTypeWaveform, value)
 }
 
 // NewContentItemFromDataset creates a ContentItem from an existing dataset
@@ -267,6 +375,128 @@ func (c *ContentItem) GetCode() (*CodeItem, error) {
 		return nil, NewErrorf("content item is not CODE type, got %s", vt)
 	}
 	return NewCodeItemFromSequence(tag.ConceptCodeSequence, c.dataset)
+}
+
+// GetPersonName returns the person name for a PNAME content item.
+func (c *ContentItem) GetPersonName() (string, error) {
+	if err := c.requireValueType(ValueTypePersonName); err != nil {
+		return "", err
+	}
+	value, ok := c.dataset.Get(tag.PersonName)
+	if !ok {
+		return "", NewError("person name not found")
+	}
+	var personName *element.PersonName
+	switch typed := value.(type) {
+	case *element.PersonName:
+		personName = typed
+	case *element.String:
+		personName = element.NewPersonNameFromBuffer(tag.PersonName, typed.Buffer(), nil)
+	default:
+		return "", NewError("person name has invalid VR")
+	}
+	return personName.GetValue(0), nil
+}
+
+// GetDate returns the date for a DATE content item.
+func (c *ContentItem) GetDate() (time.Time, error) {
+	if err := c.requireValueType(ValueTypeDate); err != nil {
+		return time.Time{}, err
+	}
+	value, ok := c.dataset.Get(tag.Date)
+	if !ok {
+		return time.Time{}, NewError("date not found")
+	}
+	var date *element.Date
+	switch typed := value.(type) {
+	case *element.Date:
+		date = typed
+	case *element.String:
+		date = element.NewDateFromBuffer(tag.Date, typed.Buffer(), nil)
+	default:
+		return time.Time{}, NewError("date has invalid VR")
+	}
+	return date.GetDate(0)
+}
+
+// GetTime returns the time for a TIME content item.
+func (c *ContentItem) GetTime() (time.Time, error) {
+	if err := c.requireValueType(ValueTypeTime); err != nil {
+		return time.Time{}, err
+	}
+	value, ok := c.dataset.Get(tag.Time)
+	if !ok {
+		return time.Time{}, NewError("time not found")
+	}
+	var timeValue *element.Time
+	switch typed := value.(type) {
+	case *element.Time:
+		timeValue = typed
+	case *element.String:
+		timeValue = element.NewTimeFromBuffer(tag.Time, typed.Buffer(), nil)
+	default:
+		return time.Time{}, NewError("time has invalid VR")
+	}
+	return timeValue.GetTime(0)
+}
+
+// GetDateTime returns the date-time for a DATETIME content item.
+func (c *ContentItem) GetDateTime() (time.Time, error) {
+	if err := c.requireValueType(ValueTypeDateTime); err != nil {
+		return time.Time{}, err
+	}
+	value, ok := c.dataset.Get(tag.DateTime)
+	if !ok {
+		return time.Time{}, NewError("date time not found")
+	}
+	var dateTime *element.DateTime
+	switch typed := value.(type) {
+	case *element.DateTime:
+		dateTime = typed
+	case *element.String:
+		dateTime = element.NewDateTimeFromBuffer(tag.DateTime, typed.Buffer(), nil)
+	default:
+		return time.Time{}, NewError("date time has invalid VR")
+	}
+	return dateTime.GetDateTime(0)
+}
+
+// GetUIDReference returns the UID for a UIDREF content item.
+func (c *ContentItem) GetUIDReference() (string, error) {
+	if err := c.requireValueType(ValueTypeUIDReference); err != nil {
+		return "", err
+	}
+	value, ok := c.dataset.GetString(tag.UID)
+	if !ok {
+		return "", NewError("UID reference not found")
+	}
+	return value, nil
+}
+
+// GetReferencedSOP returns the reference for COMPOSITE, IMAGE, or WAVEFORM.
+func (c *ContentItem) GetReferencedSOP() (*ReferencedSOP, error) {
+	valueType, err := c.ValueType()
+	if err != nil {
+		return nil, err
+	}
+	if valueType != ValueTypeComposite && valueType != ValueTypeImage && valueType != ValueTypeWaveform {
+		return nil, NewErrorf("content item is not a referenced SOP type, got %s", valueType)
+	}
+	return NewReferencedSOPFromSequence(tag.ReferencedSOPSequence, c.dataset)
+}
+
+func (c *ContentItem) requireValueType(expected ValueType) error {
+	if c == nil || c.dataset == nil {
+		return NewError("content item is nil")
+	}
+	actual, err := c.ValueType()
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return NewErrorf("content item is not %s type, got %s", expected, actual)
+	}
+	return nil
 }
 
 // Helper function to set concept name code sequence

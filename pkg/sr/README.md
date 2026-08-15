@@ -1,200 +1,97 @@
-# DICOM Structured Report (SR) Package
+# DICOM Structured Reports
 
-## Overview
+Package `sr` provides typed construction, reading, validation, and file I/O for
+DICOM Structured Report content trees.
 
-This package provides support for creating and parsing DICOM Structured Reports (SR).
+## Supported content
 
-## Current Status
+- TEXT, NUM, CODE, and CONTAINER
+- PNAME, DATE, TIME, DATETIME, and UIDREF
+- COMPOSITE, IMAGE, and WAVEFORM references
+- SCOORD and TCOORD coordinates
+- Nested by-value content and parsed by-reference content items
+- Code Value, Long Code Value, and URN Code Value
 
-🚧 **PARTIALLY IMPLEMENTED - REQUIRES DICOM DATASET API** 🚧
+The package validates root and child relationships, value-type/tag consistency,
+single-item value sequences, code items, measurement units, referenced SOP UIDs,
+coordinate cardinality, and nested content. Validation errors include the
+`ContentSequence[index]` path to the failing item.
 
-The core SR types and structures are implemented, but full functionality requires a complete `dicom.Dataset` API which is still under development.
+Template-specific relationship matrices, TID implementations, and SCOORD3D are
+outside the current package scope.
 
-## What are DICOM Structured Reports?
-
-Structured Reports are used to encode clinical findings, measurements, and observations in a structured, machine-readable format. They represent information as a tree of content items with defined relationships.
-
-### Key Components
-
-**Content Items**: The building blocks of an SR
-- Concept Name: Coded entry describing what the item represents
-- Value Type: TEXT, NUM, CODE, IMAGE, CONTAINER, etc.
-- Relationship Type: CONTAINS, HAS PROPERTIES, INFERRED FROM, etc.
-- Value: The actual content
-
-**Value Types**:
-- `TEXT`: Text values
-- `NUM`: Numeric measurements with units
-- `CODE`: Coded concepts
-- `CONTAINER`: Grouping of other content items
-- `IMAGE`: Reference to an image SOP instance
-- `COMPOSITE`: Reference to a composite SOP instance
-- `PNAME`: Person name
-- `DATE`, `TIME`, `DATETIME`: Temporal values
-- `UIDREF`: UID reference
-
-**Relationship Types**:
-- `CONTAINS`: Parent-child containment
-- `HAS PROPERTIES`: Describes properties
-- `INFERRED FROM`: Indicates source
-- `SELECTED FROM`: Selection from options
-- `HAS OBS CONTEXT`: Observation context
-- `HAS ACQ CONTEXT`: Acquisition context
-- `HAS CONCEPT MOD`: Concept modifier
-
-## Implemented Features
-
-### ✅ Core Types
-- [x] `CodeItem`: Coded entries (code value + scheme + meaning)
-- [x] `MeasuredValue`: Numeric measurements with units
-- [x] `ReferencedSOP`: References to SOP instances
-- [x] Value types (TEXT, NUM, CODE, CONTAINER, etc.)
-- [x] Relationship types (CONTAINS, HAS PROPERTIES, etc.)
-- [x] Continuity types (SEPARATE, CONTINUOUS)
-
-### ✅ Content Items
-- [x] Text content items
-- [x] Code content items
-- [x] Numeric content items
-- [x] Container content items
-- [x] Content item hierarchy
-
-### ✅ Structured Reports
-- [x] SR creation with root code
-- [x] Adding content items
-- [x] Convenience methods (AddText, AddCode, AddNumeric, AddContainer)
-
-### ⏳ Pending Implementation
-- [ ] Full integration with `dicom.Dataset` API
-- [ ] File I/O (Open, Save methods)
-- [ ] Image/Composite/Waveform content items
-- [ ] Spatial/Temporal coordinate items
-- [ ] SR template support
-- [ ] SR validation
-- [ ] SR serialization/deserialization
-
-## Dependencies Required
-
-Before full implementation, the following need to be completed in the `dicom` package:
-
-1. **Complete Dataset API**:
-   ```go
-   type Dataset struct {
-       // Full implementation with element access
-   }
-
-   func (d *Dataset) GetString(tag Tag) (string, error)
-   func (d *Dataset) PutString(tag Tag, value string) error
-   func (d *Dataset) GetFloat64s(tag Tag) ([]float64, error)
-   func (d *Dataset) FindElementByTag(tag Tag) (*Element, error)
-   // ... etc
-   ```
-
-2. **Element and Sequence Support**:
-   ```go
-   type Element struct {
-       Tag       Tag
-       ValueType VR
-       Value     Value
-   }
-
-   type SequencesValue struct {
-       Values []*Dataset
-   }
-   ```
-
-3. **File I/O**:
-   ```go
-   func ReadFile(filename string) (*File, error)
-   func (f *File) Save(filename string) error
-   ```
-
-## Planned Usage (When Complete)
+## Create a report
 
 ```go
-// Create a new structured report
-rootCode := sr.NewCodeItem("113704", "DCM", "SR Document")
-report, _ := sr.NewStructuredReport(rootCode)
+root := sr.NewCodeItem("113704", "DCM", "SR Document")
+report, err := sr.NewStructuredReport(root)
+if err != nil {
+    return err
+}
 
-// Add a text finding
-findingCode := sr.NewCodeItem("121071", "DCM", "Finding")
-report.AddText(findingCode, sr.RelationshipContains, "No abnormalities detected")
+finding := sr.NewCodeItem("121071", "DCM", "Finding")
+if err := report.AddText(
+    finding,
+    sr.RelationshipContains,
+    "No abnormalities detected",
+); err != nil {
+    return err
+}
 
-// Add a numeric measurement
-measureCode := sr.NewCodeItem("33728-7", "LN", "Size")
 units := sr.NewCodeItem("mm", "UCUM", "millimeter")
-value := sr.NewMeasuredValue(25.5, units)
-report.AddNumeric(measureCode, sr.RelationshipContains, value)
+measurement := sr.NewMeasuredValue(25.5, units)
+if err := report.AddNumeric(
+    sr.NewCodeItem("33728-7", "LN", "Size"),
+    sr.RelationshipContains,
+    measurement,
+); err != nil {
+    return err
+}
 
-// Add a container with nested items
-containerCode := sr.NewCodeItem("121111", "DCM", "Summary")
-item1, _ := sr.NewContentItemText(code1, sr.RelationshipContains, "Summary text")
-item2, _ := sr.NewContentItemNumeric(code2, sr.RelationshipContains, measurement)
-report.AddContainer(containerCode, sr.RelationshipContains, sr.ContinuitySeparate, item1, item2)
-
-// Save to file (when implemented)
-// report.Save("report.dcm")
+if err := report.Save("report.dcm"); err != nil {
+    return err
+}
 ```
 
-## Implementation Roadmap
+## Read and write
 
-### Phase 1: Core Types ✅
-- [x] Value types and relationships
-- [x] CodeItem implementation
-- [x] MeasuredValue implementation
-- [x] ReferencedSOP implementation
-- [x] Error handling
+```go
+report, err := sr.Open("report.dcm")
+if err != nil {
+    return err
+}
 
-### Phase 2: Content Items ✅
-- [x] ContentItem base implementation
-- [x] Text, Code, Numeric types
-- [x] Container type
-- [x] Hierarchy support
+children, err := report.Children()
+if err != nil {
+    return err
+}
 
-### Phase 3: Structured Report ✅ (Partial)
-- [x] SR root creation
-- [x] Adding content items
-- [x] Convenience methods
-- [ ] Full Dataset integration
+if err := report.Write(output); err != nil {
+    return err
+}
+```
 
-### Phase 4: File I/O (Pending)
-- [ ] Open from file
-- [ ] Save to file
-- [ ] Stream support
+`Open` and `Read` reject partial parses and invalid SR trees. Parsed File Meta
+Information and transfer syntax are preserved by default when using `Write` or
+`Save`. SR output always uses explicit lengths for Sequences and Sequence Items,
+matching fo-dicom's Structured Report save behavior.
 
-### Phase 5: Advanced Features (Pending)
-- [ ] SR templates (TID 1500, TID 1400, etc.)
-- [ ] Image/Waveform references
-- [ ] Spatial/Temporal coordinates
-- [ ] SR validation against templates
-- [ ] Comprehensive examples
+`NewStructuredReportFromDataset` remains permissive for callers that need to
+inspect or repair a Dataset before calling `Validate`.
 
 ## Testing
-
-Basic unit tests are implemented for core types. Run tests with:
 
 ```bash
 go test ./pkg/sr
 ```
 
-Note: Some tests may fail until the full `dicom.Dataset` API is implemented.
+The test suite round-trips `test-data/test_SR.dcm`, which is byte-identical to
+fo-dicom's Structured Report fixture, and exercises UIDREF, SCOORD, TCOORD,
+by-reference content, nested validation paths, File Meta preservation, and
+explicit-length writing.
 
 ## References
 
-- DICOM Part 3: Information Object Definitions, Annex A.35 (SR IOD)
-- DICOM Part 3, Section C.17.3 (SR Document Content Module)
-- DICOM Part 16: Content Mapping Resource (SR Templates)
-- https://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_A.35.html
-
-## Contributing
-
-This package is under active development. Contributions are welcome, especially for:
-- Completing `dicom.Dataset` integration
-- Implementing file I/O
-- SR template support
-- Validation logic
-- Examples and documentation
-
-## License
-
-Microsoft Public License (MS-PL) - Same as parent project
+- DICOM PS3.3, Section C.17.3 and Annex A.35
+- DICOM PS3.16, Structured Reporting templates and context groups
+- [fo-dicom StructuredReport](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/StructuredReport)
