@@ -1623,32 +1623,18 @@ import (
     "log"
     "os"
 
-    "github.com/cocosip/go-dicom/pkg/dicom/parser"
     "github.com/cocosip/go-dicom/pkg/imaging"
-    "github.com/cocosip/go-dicom/pkg/imaging/render"
 )
 
 func main() {
-    // Read DICOM file
-    file, err := os.Open("ct_image.dcm")
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer file.Close()
-
-    result, err := parser.Parse(file)
+    // Parse the file and create a Dataset-driven DICOM image.
+    dicomImage, err := imaging.OpenDicomImage("ct_image.dcm")
     if err != nil {
         log.Fatal(err)
     }
 
-    // Create DICOM image
-    dicomImage, err := imaging.NewDicomImage(result.Dataset)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Render with default options
-    img, err := render.Render(dicomImage, nil)
+    // Render the first frame using Dataset modality, VOI, and presentation data.
+    img, err := dicomImage.RenderFrameImage(0)
     if err != nil {
         log.Fatal(err)
     }

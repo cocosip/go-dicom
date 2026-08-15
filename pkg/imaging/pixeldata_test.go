@@ -5,6 +5,8 @@ package imaging
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -848,6 +850,63 @@ func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
 	}
 }
 
+func TestCreatePixelData_BigEndianPaletteToRGB(t *testing.T) {
+	tests := []struct {
+		name  string
+		red   element.Element
+		green element.Element
+		blue  element.Element
+	}{
+		{
+			name:  "standard",
+			red:   element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{0, 0, 0x80, 0}),
+			green: element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{0, 0, 0, 0}),
+			blue:  element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{0, 0, 0, 0}),
+		},
+		{
+			name:  "segmented",
+			red:   element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, []byte{0, 1, 0, 0, 0x80, 0}),
+			green: element.NewOtherWord(tag.SegmentedGreenPaletteColorLookupTableData, []byte{0, 1, 0, 0, 0, 0}),
+			blue:  element.NewOtherWord(tag.SegmentedBluePaletteColorLookupTableData, []byte{0, 1, 0, 0, 0, 0}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+			elements := []element.Element{
+				element.NewUnsignedShort(tag.Rows, []uint16{1}),
+				element.NewUnsignedShort(tag.Columns, []uint16{2}),
+				element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+				element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+				element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+				element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+				element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+				element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricPaletteColor}),
+				element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 16}),
+				element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 16}),
+				element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 16}),
+				tt.red,
+				tt.green,
+				tt.blue,
+				element.NewOtherByte(tag.PixelData, []byte{0, 1}),
+			}
+			for _, elem := range elements {
+				if err := ds.Add(elem); err != nil {
+					t.Fatalf("add %s: %v", elem.Tag(), err)
+				}
+			}
+
+			pd, err := CreatePixelData(ds)
+			if err != nil {
+				t.Fatalf("CreatePixelData() error = %v", err)
+			}
+			if got, want := pd.GetAllFrames(), []byte{0, 0, 0, 128, 0, 0}; !bytes.Equal(got, want) {
+				t.Fatalf("palette RGB data = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 func TestDicomPixelData_ConvertYBRPartial422ToRGB(t *testing.T) {
 	info := &PixelDataInfo{
 		Width:                     2,
@@ -964,7 +1023,7 @@ func TestDicomPixelData_ConvertYBRRCTToRGB(t *testing.T) {
 }
 
 func TestDicomPixelData_VOILUTSequence(t *testing.T) {
-	// Build dataset with LUT Descriptor [3 entries, first=0, bits=8], LUT data [0,128,255]
+	// Build dataset with a non-full-range 8-bit LUT; legacy mapping preserves entry values.
 	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
 		element.NewUnsignedShort(tag.Columns, []uint16{3}),
@@ -983,7 +1042,7 @@ func TestDicomPixelData_VOILUTSequence(t *testing.T) {
 	// VOI LUT Sequence with one item
 	lutItem := dataset.New()
 	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
-	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{0, 128, 255}))
+	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{0, 100, 200}))
 	voiSeq := dataset.NewSequence(tag.VOILUTSequence)
 	voiSeq.AddItem(lutItem)
 	_ = ds.Add(voiSeq)
@@ -1001,9 +1060,114 @@ func TestDicomPixelData_VOILUTSequence(t *testing.T) {
 		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
 	}
 	got := out[0]
-	expected := []byte{0, 128, 255}
+	expected := []byte{0, 100, 200}
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("VOI LUT mapping mismatch, got %v want %v", got, expected)
+	}
+}
+
+func TestDicomPixelData_VOILUTSequenceNormalizes16BitEntries(t *testing.T) {
+	ds, err := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{3}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
+
+	lutBytes := make([]byte, 6)
+	for index, value := range []uint16{0, 32768, 65535} {
+		binary.LittleEndian.PutUint16(lutBytes[index*2:], value)
+	}
+	lutItem := dataset.New()
+	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 16}))
+	_ = lutItem.Add(element.NewOtherWord(tag.LUTData, lutBytes))
+	voiSeq := dataset.NewSequence(tag.VOILUTSequence)
+	voiSeq.AddItem(lutItem)
+	_ = ds.Add(voiSeq)
+	_ = ds.Add(element.NewOtherByte(tag.PixelData, []byte{0, 1, 2}))
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+	out, err := pd.WindowOrLUTTo8bit(ds, 0, 0, false)
+	if err != nil {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+	}
+	if got, want := out[0], []byte{0, 128, 255}; !bytes.Equal(got, want) {
+		t.Fatalf("VOI LUT mapping mismatch, got %v want %v", got, want)
+	}
+}
+
+func TestDicomPixelData_VOILUTSequenceReadsBigEndianData(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	elements := []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{3}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+	}
+	for _, elem := range elements {
+		_ = ds.Add(elem)
+	}
+	lutBytes := make([]byte, 6)
+	for index, value := range []uint16{0, 32768, 65535} {
+		binary.BigEndian.PutUint16(lutBytes[index*2:], value)
+	}
+	lutItem := dataset.New()
+	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 16}))
+	_ = lutItem.Add(element.NewOtherWord(tag.LUTData, lutBytes))
+	voiSeq := dataset.NewSequence(tag.VOILUTSequence)
+	voiSeq.AddItem(lutItem)
+	_ = ds.Add(voiSeq)
+	_ = ds.Add(element.NewOtherByte(tag.PixelData, []byte{0, 1, 2}))
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+	out, err := pd.WindowOrLUTTo8bit(ds, 0, 0, false)
+	if err != nil {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+	}
+	if got, want := out[0], []byte{0, 128, 255}; !bytes.Equal(got, want) {
+		t.Fatalf("VOI LUT mapping mismatch, got %v want %v", got, want)
+	}
+}
+
+func TestApplyVOILUTRejectsInvalidBitsPerEntry(t *testing.T) {
+	for _, bitsPerEntry := range []uint16{17, 32} {
+		t.Run(fmt.Sprintf("bits_%d", bitsPerEntry), func(t *testing.T) {
+			ds := dataset.New()
+			lutItem := dataset.New()
+			_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, bitsPerEntry}))
+			_ = lutItem.Add(element.NewOtherWord(tag.LUTData, []byte{0, 0}))
+			_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
+			pd, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+				Width: 1, Height: 1, NumberOfFrames: 1,
+				BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
+				PhotometricInterpretation: Monochrome2,
+			}, []byte{0})
+			if err != nil {
+				t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+			}
+
+			if _, err := applyVOILUT(pd, ds, 0, 0, false); err == nil {
+				t.Fatalf("applyVOILUT() accepted bitsPerEntry=%d", bitsPerEntry)
+			}
+		})
 	}
 }
 

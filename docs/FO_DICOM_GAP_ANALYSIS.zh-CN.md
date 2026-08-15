@@ -51,7 +51,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | NET-003 | P1 | Complete | 通过高层客户端执行高级关联协商 |
 | NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Complete | 完整的结构化报告值类型和文件工作流 |
-| IMG-001 | P1 | Partial | Dataset 驱动的图像渲染管线 |
+| IMG-001 | P1 | Complete | Dataset 驱动的图像渲染管线 |
 | CORE-001 | P1 | Complete | Dataset 和 Sequence 递归验证 |
 | IMG-002 | P2 | Open | 帧几何、空间变换和插值工具 |
 | CORE-002 | P2 | Open | Dataset 遍历器、匹配规则和转换规则 |
@@ -67,13 +67,13 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 截至 2026-08-15：
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  SR-001、CORE-001、ANON-001 和 DICT-001。
+  SR-001、IMG-001、CORE-001、ANON-001 和 DICT-001。
 - **未完成：** DOC-001、
-  IMG-001、IMG-002、CORE-002、PRINT-001、OBS-001、
+  IMG-002、CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **下一项：** IMG-001，即下方计划开发顺序中的第一个未完成条目。
+- **下一项：** IMG-002，即下方计划开发顺序中的第一个未完成条目。
 
 ## 计划开发顺序
 
@@ -86,7 +86,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 1 | NET-004 | P1 | Complete | 趁 NET-003 的 Association API 和测试上下文仍然清晰，补完整个协商能力族。 |
 | 2 | CORE-001 | P1 | Complete | 在完成嵌套领域工作流之前，先建立 Dataset 和 Sequence 的递归正确性保障。 |
 | 3 | SR-001 | P1 | Complete | 基于 CORE-001 的递归验证行为完成强类型 SR 树和文件工作流。 |
-| 4 | IMG-001 | P1 | Partial | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
+| 4 | IMG-001 | P1 | Complete | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
 | 5 | IMG-002 | P2 | Open | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
 | 6 | CORE-002 | P2 | Open | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
 | 7 | PRINT-001 | P2 | Partial | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
@@ -385,10 +385,22 @@ SR 输出行为保持一致。
 
 ### IMG-001: Dataset 驱动的渲染
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P1`
 
-LUT 和 overlay 基础能力已存在，但 `DicomImage` 由 `DicomPixelData` 构造，而不能直接由 Dataset 或文件构造。其默认灰度管线将 rescale slope/intercept 固定为 `1/0`，从像素计算最优窗，并未完整使用 Dataset 中的 Modality LUT、VOI LUT、窗、显示以及逐帧元数据。已保存的 `scale` 和 `showOverlays` 状态不会影响 `RenderFrame`。
+已于 2026-08-15 完成。`DicomImage` 现在可以从 Dataset、解析结果或文件构造；
+Dataset 构造会保留私有克隆，通过可注入 codec registry 解码封装帧，并根据顶层及
+功能组元数据创建逐帧灰度管线。
+
+窗选择与 fo-dicom 保持同一优先级：有效的顶层窗、功能组窗、有效的
+Smallest/Largest Image Pixel Value，最后是排除 padding 后的像素最小/最大值。
+回退范围会先经过显式 Modality LUT 或 rescale，再计算窗宽窗位。显式 Modality/VOI
+LUT Sequence、VOI LUT Function、MONOCHROME1 显示、palette color、调用方反色及
+灰度色表都会影响输出。
+
+渲染现已支持打包 1-bit 和有符号/无符号 32-bit 灰度、双线性缩放（1-bit 使用最近邻）、
+显式及嵌入 overlay、overlay 原点/帧范围/裁剪/颜色/可见性，以及调用方切换 VOI LUT
+和控制 LUT 是否传播到所有帧。源 Dataset 不会被修改。
 
 参考：[fo-dicom DicomImage](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/DicomImage.cs)
 
@@ -404,6 +416,21 @@ LUT 和 overlay 基础能力已存在，但 `DicomImage` 由 `DicomPixelData` �
 
 - 为 CT rescale/windowing、MONOCHROME1、调色板彩色、overlay 和多帧功能组增加黄金图像测试。
 - 与 fo-dicom 比较代表性渲染像素，误差保持在声明的容差内。
+
+**已执行验证**
+
+- 合成像素测试覆盖 rescale/windowing、Modality/VOI LUT 优先级、16-bit VOI 输出
+  归一化、SIGMOID VOI、MONOCHROME 显示、原生及封装 palette 转换、1/32-bit 样本、
+  32-bit Explicit VR Big Endian 像素、Big Endian Modality/VOI/Palette LUT Data、
+  功能组、缩放、色表和显式/嵌入 overlay。
+- Dataset、解析结果、文件、注入 codec、克隆和源数据保持工作流均有聚焦测试，
+  包括调用方 pipeline 覆盖，以及无 Basic Offset Table 多帧 fragment 的就地修改 codec。
+- `go test ./pkg/imaging/... -count=1`、
+  `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`、
+  `go build ./...`、`golangci-lint run` 和 `git diff --check` 均通过。构建明确退出成功，
+  但会提示只读的默认 Go module stat cache 无法更新。
+- `go test -race fmt -run '^$'` 在当前 Windows 主机上以 `0xc0000139` 无法启动；
+  race 仍需由 CI 验证，不能记为本地通过。
 
 ### CORE-001: 递归验证
 
@@ -699,8 +726,8 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：MED-001、NET-003、NET-004、SR-001、IMG-001、CORE-001。
 
-当前进度：MED-001、NET-003、NET-004、SR-001 和 CORE-001 已完成；IMG-001
-仍未完成，因此 Phase 1 尚未完成。
+当前进度：MED-001、NET-003、NET-004、SR-001、IMG-001 和 CORE-001 均已完成，
+因此 Phase 1 已完成。
 
 阶段验收：
 

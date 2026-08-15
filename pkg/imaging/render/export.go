@@ -4,6 +4,7 @@
 package render
 
 import (
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
@@ -85,11 +86,42 @@ func (e *ImageExporter) RenderGrayscaleImage(
 	isSigned bool,
 	photometric string,
 ) (*image.Gray, error) {
+	return e.RenderGrayscaleImageWithBitDepth(
+		pixelData, width, height, bitsAllocated, bitsAllocated, bitsAllocated-1, isSigned, photometric,
+	)
+}
+
+// RenderGrayscaleImageWithBitDepth renders grayscale pixels using the stored-bit location.
+func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
+	pixelData []byte,
+	width, height int,
+	bitsAllocated, bitsStored, highBit int,
+	isSigned bool,
+	photometric string,
+) (*image.Gray, error) {
 	if width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("image dimensions must be positive")
 	}
-	if bitsAllocated != 8 && bitsAllocated != 16 {
+	if bitsAllocated != 1 && bitsAllocated != 8 && bitsAllocated != 16 && bitsAllocated != 32 {
 		return nil, fmt.Errorf("unsupported grayscale bits allocated: %d", bitsAllocated)
+	}
+	if bitsAllocated == 1 {
+		required := (width*height + 7) / 8
+		if len(pixelData) < required {
+			return nil, fmt.Errorf("grayscale pixel data too short: got %d bytes, need %d", len(pixelData), required)
+		}
+		img := image.NewGray(image.Rect(0, 0, width, height))
+		pipelineLUT := e.pipeline.LUT()
+		isMonochrome1 := photometric == "MONOCHROME1"
+		for index := 0; index < width*height; index++ {
+			pixelValue := float64((pixelData[index/8] >> uint(index%8)) & 1)
+			grayValue := clampUint8(pipelineLUT.Transform(pixelValue))
+			if isMonochrome1 {
+				grayValue = 255 - grayValue
+			}
+			img.SetGray(index%width, index/width, color.Gray{Y: grayValue})
+		}
+		return img, nil
 	}
 	bytesPerPixel := bitsAllocated / 8
 	required := width * height * bytesPerPixel
@@ -109,19 +141,16 @@ func (e *ImageExporter) RenderGrayscaleImage(
 		for x := 0; x < width; x++ {
 			pixelIndex := (y*width + x) * bytesPerPixel
 
-			var pixelValue float64
+			var raw uint64
 			switch bytesPerPixel {
 			case 1:
-				pixelValue = float64(pixelData[pixelIndex])
+				raw = uint64(pixelData[pixelIndex])
 			case 2:
-				// 16-bit pixel — use uint16 for low-byte assembly to avoid
-				// sign-extension on unsigned bytes ≥ 128, then cast to signed.
-				if isSigned {
-					pixelValue = float64(int16(uint16(pixelData[pixelIndex]) | uint16(pixelData[pixelIndex+1])<<8))
-				} else {
-					pixelValue = float64(uint16(pixelData[pixelIndex]) | uint16(pixelData[pixelIndex+1])<<8)
-				}
+				raw = uint64(binary.LittleEndian.Uint16(pixelData[pixelIndex:]))
+			case 4:
+				raw = uint64(binary.LittleEndian.Uint32(pixelData[pixelIndex:]))
 			}
+			pixelValue := storedPixelValue(raw, bitsAllocated, bitsStored, highBit, isSigned)
 
 			// Apply LUT transformation
 			outputValue := lut.Transform(pixelValue)
@@ -139,6 +168,25 @@ func (e *ImageExporter) RenderGrayscaleImage(
 	}
 
 	return img, nil
+}
+
+func storedPixelValue(raw uint64, bitsAllocated, bitsStored, highBit int, signed bool) float64 {
+	if bitsStored <= 0 || bitsStored > bitsAllocated {
+		bitsStored = bitsAllocated
+	}
+	if highBit+1 < bitsStored || highBit >= bitsAllocated {
+		highBit = bitsStored - 1
+	}
+	shift := highBit + 1 - bitsStored
+	mask := uint64(1)<<uint(bitsStored) - 1
+	value := (raw >> uint(shift)) & mask
+	if signed {
+		signBit := uint64(1) << uint(bitsStored-1)
+		if value&signBit != 0 {
+			return float64(int64(value) - int64(uint64(1)<<uint(bitsStored)))
+		}
+	}
+	return float64(value)
 }
 
 // ExportRGB exports RGB pixel data to an image format
@@ -229,6 +277,14 @@ func (e *ImageExporter) encodeImage(writer io.Writer, img image.Image, options *
 	default:
 		return fmt.Errorf("unsupported export format: %d", options.Format)
 	}
+}
+
+// ExportImage encodes an already rendered image using the requested format.
+func (e *ImageExporter) ExportImage(writer io.Writer, img image.Image, options *ExportOptions) error {
+	if options == nil {
+		options = DefaultExportOptions()
+	}
+	return e.encodeImage(writer, img, options)
 }
 
 // RenderFrame renders a single frame from DicomPixelData to an image

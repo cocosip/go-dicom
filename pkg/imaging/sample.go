@@ -6,9 +6,8 @@ package imaging
 import "encoding/binary"
 
 // decodePixelSampleLE decodes a single pixel sample from data at the given byte offset.
-// Only 8-bit and 16-bit samples (BitsAllocated 8 or 16) are supported; larger allocations
-// return (0, false) and the caller silently skips that pixel.
-func decodePixelSampleLE(data []byte, offset int, info *PixelDataInfo) (int32, bool) {
+// BitsAllocated values of 8, 16, and 32 are supported.
+func decodePixelSampleLE(data []byte, offset int, info *PixelDataInfo) (int64, bool) {
 	if info == nil {
 		return 0, false
 	}
@@ -23,6 +22,8 @@ func decodePixelSampleLE(data []byte, offset int, info *PixelDataInfo) (int32, b
 		raw = uint32(data[offset])
 	case 2:
 		raw = uint32(binary.LittleEndian.Uint16(data[offset:]))
+	case 4:
+		raw = binary.LittleEndian.Uint32(data[offset:])
 	default:
 		return 0, false
 	}
@@ -40,24 +41,30 @@ func decodePixelSampleLE(data []byte, offset int, info *PixelDataInfo) (int32, b
 	sample := (raw >> shift) & mask
 
 	if info.PixelRepresentation != SignedPixels {
-		return int32(sample), true
+		return int64(sample), true
 	}
 
 	signBit := uint32(1 << (bitsStored - 1))
 	if sample&signBit == 0 {
-		return int32(sample), true
+		return int64(sample), true
 	}
-	return int32(sample) - int32(1<<bitsStored), true
+	return int64(sample) - int64(1<<bitsStored), true
 }
 
 func swapPixelDataBytes(data []byte, info *PixelDataInfo) []byte {
-	if info == nil || info.BytesAllocated() != 2 {
+	if info == nil {
+		return data
+	}
+	bytesPerSample := info.BytesAllocated()
+	if bytesPerSample != 2 && bytesPerSample != 4 {
 		return data
 	}
 	out := make([]byte, len(data))
 	copy(out, data)
-	for i := 0; i+1 < len(out); i += 2 {
-		out[i], out[i+1] = out[i+1], out[i]
+	for offset := 0; offset+bytesPerSample <= len(out); offset += bytesPerSample {
+		for left, right := offset, offset+bytesPerSample-1; left < right; left, right = left+1, right-1 {
+			out[left], out[right] = out[right], out[left]
+		}
 	}
 	return out
 }

@@ -503,10 +503,10 @@ func (pd *DicomPixelData) MaskPadding() (frames [][]byte, masks [][]bool, err er
 		return nil, nil, fmt.Errorf("unsupported BytesAllocated=%d for padding mask", bytesPerSample)
 	}
 
-	padMin := *pd.Info.PixelPaddingValue
+	padMin := int64(*pd.Info.PixelPaddingValue)
 	padMax := padMin
 	if pd.Info.PixelPaddingRangeLimit != nil {
-		padMax = *pd.Info.PixelPaddingRangeLimit
+		padMax = int64(*pd.Info.PixelPaddingRangeLimit)
 	}
 
 	for _, frame := range pd.frames {
@@ -659,8 +659,8 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 		PixelRepresentation:       pd.Info.PixelRepresentation,
 		PlanarConfiguration:       pd.Info.PlanarConfiguration,
 		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
-		VRCode:                    pd.Info.VRCode,        // Keep original VR
-		Encapsulated:              false,                 // Decoded data is not encapsulated
+		VRCode:                    pd.Info.VRCode, // Keep original VR
+		Encapsulated:              false,          // Decoded data is not encapsulated
 		TransferSyntaxUID:         transferSyntaxExplicitVRLittleEndian,
 		IsLossy:                   pd.Info.IsLossy,
 		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
@@ -784,12 +784,14 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 
 	// Pixel padding (optional)
 	var paddingVal *int32
-	if pv, err := ds.GetInt32(tag.PixelPaddingValue, 0); err == nil {
-		paddingVal = &pv
+	if pv, err := datasetShortValue(ds, tag.PixelPaddingValue); err == nil {
+		value := int32(pv)
+		paddingVal = &value
 	}
 	var paddingRange *int32
-	if pr, err := ds.GetInt32(tag.PixelPaddingRangeLimit, 0); err == nil {
-		paddingRange = &pr
+	if pr, err := datasetShortValue(ds, tag.PixelPaddingRangeLimit); err == nil {
+		value := int32(pr)
+		paddingRange = &value
 	}
 
 	// Create pixel data info
@@ -873,7 +875,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 	}
 
 	// Palette Color handling: convert to RGB if palette LUT present
-	if pi.Value == photometricPaletteColor {
+	if pi.Value == photometricPaletteColor && !pd.Info.Encapsulated {
 		if err := convertPaletteToRGB(ds, pd); err != nil {
 			return nil, fmt.Errorf("palette conversion failed: %w", err)
 		}
@@ -909,7 +911,7 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 				continue
 			}
 
-			idxLUT := int(val - lut.first)
+			idxLUT := int(val - int64(lut.first))
 			if idxLUT < 0 {
 				idxLUT = 0
 			}
@@ -939,11 +941,12 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 }
 
 func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
+	byteOrder := datasetByteOrder(ds)
 	// Enhanced Palette Color LUT Sequence (0028,140B)
 	if seqElem, ok := ds.Get(tag.EnhancedPaletteColorLookupTableSequence); ok {
 		if seq, ok2 := seqElem.(*dataset.Sequence); ok2 && seq.Count() > 0 {
 			for i := 0; i < seq.Count(); i++ {
-				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i)); err == nil {
+				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder); err == nil {
 					return lut, nil
 				}
 			}
@@ -954,7 +957,7 @@ func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 	if seqElem, ok := ds.Get(tag.PaletteColorLookupTableSequence); ok {
 		if seq, ok2 := seqElem.(*dataset.Sequence); ok2 && seq.Count() > 0 {
 			for i := 0; i < seq.Count(); i++ {
-				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i)); err == nil {
+				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder); err == nil {
 					return lut, nil
 				}
 			}
@@ -962,13 +965,13 @@ func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 	}
 
 	// Fall back to top-level descriptors/data
-	return buildPaletteLUTFromDataset(ds)
+	return buildPaletteLUTFromDataset(ds, byteOrder)
 }
 
 // buildPaletteLUTFromDataset builds palette LUT using descriptors/data in the provided dataset (no sequence recursion).
 //
 //nolint:gocyclo // Complex function handling palette LUT variations
-func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
+func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder) (*paletteLUT, error) {
 	// Descriptors
 	rDesc, err := ds.GetUInt16(tag.RedPaletteColorLookupTableDescriptor, 0)
 	if err != nil {
@@ -1024,7 +1027,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
 			}
 		} else {
 			for i := 0; i < size && (i*2+1) < len(raw); i++ {
-				out[i] = binary.LittleEndian.Uint16(raw[i*2:])
+				out[i] = byteOrder.Uint16(raw[i*2:])
 			}
 		}
 		return out, nil
@@ -1035,9 +1038,9 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
 	if err != nil {
 		if seg, ok := ds.Get(tag.SegmentedRedPaletteColorLookupTableData); ok {
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				rLUT, err = expandSegmentedLUT(ob.GetData(), size)
+				rLUT, err = expandSegmentedLUT(ob.GetData(), size, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				rLUT, err = expandSegmentedLUT(ow.GetData(), size)
+				rLUT, err = expandSegmentedLUT(ow.GetData(), size, byteOrder)
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1050,9 +1053,9 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
 	if err != nil {
 		if seg, ok := ds.Get(tag.SegmentedGreenPaletteColorLookupTableData); ok {
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				gLUT, err = expandSegmentedLUT(ob.GetData(), size)
+				gLUT, err = expandSegmentedLUT(ob.GetData(), size, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				gLUT, err = expandSegmentedLUT(ow.GetData(), size)
+				gLUT, err = expandSegmentedLUT(ow.GetData(), size, byteOrder)
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1065,9 +1068,9 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset) (*paletteLUT, error) {
 	if err != nil {
 		if seg, ok := ds.Get(tag.SegmentedBluePaletteColorLookupTableData); ok {
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				bLUT, err = expandSegmentedLUT(ob.GetData(), size)
+				bLUT, err = expandSegmentedLUT(ob.GetData(), size, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				bLUT, err = expandSegmentedLUT(ow.GetData(), size)
+				bLUT, err = expandSegmentedLUT(ow.GetData(), size, byteOrder)
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1124,10 +1127,10 @@ func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []imagetypes.Color
 
 // expandSegmentedLUT expands DICOM segmented palette LUT data (Type 0/1 segments).
 // Supports discrete and linear segments; skips unsupported imagetypes.
-func expandSegmentedLUT(raw []byte, expectedSize int) ([]uint16, error) {
+func expandSegmentedLUT(raw []byte, expectedSize int, byteOrder binary.ByteOrder) ([]uint16, error) {
 	var out []uint16
 	for i := 0; i+1 < len(raw); {
-		desc := binary.LittleEndian.Uint16(raw[i:])
+		desc := byteOrder.Uint16(raw[i:])
 		i += 2
 		segType := desc >> 14
 		count := int(desc & 0x3FFF)
@@ -1136,7 +1139,7 @@ func expandSegmentedLUT(raw []byte, expectedSize int) ([]uint16, error) {
 		case 0: // discrete: count+1 values follow
 			n := count + 1
 			for j := 0; j < n && i+1 < len(raw); j++ {
-				val := binary.LittleEndian.Uint16(raw[i:])
+				val := byteOrder.Uint16(raw[i:])
 				out = append(out, val)
 				i += 2
 			}
@@ -1144,8 +1147,8 @@ func expandSegmentedLUT(raw []byte, expectedSize int) ([]uint16, error) {
 			if i+3 >= len(raw) {
 				return nil, fmt.Errorf("segmented LUT linear segment truncated")
 			}
-			start := binary.LittleEndian.Uint16(raw[i:])
-			end := binary.LittleEndian.Uint16(raw[i+2:])
+			start := byteOrder.Uint16(raw[i:])
+			end := byteOrder.Uint16(raw[i+2:])
 			i += 4
 			n := count + 1
 			for k := 0; k < n; k++ {
@@ -1259,7 +1262,7 @@ func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, fr
 	framesToUse := frameCount
 	var frames [][]byte
 	for i := 0; i < framesToUse; i++ {
-		data := fragments[i].Data()
+		data := append([]byte(nil), fragments[i].Data()...)
 		frames = append(frames, codec.StripTrailingPadding(data))
 	}
 	return frames, nil
@@ -1303,6 +1306,13 @@ func buildFragmentSequence(frames [][]byte, _ []uint32, _ uint16) (element.Eleme
 }
 
 func frameCountFromDataset(ds *dataset.Dataset) int {
+	if value, ok := ds.Get(tag.NumberOfFrames); ok {
+		if values, ok := value.(*element.IntegerString); ok {
+			if count, err := values.GetInt(0); err == nil && count > 0 {
+				return count
+			}
+		}
+	}
 	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
 		return int(nf)
 	}

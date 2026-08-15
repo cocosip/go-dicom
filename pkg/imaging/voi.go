@@ -22,7 +22,7 @@ func applyWindowTo8bit(pd *DicomPixelData, center, width float64, ignorePadding 
 	}
 
 	bytesPerSample := pd.Info.BytesAllocated()
-	if bytesPerSample != 1 && bytesPerSample != 2 {
+	if bytesPerSample != 1 && bytesPerSample != 2 && bytesPerSample != 4 {
 		return nil, fmt.Errorf("unsupported BytesAllocated=%d for windowing", bytesPerSample)
 	}
 
@@ -46,11 +46,11 @@ func applyWindowTo8bit(pd *DicomPixelData, center, width float64, ignorePadding 
 	precalc := lut.NewPrecalculatedLUT(voiLUT, minInput, maxInput)
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
-	var padMin, padMax int32
+	var padMin, padMax int64
 	if hasPadding {
-		padMin = *pd.Info.PixelPaddingValue
+		padMin = int64(*pd.Info.PixelPaddingValue)
 		if pd.Info.PixelPaddingRangeLimit != nil {
-			padMax = *pd.Info.PixelPaddingRangeLimit
+			padMax = int64(*pd.Info.PixelPaddingRangeLimit)
 		} else {
 			padMax = padMin
 		}
@@ -92,16 +92,16 @@ func minMaxSamples(pd *DicomPixelData, ignorePadding bool) (float64, float64, er
 	}
 
 	bytesPerSample := pd.Info.BytesAllocated()
-	if bytesPerSample != 1 && bytesPerSample != 2 {
+	if bytesPerSample != 1 && bytesPerSample != 2 && bytesPerSample != 4 {
 		return 0, 0, fmt.Errorf("unsupported BytesAllocated=%d for min/max", bytesPerSample)
 	}
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
-	var padMin, padMax int32
+	var padMin, padMax int64
 	if hasPadding {
-		padMin = *pd.Info.PixelPaddingValue
+		padMin = int64(*pd.Info.PixelPaddingValue)
 		if pd.Info.PixelPaddingRangeLimit != nil {
-			padMax = *pd.Info.PixelPaddingRangeLimit
+			padMax = int64(*pd.Info.PixelPaddingRangeLimit)
 		} else {
 			padMax = padMin
 		}

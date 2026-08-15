@@ -4,7 +4,6 @@
 package imaging
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -46,6 +45,9 @@ func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, _, _ float64, ignorePa
 	if bitsPerEntry == 0 {
 		bitsPerEntry = 16
 	}
+	if bitsPerEntry < 8 || bitsPerEntry > 16 {
+		return nil, fmt.Errorf("invalid VOI LUT bits per entry: %d", bitsPerEntry)
+	}
 
 	lutDataElem, ok := item.Get(tag.LUTData)
 	if !ok {
@@ -62,13 +64,14 @@ func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, _, _ float64, ignorePa
 	}
 
 	values := make([]uint16, numEntries)
+	byteOrder := datasetByteOrder(ds)
 	if bitsPerEntry <= 8 {
 		for i := 0; i < numEntries && i < len(lutRaw); i++ {
 			values[i] = uint16(lutRaw[i])
 		}
 	} else {
 		for i := 0; i < numEntries && (i*2+1) < len(lutRaw); i++ {
-			values[i] = binary.LittleEndian.Uint16(lutRaw[i*2:])
+			values[i] = byteOrder.Uint16(lutRaw[i*2:])
 		}
 	}
 
@@ -76,8 +79,8 @@ func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, _, _ float64, ignorePa
 		values: values,
 		first:  int(firstMap),
 	}
-	precalc := lut.NewPrecalculatedLUT(table, table.minInput(), table.maxInput())
-	return mapThroughLUT(pd, precalc, ignorePadding)
+	maximumOutput := float64(uint32(1)<<bitsPerEntry - 1)
+	return mapThroughLUT(pd, scaledVOITable(table, 0, maximumOutput), ignorePadding)
 }
 
 // voiTableLUT adapts VOI LUT Data to the shared LUT interface.
@@ -90,9 +93,32 @@ func (v *voiTableLUT) IsValid() bool {
 	return false
 }
 
-func (v *voiTableLUT) MinimumOutputValue() float64 { return 0 }
-func (v *voiTableLUT) MaximumOutputValue() float64 { return 255 }
-func (v *voiTableLUT) Recalculate()                {}
+func (v *voiTableLUT) MinimumOutputValue() float64 {
+	if len(v.values) == 0 {
+		return 0
+	}
+	minimum := v.values[0]
+	for _, value := range v.values[1:] {
+		if value < minimum {
+			minimum = value
+		}
+	}
+	return float64(minimum)
+}
+
+func (v *voiTableLUT) MaximumOutputValue() float64 {
+	if len(v.values) == 0 {
+		return 0
+	}
+	maximum := v.values[0]
+	for _, value := range v.values[1:] {
+		if value > maximum {
+			maximum = value
+		}
+	}
+	return float64(maximum)
+}
+func (v *voiTableLUT) Recalculate() {}
 
 func (v *voiTableLUT) Transform(input float64) float64 {
 	idx := int(input) - v.first
@@ -102,11 +128,45 @@ func (v *voiTableLUT) Transform(input float64) float64 {
 	if idx >= len(v.values) {
 		idx = len(v.values) - 1
 	}
-	return float64(clampByte(int(v.values[idx])))
+	return float64(v.values[idx])
 }
 
-func (v *voiTableLUT) minInput() int { return v.first }
-func (v *voiTableLUT) maxInput() int { return v.first + len(v.values) - 1 }
+type voiOutputScaleLUT struct {
+	minimum float64
+	maximum float64
+}
+
+func newVOIOutputScaleLUT(minimum, maximum float64) *voiOutputScaleLUT {
+	if maximum <= minimum {
+		maximum = minimum + 1
+	}
+	return &voiOutputScaleLUT{minimum: minimum, maximum: maximum}
+}
+
+func (v *voiOutputScaleLUT) IsValid() bool               { return true }
+func (v *voiOutputScaleLUT) MinimumOutputValue() float64 { return 0 }
+func (v *voiOutputScaleLUT) MaximumOutputValue() float64 { return 255 }
+func (v *voiOutputScaleLUT) Recalculate()                {}
+func (v *voiOutputScaleLUT) Transform(input float64) float64 {
+	if input <= v.minimum {
+		return 0
+	}
+	if input >= v.maximum {
+		return 255
+	}
+	return (input - v.minimum) * 255 / (v.maximum - v.minimum)
+}
+
+func normalizedVOITable(table *voiTableLUT) lut.LUT {
+	return scaledVOITable(table, table.MinimumOutputValue(), table.MaximumOutputValue())
+}
+
+func scaledVOITable(table *voiTableLUT, minimum, maximum float64) lut.LUT {
+	composite := lut.NewCompositeLUT()
+	composite.Add(table)
+	composite.Add(newVOIOutputScaleLUT(minimum, maximum))
+	return composite
+}
 
 func mapThroughLUT(pd *DicomPixelData, table lut.LUT, ignorePadding bool) ([][]byte, error) {
 	if pd.Info == nil {
@@ -122,11 +182,11 @@ func mapThroughLUT(pd *DicomPixelData, table lut.LUT, ignorePadding bool) ([][]b
 	}
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
-	var padMin, padMax int32
+	var padMin, padMax int64
 	if hasPadding {
-		padMin = *pd.Info.PixelPaddingValue
+		padMin = int64(*pd.Info.PixelPaddingValue)
 		if pd.Info.PixelPaddingRangeLimit != nil {
-			padMax = *pd.Info.PixelPaddingRangeLimit
+			padMax = int64(*pd.Info.PixelPaddingRangeLimit)
 		} else {
 			padMax = padMin
 		}

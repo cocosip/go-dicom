@@ -85,8 +85,12 @@ func main() {
 		return
 	}
 
-	// Create DICOM image (window is auto-calculated from pixel data)
-	dicomImage := imaging.NewDicomImage(pixelData)
+	// Create a Dataset-driven image so DICOM window, LUT, and overlay metadata is applied.
+	dicomImage, err := imaging.NewDicomImageFromParseResult(result)
+	if err != nil {
+		fmt.Printf("Failed to create DICOM image: %v\n", err)
+		return
+	}
 
 	// Print image information
 	fmt.Printf("\nImage properties:\n")
@@ -136,8 +140,7 @@ func main() {
 		dicomImage.SetWindow(wc, ww)
 		fmt.Printf("Using custom window: Center=%.0f, Width=%.0f\n", wc, ww)
 	} else {
-		// Window is auto-calculated from pixel data in DicomImage
-		fmt.Printf("Using auto-calculated window: Center=%.0f, Width=%.0f\n",
+		fmt.Printf("Using DICOM or auto-calculated window: Center=%.0f, Width=%.0f\n",
 			dicomImage.WindowCenter(), dicomImage.WindowWidth())
 	}
 

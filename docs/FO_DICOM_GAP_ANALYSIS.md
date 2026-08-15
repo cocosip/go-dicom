@@ -55,7 +55,7 @@ Priority indicates implementation order, not estimated effort:
 | NET-003 | P1 | Complete | Advanced association negotiation through the high-level client |
 | NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Complete | Complete Structured Report value types and file workflow |
-| IMG-001 | P1 | Partial | Dataset-driven image rendering pipeline |
+| IMG-001 | P1 | Complete | Dataset-driven image rendering pipeline |
 | CORE-001 | P1 | Complete | Recursive Dataset and Sequence validation |
 | IMG-002 | P2 | Open | Frame geometry, spatial transforms, and interpolation tools |
 | CORE-002 | P2 | Open | Dataset walker, match rules, and transform rules |
@@ -71,12 +71,12 @@ Priority indicates implementation order, not estimated effort:
 Progress as of 2026-08-15:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
-  SR-001, CORE-001, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, IMG-001, IMG-002, CORE-002, PRINT-001,
+  SR-001, IMG-001, CORE-001, ANON-001, and DICT-001.
+- **Not complete:** DOC-001, IMG-002, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** IMG-001, the first incomplete item in the planned development
+- **Next item:** IMG-002, the first incomplete item in the planned development
   order below.
 
 ## Planned Development Order
@@ -92,7 +92,7 @@ recorded in this document.
 | 1 | NET-004 | P1 | Complete | Complete the NET-003 negotiation family while its association APIs and tests are current. |
 | 2 | CORE-001 | P1 | Complete | Establish recursive Dataset and Sequence correctness before completing nested domain workflows. |
 | 3 | SR-001 | P1 | Complete | Build typed SR trees and file workflows on the recursive validation behavior from CORE-001. |
-| 4 | IMG-001 | P1 | Partial | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
+| 4 | IMG-001 | P1 | Complete | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
 | 5 | IMG-002 | P2 | Open | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
 | 6 | CORE-002 | P2 | Open | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
 | 7 | PRINT-001 | P2 | Partial | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
@@ -445,15 +445,25 @@ Reference: [fo-dicom StructuredReport](https://github.com/fo-dicom/fo-dicom/tree
 
 ### IMG-001: Dataset-Driven Rendering
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P1`
 
-The LUT and overlay primitives exist, but `DicomImage` is constructed from
-`DicomPixelData` rather than directly from a Dataset or file. Its default
-grayscale pipeline fixes rescale slope/intercept to `1/0`, computes an optimal
-window from pixels, and does not fully consume Dataset Modality LUT, VOI LUT,
-window, presentation, and per-frame metadata. Stored `scale` and
-`showOverlays` state do not affect `RenderFrame`.
+Completed on 2026-08-15. `DicomImage` can now be created from a Dataset, parse
+result, or file. Dataset construction retains a private Dataset clone, decodes
+encapsulated frames through an injectable codec registry, and builds per-frame
+grayscale pipelines from top-level and functional-group metadata.
+
+Window selection follows fo-dicom precedence: valid top-level window,
+functional-group window, valid Smallest/Largest Image Pixel Value, then pixel
+min/max excluding padding. The fallback range is transformed through an
+explicit Modality LUT or rescale before window calculation. Explicit Modality
+and VOI LUT Sequences, VOI LUT Function, MONOCHROME1 presentation, palette
+color, caller inversion, and caller grayscale color maps affect output.
+
+Rendering now supports packed 1-bit and signed/unsigned 32-bit grayscale,
+bilinear scaling (nearest-neighbor for 1-bit), explicit and embedded overlays,
+overlay origin/frame range/clipping/color/visibility, and caller control over
+VOI LUT and all-frame LUT propagation. The source Dataset is not mutated.
 
 Reference: [fo-dicom DicomImage](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/DicomImage.cs)
 
@@ -472,6 +482,25 @@ Reference: [fo-dicom DicomImage](https://github.com/fo-dicom/fo-dicom/blob/7ea6d
   overlays, and multi-frame functional groups.
 - Compare representative rendered pixels with fo-dicom within declared
   tolerance.
+
+**Verification performed**
+
+- Synthetic pixel tests cover rescale/windowing, Modality and VOI LUT
+  precedence, 16-bit VOI output normalization, SIGMOID VOI, MONOCHROME
+  rendering, native and encapsulated palette conversion, 1/32-bit samples,
+  32-bit Explicit VR Big Endian pixels, Big Endian Modality/VOI/Palette LUT
+  Data, functional groups, scaling, color maps, and explicit/embedded overlays.
+- Dataset, parse-result, file, injected-codec, clone, and source-preservation
+  workflows are covered by focused tests, including caller pipeline overrides
+  and mutating codecs with multi-frame fragments lacking a Basic Offset Table.
+- `go test ./pkg/imaging/... -count=1`,
+  `go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`,
+  `go build ./...`, `golangci-lint run`, and `git diff --check` pass. The build
+  exits successfully but reports that the read-only default Go module stat
+  cache cannot be updated.
+- `go test -race fmt -run '^$'` cannot start on this Windows host and exits
+  with `0xc0000139`; race remains a CI verification requirement rather than a
+  local pass.
 
 ### CORE-001: Recursive Validation
 
@@ -824,8 +853,8 @@ Phase acceptance:
 
 Scope: MED-001, NET-003, NET-004, SR-001, IMG-001, CORE-001.
 
-Current progress: MED-001, NET-003, NET-004, SR-001, and CORE-001 are complete.
-IMG-001 remains incomplete; therefore Phase 1 is not complete.
+Current progress: MED-001, NET-003, NET-004, SR-001, IMG-001, and CORE-001 are
+complete. Therefore Phase 1 is complete.
 
 Phase acceptance:
 
