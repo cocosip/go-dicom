@@ -12,7 +12,6 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	dicomendian "github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
@@ -186,6 +185,9 @@ func NewDicomPixelDataFromBytes(info *PixelDataInfo, data []byte) (*DicomPixelDa
 	if err != nil {
 		return nil, err
 	}
+	if info.TransferSyntaxUID == transferSyntaxExplicitVRBigEndian {
+		data = swapPixelDataBytes(data, info)
+	}
 
 	frameSize := info.UncompressedFrameSize()
 	expectedSize := frameSize * info.NumberOfFrames
@@ -216,6 +218,58 @@ func (pd *DicomPixelData) GetFrame(frameIndex int) ([]byte, error) {
 		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(pd.frames))
 	}
 	return pd.frames[frameIndex], nil
+}
+
+// GetSample returns one decoded native pixel sample. Coordinates and frame and
+// sample indexes are zero-based. Encapsulated data must be decoded first.
+func (pd *DicomPixelData) GetSample(frame, x, y, sample int) (int64, error) {
+	if pd == nil || pd.Info == nil {
+		return 0, fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return 0, fmt.Errorf("cannot read a scalar sample from encapsulated pixel data")
+	}
+	if frame < 0 || frame >= len(pd.frames) {
+		return 0, fmt.Errorf("frame index %d out of range [0, %d)", frame, len(pd.frames))
+	}
+	if x < 0 || x >= int(pd.Info.Width) {
+		return 0, fmt.Errorf("x coordinate %d out of range [0, %d)", x, pd.Info.Width)
+	}
+	if y < 0 || y >= int(pd.Info.Height) {
+		return 0, fmt.Errorf("y coordinate %d out of range [0, %d)", y, pd.Info.Height)
+	}
+	if sample < 0 || sample >= int(pd.Info.SamplesPerPixel) {
+		return 0, fmt.Errorf("sample index %d out of range [0, %d)", sample, pd.Info.SamplesPerPixel)
+	}
+
+	pixelIndex := y*int(pd.Info.Width) + x
+	sampleIndex := pixelIndex*int(pd.Info.SamplesPerPixel) + sample
+	if pd.Info.PlanarConfiguration == PlanarPlanar && pd.Info.SamplesPerPixel > 1 {
+		sampleIndex = sample*int(pd.Info.Width)*int(pd.Info.Height) + pixelIndex
+	}
+	offset := sampleIndex * pd.Info.BytesAllocated()
+	value, ok := decodePixelSampleLE(pd.frames[frame], offset, pd.Info)
+	if !ok {
+		return 0, fmt.Errorf("cannot decode sample at byte offset %d with BitsAllocated=%d", offset, pd.Info.BitsAllocated)
+	}
+	return value, nil
+}
+
+// IsPaddingSample reports whether value is inside the inclusive DICOM pixel
+// padding interval. A reversed Pixel Padding Range Limit is normalized.
+func (pd *DicomPixelData) IsPaddingSample(value int64) bool {
+	if pd == nil || pd.Info == nil || pd.Info.PixelPaddingValue == nil {
+		return false
+	}
+	minimum := int64(*pd.Info.PixelPaddingValue)
+	maximum := minimum
+	if pd.Info.PixelPaddingRangeLimit != nil {
+		maximum = int64(*pd.Info.PixelPaddingRangeLimit)
+	}
+	if minimum > maximum {
+		minimum, maximum = maximum, minimum
+	}
+	return value >= minimum && value <= maximum
 }
 
 // CalculateOptimalWindow computes optimal window center/width from pixel data
@@ -835,7 +889,7 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 		if len(data) == 0 {
 			return nil, fmt.Errorf("pixel data is empty")
 		}
-		if ts := ds.InternalTransferSyntax(); ts != nil && (ts.Endian() == dicomendian.Big || ts.SwapPixelData()) {
+		if ts := ds.InternalTransferSyntax(); ts != nil && ts.SwapPixelData() {
 			data = swapPixelDataBytes(data, info)
 		}
 		pd, err = NewDicomPixelDataFromBytes(info, data)

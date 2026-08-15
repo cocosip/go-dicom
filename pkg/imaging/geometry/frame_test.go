@@ -58,6 +58,28 @@ func TestClassicFrameGeometryCoordinateRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFrameGeometryReadsParserStyleNumericStrings(t *testing.T) {
+	ds := dataset.New()
+	mustAdd(t, ds,
+		element.NewUnsignedShort(tag.Columns, []uint16{4}),
+		element.NewUnsignedShort(tag.Rows, []uint16{3}),
+		element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}),
+		element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{"1.2.3"}),
+		element.NewString(tag.PixelSpacing, vr.DS, []string{"2", "3"}),
+		element.NewString(tag.ImagePositionPatient, vr.DS, []string{"10", "20", "30"}),
+		element.NewString(tag.ImageOrientationPatient, vr.DS, []string{"1", "0", "0", "0", "1", "0"}),
+	)
+
+	geometry, err := NewFrameGeometry(ds, 1)
+	if err != nil {
+		t.Fatalf("NewFrameGeometry(parser-style strings) error = %v", err)
+	}
+	if geometry.TopLeft != (math3d.Point3{X: 10, Y: 20, Z: 30}) ||
+		geometry.PixelSpacingRows != 2 || geometry.PixelSpacingColumns != 3 {
+		t.Fatalf("geometry = %+v", geometry)
+	}
+}
+
 func TestEnhancedMultiFrameGeometryUsesSharedAndPerFrameMacros(t *testing.T) {
 	ds := dataset.New()
 	mustAdd(t, ds,

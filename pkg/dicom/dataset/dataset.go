@@ -275,6 +275,29 @@ func (ds *Dataset) Clone() *Dataset {
 	return clone
 }
 
+// DeepClone creates an independent recursive copy of the Dataset. Sequence
+// items, fragment buffers, and ordinary element buffers are copied.
+func (ds *Dataset) DeepClone() *Dataset {
+	if ds == nil {
+		return New()
+	}
+	clone := New()
+	clone.internalTransferSyntax = ds.internalTransferSyntax
+	clone.skipValidation = ds.skipValidation
+	for tagValue, elem := range ds.items {
+		if sequence, ok := elem.(*Sequence); ok {
+			clone.items[tagValue] = sequence.DeepClone()
+			continue
+		}
+		clone.items[tagValue] = element.DeepClone(elem)
+	}
+	if !ds.cacheDirty && len(ds.sortedTags) > 0 {
+		clone.sortedTags = append([]uint32(nil), ds.sortedTags...)
+		clone.cacheDirty = false
+	}
+	return clone
+}
+
 // Merge merges elements from another dataset into this one.
 // If overwrite is true, existing elements are replaced.
 // If overwrite is false, only new elements are added.

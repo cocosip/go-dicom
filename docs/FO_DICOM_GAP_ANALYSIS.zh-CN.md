@@ -59,7 +59,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | ANON-001 | P2 | Complete | 完整的自定义匿名化配置加载 |
 | PRINT-001 | P2 | Partial | 基于 Dataset 的 DICOM 打印管理模型 |
 | OBS-001 | P2 | Open | 结构化网络日志、请求事件和指标钩子 |
-| IMG-003 | P3 | Partial | 体数据重建和 MPR |
+| IMG-003 | P3 | Complete | 体数据重建和 MPR |
 | MED-002 | P3 | Open | DICOM 文件扫描工作流 |
 
 ## 实施进度
@@ -67,10 +67,10 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 截至 2026-08-15：
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  SR-001、IMG-001、IMG-002、CORE-001、ANON-001 和 DICT-001。
+  SR-001、IMG-001、IMG-002、IMG-003、CORE-001、ANON-001 和 DICT-001。
 - **未完成：** DOC-001、
   CORE-002、PRINT-001、OBS-001、
-  IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
+  MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
 - **下一项：** CORE-002，即下方计划开发顺序中的第一个未完成条目。
@@ -92,7 +92,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 7 | PRINT-001 | P2 | Partial | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
 | 8 | OBS-001 | P2 | Open | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
 | 9 | MED-002 | P3 | Open | 在更大型的重建工作之前，先交付独立且边界明确的扫描器工作流。 |
-| 10 | IMG-003 | P3 | Partial | 仅在 IMG-001 和 IMG-002 完成后实施体重建和 MPR。 |
+| 10 | IMG-003 | P3 | Complete | 仅在 IMG-001 和 IMG-002 完成后实施体重建和 MPR。 |
 | 11 | DOC-001 | P0 | Partial | 主要能力完成后再做最终公共 API 和 README 审计，避免文档反复调整。 |
 
 ## 详细差距
@@ -659,10 +659,14 @@ fo-dicom 提供结构化日志、请求已发送/待处理/已完成/已超时�
 
 ### IMG-003: 体数据重建与 MPR
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P3`
 
-reconstruction 包记录了 ImageData、VolumeData、Slice、Stack 和 DicomGenerator，但这些类型仍是占位实现。构造器返回 `ErrNotImplemented`，`NewDicomGenerator` 返回 `nil`。
+已于 2026-08-15 完成。reconstruction 包现可将经典或 Enhanced CT/MR Dataset 展开为逐帧 `ImageData`，验证并排序不可变的 `VolumeData`，采样任意患者空间切面，创建惰性的标准平面 Stack，并流式生成经典 CT/MR 派生 DICOM 实例。
+
+实现没有照搬被审计的 fo-dicom 框架：它会校验帧法向量，并发路径不共享可变搜索状态，允许最后一行/列和首末层的像素中心，包含 Stack 端点；显式允许不规则层距后，按真实相邻层距离插值。生成实例使用 Explicit VR Little Endian、新的 Series/SOP UID、`DERIVED\SECONDARY\MPR`、源帧引用、有效图像平面标签、16 位有符号或无符号像素，并使用 Pixel Padding Value 表示无效样本。经典输出会移除 Enhanced 功能组和维度标签。
+
+完成后的走查还将源帧和 Volume 公共状态收紧为只读访问器，原生 Enhanced 多帧只创建并共享一个 Pixel Data 容器，并按帧校验 Dimension Index Values。重建只接受一个 Stack ID；非空间维度可以声明，但必须在全部帧中保持不变，多 Stack 以及变化的时间、扩散、心动周期维度会被拒绝。生成实例的 Modality 由输出 SOP Class 强制确定；CT MONOCHROME1 会被拒绝，MR 合法的 MONOCHROME1 极性保持不变。源数据、Cut 和 Stack 的 checked 上限可阻止整数溢出及无界预分配，生成的浮点标签使用不超过 16 字符的合法 DICOM DS 表示。
 
 参考：[fo-dicom Reconstruction](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/Reconstruction)
 
@@ -676,12 +680,15 @@ reconstruction 包记录了 ImageData、VolumeData、Slice、Stack 和 DicomGene
 - 生成具有有效几何、派生元数据、UID 和像素表示的派生 DICOM 实例。
 - 明确定义大型检查的内存和并发行为。
 
-**建议验证**
+**验证**
 
-- 使用切面结果可解析预测的合成体数据。
-- 测试不规则间距、逆序、斜位方向和多帧 Dataset。
-- 与 fo-dicom 交叉检查几何和代表性像素值。
-- 在优化体数据和切面生成之前增加基准测试。
+- 合成测试覆盖排序、兼容性错误、包含端点的边界、双线性与真实层距插值、Padding 掩码、取消和确定性 worker 数。
+- 轴位、冠状位、矢状位和任意切面均有可预测像素值测试，包括不规则层距和 Enhanced 多帧输入。
+- 派生 CT/MR Dataset 会再次经过 writer/parser 往返，验证 Transfer Syntax、元数据、源引用和代表性像素值。
+- 仓库的 `TestMultiFrame.dcm` 与 fo-dicom 的 `GH1876.dcm` 字节完全一致；集成回归测试覆盖其 7 帧几何、stored 代表像素、层距、参考 Cut、modality-space rescale 以及派生序列往返。
+- 使用流式生成器时，内存上界为已解码源帧加一个已物化输出切片。
+
+**有意边界：** IMG-003 不生成 Enhanced 多帧输出；对于彩色、浮点像素、非 CT/MR、方向不兼容和不受支持的多维输入，会显式拒绝，而不是生成语义不明确的结果。
 
 ### MED-002: DICOM 文件扫描器
 
@@ -778,6 +785,8 @@ OBS-001 尚未完成，因此 Phase 2 尚未完成。
 ### Phase 3: 专用工作流
 
 范围：IMG-003 和 MED-002。
+
+当前进度：IMG-003 已完成；MED-002 仍为 Open，因此 Phase 3 尚未完成。
 
 阶段验收：
 

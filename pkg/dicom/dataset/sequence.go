@@ -136,6 +136,24 @@ func (s *Sequence) Clone() *Sequence {
 	}
 }
 
+// DeepClone creates an independent recursive copy of the sequence and all
+// Dataset items it contains.
+func (s *Sequence) DeepClone() *Sequence {
+	if s == nil {
+		return nil
+	}
+	items := make([]*Dataset, len(s.items))
+	for index, item := range s.items {
+		if item != nil {
+			items[index] = item.DeepClone()
+		}
+	}
+	return &Sequence{
+		tag:   s.tag,
+		items: items,
+	}
+}
+
 // Filter returns a new sequence containing only items that match the predicate.
 func (s *Sequence) Filter(predicate func(*Dataset) bool) *Sequence {
 	filtered := NewSequence(s.tag)

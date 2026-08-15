@@ -63,7 +63,7 @@ Priority indicates implementation order, not estimated effort:
 | ANON-001 | P2 | Complete | Complete custom anonymization profile loading |
 | PRINT-001 | P2 | Partial | Dataset-backed DICOM Print Management models |
 | OBS-001 | P2 | Open | Structured network logging, request events, and metrics hooks |
-| IMG-003 | P3 | Partial | Volume reconstruction and MPR |
+| IMG-003 | P3 | Complete | Volume reconstruction and MPR |
 | MED-002 | P3 | Open | DICOM file scanner workflow |
 
 ## Implementation Progress
@@ -71,9 +71,9 @@ Priority indicates implementation order, not estimated effort:
 Progress as of 2026-08-15:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
-  SR-001, IMG-001, IMG-002, CORE-001, ANON-001, and DICT-001.
+  SR-001, IMG-001, IMG-002, IMG-003, CORE-001, ANON-001, and DICT-001.
 - **Not complete:** DOC-001, CORE-002, PRINT-001,
-  OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
+  OBS-001, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
 - **Next item:** CORE-002, the first incomplete item in the planned development
@@ -98,7 +98,7 @@ recorded in this document.
 | 7 | PRINT-001 | P2 | Partial | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
 | 8 | OBS-001 | P2 | Open | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
 | 9 | MED-002 | P3 | Open | Deliver the independent, bounded scanner workflow before the larger reconstruction item. |
-| 10 | IMG-003 | P3 | Partial | Implement volume reconstruction and MPR only after IMG-001 and IMG-002 are complete. |
+| 10 | IMG-003 | P3 | Complete | Implement volume reconstruction and MPR only after IMG-001 and IMG-002 are complete. |
 | 11 | DOC-001 | P0 | Partial | Perform the final public API and README audit after the major capabilities are complete, avoiding repeated documentation churn. |
 
 ## Detailed Gaps
@@ -770,12 +770,32 @@ Reference: [fo-dicom Network Metrics](https://github.com/fo-dicom/fo-dicom/tree/
 
 ### IMG-003: Volume Reconstruction and MPR
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P3`
 
-The reconstruction package documents ImageData, VolumeData, Slice, Stack, and
-DicomGenerator but implements them as placeholders. Constructors return
-`ErrNotImplemented`, and `NewDicomGenerator` returns `nil`.
+Completed on 2026-08-15. The reconstruction package now expands classic or
+Enhanced CT/MR datasets into frame-level `ImageData`, validates and sorts an
+immutable `VolumeData`, samples arbitrary patient-space cuts, creates lazy
+standard-plane stacks, and streams classic CT/MR derived DICOM instances.
+
+The implementation intentionally differs from the audited fo-dicom scaffold:
+it validates frame normals, uses immutable search state under concurrency,
+accepts final row/column and slice centers, includes stack endpoints, and uses
+actual neighbor distances when irregular spacing is explicitly enabled.
+Generated instances use Explicit VR Little Endian, new Series/SOP UIDs,
+`DERIVED\SECONDARY\MPR`, source frame references, valid image-plane tags,
+16-bit signed or unsigned pixels, and Pixel Padding Value for invalid samples.
+Enhanced functional-group and dimension tags are removed from classic output.
+
+The post-completion audit also made the public source/volume state read-only,
+reused one pixel-data container for native Enhanced frames, and validated
+per-frame Dimension Index Values. A reconstruction accepts one Stack ID and
+constant non-spatial dimensions; it rejects multiple stacks and varying
+temporal/diffusion/cardiac dimensions. Generated Modality is forced from the
+output SOP Class. CT MONOCHROME1 is rejected, while legal MR MONOCHROME1
+polarity is preserved. Checked source/cut/stack limits prevent integer overflow
+and unbounded pre-allocation, and generated floating-point tags use valid
+16-character DICOM DS formatting.
 
 Reference: [fo-dicom Reconstruction](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Imaging/Reconstruction)
 
@@ -791,13 +811,25 @@ This item depends on IMG-001 and IMG-002; both prerequisites are complete.
   UIDs, and pixel representation.
 - Define memory and concurrency behavior for large studies.
 
-**Suggested verification**
+**Verification**
 
-- Synthetic volumes with analytically predictable cuts.
-- Irregular spacing, reversed ordering, oblique orientation, and multi-frame
-  datasets.
-- Cross-check geometry and representative pixel values with fo-dicom.
-- Add benchmarks before optimizing volume and cut generation.
+- Synthetic tests cover sorting, compatibility failures, inclusive boundaries,
+  bilinear and actual-distance interpolation, padding masks, cancellation, and
+  deterministic worker counts.
+- Standard axial, coronal, sagittal, and arbitrary cuts have predictable-value
+  coverage, including irregular spacing and Enhanced multi-frame input.
+- Derived CT/MR datasets are written and parsed again to verify transfer syntax,
+  metadata, source references, and representative pixel values.
+- The repository `TestMultiFrame.dcm` fixture is byte-identical to fo-dicom's
+  `GH1876.dcm`; its seven-frame geometry, stored representative pixels, spacing,
+  reference cut, modality-space rescale, and generated-series round trip are
+  covered by an integration regression test.
+- Memory is bounded by decoded source frames plus one materialized output slice
+  when the streaming generator API is used.
+
+**Intentional boundary:** IMG-003 does not generate Enhanced multi-frame output
+and rejects color, floating-pixel, non-CT/MR, incompatible-orientation, and
+unsupported multi-dimensional inputs rather than emitting ambiguous results.
 
 ### MED-002: DICOM File Scanner
 
@@ -910,6 +942,9 @@ Phase acceptance:
 ### Phase 3: Specialized Workflows
 
 Scope: IMG-003 and MED-002.
+
+Current progress: IMG-003 is complete; MED-002 remains open, so Phase 3 is not
+complete.
 
 Phase acceptance:
 

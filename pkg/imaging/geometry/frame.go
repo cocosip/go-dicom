@@ -8,10 +8,13 @@ package geometry
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
 )
 
@@ -245,11 +248,7 @@ func validateFrameIndex(ds *dataset.Dataset, frame int) error {
 		return nil
 	}
 	if value, ok := ds.Get(tag.NumberOfFrames); ok {
-		frames, valid := value.(*element.IntegerString)
-		if !valid {
-			return fmt.Errorf("number of frames is not an IntegerString")
-		}
-		count, err := frames.GetInt(0)
+		count, err := frameCountValue(value)
 		if err != nil {
 			return fmt.Errorf("read Number of Frames: %w", err)
 		}
@@ -305,11 +304,7 @@ func decimalValues(ds *dataset.Dataset, target *tag.Tag) ([]float64, bool, error
 	if !found {
 		return nil, false, nil
 	}
-	decimal, ok := value.(*element.DecimalString)
-	if !ok {
-		return nil, true, fmt.Errorf("element %s is not DecimalString", target)
-	}
-	values, err := decimal.GetFloats()
+	values, err := geometryDecimalValues(value)
 	if err != nil {
 		return nil, true, fmt.Errorf("read %s: %w", target, err)
 	}
@@ -319,6 +314,43 @@ func decimalValues(ds *dataset.Dataset, target *tag.Tag) ([]float64, bool, error
 		}
 	}
 	return values, true, nil
+}
+
+func frameCountValue(value element.Element) (int, error) {
+	switch typed := value.(type) {
+	case *element.IntegerString:
+		return typed.GetInt(0)
+	case *element.String:
+		if typed.ValueRepresentation().Code() != vr.CodeIS {
+			return 0, fmt.Errorf("value representation is %s, want IS", typed.ValueRepresentation().Code())
+		}
+		return strconv.Atoi(strings.TrimSpace(typed.GetValue(0)))
+	default:
+		return 0, fmt.Errorf("element type is %T, want Integer String", value)
+	}
+}
+
+func geometryDecimalValues(value element.Element) ([]float64, error) {
+	switch typed := value.(type) {
+	case *element.DecimalString:
+		return typed.GetFloats()
+	case *element.String:
+		if typed.ValueRepresentation().Code() != vr.CodeDS {
+			return nil, fmt.Errorf("value representation is %s, want DS", typed.ValueRepresentation().Code())
+		}
+		stringsValues := typed.GetValues()
+		values := make([]float64, len(stringsValues))
+		for index, entry := range stringsValues {
+			parsed, err := strconv.ParseFloat(strings.TrimSpace(entry), 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse value %d: %w", index, err)
+			}
+			values[index] = parsed
+		}
+		return values, nil
+	default:
+		return nil, fmt.Errorf("element type is %T, want Decimal String", value)
+	}
 }
 
 func functionalGroupValues(ds *dataset.Dataset, frame int) *dataset.Dataset {
