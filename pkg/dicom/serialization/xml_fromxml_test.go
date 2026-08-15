@@ -4,6 +4,9 @@
 package serialization
 
 import (
+	"bytes"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -173,14 +176,96 @@ func TestFromXML_Binary(t *testing.T) {
 	}
 }
 
+func TestFromXML_RestoresBinaryElementTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		vrCode   string
+		wantVR   *vr.VR
+		wantType reflect.Type
+	}{
+		{name: "other byte", vrCode: "OB", wantVR: vr.OB, wantType: reflect.TypeOf((*element.OtherByte)(nil))},
+		{name: "other word", vrCode: "OW", wantVR: vr.OW, wantType: reflect.TypeOf((*element.OtherWord)(nil))},
+		{name: "other double", vrCode: "OD", wantVR: vr.OD, wantType: reflect.TypeOf((*element.OtherDouble)(nil))},
+		{name: "other float", vrCode: "OF", wantVR: vr.OF, wantType: reflect.TypeOf((*element.OtherFloat)(nil))},
+		{name: "other long", vrCode: "OL", wantVR: vr.OL, wantType: reflect.TypeOf((*element.OtherLong)(nil))},
+		{name: "other very long", vrCode: "OV", wantVR: vr.OV, wantType: reflect.TypeOf((*element.OtherVeryLong)(nil))},
+		{name: "unknown", vrCode: "UN", wantVR: vr.UN, wantType: reflect.TypeOf((*element.Unknown)(nil))},
+	}
+
+	for _, tt := range tests {
+		for _, withData := range []bool{false, true} {
+			caseName := "empty"
+			body := ""
+			wantData := []byte(nil)
+			wantCount := 0
+			if withData {
+				caseName = "inline binary"
+				body = "<InlineBinary>AQIDBA==</InlineBinary>"
+				wantData = []byte{1, 2, 3, 4}
+				wantCount = 1
+			}
+
+			t.Run(tt.name+"/"+caseName, func(t *testing.T) {
+				xmlData := []byte(fmt.Sprintf(
+					`<NativeDicomModel><DicomAttribute tag="00111010" vr="%s">%s</DicomAttribute></NativeDicomModel>`,
+					tt.vrCode,
+					body,
+				))
+
+				ds, err := FromXML(xmlData)
+				if err != nil {
+					t.Fatalf("FromXML() error = %v", err)
+				}
+				got, found := ds.Get(tag.New(0x0011, 0x1010))
+				if !found {
+					t.Fatal("binary element not found")
+				}
+				if gotType := reflect.TypeOf(got); gotType != tt.wantType {
+					t.Fatalf("element type = %v, want %v", gotType, tt.wantType)
+				}
+				if got.ValueRepresentation() != tt.wantVR {
+					t.Fatalf("VR = %s, want %s", got.ValueRepresentation(), tt.wantVR)
+				}
+				if got.Count() != wantCount {
+					t.Fatalf("Count() = %d, want %d", got.Count(), wantCount)
+				}
+				if gotData := got.Buffer().Data(); !bytes.Equal(gotData, wantData) {
+					t.Fatalf("data = %v, want %v", gotData, wantData)
+				}
+			})
+		}
+	}
+}
+
 func TestFromXML_Numeric(t *testing.T) {
 	xmlData := []byte(`<?xml version="1.0" encoding="utf-8"?>
 <NativeDicomModel>
-  <DicomAttribute tag="00280010" vr="US" keyword="Rows">
-    <Value number="1">512</Value>
+  <DicomAttribute tag="00111010" vr="US">
+    <Value number="1">65535</Value>
   </DicomAttribute>
-  <DicomAttribute tag="00280011" vr="US" keyword="Columns">
-    <Value number="1">512</Value>
+  <DicomAttribute tag="00111011" vr="UL">
+    <Value number="1">4294967295</Value>
+  </DicomAttribute>
+  <DicomAttribute tag="00111012" vr="SS">
+    <Value number="1">-32768</Value>
+  </DicomAttribute>
+  <DicomAttribute tag="00111013" vr="SL">
+    <Value number="1">-2147483648</Value>
+  </DicomAttribute>
+  <DicomAttribute tag="00111014" vr="FL">
+    <Value number="1">1.5</Value>
+  </DicomAttribute>
+  <DicomAttribute tag="00111015" vr="FD">
+    <Value number="1">-2.25</Value>
+  </DicomAttribute>
+  <DicomAttribute tag="00111016" vr="SV">
+    <Value number="1">-9223372036854775807</Value>
+  </DicomAttribute>
+  <DicomAttribute tag="00111017" vr="UV">
+    <Value number="1">18446744073709551614</Value>
+  </DicomAttribute>
+  <DicomAttribute tag="00111018" vr="AT">
+    <Value number="1">00280010</Value>
   </DicomAttribute>
 </NativeDicomModel>`)
 
@@ -189,20 +274,137 @@ func TestFromXML_Numeric(t *testing.T) {
 		t.Fatalf("FromXML() error = %v", err)
 	}
 
-	// Note: FromXML creates String elements for all non-binary VRs
-	// Use GetString and parse for numeric values
-	rowsStr, found := ds.GetString(tag.Rows)
-	if !found {
-		t.Error("Rows not found")
-	} else if rowsStr != "512" {
-		t.Errorf("Rows = %q, want 512", rowsStr)
+	tests := []struct {
+		name       string
+		tag        *tag.Tag
+		wantType   reflect.Type
+		wantValues []string
+	}{
+		{name: "unsigned short", tag: tag.New(0x0011, 0x1010), wantType: reflect.TypeOf((*element.UnsignedShort)(nil)), wantValues: []string{"65535"}},
+		{name: "unsigned long", tag: tag.New(0x0011, 0x1011), wantType: reflect.TypeOf((*element.UnsignedLong)(nil)), wantValues: []string{"4294967295"}},
+		{name: "signed short", tag: tag.New(0x0011, 0x1012), wantType: reflect.TypeOf((*element.SignedShort)(nil)), wantValues: []string{"-32768"}},
+		{name: "signed long", tag: tag.New(0x0011, 0x1013), wantType: reflect.TypeOf((*element.SignedLong)(nil)), wantValues: []string{"-2147483648"}},
+		{name: "float", tag: tag.New(0x0011, 0x1014), wantType: reflect.TypeOf((*element.Float)(nil)), wantValues: []string{"1.5"}},
+		{name: "double", tag: tag.New(0x0011, 0x1015), wantType: reflect.TypeOf((*element.Double)(nil)), wantValues: []string{"-2.25"}},
+		{name: "signed very long", tag: tag.New(0x0011, 0x1016), wantType: reflect.TypeOf((*element.SignedVeryLong)(nil)), wantValues: []string{"-9223372036854775807"}},
+		{name: "unsigned very long", tag: tag.New(0x0011, 0x1017), wantType: reflect.TypeOf((*element.UnsignedVeryLong)(nil)), wantValues: []string{"18446744073709551614"}},
+		{name: "attribute tag", tag: tag.New(0x0011, 0x1018), wantType: reflect.TypeOf((*element.AttributeTag)(nil)), wantValues: []string{"(0028,0010)"}},
 	}
 
-	colsStr, found := ds.GetString(tag.Columns)
-	if !found {
-		t.Error("Columns not found")
-	} else if colsStr != "512" {
-		t.Errorf("Columns = %q, want 512", colsStr)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := ds.Get(tt.tag)
+			if !found {
+				t.Fatalf("tag %s not found", tt.tag)
+			}
+			if gotType := reflect.TypeOf(got); gotType != tt.wantType {
+				t.Fatalf("element type = %v, want %v", gotType, tt.wantType)
+			}
+			values, err := element.CanonicalStrings(got)
+			if err != nil {
+				t.Fatalf("CanonicalStrings() error = %v", err)
+			}
+			if !reflect.DeepEqual(values, tt.wantValues) {
+				t.Fatalf("values = %v, want %v", values, tt.wantValues)
+			}
+		})
+	}
+}
+
+func TestFromXML_RestoresEmptyNumericAndAttributeTagElements(t *testing.T) {
+	tests := []struct {
+		name     string
+		vrCode   string
+		wantType reflect.Type
+	}{
+		{name: "unsigned short", vrCode: "US", wantType: reflect.TypeOf((*element.UnsignedShort)(nil))},
+		{name: "unsigned long", vrCode: "UL", wantType: reflect.TypeOf((*element.UnsignedLong)(nil))},
+		{name: "signed short", vrCode: "SS", wantType: reflect.TypeOf((*element.SignedShort)(nil))},
+		{name: "signed long", vrCode: "SL", wantType: reflect.TypeOf((*element.SignedLong)(nil))},
+		{name: "float", vrCode: "FL", wantType: reflect.TypeOf((*element.Float)(nil))},
+		{name: "double", vrCode: "FD", wantType: reflect.TypeOf((*element.Double)(nil))},
+		{name: "signed very long", vrCode: "SV", wantType: reflect.TypeOf((*element.SignedVeryLong)(nil))},
+		{name: "unsigned very long", vrCode: "UV", wantType: reflect.TypeOf((*element.UnsignedVeryLong)(nil))},
+		{name: "attribute tag", vrCode: "AT", wantType: reflect.TypeOf((*element.AttributeTag)(nil))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			xmlData := []byte(fmt.Sprintf(
+				`<NativeDicomModel><DicomAttribute tag="00111010" vr="%s"/></NativeDicomModel>`,
+				tt.vrCode,
+			))
+			ds, err := FromXML(xmlData)
+			if err != nil {
+				t.Fatalf("FromXML() error = %v", err)
+			}
+			got, found := ds.Get(tag.New(0x0011, 0x1010))
+			if !found {
+				t.Fatal("element not found")
+			}
+			if gotType := reflect.TypeOf(got); gotType != tt.wantType {
+				t.Fatalf("element type = %v, want %v", gotType, tt.wantType)
+			}
+			if got.Count() != 0 {
+				t.Fatalf("Count() = %d, want 0", got.Count())
+			}
+		})
+	}
+}
+
+func TestXMLRoundTripPreservesTypedValueElements(t *testing.T) {
+	tests := []struct {
+		name string
+		tag  *tag.Tag
+		elem element.Element
+	}{
+		{name: "unsigned short", tag: tag.New(0x0011, 0x1010), elem: element.NewUnsignedShort(tag.New(0x0011, 0x1010), []uint16{65535})},
+		{name: "unsigned long", tag: tag.New(0x0011, 0x1011), elem: element.NewUnsignedLong(tag.New(0x0011, 0x1011), []uint32{4294967295})},
+		{name: "signed short", tag: tag.New(0x0011, 0x1012), elem: element.NewSignedShort(tag.New(0x0011, 0x1012), []int16{-32768})},
+		{name: "signed long", tag: tag.New(0x0011, 0x1013), elem: element.NewSignedLong(tag.New(0x0011, 0x1013), []int32{-2147483648})},
+		{name: "float", tag: tag.New(0x0011, 0x1014), elem: element.NewFloat(tag.New(0x0011, 0x1014), []float32{1.5})},
+		{name: "double", tag: tag.New(0x0011, 0x1015), elem: element.NewDouble(tag.New(0x0011, 0x1015), []float64{-2.25})},
+		{name: "signed very long", tag: tag.New(0x0011, 0x1016), elem: element.NewSignedVeryLong(tag.New(0x0011, 0x1016), []int64{-9223372036854775807})},
+		{name: "unsigned very long", tag: tag.New(0x0011, 0x1017), elem: element.NewUnsignedVeryLong(tag.New(0x0011, 0x1017), []uint64{18446744073709551614})},
+		{name: "attribute tag", tag: tag.New(0x0011, 0x1018), elem: element.NewAttributeTag(tag.New(0x0011, 0x1018), []*tag.Tag{tag.Rows})},
+	}
+
+	original := dataset.New()
+	for _, tt := range tests {
+		if err := original.Add(tt.elem); err != nil {
+			t.Fatalf("Add(%s) error = %v", tt.name, err)
+		}
+	}
+	xmlData, err := ToXML(original)
+	if err != nil {
+		t.Fatalf("ToXML() error = %v", err)
+	}
+	restored, err := FromXML(xmlData)
+	if err != nil {
+		t.Fatalf("FromXML() error = %v", err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := restored.Get(tt.tag)
+			if !found {
+				t.Fatalf("tag %s not found", tt.tag)
+			}
+			if gotType, wantType := reflect.TypeOf(got), reflect.TypeOf(tt.elem); gotType != wantType {
+				t.Fatalf("element type = %v, want %v", gotType, wantType)
+			}
+			gotValues, err := element.CanonicalStrings(got)
+			if err != nil {
+				t.Fatalf("restored CanonicalStrings() error = %v", err)
+			}
+			wantValues, err := element.CanonicalStrings(tt.elem)
+			if err != nil {
+				t.Fatalf("original CanonicalStrings() error = %v", err)
+			}
+			if !reflect.DeepEqual(gotValues, wantValues) {
+				t.Fatalf("values = %v, want %v", gotValues, wantValues)
+			}
+		})
 	}
 }
 

@@ -39,9 +39,9 @@ func NewOtherByteFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherByte {
 	}
 }
 
-// Count returns 1 (binary data is treated as a single value).
+// Count returns 0 for empty data and 1 for non-empty binary data.
 func (o *OtherByte) Count() int {
-	return 1
+	return binaryValueCount(o.buffer)
 }
 
 // GetData returns the binary data.
@@ -73,9 +73,9 @@ func NewOtherWordFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherWord {
 	}
 }
 
-// Count returns 1 (binary data is treated as a single value).
+// Count returns 0 for empty data and 1 for non-empty binary data.
 func (o *OtherWord) Count() int {
-	return 1
+	return binaryValueCount(o.buffer)
 }
 
 // GetData returns the binary data.
@@ -107,9 +107,9 @@ func NewUnknownFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *Unknown {
 	}
 }
 
-// Count returns 1 (unknown data is treated as a single value).
+// Count returns 0 for empty data and 1 for non-empty unknown data.
 func (u *Unknown) Count() int {
-	return 1
+	return binaryValueCount(u.buffer)
 }
 
 // GetData returns the binary data.
@@ -141,9 +141,9 @@ func NewOtherDoubleFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherDouble {
 	}
 }
 
-// Count returns 1 (binary data is treated as a single value).
+// Count returns 0 for empty data and 1 for non-empty binary data.
 func (o *OtherDouble) Count() int {
-	return 1
+	return binaryValueCount(o.buffer)
 }
 
 // GetData returns the binary data.
@@ -175,9 +175,9 @@ func NewOtherFloatFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherFloat {
 	}
 }
 
-// Count returns 1 (binary data is treated as a single value).
+// Count returns 0 for empty data and 1 for non-empty binary data.
 func (o *OtherFloat) Count() int {
-	return 1
+	return binaryValueCount(o.buffer)
 }
 
 // GetData returns the binary data.
@@ -209,9 +209,9 @@ func NewOtherLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherLong {
 	}
 }
 
-// Count returns 1 (binary data is treated as a single value).
+// Count returns 0 for empty data and 1 for non-empty binary data.
 func (o *OtherLong) Count() int {
-	return 1
+	return binaryValueCount(o.buffer)
 }
 
 // GetData returns the binary data.
@@ -243,9 +243,9 @@ func NewOtherVeryLongFromBuffer(t *tag.Tag, buf buffer.ByteBuffer) *OtherVeryLon
 	}
 }
 
-// Count returns 1 (binary data is treated as a single value).
+// Count returns 0 for empty data and 1 for non-empty binary data.
 func (o *OtherVeryLong) Count() int {
-	return 1
+	return binaryValueCount(o.buffer)
 }
 
 // GetData returns the binary data.
@@ -254,4 +254,11 @@ func (o *OtherVeryLong) GetData() []byte {
 		return nil
 	}
 	return o.buffer.Data()
+}
+
+func binaryValueCount(buf buffer.ByteBuffer) int {
+	if buf == nil || buf.Size() == 0 {
+		return 0
+	}
+	return 1
 }

@@ -198,7 +198,7 @@ tag, _ := elem.GetValue(0) // tag.PatientName
 
 **特点**:
 - 用于存储像素数据、波形数据等
-- Count() 返回 1（整体作为单个值）
+- Count() 对空数据返回 0，非空数据整体作为单个值返回 1
 - GetData() 返回原始字节数组
 
 **示例**:
@@ -330,11 +330,11 @@ values, err := elem.GetValues()
 data := elem.GetData()
 ```
 
+## 跨包实现
+
+- [x] Sequence (SQ) - 位于 `pkg/dicom/dataset`，并实现 `element.Element`
+
 ## 未来工作
-
-### 待实现类型
-
-- [ ] Sequence (SQ) - 最复杂，需要Dataset支持才能实现
 
 ### 待增强功能
 

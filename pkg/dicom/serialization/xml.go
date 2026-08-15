@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -357,6 +358,15 @@ func (w *xmlWriter) getNumericValuesAsStrings(elem element.Element) []string {
 		}
 	}
 
+	if atElem, ok := elem.(*element.AttributeTag); ok {
+		if vals, err := atElem.GetValues(); err == nil {
+			for _, v := range vals {
+				values = append(values, v.Format("J"))
+			}
+			return values
+		}
+	}
+
 	return values
 }
 
@@ -611,25 +621,13 @@ func (r *xmlReader) readSequence(t *tag.Tag, items []xmlItem) (*dataset.Sequence
 
 // readBinary parses binary data from base64
 func (r *xmlReader) readBinary(t *tag.Tag, vrCode *vr.VR, data string) (element.Element, error) {
-	if data == "" {
-		// Return empty element based on VR
-		switch vrCode {
-		case vr.OB:
-			return element.NewOtherByte(t, nil), nil
-		case vr.OW:
-			return element.NewOtherWord(t, nil), nil
-		default:
-			return element.NewOtherByte(t, nil), nil
-		}
-	}
-
 	decoded, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base64: %w", err)
 	}
 
 	switch vrCode {
-	case vr.OB, vr.UN:
+	case vr.OB:
 		return element.NewOtherByte(t, decoded), nil
 	case vr.OW:
 		return element.NewOtherWord(t, decoded), nil
@@ -637,8 +635,14 @@ func (r *xmlReader) readBinary(t *tag.Tag, vrCode *vr.VR, data string) (element.
 		return element.NewOtherDouble(t, decoded), nil
 	case vr.OF:
 		return element.NewOtherFloat(t, decoded), nil
+	case vr.OL:
+		return element.NewOtherLong(t, decoded), nil
+	case vr.OV:
+		return element.NewOtherVeryLong(t, decoded), nil
+	case vr.UN:
+		return element.NewUnknown(t, decoded), nil
 	default:
-		return element.NewOtherByte(t, decoded), nil
+		return nil, fmt.Errorf("unsupported binary VR %s", vrCode)
 	}
 }
 
@@ -718,10 +722,86 @@ func (r *xmlReader) readStringElement(t *tag.Tag, vrCode *vr.VR, values []xmlVal
 		strValues = append(strValues, strings.TrimSpace(v.Value))
 	}
 
-	// If no values, create element with empty value
-	if len(strValues) == 0 {
-		strValues = append(strValues, "")
+	var result element.Element
+	var err error
+	switch vrCode.Code() {
+	case vr.CodeUS:
+		var parsed []uint16
+		parsed, err = parseXMLValues(strValues, func(value string) (uint16, error) {
+			number, parseErr := strconv.ParseUint(value, 10, 16)
+			return uint16(number), parseErr
+		})
+		result = element.NewUnsignedShort(t, parsed)
+	case vr.CodeUL:
+		var parsed []uint32
+		parsed, err = parseXMLValues(strValues, func(value string) (uint32, error) {
+			number, parseErr := strconv.ParseUint(value, 10, 32)
+			return uint32(number), parseErr
+		})
+		result = element.NewUnsignedLong(t, parsed)
+	case vr.CodeSS:
+		var parsed []int16
+		parsed, err = parseXMLValues(strValues, func(value string) (int16, error) {
+			number, parseErr := strconv.ParseInt(value, 10, 16)
+			return int16(number), parseErr
+		})
+		result = element.NewSignedShort(t, parsed)
+	case vr.CodeSL:
+		var parsed []int32
+		parsed, err = parseXMLValues(strValues, func(value string) (int32, error) {
+			number, parseErr := strconv.ParseInt(value, 10, 32)
+			return int32(number), parseErr
+		})
+		result = element.NewSignedLong(t, parsed)
+	case vr.CodeFL:
+		var parsed []float32
+		parsed, err = parseXMLValues(strValues, func(value string) (float32, error) {
+			number, parseErr := strconv.ParseFloat(value, 32)
+			return float32(number), parseErr
+		})
+		result = element.NewFloat(t, parsed)
+	case vr.CodeFD:
+		var parsed []float64
+		parsed, err = parseXMLValues(strValues, func(value string) (float64, error) {
+			return strconv.ParseFloat(value, 64)
+		})
+		result = element.NewDouble(t, parsed)
+	case vr.CodeSV:
+		var parsed []int64
+		parsed, err = parseXMLValues(strValues, func(value string) (int64, error) {
+			return strconv.ParseInt(value, 10, 64)
+		})
+		result = element.NewSignedVeryLong(t, parsed)
+	case vr.CodeUV:
+		var parsed []uint64
+		parsed, err = parseXMLValues(strValues, func(value string) (uint64, error) {
+			return strconv.ParseUint(value, 10, 64)
+		})
+		result = element.NewUnsignedVeryLong(t, parsed)
+	case vr.CodeAT:
+		var parsed []*tag.Tag
+		parsed, err = parseXMLValues(strValues, tag.Parse)
+		result = element.NewAttributeTag(t, parsed)
+	default:
+		if len(strValues) == 0 {
+			strValues = append(strValues, "")
+		}
+		result = element.NewString(t, vrCode, strValues)
 	}
+	if err != nil {
+		return nil, fmt.Errorf("parse XML values for VR %s: %w", vrCode.Code(), err)
+	}
+	return result, nil
+}
 
-	return element.NewString(t, vrCode, strValues), nil
+func parseXMLValues[T any](values []string, parse func(string) (T, error)) ([]T, error) {
+	parsed := make([]T, len(values))
+	for index, value := range values {
+		item, err := parse(value)
+		if err != nil {
+			return nil, fmt.Errorf("value %d %q: %w", index+1, value, err)
+		}
+		parsed[index] = item
+	}
+	return parsed, nil
 }

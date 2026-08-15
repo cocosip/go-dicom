@@ -158,6 +158,15 @@ func writeExplicitStringElement(buf *bytes.Buffer, tg *tag.Tag, vrCode string, v
 	buf.Write(value)
 }
 
+func writeExplicitLongValueElement(buf *bytes.Buffer, tg *tag.Tag, vrCode string, value []byte) {
+	_ = binary.Write(buf, binary.LittleEndian, tg.Group())
+	_ = binary.Write(buf, binary.LittleEndian, tg.Element())
+	buf.WriteString(vrCode)
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(len(value)))
+	buf.Write(value)
+}
+
 type cancelAfterFirstReadSeeker struct {
 	*bytes.Reader
 	cancel context.CancelFunc
@@ -177,6 +186,83 @@ func rawExplicitDataset() []byte {
 	var buf bytes.Buffer
 	writeExplicitStringElement(&buf, tag.PatientName, "PN", []byte(testPatientName))
 	return buf.Bytes()
+}
+
+func TestParseExplicitVRRestoresVeryLongNumericElements(t *testing.T) {
+	tests := []struct {
+		name   string
+		tag    *tag.Tag
+		vrCode string
+		write  func(*bytes.Buffer)
+		assert func(*testing.T, element.Element)
+	}{
+		{
+			name:   "signed very long",
+			tag:    tag.New(0x0011, 0x1010),
+			vrCode: "SV",
+			write: func(buf *bytes.Buffer) {
+				_ = binary.Write(buf, binary.LittleEndian, int64(-9223372036854775807))
+			},
+			assert: func(t *testing.T, elem element.Element) {
+				t.Helper()
+				typed, ok := elem.(*element.SignedVeryLong)
+				if !ok {
+					t.Fatalf("element type = %T, want *element.SignedVeryLong", elem)
+				}
+				values, err := typed.GetValues()
+				if err != nil {
+					t.Fatalf("GetValues() error = %v", err)
+				}
+				if len(values) != 1 || values[0] != -9223372036854775807 {
+					t.Fatalf("values = %v, want [-9223372036854775807]", values)
+				}
+			},
+		},
+		{
+			name:   "unsigned very long",
+			tag:    tag.New(0x0011, 0x1011),
+			vrCode: "UV",
+			write: func(buf *bytes.Buffer) {
+				_ = binary.Write(buf, binary.LittleEndian, uint64(18446744073709551614))
+			},
+			assert: func(t *testing.T, elem element.Element) {
+				t.Helper()
+				typed, ok := elem.(*element.UnsignedVeryLong)
+				if !ok {
+					t.Fatalf("element type = %T, want *element.UnsignedVeryLong", elem)
+				}
+				values, err := typed.GetValues()
+				if err != nil {
+					t.Fatalf("GetValues() error = %v", err)
+				}
+				if len(values) != 1 || values[0] != 18446744073709551614 {
+					t.Fatalf("values = %v, want [18446744073709551614]", values)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var value bytes.Buffer
+			tt.write(&value)
+
+			var raw bytes.Buffer
+			writeExplicitLongValueElement(&raw, tt.tag, tt.vrCode, value.Bytes())
+
+			result, err := Parse(bytes.NewReader(raw.Bytes()),
+				WithAssumedTransferSyntax(transfer.ExplicitVRLittleEndian),
+			)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			elem, ok := result.Dataset.Get(tt.tag)
+			if !ok {
+				t.Fatalf("tag %s not found", tt.tag)
+			}
+			tt.assert(t, elem)
+		})
+	}
 }
 
 func rawExplicitDatasetLongerThanPreambleProbe() []byte {

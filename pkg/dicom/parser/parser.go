@@ -1343,6 +1343,10 @@ func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer
 		return setOrder(element.NewFloatFromBuffer(t, buf)), nil
 	case vr.CodeFD:
 		return setOrder(element.NewDoubleFromBuffer(t, buf)), nil
+	case vr.CodeSV:
+		return setOrder(element.NewSignedVeryLongFromBuffer(t, buf)), nil
+	case vr.CodeUV:
+		return setOrder(element.NewUnsignedVeryLongFromBuffer(t, buf)), nil
 
 	case vr.CodeOB:
 		return setOrder(element.NewOtherByteFromBuffer(t, buf)), nil

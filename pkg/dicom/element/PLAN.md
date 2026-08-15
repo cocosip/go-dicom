@@ -39,8 +39,8 @@
 | SS | Signed Short | 有符号短整型 | 2 bytes | int16 | ✅ 已实现 |
 | UL | Unsigned Long | 无符号长整型 | 4 bytes | uint32 | ✅ 已实现 |
 | US | Unsigned Short | 无符号短整型 | 2 bytes | uint16 | ✅ 已实现 |
-| SV | Signed 64-bit Very Long | 有符号64位 | 8 bytes | int64 | ❌ 待实现 |
-| UV | Unsigned 64-bit Very Long | 无符号64位 | 8 bytes | uint64 | ❌ 待实现 |
+| SV | Signed 64-bit Very Long | 有符号64位 | 8 bytes | int64 | ✅ 已实现 |
+| UV | Unsigned 64-bit Very Long | 无符号64位 | 8 bytes | uint64 | ✅ 已实现 |
 
 **实现文件**: `numeric.go`
 **测试文件**: `numeric_test.go`
@@ -49,26 +49,29 @@
 
 | VR | 名称 | 描述 | 状态 |
 |----|------|------|------|
-| OB | Other Byte | 字节序列 | ❌ 待实现 |
-| OD | Other Double | 双精度浮点序列 | ❌ 待实现 |
-| OF | Other Float | 单精度浮点序列 | ❌ 待实现 |
-| OL | Other Long | 32位整数序列 | ❌ 待实现 |
-| OV | Other 64-bit Very Long | 64位整数序列 | ❌ 待实现 |
-| OW | Other Word | 16位字序列 | ❌ 待实现 |
-| UN | Unknown | 未知数据 | ❌ 待实现 |
+| OB | Other Byte | 字节序列 | ✅ 已实现 |
+| OD | Other Double | 双精度浮点序列 | ✅ 已实现 |
+| OF | Other Float | 单精度浮点序列 | ✅ 已实现 |
+| OL | Other Long | 32位整数序列 | ✅ 已实现 |
+| OV | Other 64-bit Very Long | 64位整数序列 | ✅ 已实现 |
+| OW | Other Word | 16位字序列 | ✅ 已实现 |
+| UN | Unknown | 未知数据 | ✅ 已实现 |
 
-**计划文件**: `binary.go`
-**测试文件**: `binary_test.go`
+**实现文件**: `binary.go`
+**测试覆盖**: `value_text_test.go` 及 parser/serialization 集成测试
 
 ### 4. 特殊类型
 
 | VR | 名称 | 描述 | 状态 |
 |----|------|------|------|
-| SQ | Sequence of Items | 序列(包含子项) | ❌ 待实现 |
-| AT | Attribute Tag | 属性标签 | ❌ 待实现 |
+| SQ | Sequence of Items | 序列(包含子项) | ✅ 已实现 (`pkg/dicom/dataset`) |
+| AT | Attribute Tag | 属性标签 | ✅ 已实现 |
 
-**计划文件**: `sequence.go`, `attribute_tag.go`
-**测试文件**: `sequence_test.go`, `attribute_tag_test.go`
+**实现文件**: `../dataset/sequence.go`, `attribute_tag.go`
+**测试文件**: `../dataset/sequence_test.go`, `../dataset/sequence_integration_test.go`, `value_text_test.go`
+
+`Sequence` 包含 `*Dataset`，因此实现位于 `dataset` 包以避免 `element` 与
+`dataset` 之间形成循环依赖；它仍完整实现 `element.Element` 接口。
 
 ## 实现优先级
 
@@ -82,9 +85,9 @@
 - [x] 二进制类型 (OB, OW, UN)
 - [x] 特殊字符串类型 (PN, DA, TM, DT, DS, IS)
 
-### 低优先级 (Phase 4.3)
+### 低优先级 (Phase 4.3) ✅
 - [x] 其他二进制类型 (OD, OF, OL, OV)
-- [ ] 序列类型 (SQ) - 最复杂，需要Dataset支持
+- [x] 序列类型 (SQ) - 位于 `pkg/dicom/dataset`
 
 ## fo-dicom参考
 
@@ -112,25 +115,20 @@
 
 ## 当前统计
 
-- **已实现**: 所有主要类型（除了SQ序列）
+- **已实现**: 本计划列出的所有 Element 类型
   - 字符串类型: 17个VR (包括PN特殊处理)
   - 数值类型: 8种 (US/UL/SS/SL/FL/FD/SV/UV)
   - 日期时间类型: 3种 (DA/TM/DT)
   - 数字字符串类型: 2种 (DS/IS)
   - 二进制类型: 7种 (OB/OW/OD/OF/OL/OV/UN)
   - 属性标签类型: 1种 (AT)
-- **待实现**: 1个类型 (SQ - 需要Dataset支持)
-- **代码文件**: 16个
-- **代码行数**: ~2,740行
-- **测试文件**: 5个
-- **测试函数**: 21个
-- **测试通过率**: 100% ✅
+  - 序列类型: 1种 (SQ，位于 `pkg/dicom/dataset`)
+- **读写集成**: SQ 已接入 parser、writer、JSON 和 XML；parser 与 XML 对二进制数值及二进制 VR 保留具体 Element 类型
+- **待实现**: 无
 
 ## 下一步
 
-Phase 4 基本完成！下一步：
+Phase 4 和本计划依赖的 Phase 5 能力均已完成。后续变更应继续保证：
 
-**Phase 5: Dataset包**
-- 实现Dataset结构（Element集合管理）
-- 实现Sequence (SQ)类型（依赖Dataset）
-- 实现序列化/反序列化
+- 新增或修改 VR 时同步更新 parser、writer、JSON/XML 序列化及回归测试。
+- Sequence 的嵌套、递归验证、克隆和显式/未定义长度编码保持一致。
