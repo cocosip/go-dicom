@@ -161,6 +161,19 @@ func TestAssociation_ExtendedNegotiation(t *testing.T) {
 	}
 }
 
+func TestAssociation_AddExtendedNegotiationRetainsInsertedObject(t *testing.T) {
+	assoc := NewAssociation("SCU", "SCP")
+	negotiation := NewExtendedNegotiation("1.2.3", []byte{1, 1})
+	assoc.AddExtendedNegotiation(negotiation)
+
+	negotiation.AcceptApplicationInfo([]byte{1, 0})
+	ac := ToAAssociateAC(assoc)
+	if got := ac.UserInformation.ExtendedNegotiations; len(got) != 1 ||
+		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0}) {
+		t.Fatalf("accepted extended negotiations = %#v", got)
+	}
+}
+
 func TestAssociation_RoleSelection(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 

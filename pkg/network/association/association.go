@@ -137,8 +137,17 @@ func (a *Association) FindPresentationContextByAbstractSyntax(abstractSyntax str
 
 // AddExtendedNegotiation adds an extended negotiation item.
 func (a *Association) AddExtendedNegotiation(en *ExtendedNegotiation) {
+	if en == nil {
+		return
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	for _, existing := range a.ExtendedNegotiations {
+		if existing != nil && existing.SOPClassUID == en.SOPClassUID {
+			mergeExtendedNegotiation(existing, en)
+			return
+		}
+	}
 	a.ExtendedNegotiations = append(a.ExtendedNegotiations, en)
 }
 
@@ -407,6 +416,13 @@ type ExtendedNegotiation struct {
 
 	// AcceptedApplicationInfo is the application information returned by the acceptor.
 	AcceptedApplicationInfo []byte
+
+	// ServiceClassUID is the optional Common Service Class UID requested through
+	// SOP Class Common Extended Negotiation.
+	ServiceClassUID string
+
+	// RelatedGeneralSOPClassUIDs contains the ordered Related General SOP Class UIDs.
+	RelatedGeneralSOPClassUIDs []string
 }
 
 // NewExtendedNegotiation creates a new extended negotiation item.
@@ -416,6 +432,66 @@ func NewExtendedNegotiation(sopClassUID string, appInfo []byte) *ExtendedNegotia
 		SOPClassUID:              sopClassUID,
 		ServiceClassAppInfo:      requested,
 		RequestedApplicationInfo: requested,
+	}
+}
+
+// NewCommonExtendedNegotiation creates a SOP Class Common Extended Negotiation item.
+func NewCommonExtendedNegotiation(
+	sopClassUID, serviceClassUID string,
+	relatedGeneralSOPClassUIDs ...string,
+) *ExtendedNegotiation {
+	return &ExtendedNegotiation{
+		SOPClassUID:                sopClassUID,
+		ServiceClassUID:            serviceClassUID,
+		RelatedGeneralSOPClassUIDs: append([]string{}, relatedGeneralSOPClassUIDs...),
+	}
+}
+
+// HasCommonExtendedNegotiation reports whether the common negotiation values
+// were explicitly configured, including an invalid empty Service Class UID.
+func (e *ExtendedNegotiation) HasCommonExtendedNegotiation() bool {
+	return e != nil && (e.ServiceClassUID != "" || e.RelatedGeneralSOPClassUIDs != nil)
+}
+
+// Clone returns an ownership-independent copy of the negotiation.
+func (e *ExtendedNegotiation) Clone() *ExtendedNegotiation {
+	if e == nil {
+		return nil
+	}
+	requested := append([]byte(nil), e.RequestedApplicationInfo...)
+	legacy := append([]byte(nil), e.ServiceClassAppInfo...)
+	if e.RequestedApplicationInfo != nil {
+		legacy = requested
+	}
+	var relatedGeneralSOPClassUIDs []string
+	if e.RelatedGeneralSOPClassUIDs != nil {
+		relatedGeneralSOPClassUIDs = append([]string{}, e.RelatedGeneralSOPClassUIDs...)
+	}
+	return &ExtendedNegotiation{
+		SOPClassUID:                e.SOPClassUID,
+		ServiceClassAppInfo:        legacy,
+		RequestedApplicationInfo:   requested,
+		AcceptedApplicationInfo:    append([]byte(nil), e.AcceptedApplicationInfo...),
+		ServiceClassUID:            e.ServiceClassUID,
+		RelatedGeneralSOPClassUIDs: relatedGeneralSOPClassUIDs,
+	}
+}
+
+func mergeExtendedNegotiation(existing, incoming *ExtendedNegotiation) {
+	if incoming.RequestedApplicationInfo != nil || incoming.ServiceClassAppInfo != nil {
+		requested := incoming.RequestedApplicationInfo
+		if requested == nil {
+			requested = incoming.ServiceClassAppInfo
+		}
+		existing.RequestedApplicationInfo = append([]byte(nil), requested...)
+		existing.ServiceClassAppInfo = existing.RequestedApplicationInfo
+	}
+	if incoming.AcceptedApplicationInfo != nil {
+		existing.AcceptedApplicationInfo = append([]byte(nil), incoming.AcceptedApplicationInfo...)
+	}
+	if incoming.HasCommonExtendedNegotiation() {
+		existing.ServiceClassUID = incoming.ServiceClassUID
+		existing.RelatedGeneralSOPClassUIDs = append([]string{}, incoming.RelatedGeneralSOPClassUIDs...)
 	}
 }
 
@@ -749,6 +825,13 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
 		// Extended negotiations
 		for _, en := range rq.UserInformation.ExtendedNegotiations {
 			assoc.AddExtendedNegotiation(NewExtendedNegotiation(en.SOPClassUID, en.ServiceClassAppInfo))
+		}
+		for _, en := range rq.UserInformation.CommonExtendedNegotiations {
+			assoc.AddExtendedNegotiation(NewCommonExtendedNegotiation(
+				en.SOPClassUID,
+				en.ServiceClassUID,
+				en.RelatedGeneralSOPClassUIDs...,
+			))
 		}
 
 		// User identity
@@ -1133,13 +1216,25 @@ func ToAAssociateRQ(assoc *Association) *pdu.AAssociateRQ {
 
 	// Extended negotiations
 	for _, en := range assoc.ExtendedNegotiations {
-		if en == nil || len(en.RequestedApplicationInfo) == 0 {
+		if en == nil {
 			continue
 		}
-		rq.UserInformation.ExtendedNegotiations = append(rq.UserInformation.ExtendedNegotiations, pdu.ExtendedNegotiation{
-			SOPClassUID:         en.SOPClassUID,
-			ServiceClassAppInfo: append([]byte(nil), en.RequestedApplicationInfo...),
-		})
+		if len(en.RequestedApplicationInfo) > 0 {
+			rq.UserInformation.ExtendedNegotiations = append(rq.UserInformation.ExtendedNegotiations, pdu.ExtendedNegotiation{
+				SOPClassUID:         en.SOPClassUID,
+				ServiceClassAppInfo: append([]byte(nil), en.RequestedApplicationInfo...),
+			})
+		}
+		if en.HasCommonExtendedNegotiation() {
+			rq.UserInformation.CommonExtendedNegotiations = append(
+				rq.UserInformation.CommonExtendedNegotiations,
+				pdu.CommonExtendedNegotiation{
+					SOPClassUID:                en.SOPClassUID,
+					ServiceClassUID:            en.ServiceClassUID,
+					RelatedGeneralSOPClassUIDs: append([]string(nil), en.RelatedGeneralSOPClassUIDs...),
+				},
+			)
+		}
 	}
 
 	// User identity

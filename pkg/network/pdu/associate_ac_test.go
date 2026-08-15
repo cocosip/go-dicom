@@ -14,6 +14,8 @@ const (
 	testImplVersionName    = "GO_DICOM_1_0"
 	testShortAETitle       = "SHORT"
 	testAnotherAETitle     = "ANOTHER"
+	testCalledAETitle      = "CALLED"
+	testCallingAETitle     = "CALLING"
 	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
 	testImplicitVRLittleLE = "1.2.840.10008.1.2"
 )
@@ -247,8 +249,8 @@ func TestAAssociateAC_EncodeDecodeWithUserIdentityResponse(t *testing.T) {
 
 func TestAAssociateAC_PreservesPresentEmptyUserIdentityResponse(t *testing.T) {
 	ac := NewAAssociateAC()
-	ac.CalledAETitle = "CALLED"
-	ac.CallingAETitle = "CALLING"
+	ac.CalledAETitle = testCalledAETitle
+	ac.CallingAETitle = testCallingAETitle
 	ac.UserInformation.UserIdentityResponse = &UserIdentityNegotiationResponse{
 		ServerResponse: []byte{},
 	}
@@ -274,8 +276,8 @@ func TestAAssociateAC_PreservesPresentEmptyUserIdentityResponse(t *testing.T) {
 
 func TestAAssociateAC_EncodeDecodeAdvancedNegotiation(t *testing.T) {
 	ac := NewAAssociateAC()
-	ac.CalledAETitle = "CALLED"
-	ac.CallingAETitle = "CALLING"
+	ac.CalledAETitle = testCalledAETitle
+	ac.CallingAETitle = testCallingAETitle
 	ac.UserInformation.AsynchronousOperations = &AsynchronousOperationsWindow{
 		MaximumNumberOperationsInvoked:   3,
 		MaximumNumberOperationsPerformed: 2,
@@ -310,6 +312,42 @@ func TestAAssociateAC_EncodeDecodeAdvancedNegotiation(t *testing.T) {
 		got[0].SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" ||
 		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
 		t.Fatalf("decoded extended negotiations = %#v", got)
+	}
+}
+
+func TestAAssociateAC_IgnoresCommonExtendedNegotiation(t *testing.T) {
+	common := CommonExtendedNegotiation{
+		SOPClassUID:                "1.2.3",
+		ServiceClassUID:            "4.5",
+		RelatedGeneralSOPClassUIDs: []string{"6.7", "8.9"},
+	}
+
+	ac := NewAAssociateAC()
+	ac.CalledAETitle = testCalledAETitle
+	ac.CallingAETitle = testCallingAETitle
+	ac.UserInformation.CommonExtendedNegotiations = []CommonExtendedNegotiation{common}
+	raw, err := ac.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	decoded := NewAAssociateAC()
+	if err := decoded.Decode(raw); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if got := decoded.UserInformation.CommonExtendedNegotiations; len(got) != 0 {
+		t.Fatalf("AC emitted common extended negotiations: %#v", got)
+	}
+
+	var encoded bytes.Buffer
+	if err := encodeCommonExtendedNegotiation(&encoded, common); err != nil {
+		t.Fatalf("encodeCommonExtendedNegotiation() error = %v", err)
+	}
+	userInfo, err := ac.decodeUserInformation(encoded.Bytes())
+	if err != nil {
+		t.Fatalf("decodeUserInformation() error = %v", err)
+	}
+	if got := userInfo.CommonExtendedNegotiations; len(got) != 0 {
+		t.Fatalf("AC accepted common extended negotiations: %#v", got)
 	}
 }
 

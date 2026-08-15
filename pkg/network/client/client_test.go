@@ -226,6 +226,59 @@ func TestBuildAssociateRQIncludesAdvancedNegotiation(t *testing.T) {
 	}
 }
 
+func TestWithExtendedNegotiationMergesCommonFieldsInEitherOrder(t *testing.T) {
+	orders := []struct {
+		name             string
+		applicationFirst bool
+	}{
+		{name: "application then common", applicationFirst: true},
+		{name: "common then application", applicationFirst: false},
+	}
+
+	for _, order := range orders {
+		t.Run(order.name, func(t *testing.T) {
+			application := association.NewExtendedNegotiation("1.2.3", []byte{1, 0, 1})
+			common := association.NewCommonExtendedNegotiation("1.2.3", "4.5", "6.7", "8.9")
+			options := []Option{WithExtendedNegotiation(application), WithExtendedNegotiation(common)}
+			if !order.applicationFirst {
+				options[0], options[1] = options[1], options[0]
+			}
+			client := New(options...)
+
+			application.RequestedApplicationInfo[0] = 9
+			common.RelatedGeneralSOPClassUIDs[0] = "changed"
+			rq := client.buildAssociateRQ()
+
+			if got := rq.UserInformation.ExtendedNegotiations; len(got) != 1 ||
+				!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
+				t.Fatalf("extended negotiations = %#v", got)
+			}
+			if got := rq.UserInformation.CommonExtendedNegotiations; len(got) != 1 ||
+				got[0].ServiceClassUID != "4.5" || len(got[0].RelatedGeneralSOPClassUIDs) != 2 ||
+				got[0].RelatedGeneralSOPClassUIDs[0] != "6.7" || got[0].RelatedGeneralSOPClassUIDs[1] != "8.9" {
+				t.Fatalf("common extended negotiations = %#v", got)
+			}
+			if len(client.GetConfig().ExtendedNegotiations) != 1 {
+				t.Fatalf("configured negotiations = %#v", client.GetConfig().ExtendedNegotiations)
+			}
+		})
+	}
+}
+
+func TestWithExtendedNegotiationDoesNotDiscardEmptyCommonServiceClassUID(t *testing.T) {
+	client := New(WithExtendedNegotiation(
+		association.NewCommonExtendedNegotiation("1.2.3", ""),
+	))
+
+	rq := client.buildAssociateRQ()
+	if got := rq.UserInformation.CommonExtendedNegotiations; len(got) != 1 {
+		t.Fatalf("common extended negotiations = %#v, want explicit invalid request preserved", got)
+	}
+	if _, err := rq.Encode(); err == nil {
+		t.Fatal("Encode() error = nil, want empty Service Class UID rejection")
+	}
+}
+
 func TestBuildAcceptedAssociationRequiresRequestedIdentityResponse(t *testing.T) {
 	newPair := func(require bool, response *pdu.UserIdentityNegotiationResponse) (*Client, *pdu.AAssociateRQ, *pdu.AAssociateAC) {
 		client := New(

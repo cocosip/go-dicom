@@ -84,6 +84,12 @@ func TestAdvancedNegotiationRoundTripEnforcesAsyncWindow(t *testing.T) {
 		WithExtendedNegotiation(association.NewExtendedNegotiation(
 			verificationSOPClassUID, []byte{1, 1, 0},
 		)),
+		WithExtendedNegotiation(association.NewCommonExtendedNegotiation(
+			verificationSOPClassUID,
+			"1.2.840.10008.4.2",
+			"1.2.840.10008.5.1.4.1.1.2",
+			"1.2.840.10008.5.1.4.1.1.4",
+		)),
 		WithUserIdentity(association.NewUserIdentityJWT([]byte("request-token"), true)),
 	)
 	client.AddPresentationContextWithRoles(
@@ -161,7 +167,11 @@ func assertAdvancedNegotiation(t *testing.T, assoc *association.Association, ser
 	}
 	extended := assoc.FindExtendedNegotiation("1.2.840.10008.1.1")
 	if extended == nil || !bytes.Equal(extended.RequestedApplicationInfo, []byte{1, 1, 0}) ||
-		!bytes.Equal(extended.AcceptedApplicationInfo, []byte{1, 0, 1}) {
+		!bytes.Equal(extended.AcceptedApplicationInfo, []byte{1, 0, 1}) ||
+		extended.ServiceClassUID != "1.2.840.10008.4.2" ||
+		len(extended.RelatedGeneralSOPClassUIDs) != 2 ||
+		extended.RelatedGeneralSOPClassUIDs[0] != "1.2.840.10008.5.1.4.1.1.2" ||
+		extended.RelatedGeneralSOPClassUIDs[1] != "1.2.840.10008.5.1.4.1.1.4" {
 		t.Fatalf("extended negotiation = %#v", extended)
 	}
 	if assoc.UserIdentity == nil || assoc.UserIdentity.Type != association.UserIdentityTypeJWT ||

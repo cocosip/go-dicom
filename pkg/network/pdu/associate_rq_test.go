@@ -5,6 +5,8 @@ package pdu
 
 import (
 	"bytes"
+	"io"
+	"strings"
 	"testing"
 )
 
@@ -294,6 +296,159 @@ func TestAAssociateRQ_EncodeDecodeWithExtendedNegotiation(t *testing.T) {
 
 	if !bytes.Equal(ext.ServiceClassAppInfo, []byte{0x01, 0x02, 0x03}) {
 		t.Errorf("ServiceClassAppInfo mismatch")
+	}
+}
+
+func TestCommonExtendedNegotiation_EncodeExactBytes(t *testing.T) {
+	negotiation := CommonExtendedNegotiation{
+		SOPClassUID:                "1.2.3",
+		ServiceClassUID:            "4.5",
+		RelatedGeneralSOPClassUIDs: []string{"6.7", "8.9"},
+	}
+
+	var encoded bytes.Buffer
+	if err := encodeCommonExtendedNegotiation(&encoded, negotiation); err != nil {
+		t.Fatalf("encodeCommonExtendedNegotiation() error = %v", err)
+	}
+
+	want := []byte{
+		0x57, 0x00, 0x00, 0x18,
+		0x00, 0x05, '1', '.', '2', '.', '3',
+		0x00, 0x03, '4', '.', '5',
+		0x00, 0x0a,
+		0x00, 0x03, '6', '.', '7',
+		0x00, 0x03, '8', '.', '9',
+	}
+	if !bytes.Equal(encoded.Bytes(), want) {
+		t.Fatalf("encoded common extended negotiation = % x, want % x", encoded.Bytes(), want)
+	}
+}
+
+func TestCommonExtendedNegotiation_AllowsEmptyRelatedUIDList(t *testing.T) {
+	negotiation := CommonExtendedNegotiation{
+		SOPClassUID:     "1.2.3",
+		ServiceClassUID: "4.5",
+	}
+
+	var encoded bytes.Buffer
+	if err := encodeCommonExtendedNegotiation(&encoded, negotiation); err != nil {
+		t.Fatalf("encodeCommonExtendedNegotiation() error = %v", err)
+	}
+	want := []byte{
+		0x57, 0x00, 0x00, 0x0e,
+		0x00, 0x05, '1', '.', '2', '.', '3',
+		0x00, 0x03, '4', '.', '5',
+		0x00, 0x00,
+	}
+	if !bytes.Equal(encoded.Bytes(), want) {
+		t.Fatalf("encoded common extended negotiation = % x, want % x", encoded.Bytes(), want)
+	}
+
+	decoded, err := decodeCommonExtendedNegotiation(encoded.Bytes()[4:])
+	if err != nil {
+		t.Fatalf("decodeCommonExtendedNegotiation() error = %v", err)
+	}
+	if decoded.RelatedGeneralSOPClassUIDs == nil || len(decoded.RelatedGeneralSOPClassUIDs) != 0 {
+		t.Fatalf("related general SOP Class UIDs = %#v, want present empty list", decoded.RelatedGeneralSOPClassUIDs)
+	}
+}
+
+func TestAAssociateRQ_EncodeDecodeWithCombinedExtendedNegotiation(t *testing.T) {
+	rq := NewAAssociateRQ()
+	rq.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{{
+		SOPClassUID:         "1.2.3",
+		ServiceClassAppInfo: []byte{1, 0, 1},
+	}}
+	rq.UserInformation.CommonExtendedNegotiations = []CommonExtendedNegotiation{{
+		SOPClassUID:                "1.2.3",
+		ServiceClassUID:            "4.5",
+		RelatedGeneralSOPClassUIDs: []string{"6.7", "8.9"},
+	}}
+
+	pdu, err := rq.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	decoded := &AAssociateRQ{}
+	if err := decoded.Decode(pdu); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	if got := decoded.UserInformation.ExtendedNegotiations; len(got) != 1 ||
+		got[0].SOPClassUID != "1.2.3" || !bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
+		t.Fatalf("extended negotiations = %#v", got)
+	}
+	if got := decoded.UserInformation.CommonExtendedNegotiations; len(got) != 1 ||
+		got[0].SOPClassUID != "1.2.3" || got[0].ServiceClassUID != "4.5" ||
+		len(got[0].RelatedGeneralSOPClassUIDs) != 2 ||
+		got[0].RelatedGeneralSOPClassUIDs[0] != "6.7" || got[0].RelatedGeneralSOPClassUIDs[1] != "8.9" {
+		t.Fatalf("common extended negotiations = %#v", got)
+	}
+}
+
+func TestDecodeCommonExtendedNegotiationRejectsMalformedLengths(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{name: "truncated SOP Class UID", data: []byte{0x00, 0x03, '1', '.'}},
+		{name: "truncated Service Class UID", data: []byte{0x00, 0x01, '1', 0x00, 0x02, '2'}},
+		{name: "orphan related byte", data: []byte{0x00, 0x01, '1', 0x00, 0x01, '2', 0x00, 0x01, 0x00}},
+		{name: "truncated related UID", data: []byte{0x00, 0x01, '1', 0x00, 0x01, '2', 0x00, 0x04, 0x00, 0x03, '3', '.'}},
+		{name: "trailing item data", data: []byte{0x00, 0x01, '1', 0x00, 0x01, '2', 0x00, 0x00, 0xff}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := decodeCommonExtendedNegotiation(tt.data); err == nil {
+				t.Fatal("decodeCommonExtendedNegotiation() error = nil")
+			}
+		})
+	}
+}
+
+func TestCommonExtendedNegotiationEncodeRejectsOversizedRelatedBlock(t *testing.T) {
+	negotiation := CommonExtendedNegotiation{
+		SOPClassUID:                "1.2.3",
+		ServiceClassUID:            "4.5",
+		RelatedGeneralSOPClassUIDs: []string{strings.Repeat("1", 65534)},
+	}
+
+	if err := encodeCommonExtendedNegotiation(&bytes.Buffer{}, negotiation); err == nil {
+		t.Fatal("encodeCommonExtendedNegotiation() error = nil")
+	}
+}
+
+func TestCommonExtendedNegotiationRejectsEmptyRequiredUIDs(t *testing.T) {
+	encodeTests := []CommonExtendedNegotiation{
+		{SOPClassUID: "", ServiceClassUID: "2"},
+		{SOPClassUID: "1", ServiceClassUID: ""},
+		{SOPClassUID: "1", ServiceClassUID: "2", RelatedGeneralSOPClassUIDs: []string{""}},
+	}
+	for _, negotiation := range encodeTests {
+		if err := encodeCommonExtendedNegotiation(&bytes.Buffer{}, negotiation); err == nil {
+			t.Fatalf("encodeCommonExtendedNegotiation(%#v) error = nil", negotiation)
+		}
+	}
+
+	decodeTests := [][]byte{
+		{0x00, 0x00, 0x00, 0x01, '2', 0x00, 0x00},
+		{0x00, 0x01, '1', 0x00, 0x00, 0x00, 0x00},
+		{0x00, 0x01, '1', 0x00, 0x01, '2', 0x00, 0x02, 0x00, 0x00},
+	}
+	for _, data := range decodeTests {
+		if _, err := decodeCommonExtendedNegotiation(data); err == nil {
+			t.Fatalf("decodeCommonExtendedNegotiation(% x) error = nil", data)
+		}
+	}
+}
+
+func TestReadItemRejectsTruncatedHeader(t *testing.T) {
+	for length := 1; length < 4; length++ {
+		_, _, err := readItem(bytes.NewReader([]byte{ItemTypeCommonExtendedNegotiation, 0x00, 0x00}[:length]))
+		if err == nil || err == io.EOF {
+			t.Fatalf("readItem() error for %d-byte header = %v, want truncation error", length, err)
+		}
 	}
 }
 

@@ -53,7 +53,7 @@ Priority indicates implementation order, not estimated effort:
 | STD-001 | P0 | Complete | Reproducible and current generated standard tables |
 | MED-001 | P1 | Complete | DICOMDIR media directory model and read/write workflow |
 | NET-003 | P1 | Complete | Advanced association negotiation through the high-level client |
-| NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
+| NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | Complete Structured Report value types and file workflow |
 | IMG-001 | P1 | Partial | Dataset-driven image rendering pipeline |
 | CORE-001 | P1 | Partial | Recursive Dataset and Sequence validation |
@@ -70,15 +70,37 @@ Priority indicates implementation order, not estimated effort:
 
 Progress as of 2026-08-15:
 
-- **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, NET-004, SR-001, IMG-001, CORE-001,
+- **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
+  ANON-001, and DICT-001.
+- **Not complete:** DOC-001, SR-001, IMG-001, CORE-001,
   IMG-002, CORE-002, PRINT-001,
   OBS-001, IMG-003, and MED-002 retain their `Partial` or `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Recommended next item:** NET-004. Complete SOP Class Common Extended
-  Negotiation. DOC-001 remains deferred until the other major
-  capability work is complete, so its final audit reflects the finished API.
+- **Next item:** CORE-001, the first incomplete item in the planned development
+  order below.
+
+## Planned Development Order
+
+Priority describes capability importance; this order describes the intended
+implementation sequence. Sequence numbers remain stable as work is completed.
+Mark completed rows `Complete`; the first row that is not complete is the next
+item to implement. Reorder rows only when new dependency or scope evidence is
+recorded in this document.
+
+| Order | ID | Priority | Current status | Ordering rationale |
+| ---: | --- | --- | --- | --- |
+| 1 | NET-004 | P1 | Complete | Complete the NET-003 negotiation family while its association APIs and tests are current. |
+| 2 | CORE-001 | P1 | Partial | Establish recursive Dataset and Sequence correctness before completing nested domain workflows. |
+| 3 | SR-001 | P1 | Partial | Build typed SR trees and file workflows on the recursive validation behavior from CORE-001. |
+| 4 | IMG-001 | P1 | Partial | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
+| 5 | IMG-002 | P2 | Open | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
+| 6 | CORE-002 | P2 | Open | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
+| 7 | PRINT-001 | P2 | Partial | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
+| 8 | OBS-001 | P2 | Open | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
+| 9 | MED-002 | P3 | Open | Deliver the independent, bounded scanner workflow before the larger reconstruction item. |
+| 10 | IMG-003 | P3 | Partial | Implement volume reconstruction and MPR only after IMG-001 and IMG-002 are complete. |
+| 11 | DOC-001 | P0 | Partial | Perform the final public API and README audit after the major capabilities are complete, avoiding repeated documentation churn. |
 
 ## Detailed Gaps
 
@@ -316,7 +338,7 @@ maximum invoked operations limits unfinished DIMSE requests (`0` means
 unlimited), while maximum performed operations remains negotiated metadata,
 matching fo-dicom behavior. Role Selection is bound to Presentation Contexts
 and constrains ordinary requests and reverse C-STORE sub-operations. Common
-Extended Negotiation item `0x57` remains scoped to NET-004.
+Extended Negotiation item `0x57` is completed separately by NET-004.
 
 **Acceptance criteria**
 
@@ -344,12 +366,21 @@ Extended Negotiation item `0x57` remains scoped to NET-004.
 
 ### NET-004: SOP Class Common Extended Negotiation
 
-**Status:** `Open`  
+**Status:** `Complete`
 **Priority:** `P1`
 
-The PDU item type constant `0x57` exists, but there is no complete structure,
-encoder, decoder, association representation, or client/server integration for
-Service Class UID and Related General SOP Class UIDs.
+Completed on 2026-08-15. The PDU layer now encodes and decodes the complete
+`0x57` item, while the association and high-level client layers merge its
+Service Class UID and ordered Related General SOP Class UIDs with `0x56`
+application information for the same SOP Class. Caller-owned client option
+data is copied, and an explicitly invalid common request is preserved until
+the PDU encoder rejects it.
+
+Common Extended Negotiation remains request-only: A-ASSOCIATE-AC neither emits
+nor accepts `0x57`. Empty Related General SOP Class UID lists are valid;
+required SOP Class UID, Service Class UID, and individual related UIDs must be
+non-empty. Nested and outer 16-bit lengths are checked before allocation or
+write.
 
 Reference: [fo-dicom DicomExtendedNegotiation](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/DicomExtendedNegotiation.cs)
 
@@ -360,11 +391,21 @@ Reference: [fo-dicom DicomExtendedNegotiation](https://github.com/fo-dicom/fo-di
 - Expose the request through association and high-level client APIs.
 - Reject malformed lengths without panics or partial state.
 
-**Suggested verification**
+**Verification evidence**
 
-- Byte-level encode/decode round trips against representative `0x57` payloads.
-- Client/server association tests with multiple related SOP Class UIDs.
-- Interoperability tests with fo-dicom plus malformed and truncated item tests.
+- Exact-byte and round-trip tests cover combined `0x56`/`0x57` values, an empty
+  related list, multiple related UIDs, invalid required UIDs, oversized nested
+  data, malformed lengths, partial headers, and AC directionality.
+- A real Go client/server association round-trips the common values through the
+  high-level client and server association APIs.
+- Bidirectional full-PDU checks against fo-dicom revision
+  `7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2` passed: fo-dicom parsed the Go
+  request, and Go parsed the fo-dicom request.
+- `go test ./pkg/network/... -count=1`, the full repository test suite,
+  `go build ./...`, and `golangci-lint run` passed on Go 1.26.6 Windows/amd64.
+- The Windows race gate is environment-blocked: even
+  `go test -race fmt -run '^$' -count=1` exits with status `0xc0000139`, before
+  running repository test code.
 
 ### SR-001: Complete Structured Report Workflow
 
@@ -765,7 +806,7 @@ Phase acceptance:
 
 Scope: MED-001, NET-003, NET-004, SR-001, IMG-001, CORE-001.
 
-Current progress: MED-001 and NET-003 are complete. NET-004, SR-001, IMG-001,
+Current progress: MED-001, NET-003, and NET-004 are complete. SR-001, IMG-001,
 and CORE-001 remain incomplete; therefore Phase 1 is not complete.
 
 Phase acceptance:
@@ -814,3 +855,6 @@ Phase acceptance:
   interoperability as separate levels of verification.
 - Add newly discovered gaps to the detailed list and the phase table before
   beginning implementation.
+- Keep the planned development order statuses current without renumbering
+  completed rows. Change the order only when dependency or scope evidence
+  changes, and record the reason in the ordering table.

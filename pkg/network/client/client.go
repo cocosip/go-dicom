@@ -133,7 +133,8 @@ type Config struct {
 	// RoleSelections requests SCU/SCP roles by SOP Class UID.
 	RoleSelections []*association.RoleSelection
 
-	// ExtendedNegotiations contains requested SOP Class application information.
+	// ExtendedNegotiations contains requested SOP Class application information
+	// and optional SOP Class Common Extended Negotiation values.
 	ExtendedNegotiations []*association.ExtendedNegotiation
 
 	// UserIdentity contains the optional association user identity request.
@@ -246,7 +247,7 @@ func WithRoleSelection(selection *association.RoleSelection) Option {
 	}
 }
 
-// WithExtendedNegotiation adds or replaces application information for a SOP Class UID.
+// WithExtendedNegotiation adds or merges negotiation values for a SOP Class UID.
 func WithExtendedNegotiation(negotiation *association.ExtendedNegotiation) Option {
 	return func(o *Config) {
 		o.ExtendedNegotiations = upsertExtendedNegotiation(o.ExtendedNegotiations, negotiation)
@@ -448,13 +449,25 @@ func (c *Client) buildUserInformation() *pdu.UserInformation {
 		})
 	}
 	for _, negotiation := range c.config.ExtendedNegotiations {
-		if negotiation == nil || len(negotiation.RequestedApplicationInfo) == 0 {
+		if negotiation == nil {
 			continue
 		}
-		userInfo.ExtendedNegotiations = append(userInfo.ExtendedNegotiations, pdu.ExtendedNegotiation{
-			SOPClassUID:         negotiation.SOPClassUID,
-			ServiceClassAppInfo: append([]byte(nil), negotiation.RequestedApplicationInfo...),
-		})
+		if len(negotiation.RequestedApplicationInfo) > 0 {
+			userInfo.ExtendedNegotiations = append(userInfo.ExtendedNegotiations, pdu.ExtendedNegotiation{
+				SOPClassUID:         negotiation.SOPClassUID,
+				ServiceClassAppInfo: append([]byte(nil), negotiation.RequestedApplicationInfo...),
+			})
+		}
+		if negotiation.HasCommonExtendedNegotiation() {
+			userInfo.CommonExtendedNegotiations = append(
+				userInfo.CommonExtendedNegotiations,
+				pdu.CommonExtendedNegotiation{
+					SOPClassUID:                negotiation.SOPClassUID,
+					ServiceClassUID:            negotiation.ServiceClassUID,
+					RelatedGeneralSOPClassUIDs: append([]string(nil), negotiation.RelatedGeneralSOPClassUIDs...),
+				},
+			)
+		}
 	}
 	if identity := c.config.UserIdentity; identity != nil {
 		userInfo.UserIdentity = &pdu.UserIdentityNegotiation{
@@ -493,10 +506,19 @@ func upsertExtendedNegotiation(values []*association.ExtendedNegotiation, negoti
 	if negotiation == nil {
 		return values
 	}
-	copyNegotiation := association.NewExtendedNegotiation(negotiation.SOPClassUID, negotiation.RequestedApplicationInfo)
+	copyNegotiation := negotiation.Clone()
 	for i, value := range values {
 		if value != nil && value.SOPClassUID == negotiation.SOPClassUID {
-			values[i] = copyNegotiation
+			merged := value.Clone()
+			if copyNegotiation.RequestedApplicationInfo != nil {
+				merged.RequestedApplicationInfo = append([]byte(nil), copyNegotiation.RequestedApplicationInfo...)
+				merged.ServiceClassAppInfo = merged.RequestedApplicationInfo
+			}
+			if copyNegotiation.HasCommonExtendedNegotiation() {
+				merged.ServiceClassUID = copyNegotiation.ServiceClassUID
+				merged.RelatedGeneralSOPClassUIDs = append([]string{}, copyNegotiation.RelatedGeneralSOPClassUIDs...)
+			}
+			values[i] = merged
 			return values
 		}
 	}

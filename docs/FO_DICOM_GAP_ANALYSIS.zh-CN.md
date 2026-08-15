@@ -49,7 +49,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | STD-001 | P0 | Complete | 可复现且保持最新的标准生成表 |
 | MED-001 | P1 | Complete | DICOMDIR 介质目录模型及读写工作流 |
 | NET-003 | P1 | Complete | 通过高层客户端执行高级关联协商 |
-| NET-004 | P1 | Open | SOP Class Common Extended Negotiation |
+| NET-004 | P1 | Complete | SOP Class Common Extended Negotiation |
 | SR-001 | P1 | Partial | 完整的结构化报告值类型和文件工作流 |
 | IMG-001 | P1 | Partial | Dataset 驱动的图像渲染管线 |
 | CORE-001 | P1 | Partial | Dataset 和 Sequence 递归验证 |
@@ -66,14 +66,34 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 截至 2026-08-15：
 
-- **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、ANON-001 和 DICT-001。
-- **未完成：** DOC-001、NET-004、
+- **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
+  ANON-001 和 DICT-001。
+- **未完成：** DOC-001、
   SR-001、IMG-001、CORE-001、IMG-002、CORE-002、PRINT-001、OBS-001、
   IMG-003 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **建议下一项：** NET-004。补齐 SOP Class Common Extended Negotiation。DOC-001 继续延后，
-  等其他主要能力完成后再统一审计，避免文档随新增 API 反复调整。
+- **下一项：** CORE-001，即下方计划开发顺序中的第一个未完成条目。
+
+## 计划开发顺序
+
+优先级表示能力的重要程度；此顺序表示计划实施的先后次序。工作完成后保持顺序号稳定，
+只将对应行更新为 `Complete`；表中第一个未完成条目就是下一项开发内容。只有在本文档中
+记录了新的依赖或范围证据后，才能调整顺序。
+
+| 顺序 | ID | 优先级 | 当前状态 | 排序理由 |
+| ---: | --- | --- | --- | --- |
+| 1 | NET-004 | P1 | Complete | 趁 NET-003 的 Association API 和测试上下文仍然清晰，补完整个协商能力族。 |
+| 2 | CORE-001 | P1 | Partial | 在完成嵌套领域工作流之前，先建立 Dataset 和 Sequence 的递归正确性保障。 |
+| 3 | SR-001 | P1 | Partial | 基于 CORE-001 的递归验证行为完成强类型 SR 树和文件工作流。 |
+| 4 | IMG-001 | P1 | Partial | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
+| 5 | IMG-002 | P2 | Open | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
+| 6 | CORE-002 | P2 | Open | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
+| 7 | PRINT-001 | P2 | Partial | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
+| 8 | OBS-001 | P2 | Open | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
+| 9 | MED-002 | P3 | Open | 在更大型的重建工作之前，先交付独立且边界明确的扫描器工作流。 |
+| 10 | IMG-003 | P3 | Partial | 仅在 IMG-001 和 IMG-002 完成后实施体重建和 MPR。 |
+| 11 | DOC-001 | P0 | Partial | 主要能力完成后再做最终公共 API 和 README 审计，避免文档反复调整。 |
 
 ## 详细差距
 
@@ -274,7 +294,7 @@ Username、Username/Password、Kerberos、SAML 和 JWT；关联建立后同时�
 允许响应缺失。协商后的最大 invoked operations 会实际限制尚未完成的 DIMSE 请求数，
 `0` 表示无限；最大 performed operations 与 fo-dicom 一致，仅协商并暴露，不限制
 接收线程。Role Selection 与 Presentation Context 绑定，并约束普通请求和反向
-C-STORE 子操作。Common Extended Negotiation `0x57` 仍由 NET-004 跟踪。
+C-STORE 子操作。Common Extended Negotiation `0x57` 由 NET-004 单独完成。
 
 **验收标准**
 
@@ -298,10 +318,17 @@ C-STORE 子操作。Common Extended Negotiation `0x57` 仍由 NET-004 跟踪。
 
 ### NET-004: SOP Class Common Extended Negotiation
 
-**状态：** `Open`  
+**状态：** `Complete`
 **优先级：** `P1`
 
-PDU 项类型常量 `0x57` 已存在，但缺少针对 Service Class UID 和 Related General SOP Class UID 的完整结构、编码器、解码器、关联表示以及客户端/服务端集成。
+已于 2026-08-15 完成。PDU 层现在可以完整编码和解码 `0x57` 项；关联层和高层
+客户端会按 SOP Class 合并其 Service Class UID、保持顺序的 Related General SOP
+Class UID，以及同一 SOP Class 的 `0x56` Application Information。客户端选项会复制
+调用方数据；显式但无效的 Common 请求会保留到 PDU 编码阶段并返回错误。
+
+Common Extended Negotiation 仍然只用于请求：A-ASSOCIATE-AC 既不发送也不接纳
+`0x57`。空 Related General SOP Class UID 列表合法；SOP Class UID、Service Class UID
+以及每个 Related UID 必须非空。写入或分配前会校验嵌套和外层 16 位长度。
 
 参考：[fo-dicom DicomExtendedNegotiation](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Network/DicomExtendedNegotiation.cs)
 
@@ -312,11 +339,18 @@ PDU 项类型常量 `0x57` 已存在，但缺少针对 Service Class UID 和 Rel
 - 通过关联 API 和高层客户端 API 公开该请求。
 - 拒绝异常长度，且不发生 panic 或留下部分状态。
 
-**建议验证**
+**验证证据**
 
-- 针对代表性的 `0x57` 载荷执行字节级编码/解码往返测试。
-- 使用多个 Related SOP Class UID 执行客户端/服务端关联测试。
-- 与 fo-dicom 执行互操作测试，并测试异常和截断的项。
+- 精确字节和往返测试覆盖组合的 `0x56`/`0x57` 值、空 Related 列表、多个 Related
+  UID、必填 UID 为空、嵌套数据过大、异常长度、不完整项头以及 AC 方向约束。
+- 真实 Go 客户端/服务端关联通过高层客户端和服务端 Association API 往返 Common 值。
+- 与 fo-dicom 修订 `7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2` 的双向完整 PDU
+  检查通过：fo-dicom 可解析 Go 请求，Go 也可解析 fo-dicom 请求。
+- `go test ./pkg/network/... -count=1`、仓库完整测试、`go build ./...` 和
+  `golangci-lint run` 在 Go 1.26.6 Windows/amd64 上通过。
+- Windows race 门禁受环境阻塞：即使执行
+  `go test -race fmt -run '^$' -count=1`，也会在进入仓库测试代码前以
+  `0xc0000139` 状态退出。
 
 ### SR-001: 完整结构化报告工作流
 
@@ -649,7 +683,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：MED-001、NET-003、NET-004、SR-001、IMG-001、CORE-001。
 
-当前进度：MED-001 和 NET-003 已完成；NET-004、SR-001、IMG-001 和 CORE-001
+当前进度：MED-001、NET-003 和 NET-004 已完成；SR-001、IMG-001 和 CORE-001
 仍未完成，因此 Phase 1 尚未完成。
 
 阶段验收：
@@ -694,3 +728,5 @@ OBS-001 尚未完成，因此 Phase 2 尚未完成。
 - 不能仅根据 README 变更或类型声明将条目标记为完成。
 - 将源码/单元测试证据、集成行为和跨库互操作性视为不同层级的验证。
 - 开始实施前，应将新发现的差距同时加入详细列表和阶段表。
+- 保持计划开发顺序中的状态最新，已完成行不得重新编号。只有依赖或范围证据发生变化时
+  才能调整顺序，并在排序表中记录原因。

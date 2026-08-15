@@ -4,10 +4,10 @@
 package pdu
 
 import (
-    "encoding/binary"
-    "fmt"
-    "io"
-    "math"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"math"
 )
 
 // Item type constants for A-ASSOCIATE PDUs
@@ -108,8 +108,8 @@ func ItemTypeString(itemType byte) string {
 func readItem(r io.Reader) (itemType byte, data []byte, err error) {
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(r, header); err != nil {
-		// Return EOF directly without wrapping if we're at the end of the stream
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		// Return EOF only when no header bytes remain. A partial header is malformed.
+		if err == io.EOF {
 			return 0, nil, io.EOF
 		}
 		return 0, nil, fmt.Errorf("reading item header: %w", err)
@@ -131,13 +131,13 @@ func readItem(r io.Reader) (itemType byte, data []byte, err error) {
 
 // writeItem writes an item header and data to the writer.
 func writeItem(w io.Writer, itemType byte, data []byte) error {
-    header := make([]byte, 4)
-    header[0] = itemType
-    header[1] = 0x00 // reserved
-    if len(data) > int(math.MaxUint16) {
-        return fmt.Errorf("item data too large: %d > %d", len(data), math.MaxUint16)
-    }
-    binary.BigEndian.PutUint16(header[2:4], uint16(len(data))) // #nosec G115 -- bounded by check above
+	header := make([]byte, 4)
+	header[0] = itemType
+	header[1] = 0x00 // reserved
+	if len(data) > int(math.MaxUint16) {
+		return fmt.Errorf("item data too large: %d > %d", len(data), math.MaxUint16)
+	}
+	binary.BigEndian.PutUint16(header[2:4], uint16(len(data))) // #nosec G115 -- bounded by check above
 
 	if _, err := w.Write(header); err != nil {
 		return fmt.Errorf("writing item header (type=0x%02X): %w", itemType, err)

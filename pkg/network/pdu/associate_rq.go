@@ -33,14 +33,15 @@ type PresentationContextRQ struct {
 
 // UserInformation represents the User Information item.
 type UserInformation struct {
-	MaximumLength             uint32                           // Maximum PDU length (0 = unlimited)
-	ImplementationClassUID    string                           // Implementation Class UID
-	ImplementationVersionName string                           // Implementation Version Name
-	AsynchronousOperations    *AsynchronousOperationsWindow    // Optional: Async operations
-	SCPSCURoleSelections      []SCPSCURoleSelection            // Optional: Role selections
-	ExtendedNegotiations      []ExtendedNegotiation            // Optional: Extended negotiations
-	UserIdentity              *UserIdentityNegotiation         // Optional: User identity
-	UserIdentityResponse      *UserIdentityNegotiationResponse // Optional: A-ASSOCIATE-AC identity response
+	MaximumLength              uint32                           // Maximum PDU length (0 = unlimited)
+	ImplementationClassUID     string                           // Implementation Class UID
+	ImplementationVersionName  string                           // Implementation Version Name
+	AsynchronousOperations     *AsynchronousOperationsWindow    // Optional: Async operations
+	SCPSCURoleSelections       []SCPSCURoleSelection            // Optional: Role selections
+	ExtendedNegotiations       []ExtendedNegotiation            // Optional: Extended negotiations
+	CommonExtendedNegotiations []CommonExtendedNegotiation      // Optional: Common extended negotiations (RQ only)
+	UserIdentity               *UserIdentityNegotiation         // Optional: User identity
+	UserIdentityResponse       *UserIdentityNegotiationResponse // Optional: A-ASSOCIATE-AC identity response
 }
 
 // AsynchronousOperationsWindow represents async operations sub-item.
@@ -60,6 +61,14 @@ type SCPSCURoleSelection struct {
 type ExtendedNegotiation struct {
 	SOPClassUID         string
 	ServiceClassAppInfo []byte // Application-specific information
+}
+
+// CommonExtendedNegotiation represents a SOP Class Common Extended
+// Negotiation sub-item. It is valid only in A-ASSOCIATE-RQ.
+type CommonExtendedNegotiation struct {
+	SOPClassUID                string
+	ServiceClassUID            string
+	RelatedGeneralSOPClassUIDs []string
 }
 
 // UserIdentityNegotiation represents user identity negotiation sub-item.
@@ -240,6 +249,13 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 		}
 	}
 
+	// SOP Class Common Extended Negotiation Sub-items are valid only in RQ.
+	for _, negotiation := range ui.CommonExtendedNegotiations {
+		if err := encodeCommonExtendedNegotiation(&buf, negotiation); err != nil {
+			return fmt.Errorf("writing common extended negotiation: %w", err)
+		}
+	}
+
 	// User Identity Negotiation Sub-item (optional)
 	if ui.UserIdentity != nil {
 		var idData bytes.Buffer
@@ -377,8 +393,9 @@ func (a *AAssociateRQ) decodePresentationContext(data []byte) (*PresentationCont
 // decodeUserInformation decodes the user information item.
 func (a *AAssociateRQ) decodeUserInformation(data []byte) (*UserInformation, error) {
 	ui := &UserInformation{
-		SCPSCURoleSelections: []SCPSCURoleSelection{},
-		ExtendedNegotiations: []ExtendedNegotiation{},
+		SCPSCURoleSelections:       []SCPSCURoleSelection{},
+		ExtendedNegotiations:       []ExtendedNegotiation{},
+		CommonExtendedNegotiations: []CommonExtendedNegotiation{},
 	}
 
 	r := bytes.NewReader(data)
@@ -427,6 +444,13 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte) (*UserInformation, err
 			}
 			ui.ExtendedNegotiations = append(ui.ExtendedNegotiations, *ext)
 
+		case ItemTypeCommonExtendedNegotiation:
+			negotiation, err := decodeCommonExtendedNegotiation(itemData)
+			if err != nil {
+				return nil, fmt.Errorf("decoding common extended negotiation: %w", err)
+			}
+			ui.CommonExtendedNegotiations = append(ui.CommonExtendedNegotiations, *negotiation)
+
 		case ItemTypeUserIdentityNegotiation:
 			identity, err := decodeUserIdentity(itemData)
 			if err != nil {
@@ -440,6 +464,110 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte) (*UserInformation, err
 	}
 
 	return ui, nil
+}
+
+func encodeCommonExtendedNegotiation(w io.Writer, negotiation CommonExtendedNegotiation) error {
+	if negotiation.SOPClassUID == "" {
+		return fmt.Errorf("SOP Class UID is empty")
+	}
+	if negotiation.ServiceClassUID == "" {
+		return fmt.Errorf("service class UID is empty")
+	}
+	if len(negotiation.SOPClassUID) > int(math.MaxUint16) {
+		return fmt.Errorf("SOP Class UID length too large: %d", len(negotiation.SOPClassUID))
+	}
+	if len(negotiation.ServiceClassUID) > int(math.MaxUint16) {
+		return fmt.Errorf("service class UID length too large: %d", len(negotiation.ServiceClassUID))
+	}
+
+	var related bytes.Buffer
+	for _, relatedUID := range negotiation.RelatedGeneralSOPClassUIDs {
+		if relatedUID == "" {
+			return fmt.Errorf("related general SOP Class UID is empty")
+		}
+		if len(relatedUID) > int(math.MaxUint16) {
+			return fmt.Errorf("related general SOP Class UID length too large: %d", len(relatedUID))
+		}
+		if related.Len()+2+len(relatedUID) > int(math.MaxUint16) {
+			return fmt.Errorf("related general SOP Class Identification too large: %d", related.Len()+2+len(relatedUID))
+		}
+		_ = binary.Write(&related, binary.BigEndian, uint16(len(relatedUID))) // #nosec G115 -- bounded above
+		related.WriteString(relatedUID)
+	}
+
+	var data bytes.Buffer
+	_ = binary.Write(&data, binary.BigEndian, uint16(len(negotiation.SOPClassUID))) // #nosec G115 -- bounded above
+	data.WriteString(negotiation.SOPClassUID)
+	_ = binary.Write(&data, binary.BigEndian, uint16(len(negotiation.ServiceClassUID))) // #nosec G115 -- bounded above
+	data.WriteString(negotiation.ServiceClassUID)
+	_ = binary.Write(&data, binary.BigEndian, uint16(related.Len())) // #nosec G115 -- bounded above
+	data.Write(related.Bytes())
+
+	return writeItem(w, ItemTypeCommonExtendedNegotiation, data.Bytes())
+}
+
+func decodeCommonExtendedNegotiation(data []byte) (*CommonExtendedNegotiation, error) {
+	offset := 0
+	readUID := func(name string) (string, error) {
+		if len(data)-offset < 2 {
+			return "", fmt.Errorf("%s length is truncated", name)
+		}
+		length := int(binary.BigEndian.Uint16(data[offset : offset+2]))
+		offset += 2
+		if length > len(data)-offset {
+			return "", fmt.Errorf("%s is truncated: need %d bytes, have %d", name, length, len(data)-offset)
+		}
+		value := string(data[offset : offset+length])
+		offset += length
+		return value, nil
+	}
+
+	sopClassUID, err := readUID("SOP Class UID")
+	if err != nil {
+		return nil, err
+	}
+	if sopClassUID == "" {
+		return nil, fmt.Errorf("SOP Class UID is empty")
+	}
+	serviceClassUID, err := readUID("Service Class UID")
+	if err != nil {
+		return nil, err
+	}
+	if serviceClassUID == "" {
+		return nil, fmt.Errorf("service class UID is empty")
+	}
+	if len(data)-offset < 2 {
+		return nil, fmt.Errorf("related general SOP Class Identification length is truncated")
+	}
+	relatedLength := int(binary.BigEndian.Uint16(data[offset : offset+2]))
+	offset += 2
+	if relatedLength != len(data)-offset {
+		return nil, fmt.Errorf("related general SOP Class Identification length %d does not match remaining %d bytes", relatedLength, len(data)-offset)
+	}
+
+	relatedEnd := offset + relatedLength
+	relatedUIDs := make([]string, 0)
+	for offset < relatedEnd {
+		if relatedEnd-offset < 2 {
+			return nil, fmt.Errorf("related general SOP Class UID length is truncated")
+		}
+		uidLength := int(binary.BigEndian.Uint16(data[offset : offset+2]))
+		offset += 2
+		if uidLength == 0 {
+			return nil, fmt.Errorf("related general SOP Class UID is empty")
+		}
+		if uidLength > relatedEnd-offset {
+			return nil, fmt.Errorf("related general SOP Class UID is truncated: need %d bytes, have %d", uidLength, relatedEnd-offset)
+		}
+		relatedUIDs = append(relatedUIDs, string(data[offset:offset+uidLength]))
+		offset += uidLength
+	}
+
+	return &CommonExtendedNegotiation{
+		SOPClassUID:                sopClassUID,
+		ServiceClassUID:            serviceClassUID,
+		RelatedGeneralSOPClassUIDs: relatedUIDs,
+	}, nil
 }
 
 // decodeRoleSelection decodes a role selection sub-item.

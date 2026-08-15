@@ -12,6 +12,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
+const (
+	testRelatedGeneralSOPClassUID1 = "6.7"
+	testRelatedGeneralSOPClassUID2 = "8.9"
+)
+
 func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T) {
 	rq := pdu.NewAAssociateRQ()
 	rq.CallingAETitle = "SCU"
@@ -103,6 +108,66 @@ func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T)
 		!bytes.Equal(assoc.UserIdentity.PrimaryField, []byte("request-token")) ||
 		!bytes.Equal(assoc.UserIdentity.ServerResponse, []byte("server-token")) {
 		t.Fatalf("merged user identity = %#v", assoc.UserIdentity)
+	}
+}
+
+func TestFromAAssociateRQCombinesCommonAndApplicationNegotiation(t *testing.T) {
+	rq := pdu.NewAAssociateRQ()
+	rq.UserInformation.ExtendedNegotiations = []pdu.ExtendedNegotiation{{
+		SOPClassUID:         "1.2.3",
+		ServiceClassAppInfo: []byte{1, 0, 1},
+	}}
+	rq.UserInformation.CommonExtendedNegotiations = []pdu.CommonExtendedNegotiation{{
+		SOPClassUID:                "1.2.3",
+		ServiceClassUID:            "4.5",
+		RelatedGeneralSOPClassUIDs: []string{testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2},
+	}}
+
+	assoc := FromAAssociateRQ(rq)
+	if len(assoc.ExtendedNegotiations) != 1 {
+		t.Fatalf("extended negotiations = %#v, want one combined entry", assoc.ExtendedNegotiations)
+	}
+	negotiation := assoc.FindExtendedNegotiation("1.2.3")
+	if negotiation == nil || !bytes.Equal(negotiation.RequestedApplicationInfo, []byte{1, 0, 1}) ||
+		negotiation.ServiceClassUID != "4.5" || len(negotiation.RelatedGeneralSOPClassUIDs) != 2 ||
+		negotiation.RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 ||
+		negotiation.RelatedGeneralSOPClassUIDs[1] != testRelatedGeneralSOPClassUID2 {
+		t.Fatalf("combined negotiation = %#v", negotiation)
+	}
+
+	rq.UserInformation.ExtendedNegotiations[0].ServiceClassAppInfo[0] = 9
+	rq.UserInformation.CommonExtendedNegotiations[0].RelatedGeneralSOPClassUIDs[0] = "changed"
+	if negotiation.RequestedApplicationInfo[0] != 1 ||
+		negotiation.RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 {
+		t.Fatalf("association retained caller-owned slices: %#v", negotiation)
+	}
+}
+
+func TestToAAssociateRQEmitsCombinedExtendedNegotiation(t *testing.T) {
+	assoc := NewAssociation("SCU", "SCP")
+	assoc.AddExtendedNegotiation(NewExtendedNegotiation("1.2.3", []byte{1, 0, 1}))
+	assoc.AddExtendedNegotiation(NewCommonExtendedNegotiation(
+		"1.2.3", "4.5", testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2,
+	))
+
+	rq := ToAAssociateRQ(assoc)
+	if got := rq.UserInformation.ExtendedNegotiations; len(got) != 1 ||
+		got[0].SOPClassUID != "1.2.3" || !bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
+		t.Fatalf("extended negotiations = %#v", got)
+	}
+	if got := rq.UserInformation.CommonExtendedNegotiations; len(got) != 1 ||
+		got[0].SOPClassUID != "1.2.3" || got[0].ServiceClassUID != "4.5" ||
+		len(got[0].RelatedGeneralSOPClassUIDs) != 2 ||
+		got[0].RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 {
+		t.Fatalf("common extended negotiations = %#v", got)
+	}
+
+	rq.UserInformation.ExtendedNegotiations[0].ServiceClassAppInfo[0] = 9
+	rq.UserInformation.CommonExtendedNegotiations[0].RelatedGeneralSOPClassUIDs[0] = "changed"
+	negotiation := assoc.FindExtendedNegotiation("1.2.3")
+	if negotiation.RequestedApplicationInfo[0] != 1 ||
+		negotiation.RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 {
+		t.Fatalf("RQ retained association-owned slices: %#v", negotiation)
 	}
 }
 
