@@ -247,10 +247,16 @@ func (ds *Dataset) Tags() []*tag.Tag {
 
 	tagValues := ds.sortedTagValues()
 
-	// Convert to Tag objects
+	// Return snapshots of the Tags stored on elements so Private Creator state
+	// is not lost when reconstructing from map keys.
 	tags := make([]*tag.Tag, len(tagValues))
 	for i, tagValue := range tagValues {
-		tags[i] = tag.FromUint32(tagValue)
+		elem := ds.items[tagValue]
+		if !isNilElement(elem) && elem.Tag() != nil {
+			tags[i] = elem.Tag().Clone()
+		} else {
+			tags[i] = tag.FromUint32(tagValue)
+		}
 	}
 
 	return tags
@@ -298,6 +304,38 @@ func (ds *Dataset) DeepClone() *Dataset {
 	return clone
 }
 
+// DeepCloneChecked creates an independent recursive copy and reports any
+// buffer I/O error encountered while detaching element or fragment data.
+func (ds *Dataset) DeepCloneChecked() (*Dataset, error) {
+	if ds == nil {
+		return New(), nil
+	}
+	clone := New()
+	clone.internalTransferSyntax = ds.internalTransferSyntax
+	clone.skipValidation = ds.skipValidation
+	for tagValue, elem := range ds.items {
+		cloned, err := DeepCloneElementChecked(elem)
+		if err != nil {
+			return nil, err
+		}
+		clone.items[tagValue] = cloned
+	}
+	if !ds.cacheDirty && len(ds.sortedTags) > 0 {
+		clone.sortedTags = append([]uint32(nil), ds.sortedTags...)
+		clone.cacheDirty = false
+	}
+	return clone, nil
+}
+
+// DeepCloneElementChecked clones both ordinary elements and Dataset-owned
+// Sequence elements without losing their concrete container type.
+func DeepCloneElementChecked(elem element.Element) (element.Element, error) {
+	if sequence, ok := elem.(*Sequence); ok {
+		return sequence.DeepCloneChecked()
+	}
+	return element.DeepCloneChecked(elem)
+}
+
 // ReplaceFrom atomically replaces this Dataset's elements and transfer syntax
 // with an independent deep copy of source. The receiver pointer and its
 // automatic-validation mode are preserved. Callers must provide the same
@@ -310,7 +348,10 @@ func (ds *Dataset) ReplaceFrom(source *Dataset) error {
 		return fmt.Errorf("cannot replace Dataset from nil source")
 	}
 
-	replacement := source.DeepClone()
+	replacement, err := source.DeepCloneChecked()
+	if err != nil {
+		return fmt.Errorf("clone replacement Dataset: %w", err)
+	}
 	skipValidation := ds.skipValidation
 	ds.items = replacement.items
 	ds.sortedTags = replacement.sortedTags

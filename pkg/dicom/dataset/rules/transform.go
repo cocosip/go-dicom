@@ -14,6 +14,8 @@ import (
 type TransformStage string
 
 const (
+	// StageClone identifies creation of the transaction working copy.
+	StageClone TransformStage = "clone"
 	// StageCondition identifies condition evaluation.
 	StageCondition TransformStage = "condition"
 	// StageRule identifies transform rule execution.
@@ -99,7 +101,10 @@ func (transformer *Transformer) Apply(source *dataset.Dataset) (*dataset.Dataset
 		return nil, nil, &TransformError{Stage: StageRule, Cause: fmt.Errorf("transform source Dataset is nil")}
 	}
 
-	result := source.DeepClone()
+	result, err := source.DeepCloneChecked()
+	if err != nil {
+		return nil, nil, &TransformError{Stage: StageClone, Cause: err}
+	}
 	changes := make(ChangeSet, 0)
 	if err := transformer.apply(result, nil, &changes); err != nil {
 		return nil, changes, err

@@ -131,7 +131,7 @@ func (s *Sequence) Clone() *Sequence {
 	items := make([]*Dataset, len(s.items))
 	copy(items, s.items)
 	return &Sequence{
-		tag:   s.tag,
+		tag:   s.tag.Clone(),
 		items: items,
 	}
 }
@@ -149,9 +149,32 @@ func (s *Sequence) DeepClone() *Sequence {
 		}
 	}
 	return &Sequence{
-		tag:   s.tag,
+		tag:   s.tag.Clone(),
 		items: items,
 	}
+}
+
+// DeepCloneChecked creates an independent recursive copy and reports buffer
+// I/O errors from any nested item Dataset.
+func (s *Sequence) DeepCloneChecked() (*Sequence, error) {
+	if s == nil {
+		return nil, nil
+	}
+	items := make([]*Dataset, len(s.items))
+	for index, item := range s.items {
+		if item == nil {
+			continue
+		}
+		cloned, err := item.DeepCloneChecked()
+		if err != nil {
+			return nil, fmt.Errorf("clone Sequence item %d: %w", index, err)
+		}
+		items[index] = cloned
+	}
+	return &Sequence{
+		tag:   s.tag.Clone(),
+		items: items,
+	}, nil
 }
 
 // Filter returns a new sequence containing only items that match the predicate.

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/charset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -34,6 +35,26 @@ func resolveDestinationVR(ds *dataset.Dataset, target *tag.Tag, explicit *vr.VR)
 		return nil, nil, fmt.Errorf("dictionary VR for missing element %s is ambiguous; explicit VR is required", target)
 	}
 	return valueRepresentations[0], nil, nil
+}
+
+func replaceCanonicalStrings(
+	ds *dataset.Dataset,
+	prototype element.Element,
+	target *tag.Tag,
+	valueRepresentation *vr.VR,
+	values []string,
+) (element.Element, error) {
+	if prototype != nil {
+		return element.ReplaceCanonicalStrings(prototype, target, valueRepresentation, values)
+	}
+	context := element.CanonicalValueContext{TextEncodings: charset.GetEncodings(nil)}
+	if charsets, ok := ds.GetStrings(tag.SpecificCharacterSet); ok {
+		context.TextEncodings = charset.GetEncodings(charsets)
+	}
+	if syntax := ds.InternalTransferSyntax(); syntax != nil {
+		context.Endian = syntax.Endian()
+	}
+	return element.ReplaceCanonicalStringsWithContext(target, valueRepresentation, values, context)
 }
 
 func changedElementPath(path dataset.Path, target *tag.Tag) dataset.Path {

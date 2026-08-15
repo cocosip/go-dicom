@@ -72,6 +72,5 @@ func (rule generateUIDsRule) apply(ds *dataset.Dataset, path dataset.Path, chang
 	if err := ds.AddOrUpdate(after); err != nil {
 		return transformValueError(path, rule.tag, err)
 	}
-	appendChange(changes, Change{Kind: ChangeUID, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before, After: after})
-	return nil
+	return appendChange(changes, Change{Kind: ChangeUID, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before, After: after})
 }

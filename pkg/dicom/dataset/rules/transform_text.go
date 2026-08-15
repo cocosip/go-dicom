@@ -206,6 +206,5 @@ func (rule editValuesRule) apply(ds *dataset.Dataset, path dataset.Path, changes
 	if err := ds.AddOrUpdate(after); err != nil {
 		return transformValueError(path, rule.tag, err)
 	}
-	appendChange(changes, Change{Kind: ChangeEdit, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before, After: after})
-	return nil
+	return appendChange(changes, Change{Kind: ChangeEdit, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before, After: after})
 }

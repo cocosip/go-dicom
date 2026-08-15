@@ -51,6 +51,18 @@ func NewWithPrivateCreator(group, element uint16, privateCreator *PrivateCreator
 	}
 }
 
+// Clone returns an independent copy of the Tag and its Private Creator.
+func (t *Tag) Clone() *Tag {
+	if t == nil {
+		return nil
+	}
+	clone := &Tag{group: t.group, element: t.element}
+	if t.privateCreator != nil {
+		clone.privateCreator = NewPrivateCreator(t.privateCreator.Creator())
+	}
+	return clone
+}
+
 // FromUint32 creates a tag from a 32-bit unsigned integer.
 // The upper 16 bits represent the group, and the lower 16 bits represent the element.
 func FromUint32(value uint32) *Tag {

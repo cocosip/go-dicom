@@ -4,14 +4,20 @@
 package rules
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
+
+const originalPatientID = "original"
 
 func TestRemoveAndRemoveMaskedRecordStableTagOrder(t *testing.T) {
 	first := tag.New(0x0011, 0x0010)
@@ -55,7 +61,7 @@ func TestRemoveAndRemoveMaskedRecordStableTagOrder(t *testing.T) {
 }
 
 func TestSetElementClonesConstructorInput(t *testing.T) {
-	input := element.NewString(tag.PatientID, vr.LO, []string{"original"})
+	input := element.NewString(tag.PatientID, vr.LO, []string{originalPatientID})
 	rule := mustTransformRule(SetElement(input))
 	input.Buffer().Data()[0] = 'X'
 	transformer, err := NewTransformer(rule)
@@ -67,11 +73,97 @@ func TestSetElementClonesConstructorInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value, _ := result.GetString(tag.PatientID); value != "original" {
+	if value, _ := result.GetString(tag.PatientID); value != originalPatientID {
 		t.Fatalf("PatientID = %q, constructor input was not cloned", value)
 	}
 	if len(changes) != 1 || changes[0].Before != nil || changes[0].Kind != ChangeAssign {
 		t.Fatalf("changes = %#v", changes)
+	}
+}
+
+func TestChangeTagsAndPathsDoNotAliasTransformedDataset(t *testing.T) {
+	privateTag := tag.NewWithPrivateCreator(0x0011, 0x1010, tag.NewPrivateCreator("ORIGINAL"))
+	transformer, err := NewTransformer(mustTransformRule(SetStrings(privateTag, vr.LO, "value")))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, changes, err := transformer.Apply(dataset.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes[0].Tag.SetPrivateCreator(tag.NewPrivateCreator("CHANGE-TAG"))
+	changes[0].Path[0].Tag.SetPrivateCreator(tag.NewPrivateCreator("CHANGE-PATH"))
+	resultTag := result.GetOrNil(privateTag).Tag()
+	if creator := resultTag.PrivateCreator(); creator == nil || creator.Creator() != "ORIGINAL" {
+		t.Fatalf("change metadata mutation changed result Tag: %v", resultTag)
+	}
+	if changes[0].After.Tag() == resultTag {
+		t.Fatal("Change.After Tag aliases transformed Dataset Tag")
+	}
+}
+
+func TestSetElementPreservesPopulatedSequenceAndClonesItsItems(t *testing.T) {
+	item := dataset.New()
+	requireRuleAdd(t, item, element.NewString(tag.PatientID, vr.LO, []string{originalPatientID}))
+	sequence := dataset.NewSequenceWithItems(tag.SourceImageSequence, []*dataset.Dataset{item})
+	rule := mustTransformRule(SetElement(sequence))
+	if err := item.AddOrUpdate(element.NewString(tag.PatientID, vr.LO, []string{"changed"})); err != nil {
+		t.Fatal(err)
+	}
+	transformer, err := NewTransformer(rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, changes, err := transformer.Apply(dataset.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, sequenceErr := result.GetSequence(tag.SourceImageSequence)
+	if sequenceErr != nil {
+		t.Fatalf("assigned element = %T, want Sequence: %v", result.GetOrNil(tag.SourceImageSequence), sequenceErr)
+	}
+	if got.Count() != 1 {
+		t.Fatalf("assigned Sequence count = %d, want 1", got.Count())
+	}
+	if value, _ := got.GetItem(0).GetString(tag.PatientID); value != originalPatientID {
+		t.Fatalf("assigned Sequence item PatientID = %q, want constructor snapshot", value)
+	}
+	changeAfter, isSequence := changes[0].After.(*dataset.Sequence)
+	if !isSequence || changeAfter.Count() != 1 {
+		t.Fatalf("change After = %T, want populated Sequence", changes[0].After)
+	}
+	got.GetItem(0).Remove(tag.PatientID)
+	if value, _ := changeAfter.GetItem(0).GetString(tag.PatientID); value != originalPatientID {
+		t.Fatalf("change snapshot aliased result Sequence: %q", value)
+	}
+}
+
+func TestRemoveSequenceRecordsIndependentPopulatedBeforeSnapshot(t *testing.T) {
+	item := dataset.New()
+	requireRuleAdd(t, item, element.NewString(tag.PatientID, vr.LO, []string{originalPatientID}))
+	source := dataset.New()
+	requireRuleAdd(t, source, dataset.NewSequenceWithItems(tag.SourceImageSequence, []*dataset.Dataset{item}))
+	transformer, err := NewTransformer(mustTransformRule(Remove(tag.SourceImageSequence)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, changes, err := transformer.Apply(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Contains(tag.SourceImageSequence) || len(changes) != 1 {
+		t.Fatalf("result contains Sequence=%t changes=%v", result.Contains(tag.SourceImageSequence), changes)
+	}
+	before, isSequence := changes[0].Before.(*dataset.Sequence)
+	if !isSequence || before.Count() != 1 {
+		t.Fatalf("change Before = %T, want populated Sequence", changes[0].Before)
+	}
+	item.Remove(tag.PatientID)
+	if value, _ := before.GetItem(0).GetString(tag.PatientID); value != originalPatientID {
+		t.Fatalf("change snapshot aliased source Sequence: %q", value)
 	}
 }
 
@@ -112,6 +204,56 @@ func TestSetStringsResolvesExistingExplicitAndDictionaryVR(t *testing.T) {
 				t.Fatalf("values = %v, err = %v", got, err)
 			}
 		})
+	}
+}
+
+func TestSetStringsUsesDatasetSpecificCharacterSetForMissingText(t *testing.T) {
+	source := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	requireRuleAdd(t, source, element.NewString(tag.SpecificCharacterSet, vr.CS, []string{"ISO_IR 192"}))
+	transformer, err := NewTransformer(mustTransformRule(SetStrings(tag.PatientName, nil, "张^三")))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := transformer.Apply(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encoded bytes.Buffer
+	if err := writer.Write(&encoded, result); err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, _ := parsed.Dataset.GetString(tag.PatientName); value != "张^三" {
+		t.Fatalf("round-trip PatientName = %q, want %q", value, "张^三")
+	}
+}
+
+func TestSetStringsUsesDatasetTransferSyntaxForMissingNumeric(t *testing.T) {
+	source := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	transformer, err := NewTransformer(mustTransformRule(SetStrings(tag.Rows, vr.US, "4660")))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := transformer.Apply(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encoded bytes.Buffer
+	if err := writer.Write(&encoded, result); err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := parsed.Dataset.GetUInt16(tag.Rows, 0)
+	if err != nil || value != 0x1234 {
+		t.Fatalf("round-trip Rows = %#x, error = %v, want 0x1234", value, err)
 	}
 }
 

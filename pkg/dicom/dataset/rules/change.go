@@ -4,6 +4,8 @@
 package rules
 
 import (
+	"fmt"
+
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -40,12 +42,21 @@ type Change struct {
 // ChangeSet records mutations in rule execution order.
 type ChangeSet []Change
 
-func appendChange(changes *ChangeSet, change Change) {
+func appendChange(changes *ChangeSet, change Change) error {
 	if changes == nil {
-		return
+		return nil
 	}
 	change.Path = dataset.ClonePath(change.Path)
-	change.Before = element.DeepClone(change.Before)
-	change.After = element.DeepClone(change.After)
+	change.Tag = change.Tag.Clone()
+	var err error
+	change.Before, err = dataset.DeepCloneElementChecked(change.Before)
+	if err != nil {
+		return fmt.Errorf("clone change Before: %w", err)
+	}
+	change.After, err = dataset.DeepCloneElementChecked(change.After)
+	if err != nil {
+		return fmt.Errorf("clone change After: %w", err)
+	}
 	*changes = append(*changes, change)
+	return nil
 }

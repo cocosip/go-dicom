@@ -54,10 +54,18 @@ func (e *ValidationError) Unwrap() error {
 // operation always validates, regardless of the Dataset automatic-validation
 // setting.
 func (ds *Dataset) Validate() error {
+	return validateDataset(ds, nil)
+}
+
+func validateDataset(ds *Dataset, path []ValidationPathSegment) error {
+	if ds == nil {
+		return validationError(ValidationStructural, path, fmt.Errorf("dataset is nil"))
+	}
 	err := Walk(ds, func(event WalkEvent) (WalkAction, error) {
+		eventPath := append(ClonePath(path), ClonePath(event.Path)...)
 		switch event.Kind {
 		case WalkElement, WalkFragmentBegin:
-			if err := validateElementAtPath(event.Element, event.Path); err != nil {
+			if err := validateElementAtPath(event.Element, eventPath); err != nil {
 				return WalkContinue, err
 			}
 		}
@@ -72,37 +80,23 @@ func (ds *Dataset) Validate() error {
 	}
 	var walkErr *WalkError
 	if errors.As(err, &walkErr) {
-		return validationError(ValidationStructural, walkErr.Path, walkErr.Cause)
+		walkPath := append(ClonePath(path), ClonePath(walkErr.Path)...)
+		return validationError(ValidationStructural, walkPath, walkErr.Cause)
 	}
-	return validationError(ValidationStructural, nil, err)
-}
-
-func validateDataset(ds *Dataset, path []ValidationPathSegment) error {
-	if ds == nil {
-		return validationError(ValidationStructural, path, fmt.Errorf("dataset is nil"))
-	}
-	for _, elem := range ds.Elements() {
-		if err := validateElement(elem, path); err != nil {
-			return err
-		}
-	}
-	return nil
+	return validationError(ValidationStructural, path, err)
 }
 
 func validateElement(elem element.Element, path []ValidationPathSegment) error {
-	if elem == nil {
+	if isNilElement(elem) {
 		return validationError(ValidationStructural, path, fmt.Errorf("element is nil"))
 	}
 	t := elem.Tag()
 	if t == nil {
 		return validationError(ValidationStructural, path, fmt.Errorf("element tag is nil"))
 	}
-	if sequence, ok := elem.(*Sequence); ok {
-		return validateSequence(sequence, path)
-	}
-
-	elementPath := appendPath(path, PathSegment{Tag: t})
-	return validateElementAtPath(elem, elementPath)
+	wrapper := New()
+	wrapper.items[t.ToUint32()] = elem
+	return validateDataset(wrapper, path)
 }
 
 func validateElementAtPath(elem element.Element, elementPath Path) error {
@@ -126,20 +120,7 @@ func validateSequence(sequence *Sequence, path []ValidationPathSegment) error {
 	if sequence.tag == nil {
 		return validationError(ValidationStructural, path, fmt.Errorf("sequence tag is nil"))
 	}
-	for index, item := range sequence.items {
-		if item == nil {
-			continue
-		}
-		itemIndex := index
-		itemPath := appendPath(path, PathSegment{
-			Tag:       sequence.tag,
-			ItemIndex: &itemIndex,
-		})
-		if err := validateDataset(item, itemPath); err != nil {
-			return err
-		}
-	}
-	return nil
+	return validateElement(sequence, path)
 }
 
 func validateElementVM(elem element.Element, valueRepresentation *vr.VR) error {

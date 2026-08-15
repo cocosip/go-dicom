@@ -10,6 +10,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
+const privateCreatorOriginal = "ORIGINAL"
+
 func TestFormatPathIncludesItemsAndFragments(t *testing.T) {
 	itemIndex := 2
 	fragmentIndex := 3
@@ -44,6 +46,20 @@ func TestClonePathDoesNotAliasIndexes(t *testing.T) {
 	}
 	if original[0].Tag != tag.ReferencedImageSequence {
 		t.Fatal("ClonePath shared mutable segment storage with original")
+	}
+}
+
+func TestClonePathClonesTagsAndPreservesPrivateCreator(t *testing.T) {
+	privateTag := tag.NewWithPrivateCreator(0x0011, 0x1010, tag.NewPrivateCreator(privateCreatorOriginal))
+	original := Path{{Tag: privateTag}}
+
+	clone := ClonePath(original)
+	if clone[0].Tag == privateTag || clone[0].Tag.PrivateCreator().Creator() != privateCreatorOriginal {
+		t.Fatalf("cloned Tag = %v, want independent private creator snapshot", clone[0].Tag)
+	}
+	clone[0].Tag.SetPrivateCreator(tag.NewPrivateCreator("CHANGED"))
+	if privateTag.PrivateCreator().Creator() != privateCreatorOriginal {
+		t.Fatalf("ClonePath shared Tag with original: %v", privateTag)
 	}
 }
 

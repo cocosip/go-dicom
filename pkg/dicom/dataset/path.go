@@ -24,15 +24,15 @@ type Path []PathSegment
 // ValidationPathSegment is retained as an alias for source compatibility.
 type ValidationPathSegment = PathSegment
 
-// ClonePath returns an independent path snapshot. Tag values are immutable and
-// are shared; index values are copied.
+// ClonePath returns an independent path snapshot, including mutable Tags and
+// index values.
 func ClonePath(path Path) Path {
 	if path == nil {
 		return nil
 	}
 	clone := make(Path, len(path))
 	for index, segment := range path {
-		clone[index].Tag = segment.Tag
+		clone[index].Tag = segment.Tag.Clone()
 		if segment.ItemIndex != nil {
 			itemIndex := *segment.ItemIndex
 			clone[index].ItemIndex = &itemIndex

@@ -48,6 +48,29 @@ func TestWalkVisitsDepthFirstInTagOrder(t *testing.T) {
 	}
 }
 
+func TestWalkPathPreservesPrivateCreatorWithoutAliasingSourceTag(t *testing.T) {
+	privateTag := tag.NewWithPrivateCreator(0x0011, 0x1010, tag.NewPrivateCreator(privateCreatorOriginal))
+	root := New()
+	requireWalkAdd(t, root, element.NewString(privateTag, vr.LO, []string{"value"}))
+
+	err := Walk(root, func(event WalkEvent) (WalkAction, error) {
+		if event.Kind != WalkElement {
+			return WalkContinue, nil
+		}
+		if creator := event.Path[0].Tag.PrivateCreator(); creator == nil || creator.Creator() != privateCreatorOriginal {
+			t.Fatalf("walk path Tag = %v, want private creator ORIGINAL", event.Path[0].Tag)
+		}
+		event.Path[0].Tag.SetPrivateCreator(tag.NewPrivateCreator("CHANGED"))
+		return WalkContinue, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if creator := root.GetOrNil(privateTag).Tag().PrivateCreator(); creator == nil || creator.Creator() != privateCreatorOriginal {
+		t.Fatalf("walk path mutation changed source Tag: %v", root.GetOrNil(privateTag).Tag())
+	}
+}
+
 func TestWalkEmptyContainersAreBalancedAndNilItemsAreEmptyDatasets(t *testing.T) {
 	root := New()
 	emptyItem := New()
@@ -121,6 +144,60 @@ func TestWalkFragmentBeginExposesOffsetTableAndItemsExposeBuffers(t *testing.T) 
 	}
 	if len(gotFragments) != 2 || gotFragments[0] != first || gotFragments[1] != second {
 		t.Fatal("fragment item buffers were copied or reordered")
+	}
+}
+
+func TestWalkSnapshotsSequenceItemsBeforeBeginCallback(t *testing.T) {
+	first := New()
+	requireWalkAdd(t, first, element.NewString(tag.PatientID, vr.LO, []string{"first"}))
+	second := New()
+	requireWalkAdd(t, second, element.NewString(tag.PatientID, vr.LO, []string{"second"}))
+	sequence := NewSequenceWithItems(tag.ReferencedImageSequence, []*Dataset{first})
+	root := New()
+	requireWalkAdd(t, root, sequence)
+
+	var values []string
+	err := Walk(root, func(event WalkEvent) (WalkAction, error) {
+		if event.Kind == WalkSequenceBegin {
+			sequence.AddItem(second)
+		}
+		if event.Kind == WalkElement && event.Element.Tag().Equals(tag.PatientID) {
+			value, _ := event.Dataset.GetString(tag.PatientID)
+			values = append(values, value)
+		}
+		return WalkContinue, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(values, []string{"first"}) {
+		t.Fatalf("visited Sequence item values = %v, want pre-callback snapshot", values)
+	}
+}
+
+func TestWalkSnapshotsFragmentsBeforeBeginCallback(t *testing.T) {
+	first := buffer.NewMemory([]byte{1, 2})
+	second := buffer.NewMemory([]byte{3, 4})
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	fragments.AddFragment(first)
+	root := New()
+	requireWalkAdd(t, root, fragments)
+
+	var visited []buffer.ByteBuffer
+	err := Walk(root, func(event WalkEvent) (WalkAction, error) {
+		if event.Kind == WalkFragmentBegin {
+			fragments.AddFragment(second)
+		}
+		if event.Kind == WalkFragmentItem {
+			visited = append(visited, event.Fragment)
+		}
+		return WalkContinue, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(visited, []buffer.ByteBuffer{first}) {
+		t.Fatalf("visited fragments = %v, want pre-callback snapshot", visited)
 	}
 }
 

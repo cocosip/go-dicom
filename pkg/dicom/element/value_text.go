@@ -25,6 +25,13 @@ type UnsupportedValueError struct {
 	Type string
 }
 
+// CanonicalValueContext supplies Dataset-level encoding and byte-order state
+// when canonical values create an element that has no existing prototype.
+type CanonicalValueContext struct {
+	TextEncodings []encoding.Encoding
+	Endian        endian.Endian
+}
+
 func (e *UnsupportedValueError) Error() string {
 	if e == nil {
 		return "<nil>"
@@ -112,6 +119,31 @@ func CanonicalStrings(elem Element) ([]string, error) {
 // canonical values. A compatible prototype preserves text encodings and
 // numeric byte order.
 func ReplaceCanonicalStrings(prototype Element, targetTag *tag.Tag, targetVR *vr.VR, values []string) (Element, error) {
+	return replaceCanonicalStrings(targetTag, targetVR, values, prototypeEncodings(prototype), prototypeEndian(prototype))
+}
+
+// ReplaceCanonicalStringsWithContext constructs a VR-correct element using
+// explicit Dataset-level text encoding and numeric byte order.
+func ReplaceCanonicalStringsWithContext(
+	targetTag *tag.Tag,
+	targetVR *vr.VR,
+	values []string,
+	context CanonicalValueContext,
+) (Element, error) {
+	encodings := append([]encoding.Encoding(nil), context.TextEncodings...)
+	if len(encodings) == 0 {
+		encodings = []encoding.Encoding{charset.Default}
+	}
+	return replaceCanonicalStrings(targetTag, targetVR, values, encodings, context.Endian)
+}
+
+func replaceCanonicalStrings(
+	targetTag *tag.Tag,
+	targetVR *vr.VR,
+	values []string,
+	encodings []encoding.Encoding,
+	byteOrder endian.Endian,
+) (Element, error) {
 	if targetTag == nil {
 		return nil, fmt.Errorf("canonical value target tag is nil")
 	}
@@ -125,67 +157,67 @@ func ReplaceCanonicalStrings(prototype Element, targetTag *tag.Tag, targetVR *vr
 	switch targetVR.Code() {
 	case vr.CodeAE, vr.CodeAS, vr.CodeCS, vr.CodeLO, vr.CodeLT, vr.CodeSH,
 		vr.CodeST, vr.CodeUC, vr.CodeUI, vr.CodeUR, vr.CodeUT:
-		result, err = newCanonicalString(targetTag, targetVR, values, prototypeEncodings(prototype))
+		result, err = newCanonicalString(targetTag, targetVR, values, encodings)
 	case vr.CodeDA:
 		var str *String
-		str, err = newCanonicalString(targetTag, targetVR, values, prototypeEncodings(prototype))
+		str, err = newCanonicalString(targetTag, targetVR, values, encodings)
 		result = &Date{str: str}
 	case vr.CodeTM:
 		var str *String
-		str, err = newCanonicalString(targetTag, targetVR, values, prototypeEncodings(prototype))
+		str, err = newCanonicalString(targetTag, targetVR, values, encodings)
 		result = &Time{str: str}
 	case vr.CodeDT:
 		var str *String
-		str, err = newCanonicalString(targetTag, targetVR, values, prototypeEncodings(prototype))
+		str, err = newCanonicalString(targetTag, targetVR, values, encodings)
 		result = &DateTime{str: str}
 	case vr.CodePN:
 		var str *String
-		str, err = newCanonicalString(targetTag, targetVR, values, prototypeEncodings(prototype))
+		str, err = newCanonicalString(targetTag, targetVR, values, encodings)
 		result = &PersonName{str: str}
 	case vr.CodeDS:
 		var str *String
-		str, err = newCanonicalString(targetTag, targetVR, values, prototypeEncodings(prototype))
+		str, err = newCanonicalString(targetTag, targetVR, values, encodings)
 		result = &DecimalString{str: str}
 	case vr.CodeIS:
 		var str *String
-		str, err = newCanonicalString(targetTag, targetVR, values, prototypeEncodings(prototype))
+		str, err = newCanonicalString(targetTag, targetVR, values, encodings)
 		result = &IntegerString{str: str}
 	case vr.CodeUS:
 		var parsed []uint16
 		parsed, err = parseUnsigned[uint16](values, 16)
-		result = NewUnsignedShortWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewUnsignedShortWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeUL:
 		var parsed []uint32
 		parsed, err = parseUnsigned[uint32](values, 32)
-		result = NewUnsignedLongWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewUnsignedLongWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeUV:
 		var parsed []uint64
 		parsed, err = parseUnsigned[uint64](values, 64)
-		result = NewUnsignedVeryLongWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewUnsignedVeryLongWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeSS:
 		var parsed []int16
 		parsed, err = parseSigned[int16](values, 16)
-		result = NewSignedShortWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewSignedShortWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeSL:
 		var parsed []int32
 		parsed, err = parseSigned[int32](values, 32)
-		result = NewSignedLongWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewSignedLongWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeSV:
 		var parsed []int64
 		parsed, err = parseSigned[int64](values, 64)
-		result = NewSignedVeryLongWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewSignedVeryLongWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeFL:
 		var parsed []float32
 		parsed, err = parseFloat32s(values)
-		result = NewFloatWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewFloatWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeFD:
 		var parsed []float64
 		parsed, err = parseFloat64s(values)
-		result = NewDoubleWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewDoubleWithEndian(targetTag, parsed, byteOrder)
 	case vr.CodeAT:
 		var parsed []*tag.Tag
 		parsed, err = parseAttributeTags(values)
-		result = NewAttributeTagWithEndian(targetTag, parsed, prototypeEndian(prototype))
+		result = NewAttributeTagWithEndian(targetTag, parsed, byteOrder)
 	default:
 		return nil, &UnsupportedValueError{Tag: targetTag, VR: targetVR, Type: "replacement"}
 	}

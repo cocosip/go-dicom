@@ -137,3 +137,36 @@ func TestSequenceValidateSkipsNilAndEmptyItems(t *testing.T) {
 		t.Fatalf("Validate() error = %v, want nil", err)
 	}
 }
+
+func TestSequenceValidateReportsDatasetCycleAsStructuralError(t *testing.T) {
+	item := newValidationDisabledDataset()
+	sequence := dataset.NewSequence(tag.ReferencedImageSequence)
+	if err := item.Add(sequence); err != nil {
+		t.Fatal(err)
+	}
+	sequence.AddItem(item)
+
+	err := sequence.Validate()
+	var validationErr *dataset.ValidationError
+	if !errors.As(err, &validationErr) || validationErr.Kind != dataset.ValidationStructural {
+		t.Fatalf("Validate() error = %v, want structural cycle error", err)
+	}
+	if !strings.Contains(err.Error(), "cycle") {
+		t.Fatalf("Validate() error = %v, want cycle cause", err)
+	}
+}
+
+func TestDatasetAddReportsSequenceCycleAsStructuralError(t *testing.T) {
+	item := newValidationDisabledDataset()
+	sequence := dataset.NewSequence(tag.ReferencedImageSequence)
+	if err := item.Add(sequence); err != nil {
+		t.Fatal(err)
+	}
+	sequence.AddItem(item)
+
+	err := dataset.New().Add(sequence)
+	var validationErr *dataset.ValidationError
+	if !errors.As(err, &validationErr) || validationErr.Kind != dataset.ValidationStructural {
+		t.Fatalf("Add() error = %v, want structural cycle error", err)
+	}
+}

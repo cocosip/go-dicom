@@ -41,8 +41,7 @@ func (rule removeRule) apply(ds *dataset.Dataset, path dataset.Path, changes *Ch
 			return nil
 		}
 		ds.Remove(rule.tag)
-		appendChange(changes, Change{Kind: ChangeRemove, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before})
-		return nil
+		return appendChange(changes, Change{Kind: ChangeRemove, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before})
 	}
 
 	matching := make([]*tag.Tag, 0)
@@ -54,7 +53,9 @@ func (rule removeRule) apply(ds *dataset.Dataset, path dataset.Path, changes *Ch
 	for _, candidate := range matching {
 		before, _ := ds.Get(candidate)
 		ds.Remove(candidate)
-		appendChange(changes, Change{Kind: ChangeRemove, Path: changedElementPath(path, candidate), Tag: candidate, Before: before})
+		if err := appendChange(changes, Change{Kind: ChangeRemove, Path: changedElementPath(path, candidate), Tag: candidate, Before: before}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -72,20 +73,26 @@ func SetElement(elem element.Element) (TransformRule, error) {
 	if err := element.ValidateValue(elem); err != nil {
 		return nil, fmt.Errorf("validate set element: %w", err)
 	}
-	return setElementRule{elem: element.DeepClone(elem)}, nil
+	cloned, err := dataset.DeepCloneElementChecked(elem)
+	if err != nil {
+		return nil, fmt.Errorf("clone set element: %w", err)
+	}
+	return setElementRule{elem: cloned}, nil
 }
 
 func (rule setElementRule) apply(ds *dataset.Dataset, path dataset.Path, changes *ChangeSet) error {
 	before := ds.GetOrNil(rule.elem.Tag())
-	after := element.DeepClone(rule.elem)
+	after, err := dataset.DeepCloneElementChecked(rule.elem)
+	if err != nil {
+		return fmt.Errorf("clone set element: %w", err)
+	}
 	if elementsEquivalent(before, after) {
 		return nil
 	}
 	if err := ds.AddOrUpdate(after); err != nil {
 		return transformValueError(path, after.Tag(), err)
 	}
-	appendChange(changes, Change{Kind: ChangeAssign, Path: changedElementPath(path, after.Tag()), Tag: after.Tag(), Before: before, After: after})
-	return nil
+	return appendChange(changes, Change{Kind: ChangeAssign, Path: changedElementPath(path, after.Tag()), Tag: after.Tag(), Before: before, After: after})
 }
 
 type setStringsRule struct {
@@ -108,7 +115,7 @@ func (rule setStringsRule) apply(ds *dataset.Dataset, path dataset.Path, changes
 	if err != nil {
 		return transformValueError(path, rule.tag, err)
 	}
-	after, err := element.ReplaceCanonicalStrings(prototype, rule.tag, valueRepresentation, rule.values)
+	after, err := replaceCanonicalStrings(ds, prototype, rule.tag, valueRepresentation, rule.values)
 	if err != nil {
 		return transformValueError(path, rule.tag, err)
 	}
@@ -118,8 +125,7 @@ func (rule setStringsRule) apply(ds *dataset.Dataset, path dataset.Path, changes
 	if err := ds.AddOrUpdate(after); err != nil {
 		return transformValueError(path, rule.tag, err)
 	}
-	appendChange(changes, Change{Kind: ChangeAssign, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: prototype, After: after})
-	return nil
+	return appendChange(changes, Change{Kind: ChangeAssign, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: prototype, After: after})
 }
 
 type mapValueRule struct {
@@ -154,8 +160,7 @@ func (rule mapValueRule) apply(ds *dataset.Dataset, path dataset.Path, changes *
 	if err := ds.AddOrUpdate(after); err != nil {
 		return transformValueError(path, rule.tag, err)
 	}
-	appendChange(changes, Change{Kind: ChangeMap, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before, After: after})
-	return nil
+	return appendChange(changes, Change{Kind: ChangeMap, Path: changedElementPath(path, rule.tag), Tag: rule.tag, Before: before, After: after})
 }
 
 type copyValueRule struct {
@@ -184,7 +189,7 @@ func (rule copyValueRule) apply(ds *dataset.Dataset, path dataset.Path, changes 
 	if err != nil {
 		return transformValueError(path, rule.destination, err)
 	}
-	after, err := element.ReplaceCanonicalStrings(before, rule.destination, valueRepresentation, values)
+	after, err := replaceCanonicalStrings(ds, before, rule.destination, valueRepresentation, values)
 	if err != nil {
 		return transformValueError(path, rule.destination, err)
 	}
@@ -194,6 +199,5 @@ func (rule copyValueRule) apply(ds *dataset.Dataset, path dataset.Path, changes 
 	if err := ds.AddOrUpdate(after); err != nil {
 		return transformValueError(path, rule.destination, err)
 	}
-	appendChange(changes, Change{Kind: ChangeCopy, Path: changedElementPath(path, rule.destination), Tag: rule.destination, Before: before, After: after})
-	return nil
+	return appendChange(changes, Change{Kind: ChangeCopy, Path: changedElementPath(path, rule.destination), Tag: rule.destination, Before: before, After: after})
 }

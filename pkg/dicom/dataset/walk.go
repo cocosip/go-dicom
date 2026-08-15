@@ -173,6 +173,9 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 				for index, tagValue := range tagValues {
 					task.elements[index] = task.dataset.items[tagValue]
 					task.tags[index] = tag.New(uint16(tagValue>>16), uint16(tagValue))
+					if elem := task.elements[index]; !isNilElement(elem) && elem.Tag() != nil {
+						task.tags[index] = elem.Tag().Clone()
+					}
 				}
 				task.initialized = true
 			}
@@ -191,9 +194,10 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 				if sequence.Tag() == nil {
 					return newWalkError(WalkSequenceBegin, containerPath, fmt.Errorf("sequence tag is nil"))
 				}
+				items := append([]*Dataset(nil), sequence.GetItems()...)
 				stack = append(stack,
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkSequenceEnd, Path: containerPath, Element: sequence, Dataset: task.dataset}},
-					walkTask{kind: walkTaskSequenceItems, path: task.path, sequence: sequence},
+					walkTask{kind: walkTaskSequenceItems, path: containerPath, sequence: sequence, items: items, initialized: true},
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkSequenceBegin, Path: containerPath, Element: sequence, Dataset: task.dataset}, canSkip: true},
 				)
 				continue
@@ -206,9 +210,10 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 				if fragments.Tag() == nil {
 					return newWalkError(WalkFragmentBegin, containerPath, fmt.Errorf("fragment sequence tag is nil"))
 				}
+				fragmentItems := append([]buffer.ByteBuffer(nil), fragments.Fragments()...)
 				stack = append(stack,
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkFragmentEnd, Path: containerPath, Element: fragments, Dataset: task.dataset}},
-					walkTask{kind: walkTaskFragments, path: task.path, dataset: task.dataset, fragmentSequence: fragments},
+					walkTask{kind: walkTaskFragments, path: containerPath, dataset: task.dataset, fragmentSequence: fragments, fragments: fragmentItems, initialized: true},
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkFragmentBegin, Path: containerPath, Element: fragments, Dataset: task.dataset}, canSkip: true},
 				)
 				continue
@@ -225,10 +230,6 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 			}})
 
 		case walkTaskSequenceItems:
-			if !task.initialized {
-				task.items = append([]*Dataset(nil), task.sequence.GetItems()...)
-				task.initialized = true
-			}
 			if task.index >= len(task.items) {
 				continue
 			}
@@ -238,7 +239,8 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 				item = New()
 			}
 			task.index++
-			itemPath := appendPath(task.path, PathSegment{Tag: task.sequence.Tag(), ItemIndex: &itemIndex})
+			itemPath := ClonePath(task.path)
+			itemPath[len(itemPath)-1].ItemIndex = &itemIndex
 			if _, exists := activeDatasets[item]; exists {
 				return newWalkError(WalkSequenceItemBegin, itemPath, fmt.Errorf("Dataset cycle detected"))
 			}
@@ -252,17 +254,14 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 			)
 
 		case walkTaskFragments:
-			if !task.initialized {
-				task.fragments = append([]buffer.ByteBuffer(nil), task.fragmentSequence.Fragments()...)
-				task.initialized = true
-			}
 			if task.index >= len(task.fragments) {
 				continue
 			}
 			fragmentIndex := task.index
 			fragment := task.fragments[fragmentIndex]
 			task.index++
-			fragmentPath := appendPath(task.path, PathSegment{Tag: task.fragmentSequence.Tag(), FragmentIndex: &fragmentIndex})
+			fragmentPath := ClonePath(task.path)
+			fragmentPath[len(fragmentPath)-1].FragmentIndex = &fragmentIndex
 			stack = append(stack,
 				task,
 				walkTask{kind: walkTaskEvent, event: WalkEvent{

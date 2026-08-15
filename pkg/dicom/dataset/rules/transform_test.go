@@ -14,6 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 func TestApplyReturnsIndependentCloneOnNoRules(t *testing.T) {
@@ -42,6 +43,31 @@ func TestApplyReturnsIndependentCloneOnNoRules(t *testing.T) {
 	}
 	if value, _ := source.GetString(tag.PatientName); value != "Doe^Jane" {
 		t.Fatalf("source changed through result clone: %q", value)
+	}
+}
+
+func TestApplyReturnsBufferCloneFailureWithoutMutatingSource(t *testing.T) {
+	loadErr := errors.New("load failed")
+	lazy, err := buffer.NewLazySizedWithError(4, func() ([]byte, error) {
+		return nil, loadErr
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateTag := tag.New(0x0011, 0x1010)
+	source := dataset.New()
+	requireRuleAdd(t, source, element.NewOtherByteFromBuffer(privateTag, lazy))
+	transformer, err := NewTransformer()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, changes, err := transformer.Apply(source)
+	if result != nil || len(changes) != 0 || !errors.Is(err, loadErr) {
+		t.Fatalf("Apply result=%v changes=%v error=%v, want clone failure", result, changes, err)
+	}
+	if source.GetOrNil(privateTag).Buffer() != lazy || !lazy.IsLoaded() {
+		t.Fatal("Apply replaced the source buffer or did not surface its loader failure")
 	}
 }
 
@@ -337,14 +363,13 @@ func (rule testAssignRule) apply(ds *dataset.Dataset, path dataset.Path, changes
 	if err := ds.AddOrUpdate(assigned); err != nil {
 		return err
 	}
-	appendChange(changes, Change{
+	return appendChange(changes, Change{
 		Kind:   ChangeAssign,
 		Path:   append(dataset.ClonePath(path), dataset.PathSegment{Tag: assigned.Tag()}),
 		Tag:    assigned.Tag(),
 		Before: before,
 		After:  assigned,
 	})
-	return nil
 }
 
 type testFailRule struct{ err error }
