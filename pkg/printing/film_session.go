@@ -3,6 +3,13 @@
 
 package printing
 
+import (
+	"fmt"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+)
+
 // FilmDestination represents where the exposed film is stored/processed
 type FilmDestination string
 
@@ -91,12 +98,11 @@ type FilmSession struct {
 // NewFilmSession creates a new Film Session
 func NewFilmSession(sopClassUID, sopInstanceUID string, isColor bool) *FilmSession {
 	if sopClassUID == "" {
-		sopClassUID = "1.2.840.10008.5.1.1.1" // Basic Film Session SOP Class
+		sopClassUID = basicFilmSessionSOPClassUID
 	}
 
 	if sopInstanceUID == "" {
-		// Generate a UID if not provided
-		sopInstanceUID = "1.2.840.10008.5.1.1.1.1" // Placeholder
+		sopInstanceUID = newSOPInstanceUID()
 	}
 
 	return &FilmSession{
@@ -127,6 +133,183 @@ func (fs *FilmSession) AddPresentationLUT(lut *PresentationLUT) {
 	if lut != nil {
 		fs.PresentationLUTs = append(fs.PresentationLUTs, lut)
 	}
+}
+
+// CreateFilmBox creates a Film Box from Dataset values and attaches it to the session.
+func (fs *FilmSession) CreateFilmBox(sopInstanceUID string, ds *dataset.Dataset) (*FilmBox, error) {
+	if fs == nil {
+		return nil, fmt.Errorf("printing: nil FilmSession")
+	}
+	if sopInstanceUID == "" && ds != nil {
+		sopInstanceUID, _ = ds.GetString(tag.SOPInstanceUID)
+	}
+	if sopInstanceUID != "" && fs.FindFilmBox(sopInstanceUID) != nil {
+		return nil, fmt.Errorf("printing: FilmBox SOP Instance UID %q already exists", sopInstanceUID)
+	}
+	filmBox, err := NewFilmBoxFromDataset(sopInstanceUID, ds)
+	if err != nil {
+		return nil, err
+	}
+	if fs.FindFilmBox(filmBox.SOPInstanceUID) != nil {
+		return nil, fmt.Errorf("printing: FilmBox SOP Instance UID %q already exists", filmBox.SOPInstanceUID)
+	}
+	fs.AddFilmBox(filmBox)
+	return filmBox, nil
+}
+
+// FindFilmBox returns the Film Box with the specified SOP Instance UID.
+func (fs *FilmSession) FindFilmBox(sopInstanceUID string) *FilmBox {
+	if fs == nil || sopInstanceUID == "" {
+		return nil
+	}
+	for _, filmBox := range fs.BasicFilmBoxes {
+		if filmBox != nil && filmBox.SOPInstanceUID == sopInstanceUID {
+			return filmBox
+		}
+	}
+	return nil
+}
+
+// DeleteFilmBox removes the Film Box with the specified SOP Instance UID.
+func (fs *FilmSession) DeleteFilmBox(sopInstanceUID string) bool {
+	if fs == nil || sopInstanceUID == "" {
+		return false
+	}
+	for index, filmBox := range fs.BasicFilmBoxes {
+		if filmBox != nil && filmBox.SOPInstanceUID == sopInstanceUID {
+			filmBox.filmSession = nil
+			fs.BasicFilmBoxes = append(fs.BasicFilmBoxes[:index], fs.BasicFilmBoxes[index+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// FindImageBox searches every Film Box for an Image Box SOP Instance UID.
+func (fs *FilmSession) FindImageBox(sopInstanceUID string) *ImageBox {
+	if fs == nil || sopInstanceUID == "" {
+		return nil
+	}
+	for _, filmBox := range fs.BasicFilmBoxes {
+		if filmBox == nil {
+			continue
+		}
+		for _, imageBox := range filmBox.BasicImageBoxes {
+			if imageBox != nil && imageBox.SOPInstanceUID == sopInstanceUID {
+				return imageBox
+			}
+		}
+	}
+	return nil
+}
+
+// CreatePresentationLUT creates a Presentation LUT from Dataset values and attaches it to the session.
+func (fs *FilmSession) CreatePresentationLUT(sopInstanceUID string, ds *dataset.Dataset) (*PresentationLUT, error) {
+	if fs == nil {
+		return nil, fmt.Errorf("printing: nil FilmSession")
+	}
+	if sopInstanceUID == "" && ds != nil {
+		sopInstanceUID, _ = ds.GetString(tag.SOPInstanceUID)
+	}
+	if sopInstanceUID != "" && fs.FindPresentationLUT(sopInstanceUID) != nil {
+		return nil, fmt.Errorf("printing: PresentationLUT SOP Instance UID %q already exists", sopInstanceUID)
+	}
+	lut, err := NewPresentationLUTFromDataset(sopInstanceUID, ds)
+	if err != nil {
+		return nil, err
+	}
+	if fs.FindPresentationLUT(lut.SOPInstanceUID) != nil {
+		return nil, fmt.Errorf("printing: PresentationLUT SOP Instance UID %q already exists", lut.SOPInstanceUID)
+	}
+	fs.AddPresentationLUT(lut)
+	return lut, nil
+}
+
+// FindPresentationLUT returns the Presentation LUT with the specified SOP Instance UID.
+func (fs *FilmSession) FindPresentationLUT(sopInstanceUID string) *PresentationLUT {
+	if fs == nil || sopInstanceUID == "" {
+		return nil
+	}
+	for _, lut := range fs.PresentationLUTs {
+		if lut != nil && lut.SOPInstanceUID == sopInstanceUID {
+			return lut
+		}
+	}
+	return nil
+}
+
+// DeletePresentationLUT removes the Presentation LUT with the specified SOP Instance UID.
+func (fs *FilmSession) DeletePresentationLUT(sopInstanceUID string) bool {
+	if fs == nil || sopInstanceUID == "" {
+		return false
+	}
+	for index, lut := range fs.PresentationLUTs {
+		if lut != nil && lut.SOPInstanceUID == sopInstanceUID {
+			fs.PresentationLUTs = append(fs.PresentationLUTs[:index], fs.PresentationLUTs[index+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// Clone creates a recursively independent Film Session hierarchy.
+func (fs *FilmSession) Clone() (*FilmSession, error) {
+	if fs == nil {
+		return nil, fmt.Errorf("printing: nil FilmSession")
+	}
+	sessionDataset, err := fs.ToDataset()
+	if err != nil {
+		return nil, err
+	}
+	clone, err := NewFilmSessionFromDataset("", "", sessionDataset, fs.IsColor)
+	if err != nil {
+		return nil, err
+	}
+
+	for index, sourceLUT := range fs.PresentationLUTs {
+		if sourceLUT == nil {
+			return nil, fmt.Errorf("printing: nil PresentationLUT at index %d", index)
+		}
+		lutDataset, err := sourceLUT.ToDataset()
+		if err != nil {
+			return nil, fmt.Errorf("clone PresentationLUT %q: %w", sourceLUT.SOPInstanceUID, err)
+		}
+		lut, err := NewPresentationLUTFromDataset("", lutDataset)
+		if err != nil {
+			return nil, fmt.Errorf("clone PresentationLUT %q: %w", sourceLUT.SOPInstanceUID, err)
+		}
+		clone.AddPresentationLUT(lut)
+	}
+
+	for boxIndex, sourceBox := range fs.BasicFilmBoxes {
+		if sourceBox == nil {
+			return nil, fmt.Errorf("printing: nil FilmBox at index %d", boxIndex)
+		}
+		boxDataset, err := sourceBox.ToDataset()
+		if err != nil {
+			return nil, fmt.Errorf("clone FilmBox %q: %w", sourceBox.SOPInstanceUID, err)
+		}
+		box, err := NewFilmBoxFromDataset("", boxDataset)
+		if err != nil {
+			return nil, fmt.Errorf("clone FilmBox %q: %w", sourceBox.SOPInstanceUID, err)
+		}
+		clone.AddFilmBox(box)
+		for imageIndex, sourceImage := range sourceBox.BasicImageBoxes {
+			if sourceImage == nil {
+				return nil, fmt.Errorf("printing: nil ImageBox at FilmBox %q index %d", sourceBox.SOPInstanceUID, imageIndex)
+			}
+			imageDataset, err := sourceImage.ToDataset()
+			if err != nil {
+				return nil, fmt.Errorf("clone ImageBox %q: %w", sourceImage.SOPInstanceUID, err)
+			}
+			image, err := NewImageBoxFromDataset("", imageDataset, sourceImage.IsColor)
+			if err != nil {
+				return nil, fmt.Errorf("clone ImageBox %q: %w", sourceImage.SOPInstanceUID, err)
+			}
+			box.AddImageBox(image)
+		}
+	}
+	return clone, nil
 }
 
 // GetFilmBox returns the Film Box at the specified index

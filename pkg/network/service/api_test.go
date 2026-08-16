@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
 
@@ -365,5 +368,131 @@ func TestSendCCancel_SendsRequestWithoutRegisteringPendingResponse(t *testing.T)
 	service.pendingRequestsMu.RUnlock()
 	if pendingCount != 0 {
 		t.Fatalf("pending request count = %d, want 0", pendingCount)
+	}
+}
+
+func newAcceptedTestService(t *testing.T) *Service {
+	t.Helper()
+	service := NewService(nil, createTestAssociation())
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+	return service
+}
+
+func TestServiceSendNCreate(t *testing.T) {
+	service := newAcceptedTestService(t)
+	attributes := dataset.New()
+	if err := attributes.Add(element.NewString(tag.FilmSessionLabel, vr.LO, []string{"session"})); err != nil {
+		t.Fatalf("Dataset.Add() error = %v", err)
+	}
+	req := dimse.NewNCreateRequest("1.2.840.10008.5.1.1.1", "2.25.401", attributes)
+	go func() {
+		send := <-service.sendQueue
+		got, ok := send.message.(*dimse.NCreateRequest)
+		if !ok {
+			t.Errorf("sent message type = %T, want *dimse.NCreateRequest", send.message)
+			send.resultCh <- nil
+			return
+		}
+		if got.AffectedSOPInstanceUID() != "2.25.401" || got.DataDataset() != attributes {
+			t.Errorf("sent N-CREATE did not preserve UID and attributes")
+		}
+		send.resultCh <- nil
+		_ = service.handleResponse(dimse.NewNCreateResponseSuccess(got.MessageID(), got.AffectedSOPClassUID(), got.AffectedSOPInstanceUID(), nil))
+	}()
+
+	resp, err := service.SendNCreate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("SendNCreate() error = %v", err)
+	}
+	if resp.AffectedSOPInstanceUID() != "2.25.401" {
+		t.Errorf("response SOP Instance UID = %q", resp.AffectedSOPInstanceUID())
+	}
+}
+
+func TestServiceSendNSet(t *testing.T) {
+	service := newAcceptedTestService(t)
+	modifications := dataset.New()
+	if err := modifications.Add(element.NewUnsignedShort(tag.ImageBoxPosition, []uint16{3})); err != nil {
+		t.Fatalf("Dataset.Add() error = %v", err)
+	}
+	req := dimse.NewNSetRequest("1.2.840.10008.5.1.1.4", "2.25.402", modifications)
+	go func() {
+		send := <-service.sendQueue
+		got, ok := send.message.(*dimse.NSetRequest)
+		if !ok {
+			t.Errorf("sent message type = %T, want *dimse.NSetRequest", send.message)
+			send.resultCh <- nil
+			return
+		}
+		if got.RequestedSOPInstanceUID() != "2.25.402" || got.DataDataset() != modifications {
+			t.Errorf("sent N-SET did not preserve UID and modifications")
+		}
+		send.resultCh <- nil
+		_ = service.handleResponse(dimse.NewNSetResponseSuccess(got.MessageID(), got.RequestedSOPClassUID(), got.RequestedSOPInstanceUID(), nil))
+	}()
+
+	resp, err := service.SendNSet(context.Background(), req)
+	if err != nil {
+		t.Fatalf("SendNSet() error = %v", err)
+	}
+	if resp.AffectedSOPInstanceUID() != "2.25.402" {
+		t.Errorf("response SOP Instance UID = %q", resp.AffectedSOPInstanceUID())
+	}
+}
+
+func TestServiceSendNAction(t *testing.T) {
+	service := newAcceptedTestService(t)
+	req := dimse.NewNActionRequest("1.2.840.10008.5.1.1.1", "2.25.403", 1, nil)
+	go func() {
+		send := <-service.sendQueue
+		got, ok := send.message.(*dimse.NActionRequest)
+		if !ok {
+			t.Errorf("sent message type = %T, want *dimse.NActionRequest", send.message)
+			send.resultCh <- nil
+			return
+		}
+		if got.RequestedSOPInstanceUID() != "2.25.403" || got.ActionTypeID() != 1 {
+			t.Errorf("sent N-ACTION did not preserve UID and action type")
+		}
+		send.resultCh <- nil
+		_ = service.handleResponse(dimse.NewNActionResponseSuccess(got.MessageID(), got.RequestedSOPClassUID(), got.RequestedSOPInstanceUID(), got.ActionTypeID(), nil))
+	}()
+
+	resp, err := service.SendNAction(context.Background(), req)
+	if err != nil {
+		t.Fatalf("SendNAction() error = %v", err)
+	}
+	if resp.ActionTypeID() != 1 {
+		t.Errorf("response Action Type ID = %d, want 1", resp.ActionTypeID())
+	}
+}
+
+func TestServiceSendNDelete(t *testing.T) {
+	service := newAcceptedTestService(t)
+	req := dimse.NewNDeleteRequest("1.2.840.10008.5.1.1.2", "2.25.404")
+	go func() {
+		send := <-service.sendQueue
+		got, ok := send.message.(*dimse.NDeleteRequest)
+		if !ok {
+			t.Errorf("sent message type = %T, want *dimse.NDeleteRequest", send.message)
+			send.resultCh <- nil
+			return
+		}
+		if got.RequestedSOPInstanceUID() != "2.25.404" {
+			t.Errorf("sent N-DELETE SOP Instance UID = %q", got.RequestedSOPInstanceUID())
+		}
+		send.resultCh <- nil
+		_ = service.handleResponse(dimse.NewNDeleteResponseSuccess(got.MessageID(), got.RequestedSOPClassUID(), got.RequestedSOPInstanceUID()))
+	}()
+
+	resp, err := service.SendNDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("SendNDelete() error = %v", err)
+	}
+	if resp.AffectedSOPInstanceUID() != "2.25.404" {
+		t.Errorf("response SOP Instance UID = %q", resp.AffectedSOPInstanceUID())
 	}
 }

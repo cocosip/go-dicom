@@ -144,6 +144,26 @@ func (s *Service) SendCStore(ctx context.Context, req *dimse.CStoreRequest) (*di
 	return sendSimpleRequest[*dimse.CStoreRequest, *dimse.CStoreResponse](ctx, s, req)
 }
 
+// SendNCreate sends an N-CREATE request and waits for its response.
+func (s *Service) SendNCreate(ctx context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error) {
+	return sendSimpleRequest[*dimse.NCreateRequest, *dimse.NCreateResponse](ctx, s, req)
+}
+
+// SendNSet sends an N-SET request and waits for its response.
+func (s *Service) SendNSet(ctx context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error) {
+	return sendSimpleRequest[*dimse.NSetRequest, *dimse.NSetResponse](ctx, s, req)
+}
+
+// SendNAction sends an N-ACTION request and waits for its response.
+func (s *Service) SendNAction(ctx context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error) {
+	return sendSimpleRequest[*dimse.NActionRequest, *dimse.NActionResponse](ctx, s, req)
+}
+
+// SendNDelete sends an N-DELETE request and waits for its response.
+func (s *Service) SendNDelete(ctx context.Context, req *dimse.NDeleteRequest) (*dimse.NDeleteResponse, error) {
+	return sendSimpleRequest[*dimse.NDeleteRequest, *dimse.NDeleteResponse](ctx, s, req)
+}
+
 // registerPendingRequest registers a pending request to receive its response.
 func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request, respCh chan dimse.Response) {
 	s.pendingRequestsMu.Lock()

@@ -71,8 +71,7 @@ const (
 // NewImageBox creates a new Image Box
 func NewImageBox(sopInstanceUID string, isColor bool) *ImageBox {
 	if sopInstanceUID == "" {
-		// Generate a UID if not provided
-		sopInstanceUID = "1.2.840.10008.5.1.1.4.1.1" // Placeholder
+		sopInstanceUID = newSOPInstanceUID()
 	}
 
 	sopClassUID := SOPClassGrayscaleImageBox

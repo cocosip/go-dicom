@@ -57,7 +57,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | CORE-002 | P2 | Complete | Dataset 遍历器、匹配规则和转换规则 |
 | DICT-001 | P2 | Complete | 运行时 XML 字典加载 |
 | ANON-001 | P2 | Complete | 完整的自定义匿名化配置加载 |
-| PRINT-001 | P2 | Partial | 基于 Dataset 的 DICOM 打印管理模型 |
+| PRINT-001 | P2 | Complete | 基于 Dataset 的 DICOM 打印管理模型 |
 | OBS-001 | P2 | Open | 结构化网络日志、请求事件和指标钩子 |
 | IMG-003 | P3 | Complete | 体数据重建和 MPR |
 | MED-002 | P3 | Open | DICOM 文件扫描工作流 |
@@ -67,13 +67,12 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 截至 2026-08-16：
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
-  SR-001、IMG-001、IMG-002、IMG-003、CORE-001、CORE-002、ANON-001 和 DICT-001。
-- **未完成：** DOC-001、
-  PRINT-001、OBS-001、
-  MED-002 继续保持 `Partial` 或 `Open` 状态。
+  SR-001、IMG-001、IMG-002、IMG-003、CORE-001、CORE-002、ANON-001、
+  DICT-001 和 PRINT-001。
+- **未完成：** DOC-001、OBS-001 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **下一项：** PRINT-001，即下方计划开发顺序中的第一个未完成条目。
+- **下一项：** OBS-001，即下方计划开发顺序中的第一个未完成条目。
 
 ## 计划开发顺序
 
@@ -89,7 +88,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 4 | IMG-001 | P1 | Complete | 在加入共享空间工具之前，先建立 Dataset 驱动的渲染管线。 |
 | 5 | IMG-002 | P2 | Complete | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
 | 6 | CORE-002 | P2 | Complete | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
-| 7 | PRINT-001 | P2 | Partial | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
+| 7 | PRINT-001 | P2 | Complete | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
 | 8 | OBS-001 | P2 | Open | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
 | 9 | MED-002 | P3 | Open | 在更大型的重建工作之前，先交付独立且边界明确的扫描器工作流。 |
 | 10 | IMG-003 | P3 | Complete | 仅在 IMG-001 和 IMG-002 完成后实施体重建和 MPR。 |
@@ -636,10 +635,20 @@ retired 标志、UTF-8 BOM，以及组合源文件中已知但不属于字典条
 
 ### PRINT-001: 基于 Dataset 的打印管理模型
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P2`
 
-FilmSession、FilmBox、ImageBox、PresentationLUT 和打印机状态辅助能力已经存在，但主要模型是简化的 Go struct，而不是基于 Dataset 的 DICOM 对象。它们只覆盖部分属性，缺少 fo-dicom 的克隆、加载/保存、UID 查找/删除和完整布局行为。空 UID 使用固定占位值，而不是生成的新 UID。
+已于 2026-08-16 完成。FilmSession、FilmBox、ImageBox 和 PresentationLUT
+现在可通过相互独立的 Dataset 对象往返全部已支持属性。空 SOP Instance UID
+使用 UUID 派生的 `2.25.*` 值。FilmSession 提供基于 UID 的创建/查找/删除、
+修复父引用的递归独立克隆，以及使用 Explicit VR Little Endian 的 DICOM Part 10
+加载/保存；原有索引读取和直接字段 API 保持兼容。
+
+打印客户端会验证完整层级，并按确定顺序执行 Basic Print：Film Session N-CREATE、
+Presentation LUT N-CREATE、Film Box N-CREATE、Image Box N-SET，最后执行
+Film Session N-ACTION。新增的同步强类型 N-CREATE/N-SET/N-ACTION/N-DELETE
+service API 复用现有消息 ID、待处理响应、取消和异步操作控制。工作流在第一个传输
+错误或 DIMSE 失败状态处停止，不承诺远端回滚。
 
 参考：[fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Printing)
 
@@ -656,6 +665,24 @@ FilmSession、FilmBox、ImageBox、PresentationLUT 和打印机状态辅助能�
 - 对每个受支持的打印对象和显示格式执行 Dataset 往返测试。
 - 验证克隆之间的 UID 唯一性和父子引用完整性。
 - 执行端到端打印工作流，并使用 fo-dicom 交叉读取生成的对象。
+
+**验证证据**
+
+- Dataset 往返覆盖 FilmSession、FilmBox、ImageBox 和 PresentationLUT 的所有
+  已支持属性，并验证源 Dataset、图像字节和 LUT 切片相互独立。
+- 测试覆盖唯一 UID 生成、克隆独立性、父引用修复、UID 查找/删除、重复拒绝、
+  显示格式边界和 DICOM Part 10 FilmSession 文件往返。
+- 真实 `net.Pipe` 客户端/服务端 service 对完整 N-CREATE/N-SET/N-ACTION 工作流
+  进行编解码，并验证代表性 Dataset 值、SOP Class/Instance UID、操作顺序、
+  首错停止和取消行为。
+- `CGO_ENABLED=0 go test ./pkg/printing ./pkg/network/... -count=1` 通过。
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  和 `CGO_ENABLED=0 go build ./...` 通过。build 输出一条非致命的 Windows 用户模块
+  stat cache 访问警告，最终退出码为 0。
+- `golangci-lint run --allow-parallel-runners` 报告 0 个问题，`git diff --check` 通过。
+
+**互操作边界：** service-pair 测试验证了真实 go-dicom DIMSE 编解码。本次完成验证中，
+未由独立 fo-dicom 进程交叉读取生成的 FilmSession 文件，也未让其参与打印关联。
 
 ### OBS-001: 网络可观测性
 
@@ -794,7 +821,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：IMG-002、CORE-002、DICT-001、ANON-001、PRINT-001、OBS-001。
 
-当前进度：IMG-002、CORE-002、DICT-001 和 ANON-001 已完成；PRINT-001 和
+当前进度：IMG-002、CORE-002、DICT-001、ANON-001 和 PRINT-001 已完成；
 OBS-001 尚未完成，因此 Phase 2 尚未完成。
 
 阶段验收：

@@ -61,7 +61,7 @@ Priority indicates implementation order, not estimated effort:
 | CORE-002 | P2 | Complete | Dataset walker, match rules, and transform rules |
 | DICT-001 | P2 | Complete | Runtime XML dictionary loading |
 | ANON-001 | P2 | Complete | Complete custom anonymization profile loading |
-| PRINT-001 | P2 | Partial | Dataset-backed DICOM Print Management models |
+| PRINT-001 | P2 | Complete | Dataset-backed DICOM Print Management models |
 | OBS-001 | P2 | Open | Structured network logging, request events, and metrics hooks |
 | IMG-003 | P3 | Complete | Volume reconstruction and MPR |
 | MED-002 | P3 | Open | DICOM file scanner workflow |
@@ -71,12 +71,13 @@ Priority indicates implementation order, not estimated effort:
 Progress as of 2026-08-16:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
-  SR-001, IMG-001, IMG-002, IMG-003, CORE-001, CORE-002, ANON-001, and DICT-001.
-- **Not complete:** DOC-001, PRINT-001,
-  OBS-001, and MED-002 retain their `Partial` or `Open` status.
+  SR-001, IMG-001, IMG-002, IMG-003, CORE-001, CORE-002, ANON-001,
+  DICT-001, and PRINT-001.
+- **Not complete:** DOC-001, OBS-001, and MED-002 retain their `Partial` or
+  `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** PRINT-001, the first incomplete item in the planned development
+- **Next item:** OBS-001, the first incomplete item in the planned development
   order below.
 
 ## Planned Development Order
@@ -95,7 +96,7 @@ recorded in this document.
 | 4 | IMG-001 | P1 | Complete | Establish the Dataset-driven rendering pipeline before adding shared spatial tooling. |
 | 5 | IMG-002 | P2 | Complete | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
 | 6 | CORE-002 | P2 | Complete | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
-| 7 | PRINT-001 | P2 | Partial | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
+| 7 | PRINT-001 | P2 | Complete | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
 | 8 | OBS-001 | P2 | Open | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
 | 9 | MED-002 | P3 | Open | Deliver the independent, bounded scanner workflow before the larger reconstruction item. |
 | 10 | IMG-003 | P3 | Complete | Implement volume reconstruction and MPR only after IMG-001 and IMG-002 are complete. |
@@ -741,14 +742,23 @@ mode is currently exposed.
 
 ### PRINT-001: Dataset-Backed Print Management Models
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P2`
 
-FilmSession, FilmBox, ImageBox, PresentationLUT, and printer status helpers
-exist, but the principal models are simplified Go structs rather than
-Dataset-backed DICOM objects. They cover a subset of attributes and lack the
-fo-dicom clone, load/save, UID lookup/removal, and complete layout behavior.
-Empty UIDs use fixed placeholder values rather than generated UIDs.
+Completed on 2026-08-16. FilmSession, FilmBox, ImageBox, and PresentationLUT
+now round-trip their supported attributes through independent Dataset objects.
+Empty SOP Instance UIDs use UUID-derived `2.25.*` values. FilmSession exposes
+UID-based create/find/delete operations, recursively independent cloning with
+repaired parent references, and DICOM Part 10 load/save using Explicit VR
+Little Endian. Existing index-based and direct-field APIs remain compatible.
+
+The print client validates the complete hierarchy and executes Basic Print in
+deterministic order: Film Session N-CREATE, Presentation LUT N-CREATE, Film Box
+N-CREATE, Image Box N-SET, and Film Session N-ACTION. Typed synchronous
+N-CREATE/N-SET/N-ACTION/N-DELETE service APIs reuse the existing message-ID,
+pending-response, cancellation, and asynchronous-operation behavior. The
+workflow stops at the first transport or DIMSE status failure and does not
+claim remote rollback.
 
 Reference: [fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Printing)
 
@@ -767,6 +777,29 @@ Reference: [fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d42
 - Verify UID uniqueness and parent/child reference integrity across clones.
 - Run an end-to-end print workflow and cross-read generated objects with
   fo-dicom.
+
+**Verification evidence**
+
+- Dataset round trips cover every supported property for FilmSession, FilmBox,
+  ImageBox, and PresentationLUT, including source Dataset, image-byte, and LUT
+  slice independence.
+- Tests cover unique generated UIDs, clone independence, repaired parent
+  references, UID lookup/deletion, duplicate rejection, display-format bounds,
+  and DICOM Part 10 FilmSession file round trips.
+- A real `net.Pipe` client/server service pair encodes and decodes the complete
+  N-CREATE/N-SET/N-ACTION workflow and verifies representative Dataset values,
+  SOP Class/Instance UIDs, operation order, failure stopping, and cancellation.
+- `CGO_ENABLED=0 go test ./pkg/printing ./pkg/network/... -count=1` passed.
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
+  and `CGO_ENABLED=0 go build ./...` passed. The build emitted a non-fatal
+  Windows user-module stat-cache access warning and exited 0.
+- `golangci-lint run --allow-parallel-runners` reported 0 issues, and
+  `git diff --check` passed.
+
+**Interoperability boundary:** The service-pair test verifies actual go-dicom
+DIMSE encoding and decoding. A separate fo-dicom process did not cross-read the
+generated FilmSession file or participate in the print association in this
+completion run.
 
 ### OBS-001: Network Observability
 
@@ -957,8 +990,8 @@ single pull request.
 
 Scope: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, OBS-001.
 
-Current progress: IMG-002, CORE-002, DICT-001, and ANON-001 are complete.
-PRINT-001 and OBS-001 remain incomplete; therefore Phase 2 is not complete.
+Current progress: IMG-002, CORE-002, DICT-001, ANON-001, and PRINT-001 are
+complete. OBS-001 remains incomplete; therefore Phase 2 is not complete.
 
 Phase acceptance:
 

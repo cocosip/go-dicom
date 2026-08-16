@@ -114,6 +114,9 @@ func (s *String) Count() int {
 	if str == "" {
 		return 0
 	}
+	if s.hasLiteralBackslash() {
+		return 1
+	}
 	return strings.Count(str, "\\") + 1
 }
 
@@ -146,6 +149,9 @@ func (s *String) GetValue(index int) string {
 	if str == "" {
 		return ""
 	}
+	if s.hasLiteralBackslash() {
+		return str
+	}
 
 	values := strings.Split(str, "\\")
 	if index < 0 || index >= len(values) {
@@ -161,6 +167,9 @@ func (s *String) GetValues() []string {
 	if str == "" {
 		return nil
 	}
+	if s.hasLiteralBackslash() {
+		return []string{str}
+	}
 
 	values := strings.Split(str, "\\")
 	// Trim spaces from each value
@@ -168,6 +177,10 @@ func (s *String) GetValues() []string {
 		values[i] = strings.TrimSpace(v)
 	}
 	return values
+}
+
+func (s *String) hasLiteralBackslash() bool {
+	return s.vr == vr.LT || s.vr == vr.ST || s.vr == vr.UT || s.vr == vr.UR
 }
 
 // Encoding returns the character set encoding used by this element.
@@ -202,7 +215,11 @@ func (s *String) validateValue() error {
 		if s.buffer != nil {
 			data = bytes.TrimRight(s.buffer.Data(), string(s.vr.PaddingValue()))
 		}
-		for i, value := range bytes.Split(data, []byte{'\\'}) {
+		values := bytes.Split(data, []byte{'\\'})
+		if s.hasLiteralBackslash() {
+			values = [][]byte{data}
+		}
+		for i, value := range values {
 			if uint32(len(value)) > maxLen {
 				return fmt.Errorf("value[%d] length %d exceeds maximum %d for VR %s", i, len(value), maxLen, s.vr.Code())
 			}

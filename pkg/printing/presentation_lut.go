@@ -43,9 +43,7 @@ type PresentationLUT struct {
 // NewPresentationLUT creates a new Presentation LUT instance
 func NewPresentationLUT(sopInstanceUID string) *PresentationLUT {
 	if sopInstanceUID == "" {
-		// Generate a UID if not provided
-		// In a real implementation, use proper UID generation
-		sopInstanceUID = "1.2.840.10008.5.1.4.1.1.11.1" // Placeholder
+		sopInstanceUID = newSOPInstanceUID()
 	}
 
 	return &PresentationLUT{

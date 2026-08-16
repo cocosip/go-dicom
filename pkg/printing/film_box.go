@@ -4,10 +4,10 @@
 package printing
 
 import (
-    "fmt"
-    "math"
-    "strconv"
-    "strings"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
 )
 
 // FilmOrientation represents the orientation of film
@@ -153,8 +153,7 @@ type FilmBox struct {
 // NewFilmBox creates a new Film Box
 func NewFilmBox(sopInstanceUID string, imageDisplayFormat string) *FilmBox {
 	if sopInstanceUID == "" {
-		// Generate a UID if not provided
-		sopInstanceUID = "1.2.840.10008.5.1.1.2.1" // Placeholder
+		sopInstanceUID = newSOPInstanceUID()
 	}
 
 	return &FilmBox{
@@ -196,6 +195,13 @@ func ParseImageDisplayFormat(format string) (int, error) {
 		if err1 != nil || err2 != nil {
 			return 0, fmt.Errorf("invalid STANDARD dimensions: %s", format)
 		}
+		if cols <= 0 || rows <= 0 {
+			return 0, fmt.Errorf("STANDARD dimensions must be positive: %s", format)
+		}
+		maxInt := int(^uint(0) >> 1)
+		if cols > maxInt/rows {
+			return 0, fmt.Errorf("STANDARD dimensions overflow: %s", format)
+		}
 		return cols * rows, nil
 
 	case "ROW":
@@ -206,6 +212,12 @@ func ParseImageDisplayFormat(format string) (int, error) {
 			count, err := strconv.Atoi(rc)
 			if err != nil {
 				return 0, fmt.Errorf("invalid ROW format: %s", format)
+			}
+			if count <= 0 {
+				return 0, fmt.Errorf("ROW counts must be positive: %s", format)
+			}
+			if boxes > int(^uint(0)>>1)-count {
+				return 0, fmt.Errorf("ROW counts overflow: %s", format)
 			}
 			boxes += count
 		}
@@ -219,6 +231,12 @@ func ParseImageDisplayFormat(format string) (int, error) {
 			count, err := strconv.Atoi(cc)
 			if err != nil {
 				return 0, fmt.Errorf("invalid COL format: %s", format)
+			}
+			if count <= 0 {
+				return 0, fmt.Errorf("COL counts must be positive: %s", format)
+			}
+			if boxes > int(^uint(0)>>1)-count {
+				return 0, fmt.Errorf("COL counts overflow: %s", format)
 			}
 			boxes += count
 		}
@@ -243,10 +261,10 @@ func ParseImageDisplayFormat(format string) (int, error) {
 
 // InitializeImageBoxes creates and initializes Image Boxes based on the Image Display Format
 func (fb *FilmBox) InitializeImageBoxes() error {
-    count, err := ParseImageDisplayFormat(fb.ImageDisplayFormat)
-    if err != nil {
-        return err
-    }
+	count, err := ParseImageDisplayFormat(fb.ImageDisplayFormat)
+	if err != nil {
+		return err
+	}
 
 	// Guard against malformed ImageDisplayFormat producing unreasonably large
 	// allocation (e.g., "STANDARD\\65535,65535" → 4+ billion boxes).
@@ -255,18 +273,18 @@ func (fb *FilmBox) InitializeImageBoxes() error {
 		return fmt.Errorf("image display format produces %d boxes, max is %d", count, maxImageBoxes)
 	}
 
-    fb.BasicImageBoxes = make([]*ImageBox, count)
-    for i := 0; i < count; i++ {
-        fb.BasicImageBoxes[i] = NewImageBox(fmt.Sprintf("%s.%d", fb.SOPInstanceUID, i+1), fb.filmSession != nil && fb.filmSession.IsColor)
-        fb.BasicImageBoxes[i].filmBox = fb
-        pos := i + 1
-        if pos > int(math.MaxUint16) {
-            return fmt.Errorf("image box position overflow: %d", pos)
-        }
-        fb.BasicImageBoxes[i].ImageBoxPosition = uint16(pos) // #nosec G115 -- bounded by check above
-    }
+	fb.BasicImageBoxes = make([]*ImageBox, count)
+	for i := 0; i < count; i++ {
+		fb.BasicImageBoxes[i] = NewImageBox(fmt.Sprintf("%s.%d", fb.SOPInstanceUID, i+1), fb.filmSession != nil && fb.filmSession.IsColor)
+		fb.BasicImageBoxes[i].filmBox = fb
+		pos := i + 1
+		if pos > int(math.MaxUint16) {
+			return fmt.Errorf("image box position overflow: %d", pos)
+		}
+		fb.BasicImageBoxes[i].ImageBoxPosition = uint16(pos) // #nosec G115 -- bounded by check above
+	}
 
-    return nil
+	return nil
 }
 
 // AddImageBox adds an Image Box to the Film Box
