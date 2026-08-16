@@ -29,10 +29,10 @@ func TestMissingAndEmptyHaveDistinctMatchSemantics(t *testing.T) {
 
 func TestContentRulesUseCompleteMultiValueText(t *testing.T) {
 	ds := dataset.New()
-	requireRuleAdd(t, ds, element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY"}))
+	requireRuleAdd(t, ds, element.NewString(tag.ImageType, vr.CS, []string{testRuleOriginal, "PRIMARY"}))
 
 	assertRuleMatch(t, mustMatchRule(Equal(tag.ImageType, "ORIGINAL\\PRIMARY")), ds, true)
-	assertRuleMatch(t, mustMatchRule(Equal(tag.ImageType, "ORIGINAL")), ds, false)
+	assertRuleMatch(t, mustMatchRule(Equal(tag.ImageType, testRuleOriginal)), ds, false)
 	assertRuleMatch(t, mustMatchRule(StartsWith(tag.ImageType, "ORIGINAL\\")), ds, true)
 	assertRuleMatch(t, mustMatchRule(EndsWith(tag.ImageType, "\\PRIMARY")), ds, true)
 	assertRuleMatch(t, mustMatchRule(Contains(tag.ImageType, "NAL\\PRI")), ds, true)
@@ -61,12 +61,12 @@ func TestContentRulesRejectUnsupportedValueTypes(t *testing.T) {
 
 func TestAllAnyNotAndBoolComposition(t *testing.T) {
 	ds := dataset.New()
-	requireRuleAdd(t, ds, element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	requireRuleAdd(t, ds, element.NewString(tag.PatientName, vr.PN, []string{testRulePatientName}))
 
 	all := mustMatchRule(All(
 		mustMatchRule(Exists(tag.PatientName)),
 		mustMatchRule(Not(mustMatchRule(Empty(tag.PatientName)))),
-		mustMatchRule(Any(Bool(false), mustMatchRule(Equal(tag.PatientName, "Doe^Jane")))),
+		mustMatchRule(Any(Bool(false), mustMatchRule(Equal(tag.PatientName, testRulePatientName)))),
 	))
 
 	assertRuleMatch(t, all, ds, true)
@@ -114,7 +114,7 @@ func TestWildcardIsAnchoredAndCaseInsensitive(t *testing.T) {
 
 func TestRegexUsesRE2AndInlineFlags(t *testing.T) {
 	ds := dataset.New()
-	requireRuleAdd(t, ds, element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	requireRuleAdd(t, ds, element.NewString(tag.PatientName, vr.PN, []string{testRulePatientName}))
 
 	assertRuleMatch(t, mustMatchRule(Regex(tag.PatientName, `^Doe\^J`)), ds, true)
 	assertRuleMatch(t, mustMatchRule(Regex(tag.PatientName, `(?i)^doe`)), ds, true)
@@ -153,7 +153,7 @@ func TestConcurrentMatchRuleReuseOnIndependentDatasets(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			ds := dataset.New()
-			if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"CASE-123"})); err != nil {
+			if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{testRulePatientID})); err != nil {
 				errorsByWorker <- err
 				return
 			}

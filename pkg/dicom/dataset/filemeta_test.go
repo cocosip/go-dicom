@@ -276,7 +276,7 @@ func TestCreateDefaultSourceAET(t *testing.T) {
 
 func TestFileMetaInformationDataset(t *testing.T) {
 	fmi := NewFileMetaInformation()
-	_ = fmi.SetMediaStorageSOPClassUID("1.2.3")
+	_ = fmi.SetMediaStorageSOPClassUID(testStudyInstanceUID)
 
 	ds := fmi.Dataset()
 	if ds == nil {
@@ -287,7 +287,7 @@ func TestFileMetaInformationDataset(t *testing.T) {
 	sopClassUID, ok := ds.GetString(tag.MediaStorageSOPClassUID)
 	if !ok {
 		t.Error("Could not get MediaStorageSOPClassUID from dataset")
-	} else if sopClassUID != "1.2.3" {
+	} else if sopClassUID != testStudyInstanceUID {
 		t.Errorf("Expected 1.2.3, got %s", sopClassUID)
 	}
 }

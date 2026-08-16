@@ -19,7 +19,7 @@ func ExampleNewFrameGeometry() {
 	for _, value := range []element.Element{
 		element.NewUnsignedShort(tag.Columns, []uint16{4}),
 		element.NewUnsignedShort(tag.Rows, []uint16{3}),
-		element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{"1.2.3"}),
+		element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{testFrameOfReferenceInstanceUID}),
 		element.NewDecimalStringFromFloat(tag.ImagePositionPatient, []float64{10, 20, 30}),
 		element.NewDecimalStringFromFloat(tag.ImageOrientationPatient, []float64{1, 0, 0, 0, 1, 0}),
 		element.NewDecimalStringFromFloat(tag.PixelSpacing, []float64{2, 3}),
@@ -55,7 +55,7 @@ func ExampleNewFrameGeometry() {
 
 func ExampleIntersectionLocalizer() {
 	source, err := geometry.NewFrameGeometryFromValues(
-		"1.2.3",
+		testFrameOfReferenceInstanceUID,
 		math3d.Point3{},
 		math3d.Vector3{X: 1},
 		math3d.Vector3{Y: 1},
@@ -67,7 +67,7 @@ func ExampleIntersectionLocalizer() {
 		panic(err)
 	}
 	destination, err := geometry.NewFrameGeometryFromValues(
-		"1.2.3",
+		testFrameOfReferenceInstanceUID,
 		math3d.Point3{X: 5, Z: -5},
 		math3d.Vector3{Y: 1},
 		math3d.Vector3{Z: 1},

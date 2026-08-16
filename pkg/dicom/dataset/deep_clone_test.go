@@ -18,7 +18,7 @@ func TestDeepCloneRecursivelyCopiesElementsAndFragments(t *testing.T) {
 	privateOB := tag.New(0x0011, 0x1010)
 	privateOW := tag.New(0x0011, 0x1011)
 	item := New()
-	if err := item.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{"1.2.3"})); err != nil {
+	if err := item.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{testStudyInstanceUID})); err != nil {
 		t.Fatalf("add nested item: %v", err)
 	}
 	fragments := element.NewOtherByteFragment(tag.PixelData)
@@ -54,7 +54,7 @@ func TestDeepCloneRecursivelyCopiesElementsAndFragments(t *testing.T) {
 	clonedFragment.Data()[0] = 0xff
 
 	originalSequence, _ := source.GetSequence(tag.SourceImageSequence)
-	if originalSequence.GetItem(0).TryGetString(tag.ReferencedSOPInstanceUID) != "1.2.3" {
+	if originalSequence.GetItem(0).TryGetString(tag.ReferencedSOPInstanceUID) != testStudyInstanceUID {
 		t.Fatal("DeepClone() shared nested Sequence items")
 	}
 	if source.GetOrNil(privateOB).(*element.OtherByte).GetData()[0] != 1 {

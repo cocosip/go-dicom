@@ -12,7 +12,11 @@ import (
 )
 
 const (
-	testCTImageStorageUID = "1.2.840.10008.5.1.4.1.1.2"
+	testCTImageStorageUID          = "1.2.840.10008.5.1.4.1.1.2"
+	testExtendedSOPClassUID        = "1.2.3"
+	testExtendedServiceClassUID    = "4.5"
+	testRelatedGeneralSOPClassUID1 = "6.7"
+	testRelatedGeneralSOPClassUID2 = "8.9"
 	// testServerAETitle and testClientAETitle are defined in associate_ac_test.go
 )
 
@@ -302,9 +306,9 @@ func TestAAssociateRQ_EncodeDecodeWithExtendedNegotiation(t *testing.T) {
 
 func TestCommonExtendedNegotiation_EncodeExactBytes(t *testing.T) {
 	negotiation := CommonExtendedNegotiation{
-		SOPClassUID:                "1.2.3",
-		ServiceClassUID:            "4.5",
-		RelatedGeneralSOPClassUIDs: []string{"6.7", "8.9"},
+		SOPClassUID:                testExtendedSOPClassUID,
+		ServiceClassUID:            testExtendedServiceClassUID,
+		RelatedGeneralSOPClassUIDs: []string{testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2},
 	}
 
 	var encoded bytes.Buffer
@@ -327,8 +331,8 @@ func TestCommonExtendedNegotiation_EncodeExactBytes(t *testing.T) {
 
 func TestCommonExtendedNegotiation_AllowsEmptyRelatedUIDList(t *testing.T) {
 	negotiation := CommonExtendedNegotiation{
-		SOPClassUID:     "1.2.3",
-		ServiceClassUID: "4.5",
+		SOPClassUID:     testExtendedSOPClassUID,
+		ServiceClassUID: testExtendedServiceClassUID,
 	}
 
 	var encoded bytes.Buffer
@@ -357,13 +361,13 @@ func TestCommonExtendedNegotiation_AllowsEmptyRelatedUIDList(t *testing.T) {
 func TestAAssociateRQ_EncodeDecodeWithCombinedExtendedNegotiation(t *testing.T) {
 	rq := NewAAssociateRQ()
 	rq.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{{
-		SOPClassUID:         "1.2.3",
+		SOPClassUID:         testExtendedSOPClassUID,
 		ServiceClassAppInfo: []byte{1, 0, 1},
 	}}
 	rq.UserInformation.CommonExtendedNegotiations = []CommonExtendedNegotiation{{
-		SOPClassUID:                "1.2.3",
-		ServiceClassUID:            "4.5",
-		RelatedGeneralSOPClassUIDs: []string{"6.7", "8.9"},
+		SOPClassUID:                testExtendedSOPClassUID,
+		ServiceClassUID:            testExtendedServiceClassUID,
+		RelatedGeneralSOPClassUIDs: []string{testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2},
 	}}
 
 	pdu, err := rq.Encode()
@@ -376,13 +380,13 @@ func TestAAssociateRQ_EncodeDecodeWithCombinedExtendedNegotiation(t *testing.T) 
 	}
 
 	if got := decoded.UserInformation.ExtendedNegotiations; len(got) != 1 ||
-		got[0].SOPClassUID != "1.2.3" || !bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
+		got[0].SOPClassUID != testExtendedSOPClassUID || !bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
 		t.Fatalf("extended negotiations = %#v", got)
 	}
 	if got := decoded.UserInformation.CommonExtendedNegotiations; len(got) != 1 ||
-		got[0].SOPClassUID != "1.2.3" || got[0].ServiceClassUID != "4.5" ||
+		got[0].SOPClassUID != testExtendedSOPClassUID || got[0].ServiceClassUID != testExtendedServiceClassUID ||
 		len(got[0].RelatedGeneralSOPClassUIDs) != 2 ||
-		got[0].RelatedGeneralSOPClassUIDs[0] != "6.7" || got[0].RelatedGeneralSOPClassUIDs[1] != "8.9" {
+		got[0].RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 || got[0].RelatedGeneralSOPClassUIDs[1] != testRelatedGeneralSOPClassUID2 {
 		t.Fatalf("common extended negotiations = %#v", got)
 	}
 }
@@ -410,8 +414,8 @@ func TestDecodeCommonExtendedNegotiationRejectsMalformedLengths(t *testing.T) {
 
 func TestCommonExtendedNegotiationEncodeRejectsOversizedRelatedBlock(t *testing.T) {
 	negotiation := CommonExtendedNegotiation{
-		SOPClassUID:                "1.2.3",
-		ServiceClassUID:            "4.5",
+		SOPClassUID:                testExtendedSOPClassUID,
+		ServiceClassUID:            testExtendedServiceClassUID,
 		RelatedGeneralSOPClassUIDs: []string{strings.Repeat("1", 65534)},
 	}
 

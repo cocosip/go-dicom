@@ -22,7 +22,7 @@ func TestParsePreservesInvalidValueForExplicitValidation(t *testing.T) {
 	ds.SetAutoValidate(false)
 	for _, elem := range []element.Element{
 		element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}),
-		element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4"}),
+		element.NewString(tag.SOPInstanceUID, vr.UI, []string{testCycleSOPInstanceUID}),
 		element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2..3"}),
 	} {
 		if err := ds.Add(elem); err != nil {

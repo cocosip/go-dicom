@@ -25,15 +25,15 @@ func TestAddFileGroupsRecordsAndReturnsExistingDuplicate(t *testing.T) {
 	}
 
 	first := testParseResult(t, testFileValues{
-		PatientID: "PAT1", PatientName: "Pat^Name", StudyUID: "1.2.3.1",
-		SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.1",
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
 	})
 	second := testParseResult(t, testFileValues{
-		PatientID: "PAT1", PatientName: "Pat^Name^^^", StudyUID: "1.2.3.1",
-		SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.2",
+		PatientID: testPatientID, PatientName: "Pat^Name^^^", StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: "1.2.3.1.1.2",
 	})
 	differentName := testParseResult(t, testFileValues{
-		PatientID: "PAT1", PatientName: "PAT^Name^", StudyUID: "1.2.3.2",
+		PatientID: testPatientID, PatientName: "PAT^Name^", StudyUID: "1.2.3.2",
 		SeriesUID: "1.2.3.2.1", SOPInstanceUID: "1.2.3.2.1.1",
 	})
 
@@ -59,7 +59,7 @@ func TestAddFileGroupsRecordsAndReturnsExistingDuplicate(t *testing.T) {
 	}
 
 	values, ok := entry1.Instance.Dataset().GetStrings(tag.ReferencedFileID)
-	if !ok || len(values) != 2 || values[0] != "DIR1" || values[1] != "IMAGE001" {
+	if !ok || len(values) != 2 || values[0] != testDirectoryID || values[1] != testImageID {
 		t.Fatalf("ReferencedFileID = %#v, %v", values, ok)
 	}
 }
@@ -82,8 +82,8 @@ func TestAddFileSelectsFoDicomInstanceRecordTypes(t *testing.T) {
 				t.Fatalf("NewDirectory() error = %v", err)
 			}
 			file := testParseResult(t, testFileValues{
-				PatientID: "PAT1", PatientName: "Pat^Name", StudyUID: "1.2.3.1",
-				SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1." + string(rune('1'+i)),
+				PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+				SeriesUID: testSeriesUID, SOPInstanceUID: "1.2.3.1.1." + string(rune('1'+i)),
 				SOPClass: tt.sopClass,
 			})
 			entry := addTestFile(t, dir, file, "DIR1/FILE0001")
@@ -111,8 +111,8 @@ func TestAddFileRejectsMissingRequiredUIDs(t *testing.T) {
 				t.Fatalf("NewDirectory() error = %v", err)
 			}
 			file := testParseResult(t, testFileValues{
-				PatientID: "PAT1", PatientName: "Pat^Name", StudyUID: "1.2.3.1",
-				SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.1",
+				PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+				SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
 			})
 			file.Dataset.Remove(tt.tag)
 			id, idErr := ParseFileID("DIR1/IMAGE001")
@@ -132,8 +132,8 @@ func TestAddFileDoesNotMutateSourceFile(t *testing.T) {
 		t.Fatalf("NewDirectory() error = %v", err)
 	}
 	file := testParseResult(t, testFileValues{
-		PatientID: "PAT1", PatientName: "Pat^Name", StudyUID: "1.2.3.1",
-		SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.1",
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
 	})
 	before := serializeTestFile(t, file)
 
@@ -162,8 +162,8 @@ func TestAddFileGeneratesIconUsingRepresentativeFrame(t *testing.T) {
 				t.Fatalf("NewDirectory() error = %v", err)
 			}
 			file := testParseResult(t, testFileValues{
-				PatientID: "PAT1", PatientName: "Pat^Name", StudyUID: "1.2.3.1",
-				SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.1",
+				PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+				SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
 			})
 			if err := file.Dataset.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"6"})); err != nil {
 				t.Fatalf("add NumberOfFrames: %v", err)
@@ -201,8 +201,8 @@ func TestAddFileContinuesWhenIconGenerationFails(t *testing.T) {
 		t.Fatalf("NewDirectory() error = %v", err)
 	}
 	file := testParseResult(t, testFileValues{
-		PatientID: "PAT1", PatientName: "Pat^Name", StudyUID: "1.2.3.1",
-		SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.1",
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
 	})
 	before := serializeTestFile(t, file)
 

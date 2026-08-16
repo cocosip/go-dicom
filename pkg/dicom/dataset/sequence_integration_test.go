@@ -105,7 +105,7 @@ func TestDatasetWithMultipleSequences(t *testing.T) {
 	// Create and add second sequence
 	seq2 := dataset.NewSequence(tag.ReferencedImageSequence)
 	item2 := dataset.New()
-	_ = item2.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.4"}))
+	_ = item2.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testAlternateUID}))
 	seq2.AddItem(item2)
 	_ = ds.Add(seq2)
 
@@ -149,7 +149,7 @@ func TestNestedSequences(t *testing.T) {
 	// Create nested sequence
 	nestedSeq := dataset.NewSequence(tag.ReferencedImageSequence)
 	nestedItem := dataset.New()
-	_ = nestedItem.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.4"}))
+	_ = nestedItem.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testAlternateUID}))
 	nestedSeq.AddItem(nestedItem)
 
 	// Add nested sequence to item

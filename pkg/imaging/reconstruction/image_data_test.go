@@ -190,8 +190,8 @@ func TestNewImageDataFromDatasetAcceptsConstantNonSpatialEnhancedDimension(t *te
 	})
 	addDimensionIndexes(t, ds, tag.StackID, tag.InStackPositionNumber, tag.TemporalPositionIndex)
 	addFrameContent(t, ds, []frameContentValues{
-		{stackID: "STACK-1", indexes: []uint32{1, 1, 1}},
-		{stackID: "STACK-1", indexes: []uint32{1, 2, 1}},
+		{stackID: testStackID, indexes: []uint32{1, 1, 1}},
+		{stackID: testStackID, indexes: []uint32{1, 2, 1}},
 	})
 
 	if _, err := NewImageDataFromDataset(ds); err != nil {
@@ -208,7 +208,7 @@ func TestNewImageDataFromDatasetRejectsAmbiguousEnhancedDimensions(t *testing.T)
 		{
 			name: "multiple stacks",
 			frames: []frameContentValues{
-				{stackID: "STACK-1", indexes: []uint32{1, 1, 1}},
+				{stackID: testStackID, indexes: []uint32{1, 1, 1}},
 				{stackID: "STACK-2", indexes: []uint32{2, 1, 1}},
 			},
 			want: "multiple Stack IDs",
@@ -216,8 +216,8 @@ func TestNewImageDataFromDatasetRejectsAmbiguousEnhancedDimensions(t *testing.T)
 		{
 			name: "varying temporal position",
 			frames: []frameContentValues{
-				{stackID: "STACK-1", indexes: []uint32{1, 1, 1}},
-				{stackID: "STACK-1", indexes: []uint32{1, 2, 2}},
+				{stackID: testStackID, indexes: []uint32{1, 1, 1}},
+				{stackID: testStackID, indexes: []uint32{1, 2, 2}},
 			},
 			want: "non-spatial dimension",
 		},
@@ -247,7 +247,7 @@ func TestNewImageDataRejectsAmbiguousEnhancedDimensions(t *testing.T) {
 	})
 	addDimensionIndexes(t, ds, tag.StackID, tag.InStackPositionNumber, tag.TemporalPositionIndex)
 	addFrameContent(t, ds, []frameContentValues{
-		{stackID: "STACK-1", indexes: []uint32{1, 1, 1}},
+		{stackID: testStackID, indexes: []uint32{1, 1, 1}},
 		{stackID: "STACK-2", indexes: []uint32{2, 1, 1}},
 	})
 

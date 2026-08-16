@@ -17,6 +17,11 @@ import (
 	"golang.org/x/text/encoding/japanese"
 )
 
+const (
+	testTextPatientName  = "Doe^Jane"
+	testTextPixelSpacing = "0.5"
+)
+
 func TestCanonicalStringsPreservesValueBoundaries(t *testing.T) {
 	tests := []struct {
 		name string
@@ -35,13 +40,13 @@ func TestCanonicalStringsPreservesValueBoundaries(t *testing.T) {
 		},
 		{
 			name: "person name",
-			elem: NewPersonName(tag.PatientName, []string{"Doe^Jane", "Smith^John"}),
-			want: []string{"Doe^Jane", "Smith^John"},
+			elem: NewPersonName(tag.PatientName, []string{testTextPatientName, "Smith^John"}),
+			want: []string{testTextPatientName, "Smith^John"},
 		},
 		{
 			name: "decimal string",
-			elem: NewDecimalString(tag.PixelSpacing, []string{"0.5", "0.75"}),
-			want: []string{"0.5", "0.75"},
+			elem: NewDecimalString(tag.PixelSpacing, []string{testTextPixelSpacing, "0.75"}),
+			want: []string{testTextPixelSpacing, "0.75"},
 		},
 		{
 			name: "unsigned short",
@@ -171,9 +176,9 @@ func TestReplaceCanonicalStringsBuildsSupportedVRWithoutPrototype(t *testing.T) 
 		wantType            any
 	}{
 		{name: "string", tag: tag.PatientID, valueRepresentation: vr.LO, values: []string{"123"}, wantType: (*String)(nil)},
-		{name: "person name", tag: tag.PatientName, valueRepresentation: vr.PN, values: []string{"Doe^Jane"}, wantType: (*PersonName)(nil)},
+		{name: "person name", tag: tag.PatientName, valueRepresentation: vr.PN, values: []string{testTextPatientName}, wantType: (*PersonName)(nil)},
 		{name: "date", tag: tag.StudyDate, valueRepresentation: vr.DA, values: []string{"20260816"}, wantType: (*Date)(nil)},
-		{name: "decimal", tag: tag.PixelSpacing, valueRepresentation: vr.DS, values: []string{"0.5", "0.5"}, wantType: (*DecimalString)(nil)},
+		{name: "decimal", tag: tag.PixelSpacing, valueRepresentation: vr.DS, values: []string{testTextPixelSpacing, testTextPixelSpacing}, wantType: (*DecimalString)(nil)},
 		{name: "unsigned short", tag: tag.Rows, valueRepresentation: vr.US, values: []string{"512"}, wantType: (*UnsignedShort)(nil)},
 		{name: "signed long", tag: tag.New(0x0011, 0x1010), valueRepresentation: vr.SL, values: []string{"-4"}, wantType: (*SignedLong)(nil)},
 		{name: "attribute tag", tag: tag.DimensionIndexPointer, valueRepresentation: vr.AT, values: []string{"(0028,0010)"}, wantType: (*AttributeTag)(nil)},

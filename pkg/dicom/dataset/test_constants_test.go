@@ -3,4 +3,12 @@
 
 package dataset
 
-const testMediaStorageSOPInstanceUID = "1.2.3.4.5"
+const (
+	testMediaStorageSOPInstanceUID = "1.2.3.4.5"
+	testStudyInstanceUID           = "1.2.3"
+	testInvalidUID                 = "1.2..3"
+	testAlternateUID               = "1.2.4"
+	testPatientName                = "Doe^Jane"
+	testReplacementName            = "New^Name"
+	testSourceImagePath            = "(0008,1140)[0]"
+)

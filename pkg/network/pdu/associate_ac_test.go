@@ -283,12 +283,12 @@ func TestAAssociateAC_EncodeDecodeAdvancedNegotiation(t *testing.T) {
 		MaximumNumberOperationsPerformed: 2,
 	}
 	ac.UserInformation.SCPSCURoleSelections = []SCPSCURoleSelection{{
-		SOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+		SOPClassUID: testCTImageStorageUID,
 		SCURole:     1,
 		SCPRole:     1,
 	}}
 	ac.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{{
-		SOPClassUID:         "1.2.840.10008.5.1.4.1.1.2",
+		SOPClassUID:         testCTImageStorageUID,
 		ServiceClassAppInfo: []byte{1, 0, 1},
 	}}
 
@@ -305,11 +305,11 @@ func TestAAssociateAC_EncodeDecodeAdvancedNegotiation(t *testing.T) {
 		t.Fatalf("decoded async window = %#v", async)
 	}
 	if got := decoded.UserInformation.SCPSCURoleSelections; len(got) != 1 ||
-		got[0].SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" || got[0].SCURole != 1 || got[0].SCPRole != 1 {
+		got[0].SOPClassUID != testCTImageStorageUID || got[0].SCURole != 1 || got[0].SCPRole != 1 {
 		t.Fatalf("decoded role selections = %#v", got)
 	}
 	if got := decoded.UserInformation.ExtendedNegotiations; len(got) != 1 ||
-		got[0].SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" ||
+		got[0].SOPClassUID != testCTImageStorageUID ||
 		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
 		t.Fatalf("decoded extended negotiations = %#v", got)
 	}
@@ -317,9 +317,9 @@ func TestAAssociateAC_EncodeDecodeAdvancedNegotiation(t *testing.T) {
 
 func TestAAssociateAC_IgnoresCommonExtendedNegotiation(t *testing.T) {
 	common := CommonExtendedNegotiation{
-		SOPClassUID:                "1.2.3",
-		ServiceClassUID:            "4.5",
-		RelatedGeneralSOPClassUIDs: []string{"6.7", "8.9"},
+		SOPClassUID:                testExtendedSOPClassUID,
+		ServiceClassUID:            testExtendedServiceClassUID,
+		RelatedGeneralSOPClassUIDs: []string{testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2},
 	}
 
 	ac := NewAAssociateAC()
@@ -371,7 +371,7 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 	rq.PresentationContexts = []PresentationContextRQ{
 		{
 			ID:             1,
-			AbstractSyntax: "1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
+			AbstractSyntax: testCTImageStorageUID, // CT Image Storage
 			TransferSyntaxes: []string{
 				testExplicitVRLittleLE, // Explicit VR Little Endian
 				testImplicitVRLittleLE, // Implicit VR Little Endian

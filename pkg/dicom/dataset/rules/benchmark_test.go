@@ -14,7 +14,7 @@ import (
 
 func BenchmarkMatchRuleSet(b *testing.B) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"CASE-123"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{testRulePatientID}))
 	exists, _ := Exists(tag.PatientID)
 	wildcard, _ := Wildcard(tag.PatientID, "case-*")
 	contains, _ := Contains(tag.PatientID, "-12")

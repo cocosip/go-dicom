@@ -23,6 +23,8 @@ const (
 	maxReconstructionFrames     = 65535
 	maxReconstructionDimension  = 16384
 	maxReconstructionPixelBytes = int64(1 << 30)
+	monochrome1                 = "MONOCHROME1"
+	monochrome2                 = "MONOCHROME2"
 )
 
 // ImageData is one immutable source frame used by a reconstructed volume.
@@ -83,10 +85,10 @@ func newImageData(ds *dataset.Dataset, frame int, sourcePixels *imaging.DicomPix
 		return nil, fmt.Errorf("read frame %d pixel data: pixel data is nil", frame)
 	}
 	if pixels.Info.SamplesPerPixel != 1 || pixels.Info.PhotometricInterpretation == nil ||
-		(pixels.Info.PhotometricInterpretation.Value != "MONOCHROME1" && pixels.Info.PhotometricInterpretation.Value != "MONOCHROME2") {
+		(pixels.Info.PhotometricInterpretation.Value != monochrome1 && pixels.Info.PhotometricInterpretation.Value != monochrome2) {
 		return nil, fmt.Errorf("reconstruction requires monochrome single-sample pixel data")
 	}
-	if sourceModality(sopClass) == "CT" && pixels.Info.PhotometricInterpretation.Value == "MONOCHROME1" {
+	if sourceModality(sopClass) == "CT" && pixels.Info.PhotometricInterpretation.Value == monochrome1 {
 		return nil, fmt.Errorf("CT reconstruction requires MONOCHROME2 pixel data, got MONOCHROME1")
 	}
 	if pixels.Info.BitsAllocated != 8 && pixels.Info.BitsAllocated != 16 && pixels.Info.BitsAllocated != 32 {

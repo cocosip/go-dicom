@@ -97,7 +97,7 @@ func TestObservabilityAssociationRequestAndBytes(t *testing.T) {
 		ProtocolVersion:    1,
 		CalledAETitle:      testCalledAE,
 		CallingAETitle:     testCallingAE,
-		ApplicationContext: "1.2.840.10008.3.1.1.1",
+		ApplicationContext: testApplicationContext,
 	}
 	if err := service.SendAssociationRequest(context.Background(), rq); err != nil {
 		t.Fatalf("SendAssociationRequest() error = %v", err)

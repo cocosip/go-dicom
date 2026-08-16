@@ -22,7 +22,7 @@ func newValidationDisabledDataset() *dataset.Dataset {
 
 func TestDatasetValidateReturnsNestedPathAndCause(t *testing.T) {
 	leaf := newValidationDisabledDataset()
-	if err := leaf.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{"1.2..3"})); err != nil {
+	if err := leaf.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{testInvalidUID})); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,7 +65,7 @@ func TestDatasetValidateUsesSortedFailFastOrder(t *testing.T) {
 	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{strings.Repeat("A", 65)})); err != nil {
 		t.Fatal(err)
 	}
-	if err := ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2..3"})); err != nil {
+	if err := ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testInvalidUID})); err != nil {
 		t.Fatal(err)
 	}
 
@@ -80,7 +80,7 @@ func TestDatasetValidateUsesSortedFailFastOrder(t *testing.T) {
 
 func TestDatasetValidateChecksPublicVM(t *testing.T) {
 	ds := newValidationDisabledDataset()
-	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane", "Doe^John"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName, "Doe^John"})); err != nil {
 		t.Fatal(err)
 	}
 
@@ -100,8 +100,8 @@ func TestDatasetValidateSkipsVMForEmptyPrivateUnknownAndBulkValues(t *testing.T)
 		elem element.Element
 	}{
 		{name: "empty public value", elem: element.NewString(tag.PatientName, vr.PN, nil)},
-		{name: "private explicit VR", elem: element.NewString(tag.New(0x0011, 0x1010), vr.UI, []string{"1.2.3", "1.2.4"})},
-		{name: "unknown public tag", elem: element.NewString(tag.New(0x7776, 0x0010), vr.UI, []string{"1.2.3", "1.2.4"})},
+		{name: "private explicit VR", elem: element.NewString(tag.New(0x0011, 0x1010), vr.UI, []string{testStudyInstanceUID, testAlternateUID})},
+		{name: "unknown public tag", elem: element.NewString(tag.New(0x7776, 0x0010), vr.UI, []string{testStudyInstanceUID, testAlternateUID})},
 		{name: "other byte", elem: element.NewOtherByte(tag.PixelData, []byte{1, 2, 3})},
 	}
 
@@ -120,7 +120,7 @@ func TestDatasetValidateSkipsVMForEmptyPrivateUnknownAndBulkValues(t *testing.T)
 
 func TestDatasetValidateStillChecksPrivateValueSyntax(t *testing.T) {
 	ds := newValidationDisabledDataset()
-	if err := ds.Add(element.NewString(tag.New(0x0011, 0x1010), vr.UI, []string{"1.2..3"})); err != nil {
+	if err := ds.Add(element.NewString(tag.New(0x0011, 0x1010), vr.UI, []string{testInvalidUID})); err != nil {
 		t.Fatal(err)
 	}
 

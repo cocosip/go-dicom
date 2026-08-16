@@ -67,7 +67,7 @@ func TestDirectoryWriteRoundTripsStrictly(t *testing.T) {
 
 func TestDirectorySaveTruncatesAndReopens(t *testing.T) {
 	dir, _ := roundTripDirectory(t, transfer.ExplicitVRLittleEndian)
-	path := filepath.Join(t.TempDir(), "DICOMDIR")
+	path := filepath.Join(t.TempDir(), testDICOMDIRFileID)
 	if err := os.WriteFile(path, bytes.Repeat([]byte{0xCC}, 64*1024), 0o600); err != nil {
 		t.Fatalf("seed file: %v", err)
 	}
@@ -141,12 +141,12 @@ func roundTripDirectory(t *testing.T, syntax *transfer.Syntax) (*Directory, []*p
 	}
 	sources := []*parser.ParseResult{
 		testParseResult(t, testFileValues{
-			PatientID: "PAT1", PatientName: "One^Patient", StudyUID: "1.2.3.1",
-			SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.1",
+			PatientID: testPatientID, PatientName: "One^Patient", StudyUID: testStudyUID,
+			SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
 		}),
 		testParseResult(t, testFileValues{
-			PatientID: "PAT1", PatientName: "One^Patient", StudyUID: "1.2.3.1",
-			SeriesUID: "1.2.3.1.1", SOPInstanceUID: "1.2.3.1.1.2",
+			PatientID: testPatientID, PatientName: "One^Patient", StudyUID: testStudyUID,
+			SeriesUID: testSeriesUID, SOPInstanceUID: "1.2.3.1.1.2",
 		}),
 		testParseResult(t, testFileValues{
 			PatientID: "PAT2", PatientName: "Two^Patient", StudyUID: "1.2.3.2",

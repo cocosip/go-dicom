@@ -19,6 +19,13 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
+const (
+	testFileA = "a.dcm"
+	testFileB = "b.dcm"
+	testFileC = "c.dcm"
+	testFileD = "d.dcm"
+)
+
 func TestNewRejectsInvalidOptions(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -230,7 +237,7 @@ func TestScanNilHandlerStillCountsResults(t *testing.T) {
 
 func TestScanBoundedByConfiguredWorkers(t *testing.T) {
 	root := t.TempDir()
-	writePlaceholderFiles(t, root, "a.dcm", "b.dcm", "c.dcm", "d.dcm")
+	writePlaceholderFiles(t, root, testFileA, testFileB, testFileC, testFileD)
 	value, err := New(WithWorkers(2))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -277,16 +284,16 @@ func TestScanBoundedByConfiguredWorkers(t *testing.T) {
 
 func TestScanDeterministicOrderAndSerialHandler(t *testing.T) {
 	root := t.TempDir()
-	writePlaceholderFiles(t, root, "a.dcm", "b.dcm", "c.dcm", "d.dcm")
+	writePlaceholderFiles(t, root, testFileA, testFileB, testFileC, testFileD)
 	value, err := New(WithWorkers(4))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 	delays := map[string]time.Duration{
-		"a.dcm": 40 * time.Millisecond,
-		"b.dcm": 30 * time.Millisecond,
-		"c.dcm": 20 * time.Millisecond,
-		"d.dcm": 10 * time.Millisecond,
+		testFileA: 40 * time.Millisecond,
+		testFileB: 30 * time.Millisecond,
+		testFileC: 20 * time.Millisecond,
+		"d.dcm":   10 * time.Millisecond,
 	}
 	value.classifyFile = func(_ context.Context, root, path, relative string) (Result, error) {
 		time.Sleep(delays[relative])
@@ -312,7 +319,7 @@ func TestScanDeterministicOrderAndSerialHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan() error = %v", err)
 	}
-	want := []string{"a.dcm", "b.dcm", "c.dcm", "d.dcm"}
+	want := []string{testFileA, testFileB, testFileC, testFileD}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("paths = %#v, want %#v", got, want)
 	}
@@ -326,7 +333,7 @@ func TestScanDeterministicOrderAndSerialHandler(t *testing.T) {
 
 func TestScanCancellationStopsBlockedWorkers(t *testing.T) {
 	root := t.TempDir()
-	writePlaceholderFiles(t, root, "a.dcm", "b.dcm", "c.dcm")
+	writePlaceholderFiles(t, root, testFileA, testFileB, testFileC)
 	value, err := New(WithWorkers(2))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -363,11 +370,11 @@ func TestScanCancellationStopsBlockedWorkers(t *testing.T) {
 
 func TestScanStopOnErrorReturnsDeterministicPrefix(t *testing.T) {
 	root := t.TempDir()
-	writePlaceholderFiles(t, root, "a.dcm", "b.dcm", "c.dcm")
+	writePlaceholderFiles(t, root, testFileA, testFileB, testFileC)
 	cause := errors.New("invalid fixture")
 	classifier := func(_ context.Context, root, path, relative string) (Result, error) {
 		result := Result{Root: root, Path: path, RelativePath: relative, Kind: ResultDICOM}
-		if relative == "b.dcm" {
+		if relative == testFileB {
 			result.Kind = ResultInvalid
 			result.Err = cause
 		}
@@ -387,7 +394,7 @@ func TestScanStopOnErrorReturnsDeterministicPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("continue Scan() error = %v", err)
 	}
-	if !reflect.DeepEqual(continued, []string{"a.dcm", "b.dcm", "c.dcm"}) {
+	if !reflect.DeepEqual(continued, []string{testFileA, testFileB, testFileC}) {
 		t.Fatalf("continued paths = %#v", continued)
 	}
 	if continueSummary != (Summary{Results: 3, DICOMFiles: 2, InvalidFiles: 1}) {
@@ -411,7 +418,7 @@ func TestScanStopOnErrorReturnsDeterministicPrefix(t *testing.T) {
 	if !errors.As(err, &scanErr) {
 		t.Fatalf("stop Scan() error type = %T, want *ScanError", err)
 	}
-	if !reflect.DeepEqual(stopped, []string{"a.dcm", "b.dcm"}) {
+	if !reflect.DeepEqual(stopped, []string{testFileA, testFileB}) {
 		t.Fatalf("stopped paths = %#v", stopped)
 	}
 	if stopSummary != (Summary{Results: 2, DICOMFiles: 1, InvalidFiles: 1}) {
@@ -421,7 +428,7 @@ func TestScanStopOnErrorReturnsDeterministicPrefix(t *testing.T) {
 
 func TestScanHandlerErrorStopsDelivery(t *testing.T) {
 	root := t.TempDir()
-	writePlaceholderFiles(t, root, "a.dcm", "b.dcm")
+	writePlaceholderFiles(t, root, testFileA, testFileB)
 	value, err := New(WithWorkers(2))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)

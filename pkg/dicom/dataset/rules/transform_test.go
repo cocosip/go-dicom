@@ -19,7 +19,7 @@ import (
 
 func TestApplyReturnsIndependentCloneOnNoRules(t *testing.T) {
 	source := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
-	requireRuleAdd(t, source, element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	requireRuleAdd(t, source, element.NewString(tag.PatientName, vr.PN, []string{testRulePatientName}))
 	transformer, err := NewTransformer()
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +41,7 @@ func TestApplyReturnsIndependentCloneOnNoRules(t *testing.T) {
 	if err := got.AddOrUpdate(element.NewString(tag.PatientName, vr.PN, []string{"Changed^Clone"})); err != nil {
 		t.Fatal(err)
 	}
-	if value, _ := source.GetString(tag.PatientName); value != "Doe^Jane" {
+	if value, _ := source.GetString(tag.PatientName); value != testRulePatientName {
 		t.Fatalf("source changed through result clone: %q", value)
 	}
 }
@@ -96,9 +96,9 @@ func TestConditionalNonMatchReturnsUnchangedClone(t *testing.T) {
 func TestApplyFailureNeverMutatesSourceAndReturnsPriorChanges(t *testing.T) {
 	sentinel := errors.New("rule failed")
 	source := dataset.New()
-	requireRuleAdd(t, source, element.NewString(tag.PatientName, vr.PN, []string{"Old^Name"}))
+	requireRuleAdd(t, source, element.NewString(tag.PatientName, vr.PN, []string{testRuleOriginalName}))
 	transformer, err := NewTransformer(
-		testAssignRule{elem: element.NewString(tag.PatientName, vr.PN, []string{"New^Name"})},
+		testAssignRule{elem: element.NewString(tag.PatientName, vr.PN, []string{testRuleReplacementName})},
 		testFailRule{err: sentinel},
 	)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestApplyFailureNeverMutatesSourceAndReturnsPriorChanges(t *testing.T) {
 	if len(changes) != 1 || changes[0].Kind != ChangeAssign {
 		t.Fatalf("changes = %#v", changes)
 	}
-	if value, _ := source.GetString(tag.PatientName); value != "Old^Name" {
+	if value, _ := source.GetString(tag.PatientName); value != testRuleOriginalName {
 		t.Fatalf("source changed after failure: %q", value)
 	}
 }
@@ -169,9 +169,9 @@ func TestConditionalErrorUsesConditionStage(t *testing.T) {
 
 func TestChangeSetDoesNotAliasResultDataset(t *testing.T) {
 	source := dataset.New()
-	requireRuleAdd(t, source, element.NewString(tag.PatientName, vr.PN, []string{"Old^Name"}))
+	requireRuleAdd(t, source, element.NewString(tag.PatientName, vr.PN, []string{testRuleOriginalName}))
 	transformer, err := NewTransformer(testAssignRule{
-		elem: element.NewString(tag.PatientName, vr.PN, []string{"New^Name"}),
+		elem: element.NewString(tag.PatientName, vr.PN, []string{testRuleReplacementName}),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -192,7 +192,7 @@ func TestChangeSetDoesNotAliasResultDataset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(before, []string{"Old^Name"}) || !reflect.DeepEqual(after, []string{"New^Name"}) {
+	if !reflect.DeepEqual(before, []string{testRuleOriginalName}) || !reflect.DeepEqual(after, []string{testRuleReplacementName}) {
 		t.Fatalf("change snapshots before=%v after=%v", before, after)
 	}
 }
@@ -293,7 +293,7 @@ func TestInvalidReadableDatasetTransformsWithoutValidatingUnrelatedElements(t *t
 	source := dataset.New()
 	source.SetAutoValidate(false)
 	requireRuleAdd(t, source, element.NewString(tag.Modality, vr.CS, []string{"invalid-lowercase"}))
-	transformer, err := NewTransformer(mustTransformRule(SetStrings(tag.PatientName, vr.PN, "Doe^Jane")))
+	transformer, err := NewTransformer(mustTransformRule(SetStrings(tag.PatientName, vr.PN, testRulePatientName)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestInvalidReadableDatasetTransformsWithoutValidatingUnrelatedElements(t *t
 	}
 	patientNameElement, _ := result.Get(tag.PatientName)
 	patientNames, valueErr := element.CanonicalStrings(patientNameElement)
-	if valueErr != nil || !reflect.DeepEqual(patientNames, []string{"Doe^Jane"}) {
+	if valueErr != nil || !reflect.DeepEqual(patientNames, []string{testRulePatientName}) {
 		t.Fatalf("PatientName = %v, err = %v", patientNames, valueErr)
 	}
 }
@@ -334,7 +334,7 @@ func TestConcurrentTransformerReuseOnIndependentDatasets(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			source := dataset.New()
-			if err := source.Add(element.NewString(tag.PatientID, vr.LO, []string{"CASE-123"})); err != nil {
+			if err := source.Add(element.NewString(tag.PatientID, vr.LO, []string{testRulePatientID})); err != nil {
 				errorsByWorker <- err
 				return
 			}

@@ -13,10 +13,10 @@ import (
 
 func ExampleWalk() {
 	item := New()
-	_ = item.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3"}))
+	_ = item.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testStudyInstanceUID}))
 	ds := New()
 	_ = ds.Add(NewSequenceWithItems(tag.ReferencedImageSequence, []*Dataset{item}))
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	_ = Walk(ds, func(event WalkEvent) (WalkAction, error) {
 		fmt.Printf("%s %s\n", event.Kind, FormatPath(event.Path))

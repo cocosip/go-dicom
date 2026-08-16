@@ -12,9 +12,9 @@ func TestParseFileIDNormalizesDICOMPathComponents(t *testing.T) {
 		wantString string
 		wantParts  []string
 	}{
-		{name: "forward slash", path: "DIR1/IMAGE001", wantString: `DIR1\IMAGE001`, wantParts: []string{"DIR1", "IMAGE001"}},
-		{name: "backslash", path: `DIR1\IMAGE001`, wantString: `DIR1\IMAGE001`, wantParts: []string{"DIR1", "IMAGE001"}},
-		{name: "single component", path: "DICOMDIR", wantString: "DICOMDIR", wantParts: []string{"DICOMDIR"}},
+		{name: "forward slash", path: testDirectoryID + "/" + testImageID, wantString: testDirectoryID + `\` + testImageID, wantParts: []string{testDirectoryID, testImageID}},
+		{name: "backslash", path: testDirectoryID + `\` + testImageID, wantString: testDirectoryID + `\` + testImageID, wantParts: []string{testDirectoryID, testImageID}},
+		{name: "single component", path: testDICOMDIRFileID, wantString: testDICOMDIRFileID, wantParts: []string{testDICOMDIRFileID}},
 		{name: "eight components", path: "A/B/C/D/E/F/G/H", wantString: `A\B\C\D\E\F\G\H`, wantParts: []string{"A", "B", "C", "D", "E", "F", "G", "H"}},
 	}
 
@@ -66,7 +66,7 @@ func TestParseFileIDRejectsInvalidDICOMPaths(t *testing.T) {
 }
 
 func TestFileIDComponentsReturnsDefensiveCopy(t *testing.T) {
-	id, err := NewFileID("DIR1", "IMAGE001")
+	id, err := NewFileID(testDirectoryID, testImageID)
 	if err != nil {
 		t.Fatalf("NewFileID() error = %v", err)
 	}

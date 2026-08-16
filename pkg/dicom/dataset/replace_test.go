@@ -21,7 +21,7 @@ func TestDatasetReplaceFromPreservesReceiverValidationModeAndCopiesState(t *test
 	targetPointer := target
 
 	source := NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
-	if err := source.Add(element.NewString(tag.PatientName, vr.PN, []string{"New^Name"})); err != nil {
+	if err := source.Add(element.NewString(tag.PatientName, vr.PN, []string{testReplacementName})); err != nil {
 		t.Fatal(err)
 	}
 	if err := target.ReplaceFrom(source); err != nil {
@@ -37,14 +37,14 @@ func TestDatasetReplaceFromPreservesReceiverValidationModeAndCopiesState(t *test
 	if target.InternalTransferSyntax() != transfer.ExplicitVRBigEndian {
 		t.Fatal("ReplaceFrom did not transfer internal transfer syntax")
 	}
-	if got, ok := target.GetString(tag.PatientName); !ok || got != "New^Name" {
+	if got, ok := target.GetString(tag.PatientName); !ok || got != testReplacementName {
 		t.Fatalf("PatientName = %q, %t", got, ok)
 	}
 
 	if err := source.AddOrUpdate(element.NewString(tag.PatientName, vr.PN, []string{"Later^Mutation"})); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := target.GetString(tag.PatientName); got != "New^Name" {
+	if got, _ := target.GetString(tag.PatientName); got != testReplacementName {
 		t.Fatalf("target aliased source after ReplaceFrom: %q", got)
 	}
 }

@@ -92,7 +92,7 @@ func TestSendAssociationRequest(t *testing.T) {
 		ProtocolVersion:    1,
 		CalledAETitle:      testCalledAE,
 		CallingAETitle:     testCallingAE,
-		ApplicationContext: "1.2.840.10008.3.1.1.1",
+		ApplicationContext: testApplicationContext,
 	}
 
 	ctx := context.Background()
@@ -126,7 +126,7 @@ func TestSendAssociationRequestCompletesShortWrites(t *testing.T) {
 		ProtocolVersion:    1,
 		CalledAETitle:      testCalledAE,
 		CallingAETitle:     testCallingAE,
-		ApplicationContext: "1.2.840.10008.3.1.1.1",
+		ApplicationContext: testApplicationContext,
 	}
 	rawPDU, err := rq.Encode()
 	if err != nil {

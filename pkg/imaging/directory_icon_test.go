@@ -58,7 +58,7 @@ func TestDirectoryIconGeneratorPreservesAspectRatioWithin128Pixels(t *testing.T)
 func TestDirectoryIconGeneratorRendersMonochromeAndColor(t *testing.T) {
 	generator := NewDirectoryIconGenerator()
 
-	mono := iconTestDataset(t, 2, 1, 1, "MONOCHROME1", []byte{0, 255})
+	mono := iconTestDataset(t, 2, 1, 1, photometricMonochrome1, []byte{0, 255})
 	_, _, monoPixels, err := generator.GenerateDirectoryIcon(mono, 0)
 	if err != nil {
 		t.Fatalf("MONOCHROME1 GenerateDirectoryIcon() error = %v", err)

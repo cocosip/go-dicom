@@ -14,7 +14,10 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
 )
 
-const geometryTolerance = 1e-9
+const (
+	geometryTolerance               = 1e-9
+	testFrameOfReferenceInstanceUID = "1.2.3"
+)
 
 func TestClassicFrameGeometryCoordinateRoundTrip(t *testing.T) {
 	ds := classicGeometryDataset(
@@ -64,7 +67,7 @@ func TestFrameGeometryReadsParserStyleNumericStrings(t *testing.T) {
 		element.NewUnsignedShort(tag.Columns, []uint16{4}),
 		element.NewUnsignedShort(tag.Rows, []uint16{3}),
 		element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}),
-		element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{"1.2.3"}),
+		element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{testFrameOfReferenceInstanceUID}),
 		element.NewString(tag.PixelSpacing, vr.DS, []string{"2", "3"}),
 		element.NewString(tag.ImagePositionPatient, vr.DS, []string{"10", "20", "30"}),
 		element.NewString(tag.ImageOrientationPatient, vr.DS, []string{"1", "0", "0", "0", "1", "0"}),
@@ -86,7 +89,7 @@ func TestEnhancedMultiFrameGeometryUsesSharedAndPerFrameMacros(t *testing.T) {
 		element.NewUnsignedShort(tag.Columns, []uint16{2}),
 		element.NewUnsignedShort(tag.Rows, []uint16{2}),
 		element.NewIntegerStringFromInt(tag.NumberOfFrames, []int{2}),
-		element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{"1.2.3"}),
+		element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{testFrameOfReferenceInstanceUID}),
 	)
 
 	shared := dataset.New()
@@ -155,7 +158,7 @@ func TestFrameGeometryOrientationAndRoundTrip(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			geometry, err := NewFrameGeometryFromValues(
-				"1.2.3",
+				testFrameOfReferenceInstanceUID,
 				math3d.Point3{X: 5, Y: 6, Z: 7},
 				tc.row,
 				tc.column,
@@ -187,7 +190,7 @@ func TestFrameGeometryOrientationAndRoundTrip(t *testing.T) {
 
 func TestFrameGeometryToleratesRoundedDirectionCosines(t *testing.T) {
 	geometry, err := NewFrameGeometryFromValues(
-		"1.2.3",
+		testFrameOfReferenceInstanceUID,
 		math3d.Point3{},
 		math3d.Vector3{X: 1, Y: 0.000001},
 		math3d.Vector3{Y: 1, Z: 0.000001},
@@ -234,7 +237,7 @@ func TestFrameGeometryMissingAndInvalidGeometry(t *testing.T) {
 	}
 
 	if _, err := NewFrameGeometryFromValues(
-		"1.2.3",
+		testFrameOfReferenceInstanceUID,
 		math3d.Point3{},
 		math3d.Vector3{X: 1},
 		math3d.Vector3{X: 1},
@@ -246,7 +249,7 @@ func TestFrameGeometryMissingAndInvalidGeometry(t *testing.T) {
 	}
 
 	if _, err := NewFrameGeometryFromValues(
-		"1.2.3",
+		testFrameOfReferenceInstanceUID,
 		math3d.Point3{X: math.NaN()},
 		math3d.Vector3{X: 1},
 		math3d.Vector3{Y: 1},
@@ -257,7 +260,7 @@ func TestFrameGeometryMissingAndInvalidGeometry(t *testing.T) {
 		t.Fatal("non-finite patient position was accepted")
 	}
 	if _, err := NewFrameGeometryFromValues(
-		"1.2.3",
+		testFrameOfReferenceInstanceUID,
 		math3d.Point3{},
 		math3d.Vector3{X: math.Inf(1)},
 		math3d.Vector3{Y: 1},
@@ -273,7 +276,7 @@ func classicGeometryDataset(position, orientation, spacing []float64, columns, r
 	ds := dataset.New()
 	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{columns}))
 	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
-	_ = ds.Add(element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{"1.2.3"}))
+	_ = ds.Add(element.NewString(tag.FrameOfReferenceUID, vr.UI, []string{testFrameOfReferenceInstanceUID}))
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.ImagePositionPatient, position))
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.ImageOrientationPatient, orientation))
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.PixelSpacing, spacing))

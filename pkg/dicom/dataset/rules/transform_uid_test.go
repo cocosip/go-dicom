@@ -16,11 +16,11 @@ import (
 
 func TestGenerateUIDsUsesStableInjectedMappingAcrossTags(t *testing.T) {
 	generator := &deterministicUIDGenerator{
-		values: map[string]*uid.UID{"1.2.3": uid.New("9.8.7", "mapped", uid.TypeUnknown, false)},
+		values: map[string]*uid.UID{testRuleSourceUID: uid.New(testRuleMappedUID, "mapped", uid.TypeUnknown, false)},
 	}
 	source := dataset.New()
-	requireRuleAdd(t, source, element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"}))
-	requireRuleAdd(t, source, element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.3"}))
+	requireRuleAdd(t, source, element.NewString(tag.StudyInstanceUID, vr.UI, []string{testRuleSourceUID}))
+	requireRuleAdd(t, source, element.NewString(tag.SeriesInstanceUID, vr.UI, []string{testRuleSourceUID}))
 	transformer, err := NewTransformer(
 		mustTransformRule(GenerateUIDs(tag.StudyInstanceUID, generator)),
 		mustTransformRule(GenerateUIDs(tag.SeriesInstanceUID, generator)),
@@ -34,7 +34,7 @@ func TestGenerateUIDsUsesStableInjectedMappingAcrossTags(t *testing.T) {
 	}
 	study, _ := result.GetString(tag.StudyInstanceUID)
 	series, _ := result.GetString(tag.SeriesInstanceUID)
-	if study != "9.8.7" || series != "9.8.7" || generator.calls["1.2.3"] != 2 {
+	if study != testRuleMappedUID || series != testRuleMappedUID || generator.calls[testRuleSourceUID] != 2 {
 		t.Fatalf("study=%q series=%q calls=%v", study, series, generator.calls)
 	}
 	if len(changes) != 2 || changes[0].Kind != ChangeUID || changes[1].Kind != ChangeUID {
@@ -44,11 +44,11 @@ func TestGenerateUIDsUsesStableInjectedMappingAcrossTags(t *testing.T) {
 
 func TestGenerateUIDsPreservesEmptyValues(t *testing.T) {
 	generator := &deterministicUIDGenerator{
-		values: map[string]*uid.UID{"1.2.3": uid.New("9.8.7", "mapped", uid.TypeUnknown, false)},
+		values: map[string]*uid.UID{testRuleSourceUID: uid.New(testRuleMappedUID, "mapped", uid.TypeUnknown, false)},
 	}
 	source := dataset.New()
 	source.SetAutoValidate(false)
-	requireRuleAdd(t, source, element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3", ""}))
+	requireRuleAdd(t, source, element.NewString(tag.SOPInstanceUID, vr.UI, []string{testRuleSourceUID, ""}))
 	transformer, err := NewTransformer(mustTransformRule(GenerateUIDs(tag.SOPInstanceUID, generator)))
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func TestGenerateUIDsPreservesEmptyValues(t *testing.T) {
 	}
 	elem, _ := result.Get(tag.SOPInstanceUID)
 	values, err := element.CanonicalStrings(elem)
-	if err != nil || !reflect.DeepEqual(values, []string{"9.8.7", ""}) {
+	if err != nil || !reflect.DeepEqual(values, []string{testRuleMappedUID, ""}) {
 		t.Fatalf("values = %#v, err = %v", values, err)
 	}
 	if len(generator.calls) != 1 || generator.calls[""] != 0 {
@@ -77,7 +77,7 @@ func TestGenerateUIDsRejectsInvalidConfigurationAndValues(t *testing.T) {
 	}
 
 	nonUI := dataset.New()
-	requireRuleAdd(t, nonUI, element.NewString(tag.PatientID, vr.LO, []string{"1.2.3"}))
+	requireRuleAdd(t, nonUI, element.NewString(tag.PatientID, vr.LO, []string{testRuleSourceUID}))
 	transformer, err := NewTransformer(mustTransformRule(GenerateUIDs(tag.PatientID, generator)))
 	if err != nil {
 		t.Fatal(err)

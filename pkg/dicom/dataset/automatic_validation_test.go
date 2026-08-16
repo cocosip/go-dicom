@@ -15,7 +15,7 @@ import (
 
 func TestDatasetAddRejectsNilTagWithoutMutation(t *testing.T) {
 	ds := dataset.New()
-	err := ds.Add(element.NewString(nil, vr.UI, []string{"1.2.3"}))
+	err := ds.Add(element.NewString(nil, vr.UI, []string{testStudyInstanceUID}))
 	var validationErr *dataset.ValidationError
 	if !errors.As(err, &validationErr) || validationErr.Kind != dataset.ValidationStructural {
 		t.Fatalf("Add() error = %v, want structural validation error", err)
@@ -26,7 +26,7 @@ func TestDatasetAddRejectsNilTagWithoutMutation(t *testing.T) {
 }
 
 func invalidUIDElement(t *tag.Tag) element.Element {
-	return element.NewString(t, vr.UI, []string{"1.2..3"})
+	return element.NewString(t, vr.UI, []string{testInvalidUID})
 }
 
 func TestDatasetAutomaticValidationDefaultsToEnabled(t *testing.T) {
@@ -70,21 +70,21 @@ func TestDatasetDisabledAutomaticValidationAllowsInsertButNotExplicitValidation(
 
 func TestDatasetAddOrUpdatePreservesExistingElementOnValidationFailure(t *testing.T) {
 	ds := dataset.New()
-	if err := ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.3"})); err != nil {
+	if err := ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID})); err != nil {
 		t.Fatal(err)
 	}
 	if err := ds.AddOrUpdate(invalidUIDElement(tag.StudyInstanceUID)); err == nil {
 		t.Fatal("AddOrUpdate() should reject an invalid UID")
 	}
 	got, ok := ds.GetString(tag.StudyInstanceUID)
-	if !ok || got != "1.2.3" {
+	if !ok || got != testStudyInstanceUID {
 		t.Fatalf("StudyInstanceUID = %q, %v; want original value", got, ok)
 	}
 }
 
 func TestNewWithElementsReturnsNoPartialDatasetOnValidationFailure(t *testing.T) {
 	ds, err := dataset.NewWithElements([]element.Element{
-		element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.3"}),
+		element.NewString(tag.SOPClassUID, vr.UI, []string{testStudyInstanceUID}),
 		invalidUIDElement(tag.SOPInstanceUID),
 	})
 	if err == nil {
@@ -102,7 +102,7 @@ func TestDatasetMergeIsAtomicOnValidationFailure(t *testing.T) {
 	}
 
 	source := newValidationDisabledDataset()
-	if err := source.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.3"})); err != nil {
+	if err := source.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testStudyInstanceUID})); err != nil {
 		t.Fatal(err)
 	}
 	if err := source.Add(invalidUIDElement(tag.SOPInstanceUID)); err != nil {

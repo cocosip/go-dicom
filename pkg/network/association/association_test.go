@@ -42,7 +42,7 @@ func TestAssociation_AddPresentationContext(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 
 	// Add valid context (odd ID)
-	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
+	pc1 := NewPresentationContext(1, testStorageSOPClassUID, transfer.ExplicitVRLittleEndian)
 	if err := assoc.AddPresentationContext(pc1); err != nil {
 		t.Fatalf("Failed to add presentation context: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestAssociation_AddPresentationContext(t *testing.T) {
 func TestAssociation_FindPresentationContextByID(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 
-	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
+	pc1 := NewPresentationContext(1, testStorageSOPClassUID, transfer.ExplicitVRLittleEndian)
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian)
 
 	_ = assoc.AddPresentationContext(pc1)
@@ -78,7 +78,7 @@ func TestAssociation_FindPresentationContextByID(t *testing.T) {
 	if found == nil {
 		t.Fatal("Expected to find context ID 1")
 	}
-	if found.AbstractSyntax != "1.2.840.10008.5.1.4.1.1.2" {
+	if found.AbstractSyntax != testStorageSOPClassUID {
 		t.Errorf("Wrong abstract syntax: %s", found.AbstractSyntax)
 	}
 
@@ -92,7 +92,7 @@ func TestAssociation_FindPresentationContextByID(t *testing.T) {
 func TestAssociation_FindPresentationContextByAbstractSyntax(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 
-	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
+	pc1 := NewPresentationContext(1, testStorageSOPClassUID, transfer.ExplicitVRLittleEndian)
 	pc1.Accept(transfer.ExplicitVRLittleEndian)
 
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ImplicitVRLittleEndian)
@@ -102,7 +102,7 @@ func TestAssociation_FindPresentationContextByAbstractSyntax(t *testing.T) {
 	_ = assoc.AddPresentationContext(pc3)
 
 	// Find accepted context
-	found := assoc.FindPresentationContextByAbstractSyntax("1.2.840.10008.5.1.4.1.1.2")
+	found := assoc.FindPresentationContextByAbstractSyntax(testStorageSOPClassUID)
 	if found == nil {
 		t.Error("Expected to find accepted context")
 	}
@@ -117,7 +117,7 @@ func TestAssociation_FindPresentationContextByAbstractSyntax(t *testing.T) {
 func TestAssociation_GetAcceptedPresentationContexts(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 
-	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
+	pc1 := NewPresentationContext(1, testStorageSOPClassUID, transfer.ExplicitVRLittleEndian)
 	pc1.Accept(transfer.ExplicitVRLittleEndian)
 
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ImplicitVRLittleEndian)
@@ -139,14 +139,14 @@ func TestAssociation_GetAcceptedPresentationContexts(t *testing.T) {
 func TestAssociation_ExtendedNegotiation(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 
-	en1 := NewExtendedNegotiation("1.2.840.10008.5.1.4.1.1.2", []byte{0x01, 0x02, 0x03})
+	en1 := NewExtendedNegotiation(testStorageSOPClassUID, []byte{0x01, 0x02, 0x03})
 	en2 := NewExtendedNegotiation("1.2.840.10008.1.1", []byte{0x04, 0x05})
 
 	assoc.AddExtendedNegotiation(en1)
 	assoc.AddExtendedNegotiation(en2)
 
 	// Find existing
-	found := assoc.FindExtendedNegotiation("1.2.840.10008.5.1.4.1.1.2")
+	found := assoc.FindExtendedNegotiation(testStorageSOPClassUID)
 	if found == nil {
 		t.Fatal("Expected to find extended negotiation")
 	}
@@ -163,7 +163,7 @@ func TestAssociation_ExtendedNegotiation(t *testing.T) {
 
 func TestAssociation_AddExtendedNegotiationRetainsInsertedObject(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
-	negotiation := NewExtendedNegotiation("1.2.3", []byte{1, 1})
+	negotiation := NewExtendedNegotiation(testExtendedSOPClassUID, []byte{1, 1})
 	assoc.AddExtendedNegotiation(negotiation)
 
 	negotiation.AcceptApplicationInfo([]byte{1, 0})
@@ -177,14 +177,14 @@ func TestAssociation_AddExtendedNegotiationRetainsInsertedObject(t *testing.T) {
 func TestAssociation_RoleSelection(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 
-	rs1 := NewRoleSelection("1.2.840.10008.5.1.4.1.1.2", 1, 0) // SCU only
-	rs2 := NewRoleSelection("1.2.840.10008.1.1", 1, 1)         // Both
+	rs1 := NewRoleSelection(testStorageSOPClassUID, 1, 0) // SCU only
+	rs2 := NewRoleSelection("1.2.840.10008.1.1", 1, 1)    // Both
 
 	assoc.AddRoleSelection(rs1)
 	assoc.AddRoleSelection(rs2)
 
 	// Find existing
-	found := assoc.FindRoleSelection("1.2.840.10008.5.1.4.1.1.2")
+	found := assoc.FindRoleSelection(testStorageSOPClassUID)
 	if found == nil {
 		t.Fatal("Expected to find role selection")
 	}
@@ -220,7 +220,7 @@ func TestAssociation_SetEstablished(t *testing.T) {
 func TestAssociation_String(t *testing.T) {
 	assoc := NewAssociation("MY_SCU", "PACS_SERVER")
 
-	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
+	pc1 := NewPresentationContext(1, testStorageSOPClassUID, transfer.ExplicitVRLittleEndian)
 	pc1.Accept(transfer.ExplicitVRLittleEndian)
 
 	pc3 := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ImplicitVRLittleEndian)
@@ -347,13 +347,13 @@ func TestNewAsynchronousOperationsWindow(t *testing.T) {
 func TestAssociation_GetTransferSyntaxForAbstractSyntax(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 
-	pc1 := NewPresentationContext(1, "1.2.840.10008.5.1.4.1.1.2", transfer.ExplicitVRLittleEndian)
+	pc1 := NewPresentationContext(1, testStorageSOPClassUID, transfer.ExplicitVRLittleEndian)
 	pc1.Accept(transfer.ExplicitVRLittleEndian)
 
 	_ = assoc.AddPresentationContext(pc1)
 
 	// Find transfer syntax for accepted context
-	ts := assoc.GetTransferSyntaxForAbstractSyntax("1.2.840.10008.5.1.4.1.1.2")
+	ts := assoc.GetTransferSyntaxForAbstractSyntax(testStorageSOPClassUID)
 	if ts == nil {
 		t.Error("Expected to find transfer syntax")
 	}

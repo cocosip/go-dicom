@@ -90,5 +90,5 @@ func materializeClone(source ByteBuffer) (ByteBuffer, error) {
 
 func isNilByteBuffer(source ByteBuffer) bool {
 	value := reflect.ValueOf(source)
-	return value.Kind() == reflect.Ptr && value.IsNil()
+	return value.Kind() == reflect.Pointer && value.IsNil()
 }

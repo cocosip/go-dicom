@@ -20,7 +20,7 @@ func TestRenderFrameImageMatchesExistingPNGExport(t *testing.T) {
 		kind any
 	}{
 		{
-			name: "MONOCHROME1",
+			name: photometricMonochrome1,
 			info: &PixelDataInfo{
 				Width: 2, Height: 2, NumberOfFrames: 1,
 				BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,

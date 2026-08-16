@@ -10,7 +10,7 @@ import (
 )
 
 func TestFrameGeometryBoundingBox(t *testing.T) {
-	geometry := mustFrameGeometry(t, "1.2.3", math3d.Point3{X: 10, Y: 20, Z: 30}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 4, 3)
+	geometry := mustFrameGeometry(t, testFrameOfReferenceInstanceUID, math3d.Point3{X: 10, Y: 20, Z: 30}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 4, 3)
 
 	box := geometry.BoundingBox()
 	if box.Min != (math3d.Point3{X: 10, Y: 20, Z: 30}) || box.Max != (math3d.Point3{X: 13, Y: 22, Z: 30}) {
@@ -19,8 +19,8 @@ func TestFrameGeometryBoundingBox(t *testing.T) {
 }
 
 func TestCanDrawLocalizer(t *testing.T) {
-	axial := mustFrameGeometry(t, "1.2.3", math3d.Point3{}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 11, 11)
-	sagittal := mustFrameGeometry(t, "1.2.3", math3d.Point3{X: 5, Z: -5}, math3d.Vector3{Y: 1}, math3d.Vector3{Z: 1}, 11, 11)
+	axial := mustFrameGeometry(t, testFrameOfReferenceInstanceUID, math3d.Point3{}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 11, 11)
+	sagittal := mustFrameGeometry(t, testFrameOfReferenceInstanceUID, math3d.Point3{X: 5, Z: -5}, math3d.Vector3{Y: 1}, math3d.Vector3{Z: 1}, 11, 11)
 	otherReference := mustFrameGeometry(t, "9.8.7", math3d.Point3{X: 5, Z: -5}, math3d.Vector3{Y: 1}, math3d.Vector3{Z: 1}, 11, 11)
 
 	if !CanDrawLocalizer(axial, sagittal) {
@@ -38,8 +38,8 @@ func TestCanDrawLocalizer(t *testing.T) {
 }
 
 func TestIntersectionLocalizer(t *testing.T) {
-	axial := mustFrameGeometry(t, "1.2.3", math3d.Point3{}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 11, 11)
-	sagittal := mustFrameGeometry(t, "1.2.3", math3d.Point3{X: 5, Z: -5}, math3d.Vector3{Y: 1}, math3d.Vector3{Z: 1}, 11, 11)
+	axial := mustFrameGeometry(t, testFrameOfReferenceInstanceUID, math3d.Point3{}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 11, 11)
+	sagittal := mustFrameGeometry(t, testFrameOfReferenceInstanceUID, math3d.Point3{X: 5, Z: -5}, math3d.Vector3{Y: 1}, math3d.Vector3{Z: 1}, 11, 11)
 
 	start, end, ok := IntersectionLocalizer(axial, sagittal)
 	if !ok {
@@ -56,8 +56,8 @@ func TestIntersectionLocalizer(t *testing.T) {
 }
 
 func TestProjectionLocalizer(t *testing.T) {
-	axial := mustFrameGeometry(t, "1.2.3", math3d.Point3{}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 11, 11)
-	sagittal := mustFrameGeometry(t, "1.2.3", math3d.Point3{X: 5, Z: -5}, math3d.Vector3{Y: 1}, math3d.Vector3{Z: 1}, 11, 11)
+	axial := mustFrameGeometry(t, testFrameOfReferenceInstanceUID, math3d.Point3{}, math3d.Vector3{X: 1}, math3d.Vector3{Y: 1}, 11, 11)
+	sagittal := mustFrameGeometry(t, testFrameOfReferenceInstanceUID, math3d.Point3{X: 5, Z: -5}, math3d.Vector3{Y: 1}, math3d.Vector3{Z: 1}, 11, 11)
 
 	points, err := ProjectionLocalizer(axial, sagittal)
 	if err != nil {

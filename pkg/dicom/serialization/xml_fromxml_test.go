@@ -15,6 +15,18 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+const (
+	xmlUnsignedShortName    = "unsigned short"
+	xmlUnsignedLongName     = "unsigned long"
+	xmlSignedShortName      = "signed short"
+	xmlSignedLongName       = "signed long"
+	xmlFloatName            = "float"
+	xmlDoubleName           = "double"
+	xmlSignedVeryLongName   = "signed very long"
+	xmlUnsignedVeryLongName = "unsigned very long"
+	xmlAttributeTagName     = "attribute tag"
+)
+
 func TestFromXML_Basic(t *testing.T) {
 	xmlData := []byte(`<?xml version="1.0" encoding="utf-8"?>
 <NativeDicomModel>
@@ -280,15 +292,15 @@ func TestFromXML_Numeric(t *testing.T) {
 		wantType   reflect.Type
 		wantValues []string
 	}{
-		{name: "unsigned short", tag: tag.New(0x0011, 0x1010), wantType: reflect.TypeOf((*element.UnsignedShort)(nil)), wantValues: []string{"65535"}},
-		{name: "unsigned long", tag: tag.New(0x0011, 0x1011), wantType: reflect.TypeOf((*element.UnsignedLong)(nil)), wantValues: []string{"4294967295"}},
-		{name: "signed short", tag: tag.New(0x0011, 0x1012), wantType: reflect.TypeOf((*element.SignedShort)(nil)), wantValues: []string{"-32768"}},
-		{name: "signed long", tag: tag.New(0x0011, 0x1013), wantType: reflect.TypeOf((*element.SignedLong)(nil)), wantValues: []string{"-2147483648"}},
-		{name: "float", tag: tag.New(0x0011, 0x1014), wantType: reflect.TypeOf((*element.Float)(nil)), wantValues: []string{"1.5"}},
-		{name: "double", tag: tag.New(0x0011, 0x1015), wantType: reflect.TypeOf((*element.Double)(nil)), wantValues: []string{"-2.25"}},
-		{name: "signed very long", tag: tag.New(0x0011, 0x1016), wantType: reflect.TypeOf((*element.SignedVeryLong)(nil)), wantValues: []string{"-9223372036854775807"}},
-		{name: "unsigned very long", tag: tag.New(0x0011, 0x1017), wantType: reflect.TypeOf((*element.UnsignedVeryLong)(nil)), wantValues: []string{"18446744073709551614"}},
-		{name: "attribute tag", tag: tag.New(0x0011, 0x1018), wantType: reflect.TypeOf((*element.AttributeTag)(nil)), wantValues: []string{"(0028,0010)"}},
+		{name: xmlUnsignedShortName, tag: tag.New(0x0011, 0x1010), wantType: reflect.TypeOf((*element.UnsignedShort)(nil)), wantValues: []string{"65535"}},
+		{name: xmlUnsignedLongName, tag: tag.New(0x0011, 0x1011), wantType: reflect.TypeOf((*element.UnsignedLong)(nil)), wantValues: []string{"4294967295"}},
+		{name: xmlSignedShortName, tag: tag.New(0x0011, 0x1012), wantType: reflect.TypeOf((*element.SignedShort)(nil)), wantValues: []string{"-32768"}},
+		{name: xmlSignedLongName, tag: tag.New(0x0011, 0x1013), wantType: reflect.TypeOf((*element.SignedLong)(nil)), wantValues: []string{"-2147483648"}},
+		{name: xmlFloatName, tag: tag.New(0x0011, 0x1014), wantType: reflect.TypeOf((*element.Float)(nil)), wantValues: []string{"1.5"}},
+		{name: xmlDoubleName, tag: tag.New(0x0011, 0x1015), wantType: reflect.TypeOf((*element.Double)(nil)), wantValues: []string{"-2.25"}},
+		{name: xmlSignedVeryLongName, tag: tag.New(0x0011, 0x1016), wantType: reflect.TypeOf((*element.SignedVeryLong)(nil)), wantValues: []string{"-9223372036854775807"}},
+		{name: xmlUnsignedVeryLongName, tag: tag.New(0x0011, 0x1017), wantType: reflect.TypeOf((*element.UnsignedVeryLong)(nil)), wantValues: []string{"18446744073709551614"}},
+		{name: xmlAttributeTagName, tag: tag.New(0x0011, 0x1018), wantType: reflect.TypeOf((*element.AttributeTag)(nil)), wantValues: []string{"(0028,0010)"}},
 	}
 
 	for _, tt := range tests {
@@ -317,15 +329,15 @@ func TestFromXML_RestoresEmptyNumericAndAttributeTagElements(t *testing.T) {
 		vrCode   string
 		wantType reflect.Type
 	}{
-		{name: "unsigned short", vrCode: "US", wantType: reflect.TypeOf((*element.UnsignedShort)(nil))},
-		{name: "unsigned long", vrCode: "UL", wantType: reflect.TypeOf((*element.UnsignedLong)(nil))},
-		{name: "signed short", vrCode: "SS", wantType: reflect.TypeOf((*element.SignedShort)(nil))},
-		{name: "signed long", vrCode: "SL", wantType: reflect.TypeOf((*element.SignedLong)(nil))},
-		{name: "float", vrCode: "FL", wantType: reflect.TypeOf((*element.Float)(nil))},
-		{name: "double", vrCode: "FD", wantType: reflect.TypeOf((*element.Double)(nil))},
-		{name: "signed very long", vrCode: "SV", wantType: reflect.TypeOf((*element.SignedVeryLong)(nil))},
-		{name: "unsigned very long", vrCode: "UV", wantType: reflect.TypeOf((*element.UnsignedVeryLong)(nil))},
-		{name: "attribute tag", vrCode: "AT", wantType: reflect.TypeOf((*element.AttributeTag)(nil))},
+		{name: xmlUnsignedShortName, vrCode: "US", wantType: reflect.TypeOf((*element.UnsignedShort)(nil))},
+		{name: xmlUnsignedLongName, vrCode: "UL", wantType: reflect.TypeOf((*element.UnsignedLong)(nil))},
+		{name: xmlSignedShortName, vrCode: "SS", wantType: reflect.TypeOf((*element.SignedShort)(nil))},
+		{name: xmlSignedLongName, vrCode: "SL", wantType: reflect.TypeOf((*element.SignedLong)(nil))},
+		{name: xmlFloatName, vrCode: "FL", wantType: reflect.TypeOf((*element.Float)(nil))},
+		{name: xmlDoubleName, vrCode: "FD", wantType: reflect.TypeOf((*element.Double)(nil))},
+		{name: xmlSignedVeryLongName, vrCode: "SV", wantType: reflect.TypeOf((*element.SignedVeryLong)(nil))},
+		{name: xmlUnsignedVeryLongName, vrCode: "UV", wantType: reflect.TypeOf((*element.UnsignedVeryLong)(nil))},
+		{name: xmlAttributeTagName, vrCode: "AT", wantType: reflect.TypeOf((*element.AttributeTag)(nil))},
 	}
 
 	for _, tt := range tests {
@@ -358,15 +370,15 @@ func TestXMLRoundTripPreservesTypedValueElements(t *testing.T) {
 		tag  *tag.Tag
 		elem element.Element
 	}{
-		{name: "unsigned short", tag: tag.New(0x0011, 0x1010), elem: element.NewUnsignedShort(tag.New(0x0011, 0x1010), []uint16{65535})},
-		{name: "unsigned long", tag: tag.New(0x0011, 0x1011), elem: element.NewUnsignedLong(tag.New(0x0011, 0x1011), []uint32{4294967295})},
-		{name: "signed short", tag: tag.New(0x0011, 0x1012), elem: element.NewSignedShort(tag.New(0x0011, 0x1012), []int16{-32768})},
-		{name: "signed long", tag: tag.New(0x0011, 0x1013), elem: element.NewSignedLong(tag.New(0x0011, 0x1013), []int32{-2147483648})},
-		{name: "float", tag: tag.New(0x0011, 0x1014), elem: element.NewFloat(tag.New(0x0011, 0x1014), []float32{1.5})},
-		{name: "double", tag: tag.New(0x0011, 0x1015), elem: element.NewDouble(tag.New(0x0011, 0x1015), []float64{-2.25})},
-		{name: "signed very long", tag: tag.New(0x0011, 0x1016), elem: element.NewSignedVeryLong(tag.New(0x0011, 0x1016), []int64{-9223372036854775807})},
-		{name: "unsigned very long", tag: tag.New(0x0011, 0x1017), elem: element.NewUnsignedVeryLong(tag.New(0x0011, 0x1017), []uint64{18446744073709551614})},
-		{name: "attribute tag", tag: tag.New(0x0011, 0x1018), elem: element.NewAttributeTag(tag.New(0x0011, 0x1018), []*tag.Tag{tag.Rows})},
+		{name: xmlUnsignedShortName, tag: tag.New(0x0011, 0x1010), elem: element.NewUnsignedShort(tag.New(0x0011, 0x1010), []uint16{65535})},
+		{name: xmlUnsignedLongName, tag: tag.New(0x0011, 0x1011), elem: element.NewUnsignedLong(tag.New(0x0011, 0x1011), []uint32{4294967295})},
+		{name: xmlSignedShortName, tag: tag.New(0x0011, 0x1012), elem: element.NewSignedShort(tag.New(0x0011, 0x1012), []int16{-32768})},
+		{name: xmlSignedLongName, tag: tag.New(0x0011, 0x1013), elem: element.NewSignedLong(tag.New(0x0011, 0x1013), []int32{-2147483648})},
+		{name: xmlFloatName, tag: tag.New(0x0011, 0x1014), elem: element.NewFloat(tag.New(0x0011, 0x1014), []float32{1.5})},
+		{name: xmlDoubleName, tag: tag.New(0x0011, 0x1015), elem: element.NewDouble(tag.New(0x0011, 0x1015), []float64{-2.25})},
+		{name: xmlSignedVeryLongName, tag: tag.New(0x0011, 0x1016), elem: element.NewSignedVeryLong(tag.New(0x0011, 0x1016), []int64{-9223372036854775807})},
+		{name: xmlUnsignedVeryLongName, tag: tag.New(0x0011, 0x1017), elem: element.NewUnsignedVeryLong(tag.New(0x0011, 0x1017), []uint64{18446744073709551614})},
+		{name: xmlAttributeTagName, tag: tag.New(0x0011, 0x1018), elem: element.NewAttributeTag(tag.New(0x0011, 0x1018), []*tag.Tag{tag.Rows})},
 	}
 
 	original := dataset.New()

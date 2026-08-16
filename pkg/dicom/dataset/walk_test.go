@@ -22,8 +22,8 @@ type observedWalkEvent struct {
 func TestWalkVisitsDepthFirstInTagOrder(t *testing.T) {
 	root := New()
 	item := New()
-	requireWalkAdd(t, item, element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3"}))
-	requireWalkAdd(t, root, element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	requireWalkAdd(t, item, element.NewString(tag.SOPInstanceUID, vr.UI, []string{testStudyInstanceUID}))
+	requireWalkAdd(t, root, element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	requireWalkAdd(t, root, NewSequenceWithItems(tag.ReferencedImageSequence, []*Dataset{item}))
 
 	var got []observedWalkEvent
@@ -37,9 +37,9 @@ func TestWalkVisitsDepthFirstInTagOrder(t *testing.T) {
 
 	want := []observedWalkEvent{
 		{kind: WalkSequenceBegin, path: referencedImageSequencePath},
-		{kind: WalkSequenceItemBegin, path: "(0008,1140)[0]"},
+		{kind: WalkSequenceItemBegin, path: testSourceImagePath},
 		{kind: WalkElement, path: "(0008,1140)[0]/(0008,0018)"},
-		{kind: WalkSequenceItemEnd, path: "(0008,1140)[0]"},
+		{kind: WalkSequenceItemEnd, path: testSourceImagePath},
 		{kind: WalkSequenceEnd, path: referencedImageSequencePath},
 		{kind: WalkElement, path: "(0010,0010)"},
 	}
@@ -93,8 +93,8 @@ func TestWalkEmptyContainersAreBalancedAndNilItemsAreEmptyDatasets(t *testing.T)
 
 	want := []observedWalkEvent{
 		{kind: WalkSequenceBegin, path: referencedImageSequencePath},
-		{kind: WalkSequenceItemBegin, path: "(0008,1140)[0]"},
-		{kind: WalkSequenceItemEnd, path: "(0008,1140)[0]"},
+		{kind: WalkSequenceItemBegin, path: testSourceImagePath},
+		{kind: WalkSequenceItemEnd, path: testSourceImagePath},
 		{kind: WalkSequenceItemBegin, path: "(0008,1140)[1]"},
 		{kind: WalkSequenceItemEnd, path: "(0008,1140)[1]"},
 		{kind: WalkSequenceEnd, path: referencedImageSequencePath},
@@ -336,7 +336,7 @@ func TestWalkWrapsVisitorErrorWithEventContext(t *testing.T) {
 	if !errors.As(err, &walkErr) || !errors.Is(err, sentinel) {
 		t.Fatalf("error = %v, want wrapping *WalkError", err)
 	}
-	if walkErr.Kind != WalkSequenceItemBegin || FormatPath(walkErr.Path) != "(0008,1140)[0]" {
+	if walkErr.Kind != WalkSequenceItemBegin || FormatPath(walkErr.Path) != testSourceImagePath {
 		t.Fatalf("WalkError = %#v", walkErr)
 	}
 }
@@ -396,7 +396,7 @@ func TestWalkDetectsDirectAndIndirectDatasetCycles(t *testing.T) {
 		ds   *Dataset
 		path string
 	}{
-		{name: "direct", ds: direct, path: "(0008,1140)[0]"},
+		{name: "direct", ds: direct, path: testSourceImagePath},
 		{name: "indirect", ds: root, path: "(0008,1140)[0]/(0008,2112)[0]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -414,7 +414,7 @@ func TestWalkDetectsDirectAndIndirectDatasetCycles(t *testing.T) {
 
 func TestWalkAllowsSharedSiblingDatasetAndRetainedPaths(t *testing.T) {
 	child := New()
-	requireWalkAdd(t, child, element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	requireWalkAdd(t, child, element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	root := New()
 	requireWalkAdd(t, root, NewSequenceWithItems(tag.ReferencedImageSequence, []*Dataset{child, child}))
 
@@ -438,7 +438,7 @@ func TestWalkAllowsSharedSiblingDatasetAndRetainedPaths(t *testing.T) {
 func newWalkControlFixture(t *testing.T) *Dataset {
 	t.Helper()
 	item := New()
-	requireWalkAdd(t, item, element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	requireWalkAdd(t, item, element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 	root := New()
 	requireWalkAdd(t, root, NewSequenceWithItems(tag.ReferencedImageSequence, []*Dataset{item}))
 	fragments := element.NewOtherByteFragment(tag.PixelData)

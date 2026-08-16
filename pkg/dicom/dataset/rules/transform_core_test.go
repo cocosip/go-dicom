@@ -82,7 +82,7 @@ func TestSetElementClonesConstructorInput(t *testing.T) {
 }
 
 func TestChangeTagsAndPathsDoNotAliasTransformedDataset(t *testing.T) {
-	privateTag := tag.NewWithPrivateCreator(0x0011, 0x1010, tag.NewPrivateCreator("ORIGINAL"))
+	privateTag := tag.NewWithPrivateCreator(0x0011, 0x1010, tag.NewPrivateCreator(testRuleOriginal))
 	transformer, err := NewTransformer(mustTransformRule(SetStrings(privateTag, vr.LO, "value")))
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestChangeTagsAndPathsDoNotAliasTransformedDataset(t *testing.T) {
 	changes[0].Tag.SetPrivateCreator(tag.NewPrivateCreator("CHANGE-TAG"))
 	changes[0].Path[0].Tag.SetPrivateCreator(tag.NewPrivateCreator("CHANGE-PATH"))
 	resultTag := result.GetOrNil(privateTag).Tag()
-	if creator := resultTag.PrivateCreator(); creator == nil || creator.Creator() != "ORIGINAL" {
+	if creator := resultTag.PrivateCreator(); creator == nil || creator.Creator() != testRuleOriginal {
 		t.Fatalf("change metadata mutation changed result Tag: %v", resultTag)
 	}
 	if changes[0].After.Tag() == resultTag {
@@ -291,7 +291,7 @@ func TestNoOpSetAndMissingRemoveProduceNoChanges(t *testing.T) {
 
 func TestMapValueMatchesCompleteCanonicalText(t *testing.T) {
 	source := dataset.New()
-	requireRuleAdd(t, source, element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY"}))
+	requireRuleAdd(t, source, element.NewString(tag.ImageType, vr.CS, []string{testRuleOriginal, "PRIMARY"}))
 	transformer, err := NewTransformer(mustTransformRule(MapValue(tag.ImageType, "ORIGINAL\\PRIMARY", "DERIVED\\SECONDARY")))
 	if err != nil {
 		t.Fatal(err)

@@ -17,7 +17,7 @@ func TestNewVolumeDataSortsSlicesAndCalculatesSpacingAndBounds(t *testing.T) {
 	images := testImagesAt(t, []float64{10, 0, 5})
 	for index, image := range images {
 		mustAddElement(t, image.dataset,
-			element.NewString(tag.PatientID, vr.LO, []string{"P-1"}),
+			element.NewString(tag.PatientID, vr.LO, []string{testVolumePatientID}),
 			element.NewString(tag.SeriesDescription, vr.LO, []string{"source-" + string(rune('A'+index))}),
 		)
 	}
@@ -38,7 +38,7 @@ func TestNewVolumeDataSortsSlicesAndCalculatesSpacingAndBounds(t *testing.T) {
 		t.Fatalf("bounds = %+v, want min z=0 max=(1,1,10)", bounds)
 	}
 	common := volume.CommonDataset()
-	if common.TryGetString(tag.PatientID) != "P-1" {
+	if common.TryGetString(tag.PatientID) != testVolumePatientID {
 		t.Fatal("CommonData omitted equal patient metadata")
 	}
 	if common.Contains(tag.SeriesDescription) {
@@ -51,7 +51,7 @@ func TestVolumeDataMetadataAccessorsReturnDefensiveCopies(t *testing.T) {
 	privateBinaryTag := tag.New(0x0011, 0x1010)
 	for _, image := range images {
 		mustAddElement(t, image.dataset,
-			element.NewString(tag.PatientID, vr.LO, []string{"P-1"}),
+			element.NewString(tag.PatientID, vr.LO, []string{testVolumePatientID}),
 			element.NewOtherByte(privateBinaryTag, []byte{1, 2, 3}),
 		)
 	}
@@ -68,7 +68,7 @@ func TestVolumeDataMetadataAccessorsReturnDefensiveCopies(t *testing.T) {
 
 	common := volume.CommonDataset()
 	common.Remove(tag.PatientID)
-	if volume.CommonDataset().TryGetString(tag.PatientID) != "P-1" {
+	if volume.CommonDataset().TryGetString(tag.PatientID) != testVolumePatientID {
 		t.Fatal("CommonDataset() exposed mutable common metadata")
 	}
 	binaryData, ok := common.GetOrNil(privateBinaryTag).(*element.OtherByte)

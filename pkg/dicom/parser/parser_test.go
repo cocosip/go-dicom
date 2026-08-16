@@ -22,6 +22,8 @@ import (
 	"golang.org/x/text/encoding/japanese"
 )
 
+const testCycleSOPInstanceUID = "1.2.3.4"
+
 func TestParseIgnoresZeroTrailingPadding(t *testing.T) {
 	var file bytes.Buffer
 	file.Write(make([]byte, 128))
@@ -883,7 +885,7 @@ func TestSequenceReading(t *testing.T) {
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x0008))
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x1155))
 		itemData.WriteString("UI")
-		sopUID := "1.2.3.4"
+		sopUID := testCycleSOPInstanceUID
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(len(sopUID)))
 		itemData.WriteString(sopUID)
 		_ = binary.Write(buf, binary.LittleEndian, uint32(itemData.Len()))
@@ -941,7 +943,7 @@ func TestSequenceReading(t *testing.T) {
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x0008))
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(0x1155))
 		itemData.WriteString("UI")
-		sopUID := "1.2.3.4"
+		sopUID := testCycleSOPInstanceUID
 		_ = binary.Write(itemData, binary.LittleEndian, uint16(len(sopUID)))
 		itemData.WriteString(sopUID)
 		_ = binary.Write(seqData, binary.LittleEndian, uint32(itemData.Len()))

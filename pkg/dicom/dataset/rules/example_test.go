@@ -14,7 +14,7 @@ import (
 
 func ExampleAll() {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"CASE-123"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{testRulePatientID}))
 	exists, _ := Exists(tag.PatientID)
 	pattern, _ := Wildcard(tag.PatientID, "case-*")
 	rule, _ := All(exists, pattern)

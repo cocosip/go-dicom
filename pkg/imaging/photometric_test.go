@@ -17,8 +17,8 @@ func TestParsePhotometricInterpretation(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name:     "MONOCHROME1",
-			input:    "MONOCHROME1",
+			name:     photometricMonochrome1,
+			input:    photometricMonochrome1,
 			expected: Monochrome1,
 		},
 		{

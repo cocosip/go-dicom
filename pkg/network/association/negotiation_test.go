@@ -13,6 +13,10 @@ import (
 )
 
 const (
+	testStorageSOPClassUID         = "1.2.840.10008.5.1.4.1.1.2"
+	testExplicitVRLittleEndianUID  = "1.2.840.10008.1.2.1"
+	testExtendedSOPClassUID        = "1.2.3"
+	testExtendedServiceClassUID    = "4.5"
 	testRelatedGeneralSOPClassUID1 = "6.7"
 	testRelatedGeneralSOPClassUID2 = "8.9"
 )
@@ -23,20 +27,20 @@ func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T)
 	rq.CalledAETitle = "SCP"
 	rq.PresentationContexts = []pdu.PresentationContextRQ{{
 		ID:               1,
-		AbstractSyntax:   "1.2.840.10008.5.1.4.1.1.2",
-		TransferSyntaxes: []string{"1.2.840.10008.1.2.1"},
+		AbstractSyntax:   testStorageSOPClassUID,
+		TransferSyntaxes: []string{testExplicitVRLittleEndianUID},
 	}}
 	rq.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
 		MaximumNumberOperationsInvoked:   4,
 		MaximumNumberOperationsPerformed: 3,
 	}
 	rq.UserInformation.SCPSCURoleSelections = []pdu.SCPSCURoleSelection{{
-		SOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+		SOPClassUID: testStorageSOPClassUID,
 		SCURole:     1,
 		SCPRole:     1,
 	}}
 	rq.UserInformation.ExtendedNegotiations = []pdu.ExtendedNegotiation{{
-		SOPClassUID:         "1.2.840.10008.5.1.4.1.1.2",
+		SOPClassUID:         testStorageSOPClassUID,
 		ServiceClassAppInfo: []byte{1, 1, 0},
 	}}
 	rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
@@ -51,19 +55,19 @@ func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T)
 	ac.PresentationContexts = []pdu.PresentationContextAC{{
 		ID:             1,
 		Result:         pdu.ResultAcceptance,
-		TransferSyntax: "1.2.840.10008.1.2.1",
+		TransferSyntax: testExplicitVRLittleEndianUID,
 	}}
 	ac.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
 		MaximumNumberOperationsInvoked:   2,
 		MaximumNumberOperationsPerformed: 1,
 	}
 	ac.UserInformation.SCPSCURoleSelections = []pdu.SCPSCURoleSelection{{
-		SOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+		SOPClassUID: testStorageSOPClassUID,
 		SCURole:     1,
 		SCPRole:     0,
 	}}
 	ac.UserInformation.ExtendedNegotiations = []pdu.ExtendedNegotiation{{
-		SOPClassUID:         "1.2.840.10008.5.1.4.1.1.2",
+		SOPClassUID:         testStorageSOPClassUID,
 		ServiceClassAppInfo: []byte{1, 0, 1, 1},
 	}}
 	ac.UserInformation.UserIdentityResponse = &pdu.UserIdentityNegotiationResponse{
@@ -92,11 +96,11 @@ func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T)
 	if pc.RequestedRole.SCPRole != 1 || pc.AcceptedRole.SCPRole != 0 {
 		t.Fatalf("presentation context roles = requested %#v, accepted %#v", pc.RequestedRole, pc.AcceptedRole)
 	}
-	if pc.AbstractSyntax != "1.2.840.10008.5.1.4.1.1.2" || len(pc.ProposedTransferSyntaxes) != 1 || pc.AcceptedTransferSyntax == nil {
+	if pc.AbstractSyntax != testStorageSOPClassUID || len(pc.ProposedTransferSyntaxes) != 1 || pc.AcceptedTransferSyntax == nil {
 		t.Fatalf("presentation context proposal/acceptance was not preserved: %#v", pc)
 	}
 
-	extended := assoc.FindExtendedNegotiation("1.2.840.10008.5.1.4.1.1.2")
+	extended := assoc.FindExtendedNegotiation(testStorageSOPClassUID)
 	if extended == nil || !bytes.Equal(extended.RequestedApplicationInfo, []byte{1, 1, 0}) {
 		t.Fatalf("requested extended negotiation = %#v", extended)
 	}
@@ -114,12 +118,12 @@ func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T)
 func TestFromAAssociateRQCombinesCommonAndApplicationNegotiation(t *testing.T) {
 	rq := pdu.NewAAssociateRQ()
 	rq.UserInformation.ExtendedNegotiations = []pdu.ExtendedNegotiation{{
-		SOPClassUID:         "1.2.3",
+		SOPClassUID:         testExtendedSOPClassUID,
 		ServiceClassAppInfo: []byte{1, 0, 1},
 	}}
 	rq.UserInformation.CommonExtendedNegotiations = []pdu.CommonExtendedNegotiation{{
-		SOPClassUID:                "1.2.3",
-		ServiceClassUID:            "4.5",
+		SOPClassUID:                testExtendedSOPClassUID,
+		ServiceClassUID:            testExtendedServiceClassUID,
 		RelatedGeneralSOPClassUIDs: []string{testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2},
 	}}
 
@@ -127,9 +131,9 @@ func TestFromAAssociateRQCombinesCommonAndApplicationNegotiation(t *testing.T) {
 	if len(assoc.ExtendedNegotiations) != 1 {
 		t.Fatalf("extended negotiations = %#v, want one combined entry", assoc.ExtendedNegotiations)
 	}
-	negotiation := assoc.FindExtendedNegotiation("1.2.3")
+	negotiation := assoc.FindExtendedNegotiation(testExtendedSOPClassUID)
 	if negotiation == nil || !bytes.Equal(negotiation.RequestedApplicationInfo, []byte{1, 0, 1}) ||
-		negotiation.ServiceClassUID != "4.5" || len(negotiation.RelatedGeneralSOPClassUIDs) != 2 ||
+		negotiation.ServiceClassUID != testExtendedServiceClassUID || len(negotiation.RelatedGeneralSOPClassUIDs) != 2 ||
 		negotiation.RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 ||
 		negotiation.RelatedGeneralSOPClassUIDs[1] != testRelatedGeneralSOPClassUID2 {
 		t.Fatalf("combined negotiation = %#v", negotiation)
@@ -145,18 +149,18 @@ func TestFromAAssociateRQCombinesCommonAndApplicationNegotiation(t *testing.T) {
 
 func TestToAAssociateRQEmitsCombinedExtendedNegotiation(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
-	assoc.AddExtendedNegotiation(NewExtendedNegotiation("1.2.3", []byte{1, 0, 1}))
+	assoc.AddExtendedNegotiation(NewExtendedNegotiation(testExtendedSOPClassUID, []byte{1, 0, 1}))
 	assoc.AddExtendedNegotiation(NewCommonExtendedNegotiation(
-		"1.2.3", "4.5", testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2,
+		testExtendedSOPClassUID, testExtendedServiceClassUID, testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2,
 	))
 
 	rq := ToAAssociateRQ(assoc)
 	if got := rq.UserInformation.ExtendedNegotiations; len(got) != 1 ||
-		got[0].SOPClassUID != "1.2.3" || !bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
+		got[0].SOPClassUID != testExtendedSOPClassUID || !bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
 		t.Fatalf("extended negotiations = %#v", got)
 	}
 	if got := rq.UserInformation.CommonExtendedNegotiations; len(got) != 1 ||
-		got[0].SOPClassUID != "1.2.3" || got[0].ServiceClassUID != "4.5" ||
+		got[0].SOPClassUID != testExtendedSOPClassUID || got[0].ServiceClassUID != testExtendedServiceClassUID ||
 		len(got[0].RelatedGeneralSOPClassUIDs) != 2 ||
 		got[0].RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 {
 		t.Fatalf("common extended negotiations = %#v", got)
@@ -164,7 +168,7 @@ func TestToAAssociateRQEmitsCombinedExtendedNegotiation(t *testing.T) {
 
 	rq.UserInformation.ExtendedNegotiations[0].ServiceClassAppInfo[0] = 9
 	rq.UserInformation.CommonExtendedNegotiations[0].RelatedGeneralSOPClassUIDs[0] = "changed"
-	negotiation := assoc.FindExtendedNegotiation("1.2.3")
+	negotiation := assoc.FindExtendedNegotiation(testExtendedSOPClassUID)
 	if negotiation.RequestedApplicationInfo[0] != 1 ||
 		negotiation.RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 {
 		t.Fatalf("RQ retained association-owned slices: %#v", negotiation)
@@ -175,11 +179,11 @@ func TestToAAssociateACIncludesOnlyExplicitlyAcceptedNegotiation(t *testing.T) {
 	rq := pdu.NewAAssociateRQ()
 	rq.PresentationContexts = []pdu.PresentationContextRQ{{
 		ID:               1,
-		AbstractSyntax:   "1.2.840.10008.5.1.4.1.1.2",
-		TransferSyntaxes: []string{"1.2.840.10008.1.2.1"},
+		AbstractSyntax:   testStorageSOPClassUID,
+		TransferSyntaxes: []string{testExplicitVRLittleEndianUID},
 	}}
 	rq.UserInformation.ExtendedNegotiations = []pdu.ExtendedNegotiation{{
-		SOPClassUID:         "1.2.840.10008.5.1.4.1.1.2",
+		SOPClassUID:         testStorageSOPClassUID,
 		ServiceClassAppInfo: []byte{1, 1},
 	}}
 	rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
@@ -198,7 +202,7 @@ func TestToAAssociateACIncludesOnlyExplicitlyAcceptedNegotiation(t *testing.T) {
 		t.Fatal("unset user identity response was encoded")
 	}
 
-	extended := assoc.FindExtendedNegotiation("1.2.840.10008.5.1.4.1.1.2")
+	extended := assoc.FindExtendedNegotiation(testStorageSOPClassUID)
 	extended.AcceptApplicationInfo([]byte{1, 0, 1})
 	assoc.UserIdentity.ServerResponse = []byte{}
 	accepted := ToAAssociateAC(assoc)
