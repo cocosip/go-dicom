@@ -15,6 +15,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
@@ -60,6 +61,8 @@ type serviceInterface interface {
 //	    return err
 //	}
 type Client struct {
+	connectionID observability.ConnectionID
+
 	// Network connection
 	conn net.Conn
 
@@ -82,6 +85,15 @@ type Client struct {
 
 // Config contains configuration options for the DICOM client.
 type Config struct {
+	// Logger receives structured network log records. The default is nil.
+	Logger observability.Logger
+
+	// EventObserver receives connection, association, and DIMSE lifecycle events.
+	EventObserver observability.EventObserver
+
+	// MetricsObserver receives vendor-neutral network metrics.
+	MetricsObserver observability.MetricsObserver
+
 	// CallingAE is the AE Title of this client (SCU)
 	CallingAE string
 
@@ -147,6 +159,21 @@ type Config struct {
 
 // Option is a function that modifies client configuration.
 type Option func(*Config)
+
+// WithLogger sets the structured network logger.
+func WithLogger(logger observability.Logger) Option {
+	return func(o *Config) { o.Logger = logger }
+}
+
+// WithEventObserver sets the network lifecycle event observer.
+func WithEventObserver(observer observability.EventObserver) Option {
+	return func(o *Config) { o.EventObserver = observer }
+}
+
+// WithMetricsObserver sets the vendor-neutral network metrics observer.
+func WithMetricsObserver(observer observability.MetricsObserver) Option {
+	return func(o *Config) { o.MetricsObserver = observer }
+}
 
 // WithCallingAE sets the calling AE title.
 func WithCallingAE(ae string) Option {
@@ -629,6 +656,10 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	// Create service
 	svcOpts := []service.Option{
 		service.WithAssociationRequestor(true),
+		service.WithConnectionID(c.connectionID),
+		service.WithLogger(c.config.Logger),
+		service.WithEventObserver(c.config.EventObserver),
+		service.WithMetricsObserver(c.config.MetricsObserver),
 		service.WithMaxPDULength(c.config.MaxPDULength),
 		service.WithReadTimeout(c.config.RequestTimeout),
 		service.WithWriteTimeout(c.config.RequestTimeout),
@@ -697,9 +728,12 @@ func (c *Client) Connect(ctx context.Context, host string, port int) error {
 	if len(c.presentationContexts) == 0 {
 		return fmt.Errorf("no presentation contexts configured (use AddPresentationContext)")
 	}
+	c.connectionID = observability.NewConnectionID()
+	c.emitConnectionAttempted(ctx)
 
 	// Step 1: Establish TCP connection
 	if err := c.dial(ctx, host, port); err != nil {
+		c.emitConnectionFailure(ctx, err)
 		return err
 	}
 

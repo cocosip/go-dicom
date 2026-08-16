@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
@@ -68,6 +69,7 @@ func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pd
 	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write %s: %w", pduName, err)
 	}
+	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
 	if err := s.setState(newState); err != nil {
 		return fmt.Errorf("failed to transition state: %w", err)
 	}
@@ -77,13 +79,34 @@ func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pd
 // SendAssociationRequest sends an A-ASSOCIATE-RQ PDU to request an association.
 // This is typically called by a client (SCU) to initiate a DICOM association.
 func (s *Service) SendAssociationRequest(ctx context.Context, req *pdu.AAssociateRQ) error {
-	return s.sendAssociationPDU(ctx, req, "A-ASSOCIATE-RQ", StateAssociationRequested)
+	associationInfo := s.ensureAssociationIdentity(req.CallingAETitle, req.CalledAETitle)
+	if err := s.sendAssociationPDU(ctx, req, "A-ASSOCIATE-RQ", StateAssociationRequested); err != nil {
+		return err
+	}
+	s.emitEvent(ctx, observability.Event{
+		Kind:        observability.EventAssociationRequested,
+		Association: associationInfo,
+		Direction:   observability.DirectionOutbound,
+		Outcome:     observability.OutcomeSuccess,
+	})
+	s.emitMetric(ctx, observability.Metric{
+		Kind:        observability.MetricAssociation,
+		Association: associationInfo,
+		Direction:   observability.DirectionOutbound,
+		Outcome:     observability.OutcomeSuccess,
+		Value:       1,
+	})
+	return nil
 }
 
 // SendAssociationAccept sends an A-ASSOCIATE-AC PDU to accept an association.
 // This is typically called by a server (SCP) in response to an A-ASSOCIATE-RQ.
 func (s *Service) SendAssociationAccept(ctx context.Context, ac *pdu.AAssociateAC) error {
-	return s.sendAssociationPDU(ctx, ac, "A-ASSOCIATE-AC", StateAssociationAccepted)
+	if err := s.sendAssociationPDU(ctx, ac, "A-ASSOCIATE-AC", StateAssociationAccepted); err != nil {
+		return err
+	}
+	s.emitAssociationObservation(ctx, observability.EventAssociationAccepted, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
+	return nil
 }
 
 // SendAssociationReject sends an A-ASSOCIATE-RJ PDU to reject an association.
@@ -125,11 +148,13 @@ func (s *Service) SendAssociationReject(ctx context.Context, result, source, rea
 	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write A-ASSOCIATE-RJ: %w", err)
 	}
+	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
 
 	// Transition to Closed state after rejection
 	if err := s.setState(StateClosed); err != nil {
 		return fmt.Errorf("failed to transition state: %w", err)
 	}
+	s.emitAssociationObservation(ctx, observability.EventAssociationRejected, observability.DirectionOutbound, observability.OutcomeRejected, nil)
 
 	return nil
 }
@@ -183,6 +208,7 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write A-RELEASE-RQ: %w", err)
 	}
+	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
 
 	return nil
 }
@@ -223,11 +249,13 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write A-RELEASE-RP: %w", err)
 	}
+	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
 
 	// Transition to Closed state
 	if err := s.setState(StateClosed); err != nil {
 		return fmt.Errorf("failed to transition state: %w", err)
 	}
+	s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
 
 	return nil
 }
@@ -255,15 +283,20 @@ func (s *Service) SendAbort(ctx context.Context, source, reason byte) error {
 	}
 
 	// Write to connection with timeout (ignore errors if connection is broken)
+	var writeErr error
 	if s.conn != nil {
 		if s.config.writeTimeout > 0 {
 			_ = s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout))
 		}
-		_ = rawPDU.Write(s.conn)
+		writeErr = rawPDU.Write(s.conn)
+		if writeErr == nil {
+			s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
+		}
 	}
 
 	// Transition to Aborted state (ignore errors)
 	_ = s.setState(StateAborted)
+	s.emitAssociationObservation(ctx, observability.EventAssociationAborted, observability.DirectionOutbound, observability.OutcomeAborted, writeErr)
 
 	return nil
 }
@@ -293,6 +326,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
+	s.emitPDUBytes(ctx, observability.DirectionInbound, rawPDU)
 	pduType := rawPDU.Type
 
 	// Check PDU type
@@ -308,6 +342,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		if err := s.setState(StateAssociationAccepted); err != nil {
 			return nil, fmt.Errorf("failed to transition state: %w", err)
 		}
+		s.emitAssociationObservation(ctx, observability.EventAssociationAccepted, observability.DirectionInbound, observability.OutcomeSuccess, nil)
 
 		return ac, nil
 
@@ -320,6 +355,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 
 		// Transition to Closed state
 		_ = s.setState(StateClosed)
+		s.emitAssociationObservation(ctx, observability.EventAssociationRejected, observability.DirectionInbound, observability.OutcomeRejected, nil)
 
 		return nil, fmt.Errorf("association rejected: result=%d, source=%d, reason=%d",
 			rj.Result, rj.Source, rj.Reason)
@@ -354,6 +390,7 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
+	s.emitPDUBytes(ctx, observability.DirectionInbound, rawPDU)
 	pduType := rawPDU.Type
 
 	// Validate PDU type
@@ -363,9 +400,29 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 
 	// Decode A-ASSOCIATE-RQ
 	rq := &pdu.AAssociateRQ{}
-	if err := rq.Decode(rawPDU); err != nil {
+	var warnings []pdu.DecodeWarning
+	if err := rq.DecodeWithWarnings(rawPDU, func(warning pdu.DecodeWarning) {
+		warnings = append(warnings, warning)
+	}); err != nil {
 		return nil, fmt.Errorf("failed to decode A-ASSOCIATE-RQ: %w", err)
 	}
+	associationInfo := s.ensureAssociationIdentity(rq.CallingAETitle, rq.CalledAETitle)
+	for _, warning := range warnings {
+		s.emitDecodeWarning(ctx, associationInfo, warning)
+	}
+	s.emitEvent(ctx, observability.Event{
+		Kind:        observability.EventAssociationRequested,
+		Association: associationInfo,
+		Direction:   observability.DirectionInbound,
+		Outcome:     observability.OutcomeSuccess,
+	})
+	s.emitMetric(ctx, observability.Metric{
+		Kind:        observability.MetricAssociation,
+		Association: associationInfo,
+		Direction:   observability.DirectionInbound,
+		Outcome:     observability.OutcomeSuccess,
+		Value:       1,
+	})
 
 	// Build Association from A-ASSOCIATE-RQ
 	assoc := association.FromAAssociateRQ(rq)

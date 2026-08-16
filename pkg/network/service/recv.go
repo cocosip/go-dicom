@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
@@ -59,6 +60,7 @@ func (s *Service) recvLoop(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to read PDU: %w", err)
 			}
+			s.emitPDUBytes(ctx, observability.DirectionInbound, rawPDU)
 
 			// Handle different PDU types
 			switch rawPDU.Type {
@@ -328,7 +330,7 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 // This is received in response to our A-RELEASE-RQ, indicating the peer accepted the release.
 // We update the state and notify the waiting graceful release path.
 func (s *Service) handleReleaseResponse(ctx context.Context) {
-	_ = ctx
+	s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionInbound, observability.OutcomeSuccess, nil)
 
 	select {
 	case s.releaseCh <- struct{}{}:
@@ -341,6 +343,7 @@ func (s *Service) handleReleaseResponse(ctx context.Context) {
 // handleAbort processes an A-ABORT PDU.
 // It calls the OnAbort callback (if set) for notification.
 func (s *Service) handleAbort(ctx context.Context, abort *pdu.AAbort) {
+	s.emitAssociationObservation(ctx, observability.EventAssociationAborted, observability.DirectionInbound, observability.OutcomeAborted, nil)
 	// Get lifecycle handler
 	s.callbacksMu.RLock()
 	lifecycleHandler := s.connectionLifecycleHandler

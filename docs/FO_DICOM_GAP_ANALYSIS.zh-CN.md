@@ -58,7 +58,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | DICT-001 | P2 | Complete | 运行时 XML 字典加载 |
 | ANON-001 | P2 | Complete | 完整的自定义匿名化配置加载 |
 | PRINT-001 | P2 | Complete | 基于 Dataset 的 DICOM 打印管理模型 |
-| OBS-001 | P2 | Open | 结构化网络日志、请求事件和指标钩子 |
+| OBS-001 | P2 | Complete | 结构化网络日志、请求事件和指标钩子 |
 | IMG-003 | P3 | Complete | 体数据重建和 MPR |
 | MED-002 | P3 | Open | DICOM 文件扫描工作流 |
 
@@ -68,11 +68,11 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
   SR-001、IMG-001、IMG-002、IMG-003、CORE-001、CORE-002、ANON-001、
-  DICT-001 和 PRINT-001。
-- **未完成：** DOC-001、OBS-001 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
+  DICT-001、PRINT-001 和 OBS-001。
+- **未完成：** DOC-001 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
 - Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
   工作由 DOC-001 跟踪。
-- **下一项：** OBS-001，即下方计划开发顺序中的第一个未完成条目。
+- **下一项：** MED-002，即下方计划开发顺序中的第一个未完成条目。
 
 ## 计划开发顺序
 
@@ -89,7 +89,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 5 | IMG-002 | P2 | Complete | 渲染需求稳定后补齐几何、变换和插值；该项也是 IMG-003 的前置条件。 |
 | 6 | CORE-002 | P2 | Complete | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
 | 7 | PRINT-001 | P2 | Complete | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
-| 8 | OBS-001 | P2 | Open | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
+| 8 | OBS-001 | P2 | Complete | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
 | 9 | MED-002 | P3 | Open | 在更大型的重建工作之前，先交付独立且边界明确的扫描器工作流。 |
 | 10 | IMG-003 | P3 | Complete | 仅在 IMG-001 和 IMG-002 完成后实施体重建和 MPR。 |
 | 11 | DOC-001 | P0 | Partial | 主要能力完成后再做最终公共 API 和 README 审计，避免文档反复调整。 |
@@ -686,10 +686,27 @@ service API 复用现有消息 ID、待处理响应、取消和异步操作控�
 
 ### OBS-001: 网络可观测性
 
-**状态：** `Open`  
+**状态：** `Complete`
+
 **优先级：** `P2`
 
 fo-dicom 提供结构化日志、请求已发送/待处理/已完成/已超时事件，以及网络指标收集器钩子。go-dicom 有生命周期回调，但没有内聚的日志或指标接口；部分 PDU 解码警告还会直接通过 `fmt.Printf` 输出。
+
+已于 2026-08-16 完成。`pkg/network/observability` 现提供厂商无关的 `Logger`、
+`EventObserver` 和 `MetricsObserver` 契约、函数适配器、无操作实现、固定的纯元数据记录，
+以及进程内唯一的连接与关联 ID。客户端、服务端和 service 选项会在连接建立、关联协商、
+DIMSE 交换及关闭过程中传递这些钩子，且不引入遥测 SDK 依赖。
+
+连接与关联事件覆盖尝试、打开/关闭、请求、接受/拒绝、释放和中止。出站与入站 DIMSE
+生命周期在已发送/已接收、可重复 pending 响应和恰好一个已完成、超时、已取消或失败终态
+之间保持同一请求内的顺序。覆盖内容包括本地取消、对端 C-CANCEL（cancel 命令本身及原始
+操作）、传输失败和连接关闭竞态。钩子在内部请求/map 锁之外同步执行；缓慢、可重入或
+panic 的实现不会破坏 service 状态或产生重复终态。
+
+指标覆盖连接与关联计数、DIMSE 结果、包含 6 字节头部的完整 PDU 字节数、分类错误以及
+终态延迟。记录只暴露协议元数据，不包含 Dataset 值、原始 PDU 字节、患者属性、用户身份
+payload、TLS 材料、URL、header 或凭据。原先 A-ASSOCIATE-RQ 解码器的直接告警现通过
+`DecodeWithWarnings` 提供；普通 `Decode` 和所有 nil/默认钩子保持静默。
 
 参考：[fo-dicom Network Metrics](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Log/Metrics)
 
@@ -705,6 +722,21 @@ fo-dicom 提供结构化日志、请求已发送/待处理/已完成/已超时�
 - 断言默认配置不会产生任何进程输出。
 - 集成测试成功、待处理、超时、取消、拒绝和传输失败路径中的钩子顺序。
 - 对并发关联以及缓慢或失败的 observer 执行竞态测试。
+
+**验证**
+
+- `CGO_ENABLED=0 go test ./pkg/network/... -count=1` 通过。
+- 使用仓库内 Go 缓存运行
+  `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`、
+  `go build ./...` 和 `go vet ./...` 均通过。
+- `golangci-lint run --allow-parallel-runners` 报告 `0 issues`，`git diff --check`
+  通过。build 虽输出已知的 Windows 全局模块 stat-cache `Access is denied` 告警，
+  但退出码仍为 0。
+- 已尝试 `go test -race ./pkg/network/... -count=1`，但所有测试二进制均以 Windows
+  状态 `0xc0000139` 退出；因此本次完成验证不声称具备 race 覆盖。
+
+**有意边界：** OBS-001 提供同步、厂商无关的钩子，不包含 tracing/exporter SDK 集成或
+payload 日志，也不改变 DICOM 协商或 DIMSE 协议行为。
 
 ### IMG-003: 体数据重建与 MPR
 
@@ -821,8 +853,8 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：IMG-002、CORE-002、DICT-001、ANON-001、PRINT-001、OBS-001。
 
-当前进度：IMG-002、CORE-002、DICT-001、ANON-001 和 PRINT-001 已完成；
-OBS-001 尚未完成，因此 Phase 2 尚未完成。
+当前进度：IMG-002、CORE-002、DICT-001、ANON-001、PRINT-001 和 OBS-001 已完成；
+因此 Phase 2 已完成。
 
 阶段验收：
 

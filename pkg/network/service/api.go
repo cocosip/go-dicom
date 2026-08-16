@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 )
 
 // Send sends a DIMSE message synchronously and waits for completion.
@@ -45,8 +46,10 @@ func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
 
 	// Create send request
 	req := &sendRequest{
-		message:  msg,
-		resultCh: resultCh,
+		message:   msg,
+		resultCh:  resultCh,
+		ctx:       ctx,
+		lifecycle: s.lifecycleForSend(msg),
 	}
 
 	// Send to queue
@@ -165,15 +168,18 @@ func (s *Service) SendNDelete(ctx context.Context, req *dimse.NDeleteRequest) (*
 }
 
 // registerPendingRequest registers a pending request to receive its response.
-func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request, respCh chan dimse.Response) {
+func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request, respCh chan dimse.Response) *pendingRequest {
 	s.pendingRequestsMu.Lock()
 	defer s.pendingRequestsMu.Unlock()
 
-	s.pendingRequests[messageID] = &pendingRequest{
+	pending := &pendingRequest{
 		request:    request,
 		responseCh: respCh,
 		cancelCh:   make(chan struct{}),
+		lifecycle:  newRequestLifecycle(s, observability.DirectionOutbound, request),
 	}
+	s.pendingRequests[messageID] = pending
+	return pending
 }
 
 // unregisterPendingRequest removes a pending request.
@@ -209,9 +215,10 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 		return zero, fmt.Errorf("failed to assign message ID: %w", err)
 	}
 	respCh := make(chan dimse.Response, 1)
-	s.registerPendingRequest(msgID, req, respCh)
+	pending := s.registerPendingRequest(msgID, req, respCh)
 	defer s.unregisterPendingRequest(msgID)
 	if err := s.Send(ctx, req); err != nil {
+		pending.lifecycle.finishContext(ctx, err)
 		return zero, err
 	}
 	select {
@@ -222,9 +229,12 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 		}
 		return resp, nil
 	case <-ctx.Done():
+		pending.lifecycle.finishContext(ctx, ctx.Err())
 		return zero, ctx.Err()
 	case <-s.closeCh:
-		return zero, s.CloseError()
+		err := s.CloseError()
+		pending.lifecycle.finishError(ctx, err)
+		return zero, err
 	}
 }
 
@@ -257,9 +267,10 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	}
 	resultCh := make(chan Resp, 10)
 	respCh := make(chan dimse.Response, 10)
-	s.registerPendingRequest(msgID, req, respCh)
+	pending := s.registerPendingRequest(msgID, req, respCh)
 
 	if err := s.Send(ctx, req); err != nil {
+		pending.lifecycle.finishContext(ctx, err)
 		s.unregisterPendingRequest(msgID)
 		close(resultCh)
 		release()
@@ -283,16 +294,20 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 				select {
 				case resultCh <- resp:
 				case <-ctx.Done():
+					pending.lifecycle.finishContext(ctx, ctx.Err())
 					return
 				case <-s.closeCh:
+					pending.lifecycle.finishError(ctx, s.CloseError())
 					return
 				}
 				if !resp.IsPending() {
 					return
 				}
 			case <-ctx.Done():
+				pending.lifecycle.finishContext(ctx, ctx.Err())
 				return
 			case <-s.closeCh:
+				pending.lifecycle.finishError(ctx, s.CloseError())
 				return
 			}
 		}
@@ -348,12 +363,13 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 
 	// Register pending request for multiple responses
 	respCh := make(chan dimse.Response, 10)
-	s.registerPendingRequest(msgID, req, respCh)
+	pending := s.registerPendingRequest(msgID, req, respCh)
 
 	// Send request before starting the response goroutine. The buffered response
 	// channel still accepts fast responses, and send failures cannot race with
 	// the goroutine's channel close.
 	if err := s.Send(ctx, req); err != nil {
+		pending.lifecycle.finishContext(ctx, err)
 		s.unregisterPendingRequest(msgID)
 		close(resultCh)
 		release()
@@ -380,8 +396,10 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 				select {
 				case resultCh <- resp:
 				case <-ctx.Done():
+					pending.lifecycle.finishContext(ctx, ctx.Err())
 					return
 				case <-s.closeCh:
+					pending.lifecycle.finishError(ctx, s.CloseError())
 					return
 				}
 
@@ -391,8 +409,10 @@ func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-cha
 				}
 
 			case <-ctx.Done():
+				pending.lifecycle.finishContext(ctx, ctx.Err())
 				return
 			case <-s.closeCh:
+				pending.lifecycle.finishError(ctx, s.CloseError())
 				return
 			}
 		}

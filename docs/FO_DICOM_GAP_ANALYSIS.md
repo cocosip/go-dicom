@@ -62,7 +62,7 @@ Priority indicates implementation order, not estimated effort:
 | DICT-001 | P2 | Complete | Runtime XML dictionary loading |
 | ANON-001 | P2 | Complete | Complete custom anonymization profile loading |
 | PRINT-001 | P2 | Complete | Dataset-backed DICOM Print Management models |
-| OBS-001 | P2 | Open | Structured network logging, request events, and metrics hooks |
+| OBS-001 | P2 | Complete | Structured network logging, request events, and metrics hooks |
 | IMG-003 | P3 | Complete | Volume reconstruction and MPR |
 | MED-002 | P3 | Open | DICOM file scanner workflow |
 
@@ -72,12 +72,12 @@ Progress as of 2026-08-16:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
   SR-001, IMG-001, IMG-002, IMG-003, CORE-001, CORE-002, ANON-001,
-  DICT-001, and PRINT-001.
-- **Not complete:** DOC-001, OBS-001, and MED-002 retain their `Partial` or
+  DICT-001, PRINT-001, and OBS-001.
+- **Not complete:** DOC-001 and MED-002 retain their `Partial` or
   `Open` status.
 - Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
   remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** OBS-001, the first incomplete item in the planned development
+- **Next item:** MED-002, the first incomplete item in the planned development
   order below.
 
 ## Planned Development Order
@@ -97,7 +97,7 @@ recorded in this document.
 | 5 | IMG-002 | P2 | Complete | Add geometry, transforms, and interpolation after rendering requirements are stable; this is also an IMG-003 prerequisite. |
 | 6 | CORE-002 | P2 | Complete | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
 | 7 | PRINT-001 | P2 | Complete | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
-| 8 | OBS-001 | P2 | Open | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
+| 8 | OBS-001 | P2 | Complete | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
 | 9 | MED-002 | P3 | Open | Deliver the independent, bounded scanner workflow before the larger reconstruction item. |
 | 10 | IMG-003 | P3 | Complete | Implement volume reconstruction and MPR only after IMG-001 and IMG-002 are complete. |
 | 11 | DOC-001 | P0 | Partial | Perform the final public API and README audit after the major capabilities are complete, avoiding repeated documentation churn. |
@@ -803,13 +803,37 @@ completion run.
 
 ### OBS-001: Network Observability
 
-**Status:** `Open`  
+**Status:** `Complete`
+
 **Priority:** `P2`
 
 fo-dicom exposes structured logging, request sent/pending/completed/timed-out
 events, and a network metrics collector hook. go-dicom has lifecycle callbacks
 but no cohesive logger or metrics interface; some PDU decoding warnings are
 written directly with `fmt.Printf`.
+
+Completed on 2026-08-16. `pkg/network/observability` now provides vendor-neutral
+`Logger`, `EventObserver`, and `MetricsObserver` contracts, function adapters,
+no-op implementations, fixed metadata-only records, and process-local unique
+connection and association IDs. Client, server, and service options pass these
+hooks through connection setup, association negotiation, DIMSE exchange, and
+shutdown without adding a telemetry SDK dependency.
+
+Connection and association events cover attempts, open/close, request,
+accept/reject, release, and abort. Outbound and inbound DIMSE lifecycles retain
+same-request ordering across sent/received, repeated pending responses, and
+exactly one completed, timed-out, cancelled, or failed terminal event. This
+includes local cancellation, peer C-CANCEL (both the cancel command and the
+original operation), transport failure, and connection-close races. Hooks run
+synchronously outside internal request/map locks; slow, reentrant, or panicking
+implementations cannot corrupt service state or duplicate terminal events.
+
+Metrics cover connection and association counts, DIMSE outcomes, complete PDU
+bytes including the six-byte header, classified errors, and terminal latency.
+Records expose protocol metadata only: no Dataset values, raw PDU bytes, patient
+attributes, user-identity payloads, TLS material, URLs, headers, or credentials.
+The previous direct A-ASSOCIATE-RQ decoder warnings are now available through
+`DecodeWithWarnings`; ordinary `Decode` and all nil/default hooks remain silent.
 
 Reference: [fo-dicom Network Metrics](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Log/Metrics)
 
@@ -828,6 +852,22 @@ Reference: [fo-dicom Network Metrics](https://github.com/fo-dicom/fo-dicom/tree/
 - Integration-test hook ordering for success, pending, timeout, cancellation,
   rejection, and transport failure paths.
 - Run race tests with concurrent associations and slow or failing observers.
+
+**Verification**
+
+- `CGO_ENABLED=0 go test ./pkg/network/... -count=1` passed.
+- `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`,
+  `go build ./...`, and `go vet ./...` passed with repository-local Go caches.
+- `golangci-lint run --allow-parallel-runners` reported `0 issues`, and
+  `git diff --check` passed. The build emitted the known Windows global module
+  stat-cache `Access is denied` warning while still exiting 0.
+- `go test -race ./pkg/network/... -count=1` was attempted, but every test
+  binary exited with Windows status `0xc0000139`; race coverage is therefore not
+  claimed for this completion run.
+
+**Intentional boundary:** OBS-001 supplies synchronous vendor-neutral hooks,
+not tracing/exporter SDK integration or payload logging. It does not change
+DICOM negotiation or DIMSE protocol behavior.
 
 ### IMG-003: Volume Reconstruction and MPR
 
@@ -990,8 +1030,8 @@ single pull request.
 
 Scope: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, OBS-001.
 
-Current progress: IMG-002, CORE-002, DICT-001, ANON-001, and PRINT-001 are
-complete. OBS-001 remains incomplete; therefore Phase 2 is not complete.
+Current progress: IMG-002, CORE-002, DICT-001, ANON-001, PRINT-001, and OBS-001
+are complete; therefore Phase 2 is complete.
 
 Phase acceptance:
 

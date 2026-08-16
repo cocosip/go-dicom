@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
@@ -41,6 +42,7 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 		// duplicate responses should not abort the whole association.
 		return nil
 	}
+	pending.lifecycle.response(s.ctx, resp)
 
 	// Send response to the waiting goroutine
 	select {
@@ -60,7 +62,11 @@ func (s *Service) registerActiveOperation(parent context.Context, messageID uint
 	token := &struct{}{}
 
 	s.activeOperationsMu.Lock()
-	s.activeOperations[messageID] = &activeOperation{token: token, cancel: cancel}
+	s.activeOperations[messageID] = &activeOperation{
+		token:     token,
+		cancel:    cancel,
+		lifecycle: s.inboundRequest(messageID),
+	}
 	s.activeOperationsMu.Unlock()
 
 	unregister := func() {
@@ -85,6 +91,8 @@ func (s *Service) cancelActiveOperation(messageID uint16) bool {
 
 	if exists {
 		op.cancel()
+		op.lifecycle.finish(s.ctx, observability.EventRequestCancelled, observability.OutcomeCancelled, context.Canceled)
+		s.unregisterInboundRequest(messageID, op.lifecycle)
 	}
 	return exists
 }
@@ -111,12 +119,28 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 	s.handlersMu.RLock()
 	handlers := s.handlers
 	s.handlersMu.RUnlock()
+	_, isCancel := req.(*dimse.CCancelRequest)
+	var lifecycle *requestLifecycle
+	if isCancel {
+		lifecycle = newRequestLifecycle(s, observability.DirectionInbound, req)
+	} else {
+		lifecycle = s.registerInboundRequest(req)
+	}
+	lifecycle.received(ctx)
 
 	s.requestWg.Add(1)
 	go func() {
 		defer s.requestWg.Done()
 		if err := s.dispatchRequest(ctx, req, handlers); err != nil {
+			lifecycle.finishError(ctx, err)
+			if !isCancel {
+				s.unregisterInboundRequest(req.MessageID(), lifecycle)
+			}
 			_ = s.abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, err, false)
+			return
+		}
+		if isCancel {
+			lifecycle.finish(ctx, observability.EventRequestCompleted, observability.OutcomeSuccess, nil)
 		}
 	}()
 	return nil

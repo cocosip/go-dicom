@@ -24,6 +24,27 @@ type AAssociateRQ struct {
 	UserInformation      *UserInformation        // User information
 }
 
+// DecodeWarningCode identifies a forward-compatible association decode warning.
+type DecodeWarningCode string
+
+const (
+	// DecodeWarningUnknownItem reports an unknown top-level association item.
+	DecodeWarningUnknownItem DecodeWarningCode = "unknown_item"
+	// DecodeWarningUnknownPresentationContextSubItem reports an unknown presentation-context sub-item.
+	DecodeWarningUnknownPresentationContextSubItem DecodeWarningCode = "unknown_presentation_context_sub_item"
+	// DecodeWarningUnknownUserInformationSubItem reports an unknown user-information sub-item.
+	DecodeWarningUnknownUserInformationSubItem DecodeWarningCode = "unknown_user_information_sub_item"
+)
+
+// DecodeWarning reports an unknown structural item without exposing its data.
+type DecodeWarning struct {
+	Code     DecodeWarningCode
+	ItemType byte
+}
+
+// DecodeWarningHandler receives association decode warnings.
+type DecodeWarningHandler func(DecodeWarning)
+
 // PresentationContextRQ represents a Presentation Context item in A-ASSOCIATE-RQ.
 type PresentationContextRQ struct {
 	ID               byte     // Presentation Context ID (odd numbers: 1, 3, 5, ...)
@@ -291,6 +312,16 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 
 // Decode decodes an A-ASSOCIATE-RQ from a RawPDU.
 func (a *AAssociateRQ) Decode(pdu *RawPDU) error {
+	return a.decode(pdu, nil)
+}
+
+// DecodeWithWarnings decodes an A-ASSOCIATE-RQ and reports unknown structural
+// items through handler. A nil handler is equivalent to Decode.
+func (a *AAssociateRQ) DecodeWithWarnings(pdu *RawPDU, handler DecodeWarningHandler) error {
+	return a.decode(pdu, handler)
+}
+
+func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 	if pdu.Type != TypeAAssociateRQ {
 		return fmt.Errorf("invalid PDU type: expected 0x01, got 0x%02X", pdu.Type)
 	}
@@ -331,14 +362,14 @@ func (a *AAssociateRQ) Decode(pdu *RawPDU) error {
 			a.ApplicationContext = string(data)
 
 		case ItemTypePresentationContextRQ:
-			pc, err := a.decodePresentationContext(data)
+			pc, err := a.decodePresentationContext(data, handler)
 			if err != nil {
 				return fmt.Errorf("decoding presentation context: %w", err)
 			}
 			a.PresentationContexts = append(a.PresentationContexts, *pc)
 
 		case ItemTypeUserInformation:
-			ui, err := a.decodeUserInformation(data)
+			ui, err := a.decodeUserInformation(data, handler)
 			if err != nil {
 				return fmt.Errorf("decoding user information: %w", err)
 			}
@@ -346,7 +377,7 @@ func (a *AAssociateRQ) Decode(pdu *RawPDU) error {
 
 		default:
 			// Unknown item type - skip
-			fmt.Printf("Warning: Unknown item type 0x%02X in A-ASSOCIATE-RQ\n", itemType)
+			reportDecodeWarning(handler, DecodeWarningUnknownItem, itemType)
 		}
 	}
 
@@ -354,7 +385,7 @@ func (a *AAssociateRQ) Decode(pdu *RawPDU) error {
 }
 
 // decodePresentationContext decodes a presentation context item.
-func (a *AAssociateRQ) decodePresentationContext(data []byte) (*PresentationContextRQ, error) {
+func (a *AAssociateRQ) decodePresentationContext(data []byte, handler DecodeWarningHandler) (*PresentationContextRQ, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("presentation context data too short: %d bytes", len(data))
 	}
@@ -383,7 +414,7 @@ func (a *AAssociateRQ) decodePresentationContext(data []byte) (*PresentationCont
 		case ItemTypeTransferSyntax:
 			pc.TransferSyntaxes = append(pc.TransferSyntaxes, string(itemData))
 		default:
-			fmt.Printf("Warning: Unknown sub-item type 0x%02X in presentation context\n", itemType)
+			reportDecodeWarning(handler, DecodeWarningUnknownPresentationContextSubItem, itemType)
 		}
 	}
 
@@ -391,7 +422,7 @@ func (a *AAssociateRQ) decodePresentationContext(data []byte) (*PresentationCont
 }
 
 // decodeUserInformation decodes the user information item.
-func (a *AAssociateRQ) decodeUserInformation(data []byte) (*UserInformation, error) {
+func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningHandler) (*UserInformation, error) {
 	ui := &UserInformation{
 		SCPSCURoleSelections:       []SCPSCURoleSelection{},
 		ExtendedNegotiations:       []ExtendedNegotiation{},
@@ -459,11 +490,17 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte) (*UserInformation, err
 			ui.UserIdentity = identity
 
 		default:
-			fmt.Printf("Warning: Unknown sub-item type 0x%02X in user information\n", itemType)
+			reportDecodeWarning(handler, DecodeWarningUnknownUserInformationSubItem, itemType)
 		}
 	}
 
 	return ui, nil
+}
+
+func reportDecodeWarning(handler DecodeWarningHandler, code DecodeWarningCode, itemType byte) {
+	if handler != nil {
+		handler(DecodeWarning{Code: code, ItemType: itemType})
+	}
 }
 
 func encodeCommonExtendedNegotiation(w io.Writer, negotiation CommonExtendedNegotiation) error {

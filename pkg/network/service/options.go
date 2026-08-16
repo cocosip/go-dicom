@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 )
 
 // Option configures a Service.
@@ -15,6 +16,12 @@ type Option func(*serviceConfig)
 
 // serviceConfig contains configuration options for a DICOM service.
 type serviceConfig struct {
+	// Observability hooks are optional and silent by default.
+	logger          observability.Logger
+	eventObserver   observability.EventObserver
+	metricsObserver observability.MetricsObserver
+	connectionID    observability.ConnectionID
+
 	// associationRequestor indicates that the local AE initiated the association.
 	// The default is false for services accepting inbound associations.
 	associationRequestor bool
@@ -54,6 +61,35 @@ type serviceConfig struct {
 
 	// DIMSE message handlers (optional)
 	handlers *Handlers
+}
+
+// WithLogger sets the structured network logger.
+func WithLogger(logger observability.Logger) Option {
+	return func(c *serviceConfig) {
+		c.logger = logger
+	}
+}
+
+// WithEventObserver sets the network lifecycle event observer.
+func WithEventObserver(observer observability.EventObserver) Option {
+	return func(c *serviceConfig) {
+		c.eventObserver = observer
+	}
+}
+
+// WithMetricsObserver sets the vendor-neutral network metrics observer.
+func WithMetricsObserver(observer observability.MetricsObserver) Option {
+	return func(c *serviceConfig) {
+		c.metricsObserver = observer
+	}
+}
+
+// WithConnectionID assigns the process-local identifier used to correlate
+// observations for this service. A zero value causes NewService to allocate one.
+func WithConnectionID(id observability.ConnectionID) Option {
+	return func(c *serviceConfig) {
+		c.connectionID = id
+	}
 }
 
 // defaultServiceConfig returns the default service configuration.

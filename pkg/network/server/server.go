@@ -15,6 +15,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
@@ -81,6 +82,15 @@ type Server struct {
 
 // Config contains configuration options for the DICOM server.
 type Config struct {
+	// Logger receives structured network log records. The default is nil.
+	Logger observability.Logger
+
+	// EventObserver receives connection, association, and DIMSE lifecycle events.
+	EventObserver observability.EventObserver
+
+	// MetricsObserver receives vendor-neutral network metrics.
+	MetricsObserver observability.MetricsObserver
+
 	// Port is the TCP port to listen on
 	// Default: 104 (standard DICOM port)
 	Port int
@@ -120,6 +130,21 @@ type Config struct {
 
 // Option is a function that modifies server configuration.
 type Option func(*Config)
+
+// WithLogger sets the structured network logger.
+func WithLogger(logger observability.Logger) Option {
+	return func(o *Config) { o.Logger = logger }
+}
+
+// WithEventObserver sets the network lifecycle event observer.
+func WithEventObserver(observer observability.EventObserver) Option {
+	return func(o *Config) { o.EventObserver = observer }
+}
+
+// WithMetricsObserver sets the vendor-neutral network metrics observer.
+func WithMetricsObserver(observer observability.MetricsObserver) Option {
+	return func(o *Config) { o.MetricsObserver = observer }
+}
 
 // WithPort sets the listening port.
 func WithPort(port int) Option {
@@ -388,6 +413,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 
 	if err != nil {
+		s.emitServerError(s.ctx, "listener_failed", err)
 		s.runningMu.Lock()
 		s.running = false
 		s.runningMu.Unlock()
@@ -427,7 +453,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 				s.wg.Wait()
 				return s.ctx.Err()
 			default:
-				// Log error and continue
+				s.emitServerError(s.ctx, "accept_failed", err)
 				continue
 			}
 		}
@@ -476,9 +502,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	// Create connection ID
 	connID := conn.RemoteAddr().String()
+	observationConnectionID := observability.NewConnectionID()
 
 	// Build service options from server configuration
 	svcOpts := []service.Option{
+		service.WithConnectionID(observationConnectionID),
+		service.WithLogger(s.config.Logger),
+		service.WithEventObserver(s.config.EventObserver),
+		service.WithMetricsObserver(s.config.MetricsObserver),
 		service.WithMaxPDULength(s.config.MaxPDULength),
 		service.WithReadTimeout(s.config.AssociationTimeout),
 		service.WithWriteTimeout(s.config.AssociationTimeout),

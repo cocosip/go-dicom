@@ -6,6 +6,7 @@ package pdu
 import (
 	"bytes"
 	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -554,4 +555,82 @@ func TestAETitleSpacePadding(t *testing.T) {
 	if decoded.CallingAETitle != "ANOTHER" {
 		t.Errorf("CallingAETitle should trim spaces: expected 'ANOTHER', got '%s'", decoded.CallingAETitle)
 	}
+}
+
+func TestAAssociateRQDecodeIsSilentAndReportsStructuredWarnings(t *testing.T) {
+	raw := unknownItemsAssociateRQ()
+
+	output := captureStdout(t, func() {
+		decoded := &AAssociateRQ{}
+		if err := decoded.Decode(raw); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+	})
+	if output != "" {
+		t.Fatalf("Decode() wrote to stdout: %q", output)
+	}
+
+	var warnings []DecodeWarning
+	decoded := &AAssociateRQ{}
+	if err := decoded.DecodeWithWarnings(raw, func(warning DecodeWarning) {
+		warnings = append(warnings, warning)
+	}); err != nil {
+		t.Fatalf("DecodeWithWarnings() error = %v", err)
+	}
+	wantCodes := []DecodeWarningCode{
+		DecodeWarningUnknownItem,
+		DecodeWarningUnknownPresentationContextSubItem,
+		DecodeWarningUnknownUserInformationSubItem,
+	}
+	if len(warnings) != len(wantCodes) {
+		t.Fatalf("warning count = %d, want %d: %#v", len(warnings), len(wantCodes), warnings)
+	}
+	for i, want := range wantCodes {
+		if warnings[i].Code != want || warnings[i].ItemType != 0x99 {
+			t.Errorf("warning[%d] = %#v, want code %q and item type 0x99", i, warnings[i], want)
+		}
+	}
+}
+
+func unknownItemsAssociateRQ() *RawPDU {
+	fixed := make([]byte, 68)
+	fixed[1] = 1
+
+	unknown := encodeTestItem(0x99, nil)
+	presentation := append([]byte{1, 0, 0, 0}, encodeTestItem(0x99, nil)...)
+	userInformation := encodeTestItem(0x99, nil)
+
+	data := append(fixed, unknown...)
+	data = append(data, encodeTestItem(ItemTypePresentationContextRQ, presentation)...)
+	data = append(data, encodeTestItem(ItemTypeUserInformation, userInformation)...)
+	return NewRawPDU(TypeAAssociateRQ, data)
+}
+
+func encodeTestItem(itemType byte, data []byte) []byte {
+	item := []byte{itemType, 0, byte(len(data) >> 8), byte(len(data))}
+	return append(item, data...)
+}
+
+func captureStdout(t *testing.T, run func()) string {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	original := os.Stdout
+	os.Stdout = writer
+	defer func() { os.Stdout = original }()
+
+	run()
+	if err := writer.Close(); err != nil {
+		t.Fatalf("stdout writer Close() error = %v", err)
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("ReadAll(stdout) error = %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("stdout reader Close() error = %v", err)
+	}
+	return string(data)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
@@ -46,6 +47,7 @@ func (s *Service) sendLoop(ctx context.Context) error {
 		case req := <-s.sendQueue:
 			// Process send request
 			err := s.sendMessage(req)
+			s.observeSentMessage(req.message, req.lifecycle, err)
 			if err != nil {
 				// Send error back to caller
 				select {
@@ -77,6 +79,13 @@ func (s *Service) sendLoop(ctx context.Context) error {
 //  4. Create P-DATA-TF PDU(s) from the PDVs
 //  5. Write the PDU(s) to the network connection
 func (s *Service) sendMessage(req *sendRequest) error {
+	if req.ctx != nil {
+		select {
+		case <-req.ctx.Done():
+			return req.ctx.Err()
+		default:
+		}
+	}
 	// Get association
 	assoc := s.GetAssociation()
 	if assoc == nil {
@@ -173,6 +182,7 @@ func (s *Service) sendMessage(req *sendRequest) error {
 		if err != nil {
 			return fmt.Errorf("failed to write PDU: %w", err)
 		}
+		s.emitPDUBytes(req.ctx, observability.DirectionOutbound, pduData)
 	}
 
 	return nil

@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/observability"
 )
 
 // Service represents a DICOM network service.
@@ -25,6 +26,14 @@ import (
 // Service uses goroutines for concurrent send and receive operations,
 // and channels for message queuing.
 type Service struct {
+	logger          observability.Logger
+	eventObserver   observability.EventObserver
+	metricsObserver observability.MetricsObserver
+	connectionID    observability.ConnectionID
+	associationID   observability.AssociationID
+	callingAE       string
+	calledAE        string
+
 	// Connection
 	conn net.Conn
 
@@ -55,6 +64,8 @@ type Service struct {
 	pendingRequestsMu     sync.RWMutex
 	activeOperations      map[uint16]*activeOperation
 	activeOperationsMu    sync.RWMutex
+	inboundRequests       map[uint16]*requestLifecycle
+	inboundRequestsMu     sync.RWMutex
 	asyncOperationSlots   chan struct{}
 	asyncOperationSlotsMu sync.RWMutex
 
@@ -83,8 +94,10 @@ type Service struct {
 
 // sendRequest represents a request to send a DIMSE message.
 type sendRequest struct {
-	message  dimse.Message
-	resultCh chan error // Channel to receive send result
+	message   dimse.Message
+	resultCh  chan error // Channel to receive send result
+	ctx       context.Context
+	lifecycle *requestLifecycle
 }
 
 // pendingRequest tracks a request waiting for a response.
@@ -92,12 +105,14 @@ type pendingRequest struct {
 	request    dimse.Request
 	responseCh chan dimse.Response
 	cancelCh   chan struct{}
+	lifecycle  *requestLifecycle
 }
 
 // activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.
 type activeOperation struct {
-	token  *struct{}
-	cancel context.CancelFunc
+	token     *struct{}
+	cancel    context.CancelFunc
+	lifecycle *requestLifecycle
 }
 
 // Handlers contains optional DIMSE message handlers for server mode.
@@ -175,8 +190,26 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	connectionID := config.connectionID
+	if connectionID == 0 {
+		connectionID = observability.NewConnectionID()
+	}
+	var associationID observability.AssociationID
+	var callingAE, calledAE string
+	if assoc != nil {
+		associationID = observability.NewAssociationID()
+		callingAE = assoc.CallingAE
+		calledAE = assoc.CalledAE
+	}
 
 	s := &Service{
+		logger:                     config.logger,
+		eventObserver:              config.eventObserver,
+		metricsObserver:            config.metricsObserver,
+		connectionID:               connectionID,
+		associationID:              associationID,
+		callingAE:                  callingAE,
+		calledAE:                   calledAE,
 		conn:                       conn,
 		assoc:                      assoc,
 		state:                      StateIdle,
@@ -188,6 +221,7 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		config:                     config,
 		pendingRequests:            make(map[uint16]*pendingRequest),
 		activeOperations:           make(map[uint16]*activeOperation),
+		inboundRequests:            make(map[uint16]*requestLifecycle),
 		ctx:                        ctx,
 		cancel:                     cancel,
 		handlers:                   config.handlers,
@@ -196,6 +230,7 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		connectionLifecycleHandler: config.connectionLifecycleHandler,
 	}
 	s.configureAsyncOperationSlots(assoc)
+	s.emitConnectionOpened()
 
 	return s
 }
@@ -205,6 +240,13 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 func (s *Service) SetAssociation(assoc *association.Association) {
 	s.assocMu.Lock()
 	s.assoc = assoc
+	if assoc != nil {
+		if s.associationID == 0 {
+			s.associationID = observability.NewAssociationID()
+		}
+		s.callingAE = assoc.CallingAE
+		s.calledAE = assoc.CalledAE
+	}
 	s.assocMu.Unlock()
 	s.configureAsyncOperationSlots(assoc)
 }
@@ -333,15 +375,29 @@ func (s *Service) Close() error {
 	return err
 }
 
-// cancelPendingRequests cancels all pending requests.
-func (s *Service) cancelPendingRequests() {
+// cancelPendingRequests cancels all pending requests and returns their
+// lifecycles so observers can be notified after the map lock is released.
+func (s *Service) cancelPendingRequests() []*requestLifecycle {
 	s.pendingRequestsMu.Lock()
-	defer s.pendingRequestsMu.Unlock()
-
+	lifecycles := make([]*requestLifecycle, 0, len(s.pendingRequests))
 	for _, pending := range s.pendingRequests {
 		close(pending.cancelCh)
+		lifecycles = append(lifecycles, pending.lifecycle)
 	}
 	s.pendingRequests = make(map[uint16]*pendingRequest)
+	s.pendingRequestsMu.Unlock()
+	return lifecycles
+}
+
+func (s *Service) takeInboundRequestLifecycles() []*requestLifecycle {
+	s.inboundRequestsMu.Lock()
+	lifecycles := make([]*requestLifecycle, 0, len(s.inboundRequests))
+	for _, lifecycle := range s.inboundRequests {
+		lifecycles = append(lifecycles, lifecycle)
+	}
+	s.inboundRequests = make(map[uint16]*requestLifecycle)
+	s.inboundRequestsMu.Unlock()
+	return lifecycles
 }
 
 // cancelActiveOperations cancels all incoming operations that can receive C-CANCEL-RQ.
@@ -369,8 +425,16 @@ func (s *Service) initiateClose(targetState State, recordErr error) error {
 		s.state = targetState
 		s.stateMu.Unlock()
 
-		s.cancelPendingRequests()
+		terminalErr := recordErr
+		if terminalErr == nil {
+			terminalErr = ErrServiceClosed
+		}
+		requestLifecycles := s.cancelPendingRequests()
 		s.cancelActiveOperations()
+		requestLifecycles = append(requestLifecycles, s.takeInboundRequestLifecycles()...)
+		for _, lifecycle := range requestLifecycles {
+			lifecycle.finishError(context.Background(), terminalErr)
+		}
 
 		if s.conn != nil {
 			err = s.conn.Close()
@@ -426,6 +490,8 @@ func (s *Service) waitForShutdown() {
 
 func (s *Service) notifyConnectionClosed(err error) {
 	s.connectionClosedOnce.Do(func() {
+		s.emitConnectionClosed(err)
+
 		s.callbacksMu.RLock()
 		lifecycleHandler := s.connectionLifecycleHandler
 		s.callbacksMu.RUnlock()
