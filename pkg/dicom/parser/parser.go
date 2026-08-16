@@ -9,6 +9,7 @@ import (
 	"compress/flate"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -150,6 +151,7 @@ type parseContext struct {
 	// Configuration options
 	maxElementSize        uint32           // Maximum element size to read (default 500MB, 0 = unlimited)
 	stopAtTag             *tag.Tag         // Stop parsing when this tag is reached
+	stopBeforePixelData   bool             // Stop before pixel values at any dataset depth
 	readOption            ReadOption       // How to handle large elements
 	largeObjectSize       uint32           // Size threshold for "large" objects (default 64KB)
 	assumedTransferSyntax *transfer.Syntax // Transfer syntax to use for raw datasets without file meta
@@ -186,6 +188,15 @@ func WithMaxElementSize(size uint32) Option {
 func WithStopAtTag(t *tag.Tag) Option {
 	return func(ctx *parseContext) {
 		ctx.stopAtTag = t
+	}
+}
+
+// WithStopBeforePixelData stops parsing before Pixel Data, Float Pixel Data,
+// Double Float Pixel Data, or retired variable-group Pixel Data is read at any
+// Dataset depth. The returned ParseResult is marked partial.
+func WithStopBeforePixelData() Option {
+	return func(ctx *parseContext) {
+		ctx.stopBeforePixelData = true
 	}
 }
 
@@ -686,6 +697,9 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 			}
 			break
 		}
+		if p.shouldStopBeforePixelData(t) {
+			break
+		}
 
 		// Stop before reading this element's value payload.
 		if p.stopAtTag != nil && t.ToUint32() >= p.stopAtTag.ToUint32() {
@@ -696,6 +710,9 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 		p.attachPrivateCreator(t, privateCreators)
 		elem, err := p.readElementWithTag(t)
 		if err != nil {
+			if errors.Is(err, errStopBeforePixelData) {
+				break
+			}
 			return nil, err
 		}
 
@@ -813,6 +830,9 @@ func (p *parseContext) readElementWithPrivateCreators(privateCreators privateCre
 	t, err := p.readTag()
 	if err != nil {
 		return nil, err
+	}
+	if p.shouldStopBeforePixelData(t) {
+		return nil, errStopBeforePixelData
 	}
 	p.attachPrivateCreator(t, privateCreators)
 
@@ -1156,6 +1176,9 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 				}
 				break
 			}
+			if p.shouldStopBeforePixelData(itemTag) {
+				return item, errStopBeforePixelData
+			}
 
 			// Read the rest of the element
 			p.attachPrivateCreator(itemTag, privateCreators)
@@ -1194,6 +1217,26 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 	}
 
 	return item, nil
+}
+
+var errStopBeforePixelData = errors.New("stop before pixel data")
+
+func (p *parseContext) shouldStopBeforePixelData(t *tag.Tag) bool {
+	if !p.stopBeforePixelData || !isPixelDataTag(t) {
+		return false
+	}
+	p.isPartial = true
+	return true
+}
+
+func isPixelDataTag(t *tag.Tag) bool {
+	if t == nil {
+		return false
+	}
+	if t.Group() == 0x7FE0 && (t.Element() == 0x0008 || t.Element() == 0x0009) {
+		return true
+	}
+	return t.Group()&0xFF00 == 0x7F00 && t.Element() == 0x0010
 }
 
 func isPrivateCreatorTag(t *tag.Tag) bool {
