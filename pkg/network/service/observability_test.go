@@ -48,6 +48,25 @@ func (r *observationRecorder) snapshot() ([]observability.Event, []observability
 		append([]observability.LogRecord(nil), r.logs...)
 }
 
+func (r *observationRecorder) waitForSnapshot(
+	t *testing.T,
+	description string,
+	predicate func([]observability.Event, []observability.Metric, []observability.LogRecord) bool,
+) ([]observability.Event, []observability.Metric, []observability.LogRecord) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		events, metrics, logs := r.snapshot()
+		if predicate(events, metrics, logs) {
+			return events, metrics, logs
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s; events=%#v metrics=%#v logs=%#v", description, events, metrics, logs)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestObservabilityConnectionLifecycle(t *testing.T) {
 	recorder := &observationRecorder{}
 	conn := &mockConn{}
@@ -206,16 +225,19 @@ func TestObservabilityCountsDIMSEPDUBytesBothDirections(t *testing.T) {
 
 	assertByteDirections := func(name string, recorder *observationRecorder) {
 		t.Helper()
-		_, metrics, _ := recorder.snapshot()
-		directions := map[observability.Direction]bool{}
-		for _, metric := range metrics {
-			if metric.Kind == observability.MetricBytes && metric.Value >= 6 {
-				directions[metric.Direction] = true
+		recorder.waitForSnapshot(t, name+" inbound and outbound byte metrics", func(
+			_ []observability.Event,
+			metrics []observability.Metric,
+			_ []observability.LogRecord,
+		) bool {
+			directions := map[observability.Direction]bool{}
+			for _, metric := range metrics {
+				if metric.Kind == observability.MetricBytes && metric.Value >= 6 {
+					directions[metric.Direction] = true
+				}
 			}
-		}
-		if !directions[observability.DirectionInbound] || !directions[observability.DirectionOutbound] {
-			t.Errorf("%s byte directions = %#v, want inbound and outbound", name, directions)
-		}
+			return directions[observability.DirectionInbound] && directions[observability.DirectionOutbound]
+		})
 	}
 	assertByteDirections("client", clientRecorder)
 	assertByteDirections("server", serverRecorder)
@@ -232,8 +254,20 @@ func TestObservabilityAssociationReleaseLifecycle(t *testing.T) {
 		t.Fatalf("GracefulRelease() error = %v", err)
 	}
 
-	clientEvents, _, _ := clientRecorder.snapshot()
-	serverEvents, _, _ := serverRecorder.snapshot()
+	clientEvents, _, _ := clientRecorder.waitForSnapshot(t, "client inbound association release", func(
+		events []observability.Event,
+		_ []observability.Metric,
+		_ []observability.LogRecord,
+	) bool {
+		return containsAssociationEvent(events, observability.EventAssociationReleased, observability.DirectionInbound, observability.OutcomeSuccess)
+	})
+	serverEvents, _, _ := serverRecorder.waitForSnapshot(t, "server outbound association release", func(
+		events []observability.Event,
+		_ []observability.Metric,
+		_ []observability.LogRecord,
+	) bool {
+		return containsAssociationEvent(events, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess)
+	})
 	assertAssociationEvent(t, clientEvents, observability.EventAssociationReleased, observability.DirectionInbound, observability.OutcomeSuccess)
 	assertAssociationEvent(t, serverEvents, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess)
 }
@@ -274,10 +308,22 @@ func assertAssociationEvent(
 	outcome observability.Outcome,
 ) {
 	t.Helper()
-	for _, event := range events {
-		if event.Kind == kind && event.Direction == direction && event.Outcome == outcome {
-			return
-		}
+	if containsAssociationEvent(events, kind, direction, outcome) {
+		return
 	}
 	t.Fatalf("association event %q/%q/%q not found: %#v", kind, direction, outcome, events)
+}
+
+func containsAssociationEvent(
+	events []observability.Event,
+	kind observability.EventKind,
+	direction observability.Direction,
+	outcome observability.Outcome,
+) bool {
+	for _, event := range events {
+		if event.Kind == kind && event.Direction == direction && event.Outcome == outcome {
+			return true
+		}
+	}
+	return false
 }

@@ -30,8 +30,10 @@ Known parity gaps and the staged plan for addressing them are tracked in
 - ✅ **Anonymization** - Remove/Replace patient identifiable information with configurable profiles
 - ✅ **Pixel Data Processing** - Access raw pixel data, color space conversion, LUT operations, image rendering
 - ✅ **DICOM Networking** - Complete DIMSE services (C-ECHO/STORE/FIND/MOVE/GET + N-CREATE/GET/SET/DELETE/ACTION/EVENT-REPORT), TLS support
-- ✅ **Image Processing** - Dataset rendering, frame geometry, spatial transforms, interpolation, LUT operations, and color conversion ([geometry and spatial usage](pkg/imaging/README.md#geometry-and-spatial-usage))
-- ✅ **DICOM Printing** - Film Session, Film Box, Image Box, Printer status management
+- ✅ **Image Processing** - Dataset rendering, frame geometry, spatial transforms, interpolation, volume reconstruction, MPR, LUT operations, and color conversion ([geometry and spatial usage](pkg/imaging/README.md#geometry-and-spatial-usage))
+- ✅ **DICOM Printing** - Dataset-backed Film Session, Film Box, Image Box, Presentation LUT, printer status, and Basic Print workflow
+- ✅ **DICOM File Scanning** - Cancellable metadata-only directory scanning with bounded concurrency and deterministic result delivery
+- ✅ **Network Observability** - Vendor-neutral structured logs, lifecycle events, and metrics hooks with metadata-only records
 
 ### Included Capabilities
 
@@ -85,6 +87,14 @@ Known parity gaps and the staged plan for addressing them are tracked in
   - [x] Optional pure-Go 8-bit grayscale icon generation
   - [x] fo-dicom fixture and cross-library interoperability verification
 
+- [x] **DICOM File Scanning**
+  - [x] File and recursive/non-recursive directory roots
+  - [x] Context cancellation and bounded worker concurrency
+  - [x] Deterministic DICOM, invalid-file, and read-error results
+  - [x] Configurable stop-on-error and confined file-symlink handling
+  - [x] Metadata-only parsing that stops before Pixel Data
+  - [x] Direct integration with DICOMDIR record creation
+
 - [x] **JSON/XML Serialization**
   - [x] DICOM JSON Model (Part 18 compliant)
   - [x] Native XML format
@@ -114,6 +124,9 @@ Known parity gaps and the staged plan for addressing them are tracked in
   - [x] Classic and enhanced multi-frame geometry
   - [x] Patient/image coordinate conversion and localization
   - [x] Spatial transforms and reusable interpolation
+  - [x] Classic and Enhanced CT/MR volume construction
+  - [x] Axial, coronal, sagittal, and arbitrary-plane MPR sampling
+  - [x] Streaming derived CT/MR DICOM generation
 
 - [x] **Structured Reports**
   - [x] Typed content items (TEXT, NUM, CODE, CONTAINER, PNAME, DATE, TIME, DATETIME, UIDREF)
@@ -154,6 +167,9 @@ Known parity gaps and the staged plan for addressing them are tracked in
   - [x] Extended negotiation items (SOP Class Extended Negotiation)
   - [x] User Identity negotiation (Username, Username/Password, Kerberos, SAML, JWT)
   - [x] ServiceApplicationInfo helper type
+  - [x] Structured connection, association, and DIMSE lifecycle events
+  - [x] Metadata-only byte, outcome, error, and latency metrics
+  - [x] No-op-by-default logger, event observer, and metrics observer hooks
 
 - [x] **Image Codecs**
   - [x] Native codecs (uncompressed data - Explicit/Implicit VR, Little/Big Endian)
@@ -165,11 +181,11 @@ Known parity gaps and the staged plan for addressing them are tracked in
   Add the selected [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs) codec package as a blank import to register its compressed transfer syntax.
 
 - [x] **DICOM Printing**
-  - [x] Film Session management
-  - [x] Film Box configuration
-  - [x] Image Box handling
-  - [x] Presentation LUT
-  - [x] Print job creation
+  - [x] Dataset round trips for Film Session, Film Box, Image Box, and Presentation LUT
+  - [x] Canonical print reference and Presentation LUT sequences
+  - [x] Complete grayscale and color Image Box sequence datasets
+  - [x] Film Box hierarchy persistence compatible with fo-dicom folder naming
+  - [x] Basic Print N-CREATE/N-SET/N-ACTION workflow using SCP-assigned Image Box UIDs
   - [x] Printer status management
 
 ## Performance
@@ -1732,7 +1748,9 @@ go-dicom/
 │   │   ├── math3d/         # Geometry and matrix primitives
 │   │   ├── render/         # Image rendering pipeline
 │   │   ├── transform/      # Affine and viewer spatial transforms
-│   │   └── reconstruction/ # Planned volume reconstruction and MPR
+│   │   └── reconstruction/ # Volume reconstruction, MPR, and derived images
+│   ├── media/              # DICOMDIR and filesystem media workflows
+│   │   └── scanner/        # Bounded metadata-only DICOM file scanning
 │   ├── network/            # DICOM networking
 │   │   ├── pdu/            # Protocol Data Units
 │   │   ├── dimse/          # DIMSE messages
@@ -1740,6 +1758,7 @@ go-dicom/
 │   │   ├── client/         # SCU (Service Class User)
 │   │   ├── server/         # SCP (Service Class Provider)
 │   │   ├── service/        # DIMSE services
+│   │   ├── observability/  # Structured network events, logs, and metrics
 │   │   ├── transport/      # Network transport
 │   │   └── status/         # DIMSE status codes
 │   ├── sr/                 # Structured Reports

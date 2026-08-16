@@ -10,6 +10,11 @@ import (
 	"strings"
 )
 
+const (
+	standardImageDisplayFormat   = "STANDARD"
+	defaultRequestedResolutionID = "STANDARD"
+)
+
 // FilmOrientation represents the orientation of film
 type FilmOrientation string
 
@@ -98,6 +103,12 @@ const (
 	EmptyImageDensityWhite EmptyImageDensity = "WHITE"
 )
 
+// SOPReference identifies a referenced DICOM SOP instance.
+type SOPReference struct {
+	SOPClassUID    string
+	SOPInstanceUID string
+}
+
 // FilmBox represents a Basic Film Box in DICOM Print Management
 //
 // A Film Box defines the layout and characteristics of a single sheet of film
@@ -146,6 +157,32 @@ type FilmBox struct {
 	// ConfigurationInformation contains implementation-specific configuration
 	ConfigurationInformation string
 
+	// AnnotationDisplayFormatID identifies the annotation layout.
+	AnnotationDisplayFormatID string
+
+	// SmoothingType further specifies cubic interpolation behavior.
+	SmoothingType string
+
+	// Illumination is the film illumination in candelas per square meter.
+	Illumination uint16
+
+	// ReflectedAmbientLight is the reflected ambient light contribution.
+	ReflectedAmbientLight uint16
+
+	// RequestedResolutionID identifies the requested printer resolution.
+	RequestedResolutionID string
+
+	// ReferencedFilmSession retains a detached Dataset reference. When the Film
+	// Box is attached, ToDataset derives this reference from the parent session.
+	ReferencedFilmSession SOPReference
+
+	// ReferencedImageBoxes retains detached Dataset references. When Image Boxes
+	// are attached, ToDataset derives references from the children.
+	ReferencedImageBoxes []SOPReference
+
+	// ReferencedPresentationLUT identifies the Presentation LUT used by this box.
+	ReferencedPresentationLUT SOPReference
+
 	// BasicImageBoxes is the list of Image Boxes in this Film Box
 	BasicImageBoxes []*ImageBox
 }
@@ -168,6 +205,8 @@ func NewFilmBox(sopInstanceUID string, imageDisplayFormat string) *FilmBox {
 		BorderDensity:            BorderDensityBlack,
 		EmptyImageDensity:        EmptyImageDensityBlack,
 		ConfigurationInformation: "",
+		RequestedResolutionID:    defaultRequestedResolutionID,
+		ReferencedImageBoxes:     make([]SOPReference, 0),
 		BasicImageBoxes:          make([]*ImageBox, 0),
 	}
 }
@@ -184,7 +223,7 @@ func ParseImageDisplayFormat(format string) (int, error) {
 	params := parts[1]
 
 	switch formatType {
-	case "STANDARD":
+	case standardImageDisplayFormat:
 		// STANDARD\C,R - C columns, R rows
 		dimensions := strings.Split(params, ",")
 		if len(dimensions) != 2 {

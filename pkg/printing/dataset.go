@@ -98,6 +98,65 @@ func optionalDecimalString(ds *dataset.Dataset, t *tag.Tag) (string, bool, error
 	}
 }
 
+func optionalUInt16(ds *dataset.Dataset, t *tag.Tag) (uint16, bool, error) {
+	if _, ok := ds.Get(t); !ok {
+		return 0, false, nil
+	}
+	value, err := ds.GetUInt16(t, 0)
+	if err != nil {
+		return 0, true, fmt.Errorf("printing: invalid %s: %w", t, err)
+	}
+	return value, true, nil
+}
+
+func addReferenceSequence(ds *dataset.Dataset, sequenceTag *tag.Tag, references []SOPReference) error {
+	if len(references) == 0 {
+		return nil
+	}
+	items := make([]*dataset.Dataset, 0, len(references))
+	for index, reference := range references {
+		if reference.SOPClassUID == "" || reference.SOPInstanceUID == "" {
+			return fmt.Errorf("printing: %s reference %d requires SOP Class and Instance UIDs", sequenceTag, index)
+		}
+		item := dataset.New()
+		if err := addString(item, tag.ReferencedSOPClassUID, reference.SOPClassUID, vr.UI); err != nil {
+			return err
+		}
+		if err := addString(item, tag.ReferencedSOPInstanceUID, reference.SOPInstanceUID, vr.UI); err != nil {
+			return err
+		}
+		items = append(items, item)
+	}
+	return addElement(ds, dataset.NewSequenceWithItems(sequenceTag, items))
+}
+
+func readReferenceSequence(ds *dataset.Dataset, sequenceTag *tag.Tag) ([]SOPReference, error) {
+	sequence, err := ds.GetSequence(sequenceTag)
+	if err != nil {
+		if _, ok := ds.Get(sequenceTag); !ok {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("printing: read %s: %w", sequenceTag, err)
+	}
+	references := make([]SOPReference, 0, sequence.Count())
+	for index := 0; index < sequence.Count(); index++ {
+		item := sequence.GetItem(index)
+		if item == nil {
+			return nil, fmt.Errorf("printing: %s item %d is nil", sequenceTag, index)
+		}
+		classUID, err := requiredString(item, tag.ReferencedSOPClassUID, "Referenced SOP Class UID")
+		if err != nil {
+			return nil, fmt.Errorf("printing: %s item %d: %w", sequenceTag, index, err)
+		}
+		instanceUID, err := requiredString(item, tag.ReferencedSOPInstanceUID, "Referenced SOP Instance UID")
+		if err != nil {
+			return nil, fmt.Errorf("printing: %s item %d: %w", sequenceTag, index, err)
+		}
+		references = append(references, SOPReference{SOPClassUID: classUID, SOPInstanceUID: instanceUID})
+	}
+	return references, nil
+}
+
 // ToDataset returns an independent Dataset containing the Film Session attributes.
 func (fs *FilmSession) ToDataset() (*dataset.Dataset, error) {
 	if fs == nil {
@@ -196,6 +255,9 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 		{tag.BorderDensity, string(fb.BorderDensity), vr.CS},
 		{tag.EmptyImageDensity, string(fb.EmptyImageDensity), vr.CS},
 		{tag.ConfigurationInformation, fb.ConfigurationInformation, vr.ST},
+		{tag.AnnotationDisplayFormatID, fb.AnnotationDisplayFormatID, vr.CS},
+		{tag.SmoothingType, fb.SmoothingType, vr.CS},
+		{tag.RequestedResolutionID, fb.RequestedResolutionID, vr.CS},
 	}
 	for _, value := range values {
 		if err := addString(ds, value.tag, value.value, value.vr); err != nil {
@@ -207,6 +269,41 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 	}
 	if err := addElement(ds, element.NewUnsignedShort(tag.MinDensity, []uint16{fb.MinDensity})); err != nil {
 		return nil, err
+	}
+	if err := addElement(ds, element.NewUnsignedShort(tag.Illumination, []uint16{fb.Illumination})); err != nil {
+		return nil, err
+	}
+	if err := addElement(ds, element.NewUnsignedShort(tag.ReflectedAmbientLight, []uint16{fb.ReflectedAmbientLight})); err != nil {
+		return nil, err
+	}
+	sessionReference := fb.ReferencedFilmSession
+	if fb.filmSession != nil {
+		sessionReference = SOPReference{SOPClassUID: fb.filmSession.SOPClassUID, SOPInstanceUID: fb.filmSession.SOPInstanceUID}
+	}
+	if sessionReference != (SOPReference{}) {
+		if err := addReferenceSequence(ds, tag.ReferencedFilmSessionSequence, []SOPReference{sessionReference}); err != nil {
+			return nil, err
+		}
+	}
+	imageReferences := append([]SOPReference(nil), fb.ReferencedImageBoxes...)
+	if len(fb.BasicImageBoxes) > 0 {
+		imageReferences = make([]SOPReference, 0, len(fb.BasicImageBoxes))
+		for index, imageBox := range fb.BasicImageBoxes {
+			if imageBox == nil {
+				return nil, fmt.Errorf("printing: nil ImageBox at index %d", index)
+			}
+			imageReferences = append(imageReferences, SOPReference{
+				SOPClassUID: imageBox.SOPClassUID, SOPInstanceUID: imageBox.SOPInstanceUID,
+			})
+		}
+	}
+	if err := addReferenceSequence(ds, tag.ReferencedImageBoxSequence, imageReferences); err != nil {
+		return nil, err
+	}
+	if fb.ReferencedPresentationLUT != (SOPReference{}) {
+		if err := addReferenceSequence(ds, tag.ReferencedPresentationLUTSequence, []SOPReference{fb.ReferencedPresentationLUT}); err != nil {
+			return nil, err
+		}
 	}
 	return ds, nil
 }
@@ -249,6 +346,40 @@ func NewFilmBoxFromDataset(sopInstanceUID string, ds *dataset.Dataset) (*FilmBox
 	if value, ok := ds.GetString(tag.ConfigurationInformation); ok {
 		fb.ConfigurationInformation = value
 	}
+	if value, ok := ds.GetString(tag.AnnotationDisplayFormatID); ok {
+		fb.AnnotationDisplayFormatID = value
+	}
+	if value, ok := ds.GetString(tag.SmoothingType); ok {
+		fb.SmoothingType = value
+	}
+	if value, err := ds.GetUInt16(tag.Illumination, 0); err == nil {
+		fb.Illumination = value
+	}
+	if value, err := ds.GetUInt16(tag.ReflectedAmbientLight, 0); err == nil {
+		fb.ReflectedAmbientLight = value
+	}
+	if value, ok := ds.GetString(tag.RequestedResolutionID); ok {
+		fb.RequestedResolutionID = value
+	}
+	if references, err := readReferenceSequence(ds, tag.ReferencedFilmSessionSequence); err != nil {
+		return nil, err
+	} else if len(references) > 1 {
+		return nil, fmt.Errorf("printing: Referenced Film Session Sequence has %d items, want at most 1", len(references))
+	} else if len(references) == 1 {
+		fb.ReferencedFilmSession = references[0]
+	}
+	references, err := readReferenceSequence(ds, tag.ReferencedImageBoxSequence)
+	if err != nil {
+		return nil, err
+	}
+	fb.ReferencedImageBoxes = references
+	if references, err := readReferenceSequence(ds, tag.ReferencedPresentationLUTSequence); err != nil {
+		return nil, err
+	} else if len(references) > 1 {
+		return nil, fmt.Errorf("printing: Referenced Presentation LUT Sequence has %d items, want at most 1", len(references))
+	} else if len(references) == 1 {
+		fb.ReferencedPresentationLUT = references[0]
+	}
 	return fb, nil
 }
 
@@ -272,6 +403,7 @@ func (ib *ImageBox) ToDataset() (*dataset.Dataset, error) {
 		{tag.Polarity, string(ib.Polarity), vr.CS},
 		{tag.MagnificationType, string(ib.MagnificationType), vr.CS},
 		{tag.SmoothingType, ib.SmoothingType, vr.CS},
+		{tag.RequestedDecimateCropBehavior, ib.RequestedDecimateCropBehavior, vr.CS},
 	}
 	for _, value := range values {
 		if err := addString(ds, value.tag, value.value, value.vr); err != nil {
@@ -286,16 +418,31 @@ func (ib *ImageBox) ToDataset() (*dataset.Dataset, error) {
 			return nil, err
 		}
 	}
-	if imageData := ib.GetImageData(); len(imageData) > 0 {
+	if ib.MaxDensity != nil {
+		if err := addElement(ds, element.NewUnsignedShort(tag.MaxDensity, []uint16{*ib.MaxDensity})); err != nil {
+			return nil, err
+		}
+	}
+	if ib.MinDensity != nil {
+		if err := addElement(ds, element.NewUnsignedShort(tag.MinDensity, []uint16{*ib.MinDensity})); err != nil {
+			return nil, err
+		}
+	}
+	if ib.ConfigurationInformation != nil {
+		if err := addElement(ds, element.NewString(tag.ConfigurationInformation, vr.ST, []string{*ib.ConfigurationInformation})); err != nil {
+			return nil, err
+		}
+	}
+	imageSequence, err := ib.ImageSequence()
+	if err != nil {
+		return nil, err
+	}
+	if imageSequence != nil {
 		sequenceTag := tag.BasicGrayscaleImageSequence
 		if ib.IsColor {
 			sequenceTag = tag.BasicColorImageSequence
 		}
-		item := dataset.New()
-		if err := addElement(item, element.NewOtherByte(tag.PixelData, append([]byte(nil), imageData...))); err != nil {
-			return nil, err
-		}
-		if err := addElement(ds, dataset.NewSequenceWithItems(sequenceTag, []*dataset.Dataset{item})); err != nil {
+		if err := addElement(ds, dataset.NewSequenceWithItems(sequenceTag, []*dataset.Dataset{imageSequence})); err != nil {
 			return nil, err
 		}
 	}
@@ -332,15 +479,38 @@ func NewImageBoxFromDataset(sopInstanceUID string, ds *dataset.Dataset, isColor 
 	} else if ok {
 		ib.RequestedImageSize = value
 	}
+	if value, ok, err := optionalUInt16(ds, tag.MaxDensity); err != nil {
+		return nil, err
+	} else if ok {
+		ib.MaxDensity = &value
+	}
+	if value, ok, err := optionalUInt16(ds, tag.MinDensity); err != nil {
+		return nil, err
+	} else if ok {
+		ib.MinDensity = &value
+	}
+	if _, ok := ds.Get(tag.ConfigurationInformation); ok {
+		value, _ := ds.GetString(tag.ConfigurationInformation)
+		ib.ConfigurationInformation = &value
+	}
+	if value, ok := ds.GetString(tag.RequestedDecimateCropBehavior); ok {
+		ib.RequestedDecimateCropBehavior = value
+	}
 	sequenceTag := tag.BasicGrayscaleImageSequence
 	if isColor {
 		sequenceTag = tag.BasicColorImageSequence
 	}
-	if sequence, err := ds.GetSequence(sequenceTag); err == nil && sequence.Count() > 0 {
-		if item := sequence.GetItem(0); item != nil {
-			if pixelData := item.GetOrNil(tag.PixelData); pixelData != nil && pixelData.Buffer() != nil {
-				ib.SetImageData(append([]byte(nil), pixelData.Buffer().Data()...))
-			}
+	sequence, sequenceErr := ds.GetSequence(sequenceTag)
+	if sequenceErr != nil {
+		if _, exists := ds.Get(sequenceTag); exists {
+			return nil, fmt.Errorf("printing: read %s: %w", sequenceTag, sequenceErr)
+		}
+	} else {
+		if sequence.Count() != 1 || sequence.GetItem(0) == nil {
+			return nil, fmt.Errorf("printing: %s must contain exactly one item", sequenceTag)
+		}
+		if err := ib.SetImageSequence(sequence.GetItem(0)); err != nil {
+			return nil, err
 		}
 	}
 	return ib, nil
@@ -361,18 +531,22 @@ func (p *PresentationLUT) ToDataset() (*dataset.Dataset, error) {
 	if err := addString(ds, tag.SOPInstanceUID, p.SOPInstanceUID, vr.UI); err != nil {
 		return nil, err
 	}
+	lutItem := dataset.New()
 	if len(p.LUTDescriptor) > 0 {
-		if err := addElement(ds, element.NewUnsignedShort(tag.LUTDescriptor, append([]uint16(nil), p.LUTDescriptor...))); err != nil {
+		if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTDescriptor, append([]uint16(nil), p.LUTDescriptor...))); err != nil {
 			return nil, err
 		}
 	}
-	if err := addString(ds, tag.LUTExplanation, p.LUTExplanation, vr.LO); err != nil {
+	if err := addString(lutItem, tag.LUTExplanation, p.LUTExplanation, vr.LO); err != nil {
 		return nil, err
 	}
 	if len(p.LUTData) > 0 {
-		if err := addElement(ds, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
+		if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
 			return nil, err
 		}
+	}
+	if err := addElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
+		return nil, err
 	}
 	if err := addString(ds, tag.PresentationLUTShape, string(p.PresentationLUTShape), vr.CS); err != nil {
 		return nil, err
@@ -390,13 +564,25 @@ func NewPresentationLUTFromDataset(sopInstanceUID string, ds *dataset.Dataset) (
 		return nil, err
 	}
 	p := NewPresentationLUT(instanceUID)
-	if values, err := ds.GetUInt16s(tag.LUTDescriptor); err == nil {
+	lutValues := ds
+	sequence, sequenceErr := ds.GetSequence(tag.PresentationLUTSequence)
+	if sequenceErr != nil {
+		if _, exists := ds.Get(tag.PresentationLUTSequence); exists {
+			return nil, fmt.Errorf("printing: read Presentation LUT Sequence: %w", sequenceErr)
+		}
+	} else {
+		if sequence.Count() != 1 || sequence.GetItem(0) == nil {
+			return nil, fmt.Errorf("printing: Presentation LUT Sequence must contain exactly one item")
+		}
+		lutValues = sequence.GetItem(0)
+	}
+	if values, err := lutValues.GetUInt16s(tag.LUTDescriptor); err == nil {
 		p.LUTDescriptor = append([]uint16(nil), values...)
 	}
-	if value, ok := ds.GetString(tag.LUTExplanation); ok {
+	if value, ok := lutValues.GetString(tag.LUTExplanation); ok {
 		p.LUTExplanation = value
 	}
-	if values, err := ds.GetUInt16s(tag.LUTData); err == nil {
+	if values, err := lutValues.GetUInt16s(tag.LUTData); err == nil {
 		p.LUTData = append([]uint16(nil), values...)
 	}
 	if value, ok := ds.GetString(tag.PresentationLUTShape); ok {

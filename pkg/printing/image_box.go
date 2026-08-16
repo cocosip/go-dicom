@@ -3,6 +3,15 @@
 
 package printing
 
+import (
+	"fmt"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+)
+
 // Polarity represents the polarity for image printing
 type Polarity string
 
@@ -50,6 +59,18 @@ type ImageBox struct {
 	// Format: width\height in mm, or predefined sizes
 	RequestedImageSize string
 
+	// MaxDensity overrides the Film Box maximum density when non-nil.
+	MaxDensity *uint16
+
+	// MinDensity overrides the Film Box minimum density when non-nil.
+	MinDensity *uint16
+
+	// ConfigurationInformation overrides the Film Box configuration when non-nil.
+	ConfigurationInformation *string
+
+	// RequestedDecimateCropBehavior specifies DECIMATE, CROP, or FAIL.
+	RequestedDecimateCropBehavior string
+
 	// PreformattedGrayscaleImageSequence contains the image data for grayscale
 	PreformattedGrayscaleImageSequence []byte
 
@@ -58,6 +79,53 @@ type ImageBox struct {
 
 	// IsColor indicates whether this is a color image box
 	IsColor bool
+
+	imageSequence *dataset.Dataset
+}
+
+// SetImageSequence stores an independent copy of a complete preformatted image
+// sequence item Dataset.
+func (ib *ImageBox) SetImageSequence(value *dataset.Dataset) error {
+	if ib == nil {
+		return fmt.Errorf("printing: nil ImageBox")
+	}
+	if value == nil {
+		ib.imageSequence = nil
+		ib.PreformattedGrayscaleImageSequence = nil
+		ib.PreformattedColorImageSequence = nil
+		return nil
+	}
+	clone, err := value.DeepCloneChecked()
+	if err != nil {
+		return fmt.Errorf("printing: clone Image Box sequence: %w", err)
+	}
+	ib.imageSequence = clone
+	ib.setLegacyImageData(pixelDataBytes(clone))
+	return nil
+}
+
+// ImageSequence returns an independent copy of the complete preformatted image
+// sequence item Dataset.
+func (ib *ImageBox) ImageSequence() (*dataset.Dataset, error) {
+	if ib == nil {
+		return nil, fmt.Errorf("printing: nil ImageBox")
+	}
+	if ib.imageSequence != nil {
+		result, err := ib.imageSequence.DeepCloneChecked()
+		if err != nil {
+			return nil, fmt.Errorf("printing: clone Image Box sequence: %w", err)
+		}
+		return result, nil
+	}
+	imageData := ib.GetImageData()
+	if len(imageData) == 0 {
+		return nil, nil
+	}
+	result := dataset.New()
+	if err := result.Add(element.NewOtherByte(tag.PixelData, append([]byte(nil), imageData...))); err != nil {
+		return nil, fmt.Errorf("printing: add Image Box Pixel Data: %w", err)
+	}
+	return result, nil
 }
 
 const (
@@ -95,13 +163,39 @@ func NewImageBox(sopInstanceUID string, isColor bool) *ImageBox {
 
 // SetImageData sets the image data for the Image Box
 func (ib *ImageBox) SetImageData(imageData []byte) {
-	if ib.IsColor {
-		ib.PreformattedColorImageSequence = make([]byte, len(imageData))
-		copy(ib.PreformattedColorImageSequence, imageData)
-	} else {
-		ib.PreformattedGrayscaleImageSequence = make([]byte, len(imageData))
-		copy(ib.PreformattedGrayscaleImageSequence, imageData)
+	ib.setLegacyImageData(imageData)
+	if ib.imageSequence != nil {
+		if len(imageData) == 0 {
+			ib.imageSequence.Remove(tag.PixelData)
+		} else {
+			pixelData := element.Element(element.NewOtherByte(tag.PixelData, append([]byte(nil), imageData...)))
+			if existing := ib.imageSequence.GetOrNil(tag.PixelData); existing != nil && existing.ValueRepresentation() == vr.OW {
+				pixelData = element.NewOtherWord(tag.PixelData, append([]byte(nil), imageData...))
+			}
+			_ = ib.imageSequence.AddOrUpdate(pixelData)
+		}
 	}
+}
+
+func (ib *ImageBox) setLegacyImageData(imageData []byte) {
+	if ib.IsColor {
+		ib.PreformattedColorImageSequence = append([]byte(nil), imageData...)
+		ib.PreformattedGrayscaleImageSequence = nil
+	} else {
+		ib.PreformattedGrayscaleImageSequence = append([]byte(nil), imageData...)
+		ib.PreformattedColorImageSequence = nil
+	}
+}
+
+func pixelDataBytes(ds *dataset.Dataset) []byte {
+	if ds == nil {
+		return nil
+	}
+	pixelData := ds.GetOrNil(tag.PixelData)
+	if pixelData == nil || pixelData.Buffer() == nil {
+		return nil
+	}
+	return append([]byte(nil), pixelData.Buffer().Data()...)
 }
 
 // GetImageData returns the image data for the Image Box
@@ -124,6 +218,9 @@ func (ib *ImageBox) HasImageData() bool {
 func (ib *ImageBox) ClearImageData() {
 	ib.PreformattedGrayscaleImageSequence = nil
 	ib.PreformattedColorImageSequence = nil
+	if ib.imageSequence != nil {
+		ib.imageSequence.Remove(tag.PixelData)
+	}
 }
 
 // FilmBox returns the parent Film Box

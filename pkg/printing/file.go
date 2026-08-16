@@ -4,8 +4,14 @@
 package printing
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
@@ -43,4 +49,119 @@ func LoadFilmSession(path string) (*FilmSession, error) {
 		return nil, fmt.Errorf("printing: decode FilmSession: %w", err)
 	}
 	return filmSession, nil
+}
+
+// Save writes a Film Box and its Image Boxes to a fo-dicom-compatible folder.
+func (fb *FilmBox) Save(folder string) error {
+	if fb == nil {
+		return fmt.Errorf("printing: cannot save a nil FilmBox")
+	}
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		return fmt.Errorf("printing: create FilmBox folder %q: %w", folder, err)
+	}
+
+	filmBoxDataset, err := fb.ToDataset()
+	if err != nil {
+		return fmt.Errorf("printing: encode FilmBox: %w", err)
+	}
+	filmBoxPath := filepath.Join(folder, "FilmBox.dcm")
+	if err := writeDatasetAtomically(filmBoxPath, filmBoxDataset); err != nil {
+		return fmt.Errorf("printing: save FilmBox %q: %w", filmBoxPath, err)
+	}
+
+	imagesFolder := filepath.Join(folder, "Images")
+	if err := os.MkdirAll(imagesFolder, 0o755); err != nil {
+		return fmt.Errorf("printing: create Image Box folder %q: %w", imagesFolder, err)
+	}
+	for index, imageBox := range fb.BasicImageBoxes {
+		if imageBox == nil {
+			return fmt.Errorf("printing: save Image Box %d: nil ImageBox", index+1)
+		}
+		imageDataset, err := imageBox.ToDataset()
+		if err != nil {
+			return fmt.Errorf("printing: encode Image Box %d: %w", index+1, err)
+		}
+		imagePath := filepath.Join(imagesFolder, fmt.Sprintf("I%06d.dcm", index+1))
+		if err := writeDatasetAtomically(imagePath, imageDataset); err != nil {
+			return fmt.Errorf("printing: save Image Box %d %q: %w", index+1, imagePath, err)
+		}
+	}
+	return nil
+}
+
+// LoadFilmBox reads a Film Box folder and attaches the loaded hierarchy to session.
+func LoadFilmBox(session *FilmSession, folder string) (*FilmBox, error) {
+	if session == nil {
+		return nil, fmt.Errorf("printing: FilmSession is required to load a FilmBox")
+	}
+	filmBoxPath := filepath.Join(folder, "FilmBox.dcm")
+	parsedFilmBox, err := parser.ParseFile(filmBoxPath)
+	if err != nil {
+		return nil, fmt.Errorf("printing: load FilmBox %q: %w", filmBoxPath, err)
+	}
+	if parsedFilmBox == nil || parsedFilmBox.Dataset == nil {
+		return nil, fmt.Errorf("printing: load FilmBox %q: file has no Dataset", filmBoxPath)
+	}
+	filmBoxInstanceUID := ""
+	if parsedFilmBox.FileMetaInformation != nil {
+		filmBoxInstanceUID, _ = parsedFilmBox.FileMetaInformation.MediaStorageSOPInstanceUID()
+	}
+	filmBox, err := NewFilmBoxFromDataset(filmBoxInstanceUID, parsedFilmBox.Dataset)
+	if err != nil {
+		return nil, fmt.Errorf("printing: decode FilmBox %q: %w", filmBoxPath, err)
+	}
+	filmBox.filmSession = session
+
+	imagesFolder := filepath.Join(folder, "Images")
+	entries, err := os.ReadDir(imagesFolder)
+	if err != nil {
+		return nil, fmt.Errorf("printing: read Image Box folder %q: %w", imagesFolder, err)
+	}
+	imagePaths := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".dcm") {
+			continue
+		}
+		imagePaths = append(imagePaths, filepath.Join(imagesFolder, entry.Name()))
+	}
+	sort.Strings(imagePaths)
+	for _, imagePath := range imagePaths {
+		parsedImage, err := parser.ParseFile(imagePath)
+		if err != nil {
+			return nil, fmt.Errorf("printing: load Image Box %q: %w", imagePath, err)
+		}
+		if parsedImage == nil || parsedImage.Dataset == nil {
+			return nil, fmt.Errorf("printing: load Image Box %q: file has no Dataset", imagePath)
+		}
+		imageClassUID, imageInstanceUID := "", ""
+		if parsedImage.FileMetaInformation != nil {
+			imageClassUID, _ = parsedImage.FileMetaInformation.MediaStorageSOPClassUID()
+			imageInstanceUID, _ = parsedImage.FileMetaInformation.MediaStorageSOPInstanceUID()
+		}
+		imageBox, err := NewImageBoxFromDataset(imageInstanceUID, parsedImage.Dataset, imageClassUID == SOPClassColorImageBox)
+		if err != nil {
+			return nil, fmt.Errorf("printing: decode Image Box %q: %w", imagePath, err)
+		}
+		filmBox.AddImageBox(imageBox)
+	}
+	return filmBox, nil
+}
+
+func writeDatasetAtomically(path string, ds *dataset.Dataset) error {
+	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer func() { _ = os.Remove(temporaryPath) }()
+
+	writeErr := writer.Write(temporary, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian))
+	closeErr := temporary.Close()
+	if writeErr != nil || closeErr != nil {
+		return errors.Join(writeErr, closeErr)
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	return nil
 }

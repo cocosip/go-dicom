@@ -3,7 +3,13 @@
 
 package printing
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+)
 
 func TestFilmSessionHierarchyFindAndDelete(t *testing.T) {
 	session := NewFilmSession("", "2.25.200", false)
@@ -83,9 +89,22 @@ func TestFilmSessionCloneIsIndependentAndReparentsChildren(t *testing.T) {
 	source.FilmSessionLabel = "source"
 	box := NewFilmBox("2.25.221", `STANDARD\1,1`)
 	box.ConfigurationInformation = "CS321"
+	box.AnnotationDisplayFormatID = "ANNOTATION_2"
+	box.ReferencedPresentationLUT = SOPReference{SOPClassUID: presentationLUTSOPClassUID, SOPInstanceUID: "2.25.223"}
 	image := NewImageBox("2.25.222", true)
 	image.ImageBoxPosition = 1
-	image.SetImageData([]byte{5, 6, 7})
+	maxDensity := uint16(0)
+	image.MaxDensity = &maxDensity
+	imageItem := dataset.New()
+	if err := imageItem.Add(element.NewUnsignedShort(tag.Rows, []uint16{1})); err != nil {
+		t.Fatalf("add image Rows: %v", err)
+	}
+	if err := imageItem.Add(element.NewOtherByte(tag.PixelData, []byte{5, 6, 7})); err != nil {
+		t.Fatalf("add image Pixel Data: %v", err)
+	}
+	if err := image.SetImageSequence(imageItem); err != nil {
+		t.Fatalf("SetImageSequence() error = %v", err)
+	}
 	box.AddImageBox(image)
 	source.AddFilmBox(box)
 	lut := NewPresentationLUT("2.25.223")
@@ -114,7 +133,15 @@ func TestFilmSessionCloneIsIndependentAndReparentsChildren(t *testing.T) {
 	image.PreformattedColorImageSequence[0] = 99
 	lut.LUTData[0] = 99
 	box.ConfigurationInformation = "changed"
-	if cloneImage.GetImageData()[0] != 5 || cloneLUT.LUTData[0] != 11 || cloneBox.ConfigurationInformation != "CS321" {
+	cloneImageSequence, err := cloneImage.ImageSequence()
+	if err != nil {
+		t.Fatalf("clone ImageSequence() error = %v", err)
+	}
+	rows, rowsErr := cloneImageSequence.GetUInt16(tag.Rows, 0)
+	if cloneImage.GetImageData()[0] != 5 || cloneImage.MaxDensity == nil || *cloneImage.MaxDensity != 0 ||
+		rowsErr != nil || rows != 1 || cloneLUT.LUTData[0] != 11 ||
+		cloneBox.ConfigurationInformation != "CS321" || cloneBox.AnnotationDisplayFormatID != "ANNOTATION_2" ||
+		cloneBox.ReferencedPresentationLUT.SOPInstanceUID != "2.25.223" {
 		t.Fatal("Clone() aliases source state")
 	}
 }

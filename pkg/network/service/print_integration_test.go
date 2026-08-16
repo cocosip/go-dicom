@@ -10,8 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/printing"
@@ -23,6 +26,7 @@ const (
 	printImageBoxClassUID    = "1.2.840.10008.5.1.1.4"
 	printLUTClassUID         = "1.2.840.10008.5.1.1.23"
 	printNCreateOperation    = "N-CREATE"
+	printRemoteImageBoxUID   = "2.25.699"
 )
 
 type receivedPrintOperation struct {
@@ -55,6 +59,22 @@ func printTestAssociation(t *testing.T) *association.Association {
 	return assoc
 }
 
+func printImageBoxReferenceDataset(t *testing.T) *dataset.Dataset {
+	t.Helper()
+	item := dataset.New()
+	if err := item.Add(element.NewString(tag.ReferencedSOPClassUID, vr.UI, []string{printImageBoxClassUID})); err != nil {
+		t.Fatalf("add Referenced SOP Class UID: %v", err)
+	}
+	if err := item.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{printRemoteImageBoxUID})); err != nil {
+		t.Fatalf("add Referenced SOP Instance UID: %v", err)
+	}
+	result := dataset.New()
+	if err := result.Add(dataset.NewSequenceWithItems(tag.ReferencedImageBoxSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("add Referenced Image Box Sequence: %v", err)
+	}
+	return result
+}
+
 func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
 	clientService := NewService(clientConn, printTestAssociation(t), WithAssociationRequestor(true))
@@ -71,6 +91,7 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 		operations = append(operations, operation)
 		mu.Unlock()
 	}
+	filmBoxResponseDataset := printImageBoxReferenceDataset(t)
 	serverService.SetHandlers(&Handlers{
 		NCreateHandler: func(_ context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error) {
 			op := receivedPrintOperation{
@@ -83,7 +104,11 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 				op.format, _ = req.DataDataset().GetString(tag.ImageDisplayFormat)
 			}
 			record(op)
-			return dimse.NewNCreateResponseSuccess(req.MessageID(), req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil), nil
+			var responseDataset *dataset.Dataset
+			if req.AffectedSOPClassUID() == printFilmBoxClassUID {
+				responseDataset = filmBoxResponseDataset
+			}
+			return dimse.NewNCreateResponseSuccess(req.MessageID(), req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), responseDataset), nil
 		},
 		NSetHandler: func(_ context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error) {
 			position, _ := req.DataDataset().GetUInt16(tag.ImageBoxPosition, 0)
@@ -154,7 +179,7 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 	if got[2].operation != printNCreateOperation || got[2].classUID != printFilmBoxClassUID || got[2].instance != "2.25.603" || got[2].format != `STANDARD\1,1` {
 		t.Errorf("Film Box operation = %#v", got[2])
 	}
-	if got[3].operation != "N-SET" || got[3].classUID != printImageBoxClassUID || got[3].instance != "2.25.604" || got[3].position != 1 {
+	if got[3].operation != "N-SET" || got[3].classUID != printImageBoxClassUID || got[3].instance != printRemoteImageBoxUID || got[3].position != 1 {
 		t.Errorf("Image Box operation = %#v", got[3])
 	}
 	if got[4].operation != "N-ACTION" || got[4].classUID != printFilmSessionClassUID || got[4].instance != "2.25.601" || got[4].actionID != 1 {

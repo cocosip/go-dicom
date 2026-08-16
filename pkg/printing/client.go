@@ -6,7 +6,10 @@ package printing
 import (
 	"context"
 	"fmt"
+	"sort"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
 
@@ -85,6 +88,7 @@ func (c *Client) Print(ctx context.Context, session *FilmSession) error {
 		if err != nil {
 			return fmt.Errorf("printing: encode Film Box %q: %w", filmBox.SOPInstanceUID, err)
 		}
+		filmBoxDataset.Remove(tag.ReferencedImageBoxSequence)
 		createRequest := dimse.NewNCreateRequest(basicFilmBoxSOPClassUID, filmBox.SOPInstanceUID, filmBoxDataset)
 		createResponse, err := c.service.SendNCreate(ctx, createRequest)
 		if err != nil {
@@ -93,21 +97,34 @@ func (c *Client) Print(ctx context.Context, session *FilmSession) error {
 		if err := requireSuccessfulResponse("N-CREATE Film Box", filmBox.SOPInstanceUID, createResponse); err != nil {
 			return err
 		}
+		remoteReferences, err := imageBoxReferences(createResponse, len(filmBox.BasicImageBoxes))
+		if err != nil {
+			return fmt.Errorf("printing: N-CREATE Film Box %q: %w", filmBox.SOPInstanceUID, err)
+		}
+		localImageBoxes := append([]*ImageBox(nil), filmBox.BasicImageBoxes...)
+		sort.SliceStable(localImageBoxes, func(left, right int) bool {
+			return localImageBoxes[left].ImageBoxPosition < localImageBoxes[right].ImageBoxPosition
+		})
 
-		for _, imageBox := range filmBox.BasicImageBoxes {
+		for index, imageBox := range localImageBoxes {
 			if err := ctx.Err(); err != nil {
 				return err
+			}
+			remoteReference := remoteReferences[index]
+			if remoteReference.SOPClassUID != imageBox.SOPClassUID {
+				return fmt.Errorf("printing: referenced Image Box %d SOP Class UID %q does not match local Image Box %q",
+					index, remoteReference.SOPClassUID, imageBox.SOPClassUID)
 			}
 			imageDataset, err := imageBox.ToDataset()
 			if err != nil {
 				return fmt.Errorf("printing: encode Image Box %q: %w", imageBox.SOPInstanceUID, err)
 			}
-			setRequest := dimse.NewNSetRequest(imageBox.SOPClassUID, imageBox.SOPInstanceUID, imageDataset)
+			setRequest := dimse.NewNSetRequest(remoteReference.SOPClassUID, remoteReference.SOPInstanceUID, imageDataset)
 			setResponse, err := c.service.SendNSet(ctx, setRequest)
 			if err != nil {
-				return fmt.Errorf("printing: N-SET Image Box %q: %w", imageBox.SOPInstanceUID, err)
+				return fmt.Errorf("printing: N-SET Image Box %q: %w", remoteReference.SOPInstanceUID, err)
 			}
-			if err := requireSuccessfulResponse("N-SET Image Box", imageBox.SOPInstanceUID, setResponse); err != nil {
+			if err := requireSuccessfulResponse("N-SET Image Box", remoteReference.SOPInstanceUID, setResponse); err != nil {
 				return err
 			}
 		}
@@ -122,6 +139,30 @@ func (c *Client) Print(ctx context.Context, session *FilmSession) error {
 		return fmt.Errorf("printing: N-ACTION Film Session %q: %w", session.SOPInstanceUID, err)
 	}
 	return requireSuccessfulResponse("N-ACTION Film Session", session.SOPInstanceUID, actionResponse)
+}
+
+func imageBoxReferences(response *dimse.NCreateResponse, expected int) ([]SOPReference, error) {
+	if response == nil || response.DataDataset() == nil {
+		return nil, fmt.Errorf("referenced Image Box Sequence is missing from the response Attribute List")
+	}
+	references, err := readReferenceSequence(response.DataDataset(), tag.ReferencedImageBoxSequence)
+	if err != nil {
+		return nil, fmt.Errorf("read referenced Image Box Sequence: %w", err)
+	}
+	if len(references) != expected {
+		return nil, fmt.Errorf("referenced Image Box Sequence has %d items, want %d", len(references), expected)
+	}
+	seen := make(map[string]struct{}, len(references))
+	for index, reference := range references {
+		if !uid.IsValid(reference.SOPClassUID) || !uid.IsValid(reference.SOPInstanceUID) {
+			return nil, fmt.Errorf("referenced Image Box item %d has an invalid SOP UID", index)
+		}
+		if _, exists := seen[reference.SOPInstanceUID]; exists {
+			return nil, fmt.Errorf("referenced Image Box Sequence contains duplicate SOP Instance UID %q", reference.SOPInstanceUID)
+		}
+		seen[reference.SOPInstanceUID] = struct{}{}
+	}
+	return references, nil
 }
 
 func validatePrintSession(session *FilmSession) error {
@@ -163,10 +204,19 @@ func validatePrintSession(session *FilmSession) error {
 		if err := registerUID("FilmBox", filmBox.SOPInstanceUID); err != nil {
 			return err
 		}
+		seenPositions := make(map[uint16]struct{}, len(filmBox.BasicImageBoxes))
 		for imageIndex, imageBox := range filmBox.BasicImageBoxes {
 			if imageBox == nil {
 				return fmt.Errorf("printing: ImageBox at FilmBox %q index %d is nil", filmBox.SOPInstanceUID, imageIndex)
 			}
+			if int(imageBox.ImageBoxPosition) > len(filmBox.BasicImageBoxes) {
+				return fmt.Errorf("printing: FilmBox %q has Image Box position %d outside 1..%d",
+					filmBox.SOPInstanceUID, imageBox.ImageBoxPosition, len(filmBox.BasicImageBoxes))
+			}
+			if _, exists := seenPositions[imageBox.ImageBoxPosition]; exists {
+				return fmt.Errorf("printing: FilmBox %q has duplicate Image Box position %d", filmBox.SOPInstanceUID, imageBox.ImageBoxPosition)
+			}
+			seenPositions[imageBox.ImageBoxPosition] = struct{}{}
 			if err := registerUID("ImageBox", imageBox.SOPInstanceUID); err != nil {
 				return err
 			}

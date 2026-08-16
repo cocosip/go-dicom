@@ -43,7 +43,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 | ID | 优先级 | 状态 | 能力 |
 | --- | --- | --- | --- |
-| DOC-001 | P0 | Partial | 公共能力声明与实际实现行为一致 |
+| DOC-001 | P0 | Complete | 公共能力声明与实际实现行为一致 |
 | NET-001 | P0 | Complete | 支持 TLS 的高层 DICOM 客户端 |
 | NET-002 | P0 | Complete | C-STORE 传输语法选择与自动转码 |
 | STD-001 | P0 | Complete | 可复现且保持最新的标准生成表 |
@@ -60,7 +60,7 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | PRINT-001 | P2 | Complete | 基于 Dataset 的 DICOM 打印管理模型 |
 | OBS-001 | P2 | Complete | 结构化网络日志、请求事件和指标钩子 |
 | IMG-003 | P3 | Complete | 体数据重建和 MPR |
-| MED-002 | P3 | Open | DICOM 文件扫描工作流 |
+| MED-002 | P3 | Complete | DICOM 文件扫描工作流 |
 
 ## 实施进度
 
@@ -68,11 +68,9 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 - **已完成：** NET-001、NET-002、STD-001、MED-001、NET-003、NET-004、
   SR-001、IMG-001、IMG-002、IMG-003、CORE-001、CORE-002、ANON-001、
-  DICT-001、PRINT-001 和 OBS-001。
-- **未完成：** DOC-001 和 MED-002 继续保持 `Partial` 或 `Open` 状态。
-- Phase 0 尚未完成。NET-001、NET-002 和 STD-001 已完成；其余 Phase 0
-  工作由 DOC-001 跟踪。
-- **下一项：** MED-002，即下方计划开发顺序中的第一个未完成条目。
+  DICT-001、PRINT-001、OBS-001、MED-002 和 DOC-001。
+- 所有已跟踪的非外部待办项均已完成。Phase 0 至 Phase 3 已满足各自记录的能力范围；
+  平台集成和编解码器继续遵循下方明确的外部能力边界。
 
 ## 计划开发顺序
 
@@ -90,15 +88,15 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 | 6 | CORE-002 | P2 | Complete | 待 CORE-001 和 SR-001 明确遍历语义后，再将 walker、路径、匹配和转换 API 通用化。 |
 | 7 | PRINT-001 | P2 | Complete | 核心 Dataset 能力稳定后，完成 Dataset-backed 打印模型和 N-service 工作流。 |
 | 8 | OBS-001 | P2 | Complete | 协商和打印网络工作流稳定后，再加入横切的网络诊断能力。 |
-| 9 | MED-002 | P3 | Open | 在更大型的重建工作之前，先交付独立且边界明确的扫描器工作流。 |
+| 9 | MED-002 | P3 | Complete | 在更大型的重建工作之前，先交付独立且边界明确的扫描器工作流。 |
 | 10 | IMG-003 | P3 | Complete | 仅在 IMG-001 和 IMG-002 完成后实施体重建和 MPR。 |
-| 11 | DOC-001 | P0 | Partial | 主要能力完成后再做最终公共 API 和 README 审计，避免文档反复调整。 |
+| 11 | DOC-001 | P0 | Complete | 主要能力完成后再做最终公共 API 和 README 审计，避免文档反复调整。 |
 
 ## 详细差距
 
 ### DOC-001: 公共能力声明
 
-**状态：** `Partial`  
+**状态：** `Complete`
 **优先级：** `P0`
 
 在审计基线中，README 的若干声明超出了当时已实现的公共工作流，包括完整的客户端 TLS、完整的 SR 值类型、图像重建、通过客户端进行高级协商，以及打印任务创建。TLS 示例调用了不存在的 `client.WithTLS` 选项；另一个渲染示例向 `NewDicomImage` 传入 Dataset，但该函数实际接收 `*DicomPixelData`。
@@ -107,8 +105,12 @@ go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 2026-08-14 进度：NET-001 已补齐高层客户端 TLS API，并修复 README 中的
 TLS 示例；NET-002 已使 C-STORE 传输语法选择与转码声明和实际发送路径一致；
-STD-001 已修正生成 Tag、UID 的数量和工具说明。SR、渲染、高级协商、打印及
-其他公共能力声明尚未重新审计或修复，因此 DOC-001 仍为 `Partial`。
+STD-001 已修正生成 Tag、UID 的数量和工具说明。
+
+已于 2026-08-16 完成。README 能力列表和项目树已经按公共包与聚焦测试重新审计，
+现在明确列出扫描器、可观测性、已完成的重建、Dataset-backed 打印、压缩编解码器
+归属，以及 Film Session 与 Film Box 的持久化边界。可运行的公共工作流由包级示例或
+仓库 examples 支撑，生成 Tag/UID 数量继续与生成表保持一致。
 
 **验收标准**
 
@@ -121,6 +123,14 @@ STD-001 已修正生成 Tag、UID 的数量和工具说明。SR、渲染、高�
 
 - 为 README 代码片段增加编译测试，或将可运行片段迁移到 examples。
 - 运行完整 Go 包测试树和文档链接检查。
+
+**验证证据**
+
+- TLS、存储、SR、成像、重建、打印、扫描和可观测性声明均可映射到具体公共包及聚焦测试。
+- `ExampleScanner_Scan` 以及 networking、dictionary、anonymizer、geometry、
+  interpolation 和 transform 的公共示例均在包测试中编译。
+- README 不再把已实现的 reconstruction 标为 Planned，并在能力列表和项目树中列出
+  scanner 与 observability。
 
 ### NET-001: 高层客户端 TLS
 
@@ -641,14 +651,22 @@ retired 标志、UTF-8 BOM，以及组合源文件中已知但不属于字典条
 已于 2026-08-16 完成。FilmSession、FilmBox、ImageBox 和 PresentationLUT
 现在可通过相互独立的 Dataset 对象往返全部已支持属性。空 SOP Instance UID
 使用 UUID 派生的 `2.25.*` 值。FilmSession 提供基于 UID 的创建/查找/删除、
-修复父引用的递归独立克隆，以及使用 Explicit VR Little Endian 的 DICOM Part 10
-加载/保存；原有索引读取和直接字段 API 保持兼容。
+修复父引用的递归独立克隆，以及使用 Explicit VR Little Endian 的单对象 DICOM
+Part 10 加载/保存。FilmBox 新增与 fo-dicom 兼容的层级文件夹，包含 `FilmBox.dcm`
+和有序的 `Images/I000001.dcm` 文件；原有索引读取和直接字段 API 保持兼容。
+
+Presentation LUT Descriptor、Explanation 和 Data 以规范的单项 Presentation LUT
+Sequence 输出，读取端仍接受旧的顶层值。Film Box Dataset 包含标准标量字段以及 Film
+Session、Image Box 和可选 Presentation LUT 引用序列。Image Box 通过 clone-safe
+访问器完整保留灰度或彩色图像序列项 Dataset，包括元数据和 Pixel Data。
 
 打印客户端会验证完整层级，并按确定顺序执行 Basic Print：Film Session N-CREATE、
 Presentation LUT N-CREATE、Film Box N-CREATE、Image Box N-SET，最后执行
 Film Session N-ACTION。新增的同步强类型 N-CREATE/N-SET/N-ACTION/N-DELETE
 service API 复用现有消息 ID、待处理响应、取消和异步操作控制。工作流在第一个传输
-错误或 DIMSE 失败状态处停止，不承诺远端回滚。
+错误或 DIMSE 失败状态处停止，不承诺远端回滚。Film Box N-CREATE 后会校验 SCP
+返回的 Referenced Image Box Sequence，并使用远端分配的 SOP Instance UID 发送
+N-SET，不修改本地 Image Box 标识。
 
 参考：[fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Printing)
 
@@ -671,18 +689,24 @@ service API 复用现有消息 ID、待处理响应、取消和异步操作控�
 - Dataset 往返覆盖 FilmSession、FilmBox、ImageBox 和 PresentationLUT 的所有
   已支持属性，并验证源 Dataset、图像字节和 LUT 切片相互独立。
 - 测试覆盖唯一 UID 生成、克隆独立性、父引用修复、UID 查找/删除、重复拒绝、
-  显示格式边界和 DICOM Part 10 FilmSession 文件往返。
+  显示格式边界、DICOM Part 10 FilmSession 文件往返，以及包含完整 Image Box
+  序列数据的 Film Box 层级文件夹往返。
 - 真实 `net.Pipe` 客户端/服务端 service 对完整 N-CREATE/N-SET/N-ACTION 工作流
-  进行编解码，并验证代表性 Dataset 值、SOP Class/Instance UID、操作顺序、
-  首错停止和取消行为。
+  进行编解码，并验证代表性 Dataset 值、SCP 分配的 Image Box UID、操作顺序、
+  首错停止和取消行为。单元测试拒绝缺失、损坏、重复、数量错误和不兼容的 Image Box
+  引用响应。
+- 临时 .NET 8 程序直接引用本地 fo-dicom `7ea6d424`，成功打开生成的
+  `FilmBox.dcm` 和 `Images/I000001.dcm`，并验证 Film Session、Image Box、
+  Presentation LUT 引用以及完整灰度图像序列的元数据和 Pixel Data。
 - `CGO_ENABLED=0 go test ./pkg/printing ./pkg/network/... -count=1` 通过。
 - `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
   和 `CGO_ENABLED=0 go build ./...` 通过。build 输出一条非致命的 Windows 用户模块
   stat cache 访问警告，最终退出码为 0。
 - `golangci-lint run --allow-parallel-runners` 报告 0 个问题，`git diff --check` 通过。
 
-**互操作边界：** service-pair 测试验证了真实 go-dicom DIMSE 编解码。本次完成验证中，
-未由独立 fo-dicom 进程交叉读取生成的 FilmSession 文件，也未让其参与打印关联。
+**持久化边界：** `FilmSession.Save` 和 `LoadFilmSession` 保持单对象操作。完整打印层级
+持久化由 `FilmBox.Save(folder)` 和 `LoadFilmBox(session, folder)` 负责；不生成
+fo-dicom 的诊断 `.txt` 文件。
 
 ### OBS-001: 网络可观测性
 
@@ -734,6 +758,8 @@ payload、TLS 材料、URL、header 或凭据。原先 A-ASSOCIATE-RQ 解码器�
   但退出码仍为 0。
 - 已尝试 `go test -race ./pkg/network/... -count=1`，但所有测试二进制均以 Windows
   状态 `0xc0000139` 退出；因此本次完成验证不声称具备 race 覆盖。
+- 对端字节方向和关联释放断言现在使用有界条件等待，等待服务端写后观测。聚焦测试连续
+  运行 100 次通过，`pkg/network/service` 完整包连续运行 20 次通过，且未修改生产事件顺序。
 
 **有意边界：** OBS-001 提供同步、厂商无关的钩子，不包含 tracing/exporter SDK 集成或
 payload 日志，也不改变 DICOM 协商或 DIMSE 协议行为。
@@ -773,10 +799,17 @@ payload 日志，也不改变 DICOM 协商或 DIMSE 协议行为。
 
 ### MED-002: DICOM 文件扫描器
 
-**状态：** `Open`  
+**状态：** `Complete`
 **优先级：** `P3`
 
-fo-dicom 提供扫描文件、报告 DICOM/非 DICOM 结果并与介质工作流集成的扫描器。go-dicom 有解析器和 CLI 示例，但没有可复用的扫描器抽象。
+已于 2026-08-16 完成。`pkg/media/scanner` 使用 context 取消、可配置递归和有界
+worker 并发扫描文件与目录根。结果按照确定的发现顺序串行交付，分别分类有效 DICOM
+元数据、无效文件和读取失败，并返回确定性的汇总计数。调用方可以继续处理错误，也可以
+在首个无效/读取结果处停止。
+
+元数据扫描会在 Pixel Data 前停止，并可为缺少 File Meta Information 的 Dataset
+指定假定传输语法。默认跳过符号链接；显式启用后也只跟随解析到扫描根目录内的普通文件
+链接。扫描结果可直接用于创建 DICOMDIR 记录。
 
 参考：[fo-dicom DicomFileScanner](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Media/DicomFileScanner.cs)
 
@@ -792,6 +825,18 @@ fo-dicom 提供扫描文件、报告 DICOM/非 DICOM 结果并与介质工作流
 - 扫描同时包含 DICOM、非 DICOM、不可读文件和符号链接的混合目录树。
 - 测试取消、有界并发、确定性结果统计以及两种遇错停止模式。
 - 检测大型固件，确认仅元数据扫描不会读取像素载荷。
+
+**验证证据**
+
+- 测试覆盖文件根、递归/非递归混合目录树、DICOM/无效/不可读分类、取消、有界并发、
+  确定性串行交付、停止/继续模式、handler 错误，以及受限、损坏、目录和根外符号链接。
+- 集成测试将扫描器元数据结果加入 DICOMDIR 层级。
+- `BenchmarkScanMetadata` 记录单 worker 与四 worker 的分配基线。
+- `CGO_ENABLED=0 go test ./pkg/media/scanner -count=1` 通过。
+
+**有意边界：** 不同于 fo-dicom 的后台事件 API，Go API 是同步、context-aware 的扫描，
+显式交付结果和错误。它不提供进度计数事件，也不会静默丢弃文件系统和解析错误；这些是
+有意的 Go 特定语义。
 
 ## 外部能力边界
 
@@ -821,8 +866,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：DOC-001、NET-001、NET-002、STD-001。
 
-当前进度：NET-001、NET-002 和 STD-001 已完成；DOC-001 仍为部分完成，
-因此 Phase 0 尚未完成。
+当前进度：DOC-001、NET-001、NET-002 和 STD-001 已完成，因此 Phase 0 已完成。
 
 阶段验收：
 
@@ -867,7 +911,7 @@ WPF、ImageSharp、SkiaSharp、ASP.NET 依赖注入以及 .NET 特有的异步 A
 
 范围：IMG-003 和 MED-002。
 
-当前进度：IMG-003 已完成；MED-002 仍为 Open，因此 Phase 3 尚未完成。
+当前进度：IMG-003 和 MED-002 已完成，因此 Phase 3 已完成。
 
 阶段验收：
 

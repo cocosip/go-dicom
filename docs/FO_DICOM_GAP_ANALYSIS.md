@@ -47,7 +47,7 @@ Priority indicates implementation order, not estimated effort:
 
 | ID | Priority | Status | Capability |
 | --- | --- | --- | --- |
-| DOC-001 | P0 | Partial | Public capability statements match implemented behavior |
+| DOC-001 | P0 | Complete | Public capability statements match implemented behavior |
 | NET-001 | P0 | Complete | TLS-enabled high-level DICOM client |
 | NET-002 | P0 | Complete | C-STORE transfer syntax selection and automatic transcoding |
 | STD-001 | P0 | Complete | Reproducible and current generated standard tables |
@@ -64,7 +64,7 @@ Priority indicates implementation order, not estimated effort:
 | PRINT-001 | P2 | Complete | Dataset-backed DICOM Print Management models |
 | OBS-001 | P2 | Complete | Structured network logging, request events, and metrics hooks |
 | IMG-003 | P3 | Complete | Volume reconstruction and MPR |
-| MED-002 | P3 | Open | DICOM file scanner workflow |
+| MED-002 | P3 | Complete | DICOM file scanner workflow |
 
 ## Implementation Progress
 
@@ -72,13 +72,10 @@ Progress as of 2026-08-16:
 
 - **Complete:** NET-001, NET-002, STD-001, MED-001, NET-003, NET-004,
   SR-001, IMG-001, IMG-002, IMG-003, CORE-001, CORE-002, ANON-001,
-  DICT-001, PRINT-001, and OBS-001.
-- **Not complete:** DOC-001 and MED-002 retain their `Partial` or
-  `Open` status.
-- Phase 0 is not complete. NET-001, NET-002, and STD-001 are complete; the
-  remaining Phase 0 work is tracked by DOC-001.
-- **Next item:** MED-002, the first incomplete item in the planned development
-  order below.
+  DICT-001, PRINT-001, OBS-001, MED-002, and DOC-001.
+- All tracked non-external backlog items are complete. Phases 0 through 3 meet
+  their documented capability scope; platform integrations and codecs remain
+  governed by the explicit external boundaries below.
 
 ## Planned Development Order
 
@@ -98,15 +95,15 @@ recorded in this document.
 | 6 | CORE-002 | P2 | Complete | Generalize walking, path, match, and transform APIs after CORE-001 and SR-001 establish their traversal semantics. |
 | 7 | PRINT-001 | P2 | Complete | Complete Dataset-backed print models and the N-service workflow after the core Dataset work is stable. |
 | 8 | OBS-001 | P2 | Complete | Add cross-cutting network diagnostics after negotiation and print network workflows have settled. |
-| 9 | MED-002 | P3 | Open | Deliver the independent, bounded scanner workflow before the larger reconstruction item. |
+| 9 | MED-002 | P3 | Complete | Deliver the independent, bounded scanner workflow before the larger reconstruction item. |
 | 10 | IMG-003 | P3 | Complete | Implement volume reconstruction and MPR only after IMG-001 and IMG-002 are complete. |
-| 11 | DOC-001 | P0 | Partial | Perform the final public API and README audit after the major capabilities are complete, avoiding repeated documentation churn. |
+| 11 | DOC-001 | P0 | Complete | Perform the final public API and README audit after the major capabilities are complete, avoiding repeated documentation churn. |
 
 ## Detailed Gaps
 
 ### DOC-001: Public Capability Statements
 
-**Status:** `Partial`  
+**Status:** `Complete`
 **Priority:** `P0`
 
 At the audit baseline, several README statements were broader than the
@@ -122,9 +119,15 @@ generated standard entries counted in the audited source.
 Progress on 2026-08-14: NET-001 repaired the high-level client TLS API and its
 README examples. NET-002 aligned C-STORE transfer syntax selection and
 transcoding claims with the implemented send path. STD-001 corrected the
-generated Tag and UID totals and the tooling description. The remaining SR,
-rendering, advanced negotiation, print, and other public capability statements
-have not been re-audited or repaired, so DOC-001 remains `Partial`.
+generated Tag and UID totals and the tooling description.
+
+Completed on 2026-08-16. The README capability list and project tree were
+re-audited against the public packages and focused tests. Scanner,
+observability, completed reconstruction, Dataset-backed printing, compressed
+codec ownership, and the Film Session versus Film Box persistence boundary are
+now stated explicitly. Runnable public workflows are represented by compiled
+package examples or repository examples, and generated Tag/UID totals remain
+aligned with the generated tables.
 
 **Acceptance criteria**
 
@@ -137,6 +140,15 @@ have not been re-audited or repaired, so DOC-001 remains `Partial`.
 
 - Add compile tests for README snippets or move runnable snippets to examples.
 - Run the full Go package tree and documentation link checks.
+
+**Verification evidence**
+
+- Public TLS, storage, SR, imaging, reconstruction, printing, scanner, and
+  observability claims map to concrete packages and focused tests.
+- `ExampleScanner_Scan` and the public networking, dictionary, anonymizer,
+  geometry, interpolation, and transform examples compile in package tests.
+- The README no longer labels implemented reconstruction as planned and names
+  scanner and observability in both the capability list and project tree.
 
 ### NET-001: High-Level Client TLS
 
@@ -749,8 +761,17 @@ Completed on 2026-08-16. FilmSession, FilmBox, ImageBox, and PresentationLUT
 now round-trip their supported attributes through independent Dataset objects.
 Empty SOP Instance UIDs use UUID-derived `2.25.*` values. FilmSession exposes
 UID-based create/find/delete operations, recursively independent cloning with
-repaired parent references, and DICOM Part 10 load/save using Explicit VR
-Little Endian. Existing index-based and direct-field APIs remain compatible.
+repaired parent references, and single-object DICOM Part 10 load/save using
+Explicit VR Little Endian. FilmBox adds fo-dicom-compatible hierarchy folders
+containing `FilmBox.dcm` and ordered `Images/I000001.dcm` files. Existing
+index-based and direct-field APIs remain compatible.
+
+Presentation LUT Descriptor, Explanation, and Data are emitted in a canonical
+one-item Presentation LUT Sequence while the reader accepts legacy top-level
+values. Film Box datasets include their standard scalar fields and Film
+Session, Image Box, and optional Presentation LUT reference sequences. Image
+Boxes preserve complete grayscale or color image-sequence item Datasets,
+including metadata and Pixel Data, through clone-safe accessors.
 
 The print client validates the complete hierarchy and executes Basic Print in
 deterministic order: Film Session N-CREATE, Presentation LUT N-CREATE, Film Box
@@ -758,7 +779,9 @@ N-CREATE, Image Box N-SET, and Film Session N-ACTION. Typed synchronous
 N-CREATE/N-SET/N-ACTION/N-DELETE service APIs reuse the existing message-ID,
 pending-response, cancellation, and asynchronous-operation behavior. The
 workflow stops at the first transport or DIMSE status failure and does not
-claim remote rollback.
+claim remote rollback. After Film Box N-CREATE, it validates the SCP-produced
+Referenced Image Box Sequence and sends each N-SET to the assigned remote SOP
+Instance UID without mutating local Image Box identity.
 
 Reference: [fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Printing)
 
@@ -785,10 +808,17 @@ Reference: [fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d42
   slice independence.
 - Tests cover unique generated UIDs, clone independence, repaired parent
   references, UID lookup/deletion, duplicate rejection, display-format bounds,
-  and DICOM Part 10 FilmSession file round trips.
+  DICOM Part 10 FilmSession file round trips, and Film Box hierarchy folder
+  round trips with complete Image Box sequence data.
 - A real `net.Pipe` client/server service pair encodes and decodes the complete
   N-CREATE/N-SET/N-ACTION workflow and verifies representative Dataset values,
-  SOP Class/Instance UIDs, operation order, failure stopping, and cancellation.
+  SCP-assigned Image Box UIDs, operation order, failure stopping, and
+  cancellation. Unit tests reject missing, malformed, duplicate, wrong-count,
+  and incompatible Image Box reference responses.
+- A temporary .NET 8 program referencing local fo-dicom revision `7ea6d424`
+  opened the generated `FilmBox.dcm` and `Images/I000001.dcm` files and verified
+  Film Session, Image Box, and Presentation LUT references plus the complete
+  grayscale image sequence metadata and Pixel Data.
 - `CGO_ENABLED=0 go test ./pkg/printing ./pkg/network/... -count=1` passed.
 - `CGO_ENABLED=0 go test ./cmd/... ./examples/... ./pkg/... ./tools/... -count=1`
   and `CGO_ENABLED=0 go build ./...` passed. The build emitted a non-fatal
@@ -796,10 +826,10 @@ Reference: [fo-dicom Printing](https://github.com/fo-dicom/fo-dicom/tree/7ea6d42
 - `golangci-lint run --allow-parallel-runners` reported 0 issues, and
   `git diff --check` passed.
 
-**Interoperability boundary:** The service-pair test verifies actual go-dicom
-DIMSE encoding and decoding. A separate fo-dicom process did not cross-read the
-generated FilmSession file or participate in the print association in this
-completion run.
+**Persistence boundary:** `FilmSession.Save` and `LoadFilmSession` remain
+single-object operations. Complete print hierarchy persistence is intentionally
+owned by `FilmBox.Save(folder)` and `LoadFilmBox(session, folder)`; diagnostic
+`.txt` dumps produced by fo-dicom are not generated.
 
 ### OBS-001: Network Observability
 
@@ -864,6 +894,10 @@ Reference: [fo-dicom Network Metrics](https://github.com/fo-dicom/fo-dicom/tree/
 - `go test -race ./pkg/network/... -count=1` was attempted, but every test
   binary exited with Windows status `0xc0000139`; race coverage is therefore not
   claimed for this completion run.
+- Peer byte-direction and association-release assertions now use bounded
+  condition waits for server-side post-write observations. The focused tests
+  passed 100 consecutive runs, and `pkg/network/service` passed 20 consecutive
+  full-package runs without changing production event ordering.
 
 **Intentional boundary:** OBS-001 supplies synchronous vendor-neutral hooks,
 not tracing/exporter SDK integration or payload logging. It does not change
@@ -934,12 +968,21 @@ unsupported multi-dimensional inputs rather than emitting ambiguous results.
 
 ### MED-002: DICOM File Scanner
 
-**Status:** `Open`  
+**Status:** `Complete`
 **Priority:** `P3`
 
-fo-dicom provides a scanner that walks files, reports DICOM/non-DICOM results,
-and integrates with media workflows. go-dicom has parsers and CLI examples but
-no reusable scanner abstraction.
+Completed on 2026-08-16. `pkg/media/scanner` scans file and directory roots with
+context cancellation, configurable recursion, and bounded worker concurrency.
+It delivers results serially in deterministic discovery order, classifies
+valid DICOM metadata, invalid files, and read failures separately, and returns
+deterministic summary counts. Callers can continue through errors or stop at
+the first invalid/read result.
+
+Metadata scanning stops before Pixel Data and optionally assumes a transfer
+syntax for datasets without File Meta Information. Symbolic links are skipped
+by default; the opt-in policy follows only regular-file links that resolve
+within the scanned root. Scanner results integrate directly with DICOMDIR
+record creation.
 
 Reference: [fo-dicom DicomFileScanner](https://github.com/fo-dicom/fo-dicom/blob/7ea6d424d0b0e11ecf6a55e81a8ac58b05d5e3e2/FO-DICOM.Core/Media/DicomFileScanner.cs)
 
@@ -957,6 +1000,22 @@ Reference: [fo-dicom DicomFileScanner](https://github.com/fo-dicom/fo-dicom/blob
   both stop-on-error modes.
 - Instrument large fixtures to verify metadata-only scans do not read pixel
   payloads.
+
+**Verification evidence**
+
+- Tests cover file roots, mixed recursive and non-recursive trees, DICOM,
+  invalid and unreadable classification, cancellation, bounded concurrency,
+  deterministic serial delivery, stop/continue modes, handler errors, and
+  confined, broken, directory, and out-of-root symlinks.
+- An integration test adds scanner metadata results to a DICOMDIR hierarchy.
+- `BenchmarkScanMetadata` records allocation baselines with one and four
+  workers.
+- `CGO_ENABLED=0 go test ./pkg/media/scanner -count=1` passes.
+
+**Intentional boundary:** Unlike fo-dicom's background event API, the Go API is
+a synchronous, context-aware scan with explicit result/error delivery. It does
+not expose progress-count events or silently discard filesystem and parse
+errors; these are intentional Go-specific semantics.
 
 ## External Capability Boundary
 
@@ -996,8 +1055,8 @@ cross-library capability rather than fo-dicom parity work.
 
 Scope: DOC-001, NET-001, NET-002, STD-001.
 
-Current progress: NET-001, NET-002, and STD-001 are complete. DOC-001 remains
-partial; therefore Phase 0 is not complete.
+Current progress: DOC-001, NET-001, NET-002, and STD-001 are complete;
+therefore Phase 0 is complete.
 
 Phase acceptance:
 
@@ -1044,7 +1103,7 @@ Phase acceptance:
 
 Scope: IMG-003 and MED-002.
 
-Current progress: IMG-003 is complete; MED-002 remains open, so Phase 3 is not
+Current progress: IMG-003 and MED-002 are complete; therefore Phase 3 is
 complete.
 
 Phase acceptance:

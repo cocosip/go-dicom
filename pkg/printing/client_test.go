@@ -12,7 +12,9 @@ import (
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
@@ -28,10 +30,18 @@ type fakeDIMSEService struct {
 	statusFailureAt int
 	cancelAfter     int
 	cancel          context.CancelFunc
+	filmBoxResponse *dataset.Dataset
 }
 
 func newFakeDIMSEService() *fakeDIMSEService {
-	return &fakeDIMSEService{failAt: -1, statusFailureAt: -1, cancelAfter: -1}
+	return &fakeDIMSEService{
+		failAt:          -1,
+		statusFailureAt: -1,
+		cancelAfter:     -1,
+		filmBoxResponse: referencedImageBoxResponseDataset([]SOPReference{{
+			SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.900",
+		}}),
+	}
 }
 
 func (f *fakeDIMSEService) record(operation string, ds *dataset.Dataset) (int, error) {
@@ -55,7 +65,11 @@ func (f *fakeDIMSEService) SendNCreate(_ context.Context, req *dimse.NCreateRequ
 	if index == f.statusFailureAt {
 		responseStatus = status.NCreateFailureProcessingFailure
 	}
-	return dimse.NewNCreateResponse(req.MessageID(), responseStatus, req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil), nil
+	var responseDataset *dataset.Dataset
+	if req.AffectedSOPClassUID() == basicFilmBoxSOPClassUID {
+		responseDataset = f.filmBoxResponse
+	}
+	return dimse.NewNCreateResponse(req.MessageID(), responseStatus, req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), responseDataset), nil
 }
 
 func (f *fakeDIMSEService) SendNSet(_ context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error) {
@@ -125,7 +139,7 @@ func TestClientPrintSendsOrderedDatasetBackedWorkflow(t *testing.T) {
 		"N-CREATE 1.2.840.10008.5.1.1.1 2.25.501",
 		"N-CREATE 1.2.840.10008.5.1.1.23 2.25.502",
 		"N-CREATE 1.2.840.10008.5.1.1.2 2.25.503",
-		"N-SET 1.2.840.10008.5.1.1.4 2.25.504",
+		"N-SET 1.2.840.10008.5.1.1.4 2.25.900",
 		"N-ACTION 1.2.840.10008.5.1.1.1 2.25.501 1",
 	}
 	gotOperations := make([]string, len(service.calls))
@@ -139,14 +153,124 @@ func TestClientPrintSendsOrderedDatasetBackedWorkflow(t *testing.T) {
 	if got, _ := service.calls[0].dataset.GetString(tag.FilmSessionLabel); got != "workflow" {
 		t.Errorf("Film Session payload label = %q", got)
 	}
-	if got, err := service.calls[1].dataset.GetUInt16s(tag.LUTDescriptor); err != nil || !reflect.DeepEqual(got, []uint16{2, 0, 12}) {
+	lutSequence, err := service.calls[1].dataset.GetSequence(tag.PresentationLUTSequence)
+	if err != nil || lutSequence.Count() != 1 {
+		t.Fatalf("Presentation LUT sequence = %#v, %v", lutSequence, err)
+	}
+	if got, err := lutSequence.GetItem(0).GetUInt16s(tag.LUTDescriptor); err != nil || !reflect.DeepEqual(got, []uint16{2, 0, 12}) {
 		t.Errorf("Presentation LUT descriptor = %v, %v", got, err)
 	}
 	if got, _ := service.calls[2].dataset.GetString(tag.ImageDisplayFormat); got != `STANDARD\1,1` {
 		t.Errorf("Film Box payload format = %q", got)
 	}
+	if _, ok := service.calls[2].dataset.Get(tag.ReferencedImageBoxSequence); ok {
+		t.Error("Film Box N-CREATE request contains SCP-produced Referenced Image Box Sequence")
+	}
+	assertReferenceSequence(t, service.calls[2].dataset, tag.ReferencedFilmSessionSequence, []SOPReference{{
+		SOPClassUID: basicFilmSessionSOPClassUID, SOPInstanceUID: "2.25.501",
+	}})
 	if got, err := service.calls[3].dataset.GetUInt16(tag.ImageBoxPosition, 0); err != nil || got != 1 {
 		t.Errorf("Image Box payload position = %d, %v", got, err)
+	}
+}
+
+func TestClientPrintKeepsLocalImageBoxUIDAfterRemoteMapping(t *testing.T) {
+	session := printableSession(t)
+	image := session.FindImageBox("2.25.504")
+	service := newFakeDIMSEService()
+	if err := NewClient(service).Print(context.Background(), session); err != nil {
+		t.Fatalf("Print() error = %v", err)
+	}
+	if image.SOPInstanceUID != "2.25.504" {
+		t.Fatalf("local Image Box UID = %q, want unchanged", image.SOPInstanceUID)
+	}
+}
+
+func TestClientPrintRejectsMalformedImageBoxReferences(t *testing.T) {
+	malformedItem := dataset.New()
+	_ = malformedItem.Add(element.NewString(tag.ReferencedSOPClassUID, vr.UI, []string{SOPClassGrayscaleImageBox}))
+	malformedDataset := dataset.New()
+	_ = malformedDataset.Add(dataset.NewSequenceWithItems(tag.ReferencedImageBoxSequence, []*dataset.Dataset{malformedItem}))
+
+	for _, test := range []struct {
+		name     string
+		response *dataset.Dataset
+	}{
+		{name: "missing attribute list", response: nil},
+		{name: "missing sequence", response: dataset.New()},
+		{name: "empty sequence", response: referencedImageBoxResponseDataset(nil)},
+		{name: "malformed item", response: malformedDataset},
+		{name: "wrong count", response: referencedImageBoxResponseDataset([]SOPReference{
+			{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.901"},
+			{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.902"},
+		})},
+		{name: "incompatible SOP class", response: referencedImageBoxResponseDataset([]SOPReference{{
+			SOPClassUID: SOPClassColorImageBox, SOPInstanceUID: "2.25.903",
+		}})},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service := newFakeDIMSEService()
+			service.filmBoxResponse = test.response
+			err := NewClient(service).Print(context.Background(), printableSession(t))
+			if err == nil || !strings.Contains(err.Error(), "referenced Image Box") {
+				t.Fatalf("Print() error = %v, want Referenced Image Box context", err)
+			}
+			if len(service.calls) != 3 {
+				t.Fatalf("call count = %d, want stop after Film Box N-CREATE", len(service.calls))
+			}
+		})
+	}
+}
+
+func TestClientPrintRejectsDuplicateRemoteImageBoxUID(t *testing.T) {
+	session := printableSession(t)
+	box := session.BasicFilmBoxes[0]
+	second := NewImageBox("2.25.505", false)
+	second.ImageBoxPosition = 2
+	second.SetImageData([]byte{5, 6, 7, 8})
+	box.AddImageBox(second)
+
+	service := newFakeDIMSEService()
+	service.filmBoxResponse = referencedImageBoxResponseDataset([]SOPReference{
+		{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.904"},
+		{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.904"},
+	})
+	err := NewClient(service).Print(context.Background(), session)
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("Print() error = %v, want duplicate UID error", err)
+	}
+	if len(service.calls) != 3 {
+		t.Fatalf("call count = %d, want stop after Film Box N-CREATE", len(service.calls))
+	}
+}
+
+func TestClientPrintRejectsDuplicateLocalImageBoxPosition(t *testing.T) {
+	session := printableSession(t)
+	second := NewImageBox("2.25.505", false)
+	second.ImageBoxPosition = 1
+	session.BasicFilmBoxes[0].AddImageBox(second)
+	service := newFakeDIMSEService()
+
+	err := NewClient(service).Print(context.Background(), session)
+	if err == nil || !strings.Contains(err.Error(), "duplicate Image Box position 1") {
+		t.Fatalf("Print() error = %v, want duplicate position error", err)
+	}
+	if len(service.calls) != 0 {
+		t.Fatalf("call count = %d, want validation before network operations", len(service.calls))
+	}
+}
+
+func TestClientPrintRejectsOutOfRangeLocalImageBoxPosition(t *testing.T) {
+	session := printableSession(t)
+	session.BasicFilmBoxes[0].BasicImageBoxes[0].ImageBoxPosition = 2
+	service := newFakeDIMSEService()
+
+	err := NewClient(service).Print(context.Background(), session)
+	if err == nil || !strings.Contains(err.Error(), "Image Box position 2 outside 1..1") {
+		t.Fatalf("Print() error = %v, want position range error", err)
+	}
+	if len(service.calls) != 0 {
+		t.Fatalf("call count = %d, want validation before network operations", len(service.calls))
 	}
 }
 
@@ -170,7 +294,7 @@ func TestClientPrintRejectsFailureStatus(t *testing.T) {
 	service := newFakeDIMSEService()
 	service.statusFailureAt = 3
 	err := NewClient(service).Print(context.Background(), printableSession(t))
-	if err == nil || !strings.Contains(err.Error(), "N-SET") || !strings.Contains(err.Error(), "2.25.504") {
+	if err == nil || !strings.Contains(err.Error(), "N-SET") || !strings.Contains(err.Error(), "2.25.900") {
 		t.Fatalf("Print() error = %v, want N-SET UID context", err)
 	}
 	if len(service.calls) != 4 {
@@ -205,4 +329,17 @@ func TestClientPrintHonorsCancellation(t *testing.T) {
 			t.Fatalf("call count = %d, want 1", len(service.calls))
 		}
 	})
+}
+
+func referencedImageBoxResponseDataset(references []SOPReference) *dataset.Dataset {
+	ds := dataset.New()
+	items := make([]*dataset.Dataset, 0, len(references))
+	for _, reference := range references {
+		item := dataset.New()
+		_ = item.Add(element.NewString(tag.ReferencedSOPClassUID, vr.UI, []string{reference.SOPClassUID}))
+		_ = item.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{reference.SOPInstanceUID}))
+		items = append(items, item)
+	}
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.ReferencedImageBoxSequence, items))
+	return ds
 }

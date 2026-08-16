@@ -83,7 +83,7 @@ func TestParseImageDisplayFormat(t *testing.T) {
 		// Invalid formats
 		{"INVALID", 0, true},
 		{"", 0, true},
-		{"STANDARD", 0, true}, // Missing separator
+		{standardImageDisplayFormat, 0, true}, // Missing separator
 	}
 
 	for _, tc := range testCases {
