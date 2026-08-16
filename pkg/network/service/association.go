@@ -140,8 +140,8 @@ func (s *Service) SendAssociationReject(ctx context.Context, result, source, rea
 // The method:
 // 1. Validates the current state (must be AssociationAccepted or Transferring)
 // 2. Encodes the release request PDU
-// 3. Writes it to the connection
-// 4. Transitions to ReleaseRequested state
+// 3. Transitions to ReleaseRequested state
+// 4. Writes it to the connection
 func (s *Service) SendReleaseRequest(ctx context.Context) error {
 	// Check if service is closed
 	if s.conn == nil {
@@ -166,6 +166,13 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 		return fmt.Errorf("failed to encode A-RELEASE-RQ: %w", err)
 	}
 
+	// Publish the release state before writing. A fast peer can send its
+	// A-RELEASE-RP as soon as it receives this request, while recvLoop runs
+	// concurrently with this method.
+	if err := s.setState(StateReleaseRequested); err != nil {
+		return fmt.Errorf("failed to transition state: %w", err)
+	}
+
 	// Write to connection with timeout
 	if s.config.writeTimeout > 0 {
 		if err := s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout)); err != nil {
@@ -175,11 +182,6 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 
 	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write A-RELEASE-RQ: %w", err)
-	}
-
-	// Transition to ReleaseRequested state
-	if err := s.setState(StateReleaseRequested); err != nil {
-		return fmt.Errorf("failed to transition state: %w", err)
 	}
 
 	return nil

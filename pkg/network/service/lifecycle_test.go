@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"encoding/binary"
 	"net"
 	"sync"
 	"testing"
@@ -221,6 +222,91 @@ func TestGracefulRelease_Success(t *testing.T) {
 	if !service.IsClosed() {
 		t.Error("Service should be closed after GracefulRelease")
 	}
+}
+
+func TestGracefulReleaseHandlesResponseBeforeRequestWriteReturns(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = serverConn.Close() }()
+
+	responseHandled := make(chan struct{})
+	service := NewService(&releaseResponseGateConn{
+		Conn:            clientConn,
+		responseHandled: responseHandled,
+	}, nil)
+	defer func() { _ = service.Close() }()
+
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("set association state: %v", err)
+	}
+	if err := service.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	go func() {
+		raw, err := transport.ReadPDU(serverConn, time.Second)
+		if err != nil {
+			t.Errorf("ReadPDU() error = %v", err)
+			return
+		}
+		if raw.Type != pdu.TypeAReleaseRQ {
+			t.Errorf("PDU type = 0x%02x, want 0x%02x", raw.Type, pdu.TypeAReleaseRQ)
+			return
+		}
+
+		rp, err := pdu.NewAReleaseRP().Encode()
+		if err != nil {
+			t.Errorf("Encode() error = %v", err)
+			return
+		}
+		if err := transport.WritePDU(serverConn, time.Second, rp); err != nil {
+			t.Errorf("WritePDU() error = %v", err)
+		}
+	}()
+
+	go func() {
+		deadline := time.Now().Add(time.Second)
+		for service.GetState() != StateClosed && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		close(responseHandled)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := service.GracefulRelease(ctx); err != nil {
+		t.Fatalf("GracefulRelease() error = %v", err)
+	}
+}
+
+type releaseResponseGateConn struct {
+	net.Conn
+	responseHandled         <-chan struct{}
+	releaseRequestRemaining int
+}
+
+func (c *releaseResponseGateConn) Write(data []byte) (int, error) {
+	n, err := c.Conn.Write(data)
+	if err != nil || n == 0 {
+		return n, err
+	}
+
+	written := data[:n]
+	if c.releaseRequestRemaining > 0 {
+		c.releaseRequestRemaining -= len(written)
+		if c.releaseRequestRemaining <= 0 {
+			<-c.responseHandled
+		}
+		return n, nil
+	}
+	if len(written) < 6 || written[0] != pdu.TypeAReleaseRQ {
+		return n, nil
+	}
+
+	c.releaseRequestRemaining = int(binary.BigEndian.Uint32(written[2:6]))
+	if c.releaseRequestRemaining == 0 {
+		<-c.responseHandled
+	}
+	return n, nil
 }
 
 func TestGracefulRelease_WrongState(t *testing.T) {
