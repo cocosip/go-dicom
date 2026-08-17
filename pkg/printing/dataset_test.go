@@ -4,6 +4,7 @@
 package printing
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 func TestEmptyUIDsAreUnique(t *testing.T) {
@@ -216,6 +218,44 @@ func TestFilmBoxDatasetRejectsMultiValuedStandardUInt16Attributes(t *testing.T) 
 	}
 }
 
+func TestFilmBoxDatasetAllowsEmptyOptionalUInt16Attributes(t *testing.T) {
+	for _, target := range []*tag.Tag{tag.Illumination, tag.ReflectedAmbientLight} {
+		t.Run(target.String(), func(t *testing.T) {
+			ds, err := NewFilmBox("2.25.127", testStandardOneByOne).ToDataset()
+			if err != nil {
+				t.Fatalf("ToDataset() error = %v", err)
+			}
+			if err := ds.AddOrUpdate(element.NewUnsignedShort(target, nil)); err != nil {
+				t.Fatalf("AddOrUpdate(%s) error = %v", target, err)
+			}
+
+			if _, err := NewFilmBoxFromDataset("", ds); err != nil {
+				t.Fatalf("NewFilmBoxFromDataset() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestFilmBoxDatasetRejectsOddLengthOptionalUInt16Attributes(t *testing.T) {
+	for _, length := range []int{1, 3} {
+		t.Run(fmt.Sprintf("length_%d", length), func(t *testing.T) {
+			ds, err := NewFilmBox("2.25.128", testStandardOneByOne).ToDataset()
+			if err != nil {
+				t.Fatalf("ToDataset() error = %v", err)
+			}
+			ds.SetAutoValidate(false)
+			malformed := element.NewUnsignedShortFromBuffer(tag.Illumination, buffer.NewMemory(make([]byte, length)))
+			if err := ds.AddOrUpdate(malformed); err != nil {
+				t.Fatalf("AddOrUpdate(Illumination) error = %v", err)
+			}
+
+			if _, err := NewFilmBoxFromDataset("", ds); err == nil {
+				t.Fatalf("NewFilmBoxFromDataset() accepted a %d-byte US value", length)
+			}
+		})
+	}
+}
+
 func TestImageBoxDatasetRoundTrip(t *testing.T) {
 	want := NewImageBox("2.25.103", true)
 	want.ImageBoxPosition = 4
@@ -270,6 +310,46 @@ func TestImageBoxDatasetRoundTripsOptionalOverridesIncludingZero(t *testing.T) {
 		got.ConfigurationInformation == nil || *got.ConfigurationInformation != "CS456" ||
 		got.RequestedDecimateCropBehavior != "CROP" {
 		t.Fatalf("Image Box overrides = %#v", got)
+	}
+}
+
+func TestImageBoxDatasetAllowsEmptyOptionalUInt16Attributes(t *testing.T) {
+	for _, target := range []*tag.Tag{tag.MaxDensity, tag.MinDensity} {
+		t.Run(target.String(), func(t *testing.T) {
+			ds, err := NewImageBox("2.25.134", false).ToDataset()
+			if err != nil {
+				t.Fatalf("ToDataset() error = %v", err)
+			}
+			if err := ds.AddOrUpdate(element.NewUnsignedShort(target, nil)); err != nil {
+				t.Fatalf("AddOrUpdate(%s) error = %v", target, err)
+			}
+
+			got, err := NewImageBoxFromDataset("", ds, false)
+			if err != nil {
+				t.Fatalf("NewImageBoxFromDataset() error = %v", err)
+			}
+			if got.MaxDensity != nil || got.MinDensity != nil {
+				t.Fatalf("empty density attributes became values: %#v", got)
+			}
+		})
+	}
+}
+
+func TestImageBoxDatasetAllowsEmptyConfigurationInformation(t *testing.T) {
+	ds, err := NewImageBox("2.25.135", false).ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.ConfigurationInformation, vr.ST, []string{""})); err != nil {
+		t.Fatalf("AddOrUpdate(ConfigurationInformation) error = %v", err)
+	}
+
+	got, err := NewImageBoxFromDataset("", ds, false)
+	if err != nil {
+		t.Fatalf("NewImageBoxFromDataset() error = %v", err)
+	}
+	if got.ConfigurationInformation == nil || *got.ConfigurationInformation != "" {
+		t.Fatalf("ConfigurationInformation = %#v, want present empty value", got.ConfigurationInformation)
 	}
 }
 

@@ -103,14 +103,21 @@ func optionalUInt16(ds *dataset.Dataset, t *tag.Tag) (uint16, bool, error) {
 	if !ok {
 		return 0, false, nil
 	}
-	if elem.Count() != 1 {
-		return 0, true, fmt.Errorf("printing: %s has VM %d, want 1", t, elem.Count())
+	value, valid := elem.(*element.UnsignedShort)
+	if !valid {
+		return 0, true, fmt.Errorf("printing: %s is not an Unsigned Short", t)
 	}
-	value, err := ds.GetUInt16(t, 0)
+	if elem.Length() == 0 {
+		return 0, false, nil
+	}
+	if elem.Length() != 2 {
+		return 0, true, fmt.Errorf("printing: %s has length %d, want 0 or 2 bytes", t, elem.Length())
+	}
+	decoded, err := value.GetValue(0)
 	if err != nil {
 		return 0, true, fmt.Errorf("printing: invalid %s: %w", t, err)
 	}
-	return value, true, nil
+	return decoded, true, nil
 }
 
 func addReferenceSequence(ds *dataset.Dataset, sequenceTag *tag.Tag, references []SOPReference) error {
@@ -501,8 +508,8 @@ func NewImageBoxFromDataset(sopInstanceUID string, ds *dataset.Dataset, isColor 
 		if configElement.ValueRepresentation() != vr.ST {
 			return nil, fmt.Errorf("printing: %s has VR %s, want ST", tag.ConfigurationInformation, configElement.ValueRepresentation())
 		}
-		if configElement.Count() != 1 {
-			return nil, fmt.Errorf("printing: %s has VM %d, want 1", tag.ConfigurationInformation, configElement.Count())
+		if configElement.Count() > 1 {
+			return nil, fmt.Errorf("printing: %s has VM %d, want at most 1", tag.ConfigurationInformation, configElement.Count())
 		}
 		value, valid := ds.GetString(tag.ConfigurationInformation)
 		if !valid {
