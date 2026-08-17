@@ -12,6 +12,7 @@ import (
 
 const (
 	standardImageDisplayFormat   = "STANDARD"
+	slideImageDisplayFormat      = "SLIDE"
 	defaultRequestedResolutionID = "STANDARD"
 )
 
@@ -281,9 +282,9 @@ func ParseImageDisplayFormat(format string) (int, error) {
 		}
 		return boxes, nil
 
-	case "SLIDE", "SUPERSLIDE":
+	case slideImageDisplayFormat, "SUPERSLIDE":
 		// Configuration dependent, assume standard counts
-		if formatType == "SLIDE" {
+		if formatType == slideImageDisplayFormat {
 			return 20, nil // Typical 35mm slide count
 		}
 		return 15, nil // Typical 40mm superslide count

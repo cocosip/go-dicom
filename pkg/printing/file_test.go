@@ -83,7 +83,7 @@ func TestNilFilmSessionSaveFails(t *testing.T) {
 func TestFilmBoxFolderRoundTrip(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "film-box")
 	session := NewFilmSession(basicFilmSessionSOPClassUID, "2.25.310", false)
-	filmBox := NewFilmBox("2.25.311", `STANDARD\2,1`)
+	filmBox := NewFilmBox("2.25.311", testStandardTwoByOne)
 	filmBox.AnnotationDisplayFormatID = "ANNOTATION"
 	session.AddFilmBox(filmBox)
 
@@ -170,6 +170,73 @@ func TestFilmBoxFolderRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFilmBoxSaveRemovesStaleManagedImageFiles(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "film-box")
+	session := NewFilmSession(basicFilmSessionSOPClassUID, "2.25.314", false)
+	filmBox := NewFilmBox("2.25.315", testStandardTwoByOne)
+	session.AddFilmBox(filmBox)
+	for index, instanceUID := range []string{"2.25.316", "2.25.317"} {
+		imageBox := NewImageBox(instanceUID, false)
+		imageBox.ImageBoxPosition = uint16(index + 1)
+		filmBox.AddImageBox(imageBox)
+	}
+	if err := filmBox.Save(folder); err != nil {
+		t.Fatalf("first FilmBox.Save() error = %v", err)
+	}
+	for _, name := range []string{"notes.txt", "X000002.dcm", "I000002.dcm.bak"} {
+		if err := os.WriteFile(filepath.Join(folder, "Images", name), []byte("preserve"), 0o600); err != nil {
+			t.Fatalf("os.WriteFile(%q) error = %v", name, err)
+		}
+	}
+
+	filmBox.BasicImageBoxes = filmBox.BasicImageBoxes[:1]
+	filmBox.ImageDisplayFormat = testStandardOneByOne
+	if err := filmBox.Save(folder); err != nil {
+		t.Fatalf("second FilmBox.Save() error = %v", err)
+	}
+	stalePath := filepath.Join(folder, "Images", "I000002.dcm")
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("stale Image Box file still exists: %v", err)
+	}
+	for _, name := range []string{"notes.txt", "X000002.dcm", "I000002.dcm.bak"} {
+		if _, err := os.Stat(filepath.Join(folder, "Images", name)); err != nil {
+			t.Errorf("unmanaged file %q was not preserved: %v", name, err)
+		}
+	}
+	if err := os.Remove(filepath.Join(folder, "Images", "X000002.dcm")); err != nil {
+		t.Fatalf("os.Remove(X000002.dcm) error = %v", err)
+	}
+
+	loaded, err := LoadFilmBox(NewFilmSession(basicFilmSessionSOPClassUID, "2.25.314", false), folder)
+	if err != nil {
+		t.Fatalf("LoadFilmBox() error = %v", err)
+	}
+	if len(loaded.BasicImageBoxes) != 1 {
+		t.Fatalf("loaded Image Box count = %d, want 1", len(loaded.BasicImageBoxes))
+	}
+}
+
+func TestFilmBoxSaveDoesNotRemoveStaleFilesWhenCurrentWriteFails(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "film-box")
+	imagesFolder := filepath.Join(folder, "Images")
+	if err := os.MkdirAll(filepath.Join(imagesFolder, "I000001.dcm"), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+	stalePath := filepath.Join(imagesFolder, "I000002.dcm")
+	if err := os.WriteFile(stalePath, []byte("stale"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	filmBox := NewFilmBox("2.25.318", testStandardOneByOne)
+	filmBox.AddImageBox(NewImageBox("2.25.319", false))
+	if err := filmBox.Save(folder); err == nil {
+		t.Fatal("FilmBox.Save() succeeded with a directory at the current Image Box path")
+	}
+	if _, err := os.Stat(stalePath); err != nil {
+		t.Fatalf("stale Image Box file was removed after a current write failure: %v", err)
+	}
+}
+
 func TestFilmBoxFolderPersistenceErrors(t *testing.T) {
 	t.Run("nil Film Box", func(t *testing.T) {
 		var filmBox *FilmBox
@@ -194,7 +261,7 @@ func TestFilmBoxFolderPersistenceErrors(t *testing.T) {
 	t.Run("malformed Image Box file", func(t *testing.T) {
 		folder := filepath.Join(t.TempDir(), "box")
 		session := NewFilmSession(basicFilmSessionSOPClassUID, "2.25.321", false)
-		filmBox := NewFilmBox("2.25.322", `STANDARD\1,1`)
+		filmBox := NewFilmBox("2.25.322", testStandardOneByOne)
 		session.AddFilmBox(filmBox)
 		filmBox.AddImageBox(NewImageBox("2.25.323", false))
 		if err := filmBox.Save(folder); err != nil {
@@ -214,7 +281,7 @@ func TestFilmBoxFolderPersistenceErrors(t *testing.T) {
 		if err := os.WriteFile(path, []byte("file"), 0o600); err != nil {
 			t.Fatalf("os.WriteFile() error = %v", err)
 		}
-		if err := NewFilmBox("2.25.324", `STANDARD\1,1`).Save(path); err == nil {
+		if err := NewFilmBox("2.25.324", testStandardOneByOne).Save(path); err == nil {
 			t.Fatal("FilmBox.Save() accepted a file as its target folder")
 		}
 	})

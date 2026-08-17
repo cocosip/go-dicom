@@ -21,7 +21,7 @@ func TestEmptyUIDsAreUnique(t *testing.T) {
 			return NewFilmSession("", "", false).SOPInstanceUID
 		},
 		"film box": func() string {
-			return NewFilmBox("", `STANDARD\1,1`).SOPInstanceUID
+			return NewFilmBox("", testStandardOneByOne).SOPInstanceUID
 		},
 		"image box": func() string {
 			return NewImageBox("", false).SOPInstanceUID
@@ -111,7 +111,7 @@ func TestFilmBoxDatasetRoundTripsStandardAttributesAndReferences(t *testing.T) {
 	const presentationLUTInstanceUID = "2.25.122"
 
 	session := NewFilmSession("", "2.25.120", false)
-	box := NewFilmBox("2.25.121", `STANDARD\2,1`)
+	box := NewFilmBox("2.25.121", testStandardTwoByOne)
 	box.AnnotationDisplayFormatID = "ANNOTATION_1"
 	box.SmoothingType = "SMOOTH_1"
 	box.Illumination = 2000
@@ -178,6 +178,44 @@ func TestFilmBoxDatasetRoundTripsStandardAttributesAndReferences(t *testing.T) {
 	}
 }
 
+func TestFilmBoxDatasetRejectsMalformedStandardUInt16Attributes(t *testing.T) {
+	for _, target := range []*tag.Tag{tag.Illumination, tag.ReflectedAmbientLight} {
+		t.Run(target.String(), func(t *testing.T) {
+			ds, err := NewFilmBox("2.25.125", testStandardOneByOne).ToDataset()
+			if err != nil {
+				t.Fatalf("ToDataset() error = %v", err)
+			}
+			ds.SetAutoValidate(false)
+			if err := ds.AddOrUpdate(element.NewString(target, vr.LO, []string{"invalid"})); err != nil {
+				t.Fatalf("AddOrUpdate(%s) error = %v", target, err)
+			}
+
+			if _, err := NewFilmBoxFromDataset("", ds); err == nil {
+				t.Fatalf("NewFilmBoxFromDataset() accepted malformed %s", target)
+			}
+		})
+	}
+}
+
+func TestFilmBoxDatasetRejectsMultiValuedStandardUInt16Attributes(t *testing.T) {
+	for _, target := range []*tag.Tag{tag.Illumination, tag.ReflectedAmbientLight} {
+		t.Run(target.String(), func(t *testing.T) {
+			ds, err := NewFilmBox("2.25.126", testStandardOneByOne).ToDataset()
+			if err != nil {
+				t.Fatalf("ToDataset() error = %v", err)
+			}
+			ds.SetAutoValidate(false)
+			if err := ds.AddOrUpdate(element.NewUnsignedShort(target, []uint16{1, 2})); err != nil {
+				t.Fatalf("AddOrUpdate(%s) error = %v", target, err)
+			}
+
+			if _, err := NewFilmBoxFromDataset("", ds); err == nil {
+				t.Fatalf("NewFilmBoxFromDataset() accepted multi-valued %s", target)
+			}
+		})
+	}
+}
+
 func TestImageBoxDatasetRoundTrip(t *testing.T) {
 	want := NewImageBox("2.25.103", true)
 	want.ImageBoxPosition = 4
@@ -232,6 +270,28 @@ func TestImageBoxDatasetRoundTripsOptionalOverridesIncludingZero(t *testing.T) {
 		got.ConfigurationInformation == nil || *got.ConfigurationInformation != "CS456" ||
 		got.RequestedDecimateCropBehavior != "CROP" {
 		t.Fatalf("Image Box overrides = %#v", got)
+	}
+}
+
+func TestImageBoxDatasetRejectsMalformedConfigurationInformation(t *testing.T) {
+	for _, malformed := range []element.Element{
+		element.NewUnsignedShort(tag.ConfigurationInformation, []uint16{1}),
+		element.NewString(tag.ConfigurationInformation, vr.LO, []string{"wrong VR"}),
+	} {
+		t.Run(malformed.ValueRepresentation().String(), func(t *testing.T) {
+			ds, err := NewImageBox("2.25.135", false).ToDataset()
+			if err != nil {
+				t.Fatalf("ToDataset() error = %v", err)
+			}
+			ds.SetAutoValidate(false)
+			if err := ds.AddOrUpdate(malformed); err != nil {
+				t.Fatalf("AddOrUpdate(ConfigurationInformation) error = %v", err)
+			}
+
+			if _, err := NewImageBoxFromDataset("", ds, false); err == nil {
+				t.Fatal("NewImageBoxFromDataset() accepted malformed Configuration Information")
+			}
+		})
 	}
 }
 

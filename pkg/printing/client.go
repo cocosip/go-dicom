@@ -7,9 +7,12 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
 
@@ -119,6 +122,9 @@ func (c *Client) Print(ctx context.Context, session *FilmSession) error {
 			if err != nil {
 				return fmt.Errorf("printing: encode Image Box %q: %w", imageBox.SOPInstanceUID, err)
 			}
+			if err := imageDataset.AddOrUpdate(element.NewString(tag.SOPInstanceUID, vr.UI, []string{remoteReference.SOPInstanceUID})); err != nil {
+				return fmt.Errorf("printing: set remote Image Box SOP Instance UID %q: %w", remoteReference.SOPInstanceUID, err)
+			}
 			setRequest := dimse.NewNSetRequest(remoteReference.SOPClassUID, remoteReference.SOPInstanceUID, imageDataset)
 			setResponse, err := c.service.SendNSet(ctx, setRequest)
 			if err != nil {
@@ -203,6 +209,18 @@ func validatePrintSession(session *FilmSession) error {
 		}
 		if err := registerUID("FilmBox", filmBox.SOPInstanceUID); err != nil {
 			return err
+		}
+		formatType, _, _ := strings.Cut(filmBox.ImageDisplayFormat, "\\")
+		if formatType == standardImageDisplayFormat || formatType == "ROW" || formatType == "COL" {
+			expectedImageBoxes, err := ParseImageDisplayFormat(filmBox.ImageDisplayFormat)
+			if err != nil {
+				return fmt.Errorf("printing: FilmBox %q has invalid Image Display Format %q: %w",
+					filmBox.SOPInstanceUID, filmBox.ImageDisplayFormat, err)
+			}
+			if expectedImageBoxes != len(filmBox.BasicImageBoxes) {
+				return fmt.Errorf("printing: FilmBox %q Image Display Format %q requires %d Image Boxes, got %d",
+					filmBox.SOPInstanceUID, filmBox.ImageDisplayFormat, expectedImageBoxes, len(filmBox.BasicImageBoxes))
+			}
 		}
 		seenPositions := make(map[uint16]struct{}, len(filmBox.BasicImageBoxes))
 		for imageIndex, imageBox := range filmBox.BasicImageBoxes {

@@ -99,8 +99,12 @@ func optionalDecimalString(ds *dataset.Dataset, t *tag.Tag) (string, bool, error
 }
 
 func optionalUInt16(ds *dataset.Dataset, t *tag.Tag) (uint16, bool, error) {
-	if _, ok := ds.Get(t); !ok {
+	elem, ok := ds.Get(t)
+	if !ok {
 		return 0, false, nil
+	}
+	if elem.Count() != 1 {
+		return 0, true, fmt.Errorf("printing: %s has VM %d, want 1", t, elem.Count())
 	}
 	value, err := ds.GetUInt16(t, 0)
 	if err != nil {
@@ -352,10 +356,14 @@ func NewFilmBoxFromDataset(sopInstanceUID string, ds *dataset.Dataset) (*FilmBox
 	if value, ok := ds.GetString(tag.SmoothingType); ok {
 		fb.SmoothingType = value
 	}
-	if value, err := ds.GetUInt16(tag.Illumination, 0); err == nil {
+	if value, ok, err := optionalUInt16(ds, tag.Illumination); err != nil {
+		return nil, err
+	} else if ok {
 		fb.Illumination = value
 	}
-	if value, err := ds.GetUInt16(tag.ReflectedAmbientLight, 0); err == nil {
+	if value, ok, err := optionalUInt16(ds, tag.ReflectedAmbientLight); err != nil {
+		return nil, err
+	} else if ok {
 		fb.ReflectedAmbientLight = value
 	}
 	if value, ok := ds.GetString(tag.RequestedResolutionID); ok {
@@ -489,8 +497,17 @@ func NewImageBoxFromDataset(sopInstanceUID string, ds *dataset.Dataset, isColor 
 	} else if ok {
 		ib.MinDensity = &value
 	}
-	if _, ok := ds.Get(tag.ConfigurationInformation); ok {
-		value, _ := ds.GetString(tag.ConfigurationInformation)
+	if configElement, ok := ds.Get(tag.ConfigurationInformation); ok {
+		if configElement.ValueRepresentation() != vr.ST {
+			return nil, fmt.Errorf("printing: %s has VR %s, want ST", tag.ConfigurationInformation, configElement.ValueRepresentation())
+		}
+		if configElement.Count() != 1 {
+			return nil, fmt.Errorf("printing: %s has VM %d, want 1", tag.ConfigurationInformation, configElement.Count())
+		}
+		value, valid := ds.GetString(tag.ConfigurationInformation)
+		if !valid {
+			return nil, fmt.Errorf("printing: invalid %s: expected a string value", tag.ConfigurationInformation)
+		}
 		ib.ConfigurationInformation = &value
 	}
 	if value, ok := ds.GetString(tag.RequestedDecimateCropBehavior); ok {

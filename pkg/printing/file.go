@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -84,6 +85,30 @@ func (fb *FilmBox) Save(folder string) error {
 		imagePath := filepath.Join(imagesFolder, fmt.Sprintf("I%06d.dcm", index+1))
 		if err := writeDatasetAtomically(imagePath, imageDataset); err != nil {
 			return fmt.Errorf("printing: save Image Box %d %q: %w", index+1, imagePath, err)
+		}
+	}
+	if err := removeStaleImageBoxFiles(imagesFolder, len(fb.BasicImageBoxes)); err != nil {
+		return fmt.Errorf("printing: remove stale Image Box files from %q: %w", imagesFolder, err)
+	}
+	return nil
+}
+
+func removeStaleImageBoxFiles(folder string, keep int) error {
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || len(name) != len("I000001.dcm") || name[0] != 'I' || !strings.EqualFold(name[7:], ".dcm") {
+			continue
+		}
+		index, err := strconv.Atoi(name[1:7])
+		if err != nil || index <= keep {
+			continue
+		}
+		if err := os.Remove(filepath.Join(folder, name)); err != nil {
+			return err
 		}
 	}
 	return nil

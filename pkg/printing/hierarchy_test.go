@@ -13,7 +13,7 @@ import (
 
 func TestFilmSessionHierarchyFindAndDelete(t *testing.T) {
 	session := NewFilmSession("", "2.25.200", false)
-	boxDataset, err := NewFilmBox("2.25.201", `STANDARD\1,1`).ToDataset()
+	boxDataset, err := NewFilmBox("2.25.201", testStandardOneByOne).ToDataset()
 	if err != nil {
 		t.Fatalf("FilmBox.ToDataset() error = %v", err)
 	}
@@ -61,7 +61,7 @@ func TestFilmSessionHierarchyFindAndDelete(t *testing.T) {
 
 func TestFilmSessionHierarchyRejectsDuplicateUIDs(t *testing.T) {
 	session := NewFilmSession("", "2.25.210", false)
-	boxDataset, err := NewFilmBox("2.25.211", `STANDARD\1,1`).ToDataset()
+	boxDataset, err := NewFilmBox("2.25.211", testStandardOneByOne).ToDataset()
 	if err != nil {
 		t.Fatalf("FilmBox.ToDataset() error = %v", err)
 	}
@@ -87,7 +87,7 @@ func TestFilmSessionHierarchyRejectsDuplicateUIDs(t *testing.T) {
 func TestFilmSessionCloneIsIndependentAndReparentsChildren(t *testing.T) {
 	source := NewFilmSession("", "2.25.220", true)
 	source.FilmSessionLabel = "source"
-	box := NewFilmBox("2.25.221", `STANDARD\1,1`)
+	box := NewFilmBox("2.25.221", testStandardOneByOne)
 	box.ConfigurationInformation = "CS321"
 	box.AnnotationDisplayFormatID = "ANNOTATION_2"
 	box.ReferencedPresentationLUT = SOPReference{SOPClassUID: presentationLUTSOPClassUID, SOPInstanceUID: "2.25.223"}

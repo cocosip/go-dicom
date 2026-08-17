@@ -39,7 +39,7 @@ func newFakeDIMSEService() *fakeDIMSEService {
 		statusFailureAt: -1,
 		cancelAfter:     -1,
 		filmBoxResponse: referencedImageBoxResponseDataset([]SOPReference{{
-			SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.900",
+			SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: testRemoteImageBoxUID,
 		}}),
 	}
 }
@@ -119,7 +119,7 @@ func printableSession(t *testing.T) *FilmSession {
 	}
 	session.AddPresentationLUT(lut)
 
-	filmBox := NewFilmBox("2.25.503", `STANDARD\1,1`)
+	filmBox := NewFilmBox("2.25.503", testStandardOneByOne)
 	imageBox := NewImageBox("2.25.504", false)
 	imageBox.ImageBoxPosition = 1
 	imageBox.SetImageData([]byte{1, 2, 3, 4})
@@ -160,7 +160,7 @@ func TestClientPrintSendsOrderedDatasetBackedWorkflow(t *testing.T) {
 	if got, err := lutSequence.GetItem(0).GetUInt16s(tag.LUTDescriptor); err != nil || !reflect.DeepEqual(got, []uint16{2, 0, 12}) {
 		t.Errorf("Presentation LUT descriptor = %v, %v", got, err)
 	}
-	if got, _ := service.calls[2].dataset.GetString(tag.ImageDisplayFormat); got != `STANDARD\1,1` {
+	if got, _ := service.calls[2].dataset.GetString(tag.ImageDisplayFormat); got != testStandardOneByOne {
 		t.Errorf("Film Box payload format = %q", got)
 	}
 	if _, ok := service.calls[2].dataset.Get(tag.ReferencedImageBoxSequence); ok {
@@ -171,6 +171,9 @@ func TestClientPrintSendsOrderedDatasetBackedWorkflow(t *testing.T) {
 	}})
 	if got, err := service.calls[3].dataset.GetUInt16(tag.ImageBoxPosition, 0); err != nil || got != 1 {
 		t.Errorf("Image Box payload position = %d, %v", got, err)
+	}
+	if got, ok := service.calls[3].dataset.GetString(tag.SOPInstanceUID); !ok || got != testRemoteImageBoxUID {
+		t.Errorf("Image Box payload SOP Instance UID = %q, %v; want remote UID", got, ok)
 	}
 }
 
@@ -229,6 +232,7 @@ func TestClientPrintRejectsDuplicateRemoteImageBoxUID(t *testing.T) {
 	second.ImageBoxPosition = 2
 	second.SetImageData([]byte{5, 6, 7, 8})
 	box.AddImageBox(second)
+	box.ImageDisplayFormat = testStandardTwoByOne
 
 	service := newFakeDIMSEService()
 	service.filmBoxResponse = referencedImageBoxResponseDataset([]SOPReference{
@@ -249,6 +253,7 @@ func TestClientPrintRejectsDuplicateLocalImageBoxPosition(t *testing.T) {
 	second := NewImageBox("2.25.505", false)
 	second.ImageBoxPosition = 1
 	session.BasicFilmBoxes[0].AddImageBox(second)
+	session.BasicFilmBoxes[0].ImageDisplayFormat = testStandardTwoByOne
 	service := newFakeDIMSEService()
 
 	err := NewClient(service).Print(context.Background(), session)
@@ -271,6 +276,47 @@ func TestClientPrintRejectsOutOfRangeLocalImageBoxPosition(t *testing.T) {
 	}
 	if len(service.calls) != 0 {
 		t.Fatalf("call count = %d, want validation before network operations", len(service.calls))
+	}
+}
+
+func TestClientPrintRejectsImageBoxCountMismatchBeforeNetworkOperations(t *testing.T) {
+	session := printableSession(t)
+	session.BasicFilmBoxes[0].ImageDisplayFormat = testStandardTwoByOne
+	service := newFakeDIMSEService()
+
+	err := NewClient(service).Print(context.Background(), session)
+	if err == nil || !strings.Contains(err.Error(), "requires 2 Image Boxes, got 1") {
+		t.Fatalf("Print() error = %v, want Image Display Format count error", err)
+	}
+	if len(service.calls) != 0 {
+		t.Fatalf("call count = %d, want validation before network operations", len(service.calls))
+	}
+}
+
+func TestClientPrintDefersConfigurationDependentImageBoxCounts(t *testing.T) {
+	for _, displayFormat := range []string{slideImageDisplayFormat, "SUPERSLIDE", `CUSTOM\7`} {
+		t.Run(displayFormat, func(t *testing.T) {
+			session := printableSession(t)
+			filmBox := session.BasicFilmBoxes[0]
+			filmBox.ImageDisplayFormat = displayFormat
+			second := NewImageBox("2.25.505", false)
+			second.ImageBoxPosition = 2
+			second.SetImageData([]byte{5, 6, 7, 8})
+			filmBox.AddImageBox(second)
+
+			service := newFakeDIMSEService()
+			service.filmBoxResponse = referencedImageBoxResponseDataset([]SOPReference{
+				{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: testRemoteImageBoxUID},
+				{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.901"},
+			})
+
+			if err := NewClient(service).Print(context.Background(), session); err != nil {
+				t.Fatalf("Print() error = %v", err)
+			}
+			if len(service.calls) != 6 {
+				t.Fatalf("call count = %d, want complete workflow", len(service.calls))
+			}
+		})
 	}
 }
 
