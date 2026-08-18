@@ -240,9 +240,11 @@ func TestAssociation_String(t *testing.T) {
 func TestPresentationContext_AcceptReject(t *testing.T) {
 	pc := NewPresentationContext(1, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian, transfer.ImplicitVRLittleEndian)
 
-	// Initially should be accepted (default)
-	if !pc.IsAccepted() {
-		t.Error("Expected initial state to be accepted")
+	if pc.Result != ResultNotNegotiated {
+		t.Fatalf("initial result = %d, want ResultNotNegotiated", pc.Result)
+	}
+	if pc.IsAccepted() {
+		t.Error("new presentation context must not be accepted before negotiation")
 	}
 
 	// Reject
@@ -264,6 +266,22 @@ func TestPresentationContext_AcceptReject(t *testing.T) {
 	}
 	if pc.AcceptedTransferSyntax != transfer.ExplicitVRLittleEndian {
 		t.Error("Wrong accepted transfer syntax")
+	}
+
+	pc.SetResult(ResultAcceptance, nil)
+	if pc.IsAccepted() {
+		t.Error("acceptance result without a selected transfer syntax must not be accepted")
+	}
+}
+
+func TestPresentationContext_AcceptTransferSyntaxesNegotiatesNewContext(t *testing.T) {
+	pc := NewPresentationContext(1, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian, transfer.ImplicitVRLittleEndian)
+
+	if !pc.AcceptTransferSyntaxes(false, transfer.ImplicitVRLittleEndian) {
+		t.Fatal("AcceptTransferSyntaxes returned false for a proposed syntax")
+	}
+	if !pc.IsAccepted() || pc.AcceptedTransferSyntax != transfer.ImplicitVRLittleEndian {
+		t.Fatalf("accepted transfer syntax = %v, want Implicit VR Little Endian", pc.AcceptedTransferSyntax)
 	}
 }
 

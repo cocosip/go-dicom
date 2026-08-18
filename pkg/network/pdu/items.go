@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
 // Item type constants for A-ASSOCIATE PDUs
@@ -164,6 +166,16 @@ func writeString(s string) []byte {
 		}
 	}
 	return result
+}
+
+func validateAETitles(called, calling string) error {
+	if err := vr.ValidateAE(called); err != nil {
+		return fmt.Errorf("invalid called AE Title: %w", err)
+	}
+	if err := vr.ValidateAE(calling); err != nil {
+		return fmt.Errorf("invalid calling AE Title: %w", err)
+	}
+	return nil
 }
 
 // trimTrailingSpaces removes trailing spaces from a string.

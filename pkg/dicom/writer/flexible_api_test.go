@@ -23,6 +23,7 @@ func TestWriteWithDefaults(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	// Write with defaults (no options)
@@ -65,6 +66,7 @@ func TestWriteWithFileMetaInfo(t *testing.T) {
 
 	// Create a simple dataset
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
 	// Write with custom file meta info
@@ -94,6 +96,7 @@ func TestWriteWithTransferSyntax(t *testing.T) {
 
 	// Create a dataset
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn}))
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
@@ -156,6 +159,7 @@ func TestWriteUsesDatasetInternalTransferSyntax(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	ds := dataset.NewWithTransferSyntax(transfer.JPEG2000Lossless)
+	addTestSOPUIDs(t, ds)
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"TS^FromDataset"}))
 
 	if err := Write(buf, ds); err != nil {

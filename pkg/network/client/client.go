@@ -380,39 +380,48 @@ func (c *Client) IsConnected() bool {
 	return c.connected
 }
 
+func (c *Client) activeService() (serviceInterface, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.connected || c.service == nil {
+		return nil, fmt.Errorf("client not connected")
+	}
+	return c.service, nil
+}
+
 // Close closes the client connection.
 // If connected, it attempts a graceful release first using a short timeout.
 // If the peer does not acknowledge the release in time, Close returns that
 // error after cleaning up the local connection state.
 func (c *Client) Close() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !c.connected {
+		c.mu.Unlock()
 		return nil
 	}
+	svc := c.service
+	conn := c.conn
+	c.connected = false
+	c.service = nil
+	c.assoc = nil
+	c.conn = nil
+	c.mu.Unlock()
 
 	// Try graceful release with a short timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var err error
-	if c.service != nil {
-		err = c.service.GracefulRelease(ctx)
+	if svc != nil {
+		err = svc.GracefulRelease(ctx)
 		// Service layer closes the connection via GracefulRelease; avoid double close.
-		c.conn = nil
+		conn = nil
 	}
 
-	// Clean up
-	c.connected = false
-	c.service = nil
-	c.assoc = nil
-
-	if c.conn != nil {
-		if closeErr := c.conn.Close(); closeErr != nil && err == nil {
+	if conn != nil {
+		if closeErr := conn.Close(); closeErr != nil && err == nil {
 			err = closeErr
 		}
-		c.conn = nil
 	}
 
 	return err
@@ -421,31 +430,31 @@ func (c *Client) Close() error {
 // Abort aborts the association and closes the connection.
 func (c *Client) Abort(ctx context.Context) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !c.connected {
+		c.mu.Unlock()
 		return nil
 	}
-
-	var err error
-	if c.service != nil {
-		// Source: 0 = service-user (SCU initiated)
-		// Reason: 0 = not-specified
-		err = c.service.Abort(ctx, 0, 0)
-		// Service layer closes the connection via Abort; avoid double close.
-		c.conn = nil
-	}
-
-	// Clean up
+	svc := c.service
+	conn := c.conn
 	c.connected = false
 	c.service = nil
 	c.assoc = nil
+	c.conn = nil
+	c.mu.Unlock()
 
-	if c.conn != nil {
-		if closeErr := c.conn.Close(); closeErr != nil && err == nil {
+	var err error
+	if svc != nil {
+		// Source: 0 = service-user (SCU initiated)
+		// Reason: 0 = not-specified
+		err = svc.Abort(ctx, 0, 0)
+		// Service layer closes the connection via Abort; avoid double close.
+		conn = nil
+	}
+
+	if conn != nil {
+		if closeErr := conn.Close(); closeErr != nil && err == nil {
 			err = closeErr
 		}
-		c.conn = nil
 	}
 
 	return err

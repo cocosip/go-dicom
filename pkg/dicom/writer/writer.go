@@ -18,6 +18,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
@@ -347,6 +348,9 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	if config.sequenceItemObserver != nil && config.transferSyntax.IsDeflate() {
 		return fmt.Errorf("sequence item positions are unavailable for deflated transfer syntax")
 	}
+	if err := validatePixelDataTransferSyntax(ds, config.transferSyntax); err != nil {
+		return err
+	}
 
 	// If largeObjectSize is explicitly set to 0, use default
 	if config.largeObjectSize == 0 {
@@ -397,19 +401,9 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		}
 	}
 
-	// Ensure MediaStorageSOPClassUID and MediaStorageSOPInstanceUID are present
-	// These should be copied from the main dataset if available
-	if _, exists := fileMetaInfo.Get(tag.MediaStorageSOPClassUID); !exists {
-		if sopClassUID, ok := ds.GetString(tag.SOPClassUID); ok {
-			_ = fileMetaInfo.Add(element.NewString(tag.MediaStorageSOPClassUID, vr.UI,
-				[]string{sopClassUID}))
-		}
-	}
-
-	if _, exists := fileMetaInfo.Get(tag.MediaStorageSOPInstanceUID); !exists {
-		if sopInstanceUID, ok := ds.GetString(tag.SOPInstanceUID); ok {
-			_ = fileMetaInfo.Add(element.NewString(tag.MediaStorageSOPInstanceUID, vr.UI,
-				[]string{sopInstanceUID}))
+	if writer.includePreamble {
+		if err := synchronizeFileMetaSOPUIDs(fileMetaInfo, ds); err != nil {
+			return err
 		}
 	}
 
@@ -446,6 +440,65 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 		return fmt.Errorf("failed to write dataset: %w", err)
 	}
 
+	return nil
+}
+
+func validatePixelDataTransferSyntax(ds *dataset.Dataset, ts *transfer.Syntax) error {
+	pixelData, exists := ds.Get(tag.PixelData)
+	if !exists {
+		return nil
+	}
+
+	encapsulated := false
+	switch pixelData.(type) {
+	case *element.FragmentSequence, *element.OtherByteFragment, *element.OtherWordFragment:
+		encapsulated = true
+	}
+	if encapsulated != ts.IsEncapsulated() {
+		return fmt.Errorf("pixel data representation is incompatible with transfer syntax %s", ts.UID().String())
+	}
+	return nil
+}
+
+func synchronizeFileMetaSOPUIDs(fileMetaInfo, ds *dataset.Dataset) error {
+	sopClassUID, hasSOPClassUID := ds.GetString(tag.SOPClassUID)
+	sopInstanceUID, hasSOPInstanceUID := ds.GetString(tag.SOPInstanceUID)
+	if (!hasSOPClassUID || sopClassUID == "") && (!hasSOPInstanceUID || sopInstanceUID == "") {
+		mediaStorageClassUID, hasMediaStorageClassUID := fileMetaInfo.GetString(tag.MediaStorageSOPClassUID)
+		mediaStorageInstanceUID, hasMediaStorageInstanceUID := fileMetaInfo.GetString(tag.MediaStorageSOPInstanceUID)
+		if hasMediaStorageClassUID && mediaStorageClassUID == uid.MediaStorageDirectoryStorage.UID() &&
+			hasMediaStorageInstanceUID && mediaStorageInstanceUID != "" {
+			return nil
+		}
+	}
+	if !hasSOPClassUID || sopClassUID == "" {
+		return fmt.Errorf("dataset is missing SOPClassUID required for Part 10 File Meta Information")
+	}
+	if !hasSOPInstanceUID || sopInstanceUID == "" {
+		return fmt.Errorf("dataset is missing SOPInstanceUID required for Part 10 File Meta Information")
+	}
+
+	for _, item := range []struct {
+		metaTag    *tag.Tag
+		datasetUID string
+		name       string
+	}{
+		{tag.MediaStorageSOPClassUID, sopClassUID, "MediaStorageSOPClassUID"},
+		{tag.MediaStorageSOPInstanceUID, sopInstanceUID, "MediaStorageSOPInstanceUID"},
+	} {
+		if metaUID, exists := fileMetaInfo.GetString(item.metaTag); exists {
+			if metaUID != item.datasetUID {
+				return fmt.Errorf("%s %q does not match dataset UID %q", item.name, metaUID, item.datasetUID)
+			}
+			continue
+		}
+		if _, exists := fileMetaInfo.Get(item.metaTag); exists {
+			return fmt.Errorf("file meta information contains invalid %s", item.name)
+		}
+		if err := fileMetaInfo.Add(element.NewString(item.metaTag, vr.UI, []string{item.datasetUID})); err != nil {
+			return fmt.Errorf("failed to set %s in file meta information: %w", item.name, err)
+		}
+	}
 	return nil
 }
 

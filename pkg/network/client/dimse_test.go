@@ -54,8 +54,7 @@ func TestCStore_NotConnected(t *testing.T) {
 }
 
 func TestCStore_NilDataset(t *testing.T) {
-	client := New()
-	client.connected = true // Fake connection
+	client, _ := setupMockClient()
 
 	ctx := context.Background()
 	err := client.CStore(ctx, nil)
@@ -100,8 +99,7 @@ func TestCCancel_NotConnected(t *testing.T) {
 }
 
 func TestCFind_NilQuery(t *testing.T) {
-	client := New()
-	client.connected = true // Fake connection
+	client, _ := setupMockClient()
 
 	ctx := context.Background()
 	_, err := client.CFind(ctx, dimse.QueryRetrieveLevelStudy, nil)
@@ -116,9 +114,7 @@ func TestCFind_NilQuery(t *testing.T) {
 }
 
 func TestCFindWithCallback_NilCallback(t *testing.T) {
-	client := New()
-	client.connected = true // Fake connection
-	client.assoc = association.NewAssociation("TEST_SCU", "TEST_SCP")
+	client, _ := setupMockClient()
 
 	query := dataset.New()
 	ctx := context.Background()
@@ -146,12 +142,14 @@ func TestCStoreWithPriority_NotConnected(t *testing.T) {
 
 // Mock service for testing DIMSE operations
 type mockServiceForDIMSE struct {
-	echoResponse  *dimse.CEchoResponse
-	storeResponse *dimse.CStoreResponse
-	storeHook     func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
-	findResponses []*dimse.CFindResponse
-	findHook      func(*dimse.CFindRequest)
-	cancelHook    func(messageID uint16, presentationContextID byte)
+	echoResponse    *dimse.CEchoResponse
+	storeResponse   *dimse.CStoreResponse
+	storeHook       func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
+	findResponses   []*dimse.CFindResponse
+	findHook        func(*dimse.CFindRequest)
+	cancelHook      func(messageID uint16, presentationContextID byte)
+	releaseStarted  chan struct{}
+	releaseContinue chan struct{}
 }
 
 // Association management methods (not used in these tests)
@@ -163,8 +161,17 @@ func (m *mockServiceForDIMSE) SendAssociationRequest(_ context.Context, _ *pdu.A
 func (m *mockServiceForDIMSE) ReceiveAssociationResponse(_ context.Context) (*pdu.AAssociateAC, error) {
 	return nil, nil
 }
-func (m *mockServiceForDIMSE) Start() error                                  { return nil }
-func (m *mockServiceForDIMSE) GracefulRelease(_ context.Context) error       { return nil }
+func (m *mockServiceForDIMSE) Start() error { return nil }
+func (m *mockServiceForDIMSE) GracefulRelease(_ context.Context) error {
+	continueCh := m.releaseContinue
+	if m.releaseStarted != nil {
+		close(m.releaseStarted)
+	}
+	if continueCh != nil {
+		<-continueCh
+	}
+	return nil
+}
 func (m *mockServiceForDIMSE) Abort(_ context.Context, _ byte, _ byte) error { return nil }
 
 func (m *mockServiceForDIMSE) SendCEcho(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
@@ -270,6 +277,51 @@ func setupMockClient() (*Client, *mockServiceForDIMSE) {
 	mockService := &mockServiceForDIMSE{}
 	client.service = mockService
 	return client, mockService
+}
+
+func TestCEchoTreatsMissingServiceAsDisconnected(t *testing.T) {
+	client := New()
+	client.connected = true
+
+	if err := client.CEcho(context.Background()); err == nil {
+		t.Fatal("CEcho() succeeded with no active service")
+	}
+}
+
+func TestClosePublishesDisconnectedStateBeforeGracefulReleaseCompletes(t *testing.T) {
+	client, mockService := setupMockClient()
+	mockService.releaseStarted = make(chan struct{})
+	mockService.releaseContinue = make(chan struct{})
+	defer func() {
+		if mockService.releaseContinue != nil {
+			close(mockService.releaseContinue)
+		}
+	}()
+
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- client.Close() }()
+	select {
+	case <-mockService.releaseStarted:
+	case <-time.After(time.Second):
+		t.Fatal("Close() did not start graceful release")
+	}
+
+	connected := make(chan bool, 1)
+	go func() { connected <- client.IsConnected() }()
+	select {
+	case got := <-connected:
+		if got {
+			t.Fatal("client remained connected while graceful release was in progress")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("IsConnected() blocked behind graceful release")
+	}
+
+	close(mockService.releaseContinue)
+	mockService.releaseContinue = nil
+	if err := <-closeDone; err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 }
 
 func TestCEcho_Success(t *testing.T) {

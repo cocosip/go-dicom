@@ -162,6 +162,24 @@ func TestToJSON_BulkDataURI(t *testing.T) {
 	}
 }
 
+func TestToJSON_BulkDataURIEscapesJSONString(t *testing.T) {
+	uri := "https://example.test/bulk/\"quoted\"?path=\\dicom\nnext"
+	ds := dataset.New()
+	_ = ds.Add(element.NewOtherWordFromBuffer(tag.PixelData, buffer.NewBulkDataURI(uri)))
+
+	jsonData, err := ToJSON(ds)
+	if err != nil {
+		t.Fatalf("ToJSON() error = %v", err)
+	}
+	var result map[string]map[string]any
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		t.Fatalf("ToJSON() produced invalid JSON: %v\n%s", err, jsonData)
+	}
+	if got := result["7FE00010"]["BulkDataURI"]; got != uri {
+		t.Fatalf("BulkDataURI = %q, want %q", got, uri)
+	}
+}
+
 func TestToJSON_BulkDataURI_WithData(t *testing.T) {
 	// Create dataset with BulkDataURI element that has data loaded
 	ds := dataset.New()

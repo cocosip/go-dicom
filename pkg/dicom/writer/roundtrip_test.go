@@ -19,6 +19,7 @@ import (
 func TestWriteThenRead(t *testing.T) {
 	// Create dataset with various element types
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
@@ -103,6 +104,7 @@ func TestWriteThenRead(t *testing.T) {
 
 func TestWriteThenReadDeflatedExplicitVRLittleEndian(t *testing.T) {
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Deflated^Patient"})); err != nil {
 		t.Fatalf("Add(PatientName) error = %v", err)
 	}
@@ -137,6 +139,7 @@ func TestWriteThenReadDeflatedExplicitVRLittleEndian(t *testing.T) {
 func TestWriteThenReadWithSequence(t *testing.T) {
 	// Create dataset with a sequence
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}

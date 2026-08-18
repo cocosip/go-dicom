@@ -14,6 +14,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
 
@@ -198,11 +199,11 @@ func TestReadRoundTripsStringBackedTypedValues(t *testing.T) {
 		t.Fatalf("NewStructuredReport() error = %v", err)
 	}
 	var output bytes.Buffer
-	if err := report.Write(&output); err != nil {
+	if err := report.Write(&output, writer.WithoutPreamble()); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
-	parsed, err := Read(bytes.NewReader(output.Bytes()))
+	parsed, err := Read(bytes.NewReader(output.Bytes()), parser.WithAssumedTransferSyntax(transfer.ExplicitVRLittleEndian))
 	if err != nil {
 		t.Fatalf("Read() error = %v", err)
 	}

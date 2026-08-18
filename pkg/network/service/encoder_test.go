@@ -127,11 +127,11 @@ func TestDecodeDIMSEMessagePreservesFragmentSequence(t *testing.T) {
 	var raw bytes.Buffer
 	if err := writer.Write(&raw, ds,
 		writer.WithoutPreamble(),
-		writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+		writer.WithTransferSyntax(transfer.JPEG2000Lossless)); err != nil {
 		t.Fatal(err)
 	}
 
-	_, decoded, err := DecodeDIMSEMessage(nil, raw.Bytes(), transfer.ExplicitVRLittleEndian)
+	_, decoded, err := DecodeDIMSEMessage(nil, raw.Bytes(), transfer.JPEG2000Lossless)
 	if err != nil {
 		t.Fatalf("DecodeDIMSEMessage() error = %v", err)
 	}

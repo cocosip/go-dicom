@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -154,14 +155,7 @@ func (f *Fetcher) Fetch(ctx context.Context, req rangeio.FetchRequest) ([]byte, 
 		return nil, err
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) != req.Length {
-		return nil, io.ErrUnexpectedEOF
-	}
-	return data, nil
+	return readExpectedLength(resp.Body, req.Length)
 }
 
 func (f *Fetcher) probe(ctx context.Context) error {
@@ -220,8 +214,26 @@ func (f *Fetcher) probeRangeGET(ctx context.Context) error {
 		return err
 	}
 	f.setProbeMetadata(size, resp.Header)
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return nil
+	_, err = readExpectedLength(resp.Body, 1)
+	return err
+}
+
+func readExpectedLength(r io.Reader, expected int64) ([]byte, error) {
+	limit := expected + 1
+	if expected == math.MaxInt64 {
+		limit = expected
+	}
+	data, err := io.ReadAll(io.LimitReader(r, limit))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) < expected {
+		return nil, io.ErrUnexpectedEOF
+	}
+	if int64(len(data)) > expected {
+		return nil, fmt.Errorf("rangehttp: response body exceeds expected length %d", expected)
+	}
+	return data, nil
 }
 
 func (f *Fetcher) setProbeMetadata(size int64, header http.Header) {

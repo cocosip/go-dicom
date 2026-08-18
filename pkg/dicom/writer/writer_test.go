@@ -16,10 +16,22 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	bufferio "github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 const dicmPrefix = "DICM"
+
+func addTestSOPUIDs(t *testing.T, ds *dataset.Dataset) {
+	t.Helper()
+	if err := ds.AddOrUpdate(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID})); err != nil {
+		t.Fatalf("add SOPClassUID: %v", err)
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.826.0.1.3680043.10.1142.1"})); err != nil {
+		t.Fatalf("add SOPInstanceUID: %v", err)
+	}
+}
 
 // TestWritePreamble tests preamble writing
 func TestWritePreamble(t *testing.T) {
@@ -47,7 +59,7 @@ func TestWritePreamble(t *testing.T) {
 func TestWriteUsesDatasetTransferSyntaxAndSyncsFileMeta(t *testing.T) {
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
 	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Meta^Sync"}))
 
 	fmi := dataset.New()
@@ -331,6 +343,7 @@ func TestWriteSimpleDataset(t *testing.T) {
 
 	// Create dataset
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
@@ -364,6 +377,96 @@ func TestWriteNilDataset(t *testing.T) {
 	buf := &bytes.Buffer{}
 	if err := Write(buf, nil); err == nil {
 		t.Fatal("Write() should fail for nil dataset")
+	}
+}
+
+func TestWritePart10RequiresDatasetSOPUIDs(t *testing.T) {
+	tests := []struct {
+		name string
+		ds   *dataset.Dataset
+	}{
+		{"missing SOP Class UID", func() *dataset.Dataset {
+			ds := dataset.New()
+			_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
+			return ds
+		}()},
+		{"missing SOP Instance UID", func() *dataset.Dataset {
+			ds := dataset.New()
+			_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+			return ds
+		}()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Write(&bytes.Buffer{}, tt.ds); err == nil {
+				t.Fatal("Write() succeeded without required Dataset SOP UID")
+			}
+		})
+	}
+}
+
+func TestWritePart10RejectsMismatchedMediaStorageSOPUIDs(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
+
+	tests := []struct {
+		name string
+		tag  *tag.Tag
+	}{
+		{"SOP Class UID", tag.MediaStorageSOPClassUID},
+		{"SOP Instance UID", tag.MediaStorageSOPInstanceUID},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fmi := dataset.New()
+			_ = fmi.Add(element.NewString(tt.tag, vr.UI, []string{"9.9.9"}))
+			if err := Write(&bytes.Buffer{}, ds, WithFileMetaInfo(fmi)); err == nil {
+				t.Fatal("Write() succeeded with mismatched File Meta SOP UID")
+			}
+		})
+	}
+}
+
+func TestWritePart10AllowsDICOMDIRIdentityInFileMetaOnly(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.FileSetID, vr.CS, []string{"TEST"}))
+	fmi := dataset.New()
+	_ = fmi.Add(element.NewString(tag.MediaStorageSOPClassUID, vr.UI, []string{uid.MediaStorageDirectoryStorage.UID()}))
+	_ = fmi.Add(element.NewString(tag.MediaStorageSOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
+
+	if err := Write(&bytes.Buffer{}, ds, WithFileMetaInfo(fmi)); err != nil {
+		t.Fatalf("Write() rejected standard DICOMDIR identity placement: %v", err)
+	}
+}
+
+func TestWriteRejectsPixelDataRepresentationTransferSyntaxMismatch(t *testing.T) {
+	newDataset := func(pixelData element.Element) *dataset.Dataset {
+		ds := dataset.New()
+		_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+		_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
+		_ = ds.Add(pixelData)
+		return ds
+	}
+
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	fragments.AddFragment(bufferio.NewMemory([]byte{0x01, 0x02}))
+	tests := []struct {
+		name string
+		ds   *dataset.Dataset
+		ts   *transfer.Syntax
+	}{
+		{"native pixels with encapsulated syntax", newDataset(element.NewOtherByte(tag.PixelData, []byte{0x01, 0x02})), transfer.JPEG2000Lossless},
+		{"fragments with native syntax", newDataset(fragments), transfer.ExplicitVRLittleEndian},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Write(&bytes.Buffer{}, tt.ds, WithTransferSyntax(tt.ts)); err == nil {
+				t.Fatal("Write() succeeded with incompatible Pixel Data representation")
+			}
+		})
 	}
 }
 
@@ -439,6 +542,7 @@ func TestRoundTrip(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientNameJohn})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}

@@ -561,6 +561,35 @@ func TestAETitleSpacePadding(t *testing.T) {
 	}
 }
 
+func TestAAssociateRQEncodeRejectsInvalidAETitles(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		value string
+	}{
+		{"called title over 16 bytes", testCalledAEField, testInvalidAETitle},
+		{"calling title over 16 bytes", testCallingAEField, testInvalidAETitle},
+		{"backslash", testCalledAEField, `BAD\TITLE`},
+		{"control character", testCalledAEField, "BAD\nTITLE"},
+		{"outside default repertoire", testCalledAEField, "医院"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := NewAAssociateRQ()
+			rq.CalledAETitle = "CALLED"
+			rq.CallingAETitle = "CALLING"
+			if tt.field == testCalledAEField {
+				rq.CalledAETitle = tt.value
+			} else {
+				rq.CallingAETitle = tt.value
+			}
+			if _, err := rq.Encode(); err == nil {
+				t.Fatal("Encode() succeeded with invalid AE Title")
+			}
+		})
+	}
+}
+
 func TestAAssociateRQDecodeIsSilentAndReportsStructuredWarnings(t *testing.T) {
 	raw := unknownItemsAssociateRQ()
 

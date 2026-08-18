@@ -74,8 +74,16 @@ func TestOpenReadsDICOMDIRFromPath(t *testing.T) {
 
 func TestReadRejectsNonDirectoryStorageSOPClass(t *testing.T) {
 	encoded := encodeDirectoryForReadTest(t, func(fixture *readTestFixture) {
-		if err := fixture.fileMeta.AddOrUpdate(element.NewString(tag.MediaStorageSOPClassUID, vr.UI, []string{"1.2.840.10008.1.3.11"})); err != nil {
+		const nonDirectorySOPClassUID = "1.2.840.10008.1.3.11"
+		if err := fixture.fileMeta.AddOrUpdate(element.NewString(tag.MediaStorageSOPClassUID, vr.UI, []string{nonDirectorySOPClassUID})); err != nil {
 			t.Fatalf("replace MediaStorageSOPClassUID: %v", err)
+		}
+		mediaStorageSOPInstanceUID, _ := fixture.fileMeta.GetString(tag.MediaStorageSOPInstanceUID)
+		if err := fixture.dataset.AddOrUpdate(element.NewString(tag.SOPClassUID, vr.UI, []string{nonDirectorySOPClassUID})); err != nil {
+			t.Fatalf("add dataset SOPClassUID: %v", err)
+		}
+		if err := fixture.dataset.AddOrUpdate(element.NewString(tag.SOPInstanceUID, vr.UI, []string{mediaStorageSOPInstanceUID})); err != nil {
+			t.Fatalf("add dataset SOPInstanceUID: %v", err)
 		}
 	})
 

@@ -18,6 +18,9 @@ const (
 	testCallingAETitle     = "CALLING"
 	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
 	testImplicitVRLittleLE = "1.2.840.10008.1.2"
+	testCalledAEField      = "called"
+	testCallingAEField     = "calling"
+	testInvalidAETitle     = "ABCDEFGHIJKLMNOPQ"
 )
 
 func TestNewAAssociateAC(t *testing.T) {
@@ -471,6 +474,24 @@ func TestAAssociateAC_AETitleSpacePadding(t *testing.T) {
 
 	if decoded.CallingAETitle != testAnotherAETitle {
 		t.Errorf("CallingAETitle should trim spaces: expected 'ANOTHER', got '%s'", decoded.CallingAETitle)
+	}
+}
+
+func TestAAssociateACEncodeRejectsInvalidAETitles(t *testing.T) {
+	for _, field := range []string{testCalledAEField, testCallingAEField} {
+		t.Run(field, func(t *testing.T) {
+			ac := NewAAssociateAC()
+			ac.CalledAETitle = "CALLED"
+			ac.CallingAETitle = "CALLING"
+			if field == testCalledAEField {
+				ac.CalledAETitle = testInvalidAETitle
+			} else {
+				ac.CallingAETitle = testInvalidAETitle
+			}
+			if _, err := ac.Encode(); err == nil {
+				t.Fatal("Encode() succeeded with an AE Title over 16 bytes")
+			}
+		})
 	}
 }
 

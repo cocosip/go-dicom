@@ -31,15 +31,16 @@ const (
 //	    return fmt.Errorf("C-ECHO failed: %w", err)
 //	}
 func (c *Client) CEcho(ctx context.Context) error {
-	if !c.connected {
-		return fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return err
 	}
 
 	// Create C-ECHO request
 	req := dimse.NewCEchoRequest()
 
 	// Send and wait for response
-	resp, err := c.service.SendCEcho(ctx, req)
+	resp, err := svc.SendCEcho(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-ECHO: %w", err)
 	}
@@ -75,8 +76,9 @@ func (c *Client) CEcho(ctx context.Context) error {
 //	    return fmt.Errorf("C-STORE failed: %w", err)
 //	}
 func (c *Client) CStore(ctx context.Context, ds *dataset.Dataset) error {
-	if !c.connected {
-		return fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return err
 	}
 
 	if ds == nil {
@@ -90,7 +92,7 @@ func (c *Client) CStore(ctx context.Context, ds *dataset.Dataset) error {
 	}
 
 	// Send and wait for response
-	resp, err := c.service.SendCStore(ctx, req)
+	resp, err := svc.SendCStore(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-STORE: %w", err)
 	}
@@ -141,15 +143,17 @@ func (c *Client) CFind(ctx context.Context, level dimse.QueryRetrieveLevel, quer
 // cancelled, and presentationContextID must be the presentation context used by
 // that original request.
 func (c *Client) CCancel(ctx context.Context, messageID uint16, presentationContextID byte) error {
-	if !c.connected {
-		return fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return err
 	}
-	return c.service.SendCCancel(ctx, messageID, presentationContextID)
+	return svc.SendCCancel(ctx, messageID, presentationContextID)
 }
 
 func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) ([]*dataset.Dataset, error) {
-	if !c.connected {
-		return nil, fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return nil, err
 	}
 
 	if req == nil || req.DataDataset() == nil {
@@ -157,7 +161,7 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 	}
 
 	// Send request
-	respCh, err := c.service.SendCFind(ctx, req)
+	respCh, err := svc.SendCFind(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send C-FIND: %w", err)
 	}
@@ -224,8 +228,9 @@ func (c *Client) CFindWithCallback(ctx context.Context, level dimse.QueryRetriev
 }
 
 func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFindRequest, callback func(*dataset.Dataset) bool) error {
-	if !c.connected {
-		return fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return err
 	}
 
 	if req == nil || req.DataDataset() == nil {
@@ -237,7 +242,7 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 	}
 
 	// Send request - returns channel of responses
-	respCh, err := c.service.SendCFind(ctx, req)
+	respCh, err := svc.SendCFind(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-FIND: %w", err)
 	}
@@ -287,8 +292,9 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 //   - dimse.PriorityMedium (0x0000) - default
 //   - dimse.PriorityHigh (0x0001)
 func (c *Client) CStoreWithPriority(ctx context.Context, ds *dataset.Dataset, priority dimse.Priority) error {
-	if !c.connected {
-		return fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return err
 	}
 
 	if ds == nil {
@@ -305,7 +311,7 @@ func (c *Client) CStoreWithPriority(ctx context.Context, ds *dataset.Dataset, pr
 	req.SetPriority(uint16(priority))
 
 	// Send and wait for response
-	resp, err := c.service.SendCStore(ctx, req)
+	resp, err := svc.SendCStore(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-STORE: %w", err)
 	}
@@ -361,8 +367,8 @@ func (c *Client) CFindStudyRoot(ctx context.Context, level dimse.QueryRetrieveLe
 //	    fmt.Printf("Stored %d out of %d datasets before error: %v\n", count, len(datasets), err)
 //	}
 func (c *Client) CStoreMultiple(ctx context.Context, datasets []*dataset.Dataset) (int, error) {
-	if !c.connected {
-		return 0, fmt.Errorf("client not connected")
+	if _, err := c.activeService(); err != nil {
+		return 0, err
 	}
 
 	if len(datasets) == 0 {
@@ -418,8 +424,9 @@ type CMoveCallback func(remaining, completed, failed, warning uint16) bool
 func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, moveDestination string,
 	identifier *dataset.Dataset, callback CMoveCallback) error {
 
-	if !c.connected {
-		return fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return err
 	}
 
 	if identifier == nil {
@@ -434,7 +441,7 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 	req := dimse.NewCMoveRequest(level, moveDestination, identifier)
 
 	// Send request - returns channel of responses
-	respCh, err := c.service.SendCMove(ctx, req)
+	respCh, err := svc.SendCMove(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-MOVE: %w", err)
 	}
@@ -514,8 +521,9 @@ type CGetCallback func(remaining, completed, failed, warning uint16) bool
 func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 	identifier *dataset.Dataset, callback CGetCallback) error {
 
-	if !c.connected {
-		return fmt.Errorf("client not connected")
+	svc, err := c.activeService()
+	if err != nil {
+		return err
 	}
 
 	if identifier == nil {
@@ -526,7 +534,7 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 	req := dimse.NewCGetRequest(level, identifier)
 
 	// Send request - returns channel of responses
-	respCh, err := c.service.SendCGet(ctx, req)
+	respCh, err := svc.SendCGet(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-GET: %w", err)
 	}

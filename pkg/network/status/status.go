@@ -20,29 +20,27 @@ func (s *Status) String() string {
 
 // IsSuccess returns true if the status indicates success.
 func (s *Status) IsSuccess() bool {
-	return s.Code == 0x0000
+	return s.State == StateSuccess
 }
 
 // IsPending returns true if the status indicates pending (more results to come).
 func (s *Status) IsPending() bool {
-	return s.Code == 0xFF00 || s.Code == 0xFF01
+	return s.State == StatePending
 }
 
 // IsWarning returns true if the status is a warning (operation completed with issues).
-// Warning range: 0x0001-0x00FF and 0xB000-0xBFFF
 func (s *Status) IsWarning() bool {
-	return (s.Code >= 0x0001 && s.Code <= 0x00FF) || (s.Code >= 0xB000 && s.Code <= 0xBFFF)
+	return s.State == StateWarning
 }
 
 // IsFailure returns true if the status indicates failure.
-// Failure range: 0x0100-0xAFFF and 0xC000-0xFDFF (excluding pending/cancel ranges)
 func (s *Status) IsFailure() bool {
-	return (s.Code >= 0x0100 && s.Code <= 0xAFFF) || (s.Code >= 0xC000 && s.Code <= 0xFDFF)
+	return s.State == StateFailure
 }
 
 // IsCancel returns true if the status indicates cancellation.
 func (s *Status) IsCancel() bool {
-	return s.Code == 0xFE00
+	return s.State == StateCancel
 }
 
 // NewStatus creates a new Status with the given code, state, and description.

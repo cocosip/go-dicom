@@ -36,21 +36,11 @@ func newValidationError(vrCode, content, message string) error {
 	}
 }
 
-// containsControlChars checks if string contains control characters.
-func containsControlChars(s string) bool {
-	for _, r := range s {
-		if unicode.IsControl(r) {
-			return true
-		}
-	}
-	return false
-}
-
 // ValidateAE validates Application Entity (AE) values.
 func ValidateAE(content string) error {
-	// may not be longer than 16 characters
+	// AE values are limited to 16 bytes and always use the Default Character Repertoire.
 	if len(content) > 16 {
-		return newValidationError("AE", content, "value exceeds maximum length of 16 characters")
+		return newValidationError("AE", content, "value exceeds maximum length of 16 bytes")
 	}
 
 	// may not consist only of spaces
@@ -58,9 +48,10 @@ func ValidateAE(content string) error {
 		return newValidationError("AE", content, "value may not consist only of spaces")
 	}
 
-	// Default Character Repertoire excluding backslash and control characters
-	if strings.Contains(content, "\\") || containsControlChars(content) {
-		return newValidationError("AE", content, "value contains invalid control character or backslash")
+	for i := 0; i < len(content); i++ {
+		if content[i] < 0x20 || content[i] > 0x7E || content[i] == '\\' {
+			return newValidationError("AE", content, "value contains a character outside the permitted Default Character Repertoire")
+		}
 	}
 
 	return nil

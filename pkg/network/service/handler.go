@@ -266,8 +266,7 @@ func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequ
 			resp = dimse.NewCStoreResponseFromRequest(req, status.CStoreRefusedOutOfResources)
 		}
 	} else {
-		// Default handler - return success (but don't actually store anything)
-		resp = dimse.NewCStoreResponseFromRequest(req, status.Success)
+		resp = dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand)
 	}
 
 	// Send response
@@ -291,8 +290,7 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 			return s.Send(ctx, resp)
 		}
 	} else {
-		// Default handler - return success with no results
-		resp := dimse.NewCFindResponseFromRequest(req, status.Success, nil)
+		resp := dimse.NewCFindResponseFromRequest(req, status.CFindFailedUnableToProcess, nil)
 		responses = []*dimse.CFindResponse{resp}
 	}
 
@@ -320,8 +318,7 @@ func (s *Service) handleCMoveRequest(ctx context.Context, req *dimse.CMoveReques
 		}
 		return nil
 	}
-	// Default: no handler registered — return success with no operations.
-	return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.Success))
+	return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.CMoveFailedUnableToProcess))
 }
 
 // handleCGetRequest handles a C-GET request.
@@ -344,8 +341,7 @@ func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest,
 		}
 		return nil
 	}
-	// Default: no handler registered — return success with no operations.
-	return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.Success))
+	return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.CGetFailedUnableToProcess))
 }
 
 // handleNEventReportRequest handles an N-EVENT-REPORT request.
@@ -359,7 +355,7 @@ func (s *Service) handleNEventReportRequest(ctx context.Context, req *dimse.NEve
 				req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), req.EventTypeID(), nil)
 		}
 	} else {
-		resp = dimse.NewNEventReportResponseSuccess(req.MessageID(),
+		resp = dimse.NewNEventReportResponse(req.MessageID(), status.NEventReportFailureProcessingFailure,
 			req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), req.EventTypeID(), nil)
 	}
 	return s.Send(ctx, resp)
@@ -376,7 +372,7 @@ func (s *Service) handleNGetRequest(ctx context.Context, req *dimse.NGetRequest,
 				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
 		}
 	} else {
-		resp = dimse.NewNGetResponseSuccess(req.MessageID(),
+		resp = dimse.NewNGetResponse(req.MessageID(), status.NGetFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
 	}
 	return s.Send(ctx, resp)
@@ -393,7 +389,7 @@ func (s *Service) handleNSetRequest(ctx context.Context, req *dimse.NSetRequest,
 				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
 		}
 	} else {
-		resp = dimse.NewNSetResponseSuccess(req.MessageID(),
+		resp = dimse.NewNSetResponse(req.MessageID(), status.NSetFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
 	}
 	return s.Send(ctx, resp)
@@ -410,7 +406,7 @@ func (s *Service) handleNActionRequest(ctx context.Context, req *dimse.NActionRe
 				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), req.ActionTypeID(), nil)
 		}
 	} else {
-		resp = dimse.NewNActionResponseSuccess(req.MessageID(),
+		resp = dimse.NewNActionResponse(req.MessageID(), status.NActionFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), req.ActionTypeID(), nil)
 	}
 	return s.Send(ctx, resp)
@@ -427,7 +423,7 @@ func (s *Service) handleNCreateRequest(ctx context.Context, req *dimse.NCreateRe
 				req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil)
 		}
 	} else {
-		resp = dimse.NewNCreateResponseSuccess(req.MessageID(),
+		resp = dimse.NewNCreateResponse(req.MessageID(), status.NCreateFailureProcessingFailure,
 			req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil)
 	}
 	return s.Send(ctx, resp)
@@ -444,7 +440,7 @@ func (s *Service) handleNDeleteRequest(ctx context.Context, req *dimse.NDeleteRe
 				req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID())
 		}
 	} else {
-		resp = dimse.NewNDeleteResponseSuccess(req.MessageID(),
+		resp = dimse.NewNDeleteResponse(req.MessageID(), status.NDeleteFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID())
 	}
 	return s.Send(ctx, resp)

@@ -279,6 +279,7 @@ const (
 	ResultNoReason                     byte = 2
 	ResultAbstractSyntaxNotSupported   byte = 3
 	ResultTransferSyntaxesNotSupported byte = 4
+	ResultNotNegotiated                byte = 0xFF
 )
 
 // NewPresentationContext creates a new presentation context for A-ASSOCIATE-RQ.
@@ -287,7 +288,7 @@ func NewPresentationContext(id byte, abstractSyntax string, transferSyntaxes ...
 		ID:                       id,
 		AbstractSyntax:           abstractSyntax,
 		ProposedTransferSyntaxes: transferSyntaxes,
-		Result:                   ResultAcceptance, // Default to acceptance
+		Result:                   ResultNotNegotiated,
 	}
 }
 
@@ -357,7 +358,7 @@ func (pc *PresentationContext) SetResult(result byte, transferSyntax *transfer.S
 //	}
 func (pc *PresentationContext) AcceptTransferSyntaxes(scpPriority bool, acceptedTransferSyntaxes ...*transfer.Syntax) bool {
 	// If already accepted, return true
-	if pc.Result == ResultAcceptance {
+	if pc.IsAccepted() {
 		return true
 	}
 
@@ -399,7 +400,7 @@ func (pc *PresentationContext) HasTransferSyntax(ts *transfer.Syntax) bool {
 
 // IsAccepted returns true if this presentation context is accepted.
 func (pc *PresentationContext) IsAccepted() bool {
-	return pc.Result == ResultAcceptance
+	return pc.Result == ResultAcceptance && pc.AcceptedTransferSyntax != nil
 }
 
 // ExtendedNegotiation represents SOP Class Extended Negotiation.

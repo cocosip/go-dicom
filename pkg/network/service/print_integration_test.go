@@ -113,7 +113,7 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 		NSetHandler: func(_ context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error) {
 			position, _ := req.DataDataset().GetUInt16(tag.ImageBoxPosition, 0)
 			record(receivedPrintOperation{
-				operation: "N-SET",
+				operation: testNSetOperation,
 				classUID:  req.RequestedSOPClassUID(),
 				instance:  req.RequestedSOPInstanceUID(),
 				position:  position,
@@ -122,7 +122,7 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 		},
 		NActionHandler: func(_ context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error) {
 			record(receivedPrintOperation{
-				operation: "N-ACTION",
+				operation: testNActionOperation,
 				classUID:  req.RequestedSOPClassUID(),
 				instance:  req.RequestedSOPInstanceUID(),
 				actionID:  req.ActionTypeID(),

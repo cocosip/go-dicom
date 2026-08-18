@@ -104,6 +104,9 @@ func NewAAssociateAC() *AAssociateAC {
 
 // Encode encodes the A-ASSOCIATE-AC to a RawPDU.
 func (a *AAssociateAC) Encode() (*RawPDU, error) {
+	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
+		return nil, err
+	}
 	var buf bytes.Buffer
 
 	// Protocol Version (2 bytes)

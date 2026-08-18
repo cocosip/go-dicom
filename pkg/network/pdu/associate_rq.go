@@ -122,6 +122,9 @@ func NewAAssociateRQ() *AAssociateRQ {
 
 // Encode encodes the A-ASSOCIATE-RQ into a RawPDU.
 func (a *AAssociateRQ) Encode() (*RawPDU, error) {
+	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
+		return nil, err
+	}
 	var buf bytes.Buffer
 
 	// Write fixed fields

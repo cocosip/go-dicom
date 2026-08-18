@@ -666,10 +666,12 @@ func (w *jsonWriter) writeOther(elem element.Element) error {
 
 	// Check if this is a BulkDataUri buffer
 	if bulkDataBuf, ok := buf.(*buffer.BulkDataURIByteBuffer); ok {
-		// Write as BulkDataURI
-		w.buf.WriteString(`,"BulkDataURI":"`)
-		w.buf.WriteString(bulkDataBuf.BulkDataURI())
-		w.buf.WriteString(`"`)
+		encodedURI, err := json.Marshal(bulkDataBuf.BulkDataURI())
+		if err != nil {
+			return fmt.Errorf("marshal BulkDataURI: %w", err)
+		}
+		w.buf.WriteString(`,"BulkDataURI":`)
+		w.buf.Write(encodedURI)
 		return nil
 	}
 

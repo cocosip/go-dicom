@@ -27,12 +27,13 @@ func roundTripOtherByteFragment(t *testing.T, obf *element.OtherByteFragment) *e
 	t.Helper()
 
 	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	if err := ds.Add(obf); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
 
 	buf := &bytes.Buffer{}
-	if err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+	if err := Write(buf, ds, WithTransferSyntax(transfer.JPEG2000Lossless)); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 	if buf.Len() == 0 {
@@ -113,6 +114,7 @@ func TestFragmentSequenceRoundTrip(t *testing.T) {
 	t.Run("RoundTrip", func(t *testing.T) {
 		// Create original dataset
 		ds := dataset.New()
+		addTestSOPUIDs(t, ds)
 
 		// Add some metadata
 		if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName})); err != nil {
@@ -134,7 +136,7 @@ func TestFragmentSequenceRoundTrip(t *testing.T) {
 
 		// Write to buffer
 		buf := &bytes.Buffer{}
-		err := Write(buf, ds, WithTransferSyntax(transfer.ExplicitVRLittleEndian))
+		err := Write(buf, ds, WithTransferSyntax(transfer.JPEG2000Lossless))
 		if err != nil {
 			t.Fatalf("Write() error = %v", err)
 		}

@@ -20,6 +20,7 @@ func TestValidateAE(t *testing.T) {
 		{testCaseTooLong, "VERYLONGAETITLE1234", true},
 		{"only spaces", "    ", true},
 		{"contains backslash", "AE\\TITLE", true},
+		{"outside default repertoire", "医院", true},
 		{testCaseEmpty, "", false}, // Empty is typically allowed
 	}
 

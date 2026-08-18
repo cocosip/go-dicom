@@ -220,10 +220,10 @@ func TestSetStringsUsesDatasetSpecificCharacterSetForMissingText(t *testing.T) {
 		t.Fatal(err)
 	}
 	var encoded bytes.Buffer
-	if err := writer.Write(&encoded, result); err != nil {
+	if err := writer.Write(&encoded, result, writer.WithoutPreamble()); err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()), parser.WithAssumedTransferSyntax(transfer.ExplicitVRLittleEndian))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,10 +244,10 @@ func TestSetStringsUsesDatasetTransferSyntaxForMissingNumeric(t *testing.T) {
 		t.Fatal(err)
 	}
 	var encoded bytes.Buffer
-	if err := writer.Write(&encoded, result); err != nil {
+	if err := writer.Write(&encoded, result, writer.WithoutPreamble()); err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()), parser.WithAssumedTransferSyntax(transfer.ExplicitVRBigEndian))
 	if err != nil {
 		t.Fatal(err)
 	}

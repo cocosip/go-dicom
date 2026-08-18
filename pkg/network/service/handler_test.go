@@ -48,6 +48,29 @@ func setupTestService(t *testing.T) (*Service, context.Context, context.CancelFu
 	return service, ctx, cancel
 }
 
+func setupCapturingTestService(t *testing.T) (*Service, context.Context, context.CancelFunc, <-chan dimse.Message) {
+	t.Helper()
+
+	service := NewService(nil, nil)
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("Failed to set state: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	sent := make(chan dimse.Message, 1)
+	go func() {
+		select {
+		case req := <-service.sendQueue:
+			sent <- req.message
+			req.resultCh <- nil
+		case <-service.closeCh:
+		case <-ctx.Done():
+		}
+	}()
+
+	return service, ctx, cancel, sent
+}
+
 func TestSetGetHandlers(t *testing.T) {
 	service := NewService(nil, nil)
 	defer func() { _ = service.Close() }()
@@ -167,6 +190,74 @@ func TestHandleCStoreRequest_DefaultHandler(t *testing.T) {
 	err = service.handleCStoreRequest(ctx, req, nil)
 	if err != nil {
 		t.Errorf("handleCStoreRequest failed: %v", err)
+	}
+}
+
+func TestUnhandledDIMSERequestsReturnFailure(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
+	storeRequest, err := dimse.NewCStoreRequest(ds)
+	if err != nil {
+		t.Fatalf("NewCStoreRequest failed: %v", err)
+	}
+
+	const managedSOPClassUID = "1.2.840.10008.5.1.1.1"
+	const managedSOPInstanceUID = "2.25.400"
+	tests := []struct {
+		name       string
+		wantStatus uint16
+		handle     func(*Service, context.Context) error
+	}{
+		{"C-STORE", status.CStoreErrorCannotUnderstand.Code, func(s *Service, ctx context.Context) error {
+			return s.handleCStoreRequest(ctx, storeRequest, nil)
+		}},
+		{"C-FIND", status.CFindFailedUnableToProcess.Code, func(s *Service, ctx context.Context) error {
+			return s.handleCFindRequest(ctx, dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()), nil)
+		}},
+		{"C-MOVE", status.CMoveFailedUnableToProcess.Code, func(s *Service, ctx context.Context) error {
+			return s.handleCMoveRequest(ctx, dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST", dataset.New()), nil)
+		}},
+		{"C-GET", status.CGetFailedUnableToProcess.Code, func(s *Service, ctx context.Context) error {
+			return s.handleCGetRequest(ctx, dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, dataset.New()), nil)
+		}},
+		{"N-EVENT-REPORT", status.NEventReportFailureProcessingFailure.Code, func(s *Service, ctx context.Context) error {
+			return s.handleNEventReportRequest(ctx, dimse.NewNEventReportRequest(managedSOPClassUID, managedSOPInstanceUID, 1, nil), nil)
+		}},
+		{"N-GET", status.NGetFailureProcessingFailure.Code, func(s *Service, ctx context.Context) error {
+			return s.handleNGetRequest(ctx, dimse.NewNGetRequest(managedSOPClassUID, managedSOPInstanceUID, nil), nil)
+		}},
+		{testNSetOperation, status.NSetFailureProcessingFailure.Code, func(s *Service, ctx context.Context) error {
+			return s.handleNSetRequest(ctx, dimse.NewNSetRequest(managedSOPClassUID, managedSOPInstanceUID, nil), nil)
+		}},
+		{testNActionOperation, status.NActionFailureProcessingFailure.Code, func(s *Service, ctx context.Context) error {
+			return s.handleNActionRequest(ctx, dimse.NewNActionRequest(managedSOPClassUID, managedSOPInstanceUID, 1, nil), nil)
+		}},
+		{"N-CREATE", status.NCreateFailureProcessingFailure.Code, func(s *Service, ctx context.Context) error {
+			return s.handleNCreateRequest(ctx, dimse.NewNCreateRequest(managedSOPClassUID, managedSOPInstanceUID, nil), nil)
+		}},
+		{"N-DELETE", status.NDeleteFailureProcessingFailure.Code, func(s *Service, ctx context.Context) error {
+			return s.handleNDeleteRequest(ctx, dimse.NewNDeleteRequest(managedSOPClassUID, managedSOPInstanceUID), nil)
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service, ctx, cancel, sent := setupCapturingTestService(t)
+			defer func() { _ = service.Close() }()
+			defer cancel()
+
+			if err := tt.handle(service, ctx); err != nil {
+				t.Fatalf("handler failed: %v", err)
+			}
+			response, ok := (<-sent).(dimse.Response)
+			if !ok {
+				t.Fatalf("sent message is not a DIMSE response")
+			}
+			if response.Status().Code != tt.wantStatus || !response.Status().IsFailure() {
+				t.Fatalf("status = %v, want failure 0x%04X", response.Status(), tt.wantStatus)
+			}
+		})
 	}
 }
 

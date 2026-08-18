@@ -1,14 +1,35 @@
 package rangehttp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/io/rangeio"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type countingReadCloser struct {
+	reader *bytes.Reader
+	read   int
+}
+
+func (r *countingReadCloser) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.read += n
+	return n, err
+}
+
+func (r *countingReadCloser) Close() error { return nil }
 
 func TestFetcherProbesAndFetchesRanges(t *testing.T) {
 	data := []byte("abcdefghijklmnopqrstuvwxyz")
@@ -166,5 +187,52 @@ func TestFetcherFallsBackToRangeGetProbe(t *testing.T) {
 	}
 	if string(got) != "bc" {
 		t.Fatalf("Fetch() = %q, want %q", got, "bc")
+	}
+}
+
+func TestFetcherBoundsOversizedRangeResponseRead(t *testing.T) {
+	body := &countingReadCloser{reader: bytes.NewReader(bytes.Repeat([]byte{'x'}, 1024))}
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusPartialContent,
+			Status:     "206 Partial Content",
+			Header:     http.Header{"Content-Range": []string{"bytes 0-3/10"}},
+			Body:       body,
+		}, nil
+	})}
+	fetcher := &Fetcher{client: client, url: "http://example.test/object", headers: make(http.Header), size: 10}
+
+	if _, err := fetcher.Fetch(context.Background(), rangeio.FetchRequest{Offset: 0, Length: 4}); err == nil {
+		t.Fatal("Fetch() error = nil, want error for oversized response body")
+	}
+	if body.read > 5 {
+		t.Fatalf("Fetch() read %d bytes, want at most expected length plus one", body.read)
+	}
+}
+
+func TestFetcherBoundsOversizedRangeProbeRead(t *testing.T) {
+	body := &countingReadCloser{reader: bytes.NewReader(bytes.Repeat([]byte{'x'}, 1024))}
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method == http.MethodHead {
+			return &http.Response{
+				StatusCode: http.StatusMethodNotAllowed,
+				Status:     "405 Method Not Allowed",
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewReader(nil)),
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusPartialContent,
+			Status:     "206 Partial Content",
+			Header:     http.Header{"Content-Range": []string{"bytes 0-0/10"}},
+			Body:       body,
+		}, nil
+	})}
+
+	if _, err := NewFetcher(context.Background(), "http://example.test/object", WithClient(client)); err == nil {
+		t.Fatal("NewFetcher() error = nil, want error for oversized probe body")
+	}
+	if body.read > 2 {
+		t.Fatalf("range probe read %d bytes, want at most expected length plus one", body.read)
 	}
 }

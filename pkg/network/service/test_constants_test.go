@@ -8,4 +8,6 @@ const (
 	testApplicationContext = "1.2.840.10008.3.1.1.1"
 	testSOPInstanceUID     = "1.2.3.4.5.6.7.8.9"
 	testStudyInstanceUID   = "1.2.3.4.5"
+	testNSetOperation      = "N-SET"
+	testNActionOperation   = "N-ACTION"
 )
