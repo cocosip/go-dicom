@@ -52,3 +52,17 @@ func ExampleTransformer_ApplyInPlace() {
 
 	// Output: true ABC 1
 }
+
+func ExampleSplitFormat() {
+	source := dataset.New()
+	_ = source.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^Jane"}))
+	rule, _ := SplitFormat(tag.PatientName, "^", "{1} {0}")
+	transformer, _ := NewTransformer(rule)
+
+	result, _, _ := transformer.Apply(source)
+	values, _ := element.CanonicalStrings(result.GetOrNil(tag.PatientName))
+	value := values[0]
+	fmt.Println(value)
+
+	// Output: Jane Doe
+}

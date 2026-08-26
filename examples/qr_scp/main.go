@@ -119,6 +119,7 @@ func main() {
 		return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 	})
 
+	//nolint:staticcheck // this example also demonstrates the legacy slice handler.
 	srv.SetCFindHandler(repo.handleCFind)
 	srv.SetCMoveHandler(repo.handleCMove)
 	srv.SetCGetHandler(repo.handleCGet)
@@ -203,7 +204,9 @@ func (r *qrRepository) handleCMove(ctx context.Context, op service.CMoveOperatio
 	)
 	for _, rec := range matched {
 		if rec.SOPClassUID != "" {
-			destClient.AddPresentationContext(rec.SOPClassUID, transferSyntaxes...)
+			if err := destClient.AddPresentationContext(rec.SOPClassUID, transferSyntaxes...); err != nil {
+				return op.SendFailure(status.CMoveRefusedOutOfResourcesSubOps)
+			}
 		}
 	}
 	if err := destClient.Connect(ctx, route.host, route.port); err != nil {

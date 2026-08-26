@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
@@ -89,6 +90,7 @@ func TestSetHandlers(_ *testing.T) {
 			dimse.NewCFindResponseFromRequest(req, status.Success, nil),
 		}, nil
 	})
+	server.SetCFindStreamHandler(func(_ context.Context, _ service.CFindOperation) error { return nil })
 
 	// Note: Handlers are now stored as service options and cannot be directly verified.
 	// They will be tested through integration tests that actually invoke the handlers.

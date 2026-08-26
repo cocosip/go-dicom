@@ -16,6 +16,7 @@ const (
 	testAnotherAETitle     = "ANOTHER"
 	testCalledAETitle      = "CALLED"
 	testCallingAETitle     = "CALLING"
+	testVerificationSOPUID = "1.2.840.10008.1.1"
 	testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
 	testImplicitVRLittleLE = "1.2.840.10008.1.2"
 	testCalledAEField      = "called"
@@ -382,7 +383,7 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 		},
 		{
 			ID:             3,
-			AbstractSyntax: "1.2.840.10008.1.1", // Verification SOP Class
+			AbstractSyntax: testVerificationSOPUID, // Verification SOP Class
 			TransferSyntaxes: []string{
 				testImplicitVRLittleLE,
 			},
@@ -481,8 +482,8 @@ func TestAAssociateACEncodeRejectsInvalidAETitles(t *testing.T) {
 	for _, field := range []string{testCalledAEField, testCallingAEField} {
 		t.Run(field, func(t *testing.T) {
 			ac := NewAAssociateAC()
-			ac.CalledAETitle = "CALLED"
-			ac.CallingAETitle = "CALLING"
+			ac.CalledAETitle = testCalledAETitle
+			ac.CallingAETitle = testCallingAETitle
 			if field == testCalledAEField {
 				ac.CalledAETitle = testInvalidAETitle
 			} else {

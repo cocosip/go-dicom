@@ -150,6 +150,78 @@ func (c *Client) CCancel(ctx context.Context, messageID uint16, presentationCont
 	return svc.SendCCancel(ctx, messageID, presentationContextID)
 }
 
+// NCreate sends an N-CREATE request and returns the unmodified DIMSE response.
+func (c *Client) NCreate(ctx context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-CREATE request is nil")
+	}
+	svc, err := c.activeService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.SendNCreate(ctx, req)
+}
+
+// NGet sends an N-GET request and returns the unmodified DIMSE response.
+func (c *Client) NGet(ctx context.Context, req *dimse.NGetRequest) (*dimse.NGetResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-GET request is nil")
+	}
+	svc, err := c.activeService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.SendNGet(ctx, req)
+}
+
+// NSet sends an N-SET request and returns the unmodified DIMSE response.
+func (c *Client) NSet(ctx context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-SET request is nil")
+	}
+	svc, err := c.activeService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.SendNSet(ctx, req)
+}
+
+// NDelete sends an N-DELETE request and returns the unmodified DIMSE response.
+func (c *Client) NDelete(ctx context.Context, req *dimse.NDeleteRequest) (*dimse.NDeleteResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-DELETE request is nil")
+	}
+	svc, err := c.activeService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.SendNDelete(ctx, req)
+}
+
+// NAction sends an N-ACTION request and returns the unmodified DIMSE response.
+func (c *Client) NAction(ctx context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-ACTION request is nil")
+	}
+	svc, err := c.activeService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.SendNAction(ctx, req)
+}
+
+// NEventReport sends an N-EVENT-REPORT request and returns the unmodified DIMSE response.
+func (c *Client) NEventReport(ctx context.Context, req *dimse.NEventReportRequest) (*dimse.NEventReportResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-EVENT-REPORT request is nil")
+	}
+	svc, err := c.activeService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.SendNEventReport(ctx, req)
+}
+
 func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) ([]*dataset.Dataset, error) {
 	svc, err := c.activeService()
 	if err != nil {
@@ -161,7 +233,7 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 	}
 
 	// Send request
-	respCh, err := svc.SendCFind(ctx, req)
+	respCh, terminalErrCh, err := sendCFind(ctx, svc, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send C-FIND: %w", err)
 	}
@@ -173,7 +245,10 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 		select {
 		case resp, ok := <-respCh:
 			if !ok {
-				// Channel closed, no more responses
+				if err := receiveCFindTerminalError(terminalErrCh); err != nil {
+					return results, err
+				}
+				// Channel closed after a final response.
 				return results, nil
 			}
 
@@ -199,6 +274,11 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 			// Any other status is an error
 			return results, fmt.Errorf("C-FIND failed with status: 0x%04X", statusCode)
 
+		case terminalErr, ok := <-terminalErrCh:
+			if ok && terminalErr != nil {
+				return results, terminalErr
+			}
+			terminalErrCh = nil
 		case <-ctx.Done():
 			return results, ctx.Err()
 		}
@@ -242,7 +322,7 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 	}
 
 	// Send request - returns channel of responses
-	respCh, err := svc.SendCFind(ctx, req)
+	respCh, terminalErrCh, err := sendCFind(ctx, svc, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-FIND: %w", err)
 	}
@@ -252,7 +332,10 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 		select {
 		case resp, ok := <-respCh:
 			if !ok {
-				// Channel closed
+				if err := receiveCFindTerminalError(terminalErrCh); err != nil {
+					return err
+				}
+				// Channel closed after a final response.
 				return nil
 			}
 
@@ -278,10 +361,37 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 			// Any other status is an error
 			return fmt.Errorf("C-FIND failed with status: 0x%04X", statusCode)
 
+		case terminalErr, ok := <-terminalErrCh:
+			if ok && terminalErr != nil {
+				return terminalErr
+			}
+			terminalErrCh = nil
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
+}
+
+func sendCFind(ctx context.Context, svc serviceInterface, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error) {
+	if errorService, ok := svc.(cFindErrorService); ok {
+		return errorService.SendCFindWithError(ctx, req)
+	}
+	responses, err := svc.SendCFind(ctx, req)
+	return responses, nil, err
+}
+
+func receiveCFindTerminalError(errors <-chan error) error {
+	if errors == nil {
+		return nil
+	}
+	select {
+	case err, ok := <-errors:
+		if ok {
+			return err
+		}
+	default:
+	}
+	return nil
 }
 
 // CStoreWithPriority stores a dataset with a specific priority.

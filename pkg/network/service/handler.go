@@ -35,6 +35,11 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 
 	s.pendingRequestsMu.Lock()
 	pending, exists := s.pendingRequests[msgID]
+	if exists {
+		if progress, ok := resp.(interface{ IsPending() bool }); ok && progress.IsPending() {
+			s.resetPendingRequestTimeoutLocked(msgID, pending)
+		}
+	}
 	s.pendingRequestsMu.Unlock()
 
 	if !exists {
@@ -278,29 +283,59 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 	handlerCtx, unregister := s.registerActiveOperation(ctx, req.MessageID())
 	defer unregister()
 
-	var responses []*dimse.CFindResponse
-
-	// Use custom handler if available
-	if handlers != nil && handlers.CFindHandler != nil {
-		var err error
-		responses, err = handlers.CFindHandler(handlerCtx, req)
-		if err != nil {
-			// Handler returned error - send failure response
-			resp := dimse.NewCFindResponseFromRequest(req, status.CFindRefusedOutOfResources, nil)
-			return s.Send(ctx, resp)
-		}
-	} else {
-		resp := dimse.NewCFindResponseFromRequest(req, status.CFindFailedUnableToProcess, nil)
-		responses = []*dimse.CFindResponse{resp}
-	}
-
-	// Send all responses
-	for _, resp := range responses {
-		if err := s.Send(ctx, resp); err != nil {
+	op := newCFindOperationWithFinal(req, func(response *dimse.CFindResponse) error {
+		if err := s.Send(handlerCtx, response); err != nil {
 			return fmt.Errorf("failed to send C-FIND response: %w", err)
 		}
+		return nil
+	}, func(response *dimse.CFindResponse) error {
+		if err := s.Send(ctx, response); err != nil {
+			return fmt.Errorf("failed to send C-FIND response: %w", err)
+		}
+		return nil
+	})
+
+	var handlerErr error
+	switch {
+	case handlers != nil && handlers.CFindStreamHandler != nil:
+		if handlers.CFindHandler != nil {
+			return ErrCFindHandlerConflict
+		}
+		handlerErr = handlers.CFindStreamHandler(handlerCtx, op)
+	case handlers != nil && handlers.CFindHandler != nil:
+		responses, err := handlers.CFindHandler(handlerCtx, req)
+		if err != nil {
+			handlerErr = err
+			break
+		}
+		for _, response := range responses {
+			handlerErr = op.forward(response, op.sendFinal)
+			if handlerErr != nil {
+				break
+			}
+		}
+	default:
+		return op.SendFinal(status.CFindFailedUnableToProcess)
 	}
 
+	if handlerErr != nil {
+		if handlerCtx.Err() != nil {
+			if !op.finalized() {
+				return op.SendFinal(status.Cancel)
+			}
+			return nil
+		}
+		if !op.finalized() {
+			return op.SendFinal(status.CFindFailedUnableToProcess)
+		}
+		return handlerErr
+	}
+	if handlerCtx.Err() != nil && !op.finalized() {
+		return op.SendFinal(status.Cancel)
+	}
+	if !op.finalized() {
+		return op.SendFinal(status.Success)
+	}
 	return nil
 }
 
@@ -468,6 +503,15 @@ func (s *Service) SetHandlers(handlers *Handlers) {
 	s.handlersMu.Lock()
 	defer s.handlersMu.Unlock()
 	s.handlers = handlers
+}
+
+func (s *Service) validateHandlers() error {
+	s.handlersMu.RLock()
+	defer s.handlersMu.RUnlock()
+	if s.handlers != nil && s.handlers.CFindHandler != nil && s.handlers.CFindStreamHandler != nil {
+		return ErrCFindHandlerConflict
+	}
+	return nil
 }
 
 // GetHandlers returns the current DIMSE message handlers.

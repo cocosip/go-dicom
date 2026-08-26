@@ -102,10 +102,13 @@ type sendRequest struct {
 
 // pendingRequest tracks a request waiting for a response.
 type pendingRequest struct {
-	request    dimse.Request
-	responseCh chan dimse.Response
-	cancelCh   chan struct{}
-	lifecycle  *requestLifecycle
+	request        dimse.Request
+	responseCh     chan dimse.Response
+	doneCh         chan error
+	cancelCh       chan struct{}
+	lifecycle      *requestLifecycle
+	timeoutTimer   *time.Timer
+	timeoutVersion uint64
 }
 
 // activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.
@@ -131,8 +134,15 @@ type Handlers struct {
 	CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
 
 	// CFindHandler handles C-FIND requests.
+	//
+	// Deprecated: use CFindStreamHandler so results can be sent without first
+	// accumulating the complete response set in memory.
 	// Returns multiple responses (Pending + final Success/Failed).
 	CFindHandler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)
+
+	// CFindStreamHandler handles C-FIND requests as a streaming operation.
+	// SendPending blocks until its response has entered the service send queue.
+	CFindStreamHandler func(context.Context, CFindOperation) error
 
 	// CMoveHandler handles C-MOVE requests via a CMoveOperation interface.
 	// The handler calls op.SendPending after each sub-operation completes, enabling
@@ -381,6 +391,9 @@ func (s *Service) cancelPendingRequests() []*requestLifecycle {
 	s.pendingRequestsMu.Lock()
 	lifecycles := make([]*requestLifecycle, 0, len(s.pendingRequests))
 	for _, pending := range s.pendingRequests {
+		if pending.timeoutTimer != nil {
+			pending.timeoutTimer.Stop()
+		}
 		close(pending.cancelCh)
 		lifecycles = append(lifecycles, pending.lifecycle)
 	}
@@ -464,7 +477,7 @@ func (s *Service) startShutdownFinalizer() {
 				close(done)
 			}()
 
-			timeout := s.config.dimseTimeout
+			timeout := s.config.handlerShutdownTimeout
 			if timeout <= 0 {
 				timeout = 60 * time.Second
 			}
@@ -476,6 +489,7 @@ func (s *Service) startShutdownFinalizer() {
 				// This also breaks the self-deadlock when a handler calls
 				// Close() — the handler goroutine can't reach Done() while
 				// blocked in waitForShutdown, so the timeout unblocks it.
+				s.setCloseError(ErrHandlerShutdownTimeout)
 			}
 
 			s.notifyConnectionClosed(s.shutdownError())

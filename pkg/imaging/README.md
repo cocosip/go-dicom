@@ -292,25 +292,19 @@ params.SetParameter("swap_bytes", true)
 err = leCodec.Encode(src, dst, params)
 ```
 
-### Deferred Codecs
+### Compressed Codec Registration
 
-The following codecs are **not yet implemented** due to lack of suitable Go libraries:
+Compressed codecs live in the companion `go-dicom-codecs` module so core users
+only link the codecs their application needs. Register a codec with a blank
+import before decoding or transcoding its transfer syntax:
 
-- ❌ **JPEG Baseline** (Transfer Syntax UID: 1.2.840.10008.1.2.4.50)
-  - Reason: DICOM JPEG uses non-standard markers not compatible with Go's standard `image/jpeg`
-  - Future: May implement via CGO bindings to libjpeg or wait for Go library support
+```go
+import _ "github.com/cocosip/go-dicom-codecs/jpeg/baseline"
+```
 
-- ❌ **JPEG Lossless** (Transfer Syntax UID: 1.2.840.10008.1.2.4.57, .70)
-  - Reason: No mature Go library for JPEG lossless
-  - Future: Requires specialized JPEG lossless decoder
-
-- ❌ **JPEG-LS** (Transfer Syntax UID: 1.2.840.10008.1.2.4.80, .81)
-  - Reason: No mature Go library for JPEG-LS
-  - Future: Wait for library or implement from spec
-
-- ❌ **JPEG 2000** (Transfer Syntax UID: 1.2.840.10008.1.2.4.90, .91)
-  - Reason: No mature Go library for JPEG 2000
-  - Future: Consider CGO bindings to OpenJPEG
+If no matching codec was registered, decode/transcode returns the registry
+lookup error; registering a codec does not imply that a peer accepted its
+transfer syntax during association negotiation.
 
 ## Architecture Notes
 
@@ -362,15 +356,10 @@ Current test coverage:
 3. Generate DICOM datasets from reformatted stacks
 
 ### Medium Term
-1. Research and evaluate JPEG codec options:
-   - Pure Go implementation
-   - CGO bindings to libjpeg/libjpeg-turbo
-2. Add further rendering performance benchmarks
+1. Add further rendering performance benchmarks
 
 ### Long Term
-1. JPEG-LS codec (pending library availability)
-2. JPEG 2000 codec (likely via CGO)
-3. GPU-accelerated processing
+1. GPU-accelerated processing
 
 ## References
 

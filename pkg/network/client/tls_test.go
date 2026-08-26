@@ -162,7 +162,9 @@ func TestConnectNegotiatesAssociationOverTLS(t *testing.T) {
 		WithConnectTimeout(time.Second),
 		WithAssociationTimeout(time.Second),
 	)
-	client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1")
+	if err := client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1"); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
 
 	if err := client.Connect(context.Background(), address.IP.String(), address.Port); err != nil {
 		t.Fatalf("connect over TLS: %v", err)

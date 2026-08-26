@@ -7,6 +7,7 @@ package imaging
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"io"
 	"math"
 	"sync"
@@ -15,9 +16,22 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
+	"github.com/cocosip/go-dicom/pkg/imaging/interpolation"
+	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
+	"github.com/cocosip/go-dicom/pkg/imaging/transform"
 	golangdraw "golang.org/x/image/draw"
 )
+
+// FrameRenderOptions controls optional final-frame transforms and graphics.
+// A zero value preserves RenderFrameImage's existing output.
+type FrameRenderOptions struct {
+	SpatialTransform *transform.SpatialTransform
+	Interpolation    interpolation.Mode
+	Background       color.Color
+	Viewport         image.Rectangle
+	Graphics         []render.Graphic
+}
 
 const (
 	monochrome2                          = "MONOCHROME2"
@@ -357,6 +371,44 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 
 // RenderFrameImage renders the specified frame and returns the unencoded Go image.
 func (img *DicomImage) RenderFrameImage(frame int) (image.Image, error) {
+	return img.renderFrameImage(frame, true)
+}
+
+// RenderFrameImageWithOptions renders a frame with an optional spatial
+// transform, viewport, and final-coordinate graphics. When SpatialTransform is
+// supplied it replaces legacy SetScale; otherwise legacy scale remains active.
+func (img *DicomImage) RenderFrameImageWithOptions(frame int, options FrameRenderOptions) (image.Image, error) {
+	if options.SpatialTransform == nil && options.Viewport.Empty() && len(options.Graphics) == 0 && options.Background == nil && options.Interpolation == interpolation.ModeNearestNeighbor {
+		return img.RenderFrameImage(frame)
+	}
+	rendered, err := img.renderFrameImage(frame, options.SpatialTransform == nil)
+	if err != nil {
+		return nil, err
+	}
+	if options.SpatialTransform != nil || !options.Viewport.Empty() {
+		matrix := transform.Identity()
+		if options.SpatialTransform != nil {
+			matrix, err = options.SpatialTransform.Affine(transformRect(rendered.Bounds()))
+			if err != nil {
+				return nil, err
+			}
+		}
+		rendered, err = render.ApplyAffine(rendered, matrix, options.Viewport, options.Interpolation, options.Background)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(options.Graphics) != 0 {
+		return render.DrawGraphics(rendered, options.Graphics)
+	}
+	return rendered, nil
+}
+
+func transformRect(bounds image.Rectangle) math3d.Rect {
+	return math3d.Rect{Width: float64(bounds.Dx()), Height: float64(bounds.Dy())}
+}
+
+func (img *DicomImage) renderFrameImage(frame int, applyLegacyScale bool) (image.Image, error) {
 	if frame < 0 || frame >= img.NumberOfFrames() {
 		return nil, fmt.Errorf("frame index out of range: %d", frame)
 	}
@@ -401,7 +453,11 @@ func (img *DicomImage) RenderFrameImage(frame int) (image.Image, error) {
 		return nil, err
 	}
 	rendered = img.applyGrayscaleColorMap(rendered, frame)
-	return img.scaleImage(img.applyOverlays(rendered, frame)), nil
+	rendered = img.applyOverlays(rendered, frame)
+	if applyLegacyScale {
+		rendered = img.scaleImage(rendered)
+	}
+	return rendered, nil
 }
 
 func (img *DicomImage) scaleImage(source image.Image) image.Image {

@@ -20,6 +20,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
+	"github.com/cocosip/go-dicom/pkg/imaging/transform"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -519,6 +520,28 @@ func TestRenderFrameImageAppliesScale(t *testing.T) {
 	got := color.GrayModel.Convert(rendered.At(1, 0)).(color.Gray).Y
 	if got == 0 || got == 255 {
 		t.Fatalf("interpolated pixel = %d, want a value between the source pixels", got)
+	}
+}
+
+func TestRenderFrameImageWithOptionsAppliesSpatialTransformInsteadOfLegacyScale(t *testing.T) {
+	ds := newNativeMonochromeDataset(t, 2, 1, []byte{0, 255})
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	dicomImage.SetScale(2)
+	spatial := transform.NewSpatialTransform()
+	spatial.Rotate(90)
+
+	rendered, err := dicomImage.RenderFrameImageWithOptions(0, FrameRenderOptions{SpatialTransform: spatial})
+	if err != nil {
+		t.Fatalf("RenderFrameImageWithOptions() error = %v", err)
+	}
+	if got, want := rendered.Bounds().Size().X, 1; got != want {
+		t.Fatalf("rendered width = %d, want %d", got, want)
+	}
+	if got, want := rendered.Bounds().Size().Y, 2; got != want {
+		t.Fatalf("rendered height = %d, want %d", got, want)
 	}
 }
 

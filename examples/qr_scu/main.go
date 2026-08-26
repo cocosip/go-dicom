@@ -369,17 +369,23 @@ func addPresentationContexts(c *client.Client) {
 	}
 
 	// Verification
-	c.AddPresentationContext(uid.Verification.UID(), transferSyntaxes...)
+	if err := c.AddPresentationContext(uid.Verification.UID(), transferSyntaxes...); err != nil {
+		panic(err)
+	}
 
 	// Query/Retrieve - Patient Root
-	c.AddPresentationContext(uid.PatientRootQueryRetrieveInformationModelFind.UID(), transferSyntaxes...)
-	c.AddPresentationContext(uid.PatientRootQueryRetrieveInformationModelMove.UID(), transferSyntaxes...)
-	c.AddPresentationContext(uid.PatientRootQueryRetrieveInformationModelGet.UID(), transferSyntaxes...)
+	for _, sopClass := range []string{uid.PatientRootQueryRetrieveInformationModelFind.UID(), uid.PatientRootQueryRetrieveInformationModelMove.UID(), uid.PatientRootQueryRetrieveInformationModelGet.UID()} {
+		if err := c.AddPresentationContext(sopClass, transferSyntaxes...); err != nil {
+			panic(err)
+		}
+	}
 
 	// Query/Retrieve - Study Root
-	c.AddPresentationContext(uid.StudyRootQueryRetrieveInformationModelFind.UID(), transferSyntaxes...)
-	c.AddPresentationContext(uid.StudyRootQueryRetrieveInformationModelMove.UID(), transferSyntaxes...)
-	c.AddPresentationContext(uid.StudyRootQueryRetrieveInformationModelGet.UID(), transferSyntaxes...)
+	for _, sopClass := range []string{uid.StudyRootQueryRetrieveInformationModelFind.UID(), uid.StudyRootQueryRetrieveInformationModelMove.UID(), uid.StudyRootQueryRetrieveInformationModelGet.UID()} {
+		if err := c.AddPresentationContext(sopClass, transferSyntaxes...); err != nil {
+			panic(err)
+		}
+	}
 
 	// Storage (for receiving C-STORE during C-GET)
 	storageClasses := []string{
@@ -390,7 +396,9 @@ func addPresentationContexts(c *client.Client) {
 		uid.UltrasoundImageStorage.UID(),
 	}
 	for _, sopClass := range storageClasses {
-		c.AddPresentationContext(sopClass, transferSyntaxes...)
+		if err := c.AddPresentationContext(sopClass, transferSyntaxes...); err != nil {
+			panic(err)
+		}
 	}
 }
 

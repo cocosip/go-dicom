@@ -15,7 +15,7 @@ This README describes the supported library surface rather than a development ro
 
 ### Core Capabilities ✅
 
-- ✅ **DICOM File I/O** - Read and write DICOM files with full standard compliance
+- ✅ **DICOM File I/O** - Tested Part 10 file parsing and writing, including explicit/implicit VR, sequences, fragments, and large-value handling
 - ✅ **DICOMDIR Media** - Create, read, traverse, repair, and save media directories with optional image icons
 - ✅ **Transfer Syntax Support** - Explicit/Implicit VR, Big/Little Endian
 - ✅ **Multi-Frame Images** - Full support for multi-frame and video DICOM files
@@ -26,7 +26,7 @@ This README describes the supported library surface rather than a development ro
 - ✅ **JSON/XML Serialization** - Export/Import DICOM data to JSON (Part 18) and XML formats
 - ✅ **Anonymization** - Remove/Replace patient identifiable information with configurable profiles
 - ✅ **Pixel Data Processing** - Access raw pixel data, color space conversion, LUT operations, image rendering
-- ✅ **DICOM Networking** - Complete DIMSE services (C-ECHO/STORE/FIND/MOVE/GET + N-CREATE/GET/SET/DELETE/ACTION/EVENT-REPORT), TLS support
+- ✅ **DICOM Networking** - DIMSE message models and SCP handlers for C-ECHO/STORE/FIND/MOVE/GET and N-Service; Client SCU APIs for C-ECHO/STORE/FIND/MOVE/GET and all six N-Service operations; TLS support
 - ✅ **Image Processing** - Dataset rendering, frame geometry, spatial transforms, interpolation, volume reconstruction, MPR, LUT operations, and color conversion ([geometry and spatial usage](pkg/imaging/README.md#geometry-and-spatial-usage))
 - ✅ **DICOM Printing** - Dataset-backed Film Session, Film Box, Image Box, Presentation LUT, printer status, and Basic Print workflow
 - ✅ **DICOM File Scanning** - Cancellable metadata-only directory scanning with bounded concurrency and deterministic result delivery
@@ -157,7 +157,7 @@ This README describes the supported library surface rather than a development ro
   - [x] DICOM Server (SCP) framework with handler pattern
   - [x] Network transport abstraction (TCP/TLS)
   - [x] TLS support (secure DICOM connections)
-  - [x] Concurrent-safe operations
+  - [x] Concurrent DIMSE requests within the negotiated asynchronous operations window; Client Connect, Close, IsConnected, and GetAssociation lifecycle synchronization
   - [x] 401+ unit tests with >85% code coverage
   - [x] Asynchronous Operations Window negotiation with request throttling
   - [x] Advanced role negotiation (SCP/SCU Role Selection)
@@ -1208,10 +1208,12 @@ func main() {
     )
 
     // Add Verification SOP Class
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         "1.2.840.10008.1.1",   // Verification SOP Class
         "1.2.840.10008.1.2.1", // Explicit VR Little Endian
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     // Connect to DICOM server
     ctx := context.Background()
@@ -1257,12 +1259,14 @@ func main() {
             association.NewUserIdentityJWT([]byte(os.Getenv("DICOM_JWT")), true),
         ),
     )
-    c.AddPresentationContextWithRoles(
+    if err := c.AddPresentationContextWithRoles(
         ctImageStorage,
         true, // request the SCU role
         true, // request the SCP role for C-GET C-STORE sub-operations
         "1.2.840.10008.1.2.1",
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     ctx := context.Background()
     if err := c.Connect(ctx, "localhost", 11112); err != nil {
@@ -1312,10 +1316,12 @@ func main() {
     )
 
     // Add presentation context
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         "1.2.840.10008.1.1",   // Verification SOP Class
         "1.2.840.10008.1.2.1", // Explicit VR Little Endian
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     // Connect with TLS
     ctx := context.Background()
@@ -1355,11 +1361,13 @@ func main() {
     )
 
     // Propose CT Image Storage with common transfer syntaxes
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         uid.CTImageStorage.UID(),
         transfer.ExplicitVRLittleEndian.UID().UID(),
         transfer.ImplicitVRLittleEndian.UID().UID(),
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     ctx := context.Background()
     if err := c.Connect(ctx, "localhost", 11112); err != nil {
@@ -1410,10 +1418,12 @@ func main() {
         client.WithCallingAE("GO-SCU"),
         client.WithCalledAE("QR-SCP"),
     )
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         uid.StudyRootQueryRetrieveInformationModelFind,
         uid.ExplicitVRLittleEndian,
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     ctx := context.Background()
     if err := c.Connect(ctx, "localhost", 11112); err != nil {
@@ -1460,10 +1470,12 @@ func main() {
         client.WithCallingAE("GO-SCU"),
         client.WithCalledAE("QR-SCP"),
     )
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         uid.StudyRootQueryRetrieveInformationModelMove,
         uid.ExplicitVRLittleEndian,
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     ctx := context.Background()
     if err := c.Connect(ctx, "localhost", 11112); err != nil {
@@ -1512,14 +1524,18 @@ func main() {
         client.WithCalledAE("QR-SCP"),
     )
     // Propose both C-GET and the storage SOP classes you expect to receive
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         uid.StudyRootQueryRetrieveInformationModelGet,
         uid.ExplicitVRLittleEndian,
-    )
-    c.AddPresentationContext(
+    ); err != nil {
+        log.Fatal(err)
+    }
+    if err := c.AddPresentationContext(
         uid.CTImageStorage,
         uid.ExplicitVRLittleEndian,
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     ctx := context.Background()
     if err := c.Connect(ctx, "localhost", 11112); err != nil {

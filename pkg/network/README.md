@@ -1,6 +1,6 @@
 # DICOM 网络功能
 
-本包实现了完整的 DICOM 网络协议栈，支持 SCU (Service Class User) 和 SCP (Service Class Provider) 功能。
+本包提供 DICOM 网络协议栈的 SCU (Service Class User) 和 SCP (Service Class Provider) 基础能力。
 
 ## 概述
 
@@ -10,7 +10,7 @@ DICOM 网络协议基于 TCP/IP，使用 Association 机制进行连接管理和
 
 - ✅ **完整的 PDU 支持**：7种 PDU 类型（A-ASSOCIATE-RQ/AC/RJ, P-DATA-TF, A-RELEASE-RQ/RP, A-ABORT）
 - ✅ **Association 管理**：自动协商 Presentation Contexts、MaxPDULength 等参数
-- ✅ **所有 DIMSE 操作**：
+- ✅ **DIMSE 消息模型与已覆盖的服务工作流**：
   - C-ECHO（连通性验证）
   - C-STORE（存储图像）
   - C-FIND（查询）
@@ -20,7 +20,8 @@ DICOM 网络协议基于 TCP/IP，使用 Association 机制进行连接管理和
 - ✅ **SCU 客户端**：高级 API，支持同步和异步操作
 - ✅ **SCP 服务器**：Handler 模式，支持自定义业务逻辑
 - ✅ **TLS 支持**：安全连接
-- ✅ **并发安全**：所有组件都是并发安全的
+- ✅ **Client 生命周期并发控制**：`Connect`、`Close`、`IsConnected` 与
+  `GetAssociation` 可并发调用；配置与 Presentation Context 仅可在首次连接前修改
 
 ### 测试覆盖
 
@@ -85,6 +86,46 @@ pkg/network/
 
 ## 快速开始
 
+## 并发与超时契约
+
+同一个 `Client` 可以并发调用 `Connect`、`Close`、`IsConnected` 和
+`GetAssociation`；同时只允许一个连接尝试。DIMSE 请求可在协商的
+Asynchronous Operations Window 内并发。配置和 Presentation Context 只能在首次
+`Connect` 前添加，连接生命周期开始后会返回状态错误。
+
+`WithRequestTimeout` 是单个 DIMSE response idle timeout，不会因为 association
+空闲而断开连接。`WithTransportReadTimeout` 与 `WithTransportWriteTimeout` 分别只
+约束一次底层 PDU I/O。
+
+### 手工 Client 与 ManagedClient
+
+`client.Client` 适合调用方需要自行控制 Presentation Context、连接时机或高级
+association negotiation 的场景。`client.ManagedClient` 保留该低层 API，同时为常规
+SCU 工作流按 Job 推导 context、按 FIFO 分批、在 128 个 context 上限处分割
+association，并在短暂 linger 内复用兼容 association。
+
+```go
+managed := client.NewManaged(
+    client.WithMaximumRequestsPerAssociation(32),
+    client.WithAssociationLingerTimeout(50*time.Millisecond),
+)
+if err := managed.Add(client.NewCEchoJob(func(err error) {
+    log.Printf("C-ECHO complete: %v", err)
+})); err != nil {
+    return err
+}
+if err := managed.Send(ctx, "pacs.example", 104); err != nil {
+    return err
+}
+defer managed.Close()
+```
+
+Managed Job constructors are available for C-ECHO, C-STORE, C-FIND, C-MOVE,
+C-GET and all six N-Service requests. Dataset-bearing Jobs deep-clone their
+input while queued, so callers may safely reuse or change their source Dataset
+after constructing the Job. `Close` rejects future Jobs, completes queued Jobs,
+and aborts an active association.
+
 ### SCU 客户端示例
 
 #### 1. C-ECHO（验证连接）
@@ -107,11 +148,13 @@ func main() {
     )
 
     // 添加 Presentation Context（Verification SOP Class）
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         "1.2.840.10008.1.1",   // Verification SOP Class
         "1.2.840.10008.1.2",   // Implicit VR Little Endian
         "1.2.840.10008.1.2.1", // Explicit VR Little Endian
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     // 连接服务器
     ctx := context.Background()
@@ -156,10 +199,12 @@ func main() {
     )
 
     // 添加 Storage Presentation Context
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         "1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
         "1.2.840.10008.1.2.1",       // Explicit VR Little Endian
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     // 连接并发送
     ctx := context.Background()
@@ -202,10 +247,12 @@ func main() {
     )
 
     // 添加 Query/Retrieve Presentation Context
-    c.AddPresentationContext(
+    if err := c.AddPresentationContext(
         "1.2.840.10008.5.1.4.1.2.2.1", // Study Root Query/Retrieve
         "1.2.840.10008.1.2.1",
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
     // 连接
     ctx := context.Background()
@@ -264,6 +311,8 @@ import (
 
     "github.com/cocosip/go-dicom/pkg/network/dimse"
     "github.com/cocosip/go-dicom/pkg/network/server"
+    "github.com/cocosip/go-dicom/pkg/network/service"
+    "github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func main() {
@@ -365,29 +414,22 @@ func main() {
         server.WithPort(11112),
     )
 
-    // 设置 C-FIND handler
-    srv.SetCFindHandler(func(ctx context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
-        query := req.DataDataset()
-        level := req.QueryRetrieveLevel()
+    // 流式发送 C-FIND 结果；每次 SendPending 都会接受发送队列背压。
+    srv.SetCFindStreamHandler(func(ctx context.Context, op service.CFindOperation) error {
+        query := op.Identifier()
+        level := op.QueryLevel()
 
         log.Printf("Received C-FIND query at level %s\n", level)
 
         // 在数据库中查询（这里使用模拟数据）
         results := searchDatabase(query, level)
 
-        // 构建响应
-        responses := make([]*dimse.CFindResponse, 0, len(results)+1)
-
-        // Pending responses（查询结果）
         for _, result := range results {
-            resp := dimse.NewCFindResponsePending(req, result)
-            responses = append(responses, resp)
+            if err := op.SendPending(result); err != nil {
+                return err
+            }
         }
-
-        // Final success response
-        responses = append(responses, dimse.NewCFindResponseSuccess(req))
-
-        return responses, nil
+        return op.SendFinal(status.Success)
     })
 
     // 启动服务器
@@ -428,10 +470,12 @@ c := client.New(
         MinVersion: tls.VersionTLS12,
     }),
 )
-c.AddPresentationContext(
+if err := c.AddPresentationContext(
     "1.2.840.10008.1.1",
     "1.2.840.10008.1.2.1",
-)
+); err != nil {
+    log.Fatal(err)
+}
 err := c.Connect(ctx, "pacs.hospital.com", 11112)
 ```
 

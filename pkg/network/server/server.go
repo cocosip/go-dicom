@@ -265,11 +265,21 @@ func (s *Server) SetCStoreHandler(handler func(context.Context, *dimse.CStoreReq
 	s.serviceOptions = append(s.serviceOptions, service.WithCStoreHandler(handler))
 }
 
-// SetCFindHandler sets the C-FIND request handler.
+// SetCFindHandler sets the legacy C-FIND request handler.
+//
+// Deprecated: use SetCFindStreamHandler for large result sets.
 func (s *Server) SetCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) {
 	s.optionsMu.Lock()
 	defer s.optionsMu.Unlock()
 	s.serviceOptions = append(s.serviceOptions, service.WithCFindHandler(handler))
+}
+
+// SetCFindStreamHandler sets a C-FIND handler that sends results as they
+// become available without first constructing a complete response slice.
+func (s *Server) SetCFindStreamHandler(handler func(context.Context, service.CFindOperation) error) {
+	s.optionsMu.Lock()
+	defer s.optionsMu.Unlock()
+	s.serviceOptions = append(s.serviceOptions, service.WithCFindStreamHandler(handler))
 }
 
 // SetCMoveHandler sets the C-MOVE handler via a CMoveOperation interface.

@@ -92,9 +92,11 @@ func TestAdvancedNegotiationRoundTripEnforcesAsyncWindow(t *testing.T) {
 		)),
 		WithUserIdentity(association.NewUserIdentityJWT([]byte("request-token"), true)),
 	)
-	client.AddPresentationContextWithRoles(
+	if err := client.AddPresentationContextWithRoles(
 		verificationSOPClassUID, true, true, "1.2.840.10008.1.2.1",
-	)
+	); err != nil {
+		t.Fatalf("AddPresentationContextWithRoles() error = %v", err)
+	}
 	client.conn = clientConn
 	if err := client.negotiateAssociation(ctx); err != nil {
 		t.Fatalf("negotiateAssociation failed: %v", err)
@@ -170,7 +172,7 @@ func assertAdvancedNegotiation(t *testing.T, assoc *association.Association, ser
 		!bytes.Equal(extended.AcceptedApplicationInfo, []byte{1, 0, 1}) ||
 		extended.ServiceClassUID != "1.2.840.10008.4.2" ||
 		len(extended.RelatedGeneralSOPClassUIDs) != 2 ||
-		extended.RelatedGeneralSOPClassUIDs[0] != "1.2.840.10008.5.1.4.1.1.2" ||
+		extended.RelatedGeneralSOPClassUIDs[0] != testCTImageStorageUID ||
 		extended.RelatedGeneralSOPClassUIDs[1] != "1.2.840.10008.5.1.4.1.1.4" {
 		t.Fatalf("extended negotiation = %#v", extended)
 	}

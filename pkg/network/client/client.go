@@ -8,6 +8,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -40,6 +41,20 @@ type serviceInterface interface {
 	SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error)
 	SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error)
 	SendCCancel(ctx context.Context, messageID uint16, presentationContextID byte) error
+	SendNCreate(ctx context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error)
+	SendNGet(ctx context.Context, req *dimse.NGetRequest) (*dimse.NGetResponse, error)
+	SendNSet(ctx context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error)
+	SendNDelete(ctx context.Context, req *dimse.NDeleteRequest) (*dimse.NDeleteResponse, error)
+	SendNAction(ctx context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error)
+	SendNEventReport(ctx context.Context, req *dimse.NEventReportRequest) (*dimse.NEventReportResponse, error)
+}
+
+// cFindErrorService is implemented by service.Service. It is intentionally
+// separate from serviceInterface so existing test and third-party service
+// adapters remain source compatible while Client can surface asynchronous
+// C-FIND terminal errors when the underlying implementation supports them.
+type cFindErrorService interface {
+	SendCFindWithError(context.Context, *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error)
 }
 
 // Client represents a DICOM SCU (Service Class User) client.
@@ -78,10 +93,22 @@ type Client struct {
 	// Presentation contexts to negotiate
 	presentationContexts []*pdu.PresentationContextRQ
 
-	// Connection state
-	mu        sync.Mutex
-	connected bool
+	// Connection state. All fields below are protected by mu.
+	mu             sync.Mutex
+	connected      bool
+	state          clientState
+	connectCancel  context.CancelFunc
+	transitionDone chan struct{}
 }
+
+type clientState uint8
+
+const (
+	clientDisconnected clientState = iota
+	clientConnecting
+	clientConnected
+	clientClosing
+)
 
 // Config contains configuration options for the DICOM client.
 type Config struct {
@@ -111,6 +138,15 @@ type Config struct {
 	// RequestTimeout is the default timeout for DIMSE requests
 	// Default: 30 seconds
 	RequestTimeout time.Duration
+
+	// TransportReadTimeout limits a single PDU read. A zero value permits an
+	// established association to remain idle until it is released or closed.
+	// Default: 0 (disabled).
+	TransportReadTimeout time.Duration
+
+	// TransportWriteTimeout limits a single PDU write.
+	// Default: 30 seconds.
+	TransportWriteTimeout time.Duration
 
 	// AssociationTimeout is the timeout for association negotiation
 	// Default: 10 seconds
@@ -160,6 +196,23 @@ type Config struct {
 // Option is a function that modifies client configuration.
 type Option func(*Config)
 
+var (
+	// ErrTooManyPresentationContexts reports an attempt to configure more than
+	// the 128 presentation contexts permitted in one DICOM association.
+	ErrTooManyPresentationContexts = pdu.ErrTooManyPresentationContexts
+	// ErrInvalidPresentationContext reports a context with no abstract syntax
+	// or no usable transfer syntax.
+	ErrInvalidPresentationContext = pdu.ErrInvalidPresentationContext
+	// ErrClientConnecting indicates that an association attempt is already in progress.
+	ErrClientConnecting = errors.New("client is connecting")
+	// ErrClientConnected indicates that the client already owns an established association.
+	ErrClientConnected = errors.New("client is already connected")
+	// ErrClientClosing indicates that the client is releasing or cancelling an association.
+	ErrClientClosing = errors.New("client is closing")
+	// ErrClientNotConnected indicates that no usable association is established.
+	ErrClientNotConnected = errors.New("client not connected")
+)
+
 // WithLogger sets the structured network logger.
 func WithLogger(logger observability.Logger) Option {
 	return func(o *Config) { o.Logger = logger }
@@ -207,6 +260,22 @@ func WithConnectTimeout(timeout time.Duration) Option {
 func WithRequestTimeout(timeout time.Duration) Option {
 	return func(o *Config) {
 		o.RequestTimeout = timeout
+	}
+}
+
+// WithTransportReadTimeout sets the timeout for each transport PDU read.
+// It does not affect the lifetime of an individual DIMSE request.
+func WithTransportReadTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
+		o.TransportReadTimeout = timeout
+	}
+}
+
+// WithTransportWriteTimeout sets the timeout for each transport PDU write.
+// It does not affect the lifetime of an individual DIMSE request.
+func WithTransportWriteTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
+		o.TransportWriteTimeout = timeout
 	}
 }
 
@@ -304,6 +373,7 @@ func defaultClientConfig() *Config {
 		MaxPDULength:                             16384,
 		ConnectTimeout:                           10 * time.Second,
 		RequestTimeout:                           30 * time.Second,
+		TransportWriteTimeout:                    30 * time.Second,
 		AssociationTimeout:                       10 * time.Second,
 		ImplementationClassUID:                   "1.2.826.0.1.3680043.10.854",
 		ImplementationVersionName:                "GO-DICOM-1.0",
@@ -335,9 +405,33 @@ func New(opts ...Option) *Client {
 //   - transferSyntaxes: List of transfer syntax UIDs to propose
 //
 // The presentation context ID will be automatically assigned (odd numbers: 1, 3, 5, ...).
-func (c *Client) AddPresentationContext(abstractSyntax string, transferSyntaxes ...string) {
-	// Calculate next context ID (odd numbers: 1, 3, 5, ...)
-	contextID := byte(len(c.presentationContexts)*2 + 1)
+func (c *Client) AddPresentationContext(abstractSyntax string, transferSyntaxes ...string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.addPresentationContextLocked(abstractSyntax, transferSyntaxes...)
+}
+
+func (c *Client) addPresentationContextLocked(abstractSyntax string, transferSyntaxes ...string) error {
+	if err := c.configurationStateErrorLocked(); err != nil {
+		return err
+	}
+
+	if len(c.presentationContexts) >= 128 {
+		return fmt.Errorf("%w: got %d, maximum is 128", ErrTooManyPresentationContexts, len(c.presentationContexts)+1)
+	}
+	if abstractSyntax == "" {
+		return fmt.Errorf("%w: abstract syntax is empty", ErrInvalidPresentationContext)
+	}
+	if len(transferSyntaxes) == 0 {
+		return fmt.Errorf("%w: transfer syntaxes are empty", ErrInvalidPresentationContext)
+	}
+	for _, transferSyntax := range transferSyntaxes {
+		if transferSyntax == "" {
+			return fmt.Errorf("%w: transfer syntax is empty", ErrInvalidPresentationContext)
+		}
+	}
+	// The count is bounded above, so this conversion cannot wrap.
+	contextID := byte(len(c.presentationContexts)*2 + 1) // #nosec G115 -- bounded by the 128-context limit
 
 	pc := &pdu.PresentationContextRQ{
 		ID:               contextID,
@@ -346,6 +440,7 @@ func (c *Client) AddPresentationContext(abstractSyntax string, transferSyntaxes 
 	}
 
 	c.presentationContexts = append(c.presentationContexts, pc)
+	return nil
 }
 
 // AddPresentationContextWithRoles adds a presentation context and requests the
@@ -354,10 +449,15 @@ func (c *Client) AddPresentationContextWithRoles(
 	abstractSyntax string,
 	scuRole, scpRole bool,
 	transferSyntaxes ...string,
-) {
-	c.AddPresentationContext(abstractSyntax, transferSyntaxes...)
+) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.addPresentationContextLocked(abstractSyntax, transferSyntaxes...); err != nil {
+		return err
+	}
 	selection := association.NewRoleSelection(abstractSyntax, boolByte(scuRole), boolByte(scpRole))
 	c.config.RoleSelections = upsertRoleSelection(c.config.RoleSelections, selection)
+	return nil
 }
 
 // GetConfig returns the client configuration.
@@ -377,14 +477,14 @@ func (c *Client) GetAssociation() *association.Association {
 func (c *Client) IsConnected() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.connected
+	return c.connected && c.state != clientClosing
 }
 
 func (c *Client) activeService() (serviceInterface, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.connected || c.service == nil {
-		return nil, fmt.Errorf("client not connected")
+		return nil, ErrClientNotConnected
 	}
 	return c.service, nil
 }
@@ -395,6 +495,32 @@ func (c *Client) activeService() (serviceInterface, error) {
 // error after cleaning up the local connection state.
 func (c *Client) Close() error {
 	c.mu.Lock()
+	if c.state == clientConnecting {
+		cancel := c.connectCancel
+		conn := c.conn
+		done := c.transitionDone
+		c.state = clientClosing
+		c.connected = false
+		c.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+		if conn != nil {
+			_ = conn.Close()
+		}
+		if done != nil {
+			<-done
+		}
+		return nil
+	}
+	if c.state == clientClosing {
+		done := c.transitionDone
+		c.mu.Unlock()
+		if done != nil {
+			<-done
+		}
+		return nil
+	}
 	if !c.connected {
 		c.mu.Unlock()
 		return nil
@@ -405,6 +531,9 @@ func (c *Client) Close() error {
 	c.service = nil
 	c.assoc = nil
 	c.conn = nil
+	c.state = clientClosing
+	c.transitionDone = make(chan struct{})
+	done := c.transitionDone
 	c.mu.Unlock()
 
 	// Try graceful release with a short timeout
@@ -424,12 +553,39 @@ func (c *Client) Close() error {
 		}
 	}
 
+	c.finishTransition(done)
 	return err
 }
 
 // Abort aborts the association and closes the connection.
 func (c *Client) Abort(ctx context.Context) error {
 	c.mu.Lock()
+	if c.state == clientConnecting {
+		cancel := c.connectCancel
+		conn := c.conn
+		done := c.transitionDone
+		c.state = clientClosing
+		c.connected = false
+		c.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+		if conn != nil {
+			_ = conn.Close()
+		}
+		if done != nil {
+			<-done
+		}
+		return nil
+	}
+	if c.state == clientClosing {
+		done := c.transitionDone
+		c.mu.Unlock()
+		if done != nil {
+			<-done
+		}
+		return nil
+	}
 	if !c.connected {
 		c.mu.Unlock()
 		return nil
@@ -440,6 +596,9 @@ func (c *Client) Abort(ctx context.Context) error {
 	c.service = nil
 	c.assoc = nil
 	c.conn = nil
+	c.state = clientClosing
+	c.transitionDone = make(chan struct{})
+	done := c.transitionDone
 	c.mu.Unlock()
 
 	var err error
@@ -457,7 +616,55 @@ func (c *Client) Abort(ctx context.Context) error {
 		}
 	}
 
+	c.finishTransition(done)
 	return err
+}
+
+func (c *Client) finishTransition(done chan struct{}) {
+	c.mu.Lock()
+	c.state = clientDisconnected
+	c.connected = false
+	c.connectCancel = nil
+	if c.transitionDone == done {
+		c.transitionDone = nil
+	}
+	c.mu.Unlock()
+	if done != nil {
+		close(done)
+	}
+}
+
+// handleServiceClosed receives the lifecycle notification emitted by the
+// current service. The identity check prevents an old association's receive
+// loop from clearing a newer client session.
+func (c *Client) handleServiceClosed(closed serviceInterface) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.service != closed {
+		return
+	}
+	c.service = nil
+	c.assoc = nil
+	c.conn = nil
+	c.connected = false
+	if c.state == clientConnected {
+		c.state = clientDisconnected
+	}
+}
+
+func (c *Client) configurationStateErrorLocked() error {
+	switch c.state {
+	case clientConnecting:
+		return ErrClientConnecting
+	case clientConnected:
+		return ErrClientConnected
+	case clientClosing:
+		return ErrClientClosing
+	}
+	if c.connected {
+		return ErrClientConnected
+	}
+	return nil
 }
 
 // buildUserInformation builds the UserInformation structure for A-ASSOCIATE-RQ.
@@ -638,7 +845,14 @@ func (c *Client) dial(ctx context.Context, host string, port int) error {
 			return fmt.Errorf("failed to connect to %s: %w", address, err)
 		}
 
+		c.mu.Lock()
+		if c.state == clientClosing {
+			c.mu.Unlock()
+			_ = conn.Close()
+			return ErrClientClosing
+		}
 		c.conn = conn
+		c.mu.Unlock()
 		return nil
 	}
 
@@ -652,7 +866,14 @@ func (c *Client) dial(ctx context.Context, host string, port int) error {
 		return fmt.Errorf("failed to connect to %s: %w", address, err)
 	}
 
+	c.mu.Lock()
+	if c.state == clientClosing {
+		c.mu.Unlock()
+		_ = conn.Close()
+		return ErrClientClosing
+	}
 	c.conn = conn
+	c.mu.Unlock()
 	return nil
 }
 
@@ -670,23 +891,41 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 		service.WithEventObserver(c.config.EventObserver),
 		service.WithMetricsObserver(c.config.MetricsObserver),
 		service.WithMaxPDULength(c.config.MaxPDULength),
-		service.WithReadTimeout(c.config.RequestTimeout),
-		service.WithWriteTimeout(c.config.RequestTimeout),
+		service.WithRequestTimeout(c.config.RequestTimeout),
+		service.WithReadTimeout(c.config.TransportReadTimeout),
+		service.WithWriteTimeout(c.config.TransportWriteTimeout),
 		service.WithKeepConnectionOnPeerRelease(c.config.KeepConnectionOnPeerRelease),
 	}
 	if c.config.CStoreHandler != nil {
 		svcOpts = append(svcOpts, service.WithCStoreHandler(c.config.CStoreHandler))
 	}
-	c.service = service.NewService(c.conn, nil, svcOpts...)
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return ErrClientNotConnected
+	}
+	var svc *service.Service
+	svcOpts = append(svcOpts, service.WithConnectionLifecycleHandler(
+		&service.ConnectionLifecycleHandlerFuncs{
+			OnConnectionClosedFunc: func(_ context.Context, _ error) {
+				c.handleServiceClosed(svc)
+			},
+		},
+	))
+	svc = service.NewService(conn, nil, svcOpts...)
+	c.mu.Lock()
+	c.service = svc
+	c.mu.Unlock()
 
 	// Build and send A-ASSOCIATE-RQ
 	rq := c.buildAssociateRQ()
-	if err := c.service.SendAssociationRequest(assocCtx, rq); err != nil {
+	if err := svc.SendAssociationRequest(assocCtx, rq); err != nil {
 		return fmt.Errorf("failed to send A-ASSOCIATE-RQ: %w", err)
 	}
 
 	// Wait for A-ASSOCIATE-AC or A-ASSOCIATE-RJ
-	ac, err := c.service.ReceiveAssociationResponse(assocCtx)
+	ac, err := svc.ReceiveAssociationResponse(assocCtx)
 	if err != nil {
 		return fmt.Errorf("association rejected: %w", err)
 	}
@@ -697,20 +936,23 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 		return fmt.Errorf("invalid A-ASSOCIATE-AC: %w", err)
 	}
 
-	c.mu.Lock()
-	c.assoc = acceptedAssociation
-	c.mu.Unlock()
-
 	// Map abstract syntaxes from RQ to the accepted contexts in AC
 	// (A-ASSOCIATE-AC doesn't include AbstractSyntax, so we need to restore it from RQ)
 	for _, pcRQ := range rq.PresentationContexts {
-		pcAssoc := c.assoc.FindPresentationContextByID(pcRQ.ID)
+		pcAssoc := acceptedAssociation.FindPresentationContextByID(pcRQ.ID)
 		if pcAssoc != nil {
 			pcAssoc.AbstractSyntax = pcRQ.AbstractSyntax
 		}
 	}
 
-	c.service.SetAssociation(c.assoc)
+	svc.SetAssociation(acceptedAssociation)
+	c.mu.Lock()
+	if c.state == clientClosing {
+		c.mu.Unlock()
+		return ErrClientClosing
+	}
+	c.assoc = acceptedAssociation
+	c.mu.Unlock()
 
 	return nil
 }
@@ -730,44 +972,83 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 //
 // Returns an error if connection or association fails.
 func (c *Client) Connect(ctx context.Context, host string, port int) error {
-	if c.connected {
-		return fmt.Errorf("client is already connected")
+	c.mu.Lock()
+	if err := c.configurationStateErrorLocked(); err != nil {
+		c.mu.Unlock()
+		return err
 	}
-
 	if len(c.presentationContexts) == 0 {
+		c.mu.Unlock()
 		return fmt.Errorf("no presentation contexts configured (use AddPresentationContext)")
 	}
+	attemptCtx, cancel := context.WithCancel(ctx)
+	c.connectCancel = cancel
+	c.transitionDone = make(chan struct{})
+	done := c.transitionDone
+	c.state = clientConnecting
+	c.connected = false
 	c.connectionID = observability.NewConnectionID()
-	c.emitConnectionAttempted(ctx)
+	c.mu.Unlock()
+	defer cancel()
+	c.emitConnectionAttempted(attemptCtx)
+
+	fail := func(err error) error {
+		c.finishConnectingAttempt(done)
+		c.emitConnectionFailure(attemptCtx, err)
+		return err
+	}
 
 	// Step 1: Establish TCP connection
-	if err := c.dial(ctx, host, port); err != nil {
-		c.emitConnectionFailure(ctx, err)
-		return err
+	if err := c.dial(attemptCtx, host, port); err != nil {
+		return fail(err)
 	}
 
 	// Step 2-3: Negotiate association
-	if err := c.negotiateAssociation(ctx); err != nil {
-		// Clean up connection on failure
-		if c.conn != nil {
-			_ = c.conn.Close()
-			c.conn = nil
-		}
-		return err
+	if err := c.negotiateAssociation(attemptCtx); err != nil {
+		return fail(err)
 	}
 
 	// Step 4: Start service loops
-	if err := c.service.Start(); err != nil {
-		// Clean up on failure
-		if c.conn != nil {
-			_ = c.conn.Close()
-			c.conn = nil
-		}
-		return fmt.Errorf("failed to start service: %w", err)
+	c.mu.Lock()
+	svc := c.service
+	c.mu.Unlock()
+	if err := svc.Start(); err != nil {
+		return fail(fmt.Errorf("failed to start service: %w", err))
 	}
 
+	c.mu.Lock()
+	if c.state != clientConnecting || c.transitionDone != done {
+		c.mu.Unlock()
+		return fail(ErrClientClosing)
+	}
 	c.connected = true
+	c.state = clientConnected
+	c.connectCancel = nil
+	c.transitionDone = nil
+	c.mu.Unlock()
+	close(done)
 	return nil
+}
+
+func (c *Client) finishConnectingAttempt(done chan struct{}) {
+	c.mu.Lock()
+	conn := c.conn
+	c.conn = nil
+	c.service = nil
+	c.assoc = nil
+	c.connected = false
+	c.state = clientDisconnected
+	c.connectCancel = nil
+	if c.transitionDone == done {
+		c.transitionDone = nil
+	}
+	c.mu.Unlock()
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if done != nil {
+		close(done)
+	}
 }
 
 // Dial is a convenience function that creates a new client, adds presentation contexts,
@@ -785,11 +1066,13 @@ func Dial(ctx context.Context, host string, port int, opts ...Option) (*Client, 
 
 	// Add default verification context if no contexts specified
 	if len(c.presentationContexts) == 0 {
-		c.AddPresentationContext(
+		if err := c.AddPresentationContext(
 			"1.2.840.10008.1.1",   // Verification SOP Class
 			"1.2.840.10008.1.2",   // Implicit VR Little Endian
 			"1.2.840.10008.1.2.1", // Explicit VR Little Endian
-		)
+		); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := c.Connect(ctx, host, port); err != nil {

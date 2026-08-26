@@ -17,6 +17,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
+	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
@@ -142,14 +143,16 @@ func TestCStoreWithPriority_NotConnected(t *testing.T) {
 
 // Mock service for testing DIMSE operations
 type mockServiceForDIMSE struct {
-	echoResponse    *dimse.CEchoResponse
-	storeResponse   *dimse.CStoreResponse
-	storeHook       func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
-	findResponses   []*dimse.CFindResponse
-	findHook        func(*dimse.CFindRequest)
-	cancelHook      func(messageID uint16, presentationContextID byte)
-	releaseStarted  chan struct{}
-	releaseContinue chan struct{}
+	echoResponse     *dimse.CEchoResponse
+	storeResponse    *dimse.CStoreResponse
+	storeHook        func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
+	findResponses    []*dimse.CFindResponse
+	findHook         func(*dimse.CFindRequest)
+	findTerminalErr  error
+	cancelHook       func(messageID uint16, presentationContextID byte)
+	nServiceRequests []dimse.Request
+	releaseStarted   chan struct{}
+	releaseContinue  chan struct{}
 }
 
 // Association management methods (not used in these tests)
@@ -229,6 +232,21 @@ func (m *mockServiceForDIMSE) SendCFind(_ context.Context, req *dimse.CFindReque
 	return respCh, nil
 }
 
+func (m *mockServiceForDIMSE) SendCFindWithError(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error) {
+	responses, err := m.SendCFind(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	terminalErrors := make(chan error, 1)
+	go func() {
+		defer close(terminalErrors)
+		if m.findTerminalErr != nil {
+			terminalErrors <- m.findTerminalErr
+		}
+	}()
+	return responses, terminalErrors, nil
+}
+
 func (m *mockServiceForDIMSE) SendCMove(_ context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error) {
 	ch := make(chan *dimse.CMoveResponse, 16)
 	go func() {
@@ -270,6 +288,36 @@ func (m *mockServiceForDIMSE) SendCCancel(_ context.Context, messageID uint16, p
 	return nil
 }
 
+func (m *mockServiceForDIMSE) SendNCreate(_ context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error) {
+	m.nServiceRequests = append(m.nServiceRequests, req)
+	return dimse.NewNCreateResponseSuccess(req.MessageID(), req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil), nil
+}
+
+func (m *mockServiceForDIMSE) SendNGet(_ context.Context, req *dimse.NGetRequest) (*dimse.NGetResponse, error) {
+	m.nServiceRequests = append(m.nServiceRequests, req)
+	return dimse.NewNGetResponseSuccess(req.MessageID(), req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil), nil
+}
+
+func (m *mockServiceForDIMSE) SendNSet(_ context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error) {
+	m.nServiceRequests = append(m.nServiceRequests, req)
+	return dimse.NewNSetResponseSuccess(req.MessageID(), req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil), nil
+}
+
+func (m *mockServiceForDIMSE) SendNDelete(_ context.Context, req *dimse.NDeleteRequest) (*dimse.NDeleteResponse, error) {
+	m.nServiceRequests = append(m.nServiceRequests, req)
+	return dimse.NewNDeleteResponseSuccess(req.MessageID(), req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID()), nil
+}
+
+func (m *mockServiceForDIMSE) SendNAction(_ context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error) {
+	m.nServiceRequests = append(m.nServiceRequests, req)
+	return dimse.NewNActionResponseSuccess(req.MessageID(), req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), req.ActionTypeID(), nil), nil
+}
+
+func (m *mockServiceForDIMSE) SendNEventReport(_ context.Context, req *dimse.NEventReportRequest) (*dimse.NEventReportResponse, error) {
+	m.nServiceRequests = append(m.nServiceRequests, req)
+	return dimse.NewNEventReportResponseSuccess(req.MessageID(), req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), req.EventTypeID(), nil), nil
+}
+
 func setupMockClient() (*Client, *mockServiceForDIMSE) {
 	client := New()
 	client.connected = true
@@ -285,6 +333,51 @@ func TestCEchoTreatsMissingServiceAsDisconnected(t *testing.T) {
 
 	if err := client.CEcho(context.Background()); err == nil {
 		t.Fatal("CEcho() succeeded with no active service")
+	}
+}
+
+func TestNServiceMethodsReturnRawResponses(t *testing.T) {
+	client, mock := setupMockClient()
+	const sopClassUID = "1.2.840.10008.5.1.1.1"
+	const sopInstanceUID = "2.25.701"
+
+	tests := []struct {
+		name string
+		run  func() (dimse.Response, error)
+	}{
+		{"N-CREATE", func() (dimse.Response, error) {
+			return client.NCreate(context.Background(), dimse.NewNCreateRequest(sopClassUID, sopInstanceUID, dataset.New()))
+		}},
+		{"N-GET", func() (dimse.Response, error) {
+			return client.NGet(context.Background(), dimse.NewNGetRequest(sopClassUID, sopInstanceUID, nil))
+		}},
+		{"N-SET", func() (dimse.Response, error) {
+			return client.NSet(context.Background(), dimse.NewNSetRequest(sopClassUID, sopInstanceUID, dataset.New()))
+		}},
+		{"N-DELETE", func() (dimse.Response, error) {
+			return client.NDelete(context.Background(), dimse.NewNDeleteRequest(sopClassUID, sopInstanceUID))
+		}},
+		{"N-ACTION", func() (dimse.Response, error) {
+			return client.NAction(context.Background(), dimse.NewNActionRequest(sopClassUID, sopInstanceUID, 1, dataset.New()))
+		}},
+		{"N-EVENT-REPORT", func() (dimse.Response, error) {
+			return client.NEventReport(context.Background(), dimse.NewNEventReportRequest(sopClassUID, sopInstanceUID, 1, dataset.New()))
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response, err := tt.run()
+			if err != nil {
+				t.Fatalf("%s error = %v", tt.name, err)
+			}
+			if response == nil || !response.Status().IsSuccess() {
+				t.Fatalf("%s response = %#v, want raw success response", tt.name, response)
+			}
+		})
+	}
+	if got := len(mock.nServiceRequests); got != len(tests) {
+		t.Fatalf("N-Service request count = %d, want %d", got, len(tests))
 	}
 }
 
@@ -369,6 +462,16 @@ func TestCFind_Success_NoResults(t *testing.T) {
 
 	if len(results) != 0 {
 		t.Errorf("Expected 0 results, got %d", len(results))
+	}
+}
+
+func TestCFind_PropagatesAsynchronousRequestTimeout(t *testing.T) {
+	client, mockService := setupMockClient()
+	mockService.findTerminalErr = service.ErrRequestTimeout
+
+	_, err := client.CFind(context.Background(), dimse.QueryRetrieveLevelStudy, dataset.New())
+	if !errors.Is(err, service.ErrRequestTimeout) {
+		t.Fatalf("CFind() error = %v, want ErrRequestTimeout", err)
 	}
 }
 

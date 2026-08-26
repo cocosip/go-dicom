@@ -5,11 +5,102 @@ package pdu
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"strings"
 	"testing"
 )
+
+func TestAAssociateRQEncodeRejectsInvalidPresentationContexts(t *testing.T) {
+	tests := []struct {
+		name     string
+		contexts []PresentationContextRQ
+		want     error
+	}{
+		{
+			name:     "zero ID",
+			contexts: []PresentationContextRQ{{ID: 0, AbstractSyntax: testCTImageStorageUID, TransferSyntaxes: []string{testExplicitVRLittleLE}}},
+			want:     ErrInvalidPresentationContext,
+		},
+		{
+			name:     "even ID",
+			contexts: []PresentationContextRQ{{ID: 2, AbstractSyntax: testCTImageStorageUID, TransferSyntaxes: []string{testExplicitVRLittleLE}}},
+			want:     ErrInvalidPresentationContext,
+		},
+		{
+			name: "duplicate ID",
+			contexts: []PresentationContextRQ{
+				{ID: 1, AbstractSyntax: testCTImageStorageUID, TransferSyntaxes: []string{testExplicitVRLittleLE}},
+				{ID: 1, AbstractSyntax: testVerificationSOPUID, TransferSyntaxes: []string{testExplicitVRLittleLE}},
+			},
+			want: ErrInvalidPresentationContext,
+		},
+		{
+			name:     "empty abstract syntax",
+			contexts: []PresentationContextRQ{{ID: 1, TransferSyntaxes: []string{testExplicitVRLittleLE}}},
+			want:     ErrInvalidPresentationContext,
+		},
+		{
+			name:     "empty transfer syntax list",
+			contexts: []PresentationContextRQ{{ID: 1, AbstractSyntax: testCTImageStorageUID}},
+			want:     ErrInvalidPresentationContext,
+		},
+		{
+			name:     "empty transfer syntax UID",
+			contexts: []PresentationContextRQ{{ID: 1, AbstractSyntax: testCTImageStorageUID, TransferSyntaxes: []string{""}}},
+			want:     ErrInvalidPresentationContext,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := NewAAssociateRQ()
+			rq.CalledAETitle = testCalledAETitle
+			rq.CallingAETitle = testCallingAETitle
+			rq.PresentationContexts = tt.contexts
+			_, err := rq.Encode()
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("Encode() error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestAAssociateRQEncodeRejectsMoreThan128PresentationContexts(t *testing.T) {
+	rq := NewAAssociateRQ()
+	rq.CalledAETitle = "CALLED"
+	rq.CallingAETitle = "CALLING"
+	for id := 1; id <= 255; id += 2 {
+		rq.PresentationContexts = append(rq.PresentationContexts, PresentationContextRQ{
+			ID: byte(id), AbstractSyntax: testCTImageStorageUID, TransferSyntaxes: []string{testExplicitVRLittleLE},
+		})
+	}
+	rq.PresentationContexts = append(rq.PresentationContexts, PresentationContextRQ{
+		ID: 1, AbstractSyntax: testCTImageStorageUID, TransferSyntaxes: []string{testExplicitVRLittleLE},
+	})
+
+	_, err := rq.Encode()
+	if !errors.Is(err, ErrTooManyPresentationContexts) {
+		t.Fatalf("Encode() error = %v, want ErrTooManyPresentationContexts", err)
+	}
+}
+
+func TestAAssociateRQDecodeRejectsInvalidPresentationContexts(t *testing.T) {
+	data := make([]byte, 68)
+	data[1] = 1
+	data = append(data, encodeTestItem(ItemTypeApplicationContext, []byte(applicationContextUID))...)
+	data = append(data, encodeTestItem(ItemTypePresentationContextRQ, append(
+		[]byte{1, 0, 0, 0},
+		encodeTestItem(ItemTypeAbstractSyntax, []byte(testCTImageStorageUID))...,
+	))...)
+
+	rq := &AAssociateRQ{}
+	err := rq.Decode(NewRawPDU(TypeAAssociateRQ, data))
+	if !errors.Is(err, ErrInvalidPresentationContext) {
+		t.Fatalf("Decode() error = %v, want ErrInvalidPresentationContext", err)
+	}
+}
 
 const (
 	testCTImageStorageUID          = "1.2.840.10008.5.1.4.1.1.2"
@@ -630,7 +721,9 @@ func unknownItemsAssociateRQ() *RawPDU {
 	fixed[1] = 1
 
 	unknown := encodeTestItem(0x99, nil)
-	presentation := append([]byte{1, 0, 0, 0}, encodeTestItem(0x99, nil)...)
+	presentation := append([]byte{1, 0, 0, 0}, encodeTestItem(ItemTypeAbstractSyntax, []byte(testCTImageStorageUID))...)
+	presentation = append(presentation, encodeTestItem(ItemTypeTransferSyntax, []byte(testExplicitVRLittleLE))...)
+	presentation = append(presentation, encodeTestItem(0x99, nil)...)
 	userInformation := encodeTestItem(0x99, nil)
 
 	data := append(fixed, unknown...)

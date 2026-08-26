@@ -6,6 +6,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
+
+const verificationSOPClassUID = "1.2.840.10008.1.1"
 
 func TestNew(t *testing.T) {
 	client := New()
@@ -38,6 +42,12 @@ func TestNew(t *testing.T) {
 	if opts.RequestTimeout != 30*time.Second {
 		t.Errorf("Expected RequestTimeout 30s, got %v", opts.RequestTimeout)
 	}
+	if opts.TransportReadTimeout != 0 {
+		t.Errorf("Expected TransportReadTimeout 0, got %v", opts.TransportReadTimeout)
+	}
+	if opts.TransportWriteTimeout != 30*time.Second {
+		t.Errorf("Expected TransportWriteTimeout 30s, got %v", opts.TransportWriteTimeout)
+	}
 	if opts.AssociationTimeout != 10*time.Second {
 		t.Errorf("Expected AssociationTimeout 10s, got %v", opts.AssociationTimeout)
 	}
@@ -50,6 +60,8 @@ func TestNewWithOptions(t *testing.T) {
 		WithMaxPDULength(32768),
 		WithConnectTimeout(5*time.Second),
 		WithRequestTimeout(60*time.Second),
+		WithTransportReadTimeout(20*time.Second),
+		WithTransportWriteTimeout(25*time.Second),
 		WithAssociationTimeout(15*time.Second),
 		WithImplementationClassUID(testImplementationClassUID),
 		WithImplementationVersionName("TEST-1.0"),
@@ -72,6 +84,12 @@ func TestNewWithOptions(t *testing.T) {
 	if opts.RequestTimeout != 60*time.Second {
 		t.Errorf("Expected RequestTimeout 60s, got %v", opts.RequestTimeout)
 	}
+	if opts.TransportReadTimeout != 20*time.Second {
+		t.Errorf("Expected TransportReadTimeout 20s, got %v", opts.TransportReadTimeout)
+	}
+	if opts.TransportWriteTimeout != 25*time.Second {
+		t.Errorf("Expected TransportWriteTimeout 25s, got %v", opts.TransportWriteTimeout)
+	}
 	if opts.AssociationTimeout != 15*time.Second {
 		t.Errorf("Expected AssociationTimeout 15s, got %v", opts.AssociationTimeout)
 	}
@@ -90,10 +108,12 @@ func TestAddPresentationContext(t *testing.T) {
 	client := New()
 
 	// Add first context
-	client.AddPresentationContext("1.2.840.10008.1.1", // Verification
+	if err := client.AddPresentationContext(verificationSOPClassUID, // Verification
 		"1.2.840.10008.1.2",   // Implicit VR Little Endian
 		"1.2.840.10008.1.2.1", // Explicit VR Little Endian
-	)
+	); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
 
 	if len(client.presentationContexts) != 1 {
 		t.Fatalf("Expected 1 presentation context, got %d", len(client.presentationContexts))
@@ -103,17 +123,19 @@ func TestAddPresentationContext(t *testing.T) {
 	if pc.ID != 1 {
 		t.Errorf("Expected ID 1, got %d", pc.ID)
 	}
-	if pc.AbstractSyntax != "1.2.840.10008.1.1" {
-		t.Errorf("Expected AbstractSyntax '1.2.840.10008.1.1', got '%s'", pc.AbstractSyntax)
+	if pc.AbstractSyntax != verificationSOPClassUID {
+		t.Errorf("Expected AbstractSyntax %q, got %q", verificationSOPClassUID, pc.AbstractSyntax)
 	}
 	if len(pc.TransferSyntaxes) != 2 {
 		t.Errorf("Expected 2 transfer syntaxes, got %d", len(pc.TransferSyntaxes))
 	}
 
 	// Add second context
-	client.AddPresentationContext(testCTImageStorageUID, // CT Image Storage
+	if err := client.AddPresentationContext(testCTImageStorageUID, // CT Image Storage
 		"1.2.840.10008.1.2", // Implicit VR Little Endian
-	)
+	); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
 
 	if len(client.presentationContexts) != 2 {
 		t.Fatalf("Expected 2 presentation contexts, got %d", len(client.presentationContexts))
@@ -125,9 +147,11 @@ func TestAddPresentationContext(t *testing.T) {
 	}
 
 	// Add third context
-	client.AddPresentationContext("1.2.840.10008.5.1.4.1.1.4", // MR Image Storage
+	if err := client.AddPresentationContext("1.2.840.10008.5.1.4.1.1.4", // MR Image Storage
 		"1.2.840.10008.1.2.1", // Explicit VR Little Endian
-	)
+	); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
 
 	if len(client.presentationContexts) != 3 {
 		t.Fatalf("Expected 3 presentation contexts, got %d", len(client.presentationContexts))
@@ -136,6 +160,69 @@ func TestAddPresentationContext(t *testing.T) {
 	pc3 := client.presentationContexts[2]
 	if pc3.ID != 5 {
 		t.Errorf("Expected ID 5, got %d", pc3.ID)
+	}
+}
+
+func TestAddPresentationContext_Rejects129thContextWithoutMutatingClient(t *testing.T) {
+	client := New()
+	for range 128 {
+		if err := client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1"); err != nil {
+			t.Fatalf("AddPresentationContext() before limit error = %v", err)
+		}
+	}
+
+	if got := client.presentationContexts[127].ID; got != 255 {
+		t.Fatalf("128th presentation context ID = %d, want 255", got)
+	}
+
+	err := client.AddPresentationContext("1.2.840.10008.5.1.4.1.1.2", "1.2.840.10008.1.2.1")
+	if !errors.Is(err, ErrTooManyPresentationContexts) {
+		t.Fatalf("129th AddPresentationContext() error = %v, want ErrTooManyPresentationContexts", err)
+	}
+	if got := len(client.presentationContexts); got != 128 {
+		t.Fatalf("presentation context count after rejected add = %d, want 128", got)
+	}
+}
+
+func TestAddPresentationContextWithRoles_DoesNotAddRoleWhenContextIsRejected(t *testing.T) {
+	client := New()
+	for range 128 {
+		if err := client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1"); err != nil {
+			t.Fatalf("AddPresentationContext() before limit error = %v", err)
+		}
+	}
+
+	err := client.AddPresentationContextWithRoles("1.2.840.10008.5.1.4.1.1.2", true, false, "1.2.840.10008.1.2.1")
+	if !errors.Is(err, ErrTooManyPresentationContexts) {
+		t.Fatalf("AddPresentationContextWithRoles() error = %v, want ErrTooManyPresentationContexts", err)
+	}
+	if got := len(client.config.RoleSelections); got != 0 {
+		t.Fatalf("role selection count after rejected add = %d, want 0", got)
+	}
+}
+
+func TestAddPresentationContext_RejectsInvalidSyntaxesWithoutMutatingClient(t *testing.T) {
+	tests := []struct {
+		name             string
+		abstractSyntax   string
+		transferSyntaxes []string
+	}{
+		{name: "empty abstract syntax", transferSyntaxes: []string{testExplicitVRLittleEndianUID}},
+		{name: "no transfer syntax", abstractSyntax: verificationSOPClassUID},
+		{name: "empty transfer syntax", abstractSyntax: verificationSOPClassUID, transferSyntaxes: []string{""}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := New()
+			err := client.AddPresentationContext(tt.abstractSyntax, tt.transferSyntaxes...)
+			if !errors.Is(err, ErrInvalidPresentationContext) {
+				t.Fatalf("AddPresentationContext() error = %v, want ErrInvalidPresentationContext", err)
+			}
+			if got := len(client.presentationContexts); got != 0 {
+				t.Fatalf("presentation context count after rejected add = %d, want 0", got)
+			}
+		})
 	}
 }
 
@@ -200,9 +287,11 @@ func TestBuildAssociateRQIncludesAdvancedNegotiation(t *testing.T) {
 		)),
 		WithUserIdentity(identity),
 	)
-	client.AddPresentationContextWithRoles(
+	if err := client.AddPresentationContextWithRoles(
 		"1.2.840.10008.5.1.4.1.1.2", true, true, "1.2.840.10008.1.2.1",
-	)
+	); err != nil {
+		t.Fatalf("AddPresentationContextWithRoles() error = %v", err)
+	}
 
 	rq := client.buildAssociateRQ()
 	async := rq.UserInformation.AsynchronousOperations
@@ -210,7 +299,7 @@ func TestBuildAssociateRQIncludesAdvancedNegotiation(t *testing.T) {
 		t.Fatalf("async operations = %#v", async)
 	}
 	roles := rq.UserInformation.SCPSCURoleSelections
-	if len(roles) != 1 || roles[0].SOPClassUID != "1.2.840.10008.5.1.4.1.1.2" || roles[0].SCURole != 1 || roles[0].SCPRole != 1 {
+	if len(roles) != 1 || roles[0].SOPClassUID != testCTImageStorageUID || roles[0].SCURole != 1 || roles[0].SCPRole != 1 {
 		t.Fatalf("role selections = %#v", roles)
 	}
 	extended := rq.UserInformation.ExtendedNegotiations
@@ -285,10 +374,12 @@ func TestBuildAcceptedAssociationRequiresRequestedIdentityResponse(t *testing.T)
 			WithUserIdentity(association.NewUserIdentityJWT([]byte("sensitive-request-token"), true)),
 			WithRequireSuccessfulUserIdentityNegotiation(require),
 		)
-		client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1")
+		if err := client.AddPresentationContext(verificationSOPClassUID, "1.2.840.10008.1.2.1"); err != nil {
+			t.Fatalf("AddPresentationContext() error = %v", err)
+		}
 		rq := client.buildAssociateRQ()
 		ac := pdu.NewAAssociateAC()
-		ac.PresentationContexts = []pdu.PresentationContextAC{{ID: 1, Result: pdu.ResultAcceptance, TransferSyntax: "1.2.840.10008.1.2.1"}}
+		ac.PresentationContexts = []pdu.PresentationContextAC{{ID: 1, Result: pdu.ResultAcceptance, TransferSyntax: testExplicitVRLittleEndianUID}}
 		ac.UserInformation.UserIdentityResponse = response
 		return client, rq, ac
 	}
@@ -325,7 +416,9 @@ func TestBuildAssociateRQ(t *testing.T) {
 	)
 
 	// Add presentation context
-	client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2")
+	if err := client.AddPresentationContext(verificationSOPClassUID, "1.2.840.10008.1.2"); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
 
 	rq := client.buildAssociateRQ()
 
@@ -377,5 +470,85 @@ func TestConnectAlreadyConnected(t *testing.T) {
 	expectedMsg := "client is already connected"
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
+func TestConnectRejectsConcurrentAttemptAndCloseCancelsConnectingAttempt(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			accepted <- conn
+		}
+	}()
+
+	client := New(WithAssociationTimeout(5 * time.Second))
+	if err := client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1"); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
+	connectResult := make(chan error, 1)
+	go func() {
+		port := listener.Addr().(*net.TCPAddr).Port
+		connectResult <- client.Connect(context.Background(), "127.0.0.1", port)
+	}()
+
+	select {
+	case conn := <-accepted:
+		t.Cleanup(func() { _ = conn.Close() })
+	case <-time.After(time.Second):
+		t.Fatal("client did not begin the first connection attempt")
+	}
+	concurrentResults := make(chan error, 50)
+	for range 50 {
+		go func() { concurrentResults <- client.Connect(context.Background(), "127.0.0.1", 1) }()
+	}
+	for range 50 {
+		if err := <-concurrentResults; !errors.Is(err, ErrClientConnecting) {
+			t.Fatalf("concurrent Connect() error = %v, want ErrClientConnecting", err)
+		}
+	}
+	if err := client.AddPresentationContext("1.2.840.10008.5.1.4.1.1.2", "1.2.840.10008.1.2.1"); !errors.Is(err, ErrClientConnecting) {
+		t.Fatalf("AddPresentationContext() during Connect error = %v, want ErrClientConnecting", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close() during Connect error = %v", err)
+	}
+	select {
+	case err := <-connectResult:
+		if err == nil {
+			t.Fatal("connecting attempt succeeded after Close()")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Close() did not cancel the connecting attempt")
+	}
+}
+
+func TestHandleServiceClosedOnlyClearsCurrentSession(t *testing.T) {
+	client := New()
+	current := &mockServiceForDIMSE{}
+	old := &mockServiceForDIMSE{}
+	client.mu.Lock()
+	client.service = current
+	client.assoc = &association.Association{}
+	client.connected = true
+	client.state = clientConnected
+	client.mu.Unlock()
+
+	client.handleServiceClosed(old)
+	if !client.IsConnected() {
+		t.Fatal("old service closure cleared the current connection")
+	}
+
+	client.handleServiceClosed(current)
+	if client.IsConnected() {
+		t.Fatal("current service closure left client connected")
+	}
+	if association := client.GetAssociation(); association != nil {
+		t.Fatalf("association = %#v after service closure, want nil", association)
 	}
 }

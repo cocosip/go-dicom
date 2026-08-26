@@ -6,12 +6,24 @@ package pdu
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 )
 
 const applicationContextUID = "1.2.840.10008.3.1.1.1"
+
+const maximumPresentationContexts = 128
+
+var (
+	// ErrTooManyPresentationContexts reports an association request that
+	// exceeds the 128 presentation contexts representable by odd byte IDs.
+	ErrTooManyPresentationContexts = errors.New("too many presentation contexts")
+	// ErrInvalidPresentationContext reports a presentation context that cannot
+	// be represented in an A-ASSOCIATE-RQ PDU.
+	ErrInvalidPresentationContext = errors.New("invalid presentation context")
+)
 
 // AAssociateRQ represents an A-ASSOCIATE-RQ PDU.
 // This PDU is sent by the SCU to request an association with an SCP.
@@ -123,6 +135,9 @@ func NewAAssociateRQ() *AAssociateRQ {
 // Encode encodes the A-ASSOCIATE-RQ into a RawPDU.
 func (a *AAssociateRQ) Encode() (*RawPDU, error) {
 	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
+		return nil, err
+	}
+	if err := validatePresentationContexts(a.PresentationContexts); err != nil {
 		return nil, err
 	}
 	var buf bytes.Buffer
@@ -384,6 +399,35 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 		}
 	}
 
+	return validatePresentationContexts(a.PresentationContexts)
+}
+
+func validatePresentationContexts(contexts []PresentationContextRQ) error {
+	if len(contexts) > maximumPresentationContexts {
+		return fmt.Errorf("%w: got %d, maximum is %d", ErrTooManyPresentationContexts, len(contexts), maximumPresentationContexts)
+	}
+
+	seen := make(map[byte]struct{}, len(contexts))
+	for _, pc := range contexts {
+		if pc.ID == 0 || pc.ID%2 == 0 {
+			return fmt.Errorf("%w: ID must be a non-zero odd value, got %d", ErrInvalidPresentationContext, pc.ID)
+		}
+		if _, exists := seen[pc.ID]; exists {
+			return fmt.Errorf("%w: duplicate ID %d", ErrInvalidPresentationContext, pc.ID)
+		}
+		seen[pc.ID] = struct{}{}
+		if pc.AbstractSyntax == "" {
+			return fmt.Errorf("%w: abstract syntax is empty for ID %d", ErrInvalidPresentationContext, pc.ID)
+		}
+		if len(pc.TransferSyntaxes) == 0 {
+			return fmt.Errorf("%w: transfer syntaxes are empty for ID %d", ErrInvalidPresentationContext, pc.ID)
+		}
+		for _, transferSyntax := range pc.TransferSyntaxes {
+			if transferSyntax == "" {
+				return fmt.Errorf("%w: transfer syntax is empty for ID %d", ErrInvalidPresentationContext, pc.ID)
+			}
+		}
+	}
 	return nil
 }
 

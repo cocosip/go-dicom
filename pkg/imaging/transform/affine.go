@@ -75,6 +75,28 @@ func (m Affine2D) Apply(point math3d.Point2) math3d.Point2 {
 	}
 }
 
+// Determinant returns the determinant of the linear portion of the affine
+// transform. A transform is invertible exactly when this value is non-zero.
+func (m Affine2D) Determinant() float64 {
+	return m.a*m.d - m.b*m.c
+}
+
+// Inverse returns the affine transform that reverses m.
+func (m Affine2D) Inverse() (Affine2D, error) {
+	determinant := m.Determinant()
+	if math.Abs(determinant) <= affineTolerance || math.IsNaN(determinant) || math.IsInf(determinant, 0) {
+		return Affine2D{}, fmt.Errorf("affine transform is singular")
+	}
+	return Affine2D{
+		a: m.d / determinant,
+		b: -m.b / determinant,
+		c: -m.c / determinant,
+		d: m.a / determinant,
+		e: (m.c*m.f - m.d*m.e) / determinant,
+		f: (m.b*m.e - m.a*m.f) / determinant,
+	}, nil
+}
+
 // Bounds returns the axis-aligned bounds of a transformed rectangle.
 func (m Affine2D) Bounds(rect math3d.Rect) (math3d.Rect, error) {
 	if !validRect(rect) {

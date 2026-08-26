@@ -62,7 +62,9 @@ func TestObservabilityDialFailureBeforeServiceCreation(t *testing.T) {
 		WithEventObserver(observability.EventObserverFunc(recorder.event)),
 		WithMetricsObserver(observability.MetricsObserverFunc(recorder.metric)),
 	)
-	client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1")
+	if err := client.AddPresentationContext("1.2.840.10008.1.1", "1.2.840.10008.1.2.1"); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

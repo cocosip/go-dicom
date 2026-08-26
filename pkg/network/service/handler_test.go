@@ -5,6 +5,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -348,6 +350,256 @@ func TestHandleCFindRequest_CustomHandler(t *testing.T) {
 
 	if !handlerCalled {
 		t.Error("Custom handler was not called")
+	}
+}
+
+func TestHandleCFindRequest_StreamHandlerSendsPendingBeforeHandlerReturns(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer func() { _ = service.Close() }()
+	defer cancel()
+
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err := request.SetMessageID(91); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+
+	firstSent := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	handlerDone := make(chan struct{})
+	handlers := &Handlers{
+		CFindStreamHandler: func(_ context.Context, operation CFindOperation) error {
+			if err := operation.SendPending(dataset.New()); err != nil {
+				return err
+			}
+			close(firstSent)
+			<-releaseHandler
+			close(handlerDone)
+			return operation.SendFinal(status.Success)
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- service.handleCFindRequest(ctx, request, handlers) }()
+
+	select {
+	case <-firstSent:
+	case <-time.After(time.Second):
+		t.Fatal("stream handler did not send its first pending response")
+	}
+
+	select {
+	case <-handlerDone:
+		t.Fatal("handler returned before the test released it")
+	default:
+	}
+
+	close(releaseHandler)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("handleCFindRequest() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for stream handler")
+	}
+}
+
+func TestCFindOperationRejectsResponsesAfterFinal(t *testing.T) {
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err := request.SetMessageID(92); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+
+	var responses []*dimse.CFindResponse
+	operation := newCFindOperation(request, func(response *dimse.CFindResponse) error {
+		responses = append(responses, response)
+		return nil
+	})
+	if err := operation.SendFinal(status.Success); err != nil {
+		t.Fatalf("SendFinal() error = %v", err)
+	}
+	if err := operation.SendPending(dataset.New()); err == nil {
+		t.Fatal("SendPending() after final error = nil")
+	}
+	if err := operation.SendFinal(status.Success); err == nil {
+		t.Fatal("second SendFinal() error = nil")
+	}
+	if len(responses) != 1 || responses[0].IsPending() {
+		t.Fatalf("responses = %#v, want one final response", responses)
+	}
+}
+
+func TestCFindOperationRejectsPendingFinalStatus(t *testing.T) {
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	operation := newCFindOperation(request, func(*dimse.CFindResponse) error { return nil })
+
+	if err := operation.SendFinal(status.CFindPending); err == nil {
+		t.Fatal("SendFinal(Pending) error = nil")
+	}
+	if err := operation.SendFinal(status.Success); err != nil {
+		t.Fatalf("SendFinal(Success) error = %v", err)
+	}
+}
+
+func TestServiceCloseReportsCFindHandlerShutdownTimeout(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	service := NewService(nil, nil,
+		WithHandlerShutdownTimeout(20*time.Millisecond),
+		WithCFindStreamHandler(func(context.Context, CFindOperation) error {
+			close(handlerStarted)
+			<-releaseHandler // Intentionally ignores the cancellation context.
+			return nil
+		}),
+	)
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err := request.SetMessageID(93); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	if err := service.handleRequest(context.Background(), request); err != nil {
+		t.Fatalf("handleRequest() error = %v", err)
+	}
+	select {
+	case <-handlerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("stream handler did not start")
+	}
+
+	if err := service.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if !errors.Is(service.CloseError(), ErrHandlerShutdownTimeout) {
+		t.Fatalf("CloseError() = %v, want ErrHandlerShutdownTimeout", service.CloseError())
+	}
+	close(releaseHandler)
+}
+
+func TestCFindStreamHandlerCancelBeforeFirstPendingSendsSingleCancelFinal(t *testing.T) {
+	service, ctx, cancel, sent := setupCapturingTestService(t)
+	defer func() { _ = service.Close() }()
+	defer cancel()
+
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err := request.SetMessageID(94); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	handlerStarted := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- service.handleCFindRequest(ctx, request, &Handlers{
+			CFindStreamHandler: func(ctx context.Context, _ CFindOperation) error {
+				close(handlerStarted)
+				<-ctx.Done()
+				return ctx.Err()
+			},
+		})
+	}()
+	select {
+	case <-handlerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("stream handler did not start")
+	}
+	if err := service.handleCCancelRequest(dimse.NewCCancelRequest(request.MessageID())); err != nil {
+		t.Fatalf("handleCCancelRequest() error = %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("handleCFindRequest() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stream handler did not finish after C-CANCEL")
+	}
+	select {
+	case message := <-sent:
+		response, ok := message.(*dimse.CFindResponse)
+		if !ok || response.StatusCode() != status.Cancel.Code {
+			t.Fatalf("response = %T %#v, want C-FIND Cancel final", message, message)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("C-CANCEL did not produce a final response")
+	}
+	select {
+	case duplicate := <-sent:
+		t.Fatalf("C-CANCEL produced duplicate final response: %T", duplicate)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestCFindStreamHandlerCancelUnblocksPendingSendWhenQueueIsFull(t *testing.T) {
+	service := NewService(nil, nil, WithSendQueueSize(0))
+	defer func() { _ = service.Close() }()
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err := request.SetMessageID(95); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	handlerStarted := make(chan struct{})
+	pendingReturned := make(chan error, 1)
+	handlerDone := make(chan error, 1)
+	go func() {
+		handlerDone <- service.handleCFindRequest(context.Background(), request, &Handlers{
+			CFindStreamHandler: func(_ context.Context, operation CFindOperation) error {
+				close(handlerStarted)
+				err := operation.SendPending(dataset.New())
+				pendingReturned <- err
+				return err
+			},
+		})
+	}()
+	select {
+	case <-handlerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("stream handler did not start")
+	}
+
+	if err := service.handleCCancelRequest(dimse.NewCCancelRequest(request.MessageID())); err != nil {
+		t.Fatalf("handleCCancelRequest() error = %v", err)
+	}
+	select {
+	case err := <-pendingReturned:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("SendPending() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("C-CANCEL did not unblock SendPending while the send queue was full")
+	}
+	select {
+	case send := <-service.sendQueue:
+		response, ok := send.message.(*dimse.CFindResponse)
+		if !ok || response.StatusCode() != status.Cancel.Code {
+			t.Fatalf("final message = %T %#v, want C-FIND Cancel final", send.message, send.message)
+		}
+		send.resultCh <- nil
+	case <-time.After(time.Second):
+		t.Fatal("C-CANCEL did not enqueue a final response")
+	}
+	select {
+	case <-handlerDone:
+	case <-time.After(time.Second):
+		t.Fatal("C-FIND handler did not return after C-CANCEL")
+	}
+}
+
+func TestServiceStartRejectsConflictingCFindHandlers(t *testing.T) {
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	service := NewService(client, nil, WithHandlers(&Handlers{
+		CFindHandler: func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
+			return nil, nil
+		},
+		CFindStreamHandler: func(context.Context, CFindOperation) error { return nil },
+	}))
+	defer func() { _ = service.Close() }()
+
+	if err := service.Start(); !errors.Is(err, ErrCFindHandlerConflict) {
+		t.Fatalf("Start() error = %v, want ErrCFindHandlerConflict", err)
 	}
 }
 

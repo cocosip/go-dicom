@@ -36,3 +36,14 @@ func BenchmarkTransformRuleSet(b *testing.B) {
 		_, _, _ = transformer.Apply(ds)
 	}
 }
+
+func BenchmarkSplitFormat(b *testing.B) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testRuleSplitFormatPatientName}))
+	rule, _ := SplitFormat(tag.PatientName, "^", "{1} {0} ({3})")
+	transformer, _ := NewTransformer(rule)
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		_, _, _ = transformer.Apply(ds)
+	}
+}

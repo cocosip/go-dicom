@@ -73,33 +73,41 @@ func main() {
 
 	// Add presentation contexts for various storage SOP classes
 	// Verification SOP Class (for C-ECHO)
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		uid.Verification.UID(),
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
-	)
+	); err != nil {
+		log.Fatalf("add Verification presentation context: %v", err)
+	}
 
 	// CT Image Storage
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		uid.CTImageStorage.UID(),
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
 		uid.JPEGLosslessSV1.UID(),
-	)
+	); err != nil {
+		log.Fatalf("add CT presentation context: %v", err)
+	}
 
 	// MR Image Storage
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		uid.MRImageStorage.UID(), // MR Image Storage
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
-	)
+	); err != nil {
+		log.Fatalf("add MR presentation context: %v", err)
+	}
 
 	// Secondary Capture Image Storage (commonly used)
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		uid.SecondaryCaptureImageStorage.UID(), // Secondary Capture Image Storage
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
-	)
+	); err != nil {
+		log.Fatalf("add Secondary Capture presentation context: %v", err)
+	}
 
 	// Connect to server
 	fmt.Printf("Connecting to %s:%d...\n", *host, *port)

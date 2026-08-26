@@ -16,8 +16,8 @@ import (
 func TestNewService(t *testing.T) {
 	// Create a mock connection
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	// Create service with default options
 	service := NewService(client, nil)
@@ -34,8 +34,8 @@ func TestNewService(t *testing.T) {
 		t.Errorf("Expected maxPDULength 16384, got %d", service.config.maxPDULength)
 	}
 
-	if service.config.readTimeout != 30*time.Second {
-		t.Errorf("Expected readTimeout 30s, got %v", service.config.readTimeout)
+	if service.config.readTimeout != 0 {
+		t.Errorf("Expected readTimeout 0, got %v", service.config.readTimeout)
 	}
 
 	// Verify initial state
@@ -52,14 +52,14 @@ func TestNewService(t *testing.T) {
 		t.Error("closeCh should not be nil")
 	}
 
-    // Clean up
-    _ = service.Close()
+	// Clean up
+	_ = service.Close()
 }
 
 func TestNewServiceWithCustomOptions(t *testing.T) {
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	service := NewService(client, nil,
 		WithMaxPDULength(32768),
@@ -67,7 +67,7 @@ func TestNewServiceWithCustomOptions(t *testing.T) {
 		WithWriteTimeout(10*time.Second),
 		WithDIMSETimeout(30*time.Second),
 		WithSendQueueSize(50))
-    defer func() { _ = service.Close() }()
+	defer func() { _ = service.Close() }()
 
 	if service.config.maxPDULength != 32768 {
 		t.Errorf("Expected maxPDULength 32768, got %d", service.config.maxPDULength)
@@ -84,12 +84,12 @@ func TestNewServiceWithCustomOptions(t *testing.T) {
 }
 
 func TestServiceSetGetAssociation(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
 	service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	defer func() { _ = service.Close() }()
 
 	// Initially no association
 	if service.GetAssociation() != nil {
@@ -108,12 +108,12 @@ func TestServiceSetGetAssociation(t *testing.T) {
 }
 
 func TestServiceSetHandlers(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
-    service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(client, nil)
+	defer func() { _ = service.Close() }()
 
 	// Set handlers
 	handlers := &Handlers{
@@ -130,12 +130,12 @@ func TestServiceSetHandlers(t *testing.T) {
 }
 
 func TestServiceGetState(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
-    service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(client, nil)
+	defer func() { _ = service.Close() }()
 
 	// Initial state
 	if service.GetState() != StateIdle {
@@ -144,12 +144,12 @@ func TestServiceGetState(t *testing.T) {
 }
 
 func TestServiceSetState(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
-    service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(client, nil)
+	defer func() { _ = service.Close() }()
 
 	// Valid transition: Idle -> AssociationRequested
 	err := service.setState(StateAssociationRequested)
@@ -174,8 +174,8 @@ func TestServiceSetState(t *testing.T) {
 }
 
 func TestServiceClose(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
 
 	service := NewService(client, nil)
 
@@ -217,7 +217,7 @@ func TestServiceClose(t *testing.T) {
 
 func TestServiceIsClosed(t *testing.T) {
 	server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
+	defer func() { _ = server.Close() }()
 
 	service := NewService(client, nil)
 
@@ -225,7 +225,7 @@ func TestServiceIsClosed(t *testing.T) {
 		t.Error("Service should not be closed initially")
 	}
 
-    _ = service.Close()
+	_ = service.Close()
 
 	if !service.IsClosed() {
 		t.Error("Service should be closed after Close()")
@@ -233,12 +233,12 @@ func TestServiceIsClosed(t *testing.T) {
 }
 
 func TestServiceContext(t *testing.T) {
-    server, client := net.Pipe()
-    defer func() { _ = server.Close() }()
-    defer func() { _ = client.Close() }()
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
 
-    service := NewService(client, nil)
-    defer func() { _ = service.Close() }()
+	service := NewService(client, nil)
+	defer func() { _ = service.Close() }()
 
 	ctx := service.Context()
 	if ctx == nil {
@@ -254,7 +254,7 @@ func TestServiceContext(t *testing.T) {
 	}
 
 	// Close service
-    _ = service.Close()
+	_ = service.Close()
 
 	// Context should be cancelled after close
 	select {
@@ -272,16 +272,20 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Expected maxPDULength 16384, got %d", config.maxPDULength)
 	}
 
-	if config.readTimeout != 30*time.Second {
-		t.Errorf("Expected readTimeout 30s, got %v", config.readTimeout)
+	if config.readTimeout != 0 {
+		t.Errorf("Expected readTimeout 0, got %v", config.readTimeout)
 	}
 
 	if config.writeTimeout != 30*time.Second {
 		t.Errorf("Expected writeTimeout 30s, got %v", config.writeTimeout)
 	}
 
-	if config.dimseTimeout != 60*time.Second {
-		t.Errorf("Expected dimseTimeout 60s, got %v", config.dimseTimeout)
+	if config.handlerShutdownTimeout != 60*time.Second {
+		t.Errorf("Expected handlerShutdownTimeout 60s, got %v", config.handlerShutdownTimeout)
+	}
+
+	if config.requestTimeout != 0 {
+		t.Errorf("Expected requestTimeout 0, got %v", config.requestTimeout)
 	}
 
 	if config.sendQueueSize != 100 {
@@ -313,8 +317,18 @@ func TestServiceOptions(t *testing.T) {
 
 	// Test WithDIMSETimeout
 	WithDIMSETimeout(45 * time.Second)(config)
-	if config.dimseTimeout != 45*time.Second {
-		t.Errorf("WithDIMSETimeout failed")
+	if config.handlerShutdownTimeout != 45*time.Second {
+		t.Errorf("WithDIMSETimeout compatibility alias failed")
+	}
+
+	WithHandlerShutdownTimeout(50 * time.Second)(config)
+	if config.handlerShutdownTimeout != 50*time.Second {
+		t.Errorf("WithHandlerShutdownTimeout failed")
+	}
+
+	WithRequestTimeout(45 * time.Second)(config)
+	if config.requestTimeout != 45*time.Second {
+		t.Errorf("WithRequestTimeout failed")
 	}
 
 	// Test WithSendQueueSize

@@ -29,10 +29,13 @@ func ExampleClient_tlsConfig() {
 		}),
 		client.WithConnectTimeout(10*time.Second),
 	)
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		"1.2.840.10008.1.1",
 		"1.2.840.10008.1.2.1",
-	)
+	); err != nil {
+		log.Printf("add presentation context: %v", err)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -53,18 +56,21 @@ func ExampleClient_CEcho() {
 	)
 
 	// Add presentation context for Verification SOP Class
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		"1.2.840.10008.1.1",   // Verification SOP Class
 		"1.2.840.10008.1.2",   // Implicit VR Little Endian
 		"1.2.840.10008.1.2.1", // Explicit VR Little Endian
-	)
+	); err != nil {
+		log.Printf("add presentation context: %v", err)
+		return
+	}
 
 	// Connect to the DICOM server
 	ctx := context.Background()
 	if err := c.Connect(ctx, "192.168.1.100", 104); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-    defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close() }()
 
 	// Send C-ECHO to verify connection
 	if err := c.CEcho(ctx); err != nil {
@@ -82,24 +88,27 @@ func ExampleClient_CStore() {
 	)
 
 	// Add presentation context for CT Image Storage
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		"1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
 		"1.2.840.10008.1.2",         // Implicit VR Little Endian
 		"1.2.840.10008.1.2.1",       // Explicit VR Little Endian
-	)
+	); err != nil {
+		log.Printf("add presentation context: %v", err)
+		return
+	}
 
 	ctx := context.Background()
 	if err := c.Connect(ctx, "192.168.1.100", 104); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-    defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close() }()
 
 	// Create a dataset to store
-    ds := dataset.New()
-    _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-    _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
-    _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
-    _ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	// Store the dataset
 	if err := c.CStore(ctx, ds); err != nil {
@@ -117,22 +126,25 @@ func ExampleClient_CFind() {
 	)
 
 	// Add presentation context for Study Root Query/Retrieve
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		"1.2.840.10008.5.1.4.1.2.2.1", // Study Root Query/Retrieve - FIND
 		"1.2.840.10008.1.2",           // Implicit VR Little Endian
-	)
+	); err != nil {
+		log.Printf("add presentation context: %v", err)
+		return
+	}
 
 	ctx := context.Background()
 	if err := c.Connect(ctx, "192.168.1.100", 104); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-    defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close() }()
 
 	// Create query dataset
-    query := dataset.New()
-    _ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN*"}))       // Wildcard search
-    _ = query.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20240101-20241231"})) // Date range
-    _ = query.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{""}))           // Return value
+	query := dataset.New()
+	_ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN*"}))       // Wildcard search
+	_ = query.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20240101-20241231"})) // Date range
+	_ = query.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{""}))           // Return value
 
 	// Perform C-FIND at Study level
 	results, err := c.CFind(ctx, dimse.QueryRetrieveLevelStudy, query)
@@ -155,19 +167,22 @@ func ExampleClient_CFindWithCallback() {
 		client.WithCalledAE("PACS_SCP"),
 	)
 
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		"1.2.840.10008.5.1.4.1.2.2.1", // Study Root Query/Retrieve - FIND
 		"1.2.840.10008.1.2",
-	)
+	); err != nil {
+		log.Printf("add presentation context: %v", err)
+		return
+	}
 
 	ctx := context.Background()
 	if err := c.Connect(ctx, "192.168.1.100", 104); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-    defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close() }()
 
-    query := dataset.New()
-    _ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"*"})) // All patients
+	query := dataset.New()
+	_ = query.Add(element.NewString(tag.PatientName, vr.PN, []string{"*"})) // All patients
 
 	// Process results as they arrive
 	count := 0
@@ -196,25 +211,28 @@ func ExampleClient_CStoreMultiple() {
 		client.WithCalledAE("PACS_SCP"),
 	)
 
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		"1.2.840.10008.5.1.4.1.1.2", // CT Image Storage
 		"1.2.840.10008.1.2",
-	)
+	); err != nil {
+		log.Printf("add presentation context: %v", err)
+		return
+	}
 
 	ctx := context.Background()
 	if err := c.Connect(ctx, "192.168.1.100", 104); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-    defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close() }()
 
-    // Create multiple datasets (e.g., from a CT series)
+	// Create multiple datasets (e.g., from a CT series)
 	datasets := make([]*dataset.Dataset, 100)
 	for i := 0; i < 100; i++ {
-        ds := dataset.New()
-        _ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+		ds := dataset.New()
+		_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
 		instanceUID := fmt.Sprintf("1.2.840.113619.2.1.%d", i)
-        _ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{instanceUID}))
-        _ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
+		_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{instanceUID}))
+		_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"DOE^JOHN"}))
 		datasets[i] = ds
 	}
 
@@ -234,16 +252,19 @@ func ExampleClient_Ping() {
 		client.WithCalledAE("PACS_SCP"),
 	)
 
-	c.AddPresentationContext(
+	if err := c.AddPresentationContext(
 		"1.2.840.10008.1.1", // Verification SOP Class
 		"1.2.840.10008.1.2",
-	)
+	); err != nil {
+		log.Printf("add presentation context: %v", err)
+		return
+	}
 
 	ctx := context.Background()
 	if err := c.Connect(ctx, "192.168.1.100", 104); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-    defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close() }()
 
 	// Use Ping to verify connection is still alive
 	if err := c.Ping(ctx); err != nil {
@@ -266,7 +287,7 @@ func ExampleDial() {
 	if err != nil {
 		log.Fatalf("Failed to dial: %v", err)
 	}
-    defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close() }()
 
 	// Client is ready to use
 	if err := c.Ping(ctx); err != nil {

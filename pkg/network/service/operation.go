@@ -6,11 +6,81 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
+
+// CFindOperation is the streaming response surface passed to a C-FIND SCP
+// handler. A handler may send any number of pending responses and exactly one
+// final response. If it returns without sending a final response, the service
+// sends Success automatically.
+type CFindOperation interface {
+	Request() *dimse.CFindRequest
+	QueryLevel() dimse.QueryRetrieveLevel
+	Identifier() *dataset.Dataset
+	SendPending(identifier *dataset.Dataset) error
+	SendFinal(s *status.Status) error
+}
+
+type cFindOperation struct {
+	req         *dimse.CFindRequest
+	sendPending func(*dimse.CFindResponse) error
+	sendFinal   func(*dimse.CFindResponse) error
+
+	mu    sync.Mutex
+	final bool
+}
+
+func newCFindOperation(req *dimse.CFindRequest, send func(*dimse.CFindResponse) error) *cFindOperation {
+	return newCFindOperationWithFinal(req, send, send)
+}
+
+func newCFindOperationWithFinal(
+	req *dimse.CFindRequest,
+	sendPending func(*dimse.CFindResponse) error,
+	sendFinal func(*dimse.CFindResponse) error,
+) *cFindOperation {
+	return &cFindOperation{req: req, sendPending: sendPending, sendFinal: sendFinal}
+}
+
+func (op *cFindOperation) Request() *dimse.CFindRequest         { return op.req }
+func (op *cFindOperation) QueryLevel() dimse.QueryRetrieveLevel { return op.req.QueryLevel() }
+func (op *cFindOperation) Identifier() *dataset.Dataset         { return op.req.DataDataset() }
+
+func (op *cFindOperation) SendPending(identifier *dataset.Dataset) error {
+	return op.forward(dimse.NewCFindResponseFromRequest(op.req, status.CFindPending, identifier), op.sendPending)
+}
+
+func (op *cFindOperation) SendFinal(s *status.Status) error {
+	if s == nil {
+		return fmt.Errorf("C-FIND final status is nil")
+	}
+	if s.IsPending() {
+		return fmt.Errorf("C-FIND final status must not be pending")
+	}
+	return op.forward(dimse.NewCFindResponseFromRequest(op.req, s, nil), op.sendFinal)
+}
+
+func (op *cFindOperation) forward(response *dimse.CFindResponse, send func(*dimse.CFindResponse) error) error {
+	op.mu.Lock()
+	defer op.mu.Unlock()
+	if op.final {
+		return ErrCFindOperationCompleted
+	}
+	if !response.IsPending() {
+		op.final = true
+	}
+	return send(response)
+}
+
+func (op *cFindOperation) finalized() bool {
+	op.mu.Lock()
+	defer op.mu.Unlock()
+	return op.final
+}
 
 // SubOperationResponder is the common interface shared by CMoveOperation and
 // CGetOperation for reporting sub-operation progress to the SCU.
@@ -44,8 +114,10 @@ func (b *subOperationBase) SendPending(remaining, completed, failed, warning uin
 	return b.sendPending(remaining, completed, failed, warning)
 }
 
-func (b *subOperationBase) SendSuccess() error                 { return b.sendFinal(status.Success) }
-func (b *subOperationBase) SendWarning() error                 { return b.sendFinal(status.CMoveWarningSubOperationsComplete) }
+func (b *subOperationBase) SendSuccess() error { return b.sendFinal(status.Success) }
+func (b *subOperationBase) SendWarning() error {
+	return b.sendFinal(status.CMoveWarningSubOperationsComplete)
+}
 func (b *subOperationBase) SendFailure(s *status.Status) error { return b.sendFinal(s) }
 
 // ── C-MOVE ────────────────────────────────────────────────────────────────────
@@ -75,10 +147,10 @@ type cMoveOperation struct {
 	req *dimse.CMoveRequest
 }
 
-func (op *cMoveOperation) Request() *dimse.CMoveRequest           { return op.req }
-func (op *cMoveOperation) QueryLevel() dimse.QueryRetrieveLevel   { return op.req.QueryLevel() }
-func (op *cMoveOperation) MoveDestination() string                { return op.req.MoveDestination() }
-func (op *cMoveOperation) Identifier() *dataset.Dataset           { return op.req.DataDataset() }
+func (op *cMoveOperation) Request() *dimse.CMoveRequest         { return op.req }
+func (op *cMoveOperation) QueryLevel() dimse.QueryRetrieveLevel { return op.req.QueryLevel() }
+func (op *cMoveOperation) MoveDestination() string              { return op.req.MoveDestination() }
+func (op *cMoveOperation) Identifier() *dataset.Dataset         { return op.req.DataDataset() }
 
 func newCMoveOperation(req *dimse.CMoveRequest, send func(*dimse.CMoveResponse) error) CMoveOperation {
 	return &cMoveOperation{
@@ -127,9 +199,9 @@ type cGetOperation struct {
 	sendCStore func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
 }
 
-func (op *cGetOperation) Request() *dimse.CGetRequest           { return op.req }
-func (op *cGetOperation) QueryLevel() dimse.QueryRetrieveLevel  { return op.req.QueryLevel() }
-func (op *cGetOperation) Identifier() *dataset.Dataset          { return op.req.DataDataset() }
+func (op *cGetOperation) Request() *dimse.CGetRequest          { return op.req }
+func (op *cGetOperation) QueryLevel() dimse.QueryRetrieveLevel { return op.req.QueryLevel() }
+func (op *cGetOperation) Identifier() *dataset.Dataset         { return op.req.DataDataset() }
 
 func (op *cGetOperation) SendCStore(ctx context.Context, ds *dataset.Dataset) (*dimse.CStoreResponse, error) {
 	if ds == nil {

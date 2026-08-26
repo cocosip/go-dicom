@@ -149,22 +149,50 @@ func (s *Service) SendCStore(ctx context.Context, req *dimse.CStoreRequest) (*di
 
 // SendNCreate sends an N-CREATE request and waits for its response.
 func (s *Service) SendNCreate(ctx context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-CREATE request is nil")
+	}
 	return sendSimpleRequest[*dimse.NCreateRequest, *dimse.NCreateResponse](ctx, s, req)
+}
+
+// SendNGet sends an N-GET request and waits for its response.
+func (s *Service) SendNGet(ctx context.Context, req *dimse.NGetRequest) (*dimse.NGetResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-GET request is nil")
+	}
+	return sendSimpleRequest[*dimse.NGetRequest, *dimse.NGetResponse](ctx, s, req)
 }
 
 // SendNSet sends an N-SET request and waits for its response.
 func (s *Service) SendNSet(ctx context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-SET request is nil")
+	}
 	return sendSimpleRequest[*dimse.NSetRequest, *dimse.NSetResponse](ctx, s, req)
 }
 
 // SendNAction sends an N-ACTION request and waits for its response.
 func (s *Service) SendNAction(ctx context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-ACTION request is nil")
+	}
 	return sendSimpleRequest[*dimse.NActionRequest, *dimse.NActionResponse](ctx, s, req)
 }
 
 // SendNDelete sends an N-DELETE request and waits for its response.
 func (s *Service) SendNDelete(ctx context.Context, req *dimse.NDeleteRequest) (*dimse.NDeleteResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-DELETE request is nil")
+	}
 	return sendSimpleRequest[*dimse.NDeleteRequest, *dimse.NDeleteResponse](ctx, s, req)
+}
+
+// SendNEventReport sends an N-EVENT-REPORT request and waits for its response.
+func (s *Service) SendNEventReport(ctx context.Context, req *dimse.NEventReportRequest) (*dimse.NEventReportResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("N-EVENT-REPORT request is nil")
+	}
+	return sendSimpleRequest[*dimse.NEventReportRequest, *dimse.NEventReportResponse](ctx, s, req)
 }
 
 // registerPendingRequest registers a pending request to receive its response.
@@ -175,6 +203,7 @@ func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request
 	pending := &pendingRequest{
 		request:    request,
 		responseCh: respCh,
+		doneCh:     make(chan error, 1),
 		cancelCh:   make(chan struct{}),
 		lifecycle:  newRequestLifecycle(s, observability.DirectionOutbound, request),
 	}
@@ -188,9 +217,81 @@ func (s *Service) unregisterPendingRequest(messageID uint16) {
 	defer s.pendingRequestsMu.Unlock()
 
 	if pending, exists := s.pendingRequests[messageID]; exists {
+		if pending.timeoutTimer != nil {
+			pending.timeoutTimer.Stop()
+		}
 		close(pending.cancelCh)
 		delete(s.pendingRequests, messageID)
 	}
+}
+
+// armPendingRequestTimeout starts the default response idle timeout only once
+// the complete request has been written to the transport.
+func (s *Service) armPendingRequestTimeout(ctx context.Context, messageID uint16, pending *pendingRequest) {
+	timeout := s.requestTimeoutForContext(ctx)
+	if timeout <= 0 {
+		return
+	}
+	s.resetPendingRequestTimeout(messageID, pending, timeout)
+}
+
+func (s *Service) requestTimeoutForContext(ctx context.Context) time.Duration {
+	timeout := s.config.requestTimeout
+	if timeout <= 0 {
+		return 0
+	}
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= timeout {
+		// The caller's earlier deadline owns the terminal error.
+		return 0
+	}
+	return timeout
+}
+
+func (s *Service) resetPendingRequestTimeout(messageID uint16, pending *pendingRequest, timeout time.Duration) {
+	s.pendingRequestsMu.Lock()
+	defer s.pendingRequestsMu.Unlock()
+	s.schedulePendingRequestTimeoutLocked(messageID, pending, timeout)
+}
+
+func (s *Service) resetPendingRequestTimeoutLocked(messageID uint16, pending *pendingRequest) {
+	if pending.timeoutTimer == nil || s.config.requestTimeout <= 0 {
+		return
+	}
+	s.schedulePendingRequestTimeoutLocked(messageID, pending, s.config.requestTimeout)
+}
+
+func (s *Service) schedulePendingRequestTimeoutLocked(messageID uint16, pending *pendingRequest, timeout time.Duration) {
+	if current, exists := s.pendingRequests[messageID]; !exists || current != pending {
+		return
+	}
+	if pending.timeoutTimer != nil {
+		pending.timeoutTimer.Stop()
+	}
+	pending.timeoutVersion++
+	version := pending.timeoutVersion
+	pending.timeoutTimer = time.AfterFunc(timeout, func() {
+		s.expirePendingRequest(messageID, pending, version, timeout)
+	})
+}
+
+func (s *Service) expirePendingRequest(messageID uint16, pending *pendingRequest, version uint64, timeout time.Duration) {
+	s.pendingRequestsMu.Lock()
+	current, exists := s.pendingRequests[messageID]
+	if !exists || current != pending || pending.timeoutVersion != version {
+		s.pendingRequestsMu.Unlock()
+		return
+	}
+	delete(s.pendingRequests, messageID)
+	close(pending.cancelCh)
+	s.pendingRequestsMu.Unlock()
+
+	err := &RequestTimeoutError{
+		MessageID: messageID,
+		Command:   dimse.CommandField(pending.request.CommandField()),
+		Timeout:   timeout,
+	}
+	pending.lifecycle.finishError(context.Background(), err)
+	pending.doneCh <- err
 }
 
 // sendSimpleRequest is a generic helper for sending simple request-response DIMSE operations (C-ECHO, C-STORE).
@@ -221,6 +322,7 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 		pending.lifecycle.finishContext(ctx, err)
 		return zero, err
 	}
+	s.armPendingRequestTimeout(ctx, msgID, pending)
 	select {
 	case respMsg := <-respCh:
 		resp, ok := respMsg.(Resp)
@@ -231,6 +333,8 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 	case <-ctx.Done():
 		pending.lifecycle.finishContext(ctx, ctx.Err())
 		return zero, ctx.Err()
+	case err := <-pending.doneCh:
+		return zero, err
 	case <-s.closeCh:
 		err := s.CloseError()
 		pending.lifecycle.finishError(ctx, err)
@@ -252,20 +356,35 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	req Req,
 	errMsg string,
 ) (<-chan Resp, error) {
+	responses, _, err := sendRequestWithProgressWithError[Req, Resp](ctx, s, req, errMsg)
+	return responses, err
+}
+
+// sendRequestWithProgressWithError additionally reports an asynchronous
+// terminal failure. The legacy response-only methods keep their existing
+// signature while new callers can distinguish a clean final response from a
+// locally cancelled request, request timeout, or association close.
+func sendRequestWithProgressWithError[Req dimse.Request, Resp pendingResponse](
+	ctx context.Context,
+	s *Service,
+	req Req,
+	errMsg string,
+) (<-chan Resp, <-chan error, error) {
 	assoc := s.GetAssociation()
 	if assoc == nil {
-		return nil, fmt.Errorf("no association available")
+		return nil, nil, fmt.Errorf("no association available")
 	}
 	release, err := s.acquireAsyncOperation(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	msgID, err := assoc.AssignMessageID(req)
 	if err != nil {
 		release()
-		return nil, fmt.Errorf("failed to assign message ID: %w", err)
+		return nil, nil, fmt.Errorf("failed to assign message ID: %w", err)
 	}
 	resultCh := make(chan Resp, 10)
+	terminalErrCh := make(chan error, 1)
 	respCh := make(chan dimse.Response, 10)
 	pending := s.registerPendingRequest(msgID, req, respCh)
 
@@ -273,14 +392,22 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 		pending.lifecycle.finishContext(ctx, err)
 		s.unregisterPendingRequest(msgID)
 		close(resultCh)
+		close(terminalErrCh)
 		release()
-		return nil, fmt.Errorf("%s: %w", errMsg, err)
+		return nil, nil, fmt.Errorf("%s: %w", errMsg, err)
 	}
+	s.armPendingRequestTimeout(ctx, msgID, pending)
 
 	go func() {
 		defer close(resultCh)
+		defer close(terminalErrCh)
 		defer s.unregisterPendingRequest(msgID)
 		defer release()
+		finishError := func(err error) {
+			if err != nil {
+				terminalErrCh <- err
+			}
+		}
 		for {
 			select {
 			case respMsg, ok := <-respCh:
@@ -289,15 +416,19 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 				}
 				resp, ok := respMsg.(Resp)
 				if !ok {
+					finishError(fmt.Errorf("unexpected response type: %T", respMsg))
 					return
 				}
 				select {
 				case resultCh <- resp:
 				case <-ctx.Done():
 					pending.lifecycle.finishContext(ctx, ctx.Err())
+					finishError(ctx.Err())
 					return
 				case <-s.closeCh:
-					pending.lifecycle.finishError(ctx, s.CloseError())
+					closeErr := s.CloseError()
+					pending.lifecycle.finishError(ctx, closeErr)
+					finishError(closeErr)
 					return
 				}
 				if !resp.IsPending() {
@@ -305,14 +436,20 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 				}
 			case <-ctx.Done():
 				pending.lifecycle.finishContext(ctx, ctx.Err())
+				finishError(ctx.Err())
+				return
+			case terminalErr := <-pending.doneCh:
+				finishError(terminalErr)
 				return
 			case <-s.closeCh:
-				pending.lifecycle.finishError(ctx, s.CloseError())
+				closeErr := s.CloseError()
+				pending.lifecycle.finishError(ctx, closeErr)
+				finishError(closeErr)
 				return
 			}
 		}
 	}()
-	return resultCh, nil
+	return resultCh, terminalErrCh, nil
 }
 
 // SendCFind sends a C-FIND request to query for DICOM objects.
@@ -341,84 +478,15 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 //	    }
 //	}
 func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error) {
-	// Get association to assign message ID
-	assoc := s.GetAssociation()
-	if assoc == nil {
-		return nil, fmt.Errorf("no association available")
-	}
-	release, err := s.acquireAsyncOperation(ctx)
-	if err != nil {
-		return nil, err
-	}
+	responses, _, err := s.SendCFindWithError(ctx, req)
+	return responses, err
+}
 
-	// Assign message ID from association
-	msgID, err := assoc.AssignMessageID(req)
-	if err != nil {
-		release()
-		return nil, fmt.Errorf("failed to assign message ID: %w", err)
-	}
-
-	// Create result channel
-	resultCh := make(chan *dimse.CFindResponse, 10)
-
-	// Register pending request for multiple responses
-	respCh := make(chan dimse.Response, 10)
-	pending := s.registerPendingRequest(msgID, req, respCh)
-
-	// Send request before starting the response goroutine. The buffered response
-	// channel still accepts fast responses, and send failures cannot race with
-	// the goroutine's channel close.
-	if err := s.Send(ctx, req); err != nil {
-		pending.lifecycle.finishContext(ctx, err)
-		s.unregisterPendingRequest(msgID)
-		close(resultCh)
-		release()
-		return nil, err
-	}
-
-	// Start goroutine to handle responses
-	go func() {
-		defer close(resultCh)
-		defer s.unregisterPendingRequest(msgID)
-		defer release()
-
-		for {
-			select {
-			case respMsg := <-respCh:
-				// Type assert to CFindResponse
-				resp, ok := respMsg.(*dimse.CFindResponse)
-				if !ok {
-					// Invalid response type - stop processing
-					return
-				}
-
-				// Send to result channel
-				select {
-				case resultCh <- resp:
-				case <-ctx.Done():
-					pending.lifecycle.finishContext(ctx, ctx.Err())
-					return
-				case <-s.closeCh:
-					pending.lifecycle.finishError(ctx, s.CloseError())
-					return
-				}
-
-				// If this is the final response, stop
-				if !resp.IsPending() {
-					return
-				}
-
-			case <-ctx.Done():
-				pending.lifecycle.finishContext(ctx, ctx.Err())
-				return
-			case <-s.closeCh:
-				pending.lifecycle.finishError(ctx, s.CloseError())
-				return
-			}
-		}
-	}()
-
-	return resultCh, nil
+// SendCFindWithError sends a C-FIND request and additionally returns a channel
+// for an asynchronous terminal transport, context, or request-timeout error.
+// The error channel closes without a value after a normal final response.
+func (s *Service) SendCFindWithError(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error) {
+	return sendRequestWithProgressWithError[*dimse.CFindRequest, *dimse.CFindResponse](ctx, s, req, "failed to send C-FIND request")
 }
 
 // SendCMove sends a C-MOVE request and returns a channel that will receive responses.

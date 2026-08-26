@@ -45,3 +45,7 @@ Pull requests should include a short summary, the packages affected, and the ver
 - Avoid committing local build artifacts or temporary files.
 - Treat DICOM test files as fixtures; keep new samples small and representative.
 - If you add a new command or generator, document its purpose in the nearest README or package doc.
+
+
+## Cache Directory
+- The `.cache` directory is used for project build and package caching, and is already added to `.gitignore`. During testing and debugging, relevant caches can be configured under this directory. No additional cache directories should be created.

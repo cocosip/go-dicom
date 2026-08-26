@@ -32,7 +32,7 @@ type serviceConfig struct {
 	maxPDULength uint32
 
 	// readTimeout is the timeout for reading PDUs from the connection.
-	// Default: 30 seconds
+	// Default: disabled
 	// Set to 0 to disable timeout.
 	readTimeout time.Duration
 
@@ -41,10 +41,13 @@ type serviceConfig struct {
 	// Set to 0 to disable timeout.
 	writeTimeout time.Duration
 
-	// dimseTimeout is the timeout for DIMSE operations (request/response).
-	// Default: 60 seconds
-	// Set to 0 to disable timeout.
-	dimseTimeout time.Duration
+	// requestTimeout is the default response idle timeout for an outgoing
+	// DIMSE request. It does not set a transport socket deadline.
+	requestTimeout time.Duration
+
+	// handlerShutdownTimeout bounds Close while inbound request handlers unwind.
+	// It does not control outgoing request/response timeouts.
+	handlerShutdownTimeout time.Duration
 
 	// sendQueueSize is the size of the send queue channel.
 	// Default: 100
@@ -95,11 +98,11 @@ func WithConnectionID(id observability.ConnectionID) Option {
 // defaultServiceConfig returns the default service configuration.
 func defaultServiceConfig() *serviceConfig {
 	return &serviceConfig{
-		maxPDULength:  16384, // 16 KB
-		readTimeout:   30 * time.Second,
-		writeTimeout:  30 * time.Second,
-		dimseTimeout:  60 * time.Second,
-		sendQueueSize: 100,
+		maxPDULength:           16384, // 16 KB
+		readTimeout:            0,
+		writeTimeout:           30 * time.Second,
+		handlerShutdownTimeout: 60 * time.Second,
+		sendQueueSize:          100,
 	}
 }
 
@@ -127,12 +130,30 @@ func WithWriteTimeout(timeout time.Duration) Option {
 	}
 }
 
-// WithDIMSETimeout sets the timeout for DIMSE request/response operations.
-// Default: 60 seconds. Set to 0 to disable timeout.
-func WithDIMSETimeout(timeout time.Duration) Option {
+// WithRequestTimeout sets the default response idle timeout for outgoing
+// DIMSE requests. Set it to zero to rely only on the caller's context.
+func WithRequestTimeout(timeout time.Duration) Option {
 	return func(c *serviceConfig) {
-		c.dimseTimeout = timeout
+		c.requestTimeout = timeout
 	}
+}
+
+// WithHandlerShutdownTimeout sets the time Close waits for inbound request
+// handlers to return before completing shutdown. Set it to zero to use the
+// default bounded wait.
+func WithHandlerShutdownTimeout(timeout time.Duration) Option {
+	return func(c *serviceConfig) {
+		c.handlerShutdownTimeout = timeout
+	}
+}
+
+// WithDIMSETimeout is retained for compatibility and configures only the
+// handler shutdown wait.
+//
+// Deprecated: use WithHandlerShutdownTimeout. Use WithRequestTimeout for
+// outgoing DIMSE response idle timeouts.
+func WithDIMSETimeout(timeout time.Duration) Option {
+	return WithHandlerShutdownTimeout(timeout)
 }
 
 // WithSendQueueSize sets the size of the send queue channel.
@@ -212,13 +233,26 @@ func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dim
 	}
 }
 
-// WithCFindHandler sets the C-FIND request handler.
+// WithCFindHandler sets the legacy C-FIND request handler.
+//
+// Deprecated: use WithCFindStreamHandler to stream result datasets as they
+// become available.
 func WithCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}
 		}
 		c.handlers.CFindHandler = handler
+	}
+}
+
+// WithCFindStreamHandler sets the streaming C-FIND request handler.
+func WithCFindStreamHandler(handler func(context.Context, CFindOperation) error) Option {
+	return func(c *serviceConfig) {
+		if c.handlers == nil {
+			c.handlers = &Handlers{}
+		}
+		c.handlers.CFindStreamHandler = handler
 	}
 }
 

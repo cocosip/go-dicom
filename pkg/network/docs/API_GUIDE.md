@@ -43,6 +43,8 @@ c := client.New(
 | `WithMaxPDULength(length)` | uint32 | 16384 | 最大 PDU 长度 |
 | `WithConnectTimeout(timeout)` | time.Duration | 10s | TCP 连接超时 |
 | `WithRequestTimeout(timeout)` | time.Duration | 30s | DIMSE 请求超时 |
+| `WithTransportReadTimeout(timeout)` | time.Duration | 0 | 单次 PDU read 超时；0 允许已建立的 association 空闲 |
+| `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | 单次 PDU write 超时 |
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association 协商超时 |
 | `WithImplementationClassUID(uid)` | string | "1.2.826.0.1.3680043.10.854" | 实现类 UID |
 | `WithImplementationVersionName(name)` | string | "GO-DICOM-1.0" | 实现版本名称 |
@@ -53,23 +55,23 @@ Presentation Context 定义了支持的 SOP Class 和 Transfer Syntax：
 
 ```go
 // Verification SOP Class
-c.AddPresentationContext(
+if err := c.AddPresentationContext(
     "1.2.840.10008.1.1",   // Abstract Syntax (SOP Class UID)
     "1.2.840.10008.1.2",   // Transfer Syntax: Implicit VR Little Endian
     "1.2.840.10008.1.2.1", // Transfer Syntax: Explicit VR Little Endian
-)
+); err != nil { return err }
 
 // CT Image Storage
-c.AddPresentationContext(
+if err := c.AddPresentationContext(
     "1.2.840.10008.5.1.4.1.1.2",
     "1.2.840.10008.1.2.1",
-)
+); err != nil { return err }
 
 // Patient Root Query/Retrieve
-c.AddPresentationContext(
+if err := c.AddPresentationContext(
     "1.2.840.10008.5.1.4.1.2.1.1",
     "1.2.840.10008.1.2.1",
-)
+); err != nil { return err }
 ```
 
 **常用 SOP Class UIDs**:

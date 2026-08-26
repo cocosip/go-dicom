@@ -23,6 +23,21 @@ func TestAffineCompositionOrder(t *testing.T) {
 	}
 }
 
+func TestAffineInverseRoundTripAndRejectsSingularMatrix(t *testing.T) {
+	matrix := Translate(4, -3).Then(Scale(2, 3)).Then(Rotate(90))
+	inverse, err := matrix.Inverse()
+	if err != nil {
+		t.Fatalf("Inverse() error = %v", err)
+	}
+	point := math3d.Point2{X: 7, Y: -2}
+	if got := inverse.Apply(matrix.Apply(point)); !pointClose(got, point) {
+		t.Fatalf("inverse round trip = %+v, want %+v", got, point)
+	}
+	if _, err := Scale(0, 1).Inverse(); err == nil {
+		t.Fatal("Inverse() accepted a singular matrix")
+	}
+}
+
 func TestAffineFlipAndBounds(t *testing.T) {
 	point := math3d.Point2{X: 3, Y: 4}
 	if got := FlipX().Apply(point); got != (math3d.Point2{X: -3, Y: 4}) {
