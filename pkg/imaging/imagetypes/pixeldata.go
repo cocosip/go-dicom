@@ -34,6 +34,29 @@ type PixelData interface {
 	IsEncapsulated() bool
 }
 
+// FrameInfoSetter optionally allows codecs to report the metadata of their
+// decoded or encoded pixel data without coupling to a DICOM dataset.
+//
+// PixelData implementations are not required to implement this interface.
+// Codecs should continue to work with read-only PixelData implementations.
+type FrameInfoSetter interface {
+	SetFrameInfo(info *FrameInfo)
+}
+
+// SetFrameInfo updates pixel metadata when pixelData supports FrameInfoSetter.
+// It returns false when the implementation exposes read-only metadata.
+func SetFrameInfo(pixelData PixelData, info *FrameInfo) bool {
+	if pixelData == nil || info == nil {
+		return false
+	}
+	setter, ok := pixelData.(FrameInfoSetter)
+	if !ok {
+		return false
+	}
+	setter.SetFrameInfo(info)
+	return true
+}
+
 // FrameInfo contains the metadata needed for encoding/decoding a frame.
 // This is a lightweight struct used by codecs for frame-level operations.
 type FrameInfo struct {
@@ -42,9 +65,9 @@ type FrameInfo struct {
 	Height uint16
 
 	// Bit depth information
-	BitsAllocated  uint16
-	BitsStored     uint16
-	HighBit        uint16
+	BitsAllocated   uint16
+	BitsStored      uint16
+	HighBit         uint16
 	SamplesPerPixel uint16
 
 	// Pixel representation (0 = unsigned, 1 = signed)

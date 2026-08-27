@@ -76,6 +76,22 @@ func (pd *simplePixelData) GetFrameInfo() *imagetypes.FrameInfo {
 	}
 }
 
+// SetFrameInfo records output pixel metadata reported by a codec.
+func (pd *simplePixelData) SetFrameInfo(info *imagetypes.FrameInfo) {
+	if info == nil {
+		return
+	}
+	pd.width = info.Width
+	pd.height = info.Height
+	pd.bitsAllocated = info.BitsAllocated
+	pd.bitsStored = info.BitsStored
+	pd.highBit = info.HighBit
+	pd.samplesPerPixel = info.SamplesPerPixel
+	pd.pixelRepresentation = info.PixelRepresentation
+	pd.planarConfiguration = info.PlanarConfiguration
+	pd.photometricInterpretation = info.PhotometricInterpretation
+}
+
 // IsEncapsulated returns whether the pixel data is encapsulated.
 func (pd *simplePixelData) IsEncapsulated() bool {
 	return pd.encapsulated

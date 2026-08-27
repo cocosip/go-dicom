@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
@@ -458,6 +459,9 @@ func (t *Transcoder) decode(ds *dataset.Dataset, outputSyntax *transfer.Syntax) 
 	} else {
 		_ = newDS.Add(element.NewOtherWord(tag.PixelData, uncompressedData))
 	}
+	if err := applyOutputFrameInfo(newDS, frameInfo, newPixelData.GetFrameInfo()); err != nil {
+		return nil, err
+	}
 
 	if outputSyntax.UID().UID() == transfer.ExplicitVRLittleEndian.UID().UID() {
 		return newDS, nil
@@ -570,8 +574,85 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 
 	// Add encoded pixel data
 	_ = newDS.Add(fragSeq)
+	if err := applyOutputFrameInfo(newDS, frameInfo, newPixelData.GetFrameInfo()); err != nil {
+		return nil, err
+	}
+	if err := applyLossyImageCompressionMetadata(newDS, outputTS, oldPixelData, newPixelData); err != nil {
+		return nil, err
+	}
 
 	return newDS, nil
+}
+
+func applyOutputFrameInfo(ds *dataset.Dataset, input, output *imagetypes.FrameInfo) error {
+	if input == nil || output == nil {
+		return nil
+	}
+	if output.SamplesPerPixel != input.SamplesPerPixel {
+		if err := ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{output.SamplesPerPixel})); err != nil {
+			return fmt.Errorf("update samples per pixel: %w", err)
+		}
+	}
+	if output.PhotometricInterpretation != "" && output.PhotometricInterpretation != input.PhotometricInterpretation {
+		if err := ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{output.PhotometricInterpretation})); err != nil {
+			return fmt.Errorf("update photometric interpretation: %w", err)
+		}
+	}
+	if output.PlanarConfiguration != input.PlanarConfiguration {
+		if err := ds.AddOrUpdate(element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{output.PlanarConfiguration})); err != nil {
+			return fmt.Errorf("update planar configuration: %w", err)
+		}
+	}
+	return nil
+}
+
+func applyLossyImageCompressionMetadata(
+	ds *dataset.Dataset,
+	outputTS *transfer.Syntax,
+	inputPixelData, outputPixelData imagetypes.PixelData,
+) error {
+	if !outputTS.IsLossy() || outputPixelData.FrameCount() == 0 {
+		return nil
+	}
+
+	inputBytes, err := pixelDataSize(inputPixelData)
+	if err != nil {
+		return fmt.Errorf("measure uncompressed pixel data: %w", err)
+	}
+	outputBytes, err := pixelDataSize(outputPixelData)
+	if err != nil {
+		return fmt.Errorf("measure compressed pixel data: %w", err)
+	}
+	if inputBytes == 0 || outputBytes == 0 {
+		return fmt.Errorf("invalid compression sizes: uncompressed=%d compressed=%d", inputBytes, outputBytes)
+	}
+
+	if err := ds.AddOrUpdate(element.NewString(tag.LossyImageCompression, vr.CS, []string{"01"})); err != nil {
+		return fmt.Errorf("set lossy image compression: %w", err)
+	}
+	methods, _ := ds.GetStrings(tag.LossyImageCompressionMethod)
+	methods = append(methods, outputTS.LossyCompressionMethod())
+	if err := ds.AddOrUpdate(element.NewString(tag.LossyImageCompressionMethod, vr.CS, methods)); err != nil {
+		return fmt.Errorf("set lossy image compression method: %w", err)
+	}
+	ratios, _ := ds.GetStrings(tag.LossyImageCompressionRatio)
+	ratios = append(ratios, fmt.Sprintf("%.3f", float64(inputBytes)/float64(outputBytes)))
+	if err := ds.AddOrUpdate(element.NewString(tag.LossyImageCompressionRatio, vr.DS, ratios)); err != nil {
+		return fmt.Errorf("set lossy image compression ratio: %w", err)
+	}
+	return nil
+}
+
+func pixelDataSize(pixelData imagetypes.PixelData) (int, error) {
+	total := 0
+	for frame := 0; frame < pixelData.FrameCount(); frame++ {
+		data, err := pixelData.GetFrame(frame)
+		if err != nil {
+			return 0, fmt.Errorf("read frame %d: %w", frame, err)
+		}
+		total += len(data)
+	}
+	return total, nil
 }
 
 // framesFromFragments builds per-frame compressed data using fragments and an optional BOT.
