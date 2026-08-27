@@ -97,6 +97,11 @@ Asynchronous Operations Window 内并发。配置和 Presentation Context 只能
 空闲而断开连接。`WithTransportReadTimeout` 与 `WithTransportWriteTimeout` 分别只
 约束一次底层 PDU I/O。
 
+Client 和 Server 使用相同的超时边界：`WithAssociationTimeout` 只约束 association
+协商；Server 的 `WithAcceptTimeout` 约束单次 accept 尝试；Server 的
+`WithRequestTimeout` 只约束该连接主动发出的 DIMSE 请求。入站 handler 的执行时间
+由 handler 收到的 context 和应用逻辑控制。
+
 ### 手工 Client 与 ManagedClient
 
 `client.Client` 适合调用方需要自行控制 Presentation Context、连接时机或高级
@@ -647,8 +652,9 @@ c := client.New(
 
 ```go
 srv := server.New(
-    server.WithMaxConnections(50),              // 限制并发连接
-    server.WithAssociationTimeout(30*time.Second), // 超时断开
+    server.WithMaxConnections(50),                  // 限制并发连接
+    server.WithAssociationTimeout(30*time.Second),  // 限制 Association 协商
+    server.WithTransportReadTimeout(2*time.Minute), // 限制单次 PDU read/连接空闲
 )
 ```
 

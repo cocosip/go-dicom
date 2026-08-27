@@ -316,6 +316,7 @@ srv := server.New(
     server.WithMaxPDULength(16384),
     server.WithMaxConnections(50),
     server.WithAssociationTimeout(30*time.Second),
+    server.WithTransportReadTimeout(2*time.Minute),
 )
 ```
 
@@ -327,9 +328,11 @@ srv := server.New(
 | `WithPort(port)` | int | 104 | 监听端口 |
 | `WithMaxPDULength(length)` | uint32 | 16384 | 最大 PDU 长度 |
 | `WithMaxConnections(max)` | int | 0 | 最大并发连接（0=无限制） |
-| `WithAcceptTimeout(timeout)` | time.Duration | 0 | Accept 超时（0=无限制） |
-| `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association 超时 |
-| `WithRequestTimeout(timeout)` | time.Duration | 30s | 请求处理超时 |
+| `WithAcceptTimeout(timeout)` | time.Duration | 0 | 单次 Accept 超时（0=只服从 Server context） |
+| `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association 协商超时 |
+| `WithRequestTimeout(timeout)` | time.Duration | 30s | Server 主动发出的 DIMSE 请求 response idle 超时 |
+| `WithTransportReadTimeout(timeout)` | time.Duration | 0 | 单次 PDU read 超时（0=禁用） |
+| `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | 单次 PDU write 超时（0=禁用） |
 | `WithAcceptedCallingAETitles(aes)` | []string | nil | 允许的 Calling AE（nil=全部允许） |
 | `WithStrictAECheck(strict)` | bool | false | 严格 AE Title 检查 |
 | `WithTLSConfig(config)` | *tls.Config | nil | TLS 配置 |

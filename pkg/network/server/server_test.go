@@ -13,6 +13,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
+const testVerificationSOPClassUID = "1.2.840.10008.1.1"
+
 func TestNew(t *testing.T) {
 	server := New()
 
@@ -34,6 +36,12 @@ func TestNew(t *testing.T) {
 	if config.RequestTimeout != 30*time.Second {
 		t.Errorf("Expected RequestTimeout 30s, got %v", config.RequestTimeout)
 	}
+	if config.TransportReadTimeout != 0 {
+		t.Errorf("Expected TransportReadTimeout 0, got %v", config.TransportReadTimeout)
+	}
+	if config.TransportWriteTimeout != 30*time.Second {
+		t.Errorf("Expected TransportWriteTimeout 30s, got %v", config.TransportWriteTimeout)
+	}
 }
 
 func TestNewWithOptions(t *testing.T) {
@@ -42,6 +50,8 @@ func TestNewWithOptions(t *testing.T) {
 		WithMaxPDULength(32768),
 		WithAssociationTimeout(15*time.Second),
 		WithRequestTimeout(60*time.Second),
+		WithTransportReadTimeout(20*time.Second),
+		WithTransportWriteTimeout(25*time.Second),
 		WithImplementationClassUID("1.2.3.4.5"),
 		WithImplementationVersionName("TEST-1.0"),
 		WithMaxConnections(10),
@@ -59,6 +69,12 @@ func TestNewWithOptions(t *testing.T) {
 	}
 	if config.RequestTimeout != 60*time.Second {
 		t.Errorf("Expected RequestTimeout 60s, got %v", config.RequestTimeout)
+	}
+	if config.TransportReadTimeout != 20*time.Second {
+		t.Errorf("Expected TransportReadTimeout 20s, got %v", config.TransportReadTimeout)
+	}
+	if config.TransportWriteTimeout != 25*time.Second {
+		t.Errorf("Expected TransportWriteTimeout 25s, got %v", config.TransportWriteTimeout)
 	}
 	if config.ImplementationClassUID != "1.2.3.4.5" {
 		t.Errorf("Expected ImplementationClassUID '1.2.3.4.5', got '%s'", config.ImplementationClassUID)

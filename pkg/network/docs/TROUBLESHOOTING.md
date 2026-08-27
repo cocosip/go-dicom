@@ -395,9 +395,9 @@ srv := server.New(
     server.WithMaxConnections(50),  // 最多 50 个并发连接
 )
 
-// 2. 设置连接超时
+// 2. 设置已建立连接的 PDU read/空闲超时
 srv := server.New(
-    server.WithAssociationTimeout(30*time.Second),  // 30 秒后断开空闲连接
+    server.WithTransportReadTimeout(30*time.Second), // 30 秒没有收到完整 PDU 时断开
 )
 
 // 3. 增加文件描述符限制（Linux）

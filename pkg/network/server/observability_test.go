@@ -99,7 +99,7 @@ func TestObservabilityHooksReachAcceptedService(t *testing.T) {
 		ApplicationContext: "1.2.840.10008.3.1.1.1",
 		PresentationContexts: []pdu.PresentationContextRQ{{
 			ID:               1,
-			AbstractSyntax:   "1.2.840.10008.1.1",
+			AbstractSyntax:   testVerificationSOPClassUID,
 			TransferSyntaxes: []string{"1.2.840.10008.1.2.1"},
 		}},
 		UserInformation: &pdu.UserInformation{MaximumLength: 16384},

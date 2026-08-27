@@ -505,6 +505,16 @@ func TestDeadlineFromContext(t *testing.T) {
 			expectDeadline: true,
 		},
 		{
+			name: "Context deadline, no configured timeout",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Millisecond))
+				t.Cleanup(cancel)
+				return ctx
+			}(),
+			timeout:        0,
+			expectDeadline: true,
+		},
+		{
 			name: "Context deadline earlier than timeout",
 			ctx: func() context.Context {
 				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Millisecond))

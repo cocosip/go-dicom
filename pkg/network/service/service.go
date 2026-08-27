@@ -574,17 +574,16 @@ func (s *Service) Context() context.Context {
 	return s.ctx
 }
 
-// deadlineFromContext calculates a deadline from context and timeout duration.
-// If context has a deadline, returns the earlier of context deadline or timeout.
-// If context has no deadline, returns time.Now() + timeout.
+// deadlineFromContext calculates the earlier deadline supplied by the context
+// or configured timeout. A zero configured timeout disables only the configured
+// deadline; it does not discard a deadline carried by the context.
 func deadlineFromContext(ctx context.Context, timeout time.Duration) time.Time {
-	if timeout <= 0 {
-		return time.Time{} // No deadline
+	var deadline time.Time
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
 	}
-
-	deadline := time.Now().Add(timeout)
-	if ctxDeadline, ok := ctx.Deadline(); ok {
-		if ctxDeadline.Before(deadline) {
+	if ctx != nil {
+		if ctxDeadline, ok := ctx.Deadline(); ok && (deadline.IsZero() || ctxDeadline.Before(deadline)) {
 			return ctxDeadline
 		}
 	}

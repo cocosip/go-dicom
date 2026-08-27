@@ -103,13 +103,24 @@ type Config struct {
 	// Default: no timeout
 	AcceptTimeout time.Duration
 
-	// AssociationTimeout is the timeout for association negotiation
+	// AssociationTimeout is the timeout for association negotiation.
+	// It does not apply after the association is established.
 	// Default: 10 seconds
 	AssociationTimeout time.Duration
 
-	// RequestTimeout is the default timeout for processing DIMSE requests
+	// RequestTimeout is the default response idle timeout for outgoing
+	// DIMSE requests initiated by the server-side service.
 	// Default: 30 seconds
 	RequestTimeout time.Duration
+
+	// TransportReadTimeout limits a single PDU read. A zero value permits an
+	// established association to remain idle until it is released or closed.
+	// Default: 0 (disabled)
+	TransportReadTimeout time.Duration
+
+	// TransportWriteTimeout limits a single PDU write.
+	// Default: 30 seconds
+	TransportWriteTimeout time.Duration
 
 	// ImplementationClassUID identifies the implementation
 	// Default: "1.2.826.0.1.3680043.10.854"
@@ -174,10 +185,27 @@ func WithAssociationTimeout(timeout time.Duration) Option {
 	}
 }
 
-// WithRequestTimeout sets the request timeout.
+// WithRequestTimeout sets the default response idle timeout for outgoing
+// DIMSE requests initiated by the server-side service.
 func WithRequestTimeout(timeout time.Duration) Option {
 	return func(o *Config) {
 		o.RequestTimeout = timeout
+	}
+}
+
+// WithTransportReadTimeout sets the timeout for each transport PDU read.
+// It does not affect association negotiation or an individual DIMSE request.
+func WithTransportReadTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
+		o.TransportReadTimeout = timeout
+	}
+}
+
+// WithTransportWriteTimeout sets the timeout for each transport PDU write.
+// It does not affect association negotiation or an individual DIMSE request.
+func WithTransportWriteTimeout(timeout time.Duration) Option {
+	return func(o *Config) {
+		o.TransportWriteTimeout = timeout
 	}
 }
 
@@ -217,6 +245,8 @@ func defaultServerConfig() *Config {
 		AcceptTimeout:             0, // No timeout
 		AssociationTimeout:        10 * time.Second,
 		RequestTimeout:            30 * time.Second,
+		TransportReadTimeout:      0,
+		TransportWriteTimeout:     30 * time.Second,
 		ImplementationClassUID:    "1.2.826.0.1.3680043.10.854",
 		ImplementationVersionName: "GO-DICOM-1.0",
 		MaxConnections:            0, // No limit
@@ -452,8 +482,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 			continue
 		}
 
-		// Accept connection
-		conn, err := s.listener.Accept(s.ctx)
+		// Accept connection. A configured accept timeout is scoped to this
+		// attempt; the listener remains active and immediately rearms it.
+		acceptCtx, cancelAccept := s.acceptContext()
+		conn, err := s.listener.Accept(acceptCtx)
+		cancelAccept()
 		if err != nil {
 			select {
 			case <-s.ctx.Done():
@@ -472,6 +505,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		s.wg.Add(1)
 		go s.handleConnection(conn)
 	}
+}
+
+func (s *Server) acceptContext() (context.Context, context.CancelFunc) {
+	if s.config.AcceptTimeout <= 0 {
+		return s.ctx, func() {}
+	}
+	return context.WithTimeout(s.ctx, s.config.AcceptTimeout)
 }
 
 // Shutdown gracefully shuts down the server.
@@ -514,16 +554,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 	connID := conn.RemoteAddr().String()
 	observationConnectionID := observability.NewConnectionID()
 
-	// Build service options from server configuration
-	svcOpts := []service.Option{
-		service.WithConnectionID(observationConnectionID),
-		service.WithLogger(s.config.Logger),
-		service.WithEventObserver(s.config.EventObserver),
-		service.WithMetricsObserver(s.config.MetricsObserver),
-		service.WithMaxPDULength(s.config.MaxPDULength),
-		service.WithReadTimeout(s.config.AssociationTimeout),
-		service.WithWriteTimeout(s.config.AssociationTimeout),
-	}
+	// Build service options from server configuration.
+	svcOpts := s.serviceOptionsForConnection(observationConnectionID)
 
 	// Add all configured service options (handlers, callbacks, etc.)
 	s.optionsMu.RLock()
@@ -584,4 +616,17 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// The service will handle incoming DIMSE requests automatically
 	// and call the registered handlers
 	<-svc.Context().Done()
+}
+
+func (s *Server) serviceOptionsForConnection(connectionID observability.ConnectionID) []service.Option {
+	return []service.Option{
+		service.WithConnectionID(connectionID),
+		service.WithLogger(s.config.Logger),
+		service.WithEventObserver(s.config.EventObserver),
+		service.WithMetricsObserver(s.config.MetricsObserver),
+		service.WithMaxPDULength(s.config.MaxPDULength),
+		service.WithRequestTimeout(s.config.RequestTimeout),
+		service.WithReadTimeout(s.config.TransportReadTimeout),
+		service.WithWriteTimeout(s.config.TransportWriteTimeout),
+	}
 }

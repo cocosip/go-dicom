@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
@@ -61,10 +62,11 @@ func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pd
 	if err != nil {
 		return fmt.Errorf("failed to encode %s: %w", pduName, err)
 	}
-	if s.config.writeTimeout > 0 {
-		if err := s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout)); err != nil {
+	if deadline := deadlineFromContext(ctx, s.config.writeTimeout); !deadline.IsZero() {
+		if err := s.conn.SetWriteDeadline(deadline); err != nil {
 			return fmt.Errorf("failed to set write deadline: %w", err)
 		}
+		defer func() { _ = s.conn.SetWriteDeadline(time.Time{}) }()
 	}
 	if err := rawPDU.Write(s.conn); err != nil {
 		return fmt.Errorf("failed to write %s: %w", pduName, err)
@@ -139,10 +141,11 @@ func (s *Service) SendAssociationReject(ctx context.Context, result, source, rea
 	}
 
 	// Write to connection with timeout
-	if s.config.writeTimeout > 0 {
-		if err := s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout)); err != nil {
+	if deadline := deadlineFromContext(ctx, s.config.writeTimeout); !deadline.IsZero() {
+		if err := s.conn.SetWriteDeadline(deadline); err != nil {
 			return fmt.Errorf("failed to set write deadline: %w", err)
 		}
+		defer func() { _ = s.conn.SetWriteDeadline(time.Time{}) }()
 	}
 
 	if err := rawPDU.Write(s.conn); err != nil {
