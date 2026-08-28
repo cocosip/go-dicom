@@ -917,6 +917,33 @@ func main() {
 
 ### Modifying and Anonymizing Data
 
+For a DICOM PS 3.15 profile-based anonymization, use the anonymizer package.
+The basic profile anonymizes patient information, while `RetainUIDs` preserves
+the original DICOM UIDs:
+
+```go
+profile := anonymizer.NewSecurityProfile(
+    anonymizer.BasicProfile | anonymizer.RetainUIDs,
+)
+if err := anonymizer.NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+    log.Fatal(err)
+}
+```
+
+To retain an explicitly authorized non-UID tag, add an exact-tag override. For
+example, this keeps the original Patient ID while continuing to anonymize the
+other basic-profile attributes:
+
+```go
+profile := anonymizer.NewSecurityProfile(
+    anonymizer.BasicProfile | anonymizer.RetainUIDs,
+)
+profile.OverrideAction(tag.PatientID, anonymizer.ActionK)
+```
+
+`ActionK` retains the original value. In particular, retaining Patient ID makes
+datasets linkable and is not a strict basic de-identification result.
+
 ```go
 package main
 

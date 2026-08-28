@@ -18,10 +18,10 @@ type AdditionalSecurityProfiles struct{}
 // NewRetainUIDsProfile creates a profile that retains all UIDs.
 // This is useful for research where UID consistency is required.
 func NewRetainUIDsProfile() *SecurityProfile {
-	profile := NewSecurityProfile(RetainUIDs)
+	profile := NewSecurityProfile(BasicProfile | RetainUIDs)
 
 	// Override UID-related tags to keep them
-	profile.rules = append(profile.rules, []profileRule{
+	profile.rules = append([]profileRule{
 		{mustCompile("(?i)" + `0008,0018`), ActionK}, // SOP Instance UID
 		{mustCompile("(?i)" + `0008,0020`), ActionK}, // Study Instance UID
 		{mustCompile("(?i)" + `0008,0021`), ActionK}, // Series Instance UID
@@ -34,7 +34,7 @@ func NewRetainUIDsProfile() *SecurityProfile {
 		{mustCompile("(?i)" + `0020,0052`), ActionK}, // Frame of Reference UID
 		{mustCompile("(?i)" + `0020,0200`), ActionK}, // Synchronization Frame of Reference UID
 		{mustCompile("(?i)" + `0020,3401`), ActionK}, // RT Frame of Reference UID
-	}...)
+	}, profile.rules...)
 
 	return profile
 }
@@ -42,10 +42,10 @@ func NewRetainUIDsProfile() *SecurityProfile {
 // NewRetainInstitutionProfile creates a profile that retains institution identifiers.
 // This is useful for multi-center studies where institution tracking is needed.
 func NewRetainInstitutionProfile() *SecurityProfile {
-	profile := NewSecurityProfile(RetainInstitutionIdent)
+	profile := NewSecurityProfile(BasicProfile | RetainInstitutionIdent)
 
 	// Override institution-related tags to keep them
-	profile.rules = append(profile.rules, []profileRule{
+	profile.rules = append([]profileRule{
 		{mustCompile("(?i)" + `0008,0080`), ActionK}, // Institution Name
 		{mustCompile("(?i)" + `0008,0081`), ActionK}, // Institution Address
 		{mustCompile("(?i)" + `0008,0082`), ActionK}, // Institution Code Sequence
@@ -58,7 +58,7 @@ func NewRetainInstitutionProfile() *SecurityProfile {
 		{mustCompile("(?i)" + `0008,1050`), ActionK}, // Performing Physician's Name
 		{mustCompile("(?i)" + `0008,1060`), ActionK}, // Name of Physician(s) Reading Study
 		{mustCompile("(?i)" + `0008,1070`), ActionK}, // Operators' Name
-	}...)
+	}, profile.rules...)
 
 	return profile
 }
@@ -67,10 +67,10 @@ func NewRetainInstitutionProfile() *SecurityProfile {
 // This is useful for longitudinal studies where date information is critical.
 // Note: This may compromise privacy in some jurisdictions.
 func NewRetainDatesProfile() *SecurityProfile {
-	profile := NewSecurityProfile(RetainLongFullDates | RetainLongModifDates)
+	profile := NewSecurityProfile(BasicProfile | RetainLongFullDates | RetainLongModifDates)
 
 	// Override date-related tags to keep them
-	profile.rules = append(profile.rules, []profileRule{
+	profile.rules = append([]profileRule{
 		{mustCompile("(?i)" + `0008,0012`), ActionK}, // Instance Creation Date
 		{mustCompile("(?i)" + `0008,0013`), ActionK}, // Instance Creation Time
 		{mustCompile("(?i)" + `0008,0020`), ActionK}, // Study Date
@@ -102,7 +102,7 @@ func NewRetainDatesProfile() *SecurityProfile {
 		{mustCompile("(?i)" + `0040,0245`), ActionK}, // Scheduled Procedure Step Start Time
 		{mustCompile("(?i)" + `0040,0250`), ActionK}, // Scheduled Procedure Step End Date
 		{mustCompile("(?i)" + `0040,0251`), ActionK}, // Scheduled Procedure Step End Time
-	}...)
+	}, profile.rules...)
 
 	return profile
 }
@@ -192,7 +192,7 @@ func NewMinimalProfile() *SecurityProfile {
 // NewResearchProfile creates a profile optimized for research use.
 // It retains more information while still protecting patient identity.
 func NewResearchProfile() *SecurityProfile {
-	profile := NewSecurityProfile(RetainUIDs | RetainLongFullDates)
+	profile := &SecurityProfile{rules: make([]profileRule, 0)}
 
 	// Research-friendly rules
 	researchRules := []struct {
@@ -339,6 +339,7 @@ func NewResearchProfile() *SecurityProfile {
 	for _, rule := range researchRules {
 		_ = profile.AddRule(rule.pattern, rule.action)
 	}
+	profile.loadDefaultProfile(BasicProfile | RetainUIDs | RetainLongFullDates)
 
 	return profile
 }

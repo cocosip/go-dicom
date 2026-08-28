@@ -117,6 +117,17 @@ func (sp *SecurityProfile) AddRule(pattern string, action SecurityProfileAction)
 	return nil
 }
 
+// OverrideAction applies action to an exact tag before all profile rules.
+//
+// ActionK retains the original value and can preserve identifiers that make
+// datasets linkable, so callers must explicitly authorize its use.
+func (sp *SecurityProfile) OverrideAction(t *tag.Tag, action SecurityProfileAction) {
+	tagStr := t.String()
+	tagStr = tagStr[1 : len(tagStr)-1]
+	pattern := regexp.MustCompile("(?i)^" + regexp.QuoteMeta(tagStr) + "$")
+	sp.rules = append([]profileRule{{pattern: pattern, action: action}}, sp.rules...)
+}
+
 // FindAction finds the action for a given tag
 func (sp *SecurityProfile) FindAction(t *tag.Tag) (SecurityProfileAction, bool) {
 	tagStr := t.String() // Format: (GGGG,EEEE)

@@ -142,6 +142,13 @@ func TestNewProfileFromReaderUsesFirstCompositeAction(t *testing.T) {
 	}
 }
 
+func TestNewSecurityProfileRetainUIDsKeepsBasicPatientNameAction(t *testing.T) {
+	action, found := NewSecurityProfile(BasicProfile | RetainUIDs).FindAction(tag.PatientName)
+	if !found || action != ActionZ {
+		t.Fatalf("Patient Name action = %v, found = %v, want Z, true", action, found)
+	}
+}
+
 func TestNewRetainUIDsProfile(t *testing.T) {
 	profile := NewRetainUIDsProfile()
 
@@ -165,6 +172,27 @@ func TestNewRetainUIDsProfile(t *testing.T) {
 	}
 	if action != ActionK {
 		t.Errorf("Study Instance UID action = %v, want ActionK", action)
+	}
+}
+
+func TestPredefinedRetainProfilesIncludeBasicProfile(t *testing.T) {
+	tests := []struct {
+		name       string
+		newProfile func() *SecurityProfile
+	}{
+		{name: "retain UIDs", newProfile: NewRetainUIDsProfile},
+		{name: "retain institution", newProfile: NewRetainInstitutionProfile},
+		{name: "retain dates", newProfile: NewRetainDatesProfile},
+		{name: "research", newProfile: NewResearchProfile},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action, found := tt.newProfile().FindAction(mustParseTag("(0010,1005)"))
+			if !found || action != ActionX {
+				t.Fatalf("Patient Birth Name action = %v, found = %v, want X, true", action, found)
+			}
+		})
 	}
 }
 

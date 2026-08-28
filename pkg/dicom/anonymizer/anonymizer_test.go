@@ -302,6 +302,32 @@ func TestAnonymizerCustomPatientInfo(t *testing.T) {
 	}
 }
 
+func TestSecurityProfileOverrideActionKeepsPatientID(t *testing.T) {
+	const sopInstanceUID = "1.2.840.10008.1.2.3.4"
+
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"patient-123"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+
+	profile := NewSecurityProfile(BasicProfile | RetainUIDs)
+	profile.OverrideAction(tag.PatientID, ActionK)
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+
+	if patientID, _ := ds.GetString(tag.PatientID); patientID != "patient-123" {
+		t.Errorf("PatientID = %q, want original value", patientID)
+	}
+	if patientName, _ := ds.GetString(tag.PatientName); patientName != "" {
+		t.Errorf("PatientName = %q, want empty", patientName)
+	}
+	if got, _ := ds.GetString(tag.SOPInstanceUID); got != sopInstanceUID {
+		t.Errorf("SOPInstanceUID = %q, want original value", got)
+	}
+}
+
 func TestAnonymizerClone(t *testing.T) {
 	ds := dataset.New()
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
