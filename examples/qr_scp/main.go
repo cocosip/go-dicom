@@ -142,7 +142,10 @@ func main() {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown error: %v", err)
+			log.Printf("graceful shutdown did not finish: %v; closing active connections", err)
+			if closeErr := srv.Close(); closeErr != nil {
+				log.Printf("error closing active connections: %v", closeErr)
+			}
 		}
 	case err := <-errCh:
 		if err != nil && err != context.Canceled {

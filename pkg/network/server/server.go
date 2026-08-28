@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -520,15 +521,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	// Cancel server context
-	if s.cancel != nil {
-		s.cancel()
-	}
-
-	// Close listener
-	if s.listener != nil {
-		_ = s.listener.Close()
-	}
+	_ = s.stopAccepting()
 
 	// Wait for connections to finish with timeout
 	done := make(chan struct{})
@@ -543,6 +536,44 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// Close immediately closes the listener and all active inbound connections.
+// It does not send an A-RELEASE-RQ or wait for active handlers to return.
+// Close may be called after Shutdown returns because its context expired.
+func (s *Server) Close() error {
+	var errs []error
+	if err := s.stopAccepting(); err != nil {
+		errs = append(errs, err)
+	}
+
+	s.connectionsMu.RLock()
+	connections := make([]*serverConnection, 0, len(s.connections))
+	for _, connection := range s.connections {
+		connections = append(connections, connection)
+	}
+	s.connectionsMu.RUnlock()
+
+	for _, connection := range connections {
+		if err := connection.conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+func (s *Server) stopAccepting() error {
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if s.listener == nil {
+		return nil
+	}
+	if err := s.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		return err
+	}
+	return nil
 }
 
 // handleConnection handles a single client connection.
@@ -598,6 +629,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	s.connectionsMu.Lock()
+	if s.ctx != nil && s.ctx.Err() != nil {
+		s.connectionsMu.Unlock()
+		return
+	}
 	s.connections[connID] = serverConn
 	s.connectionsMu.Unlock()
 

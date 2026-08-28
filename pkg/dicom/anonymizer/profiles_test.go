@@ -13,6 +13,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
+const retainUIDsTestName = "retain UIDs"
+
 func TestNewProfileFromReaderAcceptsGeneralReader(t *testing.T) {
 	profile, err := NewProfileFromReader(bytes.NewBufferString("0010,0010;Z\n"), BasicProfile)
 	if err != nil {
@@ -60,7 +62,7 @@ func TestNewProfileFromReaderAppliesOptionsLikeDefaultProfile(t *testing.T) {
 		want    SecurityProfileAction
 	}{
 		{name: "basic", options: BasicProfile, want: ActionU},
-		{name: "retain UIDs", options: RetainUIDs, want: ActionK},
+		{name: retainUIDsTestName, options: RetainUIDs, want: ActionK},
 		{name: "later selected option wins", options: BasicProfile | RetainUIDs, want: ActionK},
 	}
 
@@ -94,7 +96,7 @@ func TestNewProfileFromReaderMapsEveryOptionColumn(t *testing.T) {
 	}{
 		{name: "basic", options: BasicProfile, want: ActionD},
 		{name: "retain safe private", options: RetainSafePrivate, want: ActionZ},
-		{name: "retain UIDs", options: RetainUIDs, want: ActionX},
+		{name: retainUIDsTestName, options: RetainUIDs, want: ActionX},
 		{name: "retain device identifiers", options: RetainDeviceIdent, want: ActionK},
 		{name: "retain institution identifiers", options: RetainInstitutionIdent, want: ActionC},
 		{name: "retain patient characteristics", options: RetainPatientChars, want: ActionU},
@@ -180,7 +182,7 @@ func TestPredefinedRetainProfilesIncludeBasicProfile(t *testing.T) {
 		name       string
 		newProfile func() *SecurityProfile
 	}{
-		{name: "retain UIDs", newProfile: NewRetainUIDsProfile},
+		{name: retainUIDsTestName, newProfile: NewRetainUIDsProfile},
 		{name: "retain institution", newProfile: NewRetainInstitutionProfile},
 		{name: "retain dates", newProfile: NewRetainDatesProfile},
 		{name: "research", newProfile: NewResearchProfile},

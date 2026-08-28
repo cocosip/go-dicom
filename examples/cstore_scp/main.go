@@ -135,7 +135,10 @@ func main() {
 		defer shutdownCancel()
 
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error during shutdown: %v", err)
+			log.Printf("Graceful shutdown did not finish: %v; closing active connections", err)
+			if closeErr := srv.Close(); closeErr != nil {
+				log.Printf("Error closing active connections: %v", closeErr)
+			}
 		}
 
 	case err := <-serverErr:

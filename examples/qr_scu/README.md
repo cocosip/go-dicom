@@ -183,7 +183,7 @@ When using `-retrieve get`, the SCU:
 2. Sends C-GET request to the QR SCP
 3. QR SCP sends C-STORE sub-operations back to the SCU
 4. SCU receives and saves each instance to `-output-dir`
-5. SCU shuts down the temporary SCP after completion
+5. SCU gives the temporary SCP five seconds to release active Associations, then closes any that remain
 
 ### C-MOVE Workflow
 

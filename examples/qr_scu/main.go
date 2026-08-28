@@ -214,10 +214,15 @@ func startEmbeddedStoreSCP(parentCtx context.Context) (stop func(), err error) {
 	time.Sleep(200 * time.Millisecond)
 
 	stop = func() {
-		cancel()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
-		_ = srv.Shutdown(shutdownCtx)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Storage SCP graceful shutdown did not finish: %v; closing active connections", err)
+			if closeErr := srv.Close(); closeErr != nil {
+				log.Printf("Storage SCP close error: %v", closeErr)
+			}
+		}
+		cancel()
 	}
 
 	return stop, nil

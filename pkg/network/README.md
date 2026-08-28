@@ -457,6 +457,21 @@ func searchDatabase(query *dataset.Dataset, level dimse.QueryRetrieveLevel) []*d
 }
 ```
 
+#### 两阶段关闭
+
+`Shutdown` 只停止接入并等待既有 Association 自行完成。将它与有期限的 context 配合使用；如果期限到达，调用 `Close` 立即关闭仍活跃的入站连接。`Close` 不发送 A-RELEASE-RQ。
+
+```go
+shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+if err := srv.Shutdown(shutdownCtx); err != nil {
+    if closeErr := srv.Close(); closeErr != nil {
+        log.Printf("force close failed: %v", closeErr)
+    }
+}
+```
+
 ## 高级功能
 
 ### TLS 加密连接

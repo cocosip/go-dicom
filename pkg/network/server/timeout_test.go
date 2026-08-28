@@ -156,6 +156,51 @@ func TestServerRequestTimeoutAppliesToOutgoingDIMSERequest(t *testing.T) {
 	}
 }
 
+func TestServerCloseClosesAssociationAfterShutdownTimeout(t *testing.T) {
+	server, clientService, _, done := establishPipeAssociation(t,
+		WithAssociationTimeout(time.Second),
+		WithTransportReadTimeout(0),
+	)
+	defer func() { _ = clientService.Close() }()
+
+	server.runningMu.Lock()
+	server.running = true
+	server.runningMu.Unlock()
+	waitForActiveService(t, server)
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Shutdown() error = %v, want context deadline exceeded", err)
+	}
+	if server.ActiveConnections() != 1 {
+		t.Fatalf("ActiveConnections() = %d, want 1 after graceful shutdown timeout", server.ActiveConnections())
+	}
+
+	if err := server.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Close() did not close the active association")
+	}
+	if server.ActiveConnections() != 0 {
+		t.Fatalf("ActiveConnections() = %d, want 0 after Close()", server.ActiveConnections())
+	}
+}
+
+func TestServerCloseIsIdempotentWhenNotRunning(t *testing.T) {
+	server := New()
+
+	if err := server.Close(); err != nil {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+}
+
 func establishPipeAssociation(t *testing.T, opts ...Option) (*Server, *service.Service, net.Conn, <-chan struct{}) {
 	t.Helper()
 	server := New(opts...)

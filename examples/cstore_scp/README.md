@@ -11,7 +11,7 @@ This example demonstrates how to receive DICOM files from DICOM clients using th
 - Validate called/calling AE titles during association negotiation
 - Organize received files by AE title or study date
 - Track server statistics
-- Graceful shutdown
+- Graceful shutdown with a forced-connection fallback
 
 ## Usage
 
@@ -193,8 +193,9 @@ The server handles `SIGINT` and `SIGTERM` signals gracefully:
 
 1. Stop accepting new connections
 2. Wait for active connections to complete (up to 10 seconds)
-3. Display statistics
-4. Exit
+3. Close any Association still active after the grace period
+4. Display statistics
+5. Exit
 
 To stop the server, press `Ctrl+C` or send a SIGTERM signal:
 

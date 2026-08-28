@@ -547,10 +547,15 @@ go func() {
     defer cancel()
 
     if err := srv.Shutdown(ctx); err != nil {
-        log.Printf("Shutdown error: %v\n", err)
+        log.Printf("Graceful shutdown did not finish: %v\n", err)
+        if closeErr := srv.Close(); closeErr != nil {
+            log.Printf("Close error: %v\n", closeErr)
+        }
     }
 }()
 ```
+
+`Shutdown` 停止接收新连接，并等待已建立的 Association 自行释放；其 context 到期时不会强制中断传输。需要在进程退出期限内保证 socket 已关闭时，调用 `Close`。`Close` 会立即关闭 listener 和所有活跃入站连接，不发送 A-RELEASE-RQ，也不等待正在运行的 handler 返回。
 
 ### 监控服务器状态
 
