@@ -944,6 +944,32 @@ profile.OverrideAction(tag.PatientID, anonymizer.ActionK)
 `ActionK` retains the original value. In particular, retaining Patient ID makes
 datasets linkable and is not a strict basic de-identification result.
 
+For a parsed Part 10 file, anonymize through the file boundary and write the
+returned File Meta Information. This preserves only the required media storage
+and transfer-syntax fields; source AE titles, private File Meta Information,
+and source implementation identifiers are not copied:
+
+```go
+freshFileMeta, err := anonymizer.NewAnonymizer(profile).AnonymizeFileInPlace(
+    result.Dataset,
+    result.FileMetaInformation,
+)
+if err != nil {
+    log.Fatal(err)
+}
+if err := writer.WriteFile(
+    "anonymized.dcm",
+    result.Dataset,
+    writer.WithFileMetaInfo(freshFileMeta.Dataset()),
+); err != nil {
+    log.Fatal(err)
+}
+```
+
+The anonymized top-level Dataset records `Patient Identity Removed = YES` and
+the applied de-identification method. Nested Sequence items are anonymized
+recursively without receiving duplicate declarations.
+
 ```go
 package main
 
@@ -1475,6 +1501,12 @@ func main() {
 ```
 
 ### DICOM Networking - C-MOVE SCU (Retrieve to third-party AE)
+
+For progressive C-FIND, C-MOVE, and C-GET calls, returning `false` from a
+callback sends C-CANCEL and drains the final response before returning. Caller
+context cancellation makes a bounded best-effort C-CANCEL attempt and returns
+the original context error. Request timeout, transport failure, and association
+close are returned as errors rather than treated as normal channel completion.
 
 ```go
 package main

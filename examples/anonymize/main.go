@@ -41,14 +41,15 @@ func main() {
 
 	anon := anonymizer.NewAnonymizer(profile)
 
-	// Anonymize the dataset
-	err = anon.AnonymizeInPlace(result.Dataset)
+	// Anonymize the dataset and rebuild File Meta Information so identifying
+	// metadata from the source file is not reused.
+	freshFileMeta, err := anon.AnonymizeFileInPlace(result.Dataset, result.FileMetaInformation)
 	if err != nil {
-		log.Fatalf("Failed to anonymize dataset: %v", err)
+		log.Fatalf("Failed to anonymize file: %v", err)
 	}
 
 	// Write the anonymized file
-	err = writer.WriteFile(*outputPath, result.Dataset)
+	err = writer.WriteFile(*outputPath, result.Dataset, writer.WithFileMetaInfo(freshFileMeta.Dataset()))
 	if err != nil {
 		log.Fatalf("Failed to write anonymized file: %v", err)
 	}

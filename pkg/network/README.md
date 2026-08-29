@@ -131,6 +131,15 @@ input while queued, so callers may safely reuse or change their source Dataset
 after constructing the Job. `Close` rejects future Jobs, completes queued Jobs,
 and aborts an active association.
 
+Progressive C-FIND, C-MOVE, and C-GET operations propagate request timeout,
+transport, and association-close errors. Their callbacks send C-CANCEL when
+they return `false` and wait for the final response so the Association remains
+usable. Cancelling the caller context triggers one bounded best-effort
+C-CANCEL and still returns the original context error. Managed Jobs inherit
+the same behavior. Low-level callers that need asynchronous terminal errors can
+use `Service.SendCFindWithError`, `SendCMoveWithError`, and
+`SendCGetWithError`.
+
 ### SCU 客户端示例
 
 #### 1. C-ECHO（验证连接）
@@ -459,7 +468,13 @@ func searchDatabase(query *dataset.Dataset, level dimse.QueryRetrieveLevel) []*d
 
 #### 两阶段关闭
 
-`Shutdown` 只停止接入并等待既有 Association 自行完成。将它与有期限的 context 配合使用；如果期限到达，调用 `Close` 立即关闭仍活跃的入站连接。`Close` 不发送 A-RELEASE-RQ。
+`Shutdown` 先停止接入并等待 accept loop 完成，再等待既有 Association 自行完成，
+因此开始等待连接后不会再接纳新的处理任务。将它与有期限的 context 配合使用；如果期限
+到达，调用 `Close` 立即关闭仍活跃的入站连接。`Close` 不发送 A-RELEASE-RQ。
+
+入站 A-ASSOCIATE-RQ 必须声明支持 DICOM UL Protocol Version 1（bit 0）。如果
+bit 0 未设置，服务器在调用应用 negotiator 前返回 ACSE
+`protocol-version-not-supported` 拒绝。
 
 ```go
 shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

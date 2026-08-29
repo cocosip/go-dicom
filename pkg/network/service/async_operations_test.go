@@ -228,6 +228,67 @@ func TestSendCFindWithErrorReportsRequestTimeout(t *testing.T) {
 	}
 }
 
+func TestSendCMoveWithErrorReportsRequestTimeout(t *testing.T) {
+	service := NewService(nil, createTestAssociation(), WithRequestTimeout(20*time.Millisecond))
+	defer func() { _ = service.Close() }()
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	go drainSuccessfulSends(service)
+	responses, terminalErrors, err := service.SendCMoveWithError(
+		context.Background(),
+		dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", dataset.New()),
+	)
+	if err != nil {
+		t.Fatalf("SendCMoveWithError() error = %v", err)
+	}
+
+	assertProgressRequestTimeout(t, responses, terminalErrors)
+}
+
+func TestSendCGetWithErrorReportsRequestTimeout(t *testing.T) {
+	service := NewService(nil, createTestAssociation(), WithRequestTimeout(20*time.Millisecond))
+	defer func() { _ = service.Close() }()
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	go drainSuccessfulSends(service)
+	responses, terminalErrors, err := service.SendCGetWithError(
+		context.Background(),
+		dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, dataset.New()),
+	)
+	if err != nil {
+		t.Fatalf("SendCGetWithError() error = %v", err)
+	}
+
+	assertProgressRequestTimeout(t, responses, terminalErrors)
+}
+
+func assertProgressRequestTimeout[T any](t *testing.T, responses <-chan T, terminalErrors <-chan error) {
+	t.Helper()
+	select {
+	case _, ok := <-responses:
+		if ok {
+			t.Fatal("responses yielded a response without a peer reply")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("responses did not close after request timeout")
+	}
+	select {
+	case terminalErr, ok := <-terminalErrors:
+		if !ok {
+			t.Fatal("terminal errors closed without the request timeout")
+		}
+		if !errors.Is(terminalErr, ErrRequestTimeout) {
+			t.Fatalf("terminal error = %v, want ErrRequestTimeout", terminalErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("request timeout was not reported")
+	}
+}
+
 func newAsyncOperationsTestService(t *testing.T, maxInvoked uint16) *Service {
 	t.Helper()
 	assoc := createTestAssociation()

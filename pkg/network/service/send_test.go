@@ -145,6 +145,9 @@ func TestSendMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sendMessage failed: %v", err)
 	}
+	if got := req.PresentationContextID(); got != 1 {
+		t.Fatalf("PresentationContextID = %d, want negotiated context 1", got)
+	}
 }
 
 func TestSendMessageUsesNegotiatedRemoteMaxPDULength(t *testing.T) {

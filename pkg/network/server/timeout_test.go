@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,113 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
+
+type lifecycleTestListener struct {
+	acceptStarted chan struct{}
+	releaseAccept chan struct{}
+	conn          net.Conn
+	closeOnce     sync.Once
+	closed        chan struct{}
+}
+
+func (l *lifecycleTestListener) Accept(ctx context.Context) (net.Conn, error) {
+	if l.acceptStarted != nil {
+		l.closeOnce.Do(func() { close(l.acceptStarted) })
+	}
+	if l.releaseAccept != nil {
+		<-l.releaseAccept
+		return l.conn, nil
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (l *lifecycleTestListener) Close() error {
+	if l.closed != nil {
+		select {
+		case <-l.closed:
+		default:
+			close(l.closed)
+		}
+	}
+	return nil
+}
+
+func TestServerShutdownWaitsForStartupPublication(t *testing.T) {
+	server := New(WithPort(0))
+	listenStarted := make(chan struct{})
+	releaseListen := make(chan struct{})
+	listener := &lifecycleTestListener{}
+	server.listenFn = func(string, string, ...transport.ListenOption) (serverListener, error) {
+		close(listenStarted)
+		<-releaseListen
+		return listener, nil
+	}
+
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.ListenAndServe(context.Background()) }()
+	<-listenStarted
+	shutdownDone := make(chan error, 1)
+	go func() { shutdownDone <- server.Shutdown(context.Background()) }()
+
+	returnedEarly := false
+	select {
+	case <-shutdownDone:
+		returnedEarly = true
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(releaseListen)
+	if !returnedEarly {
+		if err := <-shutdownDone; err != nil {
+			t.Fatalf("Shutdown() error = %v", err)
+		}
+	}
+	if err := <-serveDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
+	}
+	if returnedEarly {
+		t.Fatal("Shutdown() returned before startup published its listener and lifecycle context")
+	}
+}
+
+func TestServerShutdownWaitsForAcceptLoopBeforeConnectionWait(t *testing.T) {
+	serverConn, peerConn := net.Pipe()
+	_ = peerConn.Close()
+	listener := &lifecycleTestListener{
+		acceptStarted: make(chan struct{}),
+		releaseAccept: make(chan struct{}),
+		conn:          serverConn,
+	}
+	server := New(WithPort(0))
+	server.listenFn = func(string, string, ...transport.ListenOption) (serverListener, error) {
+		return listener, nil
+	}
+
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.ListenAndServe(context.Background()) }()
+	<-listener.acceptStarted
+	shutdownDone := make(chan error, 1)
+	go func() { shutdownDone <- server.Shutdown(context.Background()) }()
+
+	returnedBeforeAcceptExited := false
+	select {
+	case <-shutdownDone:
+		returnedBeforeAcceptExited = true
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(listener.releaseAccept)
+	if !returnedBeforeAcceptExited {
+		if err := <-shutdownDone; err != nil {
+			t.Fatalf("Shutdown() error = %v", err)
+		}
+	}
+	if err := <-serveDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
+	}
+	if returnedBeforeAcceptExited {
+		t.Fatal("Shutdown() called connection Wait before the accept loop could finish adding work")
+	}
+}
 
 func TestServerAcceptTimeoutRearmsListener(t *testing.T) {
 	timedOut := make(chan struct{}, 1)

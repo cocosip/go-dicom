@@ -4,12 +4,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
@@ -482,6 +484,51 @@ func TestReceiveAssociationRequest(t *testing.T) {
 	}
 	if receivedRQ.CallingAETitle != rq.CallingAETitle {
 		t.Errorf("Expected CallingAETitle %s, got %s", rq.CallingAETitle, receivedRQ.CallingAETitle)
+	}
+}
+
+func TestReceiveAssociationRequestRejectsUnsupportedProtocolVersion(t *testing.T) {
+	rq := pdu.NewAAssociateRQ()
+	rq.ProtocolVersion = 0x0002
+	rq.CalledAETitle = testCalledAE
+	rq.CallingAETitle = testCallingAE
+	rawRQ, err := rq.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	conn := &mockConn{readData: serializeRawPDUForTest(rawRQ)}
+	negotiatorCalled := false
+	service := NewService(conn, nil, WithAssociationNegotiator(FuncAssociationNegotiator(
+		func(ctx context.Context, assoc *association.Association, responder AssociationResponder) error {
+			negotiatorCalled = true
+			return responder.SendAccept(ctx, assoc)
+		},
+	)))
+	defer func() { _ = service.Close() }()
+
+	if _, err := service.ReceiveAssociationRequest(context.Background()); err != nil {
+		t.Fatalf("ReceiveAssociationRequest() error = %v", err)
+	}
+	if negotiatorCalled {
+		t.Fatal("association negotiator was called for an unsupported protocol version")
+	}
+
+	rawRJ := &pdu.RawPDU{}
+	if err := rawRJ.Read(bytes.NewReader(conn.writeData)); err != nil {
+		t.Fatalf("read A-ASSOCIATE-RJ: %v", err)
+	}
+	rj := &pdu.AAssociateRJ{}
+	if err := rj.Decode(rawRJ); err != nil {
+		t.Fatalf("decode A-ASSOCIATE-RJ: %v", err)
+	}
+	if rj.Result != pdu.ResultRejectedPermanent ||
+		rj.Source != pdu.SourceServiceProviderACSE ||
+		rj.Reason != pdu.ReasonServiceProviderACSEProtocolVersionNotSupported {
+		t.Fatalf("A-ASSOCIATE-RJ = result/source/reason %d/%d/%d, want %d/%d/%d",
+			rj.Result, rj.Source, rj.Reason,
+			pdu.ResultRejectedPermanent,
+			pdu.SourceServiceProviderACSE,
+			pdu.ReasonServiceProviderACSEProtocolVersionNotSupported)
 	}
 }
 

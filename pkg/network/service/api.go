@@ -348,18 +348,6 @@ type pendingResponse interface {
 	IsPending() bool
 }
 
-// sendRequestWithProgress is a generic helper for sending requests that return progressive responses (C-FIND, C-GET, C-MOVE).
-// It handles message ID assignment, response collection, and channel management.
-func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
-	ctx context.Context,
-	s *Service,
-	req Req,
-	errMsg string,
-) (<-chan Resp, error) {
-	responses, _, err := sendRequestWithProgressWithError[Req, Resp](ctx, s, req, errMsg)
-	return responses, err
-}
-
 // sendRequestWithProgressWithError additionally reports an asynchronous
 // terminal failure. The legacy response-only methods keep their existing
 // signature while new callers can distinguish a clean final response from a
@@ -506,7 +494,15 @@ func (s *Service) SendCFindWithError(ctx context.Context, req *dimse.CFindReques
 //   - 0xA900: Identifier does not match SOP Class
 //   - 0xC000: Unable to process
 func (s *Service) SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error) {
-	return sendRequestWithProgress[*dimse.CMoveRequest, *dimse.CMoveResponse](ctx, s, req, "failed to send C-MOVE request")
+	responses, _, err := s.SendCMoveWithError(ctx, req)
+	return responses, err
+}
+
+// SendCMoveWithError sends a C-MOVE request and additionally returns a channel
+// for an asynchronous terminal transport, context, or request-timeout error.
+// The error channel closes without a value after a normal final response.
+func (s *Service) SendCMoveWithError(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, <-chan error, error) {
+	return sendRequestWithProgressWithError[*dimse.CMoveRequest, *dimse.CMoveResponse](ctx, s, req, "failed to send C-MOVE request")
 }
 
 // SendCGet sends a C-GET request and returns a channel that will receive responses.
@@ -530,5 +526,13 @@ func (s *Service) SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-cha
 //   - 0xA900: Identifier does not match SOP Class
 //   - 0xC000: Unable to process
 func (s *Service) SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error) {
-	return sendRequestWithProgress[*dimse.CGetRequest, *dimse.CGetResponse](ctx, s, req, "failed to send C-GET request")
+	responses, _, err := s.SendCGetWithError(ctx, req)
+	return responses, err
+}
+
+// SendCGetWithError sends a C-GET request and additionally returns a channel
+// for an asynchronous terminal transport, context, or request-timeout error.
+// The error channel closes without a value after a normal final response.
+func (s *Service) SendCGetWithError(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, <-chan error, error) {
+	return sendRequestWithProgressWithError[*dimse.CGetRequest, *dimse.CGetResponse](ctx, s, req, "failed to send C-GET request")
 }

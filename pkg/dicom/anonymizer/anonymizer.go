@@ -11,6 +11,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
@@ -162,6 +163,10 @@ func NewAnonymizer(profile *SecurityProfile) *Anonymizer {
 
 // AnonymizeInPlace anonymizes a dataset without cloning
 func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
+	return a.anonymizeInPlace(ds, true)
+}
+
+func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool) error {
 	var toRemove []element.Element
 
 	for _, elem := range ds.Elements() {
@@ -169,12 +174,15 @@ func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
 
 		// Handle sequences - recursively anonymize
 		if seq, ok := elem.(*dataset.Sequence); ok {
-			if !hasAction || action == ActionK || action == ActionC {
+			if !hasAction || action == ActionK || action == ActionC || action == ActionD || action == ActionU {
 				for i := 0; i < seq.Count(); i++ {
 					item := seq.GetItem(i)
-					if err := a.AnonymizeInPlace(item); err != nil {
+					if err := a.anonymizeInPlace(item, false); err != nil {
 						return err
 					}
+				}
+				if hasAction && action != ActionK {
+					continue
 				}
 			}
 		}
@@ -210,6 +218,15 @@ func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
 		}
 	}
 
+	if topLevel {
+		if err := ds.AddOrUpdate(element.NewString(tag.PatientIdentityRemoved, vr.CS, []string{"YES"})); err != nil {
+			return fmt.Errorf("failed to set Patient Identity Removed: %w", err)
+		}
+		if err := ds.AddOrUpdate(element.NewString(tag.DeidentificationMethod, vr.LO, []string{"go-dicom profile-based de-identification"})); err != nil {
+			return fmt.Errorf("failed to set De-identification Method: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -222,6 +239,51 @@ func (a *Anonymizer) Anonymize(ds *dataset.Dataset) (*dataset.Dataset, error) {
 	return clone, nil
 }
 
+// AnonymizeFileInPlace anonymizes a main Data Set and returns newly generated
+// File Meta Information. The source metadata is used only as a transfer syntax
+// fallback; optional AE titles, private information, and implementation
+// identifiers are deliberately not copied.
+func (a *Anonymizer) AnonymizeFileInPlace(ds *dataset.Dataset, source *dataset.FileMetaInformation) (*dataset.FileMetaInformation, error) {
+	if ds == nil {
+		return nil, fmt.Errorf("dataset is nil")
+	}
+
+	ts := ds.InternalTransferSyntax()
+	if ts == nil && source != nil {
+		if sourceTS, ok := source.TransferSyntax(); ok {
+			ts = sourceTS
+		}
+	}
+	if ts == nil {
+		ts = transfer.ExplicitVRLittleEndian
+	}
+
+	if err := a.AnonymizeInPlace(ds); err != nil {
+		return nil, err
+	}
+
+	sopClassUID, ok := ds.GetString(tag.SOPClassUID)
+	if !ok || sopClassUID == "" {
+		return nil, fmt.Errorf("dataset is missing SOPClassUID")
+	}
+	sopInstanceUID, ok := ds.GetString(tag.SOPInstanceUID)
+	if !ok || sopInstanceUID == "" {
+		return nil, fmt.Errorf("dataset is missing SOPInstanceUID")
+	}
+
+	fresh := dataset.NewDefaultFileMetaInformation()
+	if err := fresh.SetMediaStorageSOPClassUID(sopClassUID); err != nil {
+		return nil, fmt.Errorf("set Media Storage SOP Class UID: %w", err)
+	}
+	if err := fresh.SetMediaStorageSOPInstanceUID(sopInstanceUID); err != nil {
+		return nil, fmt.Errorf("set Media Storage SOP Instance UID: %w", err)
+	}
+	if err := fresh.SetTransferSyntax(ts); err != nil {
+		return nil, fmt.Errorf("set Transfer Syntax UID: %w", err)
+	}
+	return fresh, nil
+}
+
 // applyAction applies the specified action to an element
 func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, action SecurityProfileAction) error {
 	vrValue := elem.ValueRepresentation()
@@ -231,7 +293,7 @@ func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, acti
 		if vrValue.Code() == vr.CodeUI {
 			return a.replaceUID(ds, elem)
 		} else if isStringVR(vrValue) {
-			return a.replaceString(ds, elem, "ANONYMOUS")
+			return a.replaceString(ds, elem, dummyStringValue(vrValue))
 		}
 		return a.blankItem(ds, elem, true)
 	case ActionK:
@@ -292,7 +354,7 @@ func (a *Anonymizer) blankItem(ds *dataset.Dataset, elem element.Element, nonZer
 	// String types - replace with empty string or dummy
 	if isStringVR(vrValue) {
 		if nonZeroLength {
-			return ds.AddOrUpdate(element.NewString(t, vrValue, []string{""}))
+			return ds.AddOrUpdate(element.NewString(t, vrValue, []string{dummyStringValue(vrValue)}))
 		}
 		return ds.AddOrUpdate(element.NewString(t, vrValue, []string{}))
 	}
@@ -354,6 +416,29 @@ func (a *Anonymizer) blankItem(ds *dataset.Dataset, elem element.Element, nonZer
 	default:
 		// For other types, create empty buffer
 		return ds.AddOrUpdate(element.NewOtherByte(t, []byte{}))
+	}
+}
+
+func dummyStringValue(vrValue *vr.VR) string {
+	switch vrValue.Code() {
+	case vr.CodeAS:
+		return "000Y"
+	case vr.CodeDA:
+		return "19000101"
+	case vr.CodeDS, vr.CodeIS:
+		return "0"
+	case vr.CodeDT:
+		return "19000101000000"
+	case vr.CodeTM:
+		return "000000"
+	case vr.CodeAE:
+		return "ANON"
+	case vr.CodeCS:
+		return "ANONYMIZED"
+	case vr.CodeUR:
+		return "about:blank"
+	default:
+		return "ANONYMOUS"
 	}
 }
 

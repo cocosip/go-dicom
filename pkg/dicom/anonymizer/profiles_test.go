@@ -121,13 +121,15 @@ func TestNewProfileFromReaderMapsEveryOptionColumn(t *testing.T) {
 	}
 }
 
-func TestNewProfileFromReaderUsesFirstCompositeAction(t *testing.T) {
+func TestNewProfileFromReaderUsesStructurePreservingCompositeAction(t *testing.T) {
 	tests := []struct {
 		name    string
 		content string
+		want    SecurityProfileAction
 	}{
-		{name: "explicit rule", content: "0010,0010;X/Z\n"},
-		{name: "option row", content: "0010,0010;X/Z;;;;;;;;;;\n"},
+		{name: "explicit X/Z", content: "0010,0010;X/Z\n", want: ActionZ},
+		{name: "option X/Z/D", content: "0010,0010;X/Z/D;;;;;;;;;;\n", want: ActionD},
+		{name: "explicit X/U", content: "0010,0010;X/U\n", want: ActionU},
 	}
 
 	for _, tt := range tests {
@@ -137,8 +139,8 @@ func TestNewProfileFromReaderUsesFirstCompositeAction(t *testing.T) {
 				t.Fatalf("NewProfileFromReader() error = %v", err)
 			}
 			action, found := profile.FindAction(mustParseTag("(0010,0010)"))
-			if !found || action != ActionX {
-				t.Fatalf("action = %v, found = %v, want X, true", action, found)
+			if !found || action != tt.want {
+				t.Fatalf("action = %v, found = %v, want %v, true", action, found, tt.want)
 			}
 		})
 	}
@@ -174,6 +176,21 @@ func TestNewRetainUIDsProfile(t *testing.T) {
 	}
 	if action != ActionK {
 		t.Errorf("Study Instance UID action = %v, want ActionK", action)
+	}
+
+	for _, retainedByBusinessPolicy := range []*tag.Tag{
+		tag.StudyDate,
+		tag.SeriesDate,
+		tag.StudyTime,
+		tag.AccessionNumber,
+		tag.PatientID,
+		tag.StudyID,
+		tag.ModifyingDeviceIDRETIRED,
+	} {
+		action, found = profile.FindAction(retainedByBusinessPolicy)
+		if found && action == ActionK {
+			t.Errorf("%s action = K, want the standard profile action", retainedByBusinessPolicy)
+		}
 	}
 }
 

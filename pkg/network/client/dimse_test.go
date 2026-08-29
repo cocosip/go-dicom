@@ -143,16 +143,25 @@ func TestCStoreWithPriority_NotConnected(t *testing.T) {
 
 // Mock service for testing DIMSE operations
 type mockServiceForDIMSE struct {
-	echoResponse     *dimse.CEchoResponse
-	storeResponse    *dimse.CStoreResponse
-	storeHook        func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
-	findResponses    []*dimse.CFindResponse
-	findHook         func(*dimse.CFindRequest)
-	findTerminalErr  error
-	cancelHook       func(messageID uint16, presentationContextID byte)
-	nServiceRequests []dimse.Request
-	releaseStarted   chan struct{}
-	releaseContinue  chan struct{}
+	echoResponse      *dimse.CEchoResponse
+	storeResponse     *dimse.CStoreResponse
+	storeHook         func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
+	findResponses     []*dimse.CFindResponse
+	findResponseCh    <-chan *dimse.CFindResponse
+	findHook          func(*dimse.CFindRequest)
+	findTerminalErr   error
+	moveResponseCh    <-chan *dimse.CMoveResponse
+	moveHook          func(*dimse.CMoveRequest)
+	moveTerminalErr   error
+	getResponseCh     <-chan *dimse.CGetResponse
+	getHook           func(*dimse.CGetRequest)
+	getTerminalErr    error
+	cancelHook        func(messageID uint16, presentationContextID byte)
+	cancelContextHook func(context.Context, uint16, byte)
+	cancelErr         error
+	nServiceRequests  []dimse.Request
+	releaseStarted    chan struct{}
+	releaseContinue   chan struct{}
 }
 
 // Association management methods (not used in these tests)
@@ -206,6 +215,16 @@ func (m *mockServiceForDIMSE) SendCStore(ctx context.Context, req *dimse.CStoreR
 }
 
 func (m *mockServiceForDIMSE) SendCFind(_ context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error) {
+	if req.MessageID() == 0 {
+		_ = req.SetMessageID(101)
+	}
+	req.SetPresentationContextID(3)
+	if m.findResponseCh != nil {
+		if m.findHook != nil {
+			m.findHook(req)
+		}
+		return m.findResponseCh, nil
+	}
 	// Create response channel
 	respCh := make(chan *dimse.CFindResponse, 16)
 	if m.findHook != nil {
@@ -248,6 +267,16 @@ func (m *mockServiceForDIMSE) SendCFindWithError(ctx context.Context, req *dimse
 }
 
 func (m *mockServiceForDIMSE) SendCMove(_ context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error) {
+	if req.MessageID() == 0 {
+		_ = req.SetMessageID(102)
+	}
+	req.SetPresentationContextID(5)
+	if m.moveHook != nil {
+		m.moveHook(req)
+	}
+	if m.moveResponseCh != nil {
+		return m.moveResponseCh, nil
+	}
 	ch := make(chan *dimse.CMoveResponse, 16)
 	go func() {
 		defer close(ch)
@@ -264,7 +293,30 @@ func (m *mockServiceForDIMSE) SendCMove(_ context.Context, req *dimse.CMoveReque
 	return ch, nil
 }
 
+func (m *mockServiceForDIMSE) SendCMoveWithError(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, <-chan error, error) {
+	responses, err := m.SendCMove(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	terminalErrors := make(chan error, 1)
+	if m.moveTerminalErr != nil {
+		terminalErrors <- m.moveTerminalErr
+	}
+	close(terminalErrors)
+	return responses, terminalErrors, nil
+}
+
 func (m *mockServiceForDIMSE) SendCGet(_ context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error) {
+	if req.MessageID() == 0 {
+		_ = req.SetMessageID(103)
+	}
+	req.SetPresentationContextID(7)
+	if m.getHook != nil {
+		m.getHook(req)
+	}
+	if m.getResponseCh != nil {
+		return m.getResponseCh, nil
+	}
 	ch := make(chan *dimse.CGetResponse, 16)
 	go func() {
 		defer close(ch)
@@ -281,11 +333,27 @@ func (m *mockServiceForDIMSE) SendCGet(_ context.Context, req *dimse.CGetRequest
 	return ch, nil
 }
 
-func (m *mockServiceForDIMSE) SendCCancel(_ context.Context, messageID uint16, presentationContextID byte) error {
+func (m *mockServiceForDIMSE) SendCGetWithError(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, <-chan error, error) {
+	responses, err := m.SendCGet(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	terminalErrors := make(chan error, 1)
+	if m.getTerminalErr != nil {
+		terminalErrors <- m.getTerminalErr
+	}
+	close(terminalErrors)
+	return responses, terminalErrors, nil
+}
+
+func (m *mockServiceForDIMSE) SendCCancel(ctx context.Context, messageID uint16, presentationContextID byte) error {
 	if m.cancelHook != nil {
 		m.cancelHook(messageID, presentationContextID)
 	}
-	return nil
+	if m.cancelContextHook != nil {
+		m.cancelContextHook(ctx, messageID, presentationContextID)
+	}
+	return m.cancelErr
 }
 
 func (m *mockServiceForDIMSE) SendNCreate(_ context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error) {
@@ -509,6 +577,96 @@ func TestCCancel_Success(t *testing.T) {
 	}
 }
 
+func TestProgressiveContextCancellationSendsIndependentCCancel(t *testing.T) {
+	tests := []struct {
+		name      string
+		want      [2]uint16
+		configure func(*mockServiceForDIMSE, chan<- struct{}) func()
+		run       func(context.Context, *Client) error
+	}{
+		{
+			name: "C-FIND",
+			want: [2]uint16{101, 3},
+			configure: func(mock *mockServiceForDIMSE, started chan<- struct{}) func() {
+				responses := make(chan *dimse.CFindResponse)
+				mock.findResponseCh = responses
+				mock.findHook = func(*dimse.CFindRequest) { close(started) }
+				return func() { close(responses) }
+			},
+			run: func(ctx context.Context, client *Client) error {
+				_, err := client.CFind(ctx, dimse.QueryRetrieveLevelStudy, dataset.New())
+				return err
+			},
+		},
+		{
+			name: "C-MOVE",
+			want: [2]uint16{102, 5},
+			configure: func(mock *mockServiceForDIMSE, started chan<- struct{}) func() {
+				responses := make(chan *dimse.CMoveResponse)
+				mock.moveResponseCh = responses
+				mock.moveHook = func(*dimse.CMoveRequest) { close(started) }
+				return func() { close(responses) }
+			},
+			run: func(ctx context.Context, client *Client) error {
+				return client.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST_AE", dataset.New(), nil)
+			},
+		},
+		{
+			name: "C-GET",
+			want: [2]uint16{103, 7},
+			configure: func(mock *mockServiceForDIMSE, started chan<- struct{}) func() {
+				responses := make(chan *dimse.CGetResponse)
+				mock.getResponseCh = responses
+				mock.getHook = func(*dimse.CGetRequest) { close(started) }
+				return func() { close(responses) }
+			},
+			run: func(ctx context.Context, client *Client) error {
+				return client.CGet(ctx, dimse.QueryRetrieveLevelStudy, dataset.New(), nil)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, mockService := setupMockClient()
+			started := make(chan struct{})
+			cleanup := test.configure(mockService, started)
+			defer cleanup()
+			cancelled := make(chan struct {
+				target [2]uint16
+				err    error
+			}, 1)
+			mockService.cancelContextHook = func(ctx context.Context, messageID uint16, presentationContextID byte) {
+				cancelled <- struct {
+					target [2]uint16
+					err    error
+				}{[2]uint16{messageID, uint16(presentationContextID)}, ctx.Err()}
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			result := make(chan error, 1)
+			go func() { result <- test.run(ctx, client) }()
+			<-started
+			cancel()
+
+			select {
+			case got := <-cancelled:
+				if got.target != test.want {
+					t.Fatalf("C-CANCEL target = %v, want %v", got.target, test.want)
+				}
+				if got.err != nil {
+					t.Fatalf("C-CANCEL context error = %v, want independent live context", got.err)
+				}
+			case <-time.After(250 * time.Millisecond):
+				t.Fatal("context cancellation did not send C-CANCEL")
+			}
+			if err := <-result; !errors.Is(err, context.Canceled) {
+				t.Fatalf("operation error = %v, want context.Canceled", err)
+			}
+		})
+	}
+}
+
 func TestCFind_Success_MultipleResults(t *testing.T) {
 	client, mockService := setupMockClient()
 
@@ -603,42 +761,58 @@ func TestCFindWithCallback_Success(t *testing.T) {
 
 func TestCFindWithCallback_StopEarly(t *testing.T) {
 	client, mockService := setupMockClient()
-
-	// Setup mock responses with multiple results
-
-	id1 := dataset.New()
-	_ = id1.Add(element.NewString(tag.PatientID, vr.LO, []string{testPatientID1}))
-
-	id2 := dataset.New()
-	_ = id2.Add(element.NewString(tag.PatientID, vr.LO, []string{testPatientID2}))
-
-	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, dataset.New())
-	_ = req.SetMessageID(1)
-
-	mockService.findResponses = []*dimse.CFindResponse{
-		dimse.NewCFindResponseFromRequest(req, status.CFindPending, id1), // Pending
-		dimse.NewCFindResponseFromRequest(req, status.CFindPending, id2), // Pending
-		dimse.NewCFindResponseFromRequest(req, status.Success, nil),      // Success
+	responses := make(chan *dimse.CFindResponse, 2)
+	requests := make(chan *dimse.CFindRequest, 1)
+	cancels := make(chan [2]uint16, 1)
+	mockService.findResponseCh = responses
+	mockService.findHook = func(req *dimse.CFindRequest) { requests <- req }
+	mockService.cancelHook = func(messageID uint16, presentationContextID byte) {
+		cancels <- [2]uint16{messageID, uint16(presentationContextID)}
 	}
 
-	query := dataset.New()
-	resultCount := 0
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	err := client.CFindWithCallback(ctx, dimse.QueryRetrieveLevelPatient, query,
-		func(_ *dataset.Dataset) bool {
-			resultCount++
-			return false // Stop after first result
-		})
-
-	if err != nil {
-		t.Errorf("CFindWithCallback failed: %v", err)
+	result := make(chan error, 1)
+	go func() {
+		result <- client.CFindWithCallback(
+			context.Background(), dimse.QueryRetrieveLevelPatient, dataset.New(),
+			func(*dataset.Dataset) bool { return false },
+		)
+	}()
+	req := <-requests
+	responses <- dimse.NewCFindResponseFromRequest(req, status.CFindPending, dataset.New())
+	if got := receiveCancelTarget(t, cancels); got != [2]uint16{101, 3} {
+		t.Fatalf("C-CANCEL target = %v, want message/context [101 3]", got)
 	}
+	select {
+	case err := <-result:
+		t.Fatalf("CFindWithCallback() returned before final Cancel response: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	responses <- dimse.NewCFindResponseFromRequest(req, status.Cancel, nil)
+	close(responses)
+	if err := <-result; err != nil {
+		t.Fatalf("CFindWithCallback() error = %v", err)
+	}
+	if err := client.CEcho(context.Background()); err != nil {
+		t.Fatalf("CEcho() after cancelled C-FIND error = %v", err)
+	}
+}
 
-	if resultCount != 1 {
-		t.Errorf("Expected 1 result callback (stopped early), got %d", resultCount)
+func TestCFindWithCallbackReturnsAutomaticCancelSendFailure(t *testing.T) {
+	client, mockService := setupMockClient()
+	responses := make(chan *dimse.CFindResponse, 1)
+	mockService.findResponseCh = responses
+	mockService.findHook = func(req *dimse.CFindRequest) {
+		responses <- dimse.NewCFindResponseFromRequest(req, status.CFindPending, dataset.New())
+	}
+	wantErr := errors.New("cancel write failed")
+	mockService.cancelErr = wantErr
+
+	err := client.CFindWithCallback(
+		context.Background(), dimse.QueryRetrieveLevelStudy, dataset.New(),
+		func(*dataset.Dataset) bool { return false },
+	)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("CFindWithCallback() error = %v, want cancel send failure", err)
 	}
 }
 
@@ -873,6 +1047,18 @@ func TestCMove_Success(t *testing.T) {
 	}
 }
 
+func TestCMovePropagatesAsynchronousRequestTimeout(t *testing.T) {
+	client, mockService := setupMockClient()
+	mockService.moveTerminalErr = service.ErrRequestTimeout
+
+	err := client.CMove(
+		context.Background(), dimse.QueryRetrieveLevelStudy, "DEST_AE", dataset.New(), nil,
+	)
+	if !errors.Is(err, service.ErrRequestTimeout) {
+		t.Fatalf("CMove() error = %v, want ErrRequestTimeout", err)
+	}
+}
+
 func TestCMove_NotConnected(t *testing.T) {
 	client := New()
 
@@ -925,30 +1111,56 @@ func TestCMove_EmptyDestination(t *testing.T) {
 }
 
 func TestCMove_StopEarly(t *testing.T) {
-	client, _ := setupMockClient()
-
-	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	progressCount := 0
-	err := client.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier,
-		func(remaining, completed, failed, warning uint16) bool {
-			progressCount++
-			t.Logf("C-MOVE progress: remaining=%d, completed=%d, failed=%d, warning=%d",
-				remaining, completed, failed, warning)
-			// Stop after first progress update
-			return false
-		})
-
-	if err != nil {
-		t.Errorf("CMove failed: %v", err)
+	client, mockService := setupMockClient()
+	responses := make(chan *dimse.CMoveResponse, 2)
+	requests := make(chan *dimse.CMoveRequest, 1)
+	cancels := make(chan [2]uint16, 1)
+	mockService.moveResponseCh = responses
+	mockService.moveHook = func(req *dimse.CMoveRequest) { requests <- req }
+	mockService.cancelHook = func(messageID uint16, presentationContextID byte) {
+		cancels <- [2]uint16{messageID, uint16(presentationContextID)}
 	}
 
-	if progressCount != 1 {
-		t.Errorf("Expected 1 progress callback (stopped early), got %d", progressCount)
+	result := make(chan error, 1)
+	go func() {
+		result <- client.CMove(
+			context.Background(), dimse.QueryRetrieveLevelStudy, "DEST_AE", dataset.New(),
+			func(uint16, uint16, uint16, uint16) bool { return false },
+		)
+	}()
+	req := <-requests
+	responses <- dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 1, 0, 0, 0)
+	if got := receiveCancelTarget(t, cancels); got != [2]uint16{102, 5} {
+		t.Fatalf("C-CANCEL target = %v, want message/context [102 5]", got)
+	}
+	select {
+	case err := <-result:
+		t.Fatalf("CMove() returned before final Cancel response: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	responses <- dimse.NewCMoveResponseFromRequest(req, status.Cancel)
+	close(responses)
+	if err := <-result; err != nil {
+		t.Fatalf("CMove() error = %v", err)
+	}
+}
+
+func TestCMoveStopReturnsUnexpectedFinalStatus(t *testing.T) {
+	client, mockService := setupMockClient()
+	responses := make(chan *dimse.CMoveResponse, 2)
+	mockService.moveResponseCh = responses
+	mockService.moveHook = func(req *dimse.CMoveRequest) {
+		responses <- dimse.NewCMoveResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 1, 0, 0, 0)
+		responses <- dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
+		close(responses)
+	}
+
+	err := client.CMove(
+		context.Background(), dimse.QueryRetrieveLevelStudy, "DEST_AE", dataset.New(),
+		func(uint16, uint16, uint16, uint16) bool { return false },
+	)
+	if err == nil {
+		t.Fatal("CMove() error = nil after local cancel ended with Success, want unexpected final status")
 	}
 }
 
@@ -976,6 +1188,16 @@ func TestCGet_Success(t *testing.T) {
 
 	if progressCount != 3 {
 		t.Errorf("Expected 3 progress callbacks, got %d", progressCount)
+	}
+}
+
+func TestCGetPropagatesAsynchronousAssociationClose(t *testing.T) {
+	client, mockService := setupMockClient()
+	mockService.getTerminalErr = service.ErrServiceClosed
+
+	err := client.CGet(context.Background(), dimse.QueryRetrieveLevelStudy, dataset.New(), nil)
+	if !errors.Is(err, service.ErrServiceClosed) {
+		t.Fatalf("CGet() error = %v, want ErrServiceClosed", err)
 	}
 }
 
@@ -1013,29 +1235,47 @@ func TestCGet_NilIdentifier(t *testing.T) {
 }
 
 func TestCGet_StopEarly(t *testing.T) {
-	client, _ := setupMockClient()
-
-	identifier := dataset.New()
-	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	progressCount := 0
-	err := client.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
-		func(remaining, completed, failed, warning uint16) bool {
-			progressCount++
-			t.Logf("C-GET progress: remaining=%d, completed=%d, failed=%d, warning=%d",
-				remaining, completed, failed, warning)
-			// Stop after first progress update
-			return false
-		})
-
-	if err != nil {
-		t.Errorf("CGet failed: %v", err)
+	client, mockService := setupMockClient()
+	responses := make(chan *dimse.CGetResponse, 2)
+	requests := make(chan *dimse.CGetRequest, 1)
+	cancels := make(chan [2]uint16, 1)
+	mockService.getResponseCh = responses
+	mockService.getHook = func(req *dimse.CGetRequest) { requests <- req }
+	mockService.cancelHook = func(messageID uint16, presentationContextID byte) {
+		cancels <- [2]uint16{messageID, uint16(presentationContextID)}
 	}
 
-	if progressCount != 1 {
-		t.Errorf("Expected 1 progress callback (stopped early), got %d", progressCount)
+	result := make(chan error, 1)
+	go func() {
+		result <- client.CGet(
+			context.Background(), dimse.QueryRetrieveLevelStudy, dataset.New(),
+			func(uint16, uint16, uint16, uint16) bool { return false },
+		)
+	}()
+	req := <-requests
+	responses <- dimse.NewCGetResponsePending(req.MessageID(), req.AffectedSOPClassUID(), 1, 0, 0, 0)
+	if got := receiveCancelTarget(t, cancels); got != [2]uint16{103, 7} {
+		t.Fatalf("C-CANCEL target = %v, want message/context [103 7]", got)
+	}
+	select {
+	case err := <-result:
+		t.Fatalf("CGet() returned before final Cancel response: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	responses <- dimse.NewCGetResponseFromRequest(req, status.Cancel)
+	close(responses)
+	if err := <-result; err != nil {
+		t.Fatalf("CGet() error = %v", err)
+	}
+}
+
+func receiveCancelTarget(t *testing.T, cancels <-chan [2]uint16) [2]uint16 {
+	t.Helper()
+	select {
+	case target := <-cancels:
+		return target
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("operation did not send C-CANCEL")
+		return [2]uint16{}
 	}
 }

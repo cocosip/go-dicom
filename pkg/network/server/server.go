@@ -59,7 +59,8 @@ type Server struct {
 	config *Config
 
 	// Network listener
-	listener *transport.Listener
+	listener serverListener
+	listenFn listenerFactory
 
 	// Active connections
 	connections   map[string]*serverConnection
@@ -70,8 +71,9 @@ type Server struct {
 	optionsMu      sync.RWMutex
 
 	// Server state
-	running   bool
-	runningMu sync.RWMutex
+	running    bool
+	runningMu  sync.RWMutex
+	acceptDone chan struct{}
 
 	// Context for server lifecycle
 	ctx    context.Context
@@ -79,6 +81,17 @@ type Server struct {
 
 	// Wait group for active connections
 	wg sync.WaitGroup
+}
+
+type serverListener interface {
+	Accept(context.Context) (net.Conn, error)
+	Close() error
+}
+
+type listenerFactory func(string, string, ...transport.ListenOption) (serverListener, error)
+
+func defaultListenerFactory(network, address string, opts ...transport.ListenOption) (serverListener, error) {
+	return transport.Listen(network, address, opts...)
 }
 
 // Config contains configuration options for the DICOM server.
@@ -266,6 +279,7 @@ func New(opts ...Option) *Server {
 		config:         config,
 		connections:    make(map[string]*serverConnection),
 		serviceOptions: make([]service.Option, 0),
+		listenFn:       defaultListenerFactory,
 	}
 }
 
@@ -436,94 +450,109 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		s.runningMu.Unlock()
 		return fmt.Errorf("server is already running")
 	}
+	runCtx, cancel := context.WithCancel(ctx)
+	address := fmt.Sprintf(":%d", s.config.Port)
+	listenOptions := make([]transport.ListenOption, 0, 1)
+	if s.config.TLSConfig != nil {
+		listenOptions = append(listenOptions, transport.WithListenTLSConfig(s.config.TLSConfig))
+	}
+	listenFn := s.listenFn
+	if listenFn == nil {
+		listenFn = defaultListenerFactory
+	}
+	listener, err := listenFn("tcp", address, listenOptions...)
+	if err != nil {
+		s.runningMu.Unlock()
+		cancel()
+		s.emitServerError(runCtx, "listener_failed", err)
+		return fmt.Errorf("failed to start listener: %w", err)
+	}
+	acceptDone := make(chan struct{})
+	s.ctx = runCtx
+	s.cancel = cancel
+	s.listener = listener
+	s.acceptDone = acceptDone
 	s.running = true
 	s.runningMu.Unlock()
 
-	// Create server context
-	s.ctx, s.cancel = context.WithCancel(ctx)
-	defer s.cancel()
+	err = s.acceptLoop(runCtx, listener)
+	close(acceptDone)
+	s.wg.Wait()
+	_ = listener.Close()
+	cancel()
 
-	// Create listener
-	var err error
-	address := fmt.Sprintf(":%d", s.config.Port)
-
-	if s.config.TLSConfig != nil {
-		s.listener, err = transport.Listen("tcp", address, transport.WithListenTLSConfig(s.config.TLSConfig))
-	} else {
-		s.listener, err = transport.Listen("tcp", address)
-	}
-
-	if err != nil {
-		s.emitServerError(s.ctx, "listener_failed", err)
-		s.runningMu.Lock()
+	s.runningMu.Lock()
+	if s.acceptDone == acceptDone {
 		s.running = false
-		s.runningMu.Unlock()
-		return fmt.Errorf("failed to start listener: %w", err)
+		s.ctx = nil
+		s.cancel = nil
+		s.listener = nil
+		s.acceptDone = nil
 	}
+	s.runningMu.Unlock()
+	return err
+}
 
-	defer func() { _ = s.listener.Close() }()
-
-	// Accept connections loop
+func (s *Server) acceptLoop(ctx context.Context, listener serverListener) error {
 	for {
-		// Check if server was stopped
 		select {
-		case <-s.ctx.Done():
-			s.runningMu.Lock()
-			s.running = false
-			s.runningMu.Unlock()
-			// Wait for all connections to finish
-			s.wg.Wait()
-			return s.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 		}
 
-		// Check connection limit
 		if s.config.MaxConnections > 0 && s.ActiveConnections() >= s.config.MaxConnections {
-			time.Sleep(100 * time.Millisecond)
+			select {
+			case <-time.After(100 * time.Millisecond):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 			continue
 		}
 
-		// Accept connection. A configured accept timeout is scoped to this
-		// attempt; the listener remains active and immediately rearms it.
-		acceptCtx, cancelAccept := s.acceptContext()
-		conn, err := s.listener.Accept(acceptCtx)
+		acceptCtx, cancelAccept := s.acceptContext(ctx)
+		conn, err := listener.Accept(acceptCtx)
 		cancelAccept()
 		if err != nil {
 			select {
-			case <-s.ctx.Done():
-				s.runningMu.Lock()
-				s.running = false
-				s.runningMu.Unlock()
-				s.wg.Wait()
-				return s.ctx.Err()
+			case <-ctx.Done():
+				return ctx.Err()
 			default:
-				s.emitServerError(s.ctx, "accept_failed", err)
+				s.emitServerError(ctx, "accept_failed", err)
 				continue
 			}
 		}
+		if err := ctx.Err(); err != nil {
+			_ = conn.Close()
+			return err
+		}
 
-		// Handle connection in goroutine
 		s.wg.Add(1)
 		go s.handleConnection(conn)
 	}
 }
 
-func (s *Server) acceptContext() (context.Context, context.CancelFunc) {
+func (s *Server) acceptContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if s.config.AcceptTimeout <= 0 {
-		return s.ctx, func() {}
+		return ctx, func() {}
 	}
-	return context.WithTimeout(s.ctx, s.config.AcceptTimeout)
+	return context.WithTimeout(ctx, s.config.AcceptTimeout)
 }
 
 // Shutdown gracefully shuts down the server.
 func (s *Server) Shutdown(ctx context.Context) error {
-	if !s.IsRunning() {
-		return nil
+	acceptDone, stopErr := s.stopAccepting()
+	if stopErr != nil {
+		return stopErr
+	}
+	if acceptDone != nil {
+		select {
+		case <-acceptDone:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
-	_ = s.stopAccepting()
-
-	// Wait for connections to finish with timeout
 	done := make(chan struct{})
 	go func() {
 		s.wg.Wait()
@@ -543,7 +572,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // Close may be called after Shutdown returns because its context expired.
 func (s *Server) Close() error {
 	var errs []error
-	if err := s.stopAccepting(); err != nil {
+	if _, err := s.stopAccepting(); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -563,17 +592,27 @@ func (s *Server) Close() error {
 	return errors.Join(errs...)
 }
 
-func (s *Server) stopAccepting() error {
-	if s.cancel != nil {
-		s.cancel()
+func (s *Server) stopAccepting() (<-chan struct{}, error) {
+	s.runningMu.RLock()
+	if !s.running {
+		s.runningMu.RUnlock()
+		return nil, nil
 	}
-	if s.listener == nil {
-		return nil
+	cancel := s.cancel
+	listener := s.listener
+	acceptDone := s.acceptDone
+	s.runningMu.RUnlock()
+
+	if cancel != nil {
+		cancel()
 	}
-	if err := s.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-		return err
+	if listener == nil {
+		return acceptDone, nil
 	}
-	return nil
+	if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		return acceptDone, err
+	}
+	return acceptDone, nil
 }
 
 // handleConnection handles a single client connection.

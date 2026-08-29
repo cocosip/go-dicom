@@ -93,17 +93,24 @@ func (sp *SecurityProfile) LoadFromReader(reader io.Reader, options SecurityProf
 
 func parseSecurityProfileAction(value string) (SecurityProfileAction, bool) {
 	components := strings.Split(strings.TrimSpace(value), "/")
-	var selected SecurityProfileAction
-	for index, component := range components {
+	actions := make(map[SecurityProfileAction]struct{}, len(components))
+	for _, component := range components {
 		action, ok := parseSingleSecurityProfileAction(strings.TrimSpace(component))
 		if !ok {
 			return 0, false
 		}
-		if index == 0 {
-			selected = action
+		actions[action] = struct{}{}
+	}
+
+	// Composite actions depend on the Attribute type in the concrete IOD.
+	// Without an IOD model, prefer a de-identifying action that preserves the
+	// Attribute so Type 1 and Type 2 requirements are not broken.
+	for _, action := range []SecurityProfileAction{ActionD, ActionZ, ActionU, ActionC, ActionK, ActionX} {
+		if _, ok := actions[action]; ok {
+			return action, true
 		}
 	}
-	return selected, true
+	return 0, false
 }
 
 func parseSingleSecurityProfileAction(action string) (SecurityProfileAction, bool) {

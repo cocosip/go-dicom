@@ -426,6 +426,17 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		Outcome:     observability.OutcomeSuccess,
 		Value:       1,
 	})
+	if rq.ProtocolVersion&0x0001 == 0 {
+		if err := s.SendAssociationReject(
+			ctx,
+			pdu.ResultRejectedPermanent,
+			pdu.SourceServiceProviderACSE,
+			pdu.ReasonServiceProviderACSEProtocolVersionNotSupported,
+		); err != nil {
+			return nil, fmt.Errorf("failed to reject unsupported protocol version 0x%04X: %w", rq.ProtocolVersion, err)
+		}
+		return rq, nil
+	}
 
 	// Build Association from A-ASSOCIATE-RQ
 	assoc := association.FromAAssociateRQ(rq)

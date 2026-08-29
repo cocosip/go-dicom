@@ -18,25 +18,7 @@ type AdditionalSecurityProfiles struct{}
 // NewRetainUIDsProfile creates a profile that retains all UIDs.
 // This is useful for research where UID consistency is required.
 func NewRetainUIDsProfile() *SecurityProfile {
-	profile := NewSecurityProfile(BasicProfile | RetainUIDs)
-
-	// Override UID-related tags to keep them
-	profile.rules = append([]profileRule{
-		{mustCompile("(?i)" + `0008,0018`), ActionK}, // SOP Instance UID
-		{mustCompile("(?i)" + `0008,0020`), ActionK}, // Study Instance UID
-		{mustCompile("(?i)" + `0008,0021`), ActionK}, // Series Instance UID
-		{mustCompile("(?i)" + `0008,0030`), ActionK}, // Study Time (keep for research)
-		{mustCompile("(?i)" + `0008,0050`), ActionK}, // Accession Number
-		{mustCompile("(?i)" + `0010,0020`), ActionK}, // Patient ID
-		{mustCompile("(?i)" + `0020,000D`), ActionK}, // Study Instance UID
-		{mustCompile("(?i)" + `0020,000E`), ActionK}, // Series Instance UID
-		{mustCompile("(?i)" + `0020,0010`), ActionK}, // Study ID
-		{mustCompile("(?i)" + `0020,0052`), ActionK}, // Frame of Reference UID
-		{mustCompile("(?i)" + `0020,0200`), ActionK}, // Synchronization Frame of Reference UID
-		{mustCompile("(?i)" + `0020,3401`), ActionK}, // RT Frame of Reference UID
-	}, profile.rules...)
-
-	return profile
+	return NewSecurityProfile(BasicProfile | RetainUIDs)
 }
 
 // NewRetainInstitutionProfile creates a profile that retains institution identifiers.

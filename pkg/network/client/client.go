@@ -57,6 +57,14 @@ type cFindErrorService interface {
 	SendCFindWithError(context.Context, *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error)
 }
 
+type cMoveErrorService interface {
+	SendCMoveWithError(context.Context, *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, <-chan error, error)
+}
+
+type cGetErrorService interface {
+	SendCGetWithError(context.Context, *dimse.CGetRequest) (<-chan *dimse.CGetResponse, <-chan error, error)
+}
+
 // Client represents a DICOM SCU (Service Class User) client.
 // It provides a high-level API for connecting to DICOM servers
 // and performing DIMSE operations.

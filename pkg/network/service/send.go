@@ -137,6 +137,7 @@ func (s *Service) sendMessage(req *sendRequest) error {
 		// Fall back to Explicit VR Little Endian
 		transferSyntax = transfer.ExplicitVRLittleEndian
 	}
+	message.SetPresentationContextID(pc.ID)
 
 	// Encode message
 	commandData, datasetData, err := EncodeDIMSEMessage(message, transferSyntax)

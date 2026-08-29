@@ -9,8 +9,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
+
+const anonymizedString = "ANONYMOUS"
 
 func TestNewAnonymizer(t *testing.T) {
 	// Test with nil profile (should use default BasicProfile)
@@ -135,12 +138,12 @@ func TestAnonymizerReplaceString(t *testing.T) {
 
 	// Both should be replaced with ANONYMOUS
 	patientName, _ := ds.GetString(tag.PatientName)
-	if patientName != "ANONYMOUS" {
+	if patientName != anonymizedString {
 		t.Errorf("PatientName = %q, want ANONYMOUS", patientName)
 	}
 
 	institutionName, _ := ds.GetString(tag.InstitutionName)
-	if institutionName != "ANONYMOUS" {
+	if institutionName != anonymizedString {
 		t.Errorf("InstitutionName = %q, want ANONYMOUS", institutionName)
 	}
 }
@@ -271,6 +274,170 @@ func TestAnonymizerSequence(t *testing.T) {
 	studyDesc, _ := itemAnon.GetString(tag.StudyDescription)
 	if studyDesc == testStudyDescription {
 		t.Error("StudyDescription should have been anonymized")
+	}
+}
+
+func TestAnonymizerCleanSequencePreservesItems(t *testing.T) {
+	ds := dataset.New()
+	seq := dataset.NewSequence(tag.ReferencedStudySequence)
+	item := dataset.New()
+	_ = item.Add(element.NewString(tag.StudyDescription, vr.LO, []string{testStudyDescription}))
+	seq.AddItem(item)
+	_ = ds.Add(seq)
+
+	profile := &SecurityProfile{rules: make([]profileRule, 0)}
+	_ = profile.AddRule("0008,1110", ActionC)
+	_ = profile.AddRule("0008,1030", ActionD)
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+
+	got, ok := ds.GetOrNil(tag.ReferencedStudySequence).(*dataset.Sequence)
+	if !ok {
+		t.Fatalf("cleaned sequence = %T, want *dataset.Sequence", got)
+	}
+	if got.Count() != 1 {
+		t.Fatalf("cleaned sequence has %d items, want one", got.Count())
+	}
+	if value, _ := got.GetItem(0).GetString(tag.StudyDescription); value != anonymizedString {
+		t.Errorf("StudyDescription = %q, want ANONYMOUS", value)
+	}
+	if got.GetItem(0).Contains(tag.PatientIdentityRemoved) {
+		t.Error("nested sequence item contains top-level de-identification declaration")
+	}
+}
+
+func TestAnonymizerDummySequencePreservesItems(t *testing.T) {
+	ds := dataset.New()
+	seq := dataset.NewSequence(tag.ReferencedStudySequence)
+	item := dataset.New()
+	_ = item.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+	seq.AddItem(item)
+	_ = ds.Add(seq)
+
+	profile := &SecurityProfile{rules: make([]profileRule, 0)}
+	_ = profile.AddRule("0008,1110", ActionD)
+	_ = profile.AddRule("0010,0010", ActionD)
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+
+	got, ok := ds.GetOrNil(tag.ReferencedStudySequence).(*dataset.Sequence)
+	if !ok {
+		t.Fatalf("dummy sequence = %T, want *dataset.Sequence", got)
+	}
+	if got.Count() != 1 {
+		t.Fatalf("dummy sequence has %d items, want one", got.Count())
+	}
+	if value, _ := got.GetItem(0).GetString(tag.PatientName); value != anonymizedString {
+		t.Errorf("PatientName = %q, want ANONYMOUS", value)
+	}
+}
+
+func TestAnonymizerDummyStringsAreValidForVR(t *testing.T) {
+	ds := dataset.New()
+	values := []struct {
+		tag   *tag.Tag
+		vr    *vr.VR
+		input string
+		want  string
+	}{
+		{tag: tag.StudyDate, vr: vr.DA, input: "20260829", want: "19000101"},
+		{tag: tag.AcquisitionDateTime, vr: vr.DT, input: "20260829120000", want: "19000101000000"},
+		{tag: tag.StudyTime, vr: vr.TM, input: "120000", want: "000000"},
+		{tag: tag.PatientAge, vr: vr.AS, input: "042Y", want: "000Y"},
+		{tag: tag.PatientWeight, vr: vr.DS, input: "70.5", want: "0"},
+		{tag: tag.InstanceNumber, vr: vr.IS, input: "7", want: "0"},
+	}
+	profile := &SecurityProfile{rules: make([]profileRule, 0)}
+	for _, value := range values {
+		_ = ds.Add(element.NewString(value.tag, value.vr, []string{value.input}))
+		tagText := value.tag.String()
+		_ = profile.AddRule(tagText[1:len(tagText)-1], ActionD)
+	}
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	for _, value := range values {
+		if got, _ := ds.GetString(value.tag); got != value.want {
+			t.Errorf("%s = %q, want %q", value.tag, got, value.want)
+		}
+	}
+}
+
+func TestAnonymizerAddsTopLevelDeidentificationDeclaration(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+
+	if err := NewAnonymizer(nil).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != "YES" {
+		t.Errorf("PatientIdentityRemoved = %q, want YES", got)
+	}
+	if got, _ := ds.GetString(tag.DeidentificationMethod); got == "" {
+		t.Error("DeidentificationMethod is empty")
+	}
+}
+
+func TestAnonymizeFileInPlaceRebuildsFileMetaInformation(t *testing.T) {
+	const (
+		sopClassUID       = "1.2.840.10008.5.1.4.1.1.2"
+		originalSOPUID    = "1.2.826.0.1.3680043.10.999.1"
+		oldImplementation = "1.2.826.0.1.3680043.10.999.2"
+	)
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{sopClassUID}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{originalSOPUID}))
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+
+	source := dataset.NewDefaultFileMetaInformation()
+	_ = source.SetMediaStorageSOPClassUID(sopClassUID)
+	_ = source.SetMediaStorageSOPInstanceUID(originalSOPUID)
+	_ = source.SetTransferSyntax(transfer.ExplicitVRLittleEndian)
+	_ = source.SetImplementationClassUID(oldImplementation)
+	_ = source.SetImplementationVersionName("OLD_VERSION")
+	_ = source.SetSourceApplicationEntityTitle("SOURCE_AE")
+	_ = source.SetSendingApplicationEntityTitle("SENDING_AE")
+	_ = source.SetReceivingApplicationEntityTitle("RECEIVING_AE")
+	_ = source.SetPrivateInformationCreatorUID(oldImplementation)
+	_ = source.SetPrivateInformation([]byte("patient-linked private metadata"))
+
+	profile := &SecurityProfile{rules: make([]profileRule, 0)}
+	_ = profile.AddRule("0008,0018", ActionU)
+	fresh, err := NewAnonymizer(profile).AnonymizeFileInPlace(ds, source)
+	if err != nil {
+		t.Fatalf("AnonymizeFileInPlace() error = %v", err)
+	}
+	if fresh == source {
+		t.Fatal("AnonymizeFileInPlace() reused input File Meta Information")
+	}
+	wantSOPUID, _ := ds.GetString(tag.SOPInstanceUID)
+	if wantSOPUID == originalSOPUID {
+		t.Fatal("SOPInstanceUID was not anonymized")
+	}
+	if got, _ := fresh.MediaStorageSOPInstanceUID(); got != wantSOPUID {
+		t.Errorf("MediaStorageSOPInstanceUID = %q, want %q", got, wantSOPUID)
+	}
+	if got, _ := fresh.TransferSyntaxUID(); got != transfer.ExplicitVRLittleEndian.UID().UID() {
+		t.Errorf("TransferSyntaxUID = %q, want Explicit VR Little Endian", got)
+	}
+	for _, identifyingTag := range []*tag.Tag{
+		tag.SourceApplicationEntityTitle,
+		tag.SendingApplicationEntityTitle,
+		tag.ReceivingApplicationEntityTitle,
+		tag.PrivateInformationCreatorUID,
+		tag.PrivateInformation,
+	} {
+		if fresh.Dataset().Contains(identifyingTag) {
+			t.Errorf("fresh File Meta Information contains %s", identifyingTag)
+		}
+	}
+	if got, _ := fresh.ImplementationClassUID(); got == oldImplementation {
+		t.Errorf("ImplementationClassUID retained source value %q", got)
 	}
 }
 
