@@ -246,10 +246,10 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 	for {
 		select {
 		case resp, ok := <-respCh:
-			if contextErr := progressiveContextError(ctx, svc, req, false); contextErr != nil {
-				return results, contextErr
-			}
 			if !ok {
+				if contextErr := progressiveContextError(ctx, svc, req, false); contextErr != nil {
+					return results, contextErr
+				}
 				if err := receiveTerminalError(terminalErrCh); err != nil {
 					return results, err
 				}
@@ -257,10 +257,11 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 				return results, nil
 			}
 
-			statusCode := resp.StatusCode()
-
 			// Pending status - more results coming
-			if statusCode == status.CFindPending.Code {
+			if resp.IsPending() {
+				if contextErr := progressiveContextError(ctx, svc, req, false); contextErr != nil {
+					return results, contextErr
+				}
 				// Extract identifier dataset
 				if resp.HasIdentifier() {
 					identifier := resp.DataDataset()
@@ -272,14 +273,14 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 			}
 
 			// Success status - final response
-			if statusCode == status.Success.Code {
-				return results, nil
-			}
-
-			// Any other status is an error
-			return results, fmt.Errorf("C-FIND failed with status: 0x%04X", statusCode)
+			return results, cFindFinalStatusError(resp.StatusCode(), false)
 
 		case terminalErr, ok := <-terminalErrCh:
+			if ctx.Err() != nil {
+				if final, finalErr := bufferedCFindFinal(respCh, false); final {
+					return results, finalErr
+				}
+			}
 			if contextErr := progressiveContextError(ctx, svc, req, false); contextErr != nil {
 				return results, contextErr
 			}
@@ -288,6 +289,9 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 			}
 			terminalErrCh = nil
 		case <-ctx.Done():
+			if final, finalErr := bufferedCFindFinal(respCh, false); final {
+				return results, finalErr
+			}
 			return results, progressiveContextError(ctx, svc, req, false)
 		}
 	}
@@ -340,10 +344,10 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 	for {
 		select {
 		case resp, ok := <-respCh:
-			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-				return contextErr
-			}
 			if !ok {
+				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+					return contextErr
+				}
 				if err := receiveTerminalError(terminalErrCh); err != nil {
 					return err
 				}
@@ -354,10 +358,11 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 				return nil
 			}
 
-			statusCode := resp.StatusCode()
-
 			// Pending status - more results coming
-			if statusCode == status.CFindPending.Code {
+			if resp.IsPending() {
+				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+					return contextErr
+				}
 				if !cancelRequested && resp.HasIdentifier() {
 					identifier := resp.DataDataset()
 					if identifier != nil && !callback(identifier) {
@@ -370,22 +375,14 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 				continue
 			}
 
-			if cancelRequested {
-				if statusCode == status.Cancel.Code {
-					return nil
-				}
-				return fmt.Errorf("C-FIND cancellation received unexpected final status: 0x%04X", statusCode)
-			}
-
-			// Success status - final response
-			if statusCode == status.Success.Code {
-				return nil
-			}
-
-			// Any other status is an error
-			return fmt.Errorf("C-FIND failed with status: 0x%04X", statusCode)
+			return cFindFinalStatusError(resp.StatusCode(), cancelRequested)
 
 		case terminalErr, ok := <-terminalErrCh:
+			if ctx.Err() != nil {
+				if final, finalErr := bufferedCFindFinal(respCh, cancelRequested); final {
+					return finalErr
+				}
+			}
 			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
 				return contextErr
 			}
@@ -394,9 +391,30 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 			}
 			terminalErrCh = nil
 		case <-ctx.Done():
+			if final, finalErr := bufferedCFindFinal(respCh, cancelRequested); final {
+				return finalErr
+			}
 			return progressiveContextError(ctx, svc, req, cancelRequested)
 		}
 	}
+}
+
+func cFindFinalStatusError(statusCode uint16, cancelRequested bool) error {
+	if statusCode == status.Success.Code || cancelRequested && statusCode == status.Cancel.Code {
+		return nil
+	}
+	return fmt.Errorf("C-FIND failed with status: 0x%04X", statusCode)
+}
+
+func bufferedCFindFinal(respCh <-chan *dimse.CFindResponse, cancelRequested bool) (bool, error) {
+	select {
+	case resp, ok := <-respCh:
+		if ok && !resp.IsPending() {
+			return true, cFindFinalStatusError(resp.StatusCode(), cancelRequested)
+		}
+	default:
+	}
+	return false, nil
 }
 
 func sendCFind(ctx context.Context, svc serviceInterface, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error) {
@@ -611,10 +629,10 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 	for {
 		select {
 		case resp, ok := <-respCh:
-			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-				return contextErr
-			}
 			if !ok {
+				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+					return contextErr
+				}
 				if err := receiveTerminalError(terminalErrCh); err != nil {
 					return err
 				}
@@ -624,10 +642,11 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 				return nil
 			}
 
-			statusCode := resp.StatusCode()
-
 			// Pending status - sub-operations in progress
-			if statusCode == status.CMovePending.Code {
+			if resp.IsPending() {
+				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+					return contextErr
+				}
 				if !cancelRequested && callback != nil && resp.HasSubOperationCounts() {
 					if !callback(
 						resp.NumberOfRemainingSubOperations(),
@@ -644,27 +663,14 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 				continue
 			}
 
-			if cancelRequested {
-				if statusCode == status.Cancel.Code {
-					return nil
-				}
-				return fmt.Errorf("C-MOVE cancellation received unexpected final status: 0x%04X", statusCode)
-			}
-
-			// Success status - all sub-operations completed
-			if statusCode == status.Success.Code {
-				return nil
-			}
-
-			// Warning status - completed with sub-operation failures
-			if statusCode == status.CMoveWarningSubOperationsComplete.Code {
-				return nil
-			}
-
-			// Any other status is an error
-			return fmt.Errorf("C-MOVE failed with status: 0x%04X", statusCode)
+			return cMoveFinalStatusError(resp.StatusCode(), cancelRequested)
 
 		case terminalErr, ok := <-terminalErrCh:
+			if ctx.Err() != nil {
+				if final, finalErr := bufferedCMoveFinal(respCh, cancelRequested); final {
+					return finalErr
+				}
+			}
 			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
 				return contextErr
 			}
@@ -673,9 +679,31 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 			}
 			terminalErrCh = nil
 		case <-ctx.Done():
+			if final, finalErr := bufferedCMoveFinal(respCh, cancelRequested); final {
+				return finalErr
+			}
 			return progressiveContextError(ctx, svc, req, cancelRequested)
 		}
 	}
+}
+
+func cMoveFinalStatusError(statusCode uint16, cancelRequested bool) error {
+	if statusCode == status.Success.Code || statusCode == status.CMoveWarningSubOperationsComplete.Code ||
+		cancelRequested && statusCode == status.Cancel.Code {
+		return nil
+	}
+	return fmt.Errorf("C-MOVE failed with status: 0x%04X", statusCode)
+}
+
+func bufferedCMoveFinal(respCh <-chan *dimse.CMoveResponse, cancelRequested bool) (bool, error) {
+	select {
+	case resp, ok := <-respCh:
+		if ok && !resp.IsPending() {
+			return true, cMoveFinalStatusError(resp.StatusCode(), cancelRequested)
+		}
+	default:
+	}
+	return false, nil
 }
 
 func sendCMove(ctx context.Context, svc serviceInterface, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, <-chan error, error) {
@@ -738,10 +766,10 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 	for {
 		select {
 		case resp, ok := <-respCh:
-			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-				return contextErr
-			}
 			if !ok {
+				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+					return contextErr
+				}
 				if err := receiveTerminalError(terminalErrCh); err != nil {
 					return err
 				}
@@ -751,10 +779,11 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 				return nil
 			}
 
-			statusCode := resp.StatusCode()
-
 			// Pending status - sub-operations in progress
-			if statusCode == status.CGetPending.Code {
+			if resp.IsPending() {
+				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+					return contextErr
+				}
 				if !cancelRequested && callback != nil && resp.HasSubOperationCounts() {
 					if !callback(
 						resp.NumberOfRemainingSubOperations(),
@@ -771,27 +800,14 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 				continue
 			}
 
-			if cancelRequested {
-				if statusCode == status.Cancel.Code {
-					return nil
-				}
-				return fmt.Errorf("C-GET cancellation received unexpected final status: 0x%04X", statusCode)
-			}
-
-			// Success status - all sub-operations completed
-			if statusCode == status.Success.Code {
-				return nil
-			}
-
-			// Warning status - completed with sub-operation failures
-			if statusCode == status.CGetWarningSubOperationsComplete.Code {
-				return nil
-			}
-
-			// Any other status is an error
-			return fmt.Errorf("C-GET failed with status: 0x%04X", statusCode)
+			return cGetFinalStatusError(resp.StatusCode(), cancelRequested)
 
 		case terminalErr, ok := <-terminalErrCh:
+			if ctx.Err() != nil {
+				if final, finalErr := bufferedCGetFinal(respCh, cancelRequested); final {
+					return finalErr
+				}
+			}
 			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
 				return contextErr
 			}
@@ -800,9 +816,31 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 			}
 			terminalErrCh = nil
 		case <-ctx.Done():
+			if final, finalErr := bufferedCGetFinal(respCh, cancelRequested); final {
+				return finalErr
+			}
 			return progressiveContextError(ctx, svc, req, cancelRequested)
 		}
 	}
+}
+
+func cGetFinalStatusError(statusCode uint16, cancelRequested bool) error {
+	if statusCode == status.Success.Code || statusCode == status.CGetWarningSubOperationsComplete.Code ||
+		cancelRequested && statusCode == status.Cancel.Code {
+		return nil
+	}
+	return fmt.Errorf("C-GET failed with status: 0x%04X", statusCode)
+}
+
+func bufferedCGetFinal(respCh <-chan *dimse.CGetResponse, cancelRequested bool) (bool, error) {
+	select {
+	case resp, ok := <-respCh:
+		if ok && !resp.IsPending() {
+			return true, cGetFinalStatusError(resp.StatusCode(), cancelRequested)
+		}
+	default:
+	}
+	return false, nil
 }
 
 func sendCGet(ctx context.Context, svc serviceInterface, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, <-chan error, error) {

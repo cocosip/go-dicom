@@ -4,6 +4,7 @@
 package anonymizer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -13,7 +14,12 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
-const anonymizedString = "ANONYMOUS"
+const (
+	anonymizedString        = "ANONYMOUS"
+	customPatientName       = "ANONYMOUS^PATIENT"
+	customPatientID         = "ANON-ID-001"
+	explicitlyKeptPatientID = "patient-123"
+)
 
 func TestNewAnonymizer(t *testing.T) {
 	// Test with nil profile (should use default BasicProfile)
@@ -447,8 +453,8 @@ func TestAnonymizerCustomPatientInfo(t *testing.T) {
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
 
 	profile := NewSecurityProfile(BasicProfile)
-	profile.PatientName = "ANONYMOUS^PATIENT"
-	profile.PatientID = "ANON-ID-001"
+	profile.PatientName = customPatientName
+	profile.PatientID = customPatientID
 
 	anon := NewAnonymizer(profile)
 	err := anon.AnonymizeInPlace(ds)
@@ -458,13 +464,13 @@ func TestAnonymizerCustomPatientInfo(t *testing.T) {
 
 	// Check custom patient name
 	patientName, _ := ds.GetString(tag.PatientName)
-	if patientName != "ANONYMOUS^PATIENT" {
+	if patientName != customPatientName {
 		t.Errorf("PatientName = %q, want ANONYMOUS^PATIENT", patientName)
 	}
 
 	// Check custom patient ID
 	patientID, _ := ds.GetString(tag.PatientID)
-	if patientID != "ANON-ID-001" {
+	if patientID != customPatientID {
 		t.Errorf("PatientID = %q, want ANON-ID-001", patientID)
 	}
 }
@@ -474,7 +480,7 @@ func TestSecurityProfileOverrideActionKeepsPatientID(t *testing.T) {
 
 	ds := dataset.New()
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
-	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"patient-123"}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{explicitlyKeptPatientID}))
 	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID}))
 
 	profile := NewSecurityProfile(BasicProfile | RetainUIDs)
@@ -484,7 +490,7 @@ func TestSecurityProfileOverrideActionKeepsPatientID(t *testing.T) {
 		t.Fatalf("AnonymizeInPlace() error = %v", err)
 	}
 
-	if patientID, _ := ds.GetString(tag.PatientID); patientID != "patient-123" {
+	if patientID, _ := ds.GetString(tag.PatientID); patientID != explicitlyKeptPatientID {
 		t.Errorf("PatientID = %q, want original value", patientID)
 	}
 	if patientName, _ := ds.GetString(tag.PatientName); patientName != "" {
@@ -492,6 +498,104 @@ func TestSecurityProfileOverrideActionKeepsPatientID(t *testing.T) {
 	}
 	if got, _ := ds.GetString(tag.SOPInstanceUID); got != sopInstanceUID {
 		t.Errorf("SOPInstanceUID = %q, want original value", got)
+	}
+	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != "NO" {
+		t.Errorf("PatientIdentityRemoved = %q, want NO", got)
+	}
+	if got, _ := ds.GetString(tag.DeidentificationMethod); !strings.Contains(got, tag.PatientID.String()) {
+		t.Errorf("DeidentificationMethod = %q, want retained PatientID override", got)
+	}
+}
+
+func TestExplicitKeepWithConfiguredReplacementReportsIdentityRemoved(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{explicitlyKeptPatientID}))
+	profile := NewSecurityProfile(BasicProfile)
+	profile.OverrideAction(tag.PatientID, ActionK)
+	profile.PatientID = customPatientID
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if got, _ := ds.GetString(tag.PatientID); got != profile.PatientID {
+		t.Errorf("PatientID = %q, want configured replacement", got)
+	}
+	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != "YES" {
+		t.Errorf("PatientIdentityRemoved = %q, want YES", got)
+	}
+}
+
+func TestAnonymizeDeepClonesSequenceItems(t *testing.T) {
+	item := dataset.New()
+	_ = item.Add(element.NewString(tag.PatientID, vr.LO, []string{explicitlyKeptPatientID}))
+	seq := dataset.NewSequence(tag.ReferencedStudySequence)
+	seq.AddItem(item)
+	ds := dataset.New()
+	_ = ds.Add(seq)
+
+	profile := &SecurityProfile{rules: make([]profileRule, 0)}
+	_ = profile.AddRule("0010,0020", ActionD)
+	got, err := NewAnonymizer(profile).Anonymize(ds)
+	if err != nil {
+		t.Fatalf("Anonymize() error = %v", err)
+	}
+
+	gotSeq := got.GetOrNil(tag.ReferencedStudySequence).(*dataset.Sequence)
+	if value, _ := gotSeq.GetItem(0).GetString(tag.PatientID); value == explicitlyKeptPatientID {
+		t.Fatal("anonymized sequence item retained the original PatientID")
+	}
+	if value, _ := item.GetString(tag.PatientID); value != explicitlyKeptPatientID {
+		t.Errorf("original sequence PatientID = %q, want patient-123", value)
+	}
+}
+
+func TestCustomPatientReplacementsSurviveRemoveAction(t *testing.T) {
+	profile := &SecurityProfile{
+		rules:       make([]profileRule, 0),
+		PatientName: customPatientName,
+		PatientID:   customPatientID,
+	}
+	_ = profile.AddRule("0010,0010", ActionX)
+	_ = profile.AddRule("0010,0020", ActionX)
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{explicitlyKeptPatientID}))
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if got, _ := ds.GetString(tag.PatientName); got != profile.PatientName {
+		t.Errorf("PatientName = %q, want %q", got, profile.PatientName)
+	}
+	if got, _ := ds.GetString(tag.PatientID); got != profile.PatientID {
+		t.Errorf("PatientID = %q, want %q", got, profile.PatientID)
+	}
+
+	absent := dataset.New()
+	if err := NewAnonymizer(profile).AnonymizeInPlace(absent); err != nil {
+		t.Fatalf("AnonymizeInPlace(absent) error = %v", err)
+	}
+	if absent.Contains(tag.PatientName) || absent.Contains(tag.PatientID) {
+		t.Fatal("custom replacements added patient attributes that were absent")
+	}
+}
+
+func TestAnonymizeFileInPlaceAppliesSourceTransferSyntaxToDataset(t *testing.T) {
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.826.0.1.3680043.10.999.1"}))
+	source := dataset.NewDefaultFileMetaInformation()
+	_ = source.SetTransferSyntax(transfer.ExplicitVRBigEndian)
+
+	fmi, err := NewAnonymizer(&SecurityProfile{}).AnonymizeFileInPlace(ds, source)
+	if err != nil {
+		t.Fatalf("AnonymizeFileInPlace() error = %v", err)
+	}
+	if ds.InternalTransferSyntax() != transfer.ExplicitVRBigEndian {
+		t.Fatalf("Dataset transfer syntax = %v, want Explicit VR Big Endian", ds.InternalTransferSyntax())
+	}
+	if got, _ := fmi.TransferSyntax(); got != transfer.ExplicitVRBigEndian {
+		t.Fatalf("File Meta transfer syntax = %v, want Explicit VR Big Endian", got)
 	}
 }
 

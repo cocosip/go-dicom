@@ -63,26 +63,66 @@ func TestServerShutdownWaitsForStartupPublication(t *testing.T) {
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.ListenAndServe(context.Background()) }()
 	<-listenStarted
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancelShutdown()
 	shutdownDone := make(chan error, 1)
-	go func() { shutdownDone <- server.Shutdown(context.Background()) }()
+	go func() { shutdownDone <- server.Shutdown(shutdownCtx) }()
 
-	returnedEarly := false
 	select {
-	case <-shutdownDone:
-		returnedEarly = true
-	case <-time.After(25 * time.Millisecond):
+	case err := <-shutdownDone:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			close(releaseListen)
+			t.Fatalf("Shutdown() error = %v, want context deadline exceeded", err)
+		}
+	case <-time.After(250 * time.Millisecond):
+		close(releaseListen)
+		<-shutdownDone
+		_ = server.Close()
+		<-serveDone
+		t.Fatal("Shutdown() ignored its deadline while listener creation was blocked")
 	}
 	close(releaseListen)
-	if !returnedEarly {
-		if err := <-shutdownDone; err != nil {
-			t.Fatalf("Shutdown() error = %v", err)
-		}
+	if err := server.Shutdown(context.Background()); err != nil {
+		t.Fatalf("cleanup Shutdown() error = %v", err)
 	}
 	if err := <-serveDone; !errors.Is(err, context.Canceled) {
 		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
 	}
-	if returnedEarly {
-		t.Fatal("Shutdown() returned before startup published its listener and lifecycle context")
+}
+
+func TestServerRejectsConcurrentListenWhileStarting(t *testing.T) {
+	server := New(WithPort(0))
+	listenStarted := make(chan struct{})
+	releaseListen := make(chan struct{})
+	server.listenFn = func(string, string, ...transport.ListenOption) (serverListener, error) {
+		close(listenStarted)
+		<-releaseListen
+		return &lifecycleTestListener{}, nil
+	}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.ListenAndServe(context.Background()) }()
+	<-listenStarted
+
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- server.ListenAndServe(context.Background()) }()
+	select {
+	case err := <-secondDone:
+		if err == nil {
+			close(releaseListen)
+			t.Fatal("second ListenAndServe() error = nil")
+		}
+	case <-time.After(250 * time.Millisecond):
+		close(releaseListen)
+		_ = server.Close()
+		<-serveDone
+		t.Fatal("second ListenAndServe() blocked behind listener creation")
+	}
+	close(releaseListen)
+	if err := server.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+	if err := <-serveDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
 	}
 }
 

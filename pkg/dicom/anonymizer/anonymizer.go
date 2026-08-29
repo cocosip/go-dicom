@@ -7,6 +7,7 @@ package anonymizer
 import (
 	"fmt"
 	"regexp"
+	"sort"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -85,9 +86,10 @@ func (a SecurityProfileAction) String() string {
 
 // SecurityProfile represents a mapping from tag patterns to anonymization actions
 type SecurityProfile struct {
-	rules       []profileRule
-	PatientName string // Optional replacement patient name
-	PatientID   string // Optional replacement patient ID
+	rules          []profileRule
+	exactOverrides map[uint32]SecurityProfileAction
+	PatientName    string // Optional replacement patient name
+	PatientID      string // Optional replacement patient ID
 }
 
 type profileRule struct {
@@ -123,10 +125,22 @@ func (sp *SecurityProfile) AddRule(pattern string, action SecurityProfileAction)
 // ActionK retains the original value and can preserve identifiers that make
 // datasets linkable, so callers must explicitly authorize its use.
 func (sp *SecurityProfile) OverrideAction(t *tag.Tag, action SecurityProfileAction) {
+	if sp.exactOverrides == nil {
+		sp.exactOverrides = make(map[uint32]SecurityProfileAction)
+	}
+	sp.exactOverrides[t.ToUint32()] = action
 	tagStr := t.String()
 	tagStr = tagStr[1 : len(tagStr)-1]
 	pattern := regexp.MustCompile("(?i)^" + regexp.QuoteMeta(tagStr) + "$")
 	sp.rules = append([]profileRule{{pattern: pattern, action: action}}, sp.rules...)
+}
+
+func (sp *SecurityProfile) exactOverrideAction(t *tag.Tag) (SecurityProfileAction, bool) {
+	if sp == nil || sp.exactOverrides == nil {
+		return 0, false
+	}
+	action, ok := sp.exactOverrides[t.ToUint32()]
+	return action, ok
 }
 
 // FindAction finds the action for a given tag
@@ -163,28 +177,39 @@ func NewAnonymizer(profile *SecurityProfile) *Anonymizer {
 
 // AnonymizeInPlace anonymizes a dataset without cloning
 func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
-	return a.anonymizeInPlace(ds, true)
+	state := &anonymizationState{retainedOverrides: make(map[uint32]*tag.Tag)}
+	return a.anonymizeInPlace(ds, true, state)
 }
 
-func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool) error {
+type anonymizationState struct {
+	retainedOverrides map[uint32]*tag.Tag
+}
+
+func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool, state *anonymizationState) error {
 	var toRemove []element.Element
+	var patientNameElement element.Element
+	var patientIDElement element.Element
 
 	for _, elem := range ds.Elements() {
-		action, hasAction := a.Profile.FindAction(elem.Tag())
+		if elem.Tag().Equals(tag.PatientName) && a.Profile.PatientName != "" {
+			patientNameElement = elem
+		}
+		if elem.Tag().Equals(tag.PatientID) && a.Profile.PatientID != "" {
+			patientIDElement = elem
+		}
 
-		// Handle sequences - recursively anonymize
-		if seq, ok := elem.(*dataset.Sequence); ok {
-			if !hasAction || action == ActionK || action == ActionC || action == ActionD || action == ActionU {
-				for i := 0; i < seq.Count(); i++ {
-					item := seq.GetItem(i)
-					if err := a.anonymizeInPlace(item, false); err != nil {
-						return err
-					}
-				}
-				if hasAction && action != ActionK {
-					continue
-				}
-			}
+		action, hasAction := a.Profile.FindAction(elem.Tag())
+		if override, exact := a.Profile.exactOverrideAction(elem.Tag()); exact && override == ActionK &&
+			hasAction && action == ActionK && !a.hasConfiguredReplacement(elem.Tag()) {
+			state.retainedOverrides[elem.Tag().ToUint32()] = elem.Tag()
+		}
+
+		skipAction, err := a.anonymizeSequence(elem, hasAction, action, state)
+		if err != nil {
+			return err
+		}
+		if skipAction {
+			continue
 		}
 
 		// Apply action if found
@@ -204,35 +229,77 @@ func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool) error 
 		ds.Remove(elem.Tag())
 	}
 
-	// Handle special replacement fields (after removals to avoid
-	// the replacement being deleted by ActionX on the same tag).
-	for _, elem := range ds.Elements() {
-		if elem.Tag().Equals(tag.PatientName) && a.Profile.PatientName != "" {
-			if err := a.replaceString(ds, elem, a.Profile.PatientName); err != nil {
-				return fmt.Errorf("failed to replace patient name: %w", err)
-			}
-		} else if elem.Tag().Equals(tag.PatientID) && a.Profile.PatientID != "" {
-			if err := a.replaceString(ds, elem, a.Profile.PatientID); err != nil {
-				return fmt.Errorf("failed to replace patient ID: %w", err)
-			}
+	// Re-add configured replacements only when the source attribute existed.
+	if patientNameElement != nil {
+		if err := a.replaceString(ds, patientNameElement, a.Profile.PatientName); err != nil {
+			return fmt.Errorf("failed to replace patient name: %w", err)
+		}
+	}
+	if patientIDElement != nil {
+		if err := a.replaceString(ds, patientIDElement, a.Profile.PatientID); err != nil {
+			return fmt.Errorf("failed to replace patient ID: %w", err)
 		}
 	}
 
 	if topLevel {
-		if err := ds.AddOrUpdate(element.NewString(tag.PatientIdentityRemoved, vr.CS, []string{"YES"})); err != nil {
-			return fmt.Errorf("failed to set Patient Identity Removed: %w", err)
-		}
-		if err := ds.AddOrUpdate(element.NewString(tag.DeidentificationMethod, vr.LO, []string{"go-dicom profile-based de-identification"})); err != nil {
-			return fmt.Errorf("failed to set De-identification Method: %w", err)
-		}
+		return addDeidentificationDeclaration(ds, state)
 	}
 
 	return nil
 }
 
+func (a *Anonymizer) anonymizeSequence(elem element.Element, hasAction bool, action SecurityProfileAction, state *anonymizationState) (bool, error) {
+	seq, ok := elem.(*dataset.Sequence)
+	if !ok {
+		return false, nil
+	}
+	if hasAction && action != ActionK && action != ActionC && action != ActionD && action != ActionU {
+		return false, nil
+	}
+	for i := 0; i < seq.Count(); i++ {
+		if err := a.anonymizeInPlace(seq.GetItem(i), false, state); err != nil {
+			return false, err
+		}
+	}
+	return hasAction && action != ActionK, nil
+}
+
+func addDeidentificationDeclaration(ds *dataset.Dataset, state *anonymizationState) error {
+	identityRemoved := "YES"
+	methods := []string{"go-dicom profile-based de-identification"}
+	if len(state.retainedOverrides) > 0 {
+		identityRemoved = "NO"
+		retained := make([]string, 0, len(state.retainedOverrides))
+		for _, retainedTag := range state.retainedOverrides {
+			retained = append(retained, retainedTag.String())
+		}
+		sort.Strings(retained)
+		methods = make([]string, 0, len(retained)+1)
+		for _, retainedTag := range retained {
+			methods = append(methods, "go-dicom retained explicit override: "+retainedTag)
+		}
+		methods = append(methods, "go-dicom profile-based de-identification")
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.PatientIdentityRemoved, vr.CS, []string{identityRemoved})); err != nil {
+		return fmt.Errorf("failed to set Patient Identity Removed: %w", err)
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.DeidentificationMethod, vr.LO, methods)); err != nil {
+		return fmt.Errorf("failed to set De-identification Method: %w", err)
+	}
+	return nil
+}
+
+func (a *Anonymizer) hasConfiguredReplacement(t *tag.Tag) bool {
+	return t.Equals(tag.PatientName) && a.Profile.PatientName != "" ||
+		t.Equals(tag.PatientID) && a.Profile.PatientID != ""
+}
+
 // Anonymize clones and anonymizes a dataset
 func (a *Anonymizer) Anonymize(ds *dataset.Dataset) (*dataset.Dataset, error) {
-	clone := ds.Clone()
+	clone, err := ds.DeepCloneChecked()
+	if err != nil {
+		return nil, fmt.Errorf("clone dataset for anonymization: %w", err)
+	}
 	if err := a.AnonymizeInPlace(clone); err != nil {
 		return nil, err
 	}
@@ -256,6 +323,9 @@ func (a *Anonymizer) AnonymizeFileInPlace(ds *dataset.Dataset, source *dataset.F
 	}
 	if ts == nil {
 		ts = transfer.ExplicitVRLittleEndian
+	}
+	if ds.InternalTransferSyntax() == nil {
+		ds.SetInternalTransferSyntax(ts)
 	}
 
 	if err := a.AnonymizeInPlace(ds); err != nil {

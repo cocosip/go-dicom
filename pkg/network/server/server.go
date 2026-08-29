@@ -72,7 +72,9 @@ type Server struct {
 
 	// Server state
 	running    bool
+	starting   bool
 	runningMu  sync.RWMutex
+	startDone  chan struct{}
 	acceptDone chan struct{}
 
 	// Context for server lifecycle
@@ -446,10 +448,15 @@ func (s *Server) buildUserInformation() *pdu.UserInformation {
 // ListenAndServe starts the server and blocks until it's stopped or an error occurs.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	s.runningMu.Lock()
-	if s.running {
+	if s.running || s.starting {
 		s.runningMu.Unlock()
 		return fmt.Errorf("server is already running")
 	}
+	startDone := make(chan struct{})
+	s.starting = true
+	s.startDone = startDone
+	s.runningMu.Unlock()
+
 	runCtx, cancel := context.WithCancel(ctx)
 	address := fmt.Sprintf(":%d", s.config.Port)
 	listenOptions := make([]transport.ListenOption, 0, 1)
@@ -462,17 +469,27 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 	listener, err := listenFn("tcp", address, listenOptions...)
 	if err != nil {
-		s.runningMu.Unlock()
 		cancel()
+		s.runningMu.Lock()
+		if s.startDone == startDone {
+			s.starting = false
+			s.startDone = nil
+			close(startDone)
+		}
+		s.runningMu.Unlock()
 		s.emitServerError(runCtx, "listener_failed", err)
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
 	acceptDone := make(chan struct{})
+	s.runningMu.Lock()
 	s.ctx = runCtx
 	s.cancel = cancel
 	s.listener = listener
 	s.acceptDone = acceptDone
 	s.running = true
+	s.starting = false
+	s.startDone = nil
+	close(startDone)
 	s.runningMu.Unlock()
 
 	err = s.acceptLoop(runCtx, listener)
@@ -541,6 +558,9 @@ func (s *Server) acceptContext(ctx context.Context) (context.Context, context.Ca
 
 // Shutdown gracefully shuts down the server.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if err := s.waitForStartup(ctx); err != nil {
+		return err
+	}
 	acceptDone, stopErr := s.stopAccepting()
 	if stopErr != nil {
 		return stopErr
@@ -564,6 +584,23 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+func (s *Server) waitForStartup(ctx context.Context) error {
+	for {
+		s.runningMu.RLock()
+		starting := s.starting
+		startDone := s.startDone
+		s.runningMu.RUnlock()
+		if !starting || startDone == nil {
+			return nil
+		}
+		select {
+		case <-startDone:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
