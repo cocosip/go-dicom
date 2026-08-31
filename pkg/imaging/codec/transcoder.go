@@ -4,10 +4,13 @@
 package codec
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -16,6 +19,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
 // Transcoder handles transcoding of DICOM datasets between different transfer syntaxes.
@@ -127,7 +131,32 @@ func (t *Transcoder) OutputSyntax() *transfer.Syntax {
 // Transcode converts a dataset from input transfer syntax to output transfer syntax.
 // Note: This method only transcodes the dataset and does not preserve File Meta Information.
 // If you need to preserve File Meta Information, use TranscodeWithMetadata instead.
-func (t *Transcoder) Transcode(ds *dataset.Dataset) (*dataset.Dataset, error) {
+func (t *Transcoder) Transcode(ds *dataset.Dataset) (result *dataset.Dataset, err error) {
+	started := time.Now()
+	frameCount := 0
+	if ds != nil && ds.Contains(tag.PixelData) {
+		frameCount = frameCountFromDataset(ds)
+	}
+	defer func() {
+		attrs := []slog.Attr{
+			slog.String("component", "imaging.codec"),
+			slog.String("input_transfer_syntax", t.inputSyntax.UID().UID()),
+			slog.String("output_transfer_syntax", t.outputSyntax.UID().UID()),
+			slog.Int("frame_count", frameCount),
+			slog.Duration("duration", time.Since(started)),
+		}
+		if err != nil {
+			attrs = append(attrs,
+				slog.String("event", "transcode_failed"),
+				slog.String("error_type", fmt.Sprintf("%T", err)),
+			)
+			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM transcode failed", attrs...)
+			return
+		}
+		attrs = append(attrs, slog.String("event", "transcode_completed"))
+		logging.LogAttrs(context.Background(), slog.LevelInfo, "DICOM transcode completed", attrs...)
+	}()
+
 	// Check if dataset contains pixel data
 	if !ds.Contains(tag.PixelData) {
 		// No pixel data - just clone and update transfer syntax
@@ -224,7 +253,29 @@ func (t *Transcoder) TranscodeWithMetadata(ds *dataset.Dataset, sourceMeta *data
 // DecodeFrame decodes a single frame from compressed pixel data.
 // This follows fo-dicom's pattern of creating a temporary PixelData with one frame,
 // then using the high-level Decode method.
-func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, error) {
+func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) (decoded []byte, err error) {
+	started := time.Now()
+	defer func() {
+		attrs := []slog.Attr{
+			slog.String("component", "imaging.codec"),
+			slog.String("event", "frame_decode_completed"),
+			slog.String("input_transfer_syntax", t.inputSyntax.UID().UID()),
+			slog.Int("frame", frameIndex),
+			slog.Duration("duration", time.Since(started)),
+		}
+		level := slog.LevelDebug
+		message := "DICOM frame decode completed"
+		if err != nil {
+			level = slog.LevelError
+			message = "DICOM frame decode failed"
+			attrs[1] = slog.String("event", "frame_decode_failed")
+			attrs = append(attrs, slog.String("error_type", fmt.Sprintf("%T", err)))
+		} else {
+			attrs = append(attrs, slog.Int("output_bytes", len(decoded)))
+		}
+		logging.LogAttrs(context.Background(), level, message, attrs...)
+	}()
+
 	// Check if pixel data exists
 	pixelDataElem, exists := ds.Get(tag.PixelData)
 	if !exists {

@@ -26,9 +26,11 @@ func (c *Client) emitClientEvent(ctx context.Context, event observability.Event,
 		event.Association = c.observationAssociation()
 	}
 	observability.EmitEvent(ctx, c.config.EventObserver, event)
-	observability.EmitLog(ctx, c.config.Logger, observability.LogRecord{
+	record := observability.LogRecord{
 		Level: level, Message: string(event.Kind), Event: event,
-	})
+	}
+	observability.EmitSlog(ctx, "network.client", record)
+	observability.EmitLog(ctx, c.config.Logger, record)
 }
 
 func (c *Client) emitClientMetric(ctx context.Context, metric observability.Metric) {

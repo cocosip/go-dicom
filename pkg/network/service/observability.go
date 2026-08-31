@@ -366,11 +366,13 @@ func (s *Service) emitEvent(ctx context.Context, event observability.Event) {
 		event.Association = s.observationAssociation()
 	}
 	observability.EmitEvent(ctx, s.eventObserver, event)
-	observability.EmitLog(ctx, s.logger, observability.LogRecord{
+	record := observability.LogRecord{
 		Level:   eventLogLevel(event),
 		Message: string(event.Kind),
 		Event:   event,
-	})
+	}
+	observability.EmitSlog(ctx, "network.service", record)
+	observability.EmitLog(ctx, s.logger, record)
 }
 
 func (s *Service) emitDecodeWarning(ctx context.Context, association observability.Association, warning pdu.DecodeWarning) {
@@ -382,13 +384,15 @@ func (s *Service) emitDecodeWarning(ctx context.Context, association observabili
 		Outcome:     observability.OutcomeWarning,
 	}
 	observability.EmitEvent(ctx, s.eventObserver, event)
-	observability.EmitLog(ctx, s.logger, observability.LogRecord{
+	record := observability.LogRecord{
 		Level:    observability.LevelWarn,
 		Message:  string(event.Kind),
 		Code:     string(warning.Code),
 		ItemType: warning.ItemType,
 		Event:    event,
-	})
+	}
+	observability.EmitSlog(ctx, "network.service", record)
+	observability.EmitLog(ctx, s.logger, record)
 }
 
 func eventLogLevel(event observability.Event) observability.Level {

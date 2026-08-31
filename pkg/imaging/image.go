@@ -5,12 +5,15 @@
 package imaging
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
 	"io"
+	"log/slog"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -20,6 +23,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 	"github.com/cocosip/go-dicom/pkg/imaging/transform"
+	"github.com/cocosip/go-dicom/pkg/logging"
 	golangdraw "golang.org/x/image/draw"
 )
 
@@ -408,7 +412,30 @@ func transformRect(bounds image.Rectangle) math3d.Rect {
 	return math3d.Rect{Width: float64(bounds.Dx()), Height: float64(bounds.Dy())}
 }
 
-func (img *DicomImage) renderFrameImage(frame int, applyLegacyScale bool) (image.Image, error) {
+func (img *DicomImage) renderFrameImage(frame int, applyLegacyScale bool) (rendered image.Image, err error) {
+	started := time.Now()
+	defer func() {
+		attrs := []slog.Attr{
+			slog.String("component", "imaging.render"),
+			slog.Int("frame", frame),
+			slog.Int("width", int(img.Width())),
+			slog.Int("height", int(img.Height())),
+			slog.Int("samples_per_pixel", int(img.pixelData.Info.SamplesPerPixel)),
+			slog.Int("bits_allocated", int(img.pixelData.Info.BitsAllocated)),
+			slog.Duration("duration", time.Since(started)),
+		}
+		if err != nil {
+			attrs = append(attrs,
+				slog.String("event", "render_failed"),
+				slog.String("error_type", fmt.Sprintf("%T", err)),
+			)
+			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM render failed", attrs...)
+			return
+		}
+		attrs = append(attrs, slog.String("event", "render_completed"))
+		logging.LogAttrs(context.Background(), slog.LevelDebug, "DICOM render completed", attrs...)
+	}()
+
 	if frame < 0 || frame >= img.NumberOfFrames() {
 		return nil, fmt.Errorf("frame index out of range: %d", frame)
 	}
@@ -417,7 +444,6 @@ func (img *DicomImage) renderFrameImage(frame int, applyLegacyScale bool) (image
 		return nil, fmt.Errorf("failed to get frame data: %w", err)
 	}
 	exporter := render.NewImageExporter(img.GetOrCreatePipeline(frame))
-	var rendered image.Image
 	switch img.pixelData.Info.SamplesPerPixel {
 	case 1:
 		photometric := monochrome2
@@ -493,13 +519,37 @@ func (img *DicomImage) RenderCurrentFrame(writer io.Writer, options *render.Expo
 }
 
 // DecodeIfNeeded decodes the pixel data if it's in a compressed format
-func (img *DicomImage) DecodeIfNeeded(c codec.Codec, params codec.Parameters) error {
+func (img *DicomImage) DecodeIfNeeded(c codec.Codec, params codec.Parameters) (err error) {
 	// Check if already uncompressed
 	if img.pixelData.Info.TransferSyntaxUID == transferSyntaxImplicitVRLittleEndian ||
 		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRLittleEndian ||
 		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRBigEndian {
 		return nil // Already uncompressed
 	}
+	started := time.Now()
+	inputTransferSyntax := img.pixelData.Info.TransferSyntaxUID
+	frameCount := img.pixelData.Info.NumberOfFrames
+	codecType := fmt.Sprintf("%T", c)
+	defer func() {
+		attrs := []slog.Attr{
+			slog.String("component", "imaging.decode"),
+			slog.String("input_transfer_syntax", inputTransferSyntax),
+			slog.String("output_transfer_syntax", transferSyntaxExplicitVRLittleEndian),
+			slog.String("codec_type", codecType),
+			slog.Int("frame_count", frameCount),
+			slog.Duration("duration", time.Since(started)),
+		}
+		if err != nil {
+			attrs = append(attrs,
+				slog.String("event", "pixel_decode_failed"),
+				slog.String("error_type", fmt.Sprintf("%T", err)),
+			)
+			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM pixel decode failed", attrs...)
+			return
+		}
+		attrs = append(attrs, slog.String("event", "pixel_decode_completed"))
+		logging.LogAttrs(context.Background(), slog.LevelInfo, "DICOM pixel decode completed", attrs...)
+	}()
 
 	// Decode
 	decoded, err := img.pixelData.Decode(c, params)

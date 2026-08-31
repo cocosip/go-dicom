@@ -5,14 +5,17 @@ package writer
 
 import (
 	"compress/flate"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -21,6 +24,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
 // SetOffsetTableForFrames computes and sets the Basic Offset Table (BOT) for a fragment sequence.
@@ -311,7 +315,32 @@ func New(ts *transfer.Syntax, opts ...Option) *Writer {
 //   - Preamble (128 bytes) + DICM prefix (4 bytes) [default, can be disabled with WithoutPreamble()]
 //   - File Meta Information (Group 0002, always Explicit VR Little Endian)
 //   - Dataset (encoding depends on Transfer Syntax)
-func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
+func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) (err error) {
+	started := time.Now()
+	transferSyntaxUID := ""
+	elementCount := 0
+	if ds != nil {
+		elementCount = len(ds.Elements())
+	}
+	defer func() {
+		attrs := []slog.Attr{
+			slog.String("component", "dicom.writer"),
+			slog.String("transfer_syntax", transferSyntaxUID),
+			slog.Int("element_count", elementCount),
+			slog.Duration("duration", time.Since(started)),
+		}
+		if err != nil {
+			attrs = append(attrs,
+				slog.String("event", "write_failed"),
+				slog.String("error_type", fmt.Sprintf("%T", err)),
+			)
+			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM write failed", attrs...)
+			return
+		}
+		attrs = append(attrs, slog.String("event", "write_completed"))
+		logging.LogAttrs(context.Background(), slog.LevelInfo, "DICOM write completed", attrs...)
+	}()
+
 	if ds == nil {
 		return fmt.Errorf("dataset cannot be nil")
 	}
@@ -345,6 +374,7 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	if config.transferSyntax == nil {
 		return fmt.Errorf("transfer syntax cannot be nil")
 	}
+	transferSyntaxUID = config.transferSyntax.UID().UID()
 	if config.sequenceItemObserver != nil && config.transferSyntax.IsDeflate() {
 		return fmt.Errorf("sequence item positions are unavailable for deflated transfer syntax")
 	}

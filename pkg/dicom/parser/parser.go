@@ -12,8 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sync"
+	"time"
 
 	"golang.org/x/text/encoding"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
 // ReadOption controls how large DICOM elements are read.
@@ -356,9 +359,30 @@ func (c *ctxReadSeeker) Seek(offset int64, whence int) (int64, error) {
 //   - TransferSyntax: How the dataset is encoded
 //   - Format: Detected file format
 //   - IsPartial: Whether parsing stopped early
-func Parse(r io.Reader, opts ...Option) (*ParseResult, error) {
+func Parse(r io.Reader, opts ...Option) (result *ParseResult, err error) {
+	started := time.Now()
 	pctx := newParseContext(opts...)
-	return pctx.parse(r)
+	result, err = pctx.parse(r)
+	if err != nil {
+		logging.LogAttrs(pctx.ctx, slog.LevelError, "DICOM parse failed",
+			slog.String("component", "dicom.parser"),
+			slog.String("event", "parse_failed"),
+			slog.String("error_type", fmt.Sprintf("%T", err)),
+			slog.Duration("duration", time.Since(started)),
+		)
+		return nil, err
+	}
+
+	logging.LogAttrs(pctx.ctx, slog.LevelDebug, "DICOM parse completed",
+		slog.String("component", "dicom.parser"),
+		slog.String("event", "parse_completed"),
+		slog.String("format", result.Format.String()),
+		slog.String("transfer_syntax", result.TransferSyntax.UID().UID()),
+		slog.Int("element_count", len(result.Dataset.Elements())),
+		slog.Bool("partial", result.IsPartial),
+		slog.Duration("duration", time.Since(started)),
+	)
+	return result, nil
 }
 
 // parse is the internal parsing implementation.

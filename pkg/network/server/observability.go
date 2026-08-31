@@ -16,11 +16,13 @@ func (s *Server) emitServerError(ctx context.Context, message string, err error)
 		Outcome:   observability.OutcomeFailure,
 		Error:     err,
 	}
-	observability.EmitLog(ctx, s.config.Logger, observability.LogRecord{
+	record := observability.LogRecord{
 		Level:   observability.LevelError,
 		Message: message,
 		Event:   event,
-	})
+	}
+	observability.EmitSlog(ctx, "network.server", record)
+	observability.EmitLog(ctx, s.config.Logger, record)
 	observability.EmitMetric(ctx, s.config.MetricsObserver, observability.Metric{
 		Timestamp: time.Now(),
 		Kind:      observability.MetricError,
