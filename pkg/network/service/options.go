@@ -17,7 +17,6 @@ type Option func(*serviceConfig)
 // serviceConfig contains configuration options for a DICOM service.
 type serviceConfig struct {
 	// Observability hooks are optional and silent by default.
-	logger          observability.Logger
 	eventObserver   observability.EventObserver
 	metricsObserver observability.MetricsObserver
 	connectionID    observability.ConnectionID
@@ -64,13 +63,6 @@ type serviceConfig struct {
 
 	// DIMSE message handlers (optional)
 	handlers *Handlers
-}
-
-// WithLogger sets the structured network logger.
-func WithLogger(logger observability.Logger) Option {
-	return func(c *serviceConfig) {
-		c.logger = logger
-	}
 }
 
 // WithEventObserver sets the network lifecycle event observer.

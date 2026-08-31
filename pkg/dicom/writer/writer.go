@@ -315,31 +315,49 @@ func New(ts *transfer.Syntax, opts ...Option) *Writer {
 //   - Preamble (128 bytes) + DICM prefix (4 bytes) [default, can be disabled with WithoutPreamble()]
 //   - File Meta Information (Group 0002, always Explicit VR Little Endian)
 //   - Dataset (encoding depends on Transfer Syntax)
-func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) (err error) {
-	started := time.Now()
+func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
+	return WriteContext(context.Background(), w, ds, opts...)
+}
+
+// WriteContext writes a DICOM dataset and associates logging with ctx.
+func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ...WriteOption) (err error) {
+	logDebug := logging.Enabled(ctx, slog.LevelDebug)
+	logError := logging.Enabled(ctx, slog.LevelError)
 	transferSyntaxUID := ""
-	elementCount := 0
-	if ds != nil {
-		elementCount = len(ds.Elements())
+	if logDebug || logError {
+		started := time.Now()
+		defer func() {
+			level := slog.LevelDebug
+			event := "write_completed"
+			message := "DICOM write completed"
+			if err != nil {
+				level = slog.LevelError
+				event = "write_failed"
+				message = "DICOM write failed"
+			}
+			if !logging.Enabled(ctx, level) {
+				return
+			}
+			elementCount := 0
+			if ds != nil {
+				elementCount = ds.Count()
+			}
+			attrs := []slog.Attr{
+				slog.String("transfer_syntax", transferSyntaxUID),
+				slog.Int("element_count", elementCount),
+				slog.Duration("duration", time.Since(started)),
+			}
+			if err != nil {
+				attrs = append(attrs,
+					slog.String("failure_stage", "write"),
+					slog.String("error_type", fmt.Sprintf("%T", err)),
+				)
+			}
+			logging.Emit(ctx, logging.Record{
+				Level: level, Component: "dicom.writer", Event: event, Message: message, Attrs: attrs,
+			})
+		}()
 	}
-	defer func() {
-		attrs := []slog.Attr{
-			slog.String("component", "dicom.writer"),
-			slog.String("transfer_syntax", transferSyntaxUID),
-			slog.Int("element_count", elementCount),
-			slog.Duration("duration", time.Since(started)),
-		}
-		if err != nil {
-			attrs = append(attrs,
-				slog.String("event", "write_failed"),
-				slog.String("error_type", fmt.Sprintf("%T", err)),
-			)
-			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM write failed", attrs...)
-			return
-		}
-		attrs = append(attrs, slog.String("event", "write_completed"))
-		logging.LogAttrs(context.Background(), slog.LevelInfo, "DICOM write completed", attrs...)
-	}()
 
 	if ds == nil {
 		return fmt.Errorf("dataset cannot be nil")

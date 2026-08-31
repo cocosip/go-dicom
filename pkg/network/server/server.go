@@ -98,9 +98,6 @@ func defaultListenerFactory(network, address string, opts ...transport.ListenOpt
 
 // Config contains configuration options for the DICOM server.
 type Config struct {
-	// Logger receives structured network log records. The default is nil.
-	Logger observability.Logger
-
 	// EventObserver receives connection, association, and DIMSE lifecycle events.
 	EventObserver observability.EventObserver
 
@@ -157,11 +154,6 @@ type Config struct {
 
 // Option is a function that modifies server configuration.
 type Option func(*Config)
-
-// WithLogger sets the structured network logger.
-func WithLogger(logger observability.Logger) Option {
-	return func(o *Config) { o.Logger = logger }
-}
 
 // WithEventObserver sets the network lifecycle event observer.
 func WithEventObserver(observer observability.EventObserver) Option {
@@ -732,7 +724,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 func (s *Server) serviceOptionsForConnection(connectionID observability.ConnectionID) []service.Option {
 	return []service.Option{
 		service.WithConnectionID(connectionID),
-		service.WithLogger(s.config.Logger),
 		service.WithEventObserver(s.config.EventObserver),
 		service.WithMetricsObserver(s.config.MetricsObserver),
 		service.WithMaxPDULength(s.config.MaxPDULength),

@@ -5,12 +5,14 @@ package client
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/logging"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 )
 
@@ -18,7 +20,7 @@ type clientObservationRecorder struct {
 	mu      sync.Mutex
 	events  []observability.Event
 	metrics []observability.Metric
-	logs    []observability.LogRecord
+	logs    []slog.Record
 }
 
 func (r *clientObservationRecorder) event(_ context.Context, event observability.Event) {
@@ -33,11 +35,18 @@ func (r *clientObservationRecorder) metric(_ context.Context, metric observabili
 	r.metrics = append(r.metrics, metric)
 }
 
-func (r *clientObservationRecorder) log(_ context.Context, record observability.LogRecord) {
+func (r *clientObservationRecorder) Enabled(context.Context, slog.Level) bool { return true }
+
+func (r *clientObservationRecorder) Handle(_ context.Context, record slog.Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.logs = append(r.logs, record)
+	r.logs = append(r.logs, record.Clone())
+	return nil
 }
+
+func (r *clientObservationRecorder) WithAttrs([]slog.Attr) slog.Handler { return r }
+
+func (r *clientObservationRecorder) WithGroup(string) slog.Handler { return r }
 
 func TestObservabilityDialFailureBeforeServiceCreation(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -54,11 +63,14 @@ func TestObservabilityDialFailureBeforeServiceCreation(t *testing.T) {
 	}
 
 	recorder := &clientObservationRecorder{}
+	if err := logging.Configure(logging.Config{Handler: recorder}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 	client := New(
 		WithCallingAE("OBS-SCU"),
 		WithCalledAE("OBS-SCP"),
 		WithConnectTimeout(200*time.Millisecond),
-		WithLogger(observability.LoggerFunc(recorder.log)),
 		WithEventObserver(observability.EventObserverFunc(recorder.event)),
 		WithMetricsObserver(observability.MetricsObserverFunc(recorder.metric)),
 	)

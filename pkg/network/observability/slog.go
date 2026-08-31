@@ -21,10 +21,7 @@ func EmitSlog(ctx context.Context, component string, record LogRecord) {
 	}
 
 	event := record.Event
-	attrs := []slog.Attr{
-		slog.String("component", component),
-		slog.String("event", record.Message),
-	}
+	attrs := make([]slog.Attr, 0, 14)
 	if event.Association.ConnectionID != 0 {
 		attrs = append(attrs, slog.Uint64("connection_id", uint64(event.Association.ConnectionID)))
 	}
@@ -65,10 +62,15 @@ func EmitSlog(ctx context.Context, component string, record LogRecord) {
 		attrs = append(attrs, slog.Uint64("item_type", uint64(record.ItemType)))
 	}
 	if event.Error != nil {
-		attrs = append(attrs, slog.String("error_type", fmt.Sprintf("%T", event.Error)))
+		attrs = append(attrs,
+			slog.String("failure_stage", string(event.Kind)),
+			slog.String("error_type", fmt.Sprintf("%T", event.Error)),
+		)
 	}
 
-	logging.LogAttrs(ctx, level, record.Message, attrs...)
+	logging.Emit(ctx, logging.Record{
+		Level: level, Component: component, Event: record.Message, Message: record.Message, Attrs: attrs,
+	})
 }
 
 func slogLevel(level Level) slog.Level {

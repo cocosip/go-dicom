@@ -5,6 +5,7 @@ package imaging
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"strings"
 	"testing"
@@ -14,11 +15,16 @@ import (
 	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
+type imagingLogContextKey struct{}
+
 func TestRenderFrameImageWritesDebugSlogRecord(t *testing.T) {
 	var output bytes.Buffer
-	previous := logging.Logger()
-	logging.SetLogger(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
-	t.Cleanup(func() { logging.SetLogger(previous) })
+	if err := logging.Configure(logging.Config{
+		Handler: slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug}),
+	}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 
 	pixelData, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
 		Width: 1, Height: 1, NumberOfFrames: 1,
@@ -48,9 +54,12 @@ func TestRenderFrameImageWritesDebugSlogRecord(t *testing.T) {
 
 func TestDecodeIfNeededWritesSafeSlogRecord(t *testing.T) {
 	var output bytes.Buffer
-	previous := logging.Logger()
-	logging.SetLogger(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
-	t.Cleanup(func() { logging.SetLogger(previous) })
+	if err := logging.Configure(logging.Config{
+		Handler: slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug}),
+	}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 
 	pixelData, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
 		Width: 1, Height: 1, NumberOfFrames: 1,
@@ -77,3 +86,43 @@ func TestDecodeIfNeededWritesSafeSlogRecord(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderFrameImageContextPassesContextToLogHandler(t *testing.T) {
+	handler := &imagingContextHandler{}
+	if err := logging.Configure(logging.Config{Handler: handler}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
+
+	pixelData, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+		Width: 1, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
+		PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome2,
+	}, []byte{128})
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+	ctx := context.WithValue(context.Background(), imagingLogContextKey{}, "render-request")
+	if _, err := NewDicomImage(pixelData).RenderFrameImageContext(ctx, 0); err != nil {
+		t.Fatalf("RenderFrameImageContext() error = %v", err)
+	}
+
+	if handler.contextValue != "render-request" {
+		t.Fatalf("handler context value = %#v, want render-request", handler.contextValue)
+	}
+}
+
+type imagingContextHandler struct {
+	contextValue any
+}
+
+func (h *imagingContextHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *imagingContextHandler) Handle(ctx context.Context, _ slog.Record) error {
+	h.contextValue = ctx.Value(imagingLogContextKey{})
+	return nil
+}
+
+func (h *imagingContextHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h *imagingContextHandler) WithGroup(string) slog.Handler { return h }

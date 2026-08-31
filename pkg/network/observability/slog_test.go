@@ -15,9 +15,10 @@ import (
 
 func TestEmitSlogWritesSafeNetworkLifecycleRecord(t *testing.T) {
 	handler := &slogRecordHandler{}
-	previous := logging.Logger()
-	logging.SetLogger(slog.New(handler))
-	t.Cleanup(func() { logging.SetLogger(previous) })
+	if err := logging.Configure(logging.Config{Handler: handler}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 
 	EmitSlog(context.Background(), "network.service", LogRecord{
 		Level:   LevelInfo,
@@ -77,9 +78,10 @@ func TestEmitSlogWritesSafeNetworkLifecycleRecord(t *testing.T) {
 
 func TestEmitSlogUsesRecordMessageWhenEventKindIsUnavailable(t *testing.T) {
 	handler := &slogRecordHandler{}
-	previous := logging.Logger()
-	logging.SetLogger(slog.New(handler))
-	t.Cleanup(func() { logging.SetLogger(previous) })
+	if err := logging.Configure(logging.Config{Handler: handler}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 
 	EmitSlog(context.Background(), "network.server", LogRecord{
 		Level:   LevelError,

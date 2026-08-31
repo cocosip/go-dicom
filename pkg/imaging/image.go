@@ -366,7 +366,12 @@ func (img *DicomImage) lutFrameRange() (int, int) {
 
 // RenderFrame renders the specified frame to a writer in the specified format
 func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.ExportOptions) error {
-	rendered, err := img.RenderFrameImage(frame)
+	return img.RenderFrameContext(context.Background(), writer, frame, options)
+}
+
+// RenderFrameContext renders a frame and associates logging with ctx.
+func (img *DicomImage) RenderFrameContext(ctx context.Context, writer io.Writer, frame int, options *render.ExportOptions) error {
+	rendered, err := img.RenderFrameImageContext(ctx, frame)
 	if err != nil {
 		return err
 	}
@@ -375,17 +380,28 @@ func (img *DicomImage) RenderFrame(writer io.Writer, frame int, options *render.
 
 // RenderFrameImage renders the specified frame and returns the unencoded Go image.
 func (img *DicomImage) RenderFrameImage(frame int) (image.Image, error) {
-	return img.renderFrameImage(frame, true)
+	return img.RenderFrameImageContext(context.Background(), frame)
+}
+
+// RenderFrameImageContext renders a frame and associates logging with ctx.
+func (img *DicomImage) RenderFrameImageContext(ctx context.Context, frame int) (image.Image, error) {
+	return img.renderFrameImage(ctx, frame, true)
 }
 
 // RenderFrameImageWithOptions renders a frame with an optional spatial
 // transform, viewport, and final-coordinate graphics. When SpatialTransform is
 // supplied it replaces legacy SetScale; otherwise legacy scale remains active.
 func (img *DicomImage) RenderFrameImageWithOptions(frame int, options FrameRenderOptions) (image.Image, error) {
+	return img.RenderFrameImageWithOptionsContext(context.Background(), frame, options)
+}
+
+// RenderFrameImageWithOptionsContext renders a frame with spatial options and
+// associates logging with ctx.
+func (img *DicomImage) RenderFrameImageWithOptionsContext(ctx context.Context, frame int, options FrameRenderOptions) (image.Image, error) {
 	if options.SpatialTransform == nil && options.Viewport.Empty() && len(options.Graphics) == 0 && options.Background == nil && options.Interpolation == interpolation.ModeNearestNeighbor {
-		return img.RenderFrameImage(frame)
+		return img.RenderFrameImageContext(ctx, frame)
 	}
-	rendered, err := img.renderFrameImage(frame, options.SpatialTransform == nil)
+	rendered, err := img.renderFrameImage(ctx, frame, options.SpatialTransform == nil)
 	if err != nil {
 		return nil, err
 	}
@@ -412,29 +428,42 @@ func transformRect(bounds image.Rectangle) math3d.Rect {
 	return math3d.Rect{Width: float64(bounds.Dx()), Height: float64(bounds.Dy())}
 }
 
-func (img *DicomImage) renderFrameImage(frame int, applyLegacyScale bool) (rendered image.Image, err error) {
-	started := time.Now()
-	defer func() {
-		attrs := []slog.Attr{
-			slog.String("component", "imaging.render"),
-			slog.Int("frame", frame),
-			slog.Int("width", int(img.Width())),
-			slog.Int("height", int(img.Height())),
-			slog.Int("samples_per_pixel", int(img.pixelData.Info.SamplesPerPixel)),
-			slog.Int("bits_allocated", int(img.pixelData.Info.BitsAllocated)),
-			slog.Duration("duration", time.Since(started)),
-		}
-		if err != nil {
-			attrs = append(attrs,
-				slog.String("event", "render_failed"),
-				slog.String("error_type", fmt.Sprintf("%T", err)),
-			)
-			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM render failed", attrs...)
-			return
-		}
-		attrs = append(attrs, slog.String("event", "render_completed"))
-		logging.LogAttrs(context.Background(), slog.LevelDebug, "DICOM render completed", attrs...)
-	}()
+func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLegacyScale bool) (rendered image.Image, err error) {
+	logDebug := logging.Enabled(ctx, slog.LevelDebug)
+	logError := logging.Enabled(ctx, slog.LevelError)
+	if logDebug || logError {
+		started := time.Now()
+		defer func() {
+			level := slog.LevelDebug
+			event := "render_completed"
+			message := "DICOM render completed"
+			if err != nil {
+				level = slog.LevelError
+				event = "render_failed"
+				message = "DICOM render failed"
+			}
+			if !logging.Enabled(ctx, level) {
+				return
+			}
+			attrs := []slog.Attr{
+				slog.Int("frame", frame),
+				slog.Int("width", int(img.Width())),
+				slog.Int("height", int(img.Height())),
+				slog.Int("samples_per_pixel", int(img.pixelData.Info.SamplesPerPixel)),
+				slog.Int("bits_allocated", int(img.pixelData.Info.BitsAllocated)),
+				slog.Duration("duration", time.Since(started)),
+			}
+			if err != nil {
+				attrs = append(attrs,
+					slog.String("failure_stage", "render"),
+					slog.String("error_type", fmt.Sprintf("%T", err)),
+				)
+			}
+			logging.Emit(ctx, logging.Record{
+				Level: level, Component: "imaging.render", Event: event, Message: message, Attrs: attrs,
+			})
+		}()
+	}
 
 	if frame < 0 || frame >= img.NumberOfFrames() {
 		return nil, fmt.Errorf("frame index out of range: %d", frame)
@@ -512,44 +541,67 @@ func (img *DicomImage) scaleImage(source image.Image) image.Image {
 
 // RenderCurrentFrame renders the current frame to a writer
 func (img *DicomImage) RenderCurrentFrame(writer io.Writer, options *render.ExportOptions) error {
+	return img.RenderCurrentFrameContext(context.Background(), writer, options)
+}
+
+// RenderCurrentFrameContext renders the current frame and associates logging with ctx.
+func (img *DicomImage) RenderCurrentFrameContext(ctx context.Context, writer io.Writer, options *render.ExportOptions) error {
 	img.mu.RLock()
 	frame := img.currentFrame
 	img.mu.RUnlock()
-	return img.RenderFrame(writer, frame, options)
+	return img.RenderFrameContext(ctx, writer, frame, options)
 }
 
 // DecodeIfNeeded decodes the pixel data if it's in a compressed format
-func (img *DicomImage) DecodeIfNeeded(c codec.Codec, params codec.Parameters) (err error) {
+func (img *DicomImage) DecodeIfNeeded(c codec.Codec, params codec.Parameters) error {
+	return img.DecodeIfNeededContext(context.Background(), c, params)
+}
+
+// DecodeIfNeededContext decodes compressed pixel data and associates logging with ctx.
+func (img *DicomImage) DecodeIfNeededContext(ctx context.Context, c codec.Codec, params codec.Parameters) (err error) {
 	// Check if already uncompressed
 	if img.pixelData.Info.TransferSyntaxUID == transferSyntaxImplicitVRLittleEndian ||
 		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRLittleEndian ||
 		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRBigEndian {
 		return nil // Already uncompressed
 	}
-	started := time.Now()
-	inputTransferSyntax := img.pixelData.Info.TransferSyntaxUID
-	frameCount := img.pixelData.Info.NumberOfFrames
-	codecType := fmt.Sprintf("%T", c)
-	defer func() {
-		attrs := []slog.Attr{
-			slog.String("component", "imaging.decode"),
-			slog.String("input_transfer_syntax", inputTransferSyntax),
-			slog.String("output_transfer_syntax", transferSyntaxExplicitVRLittleEndian),
-			slog.String("codec_type", codecType),
-			slog.Int("frame_count", frameCount),
-			slog.Duration("duration", time.Since(started)),
-		}
-		if err != nil {
-			attrs = append(attrs,
-				slog.String("event", "pixel_decode_failed"),
-				slog.String("error_type", fmt.Sprintf("%T", err)),
-			)
-			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM pixel decode failed", attrs...)
-			return
-		}
-		attrs = append(attrs, slog.String("event", "pixel_decode_completed"))
-		logging.LogAttrs(context.Background(), slog.LevelInfo, "DICOM pixel decode completed", attrs...)
-	}()
+	logDebug := logging.Enabled(ctx, slog.LevelDebug)
+	logError := logging.Enabled(ctx, slog.LevelError)
+	if logDebug || logError {
+		started := time.Now()
+		inputTransferSyntax := img.pixelData.Info.TransferSyntaxUID
+		frameCount := img.pixelData.Info.NumberOfFrames
+		codecType := fmt.Sprintf("%T", c)
+		defer func() {
+			level := slog.LevelDebug
+			event := "pixel_decode_completed"
+			message := "DICOM pixel decode completed"
+			if err != nil {
+				level = slog.LevelError
+				event = "pixel_decode_failed"
+				message = "DICOM pixel decode failed"
+			}
+			if !logging.Enabled(ctx, level) {
+				return
+			}
+			attrs := []slog.Attr{
+				slog.String("input_transfer_syntax", inputTransferSyntax),
+				slog.String("output_transfer_syntax", transferSyntaxExplicitVRLittleEndian),
+				slog.String("codec_type", codecType),
+				slog.Int("frame_count", frameCount),
+				slog.Duration("duration", time.Since(started)),
+			}
+			if err != nil {
+				attrs = append(attrs,
+					slog.String("failure_stage", "pixel_decode"),
+					slog.String("error_type", fmt.Sprintf("%T", err)),
+				)
+			}
+			logging.Emit(ctx, logging.Record{
+				Level: level, Component: "imaging.decode", Event: event, Message: message, Attrs: attrs,
+			})
+		}()
+	}
 
 	// Decode
 	decoded, err := img.pixelData.Decode(c, params)

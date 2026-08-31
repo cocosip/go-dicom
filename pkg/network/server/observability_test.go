@@ -5,11 +5,13 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/logging"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/service"
@@ -19,7 +21,7 @@ type serverObservationRecorder struct {
 	mu      sync.Mutex
 	events  []observability.Event
 	metrics []observability.Metric
-	logs    []observability.LogRecord
+	logs    []slog.Record
 }
 
 func (r *serverObservationRecorder) metric(_ context.Context, metric observability.Metric) {
@@ -28,11 +30,18 @@ func (r *serverObservationRecorder) metric(_ context.Context, metric observabili
 	r.metrics = append(r.metrics, metric)
 }
 
-func (r *serverObservationRecorder) log(_ context.Context, record observability.LogRecord) {
+func (r *serverObservationRecorder) Enabled(context.Context, slog.Level) bool { return true }
+
+func (r *serverObservationRecorder) Handle(_ context.Context, record slog.Record) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.logs = append(r.logs, record)
+	r.logs = append(r.logs, record.Clone())
+	return nil
 }
+
+func (r *serverObservationRecorder) WithAttrs([]slog.Attr) slog.Handler { return r }
+
+func (r *serverObservationRecorder) WithGroup(string) slog.Handler { return r }
 
 func (r *serverObservationRecorder) event(_ context.Context, event observability.Event) {
 	r.mu.Lock()
@@ -48,9 +57,12 @@ func TestObservabilityListenFailureIsStructured(t *testing.T) {
 	defer func() { _ = listener.Close() }()
 	port := listener.Addr().(*net.TCPAddr).Port
 	recorder := &serverObservationRecorder{}
+	if err := logging.Configure(logging.Config{Handler: recorder}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 	server := New(
 		WithPort(port),
-		WithLogger(observability.LoggerFunc(recorder.log)),
 		WithMetricsObserver(observability.MetricsObserverFunc(recorder.metric)),
 	)
 
@@ -61,9 +73,9 @@ func TestObservabilityListenFailureIsStructured(t *testing.T) {
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()
 	if len(recorder.logs) != 1 ||
-		recorder.logs[0].Level != observability.LevelError ||
+		recorder.logs[0].Level != slog.LevelError ||
 		recorder.logs[0].Message != "listener_failed" ||
-		recorder.logs[0].Event.Outcome != observability.OutcomeFailure {
+		serverRecordAttrs(recorder.logs[0])["outcome"] != string(observability.OutcomeFailure) {
 		t.Fatalf("logs = %#v, want one structured listener failure", recorder.logs)
 	}
 	if len(recorder.metrics) != 1 ||
@@ -72,6 +84,15 @@ func TestObservabilityListenFailureIsStructured(t *testing.T) {
 		recorder.metrics[0].Value != 1 {
 		t.Fatalf("metrics = %#v, want one connection error", recorder.metrics)
 	}
+}
+
+func serverRecordAttrs(record slog.Record) map[string]any {
+	attrs := make(map[string]any)
+	record.Attrs(func(attr slog.Attr) bool {
+		attrs[attr.Key] = attr.Value.Any()
+		return true
+	})
+	return attrs
 }
 
 func TestObservabilityHooksReachAcceptedService(t *testing.T) {

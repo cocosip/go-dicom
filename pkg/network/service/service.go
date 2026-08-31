@@ -26,7 +26,6 @@ import (
 // Service uses goroutines for concurrent send and receive operations,
 // and channels for message queuing.
 type Service struct {
-	logger          observability.Logger
 	eventObserver   observability.EventObserver
 	metricsObserver observability.MetricsObserver
 	connectionID    observability.ConnectionID
@@ -213,7 +212,6 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 	}
 
 	s := &Service{
-		logger:                     config.logger,
 		eventObserver:              config.eventObserver,
 		metricsObserver:            config.metricsObserver,
 		connectionID:               connectionID,

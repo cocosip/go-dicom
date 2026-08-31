@@ -360,28 +360,40 @@ func (c *ctxReadSeeker) Seek(offset int64, whence int) (int64, error) {
 //   - Format: Detected file format
 //   - IsPartial: Whether parsing stopped early
 func Parse(r io.Reader, opts ...Option) (result *ParseResult, err error) {
-	started := time.Now()
 	pctx := newParseContext(opts...)
+	logDebug := logging.Enabled(pctx.ctx, slog.LevelDebug)
+	logError := logging.Enabled(pctx.ctx, slog.LevelError)
+	var started time.Time
+	if logDebug || logError {
+		started = time.Now()
+	}
 	result, err = pctx.parse(r)
 	if err != nil {
-		logging.LogAttrs(pctx.ctx, slog.LevelError, "DICOM parse failed",
-			slog.String("component", "dicom.parser"),
-			slog.String("event", "parse_failed"),
-			slog.String("error_type", fmt.Sprintf("%T", err)),
-			slog.Duration("duration", time.Since(started)),
-		)
+		if logError && logging.Enabled(pctx.ctx, slog.LevelError) {
+			logging.Emit(pctx.ctx, logging.Record{
+				Level: slog.LevelError, Component: "dicom.parser", Event: "parse_failed", Message: "DICOM parse failed",
+				Attrs: []slog.Attr{
+					slog.String("failure_stage", "parse"),
+					slog.String("error_type", fmt.Sprintf("%T", err)),
+					slog.Duration("duration", time.Since(started)),
+				},
+			})
+		}
 		return nil, err
 	}
 
-	logging.LogAttrs(pctx.ctx, slog.LevelDebug, "DICOM parse completed",
-		slog.String("component", "dicom.parser"),
-		slog.String("event", "parse_completed"),
-		slog.String("format", result.Format.String()),
-		slog.String("transfer_syntax", result.TransferSyntax.UID().UID()),
-		slog.Int("element_count", len(result.Dataset.Elements())),
-		slog.Bool("partial", result.IsPartial),
-		slog.Duration("duration", time.Since(started)),
-	)
+	if logDebug && logging.Enabled(pctx.ctx, slog.LevelDebug) {
+		logging.Emit(pctx.ctx, logging.Record{
+			Level: slog.LevelDebug, Component: "dicom.parser", Event: "parse_completed", Message: "DICOM parse completed",
+			Attrs: []slog.Attr{
+				slog.String("format", result.Format.String()),
+				slog.String("transfer_syntax", result.TransferSyntax.UID().UID()),
+				slog.Int("element_count", result.Dataset.Count()),
+				slog.Bool("partial", result.IsPartial),
+				slog.Duration("duration", time.Since(started)),
+			},
+		})
+	}
 	return result, nil
 }
 

@@ -5,10 +5,12 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/logging"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
@@ -32,12 +34,6 @@ func (r *observationRecorder) observeMetric(_ context.Context, metric observabil
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.metrics = append(r.metrics, metric)
-}
-
-func (r *observationRecorder) log(_ context.Context, record observability.LogRecord) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.logs = append(r.logs, record)
 }
 
 func (r *observationRecorder) snapshot() ([]observability.Event, []observability.Metric, []observability.LogRecord) {
@@ -72,7 +68,6 @@ func TestObservabilityConnectionLifecycle(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil,
 		WithConnectionID(42),
-		WithLogger(observability.LoggerFunc(recorder.log)),
 		WithEventObserver(observability.EventObserverFunc(recorder.observeEvent)),
 		WithMetricsObserver(observability.MetricsObserverFunc(recorder.observeMetric)),
 	)
@@ -81,7 +76,7 @@ func TestObservabilityConnectionLifecycle(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	events, metrics, logs := recorder.snapshot()
+	events, metrics, _ := recorder.snapshot()
 	if len(events) != 2 {
 		t.Fatalf("event count = %d, want 2: %#v", len(events), events)
 	}
@@ -96,9 +91,6 @@ func TestObservabilityConnectionLifecycle(t *testing.T) {
 	}
 	if len(metrics) != 2 || metrics[0].Kind != observability.MetricConnection || metrics[1].Kind != observability.MetricConnection {
 		t.Fatalf("connection metrics = %#v, want open and close", metrics)
-	}
-	if len(logs) != 2 {
-		t.Fatalf("log count = %d, want 2", len(logs))
 	}
 }
 
@@ -179,32 +171,35 @@ func TestObservabilityRoutesAssociationDecodeWarningToLogger(t *testing.T) {
 	raw.Data = append(raw.Data, 0x99, 0x00, 0x00, 0x00)
 	raw.Length = uint32(len(raw.Data))
 
-	recorder := &observationRecorder{}
+	handler := &serviceSlogHandler{}
+	if err := logging.Configure(logging.Config{Handler: handler}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 	conn := &mockConn{readData: serializeRawPDUForTest(raw)}
-	service := NewService(conn, nil,
-		WithLogger(observability.LoggerFunc(recorder.log)),
-	)
+	service := NewService(conn, nil)
 	defer func() { _ = service.Close() }()
 
 	if _, err := service.ReceiveAssociationRequest(context.Background()); err != nil {
 		t.Fatalf("ReceiveAssociationRequest() error = %v", err)
 	}
-	_, _, logs := recorder.snapshot()
-	var warning *observability.LogRecord
-	for i := range logs {
-		if logs[i].Event.Kind == observability.EventDecodeWarning {
-			warning = &logs[i]
+	records := handler.snapshot()
+	var warning *slog.Record
+	for i := range records {
+		if records[i].Message == string(observability.EventDecodeWarning) {
+			warning = &records[i]
 			break
 		}
 	}
 	if warning == nil {
-		t.Fatalf("decode warning log not found: %#v", logs)
+		t.Fatalf("decode warning log not found: %#v", records)
 	}
-	if warning.Level != observability.LevelWarn ||
-		warning.Code != string(pdu.DecodeWarningUnknownItem) ||
-		warning.ItemType != 0x99 ||
-		warning.Event.Association.AssociationID == 0 {
-		t.Fatalf("decode warning = %#v", *warning)
+	attrs := serviceSlogAttrs(*warning)
+	if warning.Level != slog.LevelWarn ||
+		attrs["code"] != string(pdu.DecodeWarningUnknownItem) ||
+		attrs["item_type"] != uint64(0x99) ||
+		attrs["association_id"] == uint64(0) {
+		t.Fatalf("decode warning = %#v attrs=%#v", *warning, attrs)
 	}
 }
 

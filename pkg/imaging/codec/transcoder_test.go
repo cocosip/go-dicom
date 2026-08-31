@@ -5,6 +5,7 @@ package codec
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"testing"
 
@@ -407,7 +408,7 @@ func TestTranscoderDecodeParsesStringNumberOfFrames(t *testing.T) {
 		WithInputCodec(echoDecodeCodec{}),
 	)
 
-	result, err := transcoder.decode(ds, transfer.ExplicitVRLittleEndian)
+	result, err := transcoder.decode(context.Background(), ds, transfer.ExplicitVRLittleEndian)
 	if err != nil {
 		t.Fatalf("decode() error = %v", err)
 	}

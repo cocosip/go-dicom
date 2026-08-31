@@ -94,7 +94,7 @@ func TestObservabilityCloseFinalizesPendingAndInboundOnce(t *testing.T) {
 	}
 }
 
-func TestObservabilityHooksAreReentrantSlowAndPanicIsolated(t *testing.T) {
+func TestObservabilityHooksAreReentrantAndSlow(t *testing.T) {
 	var service *Service
 	var ready atomic.Bool
 	var calls atomic.Int32
@@ -106,9 +106,6 @@ func TestObservabilityHooksAreReentrantSlowAndPanicIsolated(t *testing.T) {
 		}
 	})
 	service = NewService(&mockConn{}, nil,
-		WithLogger(observability.LoggerFunc(func(context.Context, observability.LogRecord) {
-			panic("logger failure")
-		})),
 		WithEventObserver(observer),
 		WithMetricsObserver(observability.MetricsObserverFunc(func(context.Context, observability.Metric) {
 			if ready.Load() {

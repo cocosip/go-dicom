@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/logging"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
@@ -35,7 +36,7 @@ type requestLifecycle struct {
 }
 
 func newRequestLifecycle(s *Service, direction observability.Direction, req dimse.Request) *requestLifecycle {
-	if s == nil || (s.logger == nil && s.eventObserver == nil && s.metricsObserver == nil) {
+	if s == nil || (!logging.Configured() && s.eventObserver == nil && s.metricsObserver == nil) {
 		return nil
 	}
 	messageID := req.MessageID()
@@ -372,7 +373,6 @@ func (s *Service) emitEvent(ctx context.Context, event observability.Event) {
 		Event:   event,
 	}
 	observability.EmitSlog(ctx, "network.service", record)
-	observability.EmitLog(ctx, s.logger, record)
 }
 
 func (s *Service) emitDecodeWarning(ctx context.Context, association observability.Association, warning pdu.DecodeWarning) {
@@ -392,7 +392,6 @@ func (s *Service) emitDecodeWarning(ctx context.Context, association observabili
 		Event:    event,
 	}
 	observability.EmitSlog(ctx, "network.service", record)
-	observability.EmitLog(ctx, s.logger, record)
 }
 
 func eventLogLevel(event observability.Event) observability.Level {

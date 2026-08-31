@@ -2,6 +2,11 @@
 
 ## Next
 
+- All packages now emit through one optional process-wide logger configured by
+  `pkg/logging.Configure`. The logger is private to go-dicom and never uses
+  `slog.Default()`; leaving logging unconfigured is fully supported and silent.
+  The unreleased network-specific Logger interface and `WithLogger` options
+  were removed in favor of this single logging channel.
 - `Client.AddPresentationContext` and `Client.AddPresentationContextWithRoles`
   now return an error. They reject invalid UIDs, invalid context IDs, more than
   128 contexts, and calls made after connection lifecycle start.

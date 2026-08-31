@@ -203,30 +203,6 @@ type Metric struct {
 	Duration    time.Duration
 }
 
-// Logger accepts structured network log records.
-type Logger interface {
-	Enabled(Level) bool
-	Log(context.Context, LogRecord)
-}
-
-// LoggerFunc adapts a function to Logger and enables every level when non-nil.
-type LoggerFunc func(context.Context, LogRecord)
-
-// Enabled reports whether the function can receive a record.
-func (f LoggerFunc) Enabled(Level) bool { return f != nil }
-
-// Log delivers a record to the function.
-func (f LoggerFunc) Log(ctx context.Context, record LogRecord) { f(ctx, record) }
-
-// NopLogger discards all records and reports every level disabled.
-type NopLogger struct{}
-
-// Enabled always reports false.
-func (NopLogger) Enabled(Level) bool { return false }
-
-// Log discards the record.
-func (NopLogger) Log(context.Context, LogRecord) {}
-
 // EventObserver accepts structured lifecycle events.
 type EventObserver interface {
 	ObserveEvent(context.Context, Event)

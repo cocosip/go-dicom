@@ -15,9 +15,12 @@ import (
 
 func TestParseWritesSafeSlogRecord(t *testing.T) {
 	var output bytes.Buffer
-	previous := logging.Logger()
-	logging.SetLogger(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
-	t.Cleanup(func() { logging.SetLogger(previous) })
+	if err := logging.Configure(logging.Config{
+		Handler: slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug}),
+	}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 
 	var file bytes.Buffer
 	file.Write(make([]byte, 128))

@@ -131,31 +131,49 @@ func (t *Transcoder) OutputSyntax() *transfer.Syntax {
 // Transcode converts a dataset from input transfer syntax to output transfer syntax.
 // Note: This method only transcodes the dataset and does not preserve File Meta Information.
 // If you need to preserve File Meta Information, use TranscodeWithMetadata instead.
-func (t *Transcoder) Transcode(ds *dataset.Dataset) (result *dataset.Dataset, err error) {
-	started := time.Now()
-	frameCount := 0
-	if ds != nil && ds.Contains(tag.PixelData) {
-		frameCount = frameCountFromDataset(ds)
+func (t *Transcoder) Transcode(ds *dataset.Dataset) (*dataset.Dataset, error) {
+	return t.TranscodeContext(context.Background(), ds)
+}
+
+// TranscodeContext converts a dataset and associates logging with ctx.
+func (t *Transcoder) TranscodeContext(ctx context.Context, ds *dataset.Dataset) (result *dataset.Dataset, err error) {
+	logDebug := logging.Enabled(ctx, slog.LevelDebug)
+	logError := logging.Enabled(ctx, slog.LevelError)
+	if logDebug || logError {
+		started := time.Now()
+		defer func() {
+			level := slog.LevelDebug
+			event := "transcode_completed"
+			message := "DICOM transcode completed"
+			if err != nil {
+				level = slog.LevelError
+				event = "transcode_failed"
+				message = "DICOM transcode failed"
+			}
+			if !logging.Enabled(ctx, level) {
+				return
+			}
+			frameCount := 0
+			if ds != nil && ds.Contains(tag.PixelData) {
+				frameCount = frameCountFromDataset(ds)
+			}
+			attrs := []slog.Attr{
+				slog.String("input_transfer_syntax", t.inputSyntax.UID().UID()),
+				slog.String("output_transfer_syntax", t.outputSyntax.UID().UID()),
+				slog.Int("frame_count", frameCount),
+				slog.Duration("duration", time.Since(started)),
+			}
+			if err != nil {
+				attrs = append(attrs,
+					slog.String("failure_stage", "transcode"),
+					slog.String("error_type", fmt.Sprintf("%T", err)),
+				)
+			}
+			logging.Emit(ctx, logging.Record{
+				Level: level, Component: "imaging.codec", Event: event, Message: message, Attrs: attrs,
+			})
+		}()
 	}
-	defer func() {
-		attrs := []slog.Attr{
-			slog.String("component", "imaging.codec"),
-			slog.String("input_transfer_syntax", t.inputSyntax.UID().UID()),
-			slog.String("output_transfer_syntax", t.outputSyntax.UID().UID()),
-			slog.Int("frame_count", frameCount),
-			slog.Duration("duration", time.Since(started)),
-		}
-		if err != nil {
-			attrs = append(attrs,
-				slog.String("event", "transcode_failed"),
-				slog.String("error_type", fmt.Sprintf("%T", err)),
-			)
-			logging.LogAttrs(context.Background(), slog.LevelError, "DICOM transcode failed", attrs...)
-			return
-		}
-		attrs = append(attrs, slog.String("event", "transcode_completed"))
-		logging.LogAttrs(context.Background(), slog.LevelInfo, "DICOM transcode completed", attrs...)
-	}()
 
 	// Check if dataset contains pixel data
 	if !ds.Contains(tag.PixelData) {
@@ -176,21 +194,21 @@ func (t *Transcoder) Transcode(ds *dataset.Dataset) (result *dataset.Dataset, er
 
 	if inputEncapsulated && outputEncapsulated {
 		// Compressed to compressed (decompress then compress)
-		tempDS, err := t.decode(ds, transfer.ExplicitVRLittleEndian)
+		tempDS, err := t.decode(ctx, ds, transfer.ExplicitVRLittleEndian)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode: %w", err)
 		}
-		return t.encode(tempDS, t.outputSyntax)
+		return t.encode(ctx, tempDS, t.outputSyntax)
 	}
 
 	if inputEncapsulated {
 		// Compressed to uncompressed
-		return t.decode(ds, t.outputSyntax)
+		return t.decode(ctx, ds, t.outputSyntax)
 	}
 
 	if outputEncapsulated {
 		// Uncompressed to compressed
-		return t.encode(ds, t.outputSyntax)
+		return t.encode(ctx, ds, t.outputSyntax)
 	}
 
 	return nil, fmt.Errorf("unable to determine transcode path from %s to %s",
@@ -224,8 +242,14 @@ func (t *Transcoder) Transcode(ds *dataset.Dataset) (result *dataset.Dataset, er
 //	    result.FileMetaInformation)
 //	writer.WriteFile("output.dcm", newDS, writer.WithFileMetaInfo(newMeta.Dataset()))
 func (t *Transcoder) TranscodeWithMetadata(ds *dataset.Dataset, sourceMeta *dataset.FileMetaInformation) (*dataset.Dataset, *dataset.FileMetaInformation, error) {
+	return t.TranscodeWithMetadataContext(context.Background(), ds, sourceMeta)
+}
+
+// TranscodeWithMetadataContext transcodes a dataset while preserving file meta
+// information and associates logging with ctx.
+func (t *Transcoder) TranscodeWithMetadataContext(ctx context.Context, ds *dataset.Dataset, sourceMeta *dataset.FileMetaInformation) (*dataset.Dataset, *dataset.FileMetaInformation, error) {
 	// Transcode the dataset
-	newDS, err := t.Transcode(ds)
+	newDS, err := t.TranscodeContext(ctx, ds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -253,28 +277,46 @@ func (t *Transcoder) TranscodeWithMetadata(ds *dataset.Dataset, sourceMeta *data
 // DecodeFrame decodes a single frame from compressed pixel data.
 // This follows fo-dicom's pattern of creating a temporary PixelData with one frame,
 // then using the high-level Decode method.
-func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) (decoded []byte, err error) {
-	started := time.Now()
-	defer func() {
-		attrs := []slog.Attr{
-			slog.String("component", "imaging.codec"),
-			slog.String("event", "frame_decode_completed"),
-			slog.String("input_transfer_syntax", t.inputSyntax.UID().UID()),
-			slog.Int("frame", frameIndex),
-			slog.Duration("duration", time.Since(started)),
-		}
-		level := slog.LevelDebug
-		message := "DICOM frame decode completed"
-		if err != nil {
-			level = slog.LevelError
-			message = "DICOM frame decode failed"
-			attrs[1] = slog.String("event", "frame_decode_failed")
-			attrs = append(attrs, slog.String("error_type", fmt.Sprintf("%T", err)))
-		} else {
-			attrs = append(attrs, slog.Int("output_bytes", len(decoded)))
-		}
-		logging.LogAttrs(context.Background(), level, message, attrs...)
-	}()
+func (t *Transcoder) DecodeFrame(ds *dataset.Dataset, frameIndex int) ([]byte, error) {
+	return t.DecodeFrameContext(context.Background(), ds, frameIndex)
+}
+
+// DecodeFrameContext decodes one frame and associates logging with ctx.
+func (t *Transcoder) DecodeFrameContext(ctx context.Context, ds *dataset.Dataset, frameIndex int) (decoded []byte, err error) {
+	logDebug := logging.Enabled(ctx, slog.LevelDebug)
+	logError := logging.Enabled(ctx, slog.LevelError)
+	if logDebug || logError {
+		started := time.Now()
+		defer func() {
+			level := slog.LevelDebug
+			event := "frame_decode_completed"
+			message := "DICOM frame decode completed"
+			if err != nil {
+				level = slog.LevelError
+				event = "frame_decode_failed"
+				message = "DICOM frame decode failed"
+			}
+			if !logging.Enabled(ctx, level) {
+				return
+			}
+			attrs := []slog.Attr{
+				slog.String("input_transfer_syntax", t.inputSyntax.UID().UID()),
+				slog.Int("frame", frameIndex),
+				slog.Duration("duration", time.Since(started)),
+			}
+			if err != nil {
+				attrs = append(attrs,
+					slog.String("failure_stage", "frame_decode"),
+					slog.String("error_type", fmt.Sprintf("%T", err)),
+				)
+			} else {
+				attrs = append(attrs, slog.Int("output_bytes", len(decoded)))
+			}
+			logging.Emit(ctx, logging.Record{
+				Level: level, Component: "imaging.codec", Event: event, Message: message, Attrs: attrs,
+			})
+		}()
+	}
 
 	// Check if pixel data exists
 	pixelDataElem, exists := ds.Get(tag.PixelData)
@@ -421,7 +463,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 //
 // Note: This method requires imagetypes.PixelData implementations that also support conversion
 // back to DICOM elements (e.g., DicomPixelData from the imaging package).
-func (t *Transcoder) decode(ds *dataset.Dataset, outputSyntax *transfer.Syntax) (*dataset.Dataset, error) {
+func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSyntax *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.inputCodec == nil {
 		return nil, fmt.Errorf("no codec available for decoding %s", t.inputSyntax.UID().UID())
 	}
@@ -519,13 +561,13 @@ func (t *Transcoder) decode(ds *dataset.Dataset, outputSyntax *transfer.Syntax) 
 	}
 
 	nativeTranscoder := NewTranscoder(transfer.ExplicitVRLittleEndian, outputSyntax)
-	return nativeTranscoder.Transcode(newDS)
+	return nativeTranscoder.TranscodeContext(ctx, newDS)
 }
 
 // encode compresses pixel data from a dataset using the high-level codec.Encode method.
 // This follows the fo-dicom pattern of creating complete PixelData objects and using
 // the codec's Encode method instead of frame-by-frame processing.
-func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
+func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.outputCodec == nil {
 		return nil, fmt.Errorf("no codec available for encoding to %s", outputTS.UID().UID())
 	}
@@ -537,7 +579,7 @@ func (t *Transcoder) encode(ds *dataset.Dataset, outputTS *transfer.Syntax) (*da
 	}
 	if sourceSyntax != nil && sourceSyntax.UID().UID() != transfer.ExplicitVRLittleEndian.UID().UID() {
 		nativeTranscoder := NewTranscoder(sourceSyntax, transfer.ExplicitVRLittleEndian)
-		normalizedDS, err := nativeTranscoder.Transcode(ds)
+		normalizedDS, err := nativeTranscoder.TranscodeContext(ctx, ds)
 		if err != nil {
 			return nil, fmt.Errorf("failed to normalize pixel data for encoding: %w", err)
 		}

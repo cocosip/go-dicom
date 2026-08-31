@@ -6,13 +6,14 @@ package server
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/logging"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
-	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
@@ -167,17 +168,13 @@ func TestServerShutdownWaitsForAcceptLoopBeforeConnectionWait(t *testing.T) {
 
 func TestServerAcceptTimeoutRearmsListener(t *testing.T) {
 	timedOut := make(chan struct{}, 1)
+	if err := logging.Configure(logging.Config{Handler: acceptTimeoutHandler{timedOut: timedOut}}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
 	server := New(
 		WithPort(0),
 		WithAcceptTimeout(25*time.Millisecond),
-		WithLogger(observability.LoggerFunc(func(_ context.Context, record observability.LogRecord) {
-			if record.Message == "accept_failed" {
-				select {
-				case timedOut <- struct{}{}:
-				default:
-				}
-			}
-		})),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -202,6 +199,26 @@ func TestServerAcceptTimeoutRearmsListener(t *testing.T) {
 		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
 	}
 }
+
+type acceptTimeoutHandler struct {
+	timedOut chan<- struct{}
+}
+
+func (acceptTimeoutHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h acceptTimeoutHandler) Handle(_ context.Context, record slog.Record) error {
+	if record.Message == "accept_failed" {
+		select {
+		case h.timedOut <- struct{}{}:
+		default:
+		}
+	}
+	return nil
+}
+
+func (h acceptTimeoutHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h acceptTimeoutHandler) WithGroup(string) slog.Handler { return h }
 
 func TestServerAssociationTimeoutDoesNotCloseEstablishedIdleAssociation(t *testing.T) {
 	const associationTimeout = 30 * time.Millisecond

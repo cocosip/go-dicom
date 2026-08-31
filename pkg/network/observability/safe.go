@@ -5,21 +5,6 @@ package observability
 
 import "context"
 
-// EmitLog delivers a log record when its level is enabled. It returns false
-// when the logger is absent, disabled, or panics.
-func EmitLog(ctx context.Context, logger Logger, record LogRecord) (delivered bool) {
-	defer func() {
-		if recover() != nil {
-			delivered = false
-		}
-	}()
-	if logger == nil || !logger.Enabled(record.Level) {
-		return false
-	}
-	logger.Log(ctx, record)
-	return true
-}
-
 // EmitEvent delivers an event and returns false when the observer is absent or panics.
 func EmitEvent(ctx context.Context, observer EventObserver, event Event) (delivered bool) {
 	if observer == nil {

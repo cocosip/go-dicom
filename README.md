@@ -166,7 +166,7 @@ This README describes the supported library surface rather than a development ro
   - [x] ServiceApplicationInfo helper type
   - [x] Structured connection, association, and DIMSE lifecycle events
   - [x] Metadata-only byte, outcome, error, and latency metrics
-  - [x] No-op-by-default logger, event observer, and metrics observer hooks
+  - [x] Optional process-wide structured logging plus independent event and metrics observers
 
 - [x] **Image Codecs**
   - [x] Native codecs (uncompressed data - Explicit/Implicit VR, Little/Big Endian)
@@ -195,6 +195,28 @@ Run benchmarks yourself:
 ```bash
 go test -bench='.' -benchmem -run='^$' ./pkg/dicom/... ./pkg/io/... ./pkg/imaging/...
 ```
+
+## Logging
+
+Logging is optional and silent by default. All go-dicom packages use one
+process-wide logger configured through `pkg/logging`; go-dicom never reads or
+modifies `slog.Default()`. Applications that do not configure logging continue
+to use parsing, writing, imaging, transcoding, and networking normally.
+
+```go
+handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+    Level: slog.LevelInfo,
+})
+if err := logging.Configure(logging.Config{Handler: handler}); err != nil {
+    log.Fatal(err)
+}
+defer logging.Disable()
+```
+
+The application owns the Handler, its output writer, rotation, retention, and
+shutdown. `logging.Disable()` stops new go-dicom records but does not close the
+Handler or writer. Records contain operational metadata only; datasets, PDU
+payloads, Pixel Data, and patient attributes are excluded.
 
 ## Quick Start
 

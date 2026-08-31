@@ -120,9 +120,6 @@ const (
 
 // Config contains configuration options for the DICOM client.
 type Config struct {
-	// Logger receives structured network log records. The default is nil.
-	Logger observability.Logger
-
 	// EventObserver receives connection, association, and DIMSE lifecycle events.
 	EventObserver observability.EventObserver
 
@@ -220,11 +217,6 @@ var (
 	// ErrClientNotConnected indicates that no usable association is established.
 	ErrClientNotConnected = errors.New("client not connected")
 )
-
-// WithLogger sets the structured network logger.
-func WithLogger(logger observability.Logger) Option {
-	return func(o *Config) { o.Logger = logger }
-}
 
 // WithEventObserver sets the network lifecycle event observer.
 func WithEventObserver(observer observability.EventObserver) Option {
@@ -895,7 +887,6 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	svcOpts := []service.Option{
 		service.WithAssociationRequestor(true),
 		service.WithConnectionID(c.connectionID),
-		service.WithLogger(c.config.Logger),
 		service.WithEventObserver(c.config.EventObserver),
 		service.WithMetricsObserver(c.config.MetricsObserver),
 		service.WithMaxPDULength(c.config.MaxPDULength),
