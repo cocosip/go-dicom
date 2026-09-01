@@ -716,7 +716,7 @@ func TestHandleCMoveRequest_DefaultHandler(t *testing.T) {
 
 	identifier := dataset.New()
 	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
-	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, testMoveDestinationAE, identifier)
 	if err := req.SetMessageID(1); err != nil {
 		t.Fatalf("SetMessageID failed: %v", err)
 	}
@@ -735,7 +735,7 @@ func TestHandleCMoveRequest_CustomHandler(t *testing.T) {
 
 	identifier := dataset.New()
 	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
-	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, testMoveDestinationAE, identifier)
 	if err := req.SetMessageID(1); err != nil {
 		t.Fatalf("SetMessageID failed: %v", err)
 	}
@@ -769,7 +769,7 @@ func TestHandleCCancelRequest_CancelsActiveCMoveHandler(t *testing.T) {
 
 	identifier := dataset.New()
 	_ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{testStudyInstanceUID}))
-	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier)
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, testMoveDestinationAE, identifier)
 	if err := req.SetMessageID(88); err != nil {
 		t.Fatalf("SetMessageID failed: %v", err)
 	}

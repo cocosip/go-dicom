@@ -919,6 +919,9 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 
 	// Build and send A-ASSOCIATE-RQ
 	rq := c.buildAssociateRQ()
+	// Keep the proposed contexts on the service so the accepted-association log
+	// can merge AC results back onto their Abstract Syntax values.
+	svc.SetAssociation(association.FromAAssociateRQ(rq))
 	if err := svc.SendAssociationRequest(assocCtx, rq); err != nil {
 		return fmt.Errorf("failed to send A-ASSOCIATE-RQ: %w", err)
 	}

@@ -6,11 +6,13 @@ package service
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/logging"
+	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
@@ -91,6 +93,49 @@ func TestObservabilityConnectionLifecycle(t *testing.T) {
 	}
 	if len(metrics) != 2 || metrics[0].Kind != observability.MetricConnection || metrics[1].Kind != observability.MetricConnection {
 		t.Fatalf("connection metrics = %#v, want open and close", metrics)
+	}
+}
+
+func TestObservationAssociationCapturesNetworkAndNegotiationMetadata(t *testing.T) {
+	assoc := createTestAssociation()
+	assoc.RemoteHost = "pacs.example"
+	assoc.RemotePort = 104
+	assoc.ImplementationClassUID = "1.2.3"
+	assoc.ImplementationVersionName = "PACS_1"
+	assoc.MaxPDULength = 32768
+	assoc.AsynchronousOperations = &association.AsynchronousOperationsWindow{
+		MaxInvokedOperations:   4,
+		MaxPerformedOperations: 2,
+	}
+
+	svc := NewService(&recordingConn{}, assoc)
+	t.Cleanup(func() { _ = svc.Close() })
+
+	info := svc.observationAssociation()
+	if info.LocalAddr != "local" || info.RemoteAddr != "remote" ||
+		info.RemoteHost != "pacs.example" || info.RemotePort != 104 ||
+		info.ImplementationClassUID != "1.2.3" ||
+		info.ImplementationVersionName != "PACS_1" ||
+		info.MaxPDULength != 32768 || info.AsyncOpsInvoked != 4 ||
+		info.AsyncOpsPerformed != 2 || info.PresentationContextCount != 2 ||
+		info.AcceptedPresentationContextCount != 2 ||
+		!strings.Contains(info.PresentationContextSummary, testCTImageStorageUID) ||
+		!strings.Contains(info.PresentationContextSummary, "1.2.840.10008.1.2.1") {
+		t.Fatalf("association observation = %#v", info)
+	}
+}
+
+func TestAssociationAcceptedSummaryRetainsAbstractSyntaxFromRequest(t *testing.T) {
+	assoc := createTestAssociation()
+	svc := NewService(&recordingConn{}, assoc)
+	t.Cleanup(func() { _ = svc.Close() })
+
+	ac := association.ToAAssociateAC(assoc)
+	info := svc.associationObservationForAC(ac)
+	if !strings.Contains(info.PresentationContextSummary, testCTImageStorageUID) ||
+		!strings.Contains(info.PresentationContextSummary, "\"result\":0") ||
+		!strings.Contains(info.PresentationContextSummary, "1.2.840.10008.1.2.1") {
+		t.Fatalf("accepted association summary = %s", info.PresentationContextSummary)
 	}
 }
 

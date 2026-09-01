@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
@@ -136,6 +139,124 @@ func TestOutboundRequestObservabilitySuccessAndInboundLifecycle(t *testing.T) {
 	if clientEvents[1].StatusCode != 0 || clientEvents[1].Outcome != observability.OutcomeSuccess {
 		t.Fatalf("client completion = %#v", clientEvents[1])
 	}
+}
+
+func TestCGetCStoreSubOperationCarriesParentOperationID(t *testing.T) {
+	clientRecorder := &observationRecorder{}
+	serverRecorder := &observationRecorder{}
+	clientService := startObservedServicePairWithAssociation(t, clientRecorder, serverRecorder,
+		observedCGetAssociation(t), &Handlers{
+			CGetHandler: func(ctx context.Context, op CGetOperation) error {
+				ds, err := dataset.NewWithElements([]element.Element{
+					element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}),
+					element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}),
+				})
+				if err != nil {
+					return err
+				}
+				if _, err := op.SendCStore(ctx, ds); err != nil {
+					return err
+				}
+				return op.SendSuccess()
+			},
+		})
+	clientService.SetHandlers(&Handlers{
+		CStoreHandler: func(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+			return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	responses, err := clientService.SendCGet(ctx, dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, dataset.New()))
+	if err != nil {
+		t.Fatalf("SendCGet() error = %v", err)
+	}
+	responseCount := 0
+	for range responses {
+		responseCount++
+	}
+	if responseCount == 0 {
+		t.Fatal("SendCGet() returned no responses")
+	}
+
+	clientEvents := waitForRequestEventCount(t, clientRecorder, dimse.CommandCGetRQ, 2)
+	var parentOperationID uint64
+	for _, event := range clientEvents {
+		if event.Kind == observability.EventRequestSent {
+			parentOperationID = event.OperationID
+			break
+		}
+	}
+	if parentOperationID == 0 {
+		t.Fatalf("C-GET parent operation ID not found: %#v", clientEvents)
+	}
+	storeEvents := requestEvents(clientRecorder, dimse.CommandCStoreRQ)
+	if len(storeEvents) < 2 {
+		allEvents, _, _ := clientRecorder.snapshot()
+		serverEvents, _, _ := serverRecorder.snapshot()
+		for _, event := range serverEvents {
+			if event.Error != nil {
+				t.Logf("server event %s error: %v", event.Kind, event.Error)
+			}
+		}
+		t.Fatalf("C-STORE lifecycle events = %#v, all client events = %#v, all server events = %#v, want receive and complete", storeEvents, allEvents, serverEvents)
+	}
+	if storeEvents[0].ParentOperationID != parentOperationID {
+		t.Fatalf("C-STORE parent operation ID = %d, want %d", storeEvents[0].ParentOperationID, parentOperationID)
+	}
+}
+
+func observedCGetAssociation(t *testing.T) *association.Association {
+	t.Helper()
+	assoc := createTestAssociation()
+	if pc := assoc.FindPresentationContextByAbstractSyntax(testCTImageStorageUID); pc != nil {
+		pc.AcceptedRole = association.NewRoleSelection(testCTImageStorageUID, 1, 1)
+	}
+	for _, spec := range []struct {
+		id  byte
+		uid string
+	}{
+		{7, "1.2.840.10008.5.1.4.1.2.2.3"},
+	} {
+		pc := association.NewPresentationContext(spec.id, spec.uid, transfer.ExplicitVRLittleEndian)
+		pc.AcceptedTransferSyntax = transfer.ExplicitVRLittleEndian
+		pc.Result = association.ResultAcceptance
+		if spec.uid == testCTImageStorageUID {
+			pc.AcceptedRole = association.NewRoleSelection(spec.uid, 1, 1)
+		}
+		if err := assoc.AddPresentationContext(pc); err != nil {
+			t.Fatalf("AddPresentationContext() error = %v", err)
+		}
+	}
+	return assoc
+}
+
+func startObservedServicePairWithAssociation(t *testing.T, clientRecorder, serverRecorder *observationRecorder,
+	assoc *association.Association, handlers *Handlers) *Service {
+	t.Helper()
+	clientConn, serverConn := net.Pipe()
+	clientService := NewService(clientConn, assoc, WithAssociationRequestor(true),
+		WithEventObserver(observability.EventObserverFunc(clientRecorder.observeEvent)),
+		WithMetricsObserver(observability.MetricsObserverFunc(clientRecorder.observeMetric)))
+	serverService := NewService(serverConn, assoc, WithAssociationRequestor(false),
+		WithEventObserver(observability.EventObserverFunc(serverRecorder.observeEvent)),
+		WithMetricsObserver(observability.MetricsObserverFunc(serverRecorder.observeMetric)))
+	serverService.SetHandlers(handlers)
+	t.Cleanup(func() { _ = clientService.Close(); _ = serverService.Close() })
+	if err := clientService.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("client setState() error = %v", err)
+	}
+	if err := serverService.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("server setState() error = %v", err)
+	}
+	if err := serverService.Start(); err != nil {
+		t.Fatalf("server Start() error = %v", err)
+	}
+	if err := clientService.Start(); err != nil {
+		t.Fatalf("client Start() error = %v", err)
+	}
+	return clientService
 }
 
 func TestOutboundRequestObservabilityPendingOrder(t *testing.T) {

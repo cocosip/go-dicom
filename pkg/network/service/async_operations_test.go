@@ -238,7 +238,7 @@ func TestSendCMoveWithErrorReportsRequestTimeout(t *testing.T) {
 	go drainSuccessfulSends(service)
 	responses, terminalErrors, err := service.SendCMoveWithError(
 		context.Background(),
-		dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", dataset.New()),
+		dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, testMoveDestinationAE, dataset.New()),
 	)
 	if err != nil {
 		t.Fatalf("SendCMoveWithError() error = %v", err)

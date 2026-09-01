@@ -290,7 +290,7 @@ func TestSendCMove_SendFailureCleansPendingRequest(t *testing.T) {
 	service := NewService(nil, createTestAssociation())
 	defer func() { _ = service.Close() }()
 
-	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST_AE", dataset.New())
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, testMoveDestinationAE, dataset.New())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 

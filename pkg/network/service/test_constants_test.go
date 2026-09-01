@@ -10,4 +10,5 @@ const (
 	testStudyInstanceUID   = "1.2.3.4.5"
 	testNSetOperation      = "N-SET"
 	testNActionOperation   = "N-ACTION"
+	testMoveDestinationAE  = "DEST_AE"
 )

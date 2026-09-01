@@ -73,6 +73,9 @@ func (s *Service) registerActiveOperation(parent context.Context, messageID uint
 		lifecycle: s.inboundRequest(messageID),
 	}
 	s.activeOperationsMu.Unlock()
+	if op := s.inboundRequest(messageID); op != nil {
+		ctx = withOperationID(ctx, op.operationID)
+	}
 
 	unregister := func() {
 		s.activeOperationsMu.Lock()

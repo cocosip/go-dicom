@@ -21,11 +21,17 @@ type AssociationID uint64
 var (
 	nextConnectionID  atomic.Uint64
 	nextAssociationID atomic.Uint64
+	nextOperationID   atomic.Uint64
 )
 
 // NewConnectionID returns a new non-zero process-local connection identifier.
 func NewConnectionID() ConnectionID {
 	return ConnectionID(nextConnectionID.Add(1))
+}
+
+// NewOperationID returns a new non-zero process-local DIMSE operation identifier.
+func NewOperationID() uint64 {
+	return nextOperationID.Add(1)
 }
 
 // NewAssociationID returns a new non-zero process-local association identifier.
@@ -159,25 +165,62 @@ const (
 
 // Association is a safe immutable snapshot used to correlate observations.
 type Association struct {
-	ConnectionID  ConnectionID
-	AssociationID AssociationID
-	CallingAE     string
-	CalledAE      string
+	ConnectionID                     ConnectionID
+	AssociationID                    AssociationID
+	CallingAE                        string
+	CalledAE                         string
+	LocalAddr                        string
+	RemoteAddr                       string
+	RemoteHost                       string
+	RemotePort                       int
+	ImplementationClassUID           string
+	ImplementationVersionName        string
+	MaxPDULength                     uint32
+	AsyncOpsInvoked                  uint16
+	AsyncOpsPerformed                uint16
+	PresentationContextCount         uint16
+	AcceptedPresentationContextCount uint16
+	// PresentationContextSummary is a compact JSON array of context ID,
+	// abstract syntax, transfer syntaxes, and negotiation result.
+	PresentationContextSummary string
+}
+
+// PresentationContext is a safe summary of one negotiated presentation context.
+type PresentationContext struct {
+	ID               byte     `json:"id"`
+	AbstractSyntax   string   `json:"abstract_syntax,omitempty"`
+	TransferSyntaxes []string `json:"transfer_syntaxes,omitempty"`
+	Result           byte     `json:"result"`
 }
 
 // Event describes one network lifecycle transition.
 type Event struct {
-	Timestamp   time.Time
-	Kind        EventKind
-	Association Association
-	Direction   Direction
-	MessageID   uint16
-	Command     uint16
-	StatusCode  uint16
-	StatusState string
-	Duration    time.Duration
-	Outcome     Outcome
-	Error       error
+	Timestamp              time.Time
+	Kind                   EventKind
+	Association            Association
+	Direction              Direction
+	MessageID              uint16
+	Command                uint16
+	CommandName            string
+	Operation              string
+	OperationID            uint64
+	ParentOperationID      uint64
+	SOPClassUID            string
+	TransferSyntax         string
+	QueryRetrieveLevel     string
+	MoveDestinationAE      string
+	PresentationContextID  byte
+	SubOperationCounts     bool
+	RemainingSubOperations uint16
+	CompletedSubOperations uint16
+	FailedSubOperations    uint16
+	WarningSubOperations   uint16
+	ResultCount            uint64
+	StatusCode             uint16
+	StatusState            string
+	Duration               time.Duration
+	Outcome                Outcome
+	Error                  error
 }
 
 // LogRecord is a structured logger input.

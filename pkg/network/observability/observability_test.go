@@ -14,6 +14,7 @@ func TestIDsAreUniqueUnderConcurrency(t *testing.T) {
 	const count = 256
 	connectionIDs := make(chan ConnectionID, count)
 	associationIDs := make(chan AssociationID, count)
+	operationIDs := make(chan uint64, count)
 
 	var wg sync.WaitGroup
 	for range count {
@@ -22,14 +23,17 @@ func TestIDsAreUniqueUnderConcurrency(t *testing.T) {
 			defer wg.Done()
 			connectionIDs <- NewConnectionID()
 			associationIDs <- NewAssociationID()
+			operationIDs <- NewOperationID()
 		}()
 	}
 	wg.Wait()
 	close(connectionIDs)
 	close(associationIDs)
+	close(operationIDs)
 
 	assertUniqueConnections(t, connectionIDs, count)
 	assertUniqueAssociations(t, associationIDs, count)
+	assertUniqueOperations(t, operationIDs, count)
 }
 
 func assertUniqueConnections(t *testing.T, ids <-chan ConnectionID, want int) {
@@ -63,6 +67,23 @@ func assertUniqueAssociations(t *testing.T, ids <-chan AssociationID, want int) 
 	}
 	if len(seen) != want {
 		t.Fatalf("association ID count = %d, want %d", len(seen), want)
+	}
+}
+
+func assertUniqueOperations(t *testing.T, ids <-chan uint64, want int) {
+	t.Helper()
+	seen := make(map[uint64]struct{}, want)
+	for id := range ids {
+		if id == 0 {
+			t.Fatal("NewOperationID() returned zero")
+		}
+		if _, exists := seen[id]; exists {
+			t.Fatalf("duplicate operation ID %d", id)
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) != want {
+		t.Fatalf("operation ID count = %d, want %d", len(seen), want)
 	}
 }
 

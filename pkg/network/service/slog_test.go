@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/logging"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func TestServiceWritesLifecycleToGoDicomLogger(t *testing.T) {
@@ -91,6 +92,77 @@ func TestErrorOnlyGlobalLoggerReceivesTerminalDIMSEFailure(t *testing.T) {
 	records := handler.snapshot()
 	if len(records) != 1 || records[0].Message != string(observability.EventRequestFailed) || records[0].Level != slog.LevelError {
 		t.Fatalf("Error-only records = %#v, want one request_failed Error record", records)
+	}
+}
+
+func TestPendingDIMSELogUsesInfoLevel(t *testing.T) {
+	handler := &serviceSlogHandler{}
+	if err := logging.Configure(logging.Config{Handler: handler}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
+
+	svc := NewService(&mockConn{}, createTestAssociation(), WithConnectionID(45))
+	t.Cleanup(func() { _ = svc.Close() })
+	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, nil)
+	if err := req.SetMessageID(8); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	lifecycle := newRequestLifecycle(svc, observability.DirectionOutbound, req)
+	lifecycle.sent(context.Background())
+	lifecycle.response(context.Background(), dimse.NewCFindResponseFromRequest(req, status.Pending, nil))
+	lifecycle.response(context.Background(), dimse.NewCFindResponseFromRequest(req, status.Success, nil))
+
+	records := handler.snapshot()
+	var pending, completed *slog.Record
+	for i := range records {
+		switch records[i].Message {
+		case string(observability.EventRequestPending):
+			pending = &records[i]
+		case string(observability.EventRequestCompleted):
+			completed = &records[i]
+		}
+	}
+	if pending == nil || pending.Level != slog.LevelInfo {
+		t.Fatalf("pending record = %#v, want INFO", pending)
+	}
+	if completed == nil || completed.Level != slog.LevelInfo {
+		t.Fatalf("completed record = %#v, want INFO", completed)
+	}
+}
+
+func TestRequestLifecycleCapturesQueryRetrieveMetadata(t *testing.T) {
+	recorder := &observationRecorder{}
+	svc := NewService(&mockConn{}, createTestAssociation(),
+		WithEventObserver(observability.EventObserverFunc(recorder.observeEvent)),
+	)
+	t.Cleanup(func() { _ = svc.Close() })
+
+	req := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, testMoveDestinationAE, nil)
+	if err := req.SetMessageID(9); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	lifecycle := newRequestLifecycle(svc, observability.DirectionOutbound, req)
+	if lifecycle == nil {
+		t.Fatal("newRequestLifecycle() = nil")
+	}
+	lifecycle.sent(context.Background())
+
+	events, _, _ := recorder.snapshot()
+	var event observability.Event
+	for _, candidate := range events {
+		if candidate.Kind == observability.EventRequestSent {
+			event = candidate
+			break
+		}
+	}
+	if event.Kind != observability.EventRequestSent {
+		t.Fatalf("request event not found: %#v", events)
+	}
+	if event.CommandName != "C-MOVE-RQ" || event.Operation != "C-MOVE" ||
+		event.QueryRetrieveLevel != "STUDY" || event.MoveDestinationAE != testMoveDestinationAE ||
+		event.SOPClassUID == "" || event.OperationID == 0 {
+		t.Fatalf("request metadata = %#v", event)
 	}
 }
 

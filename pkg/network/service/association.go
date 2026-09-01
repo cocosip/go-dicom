@@ -24,14 +24,13 @@ type serviceResponder struct {
 func (r *serviceResponder) SendAccept(ctx context.Context, assoc *association.Association) error {
 	// Convert Association to A-ASSOCIATE-AC PDU
 	ac := association.ToAAssociateAC(assoc)
+	// Keep the negotiated request-side contexts available while the AC log is emitted.
+	r.service.SetAssociation(assoc)
 
 	// Send the PDU
 	if err := r.service.SendAssociationAccept(ctx, ac); err != nil {
 		return fmt.Errorf("failed to send A-ASSOCIATE-AC: %w", err)
 	}
-
-	// Store the association
-	r.service.SetAssociation(assoc)
 
 	return nil
 }
@@ -81,7 +80,8 @@ func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pd
 // SendAssociationRequest sends an A-ASSOCIATE-RQ PDU to request an association.
 // This is typically called by a client (SCU) to initiate a DICOM association.
 func (s *Service) SendAssociationRequest(ctx context.Context, req *pdu.AAssociateRQ) error {
-	associationInfo := s.ensureAssociationIdentity(req.CallingAETitle, req.CalledAETitle)
+	s.ensureAssociationIdentity(req.CallingAETitle, req.CalledAETitle)
+	associationInfo := s.associationObservationForRQ(req)
 	if err := s.sendAssociationPDU(ctx, req, "A-ASSOCIATE-RQ", StateAssociationRequested); err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (s *Service) SendAssociationAccept(ctx context.Context, ac *pdu.AAssociateA
 	if err := s.sendAssociationPDU(ctx, ac, "A-ASSOCIATE-AC", StateAssociationAccepted); err != nil {
 		return err
 	}
-	s.emitAssociationObservation(ctx, observability.EventAssociationAccepted, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
+	s.emitAssociationObservationWithInfo(ctx, observability.EventAssociationAccepted, observability.DirectionOutbound, observability.OutcomeSuccess, nil, s.associationObservationForAC(ac))
 	return nil
 }
 
@@ -345,7 +345,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		if err := s.setState(StateAssociationAccepted); err != nil {
 			return nil, fmt.Errorf("failed to transition state: %w", err)
 		}
-		s.emitAssociationObservation(ctx, observability.EventAssociationAccepted, observability.DirectionInbound, observability.OutcomeSuccess, nil)
+		s.emitAssociationObservationWithInfo(ctx, observability.EventAssociationAccepted, observability.DirectionInbound, observability.OutcomeSuccess, nil, s.associationObservationForAC(ac))
 
 		return ac, nil
 
@@ -409,7 +409,8 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 	}); err != nil {
 		return nil, fmt.Errorf("failed to decode A-ASSOCIATE-RQ: %w", err)
 	}
-	associationInfo := s.ensureAssociationIdentity(rq.CallingAETitle, rq.CalledAETitle)
+	s.ensureAssociationIdentity(rq.CallingAETitle, rq.CalledAETitle)
+	associationInfo := s.associationObservationForRQ(rq)
 	for _, warning := range warnings {
 		s.emitDecodeWarning(ctx, associationInfo, warning)
 	}

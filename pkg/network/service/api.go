@@ -51,6 +51,9 @@ func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
 		ctx:       ctx,
 		lifecycle: s.lifecycleForSend(msg),
 	}
+	if req.lifecycle != nil {
+		req.lifecycle.setParentOperationID(operationIDFromContext(ctx))
+	}
 
 	// Send to queue
 	select {

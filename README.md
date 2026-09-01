@@ -218,6 +218,21 @@ shutdown. `logging.Disable()` stops new go-dicom records but does not close the
 Handler or writer. Records contain operational metadata only; datasets, PDU
 payloads, Pixel Data, and patient attributes are excluded.
 
+Network DIMSE records include both the numeric `command` (kept for metric
+compatibility) and readable fields such as `command_name`, `operation`,
+`message_id`, `sop_class_uid`, `transfer_syntax`, and
+`presentation_context_id`. C-MOVE and C-GET records include
+`query_retrieve_level`; C-MOVE records also include `move_destination_ae`.
+C-GET C-STORE sub-operations carry `parent_operation_id` so they can be
+distinguished from unrelated C-STORE traffic on the same Association.
+
+Association records include `local_addr`, `remote_addr`, AE titles,
+implementation UID/version, maximum PDU length, asynchronous operation limits,
+and presentation-context acceptance counts. Association lifecycle and all
+DIMSE message summaries, including pending responses, use INFO. Timeout,
+cancellation, and transport details use WARN/DEBUG as applicable. PDU byte
+counts remain metrics rather than log records.
+
 ## Quick Start
 
 ### Reading a DICOM File

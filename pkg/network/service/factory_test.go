@@ -58,7 +58,7 @@ func TestCreateCMoveRequestRequiresMoveDestinationAndQueryRetrieveLevel(t *testi
 		if err := command.Add(element.NewUnsignedShort(tag.MessageID, []uint16{1})); err != nil {
 			t.Fatalf("failed to add MessageID: %v", err)
 		}
-		if err := command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{"DEST_AE"})); err != nil {
+		if err := command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{testMoveDestinationAE})); err != nil {
 			t.Fatalf("failed to add MoveDestination: %v", err)
 		}
 
@@ -164,7 +164,7 @@ func TestCreateCMoveRequestPreservesAffectedSOPClassUID(t *testing.T) {
 	if err := command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{patientRootMove})); err != nil {
 		t.Fatalf("failed to add AffectedSOPClassUID: %v", err)
 	}
-	if err := command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{"DEST_AE"})); err != nil {
+	if err := command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{testMoveDestinationAE})); err != nil {
 		t.Fatalf("failed to add MoveDestination: %v", err)
 	}
 
