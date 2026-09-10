@@ -7,10 +7,23 @@
 // and color mapping.
 package lut
 
-import (
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
-)
+// LUT transforms input pixel values to output values.
+type LUT interface {
+	IsValid() bool
+	MinimumOutputValue() float64
+	MaximumOutputValue() float64
+	Transform(input float64) float64
+	Recalculate()
+}
 
-// LUT is an alias for the common LUT interface defined in types package.
-// This alias is provided for backward compatibility and convenience.
-type LUT = imagetypes.LUT
+// VOILUTFunction identifies a DICOM VOI LUT function.
+type VOILUTFunction string
+
+const (
+	// VOILUTFunctionLinear applies the DICOM LINEAR windowing function.
+	VOILUTFunctionLinear VOILUTFunction = "LINEAR"
+	// VOILUTFunctionLinearExact applies the DICOM LINEAR_EXACT windowing function.
+	VOILUTFunctionLinearExact VOILUTFunction = "LINEAR_EXACT"
+	// VOILUTFunctionSigmoid applies the DICOM SIGMOID windowing function.
+	VOILUTFunctionSigmoid VOILUTFunction = "SIGMOID"
+)

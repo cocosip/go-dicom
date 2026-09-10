@@ -13,6 +13,10 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+type customMessageIDRequest struct {
+	*BaseRequest
+}
+
 func TestMessageIDGenerator_Next(t *testing.T) {
 	gen := NewMessageIDGenerator()
 
@@ -128,6 +132,19 @@ func TestMessageIDGenerator_AssignMessageID(t *testing.T) {
 
 	if req.MessageID() != 1 {
 		t.Errorf("Request MessageID not updated, got %d", req.MessageID())
+	}
+}
+
+func TestMessageIDGeneratorAssignsAnyRequestThroughSetter(t *testing.T) {
+	gen := NewMessageIDGenerator()
+	req := &customMessageIDRequest{BaseRequest: NewBaseRequest(dataset.New(), nil)}
+
+	messageID, err := gen.AssignMessageID(req)
+	if err != nil {
+		t.Fatalf("AssignMessageID() error = %v", err)
+	}
+	if messageID != 1 || req.MessageID() != 1 {
+		t.Fatalf("AssignMessageID() = %d, request ID = %d, want both 1", messageID, req.MessageID())
 	}
 }
 

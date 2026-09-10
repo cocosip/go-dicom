@@ -9,7 +9,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
@@ -319,8 +318,8 @@ func BenchmarkDatasetContains(b *testing.B) {
 func BenchmarkDatasetElements(b *testing.B) {
 	ds := dataset.New()
 	// Add multiple elements
-	for i := 0; i < 100; i++ {
-		t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+	for i := uint16(0); i < 100; i++ {
+		t := tag.New(0x0010, i)
 		_ = ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
 	}
 
@@ -332,8 +331,8 @@ func BenchmarkDatasetElements(b *testing.B) {
 
 func BenchmarkDatasetClone(b *testing.B) {
 	ds := dataset.New()
-	for i := 0; i < 50; i++ {
-		t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+	for i := uint16(0); i < 50; i++ {
+		t := tag.New(0x0010, i)
 		_ = ds.Add(element.NewString(t, vr.LO, []string{"Value"}))
 	}
 
@@ -347,13 +346,13 @@ func BenchmarkDatasetMerge(b *testing.B) {
 	ds1 := dataset.New()
 	ds2 := dataset.New()
 
-	for i := 0; i < 25; i++ {
-		t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+	for i := uint16(0); i < 25; i++ {
+		t := tag.New(0x0010, i)
 		_ = ds1.Add(element.NewString(t, vr.LO, []string{"Value1"}))
 	}
 
-	for i := 25; i < 50; i++ {
-		t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+	for i := uint16(25); i < 50; i++ {
+		t := tag.New(0x0010, i)
 		_ = ds2.Add(element.NewString(t, vr.LO, []string{"Value2"}))
 	}
 
@@ -366,12 +365,12 @@ func BenchmarkDatasetMerge(b *testing.B) {
 
 func BenchmarkDatasetFilter(b *testing.B) {
 	ds := dataset.New()
-	for i := 0; i < 100; i++ {
-		t := tag.New(0x0010, testutil.SafeUint16FromInt(i))
+	for i := uint16(0); i < 100; i++ {
+		t := tag.New(0x0010, i)
 		if i%2 == 0 {
 			_ = ds.Add(element.NewString(t, vr.LO, []string{"String"}))
 		} else {
-			_ = ds.Add(element.NewUnsignedShort(t, []uint16{testutil.SafeUint16FromInt(i)}))
+			_ = ds.Add(element.NewUnsignedShort(t, []uint16{i}))
 		}
 	}
 

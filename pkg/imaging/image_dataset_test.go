@@ -5,6 +5,7 @@ package imaging
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"image"
@@ -17,10 +18,14 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 	"github.com/cocosip/go-dicom/pkg/imaging/transform"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
@@ -518,8 +523,8 @@ func TestModalityLUTRejectsNonStandardBitDepth(t *testing.T) {
 		t.Fatalf("add Modality LUT Sequence: %v", err)
 	}
 
-	if _, err := imageModalityLUT(ds, false); err == nil {
-		t.Fatal("imageModalityLUT() accepted a bit depth other than 8 or 16")
+	if _, err := pixeldata.ModalityLUT(ds, false); err == nil {
+		t.Fatal("pixeldata.ModalityLUT() accepted a bit depth other than 8 or 16")
 	}
 }
 
@@ -536,8 +541,8 @@ func TestModalityLUTRequiresExactlyOneItem(t *testing.T) {
 			}
 			_ = ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, items))
 
-			if _, err := imageModalityLUT(ds, false); err == nil {
-				t.Fatalf("imageModalityLUT() accepted %d items", count)
+			if _, err := pixeldata.ModalityLUT(ds, false); err == nil {
+				t.Fatalf("pixeldata.ModalityLUT() accepted %d items", count)
 			}
 		})
 	}
@@ -582,9 +587,9 @@ func TestSignedShortModalityLUTDescriptorMapsSignedInputs(t *testing.T) {
 	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
 	_ = ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item}))
 
-	table, err := imageModalityLUT(ds, true)
+	table, err := pixeldata.ModalityLUT(ds, true)
 	if err != nil {
-		t.Fatalf("imageModalityLUT() error = %v", err)
+		t.Fatalf("pixeldata.ModalityLUT() error = %v", err)
 	}
 	for input, want := range map[int]float64{-1: 10, 0: 20, 1: 30} {
 		if got := table.Transform(float64(input)); got != want {
@@ -600,9 +605,9 @@ func TestSignedShortVOILUTDescriptorMapsSignedInputs(t *testing.T) {
 	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
 	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
 
-	table, err := imageVOILUT(ds, true)
+	table, err := pixeldata.VOILUT(ds, true)
 	if err != nil {
-		t.Fatalf("imageVOILUT() error = %v", err)
+		t.Fatalf("pixeldata.VOILUT() error = %v", err)
 	}
 	for input, want := range map[int]float64{-1: 10, 0: 20, 1: 30} {
 		if got := table.Transform(float64(input)); math.Abs(got-want) > 1e-9 {
@@ -615,20 +620,20 @@ func TestUnsignedShortLUTDescriptorUsesSignedPixelRepresentation(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		tag  *tag.Tag
-		load func(*dataset.Dataset) (render.LUT, error)
+		load func(*dataset.Dataset) (lut.LUT, error)
 	}{
 		{
 			name: "modality",
 			tag:  tag.ModalityLUTSequence,
-			load: func(ds *dataset.Dataset) (render.LUT, error) {
-				return imageModalityLUT(ds, true)
+			load: func(ds *dataset.Dataset) (lut.LUT, error) {
+				return pixeldata.ModalityLUT(ds, true)
 			},
 		},
 		{
 			name: "VOI",
 			tag:  tag.VOILUTSequence,
-			load: func(ds *dataset.Dataset) (render.LUT, error) {
-				return imageVOILUT(ds, true)
+			load: func(ds *dataset.Dataset) (lut.LUT, error) {
+				return pixeldata.VOILUT(ds, true)
 			},
 		},
 	} {
@@ -712,12 +717,12 @@ func TestImageVOILUTReportsValidForStandardSequence(t *testing.T) {
 		t.Fatalf("add VOI LUT Sequence: %v", err)
 	}
 
-	table, err := imageVOILUT(ds, false)
+	table, err := pixeldata.VOILUT(ds, false)
 	if err != nil {
-		t.Fatalf("imageVOILUT() error = %v", err)
+		t.Fatalf("pixeldata.VOILUT() error = %v", err)
 	}
 	if !table.IsValid() {
-		t.Fatal("imageVOILUT() returned a LUT that reports itself invalid")
+		t.Fatal("pixeldata.VOILUT() returned a LUT that reports itself invalid")
 	}
 }
 
@@ -736,8 +741,8 @@ func TestImageVOILUTRejectsPresentationStateBitDepths(t *testing.T) {
 				t.Fatalf("add VOI LUT Sequence: %v", err)
 			}
 
-			if _, err := imageVOILUT(ds, false); err == nil {
-				t.Fatalf("imageVOILUT() accepted image VOI LUT bitsPerEntry=%d", bitsPerEntry)
+			if _, err := pixeldata.VOILUT(ds, false); err == nil {
+				t.Fatalf("pixeldata.VOILUT() accepted image VOI LUT bitsPerEntry=%d", bitsPerEntry)
 			}
 		})
 	}
@@ -816,7 +821,7 @@ func TestDatasetImageReadsSourceEndianVOILUTAfterNativeTranscode(t *testing.T) {
 		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 	} {
 		if err := ds.Add(elem); err != nil {
 			t.Fatalf("add %s: %v", elem.Tag(), err)
@@ -834,10 +839,15 @@ func TestDatasetImageReadsSourceEndianVOILUTAfterNativeTranscode(t *testing.T) {
 	element.SetByteOrder(pixelData, binary.BigEndian)
 	_ = ds.Add(pixelData)
 
-	transcoded, err := codec.NewTranscoder(
-		transfer.ExplicitVRBigEndian,
-		transfer.ExplicitVRLittleEndian,
-	).Transcode(ds)
+	manager, err := transcode.NewManager(codec.NewRegistry())
+	if err != nil {
+		t.Fatalf("transcode.NewManager() error = %v", err)
+	}
+	transcoder, err := manager.NewTranscoder(transfer.ExplicitVRBigEndian, transfer.ExplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("Manager.NewTranscoder() error = %v", err)
+	}
+	transcoded, err := transcoder.Transcode(context.Background(), ds)
 	if err != nil {
 		t.Fatalf("Transcode() error = %v", err)
 	}
@@ -993,7 +1003,7 @@ func TestDatasetImageRendersPackedOneBitPixels(t *testing.T) {
 		element.NewUnsignedShort(tag.HighBit, []uint16{0}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 		element.NewOtherByte(tag.PixelData, []byte{0b10101010}),
 	}
 	for _, elem := range elements {
@@ -1042,7 +1052,7 @@ func TestDatasetImageRenders32BitGrayscalePixels(t *testing.T) {
 				element.NewUnsignedShort(tag.HighBit, []uint16{31}),
 				element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 				element.NewUnsignedShort(tag.PixelRepresentation, []uint16{tt.representation}),
-				element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+				element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 				element.NewOtherWord(tag.PixelData, pixels),
 			}
 			for _, elem := range elements {
@@ -1083,7 +1093,7 @@ func TestDatasetImageRendersExplicitVRBigEndian32BitPixels(t *testing.T) {
 		element.NewUnsignedShort(tag.HighBit, []uint16{31}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 		element.NewOtherWord(tag.PixelData, pixels),
 	}
 	for _, elem := range elements {
@@ -1116,8 +1126,10 @@ func TestDatasetImageAutomaticallyDecodesEncapsulatedPixels(t *testing.T) {
 	if err := ds.AddOrUpdate(fragments); err != nil {
 		t.Fatalf("replace PixelData: %v", err)
 	}
-	registry := codec.NewCodecRegistry()
-	registry.RegisterCodec(transfer.JPEG2000Lossless, imagePassthroughCodec{})
+	registry := codec.NewRegistry()
+	if err := registry.Register(imagePassthroughCodec{}); err != nil {
+		t.Fatal(err)
+	}
 
 	dicomImage, err := NewDicomImageFromDataset(ds, WithImageCodecRegistry(registry))
 	if err != nil {
@@ -1149,8 +1161,10 @@ func TestDatasetImageDecodeDoesNotMutateSourceFragmentsWithoutBOT(t *testing.T) 
 	if err := ds.AddOrUpdate(fragments); err != nil {
 		t.Fatalf("replace PixelData: %v", err)
 	}
-	registry := codec.NewCodecRegistry()
-	registry.RegisterCodec(transfer.JPEG2000Lossless, mutatingImageCodec{})
+	registry := codec.NewRegistry()
+	if err := registry.Register(mutatingImageCodec{}); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := NewDicomImageFromDataset(ds, WithImageCodecRegistry(registry)); err != nil {
 		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
@@ -1174,7 +1188,7 @@ func TestDatasetImageDecodesEncapsulatedPaletteBeforeRGBConversion(t *testing.T)
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricPaletteColor}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.PaletteColor.Value}),
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
@@ -1192,8 +1206,10 @@ func TestDatasetImageDecodesEncapsulatedPaletteBeforeRGBConversion(t *testing.T)
 	if err := ds.Add(fragments); err != nil {
 		t.Fatalf("add PixelData: %v", err)
 	}
-	registry := codec.NewCodecRegistry()
-	registry.RegisterCodec(transfer.JPEG2000Lossless, paletteIndexCodec{})
+	registry := codec.NewRegistry()
+	if err := registry.Register(paletteIndexCodec{}); err != nil {
+		t.Fatal(err)
+	}
 
 	dicomImage, err := NewDicomImageFromDataset(ds, WithImageCodecRegistry(registry))
 	if err != nil {
@@ -1220,7 +1236,7 @@ func TestDatasetPaletteAlphaIsPreservedInRendering(t *testing.T) {
 		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricPaletteColor}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.PaletteColor.Value}),
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
@@ -1262,7 +1278,7 @@ func TestSupplementalPaletteRendering(t *testing.T) {
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 		element.NewString(tag.PixelPresentation, vr.CS, []string{"COLOR"}),
 		element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{127.5}),
 		element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{256}),
@@ -1321,7 +1337,7 @@ func TestSupplementalPaletteRequiresEligibility(t *testing.T) {
 				element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 				element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 				element.NewString(tag.NumberOfFrames, vr.IS, []string{tt.numberOfFrames}),
-				element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+				element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 				element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
 				element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
 				element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
@@ -1377,7 +1393,7 @@ func TestDatasetImageRendersExplicitOverlayWithOriginAndVisibility(t *testing.T)
 	if err != nil {
 		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
 	}
-	dicomImage.SetOverlayColor(imagetypes.Color32{A: 255, R: 255})
+	dicomImage.SetOverlayColor(colorconv.Color32{A: 255, R: 255})
 	rendered, err := dicomImage.RenderFrameImage(0)
 	if err != nil {
 		t.Fatalf("RenderFrameImage(0) error = %v", err)
@@ -1410,7 +1426,7 @@ func TestDatasetImageExtractsEmbeddedOverlayBit(t *testing.T) {
 		element.NewUnsignedShort(tag.HighBit, []uint16{11}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 		element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{2047.5}),
 		element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{4095}),
 		element.NewOtherWord(tag.PixelData, []byte{0, 0, 0, 0x80}),
@@ -1430,7 +1446,7 @@ func TestDatasetImageExtractsEmbeddedOverlayBit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
 	}
-	dicomImage.SetOverlayColor(imagetypes.Color32{A: 255, R: 255})
+	dicomImage.SetOverlayColor(colorconv.Color32{A: 255, R: 255})
 	rendered, err := dicomImage.RenderFrameImage(0)
 	if err != nil {
 		t.Fatalf("RenderFrameImage(0) error = %v", err)
@@ -1475,14 +1491,14 @@ func TestWindowOverridesApplyToAllFramesUnlessDisabled(t *testing.T) {
 }
 
 func TestLegacyPixelDataConstructorKeepsWindowBehavior(t *testing.T) {
-	info := &PixelDataInfo{
+	info := &pixeldata.Info{
 		Width: 2, Height: 1, NumberOfFrames: 2,
 		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
-		PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome2,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.Monochrome2,
 	}
-	pixelData, err := NewDicomPixelDataFromBytes(info, []byte{0, 100, 200, 255})
+	pixelData, err := pixeldata.NewFromBytes(info, []byte{0, 100, 200, 255})
 	if err != nil {
-		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
 	}
 	dicomImage := NewDicomImage(pixelData)
 	if got, want := dicomImage.WindowCenter(), 50.0; got != want {
@@ -1503,9 +1519,9 @@ func TestCallerGrayscaleColorMapChangesRenderedColors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
 	}
-	var colorMap [256]imagetypes.Color32
+	var colorMap [256]colorconv.Color32
 	for index := range colorMap {
-		colorMap[index] = imagetypes.Color32{A: 255, G: uint8(index)}
+		colorMap[index] = colorconv.Color32{A: 255, G: uint8(index)}
 	}
 	dicomImage.SetGrayscaleColorMap(colorMap)
 
@@ -1657,19 +1673,19 @@ func (imagePassthroughCodec) Name() string { return "image test passthrough" }
 func (imagePassthroughCodec) TransferSyntax() *transfer.Syntax {
 	return transfer.JPEG2000Lossless
 }
-func (imagePassthroughCodec) GetDefaultParameters() codec.Parameters {
-	return codec.NewBaseParameters()
+func (imagePassthroughCodec) DefaultParameters() codec.Parameters {
+	return codec.NoParameters{}
 }
-func (imagePassthroughCodec) Encode(imagetypes.PixelData, imagetypes.PixelData, codec.Parameters) error {
+func (imagePassthroughCodec) Encode(context.Context, codec.FrameSource, codec.FrameSink, codec.Parameters) error {
 	return nil
 }
-func (imagePassthroughCodec) Decode(oldPixelData, newPixelData imagetypes.PixelData, _ codec.Parameters) error {
+func (imagePassthroughCodec) Decode(ctx context.Context, oldPixelData codec.FrameSource, newPixelData codec.FrameSink, _ codec.Parameters) error {
 	for frame := 0; frame < oldPixelData.FrameCount(); frame++ {
-		data, err := oldPixelData.GetFrame(frame)
+		data, err := oldPixelData.Frame(ctx, frame)
 		if err != nil {
 			return err
 		}
-		if err := newPixelData.AddFrame(data); err != nil {
+		if err := newPixelData.AddFrame(ctx, data); err != nil {
 			return err
 		}
 	}
@@ -1682,25 +1698,25 @@ func (paletteIndexCodec) Name() string { return "palette index test codec" }
 func (paletteIndexCodec) TransferSyntax() *transfer.Syntax {
 	return transfer.JPEG2000Lossless
 }
-func (paletteIndexCodec) GetDefaultParameters() codec.Parameters {
-	return codec.NewBaseParameters()
+func (paletteIndexCodec) DefaultParameters() codec.Parameters {
+	return codec.NoParameters{}
 }
-func (paletteIndexCodec) Encode(imagetypes.PixelData, imagetypes.PixelData, codec.Parameters) error {
+func (paletteIndexCodec) Encode(context.Context, codec.FrameSource, codec.FrameSink, codec.Parameters) error {
 	return nil
 }
-func (paletteIndexCodec) Decode(oldPixelData, newPixelData imagetypes.PixelData, _ codec.Parameters) error {
-	info := oldPixelData.GetFrameInfo()
-	if info.PhotometricInterpretation != photometricPaletteColor || info.SamplesPerPixel != 1 {
-		return fmt.Errorf("codec input metadata = %s/%d, want PALETTE COLOR/1", info.PhotometricInterpretation, info.SamplesPerPixel)
+func (paletteIndexCodec) Decode(ctx context.Context, oldPixelData codec.FrameSource, newPixelData codec.FrameSink, _ codec.Parameters) error {
+	info := oldPixelData.FrameInfo()
+	if info.PhotometricInterpretation.Value != pixel.PaletteColor.Value || info.SamplesPerPixel != 1 {
+		return fmt.Errorf("codec input metadata = %s/%d, want PALETTE COLOR/1", info.PhotometricInterpretation.Value, info.SamplesPerPixel)
 	}
-	frame, err := oldPixelData.GetFrame(0)
+	frame, err := oldPixelData.Frame(ctx, 0)
 	if err != nil {
 		return err
 	}
 	if !bytes.Equal(frame, []byte{0, 1}) {
 		return fmt.Errorf("codec input frame = %v, want [0 1]", frame)
 	}
-	return newPixelData.AddFrame(frame)
+	return newPixelData.AddFrame(ctx, frame)
 }
 
 type mutatingImageCodec struct{}
@@ -1709,20 +1725,20 @@ func (mutatingImageCodec) Name() string { return "mutating image test codec" }
 func (mutatingImageCodec) TransferSyntax() *transfer.Syntax {
 	return transfer.JPEG2000Lossless
 }
-func (mutatingImageCodec) GetDefaultParameters() codec.Parameters {
-	return codec.NewBaseParameters()
+func (mutatingImageCodec) DefaultParameters() codec.Parameters {
+	return codec.NoParameters{}
 }
-func (mutatingImageCodec) Encode(imagetypes.PixelData, imagetypes.PixelData, codec.Parameters) error {
+func (mutatingImageCodec) Encode(context.Context, codec.FrameSource, codec.FrameSink, codec.Parameters) error {
 	return nil
 }
-func (mutatingImageCodec) Decode(oldPixelData, newPixelData imagetypes.PixelData, _ codec.Parameters) error {
+func (mutatingImageCodec) Decode(ctx context.Context, oldPixelData codec.FrameSource, newPixelData codec.FrameSink, _ codec.Parameters) error {
 	for frameIndex := 0; frameIndex < oldPixelData.FrameCount(); frameIndex++ {
-		frame, err := oldPixelData.GetFrame(frameIndex)
+		frame, err := oldPixelData.Frame(ctx, frameIndex)
 		if err != nil {
 			return err
 		}
 		frame[0] ^= 0xff
-		if err := newPixelData.AddFrame(frame); err != nil {
+		if err := newPixelData.AddFrame(ctx, frame); err != nil {
 			return err
 		}
 	}
@@ -1735,8 +1751,8 @@ type imageLockCheckingPipeline struct {
 	calledWithoutImageLock *bool
 }
 
-func (p *imageLockCheckingPipeline) LUT() render.LUT { return p.delegate.LUT() }
-func (p *imageLockCheckingPipeline) ClearCache()     { p.delegate.ClearCache() }
+func (p *imageLockCheckingPipeline) LUT() lut.LUT { return p.delegate.LUT() }
+func (p *imageLockCheckingPipeline) ClearCache()  { p.delegate.ClearCache() }
 func (p *imageLockCheckingPipeline) ClonePipeline() render.Pipeline {
 	if p.image.mu.TryLock() {
 		*p.calledWithoutImageLock = true
@@ -1756,7 +1772,7 @@ func newNativeMonochromeDataset(t *testing.T, width, height uint16, pixels []byt
 		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{monochrome2}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 		element.NewOtherByte(tag.PixelData, pixels),
 	}
 	for _, elem := range elements {

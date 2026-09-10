@@ -136,9 +136,10 @@ transport, and association-close errors. Their callbacks send C-CANCEL when
 they return `false` and wait for the final response so the Association remains
 usable. Cancelling the caller context triggers one bounded best-effort
 C-CANCEL and still returns the original context error. Managed Jobs inherit
-the same behavior. Low-level callers that need asynchronous terminal errors can
-use `Service.SendCFindWithError`, `SendCMoveWithError`, and
-`SendCGetWithError`.
+the same behavior. Low-level `Service.SendCFind`, `SendCMove`, and `SendCGet`
+calls return a single ordered `ResponseEvent` stream: each event contains either
+a DIMSE response or the one terminal error. The stream never closes silently
+before a final response or terminal error.
 
 ### SCU 客户端示例
 
@@ -420,6 +421,8 @@ import (
     "github.com/cocosip/go-dicom/pkg/dicom/vr"
     "github.com/cocosip/go-dicom/pkg/network/dimse"
     "github.com/cocosip/go-dicom/pkg/network/server"
+    "github.com/cocosip/go-dicom/pkg/network/service"
+    "github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func main() {
@@ -429,7 +432,7 @@ func main() {
     )
 
     // 流式发送 C-FIND 结果；每次 SendPending 都会接受发送队列背压。
-    srv.SetCFindStreamHandler(func(ctx context.Context, op service.CFindOperation) error {
+    srv.SetCFindHandler(func(ctx context.Context, op service.CFindOperation) error {
         query := op.Identifier()
         level := op.QueryLevel()
 

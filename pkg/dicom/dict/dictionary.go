@@ -7,39 +7,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/dictif"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
-
-// dictionaryAdapter wraps Dictionary to implement dictif.Lookup interface.
-// This adapter is needed because Go's interface matching requires exact method signatures,
-// and we can't change existing Dictionary methods without breaking compatibility.
-type dictionaryAdapter struct {
-	*Dictionary
-}
-
-// LookupKeyword implements dictif.Lookup by wrapping Dictionary.LookupKeyword.
-func (da *dictionaryAdapter) LookupKeyword(keyword string) dictif.Tag {
-	tag := da.Dictionary.LookupKeyword(keyword)
-	if tag == nil {
-		return nil
-	}
-	return tag // *tag.Tag implements dictif.Tag
-}
-
-// GetPrivateCreator implements dictif.Lookup by wrapping Dictionary.GetPrivateCreator.
-func (da *dictionaryAdapter) GetPrivateCreator(creator string) dictif.PrivateCreator {
-	pc := da.Dictionary.GetPrivateCreator(creator)
-	if pc == nil {
-		return nil
-	}
-	return pc // *tag.PrivateCreator implements dictif.PrivateCreator
-}
-
-// init registers the default dictionary as the global lookup implementation.
-func init() {
-	dictif.SetGlobalLookup(&dictionaryAdapter{Dictionary: Default()})
-}
 
 // Dictionary manages DICOM dictionary entries.
 //
@@ -333,23 +302,4 @@ func Default() *Dictionary {
 func initializeDefaultDictionary(d *Dictionary) {
 	loadStandardEntries(d)
 	loadPrivateEntries(d)
-}
-
-// LookupTag implements dictif.Lookup interface.
-// It converts dictif.Tag to *tag.Tag and returns dictif.Entry.
-func (d *Dictionary) LookupTag(t dictif.Tag) dictif.Entry {
-	tagPtr, ok := t.(*tag.Tag)
-	if !ok {
-		// Convert an interface-only tag when no private creator information exists.
-		tagPtr = tag.New(t.Group(), t.Element())
-	}
-
-	// Use existing Lookup method
-	entry := d.Lookup(tagPtr)
-	if entry == nil {
-		return nil
-	}
-
-	// Entry already implements dictif.Entry
-	return entry
 }

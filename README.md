@@ -175,7 +175,12 @@ This README describes the supported library surface rather than a development ro
   - [x] Compressed transfer syntax codecs supplied by [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs)
 
   **Note**: `go-dicom` supplies the codec registry, transcoder, and DICOM encapsulation support.
-  Add the selected [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs) codec package as a blank import to register its compressed transfer syntax.
+  Add the selected [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs) codec package as a blank import to register its codec in the process-wide, mutable `codec.GlobalRegistry()`.
+
+  Standard transfer syntaxes are read from an immutable catalog. Applications that need
+  application-defined transfer syntaxes or an isolated view should create a
+  `transfer.NewRegistry()` and pass it explicitly to the parser or network composition root;
+  constructing a syntax with `transfer.NewBuilder(...).Build()` has no registration side effect.
 
 - [x] **DICOM Printing**
   - [x] Dataset round trips for Film Session, Film Box, Image Box, and Presentation LUT
@@ -1164,8 +1169,8 @@ func main() {
         fmt.Printf("Total compressed size: %d bytes\n", totalSize)
 
         // To decode or transcode this data, add the selected go-dicom-codecs
-        // package as a blank import so it registers its codec, then use
-        // imaging/codec.NewTranscoder with the required transfer syntaxes.
+        // package as a blank import so it registers its codec, then create a
+        // transcode.Manager from codec.GlobalRegistry().
     }
 }
 ```

@@ -9,33 +9,35 @@ import (
 	"image/png"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 )
 
 func TestRenderFrameImageMatchesExistingPNGExport(t *testing.T) {
 	tests := []struct {
 		name string
-		info *PixelDataInfo
+		info *pixeldata.Info
 		data []byte
 		kind any
 	}{
 		{
-			name: photometricMonochrome1,
-			info: &PixelDataInfo{
+			name: pixel.Monochrome1.Value,
+			info: &pixeldata.Info{
 				Width: 2, Height: 2, NumberOfFrames: 1,
 				BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
-				PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome1,
+				PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.Monochrome1,
 			},
 			data: []byte{0, 64, 128, 255},
 			kind: (*image.Gray)(nil),
 		},
 		{
 			name: "RGB",
-			info: &PixelDataInfo{
+			info: &pixeldata.Info{
 				Width: 2, Height: 1, NumberOfFrames: 1,
 				BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 3,
-				PixelRepresentation: UnsignedPixels, PhotometricInterpretation: RGBPhotometric,
-				PlanarConfiguration: InterleavedPlanar,
+				PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.RGBPhotometric,
+				PlanarConfiguration: pixel.InterleavedPlanar,
 			},
 			data: []byte{255, 0, 0, 0, 128, 255},
 			kind: (*image.RGBA)(nil),
@@ -44,9 +46,9 @@ func TestRenderFrameImageMatchesExistingPNGExport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pixelData, err := NewDicomPixelDataFromBytes(tt.info, tt.data)
+			pixelData, err := pixeldata.NewFromBytes(tt.info, tt.data)
 			if err != nil {
-				t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+				t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
 			}
 			dicomImage := NewDicomImage(pixelData)
 			got, err := dicomImage.RenderFrameImage(0)
@@ -78,13 +80,13 @@ func TestRenderFrameImageMatchesExistingPNGExport(t *testing.T) {
 }
 
 func TestRenderFrameImageRejectsInvalidFrame(t *testing.T) {
-	pixelData, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+	pixelData, err := pixeldata.NewFromBytes(&pixeldata.Info{
 		Width: 1, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
-		PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome2,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.Monochrome2,
 	}, []byte{1})
 	if err != nil {
-		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
 	}
 	if _, err := NewDicomImage(pixelData).RenderFrameImage(1); err == nil {
 		t.Fatal("RenderFrameImage() accepted an out-of-range frame")

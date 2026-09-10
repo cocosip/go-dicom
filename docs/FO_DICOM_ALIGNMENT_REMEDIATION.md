@@ -226,9 +226,9 @@ func WithRequestTimeout(timeout time.Duration) service.Option
 func WithHandlerShutdownTimeout(timeout time.Duration) service.Option
 ```
 
-现有 `service.WithDIMSETimeout` 标记 Deprecated，并在兼容期内作为
-`WithHandlerShutdownTimeout` 的别名；它不能继续宣称控制 request/response timeout。Service 已有
-`WithReadTimeout`/`WithWriteTimeout` 保持不变。`defaultServiceConfig` 的 read timeout 改为 `0`，
+`service.WithDIMSETimeout` 已移除，不保留含义含糊的兼容别名。原来依赖其真实行为的调用迁移到
+`WithHandlerShutdownTimeout`；出站请求的 response idle timeout 使用 `WithRequestTimeout`。
+Service 已有 `WithReadTimeout`/`WithWriteTimeout` 保持不变。`defaultServiceConfig` 的 read timeout 改为 `0`，
 Client 默认 transport read timeout 同样为 `0`；write timeout 保持有界值，避免永久阻塞写操作。
 服务器若需要连接 idle policy，应显式配置 transport read timeout 或在应用层管理 association。
 
@@ -271,7 +271,7 @@ Client 默认 transport read timeout 同样为 `0`；write timeout 保持有界�
 
 **优先级：** `P0`
 
-**初始状态：** `Open`
+**状态：** `Completed`
 
 **最低验证等级：** `L2`
 
@@ -432,7 +432,7 @@ type clientSession struct {
 
 **最低验证等级：** `L3`
 
-#### 现状
+#### 原问题
 
 DIMSE 层已有 N-CREATE、N-GET、N-SET、N-DELETE、N-ACTION、N-EVENT-REPORT 的 request、
 response、factory 和 SCP handler。Service 仅提供 N-CREATE/N-SET/N-ACTION/N-DELETE 的
@@ -509,11 +509,11 @@ func (c *Client) NEventReport(ctx context.Context, req *dimse.NEventReportReques
 
 #### 现状
 
-当前 `CFindHandler` 返回完整 `[]*CFindResponse`，handler 返回后 Service 才发送第一条结果。
+旧 `CFindHandler` 返回完整 `[]*CFindResponse`，handler 返回后 Service 才发送第一条结果。
 大结果集会产生首包延迟和额外内存，C-CANCEL 只能通过 context 通知 handler，但无法中止已经
 构造的大切片。
 
-#### 推荐 API
+#### 已实现 API
 
 参照现有 CMoveOperation/CGetOperation，引入：
 
@@ -523,14 +523,15 @@ type CFindOperation interface {
     QueryLevel() dimse.QueryRetrieveLevel
     Identifier() *dataset.Dataset
     SendPending(identifier *dataset.Dataset) error
+    SendPendingWithStatus(identifier *dataset.Dataset, s *status.Status) error
     SendFinal(s *status.Status) error
 }
 
-type CFindStreamHandler func(context.Context, CFindOperation) error
+type CFindHandler func(context.Context, CFindOperation) error
 ```
 
-`Handlers` 新增 `CFindStreamHandler`，保留旧 `CFindHandler` 作为兼容入口并标记 Deprecated。
-两者同时配置时优先 stream handler，并在构造/启动时返回配置冲突错误，避免静默忽略。
+`Handlers`、`WithCFindHandler` 和 `Server.SetCFindHandler` 只接受这一套 operation handler。
+旧 slice handler 和 `CFindStreamHandler` 后缀入口均已迁移并移除，不保留双入口。
 
 #### 生命周期和背压
 
@@ -542,11 +543,11 @@ type CFindStreamHandler func(context.Context, CFindOperation) error
 6. handler 在 cancel 后未发送 final 时，Service 发送 Cancel final；已经 final 时不重复发送。
 7. identifier 在调用发送前进行独立快照或同步编码，调用方后续修改不得改变 wire 数据。
 
-#### 兼容迁移
+#### 唯一入口迁移
 
-- 旧 slice handler 通过内部 adapter 逐条调用 operation，现有应用无需立即修改。
-- 新示例和文档只展示 stream handler。
-- 至少保留一个小版本周期后，再评估是否移除旧字段；本文不授权直接删除。
+- 旧 slice handler 的每个 Pending identifier 和最终 status 都逐项迁移到 operation 调用。
+- `SendPendingWithStatus` 保留旧 handler 可表达的 `0xFF01` Pending Warning。
+- 新示例和文档只展示 `CFindHandler func(context.Context, CFindOperation) error`。
 
 #### 必测场景
 
@@ -989,7 +990,7 @@ pending 数、final 数、超时结果和连接是否复用。临时 fo-dicom �
 | --- | --- | --- |
 | AddPresentationContext 返回 error | 源码/API 调整 | release notes，直接语句调用保持可用 |
 | Client 默认不因 RequestTimeout 关闭空闲连接 | 行为修复 | 作为 bug fix，明确 transport option |
-| 新增 CFindStreamHandler | 向后兼容 | 保留并弃用 slice handler |
+| C-FIND handler 收敛为 operation API | 源码/API 调整 | 逐项迁移 pending/final/status，不保留双入口 |
 | 新增六种 Client N-Service 方法 | 向后兼容 | 不改变 Service 已有四种方法 |
 | 新增 ManagedClient | 向后兼容 | 不隐式改变低层 Client |
 | 新增 RenderFrameImageWithOptions | 向后兼容 | 旧方法保持零值输出 |

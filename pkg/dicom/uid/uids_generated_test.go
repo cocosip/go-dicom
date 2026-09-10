@@ -67,14 +67,12 @@ func TestGeneratedUIDs(t *testing.T) {
 	}
 }
 
-// Test that UIDs are registered in the global registry
-func TestGeneratedUIDsRegistered(t *testing.T) {
-	// Parse a standard UID - should return the registered instance
+// Test that generated UIDs are available from the immutable standard catalog.
+func TestGeneratedUIDsInStandardCatalog(t *testing.T) {
 	parsed := uid.Parse(testImplicitVRLittleLE, "Implicit VR Little Endian", uid.TypeUnknown)
 
-	// Verify it equals the registered constant
-	if !parsed.Equals(uid.ImplicitVRLittleEndian) {
-		t.Error("Parsed UID should equal registered constant")
+	if parsed != uid.ImplicitVRLittleEndian {
+		t.Error("parsed UID should be the generated canonical object")
 	}
 
 	// Verify the full name from the registered instance

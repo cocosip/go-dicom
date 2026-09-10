@@ -53,11 +53,20 @@ var (
 		)
 	}
 
-	output.WriteString(")\n\nfunc init() {\n")
+	output.WriteString(")\n\nvar generatedStandardUIDEntries = []*UID{\n")
 	for _, dictionaryUID := range dictionary.UIDs {
 		fmt.Fprintf(
 			&output,
-			"\tRegister(%s)\n",
+			"\t%s,\n",
+			generatedIdentifier(dictionaryUID.Keyword, dictionaryUID.Retired),
+		)
+	}
+	output.WriteString("}\n\nvar generatedStandardUIDIndex = map[string]*UID{\n")
+	for _, dictionaryUID := range dictionary.UIDs {
+		fmt.Fprintf(
+			&output,
+			"\t%s: %s,\n",
+			strconv.Quote(dictionaryUID.Value),
 			generatedIdentifier(dictionaryUID.Keyword, dictionaryUID.Retired),
 		)
 	}

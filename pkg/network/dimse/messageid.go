@@ -36,7 +36,7 @@ func (g *MessageIDGenerator) Reset() {
 // AssignMessageID assigns a message ID to a request if it doesn't have one.
 // If the message already has a non-zero MessageID, it is left unchanged.
 // Returns the assigned MessageID.
-func (g *MessageIDGenerator) AssignMessageID(msg Message) (uint16, error) {
+func (g *MessageIDGenerator) AssignMessageID(msg Request) (uint16, error) {
 	currentID := msg.MessageID()
 
 	// If already assigned, return it
@@ -47,57 +47,8 @@ func (g *MessageIDGenerator) AssignMessageID(msg Message) (uint16, error) {
 	// Generate new MessageID
 	newID := g.Next()
 
-	// Try to set it (only works on BaseMessage)
-	if base, ok := msg.(*BaseMessage); ok {
-		if err := base.SetMessageID(newID); err != nil {
-			return 0, err
-		}
-		return newID, nil
-	}
-
-	// For Request messages
-	if req, ok := msg.(Request); ok {
-		if baseReq, ok := req.(*BaseRequest); ok {
-			if err := baseReq.SetMessageID(newID); err != nil {
-				return 0, err
-			}
-			return newID, nil
-		}
-	}
-
-	// If we can't cast, try to access BaseMessage through the interface
-	// This works for CEchoRequest, CStoreRequest, etc.
-	switch m := msg.(type) {
-	case *CEchoRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *CStoreRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *CFindRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *CGetRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *CMoveRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *NEventReportRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *NGetRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *NSetRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *NActionRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *NCreateRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	case *NDeleteRequest:
-		return g.assignToBaseRequest(m.BaseRequest, newID)
-	}
-
-	return 0, nil
-}
-
-func (g *MessageIDGenerator) assignToBaseRequest(req *BaseRequest, id uint16) (uint16, error) {
-	if err := req.SetMessageID(id); err != nil {
+	if err := msg.SetMessageID(newID); err != nil {
 		return 0, err
 	}
-	return id, nil
+	return newID, nil
 }

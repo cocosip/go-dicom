@@ -23,14 +23,14 @@ Converts stored pixel values to modality-specific units (e.g., Hounsfield Units 
 
 **Modality Rescale LUT**:
 ```go
-lut := render.NewModalityRescaleLUT(slope, intercept, minInput, maxInput)
-output := lut.Transform(pixelValue)  // output = pixelValue * slope + intercept
+table := lut.NewModalityRescaleLUT(slope, intercept, minInput, maxInput)
+output := table.Transform(pixelValue)  // output = pixelValue * slope + intercept
 ```
 
 **Modality Sequence LUT**:
 ```go
 lutData := []float64{10, 20, 30, 40, 50}
-lut := render.NewModalitySequenceLUT(lutData, firstValueMapped, isSigned)
+table := lut.NewModalitySequenceLUT(lutData, firstValueMapped, isSigned)
 ```
 
 #### VOI LUT (Value of Interest)
@@ -43,24 +43,27 @@ Applies window/level transformations for visualization.
 
 ```go
 // Create LINEAR VOI LUT
-lut := render.NewLinearVOILUT(windowCenter, windowWidth)
+table := lut.NewVOILinearLUT(windowCenter, windowWidth)
 
 // Create using factory (auto-selects LINEAR_EXACT for width < 1.0)
-lut := render.CreateVOILUT(render.VOILinear, center, width)
+table := lut.CreateVOILUT(lut.VOILUTFunctionLinear, center, width)
 
 // Adjust window
-lut.SetWindow(newCenter, newWidth)
+table.SetWindow(newCenter, newWidth)
 ```
 
 #### Composite LUT
 Chains multiple LUTs together for complex transformations.
 
 ```go
-modalityLUT := render.NewModalityRescaleLUT(2.0, 0, 0, 4095)
-voiLUT := render.NewLinearVOILUT(2048, 4096)
-invertLUT := render.NewInvertLUT(0, 255)
+modalityLUT := lut.NewModalityRescaleLUT(2.0, 0, 0, 4095)
+voiLUT := lut.NewVOILinearLUT(2048, 4096)
+invertLUT := lut.NewInvertLUT(0, 255)
 
-compositeLUT := render.NewCompositeLUT(modalityLUT, voiLUT, invertLUT)
+compositeLUT := lut.NewCompositeLUT()
+compositeLUT.Add(modalityLUT)
+compositeLUT.Add(voiLUT)
+compositeLUT.Add(invertLUT)
 output := compositeLUT.Transform(input)
 ```
 
@@ -69,26 +72,24 @@ output := compositeLUT.Transform(input)
 Supports conversion between multiple DICOM color spaces:
 
 ```go
-converter := render.NewColorSpaceConverter()
-
 // RGB <-> YBR_FULL
-y, cb, cr := converter.RGBToYBRFull(r, g, b)
-r, g, b = converter.YBRFullToRGB(y, cb, cr)
+y, cb, cr := colorconv.RGBToYBRFull(r, g, b)
+r, g, b = colorconv.YBRFullToRGB(y, cb, cr)
 
 // YBR_FULL_422 (4:2:2 subsampling)
-y1, y2, cb, cr := converter.RGBToYBRFull422(r1, g1, b1, r2, g2, b2)
-r1, g1, b1, r2, g2, b2 = converter.YBRFull422ToRGB(y1, y2, cb, cr)
+y1, y2, cb, cr := colorconv.RGBToYBRFull422(r1, g1, b1, r2, g2, b2)
+r1, g1, b1, r2, g2, b2 = colorconv.YBRFull422ToRGB(y1, y2, cb, cr)
 
 // YBR_PARTIAL_422 (BT.601 limited range)
-y, cb, cr := converter.RGBToYBRPartial422(r, g, b)
-r, g, b = converter.YBRPartial422ToRGB(y, cb, cr)
+y, cb, cr := colorconv.RGBToYBRPartial422(r, g, b)
+r, g, b = colorconv.YBRPartial422ToRGB(y, cb, cr)
 
 // YBR_ICT/RCT (JPEG 2000)
-y, cb, cr := converter.RGBToYBRICT(r, g, b)
-r, g, b = converter.YBRICTToRGB(y, cb, cr)
+y, cb, cr := colorconv.RGBToYBRICT(r, g, b)
+r, g, b = colorconv.YBRICTToRGB(y, cb, cr)
 
 // Batch conversion
-rgbData, err := converter.ConvertToRGB(ybrData, width, height, "YBR_FULL", planarConfig)
+rgbData, err := colorconv.ConvertToRGB(ybrData, width, height, *pixel.YbrFull, planarConfig)
 ```
 
 ### Rendering Pipeline

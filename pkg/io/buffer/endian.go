@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 // EndianByteBuffer is a ByteBuffer implementation that performs endian conversion.
@@ -32,7 +32,7 @@ func NewEndian(buffer ByteBuffer, endianness endian.Endian, unitSize int) ByteBu
 	}
 
 	// No conversion needed if endianness matches local machine
-	if endianness == endian.LocalMachine {
+	if endianness == endian.Native() {
 		return buffer
 	}
 

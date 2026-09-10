@@ -696,6 +696,27 @@ func TestParseSetsDatasetInternalTransferSyntax(t *testing.T) {
 	}
 }
 
+func TestParseUsesConfiguredTransferSyntaxRegistry(t *testing.T) {
+	registry := transfer.NewRegistry()
+	replacement := transfer.NewBuilder(transfer.ExplicitVRLittleEndian.UID()).
+		SetExplicitVR(true).
+		Build()
+	if _, err := registry.Replace(replacement); err != nil {
+		t.Fatalf("Registry.Replace() error = %v", err)
+	}
+
+	result, err := Parse(createMiniDICOM(), WithTransferSyntaxRegistry(registry))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if result.TransferSyntax != replacement {
+		t.Fatal("Parse() did not use the configured Transfer Syntax Registry")
+	}
+	if result.Dataset.InternalTransferSyntax() != replacement {
+		t.Fatal("Dataset did not retain the configured Transfer Syntax object")
+	}
+}
+
 func TestParseNoPreambleDICOM(t *testing.T) {
 	full := createMiniDICOM().Bytes()
 	if len(full) <= 132 {

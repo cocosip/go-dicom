@@ -133,8 +133,12 @@ func TestRunCommandUsesFODicomRetiredIdentifierConvention(t *testing.T) {
 	}
 	uids := readTestFile(t, filepath.Join(root, filepath.FromSlash(uidsOutput)))
 	if !strings.Contains(uids, "ExplicitVRBigEndianRETIRED = New(") ||
-		!strings.Contains(uids, "Register(ExplicitVRBigEndianRETIRED)") {
+		!strings.Contains(uids, "generatedStandardUIDEntries = []*UID{") ||
+		!strings.Contains(uids, "generatedStandardUIDIndex = map[string]*UID{") {
 		t.Errorf("generated UIDs do not use fo-dicom retired identifier convention")
+	}
+	if strings.Contains(uids, "func init()") || strings.Contains(uids, "Register(ExplicitVRBigEndianRETIRED)") {
+		t.Errorf("generated UIDs contain registry initialization side effects")
 	}
 	dictionary := readTestFile(t, filepath.Join(root, filepath.FromSlash(dictionaryOutput)))
 	if !strings.Contains(dictionary, `"LengthToEnd"`) {

@@ -4,6 +4,8 @@
 // Package serialization provides options for DICOM JSON serialization and deserialization and xml serialization.
 package serialization
 
+import "github.com/cocosip/go-dicom/pkg/dicom/dict"
+
 // NumberSerializationMode defines how DICOM numbers (IS, DS, SV, UV) should be serialized
 type NumberSerializationMode int
 
@@ -25,6 +27,8 @@ const (
 
 // jsonConfig configures JSON serialization/deserialization behavior
 type jsonConfig struct {
+	lookup dict.Lookup
+
 	// writeTagsAsKeywords writes DICOM keywords instead of tags as JSON keys.
 	// This makes the JSON non-compliant to DICOM JSON standard.
 	// Example: "PatientName" instead of "00100010"
@@ -54,6 +58,7 @@ type jsonConfig struct {
 // These options produce standard-compliant DICOM JSON.
 func defaultJSONConfig() jsonConfig {
 	return jsonConfig{
+		lookup:                  dict.Default(),
 		writeTagsAsKeywords:     false,
 		writeKeyword:            false,
 		writeName:               false,
@@ -65,6 +70,15 @@ func defaultJSONConfig() jsonConfig {
 
 // JSONOption is a functional option for configuring JSON serialization
 type JSONOption func(*jsonConfig)
+
+// WithJSONLookup selects the dictionary used for JSON keyword lookup.
+func WithJSONLookup(lookup dict.Lookup) JSONOption {
+	return func(c *jsonConfig) {
+		if lookup != nil {
+			c.lookup = lookup
+		}
+	}
+}
 
 // WithWriteTagsAsKeywords configures whether to write tags as keywords (non-standard)
 func WithWriteTagsAsKeywords(enabled bool) JSONOption {
@@ -110,6 +124,8 @@ func WithIndent(indent string) JSONOption {
 
 // xmlConfig configures XML serialization behavior
 type xmlConfig struct {
+	lookup dict.Lookup
+
 	// indent specifies the indentation string for pretty-printing.
 	// Empty string means no indentation (compact format).
 	// Common values: "" (compact), "  " (2 spaces), "\t" (tab)
@@ -120,12 +136,22 @@ type xmlConfig struct {
 // These options produce standard-compliant DICOM NativeDicomModel XML.
 func defaultXMLConfig() xmlConfig {
 	return xmlConfig{
+		lookup: dict.Default(),
 		indent: "  ", // Default to 2-space indentation for readability
 	}
 }
 
 // XMLOption is a functional option for configuring XML serialization
 type XMLOption func(*xmlConfig)
+
+// WithXMLLookup selects the dictionary used for XML keyword lookup.
+func WithXMLLookup(lookup dict.Lookup) XMLOption {
+	return func(c *xmlConfig) {
+		if lookup != nil {
+			c.lookup = lookup
+		}
+	}
+}
 
 // WithXMLIndent configures the indentation for XML pretty-printing
 func WithXMLIndent(indent string) XMLOption {

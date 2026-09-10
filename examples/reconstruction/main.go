@@ -15,8 +15,10 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/reconstruction"
 )
 
@@ -43,12 +45,19 @@ func run(ctx context.Context, inputs []string, outputDirectory, plane string, sp
 		return err
 	}
 	images := make([]*reconstruction.ImageData, 0, len(inputs))
+	manager, err := transcode.NewManager(codec.GlobalRegistry())
+	if err != nil {
+		return fmt.Errorf("create transcode manager: %w", err)
+	}
 	for _, input := range inputs {
 		result, err := parser.ParseFile(input)
 		if err != nil {
 			return fmt.Errorf("parse %s: %w", input, err)
 		}
-		frames, err := reconstruction.NewImageDataFromDataset(result.Dataset)
+		frames, err := reconstruction.NewImageDataFromDataset(
+			result.Dataset,
+			reconstruction.WithTranscodeManager(manager),
+		)
 		if err != nil {
 			return fmt.Errorf("read reconstruction frames from %s: %w", input, err)
 		}

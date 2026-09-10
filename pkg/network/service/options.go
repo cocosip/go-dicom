@@ -7,6 +7,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 )
@@ -17,9 +19,11 @@ type Option func(*serviceConfig)
 // serviceConfig contains configuration options for a DICOM service.
 type serviceConfig struct {
 	// Observability hooks are optional and silent by default.
-	eventObserver   observability.EventObserver
-	metricsObserver observability.MetricsObserver
-	connectionID    observability.ConnectionID
+	eventObserver          observability.EventObserver
+	metricsObserver        observability.MetricsObserver
+	connectionID           observability.ConnectionID
+	transcodeManager       *transcode.Manager
+	transferSyntaxRegistry *transfer.Registry
 
 	// associationRequestor indicates that the local AE initiated the association.
 	// The default is false for services accepting inbound associations.
@@ -65,6 +69,22 @@ type serviceConfig struct {
 	handlers *Handlers
 }
 
+// WithTranscodeManager sets the Dataset transcode manager used when a C-STORE
+// dataset does not match any accepted transfer syntax directly.
+func WithTranscodeManager(manager *transcode.Manager) Option {
+	return func(c *serviceConfig) {
+		c.transcodeManager = manager
+	}
+}
+
+// WithTransferSyntaxRegistry sets the isolated registry used to resolve
+// presentation-context Transfer Syntax UIDs.
+func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
+	return func(c *serviceConfig) {
+		c.transferSyntaxRegistry = registry
+	}
+}
+
 // WithEventObserver sets the network lifecycle event observer.
 func WithEventObserver(observer observability.EventObserver) Option {
 	return func(c *serviceConfig) {
@@ -91,6 +111,7 @@ func WithConnectionID(id observability.ConnectionID) Option {
 func defaultServiceConfig() *serviceConfig {
 	return &serviceConfig{
 		maxPDULength:           16384, // 16 KB
+		transferSyntaxRegistry: transfer.NewRegistry(),
 		readTimeout:            0,
 		writeTimeout:           30 * time.Second,
 		handlerShutdownTimeout: 60 * time.Second,
@@ -137,15 +158,6 @@ func WithHandlerShutdownTimeout(timeout time.Duration) Option {
 	return func(c *serviceConfig) {
 		c.handlerShutdownTimeout = timeout
 	}
-}
-
-// WithDIMSETimeout is retained for compatibility and configures only the
-// handler shutdown wait.
-//
-// Deprecated: use WithHandlerShutdownTimeout. Use WithRequestTimeout for
-// outgoing DIMSE response idle timeouts.
-func WithDIMSETimeout(timeout time.Duration) Option {
-	return WithHandlerShutdownTimeout(timeout)
 }
 
 // WithSendQueueSize sets the size of the send queue channel.
@@ -225,26 +237,13 @@ func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dim
 	}
 }
 
-// WithCFindHandler sets the legacy C-FIND request handler.
-//
-// Deprecated: use WithCFindStreamHandler to stream result datasets as they
-// become available.
-func WithCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) Option {
+// WithCFindHandler sets the streaming C-FIND request handler.
+func WithCFindHandler(handler func(context.Context, CFindOperation) error) Option {
 	return func(c *serviceConfig) {
 		if c.handlers == nil {
 			c.handlers = &Handlers{}
 		}
 		c.handlers.CFindHandler = handler
-	}
-}
-
-// WithCFindStreamHandler sets the streaming C-FIND request handler.
-func WithCFindStreamHandler(handler func(context.Context, CFindOperation) error) Option {
-	return func(c *serviceConfig) {
-		if c.handlers == nil {
-			c.handlers = &Handlers{}
-		}
-		c.handlers.CFindStreamHandler = handler
 	}
 }
 

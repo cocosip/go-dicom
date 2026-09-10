@@ -314,7 +314,7 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 		return zero, err
 	}
 	defer release()
-	msgID, err := assoc.AssignMessageID(req)
+	msgID, err := s.messageIDGenerator.AssignMessageID(req)
 	if err != nil {
 		return zero, fmt.Errorf("failed to assign message ID: %w", err)
 	}
@@ -351,75 +351,74 @@ type pendingResponse interface {
 	IsPending() bool
 }
 
-// sendRequestWithProgressWithError additionally reports an asynchronous
-// terminal failure. The legacy response-only methods keep their existing
-// signature while new callers can distinguish a clean final response from a
-// locally cancelled request, request timeout, or association close.
-func sendRequestWithProgressWithError[Req dimse.Request, Resp pendingResponse](
+// ResponseEvent is one ordered event from a multi-response DIMSE request.
+// Exactly one of Response or Err is set. An error is terminal; a final
+// response is the last response event.
+type ResponseEvent[T dimse.Response] struct {
+	Response T
+	Err      error
+}
+
+func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	ctx context.Context,
 	s *Service,
 	req Req,
 	errMsg string,
-) (<-chan Resp, <-chan error, error) {
+) (<-chan ResponseEvent[Resp], error) {
 	assoc := s.GetAssociation()
 	if assoc == nil {
-		return nil, nil, fmt.Errorf("no association available")
+		return nil, fmt.Errorf("no association available")
 	}
 	release, err := s.acquireAsyncOperation(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	msgID, err := assoc.AssignMessageID(req)
+	msgID, err := s.messageIDGenerator.AssignMessageID(req)
 	if err != nil {
 		release()
-		return nil, nil, fmt.Errorf("failed to assign message ID: %w", err)
+		return nil, fmt.Errorf("failed to assign message ID: %w", err)
 	}
-	resultCh := make(chan Resp, 10)
-	terminalErrCh := make(chan error, 1)
+	eventCh := make(chan ResponseEvent[Resp], 10)
 	respCh := make(chan dimse.Response, 10)
 	pending := s.registerPendingRequest(msgID, req, respCh)
 
 	if err := s.Send(ctx, req); err != nil {
 		pending.lifecycle.finishContext(ctx, err)
 		s.unregisterPendingRequest(msgID)
-		close(resultCh)
-		close(terminalErrCh)
 		release()
-		return nil, nil, fmt.Errorf("%s: %w", errMsg, err)
+		return nil, fmt.Errorf("%s: %w", errMsg, err)
 	}
 	s.armPendingRequestTimeout(ctx, msgID, pending)
 
 	go func() {
-		defer close(resultCh)
-		defer close(terminalErrCh)
+		defer close(eventCh)
 		defer s.unregisterPendingRequest(msgID)
 		defer release()
-		finishError := func(err error) {
-			if err != nil {
-				terminalErrCh <- err
-			}
+		sendError := func(err error) {
+			eventCh <- ResponseEvent[Resp]{Err: err}
 		}
 		for {
 			select {
 			case respMsg, ok := <-respCh:
 				if !ok {
+					sendError(fmt.Errorf("response stream closed before a final response"))
 					return
 				}
 				resp, ok := respMsg.(Resp)
 				if !ok {
-					finishError(fmt.Errorf("unexpected response type: %T", respMsg))
+					sendError(fmt.Errorf("unexpected response type: %T", respMsg))
 					return
 				}
 				select {
-				case resultCh <- resp:
+				case eventCh <- ResponseEvent[Resp]{Response: resp}:
 				case <-ctx.Done():
 					pending.lifecycle.finishContext(ctx, ctx.Err())
-					finishError(ctx.Err())
+					sendError(ctx.Err())
 					return
 				case <-s.closeCh:
 					closeErr := s.CloseError()
 					pending.lifecycle.finishError(ctx, closeErr)
-					finishError(closeErr)
+					sendError(closeErr)
 					return
 				}
 				if !resp.IsPending() {
@@ -427,26 +426,27 @@ func sendRequestWithProgressWithError[Req dimse.Request, Resp pendingResponse](
 				}
 			case <-ctx.Done():
 				pending.lifecycle.finishContext(ctx, ctx.Err())
-				finishError(ctx.Err())
+				sendError(ctx.Err())
 				return
 			case terminalErr := <-pending.doneCh:
-				finishError(terminalErr)
+				sendError(terminalErr)
 				return
 			case <-s.closeCh:
 				closeErr := s.CloseError()
 				pending.lifecycle.finishError(ctx, closeErr)
-				finishError(closeErr)
+				sendError(closeErr)
 				return
 			}
 		}
 	}()
-	return resultCh, terminalErrCh, nil
+	return eventCh, nil
 }
 
 // SendCFind sends a C-FIND request to query for DICOM objects.
 //
-// Returns a channel that will receive all C-FIND responses (both pending and final).
-// The channel will be closed when the final response is received or an error occurs.
+// Returns a channel that will receive ordered response events. Each event contains
+// either a pending/final response or a terminal error. The channel closes after a
+// final response or terminal error.
 //
 // The request's MessageID will be automatically assigned if not already set.
 //
@@ -468,16 +468,8 @@ func sendRequestWithProgressWithError[Req dimse.Request, Resp pendingResponse](
 //	        // Final response
 //	    }
 //	}
-func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error) {
-	responses, _, err := s.SendCFindWithError(ctx, req)
-	return responses, err
-}
-
-// SendCFindWithError sends a C-FIND request and additionally returns a channel
-// for an asynchronous terminal transport, context, or request-timeout error.
-// The error channel closes without a value after a normal final response.
-func (s *Service) SendCFindWithError(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error) {
-	return sendRequestWithProgressWithError[*dimse.CFindRequest, *dimse.CFindResponse](ctx, s, req, "failed to send C-FIND request")
+func (s *Service) SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-chan ResponseEvent[*dimse.CFindResponse], error) {
+	return sendRequestWithProgress[*dimse.CFindRequest, *dimse.CFindResponse](ctx, s, req, "failed to send C-FIND request")
 }
 
 // SendCMove sends a C-MOVE request and returns a channel that will receive responses.
@@ -496,16 +488,8 @@ func (s *Service) SendCFindWithError(ctx context.Context, req *dimse.CFindReques
 //   - 0xA801: Move destination unknown
 //   - 0xA900: Identifier does not match SOP Class
 //   - 0xC000: Unable to process
-func (s *Service) SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error) {
-	responses, _, err := s.SendCMoveWithError(ctx, req)
-	return responses, err
-}
-
-// SendCMoveWithError sends a C-MOVE request and additionally returns a channel
-// for an asynchronous terminal transport, context, or request-timeout error.
-// The error channel closes without a value after a normal final response.
-func (s *Service) SendCMoveWithError(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, <-chan error, error) {
-	return sendRequestWithProgressWithError[*dimse.CMoveRequest, *dimse.CMoveResponse](ctx, s, req, "failed to send C-MOVE request")
+func (s *Service) SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan ResponseEvent[*dimse.CMoveResponse], error) {
+	return sendRequestWithProgress[*dimse.CMoveRequest, *dimse.CMoveResponse](ctx, s, req, "failed to send C-MOVE request")
 }
 
 // SendCGet sends a C-GET request and returns a channel that will receive responses.
@@ -528,14 +512,6 @@ func (s *Service) SendCMoveWithError(ctx context.Context, req *dimse.CMoveReques
 //   - 0xA702: Out of resources - unable to perform sub-operations
 //   - 0xA900: Identifier does not match SOP Class
 //   - 0xC000: Unable to process
-func (s *Service) SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error) {
-	responses, _, err := s.SendCGetWithError(ctx, req)
-	return responses, err
-}
-
-// SendCGetWithError sends a C-GET request and additionally returns a channel
-// for an asynchronous terminal transport, context, or request-timeout error.
-// The error channel closes without a value after a normal final response.
-func (s *Service) SendCGetWithError(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, <-chan error, error) {
-	return sendRequestWithProgressWithError[*dimse.CGetRequest, *dimse.CGetResponse](ctx, s, req, "failed to send C-GET request")
+func (s *Service) SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan ResponseEvent[*dimse.CGetResponse], error) {
+	return sendRequestWithProgress[*dimse.CGetRequest, *dimse.CGetResponse](ctx, s, req, "failed to send C-GET request")
 }

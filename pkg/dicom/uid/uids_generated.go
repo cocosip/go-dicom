@@ -5792,1933 +5792,3864 @@ var (
 	MetalArtifactReductionAlgorithmFamily10036 = New("1.2.840.10008.6.1.1571", "Metal Artifact Reduction Algorithm Family (10036)", TypeContextGroupName, false)
 )
 
-func init() {
-	Register(Verification)
-	Register(ImplicitVRLittleEndian)
-	Register(ExplicitVRLittleEndian)
-	Register(EncapsulatedUncompressedExplicitVRLittleEndian)
-	Register(DeflatedExplicitVRLittleEndian)
-	Register(ExplicitVRBigEndianRETIRED)
-	Register(JPEGBaseline8Bit)
-	Register(JPEGExtended12Bit)
-	Register(JPEGExtended35RETIRED)
-	Register(JPEGSpectralSelectionNonHierarchical68RETIRED)
-	Register(JPEGSpectralSelectionNonHierarchical79RETIRED)
-	Register(JPEGFullProgressionNonHierarchical1012RETIRED)
-	Register(JPEGFullProgressionNonHierarchical1113RETIRED)
-	Register(JPEGLossless)
-	Register(JPEGLosslessNonHierarchical15RETIRED)
-	Register(JPEGExtendedHierarchical1618RETIRED)
-	Register(JPEGExtendedHierarchical1719RETIRED)
-	Register(JPEGSpectralSelectionHierarchical2022RETIRED)
-	Register(JPEGSpectralSelectionHierarchical2123RETIRED)
-	Register(JPEGFullProgressionHierarchical2426RETIRED)
-	Register(JPEGFullProgressionHierarchical2527RETIRED)
-	Register(JPEGLosslessHierarchical28RETIRED)
-	Register(JPEGLosslessHierarchical29RETIRED)
-	Register(JPEGLosslessSV1)
-	Register(JPEGLSLossless)
-	Register(JPEGLSNearLossless)
-	Register(JPEG2000Lossless)
-	Register(JPEG2000)
-	Register(JPEG2000MCLossless)
-	Register(JPEG2000MC)
-	Register(JPIPReferenced)
-	Register(JPIPReferencedDeflate)
-	Register(MPEG2MPML)
-	Register(MPEG2MPMLF)
-	Register(MPEG2MPHL)
-	Register(MPEG2MPHLF)
-	Register(MPEG4HP41)
-	Register(MPEG4HP41F)
-	Register(MPEG4HP41BD)
-	Register(MPEG4HP41BDF)
-	Register(MPEG4HP422D)
-	Register(MPEG4HP422DF)
-	Register(MPEG4HP423D)
-	Register(MPEG4HP423DF)
-	Register(MPEG4HP42STEREO)
-	Register(MPEG4HP42STEREOF)
-	Register(HEVCMP51)
-	Register(HEVCM10P51)
-	Register(JPEGXLLossless)
-	Register(JPEGXLJPEGRecompression)
-	Register(JPEGXL)
-	Register(HTJ2KLossless)
-	Register(HTJ2KLosslessRPCL)
-	Register(HTJ2K)
-	Register(JPIPHTJ2KReferenced)
-	Register(JPIPHTJ2KReferencedDeflate)
-	Register(RLELossless)
-	Register(RFC2557MIMEEncapsulationRETIRED)
-	Register(XMLEncodingRETIRED)
-	Register(SMPTEST211020UncompressedProgressiveActiveVideo)
-	Register(SMPTEST211020UncompressedInterlacedActiveVideo)
-	Register(SMPTEST211030PCMDigitalAudio)
-	Register(DeflatedImageFrameCompression)
-	Register(MediaStorageDirectoryStorage)
-	Register(HotIronPalette)
-	Register(PETPalette)
-	Register(HotMetalBluePalette)
-	Register(PET20StepPalette)
-	Register(SpringPalette)
-	Register(SummerPalette)
-	Register(FallPalette)
-	Register(WinterPalette)
-	Register(BasicStudyContentNotificationRETIRED)
-	Register(Papyrus3ImplicitVRLittleEndianRETIRED)
-	Register(StorageCommitmentPushModel)
-	Register(StorageCommitmentPushModelInstance)
-	Register(StorageCommitmentPullModelRETIRED)
-	Register(StorageCommitmentPullModelInstanceRETIRED)
-	Register(ProceduralEventLogging)
-	Register(ProceduralEventLoggingInstance)
-	Register(SubstanceAdministrationLogging)
-	Register(SubstanceAdministrationLoggingInstance)
-	Register(DCMUID)
-	Register(DCM)
-	Register(MA)
-	Register(UBERON)
-	Register(ITIS_TSN)
-	Register(MGI)
-	Register(PUBCHEM_CID)
-	Register(DC)
-	Register(NYUMCCG)
-	Register(MAYONRISBSASRG)
-	Register(IBSI)
-	Register(RO)
-	Register(RADELEMENT)
-	Register(I11)
-	Register(UNS)
-	Register(RRID)
-	Register(DICOMApplicationContext)
-	Register(DetachedPatientManagementRETIRED)
-	Register(DetachedPatientManagementMetaRETIRED)
-	Register(DetachedVisitManagementRETIRED)
-	Register(DetachedStudyManagementRETIRED)
-	Register(StudyComponentManagementRETIRED)
-	Register(ModalityPerformedProcedureStep)
-	Register(ModalityPerformedProcedureStepRetrieve)
-	Register(ModalityPerformedProcedureStepNotification)
-	Register(DetachedResultsManagementRETIRED)
-	Register(DetachedResultsManagementMetaRETIRED)
-	Register(DetachedStudyManagementMetaRETIRED)
-	Register(DetachedInterpretationManagementRETIRED)
-	Register(Storage)
-	Register(BasicFilmSession)
-	Register(BasicFilmBox)
-	Register(BasicGrayscaleImageBox)
-	Register(BasicColorImageBox)
-	Register(ReferencedImageBoxRETIRED)
-	Register(BasicGrayscalePrintManagementMeta)
-	Register(ReferencedGrayscalePrintManagementMetaRETIRED)
-	Register(PrintJob)
-	Register(BasicAnnotationBox)
-	Register(Printer)
-	Register(PrinterConfigurationRetrieval)
-	Register(PrinterInstance)
-	Register(PrinterConfigurationRetrievalInstance)
-	Register(BasicColorPrintManagementMeta)
-	Register(ReferencedColorPrintManagementMetaRETIRED)
-	Register(VOILUTBox)
-	Register(PresentationLUT)
-	Register(ImageOverlayBoxRETIRED)
-	Register(BasicPrintImageOverlayBoxRETIRED)
-	Register(PrintQueueInstanceRETIRED)
-	Register(PrintQueueManagementRETIRED)
-	Register(StoredPrintStorageRETIRED)
-	Register(HardcopyGrayscaleImageStorageRETIRED)
-	Register(HardcopyColorImageStorageRETIRED)
-	Register(PullPrintRequestRETIRED)
-	Register(PullStoredPrintManagementMetaRETIRED)
-	Register(MediaCreationManagement)
-	Register(DisplaySystem)
-	Register(DisplaySystemInstance)
-	Register(ComputedRadiographyImageStorage)
-	Register(DigitalXRayImageStorageForPresentation)
-	Register(DigitalXRayImageStorageForProcessing)
-	Register(DigitalMammographyXRayImageStorageForPresentation)
-	Register(DigitalMammographyXRayImageStorageForProcessing)
-	Register(DigitalIntraOralXRayImageStorageForPresentation)
-	Register(DigitalIntraOralXRayImageStorageForProcessing)
-	Register(CTImageStorage)
-	Register(EnhancedCTImageStorage)
-	Register(LegacyConvertedEnhancedCTImageStorage)
-	Register(UltrasoundMultiFrameImageStorageRetiredRETIRED)
-	Register(UltrasoundMultiFrameImageStorage)
-	Register(MRImageStorage)
-	Register(EnhancedMRImageStorage)
-	Register(MRSpectroscopyStorage)
-	Register(EnhancedMRColorImageStorage)
-	Register(LegacyConvertedEnhancedMRImageStorage)
-	Register(NuclearMedicineImageStorageRetiredRETIRED)
-	Register(UltrasoundImageStorageRetiredRETIRED)
-	Register(UltrasoundImageStorage)
-	Register(EnhancedUSVolumeStorage)
-	Register(PhotoacousticImageStorage)
-	Register(SecondaryCaptureImageStorage)
-	Register(MultiFrameSingleBitSecondaryCaptureImageStorage)
-	Register(MultiFrameGrayscaleByteSecondaryCaptureImageStorage)
-	Register(MultiFrameGrayscaleWordSecondaryCaptureImageStorage)
-	Register(MultiFrameTrueColorSecondaryCaptureImageStorage)
-	Register(StandaloneOverlayStorageRETIRED)
-	Register(StandaloneCurveStorageRETIRED)
-	Register(WaveformStorageTrialRETIRED)
-	Register(TwelveLeadECGWaveformStorage)
-	Register(GeneralECGWaveformStorage)
-	Register(AmbulatoryECGWaveformStorage)
-	Register(General32bitECGWaveformStorage)
-	Register(HemodynamicWaveformStorage)
-	Register(CardiacElectrophysiologyWaveformStorage)
-	Register(BasicVoiceAudioWaveformStorage)
-	Register(GeneralAudioWaveformStorage)
-	Register(ArterialPulseWaveformStorage)
-	Register(RespiratoryWaveformStorage)
-	Register(MultichannelRespiratoryWaveformStorage)
-	Register(RoutineScalpElectroencephalogramWaveformStorage)
-	Register(ElectromyogramWaveformStorage)
-	Register(ElectrooculogramWaveformStorage)
-	Register(SleepElectroencephalogramWaveformStorage)
-	Register(BodyPositionWaveformStorage)
-	Register(WaveformPresentationStateStorage)
-	Register(WaveformAcquisitionPresentationStateStorage)
-	Register(StandaloneModalityLUTStorageRETIRED)
-	Register(StandaloneVOILUTStorageRETIRED)
-	Register(GrayscaleSoftcopyPresentationStateStorage)
-	Register(ColorSoftcopyPresentationStateStorage)
-	Register(PseudoColorSoftcopyPresentationStateStorage)
-	Register(BlendingSoftcopyPresentationStateStorage)
-	Register(XAXRFGrayscaleSoftcopyPresentationStateStorage)
-	Register(GrayscalePlanarMPRVolumetricPresentationStateStorage)
-	Register(CompositingPlanarMPRVolumetricPresentationStateStorage)
-	Register(AdvancedBlendingPresentationStateStorage)
-	Register(VolumeRenderingVolumetricPresentationStateStorage)
-	Register(SegmentedVolumeRenderingVolumetricPresentationStateStorage)
-	Register(MultipleVolumeRenderingVolumetricPresentationStateStorage)
-	Register(VariableModalityLUTSoftcopyPresentationStateStorage)
-	Register(XRayAngiographicImageStorage)
-	Register(EnhancedXAImageStorage)
-	Register(XRayRadiofluoroscopicImageStorage)
-	Register(EnhancedXRFImageStorage)
-	Register(XRayAngiographicBiPlaneImageStorageRETIRED)
-	Register(XRay3DAngiographicImageStorage)
-	Register(XRay3DCraniofacialImageStorage)
-	Register(BreastTomosynthesisImageStorage)
-	Register(BreastProjectionXRayImageStorageForPresentation)
-	Register(BreastProjectionXRayImageStorageForProcessing)
-	Register(IntravascularOpticalCoherenceTomographyImageStorageForPresentation)
-	Register(IntravascularOpticalCoherenceTomographyImageStorageForProcessing)
-	Register(NuclearMedicineImageStorage)
-	Register(ParametricMapStorage)
-	Register(RawDataStorage)
-	Register(SpatialRegistrationStorage)
-	Register(SpatialFiducialsStorage)
-	Register(DeformableSpatialRegistrationStorage)
-	Register(SegmentationStorage)
-	Register(SurfaceSegmentationStorage)
-	Register(TractographyResultsStorage)
-	Register(LabelMapSegmentationStorage)
-	Register(HeightMapSegmentationStorage)
-	Register(RealWorldValueMappingStorage)
-	Register(SurfaceScanMeshStorage)
-	Register(SurfaceScanPointCloudStorage)
-	Register(VLImageStorageTrialRETIRED)
-	Register(VLMultiFrameImageStorageTrialRETIRED)
-	Register(VLEndoscopicImageStorage)
-	Register(VideoEndoscopicImageStorage)
-	Register(VLMicroscopicImageStorage)
-	Register(VideoMicroscopicImageStorage)
-	Register(VLSlideCoordinatesMicroscopicImageStorage)
-	Register(VLPhotographicImageStorage)
-	Register(VideoPhotographicImageStorage)
-	Register(OphthalmicPhotography8BitImageStorage)
-	Register(OphthalmicPhotography16BitImageStorage)
-	Register(StereometricRelationshipStorage)
-	Register(OphthalmicTomographyImageStorage)
-	Register(WideFieldOphthalmicPhotographyStereographicProjectionImageStorage)
-	Register(WideFieldOphthalmicPhotography3DCoordinatesImageStorage)
-	Register(OphthalmicOpticalCoherenceTomographyEnFaceImageStorage)
-	Register(OphthalmicOpticalCoherenceTomographyBscanVolumeAnalysisStorage)
-	Register(VLWholeSlideMicroscopyImageStorage)
-	Register(DermoscopicPhotographyImageStorage)
-	Register(ConfocalMicroscopyImageStorage)
-	Register(ConfocalMicroscopyTiledPyramidalImageStorage)
-	Register(LensometryMeasurementsStorage)
-	Register(AutorefractionMeasurementsStorage)
-	Register(KeratometryMeasurementsStorage)
-	Register(SubjectiveRefractionMeasurementsStorage)
-	Register(VisualAcuityMeasurementsStorage)
-	Register(SpectaclePrescriptionReportStorage)
-	Register(OphthalmicAxialMeasurementsStorage)
-	Register(IntraocularLensCalculationsStorage)
-	Register(MacularGridThicknessAndVolumeReportStorage)
-	Register(OphthalmicVisualFieldStaticPerimetryMeasurementsStorage)
-	Register(OphthalmicThicknessMapStorage)
-	Register(CornealTopographyMapStorage)
-	Register(TextSRStorageTrialRETIRED)
-	Register(AudioSRStorageTrialRETIRED)
-	Register(DetailSRStorageTrialRETIRED)
-	Register(ComprehensiveSRStorageTrialRETIRED)
-	Register(BasicTextSRStorage)
-	Register(EnhancedSRStorage)
-	Register(ComprehensiveSRStorage)
-	Register(Comprehensive3DSRStorage)
-	Register(ExtensibleSRStorage)
-	Register(ProcedureLogStorage)
-	Register(MammographyCADSRStorage)
-	Register(KeyObjectSelectionDocumentStorage)
-	Register(ChestCADSRStorage)
-	Register(XRayRadiationDoseSRStorage)
-	Register(RadiopharmaceuticalRadiationDoseSRStorage)
-	Register(ColonCADSRStorage)
-	Register(ImplantationPlanSRStorage)
-	Register(AcquisitionContextSRStorage)
-	Register(SimplifiedAdultEchoSRStorage)
-	Register(PatientRadiationDoseSRStorage)
-	Register(PlannedImagingAgentAdministrationSRStorage)
-	Register(PerformedImagingAgentAdministrationSRStorage)
-	Register(EnhancedXRayRadiationDoseSRStorage)
-	Register(WaveformAnnotationSRStorage)
-	Register(ContentAssessmentResultsStorage)
-	Register(MicroscopyBulkSimpleAnnotationsStorage)
-	Register(EncapsulatedPDFStorage)
-	Register(EncapsulatedCDAStorage)
-	Register(EncapsulatedSTLStorage)
-	Register(EncapsulatedOBJStorage)
-	Register(EncapsulatedMTLStorage)
-	Register(PositronEmissionTomographyImageStorage)
-	Register(LegacyConvertedEnhancedPETImageStorage)
-	Register(StandalonePETCurveStorageRETIRED)
-	Register(EnhancedPETImageStorage)
-	Register(BasicStructuredDisplayStorage)
-	Register(CTDefinedProcedureProtocolStorage)
-	Register(CTPerformedProcedureProtocolStorage)
-	Register(ProtocolApprovalStorage)
-	Register(ProtocolApprovalInformationModelFind)
-	Register(ProtocolApprovalInformationModelMove)
-	Register(ProtocolApprovalInformationModelGet)
-	Register(XADefinedProcedureProtocolStorage)
-	Register(XAPerformedProcedureProtocolStorage)
-	Register(InventoryStorage)
-	Register(InventoryFind)
-	Register(InventoryMove)
-	Register(InventoryGet)
-	Register(InventoryCreation)
-	Register(RepositoryQuery)
-	Register(StorageManagementInstance)
-	Register(RTImageStorage)
-	Register(RTDoseStorage)
-	Register(RTStructureSetStorage)
-	Register(RTBeamsTreatmentRecordStorage)
-	Register(RTPlanStorage)
-	Register(RTBrachyTreatmentRecordStorage)
-	Register(RTTreatmentSummaryRecordStorage)
-	Register(RTIonPlanStorage)
-	Register(RTIonBeamsTreatmentRecordStorage)
-	Register(RTPhysicianIntentStorage)
-	Register(RTSegmentAnnotationStorage)
-	Register(RTRadiationSetStorage)
-	Register(CArmPhotonElectronRadiationStorage)
-	Register(TomotherapeuticRadiationStorage)
-	Register(RoboticArmRadiationStorage)
-	Register(RTRadiationRecordSetStorage)
-	Register(RTRadiationSalvageRecordStorage)
-	Register(TomotherapeuticRadiationRecordStorage)
-	Register(CArmPhotonElectronRadiationRecordStorage)
-	Register(RoboticRadiationRecordStorage)
-	Register(RTRadiationSetDeliveryInstructionStorage)
-	Register(RTTreatmentPreparationStorage)
-	Register(EnhancedRTImageStorage)
-	Register(EnhancedContinuousRTImageStorage)
-	Register(RTPatientPositionAcquisitionInstructionStorage)
-	Register(DICOSCTImageStorage)
-	Register(DICOSDigitalXRayImageStorageForPresentation)
-	Register(DICOSDigitalXRayImageStorageForProcessing)
-	Register(DICOSThreatDetectionReportStorage)
-	Register(DICOS2DAITStorage)
-	Register(DICOS3DAITStorage)
-	Register(DICOSQuadrupoleResonanceStorage)
-	Register(EddyCurrentImageStorage)
-	Register(EddyCurrentMultiFrameImageStorage)
-	Register(ThermographyImageStorage)
-	Register(ThermographyMultiFrameImageStorage)
-	Register(UltrasoundWaveformStorage)
-	Register(PatientRootQueryRetrieveInformationModelFind)
-	Register(PatientRootQueryRetrieveInformationModelMove)
-	Register(PatientRootQueryRetrieveInformationModelGet)
-	Register(StudyRootQueryRetrieveInformationModelFind)
-	Register(StudyRootQueryRetrieveInformationModelMove)
-	Register(StudyRootQueryRetrieveInformationModelGet)
-	Register(PatientStudyOnlyQueryRetrieveInformationModelFindRETIRED)
-	Register(PatientStudyOnlyQueryRetrieveInformationModelMoveRETIRED)
-	Register(PatientStudyOnlyQueryRetrieveInformationModelGetRETIRED)
-	Register(CompositeInstanceRootRetrieveMove)
-	Register(CompositeInstanceRootRetrieveGet)
-	Register(CompositeInstanceRetrieveWithoutBulkDataGet)
-	Register(DefinedProcedureProtocolInformationModelFind)
-	Register(DefinedProcedureProtocolInformationModelMove)
-	Register(DefinedProcedureProtocolInformationModelGet)
-	Register(ModalityWorklistInformationModelFind)
-	Register(GeneralPurposeWorklistManagementMetaRETIRED)
-	Register(GeneralPurposeWorklistInformationModelFindRETIRED)
-	Register(GeneralPurposeScheduledProcedureStepRETIRED)
-	Register(GeneralPurposePerformedProcedureStepRETIRED)
-	Register(InstanceAvailabilityNotification)
-	Register(RTBeamsDeliveryInstructionStorageTrialRETIRED)
-	Register(RTConventionalMachineVerificationTrialRETIRED)
-	Register(RTIonMachineVerificationTrialRETIRED)
-	Register(UnifiedWorklistAndProcedureStepTrialRETIRED)
-	Register(UnifiedProcedureStepPushTrialRETIRED)
-	Register(UnifiedProcedureStepWatchTrialRETIRED)
-	Register(UnifiedProcedureStepPullTrialRETIRED)
-	Register(UnifiedProcedureStepEventTrialRETIRED)
-	Register(UPSGlobalSubscriptionInstance)
-	Register(UPSFilteredGlobalSubscriptionInstance)
-	Register(UnifiedWorklistAndProcedureStep)
-	Register(UnifiedProcedureStepPush)
-	Register(UnifiedProcedureStepWatch)
-	Register(UnifiedProcedureStepPull)
-	Register(UnifiedProcedureStepEvent)
-	Register(UnifiedProcedureStepQuery)
-	Register(RTBeamsDeliveryInstructionStorage)
-	Register(RTConventionalMachineVerification)
-	Register(RTIonMachineVerification)
-	Register(RTBrachyApplicationSetupDeliveryInstructionStorage)
-	Register(GeneralRelevantPatientInformationQuery)
-	Register(BreastImagingRelevantPatientInformationQuery)
-	Register(CardiacRelevantPatientInformationQuery)
-	Register(HangingProtocolStorage)
-	Register(HangingProtocolInformationModelFind)
-	Register(HangingProtocolInformationModelMove)
-	Register(HangingProtocolInformationModelGet)
-	Register(ColorPaletteStorage)
-	Register(ColorPaletteQueryRetrieveInformationModelFind)
-	Register(ColorPaletteQueryRetrieveInformationModelMove)
-	Register(ColorPaletteQueryRetrieveInformationModelGet)
-	Register(ProductCharacteristicsQuery)
-	Register(SubstanceApprovalQuery)
-	Register(GenericImplantTemplateStorage)
-	Register(GenericImplantTemplateInformationModelFind)
-	Register(GenericImplantTemplateInformationModelMove)
-	Register(GenericImplantTemplateInformationModelGet)
-	Register(ImplantAssemblyTemplateStorage)
-	Register(ImplantAssemblyTemplateInformationModelFind)
-	Register(ImplantAssemblyTemplateInformationModelMove)
-	Register(ImplantAssemblyTemplateInformationModelGet)
-	Register(ImplantTemplateGroupStorage)
-	Register(ImplantTemplateGroupInformationModelFind)
-	Register(ImplantTemplateGroupInformationModelMove)
-	Register(ImplantTemplateGroupInformationModelGet)
-	Register(NativeDICOMModel)
-	Register(AbstractMultiDimensionalImageModel)
-	Register(DICOMContentMappingResource)
-	Register(VideoEndoscopicImageRealTimeCommunication)
-	Register(VideoPhotographicImageRealTimeCommunication)
-	Register(AudioWaveformRealTimeCommunication)
-	Register(RenditionSelectionDocumentRealTimeCommunication)
-	Register(dicomDeviceName)
-	Register(dicomDescription)
-	Register(dicomManufacturer)
-	Register(dicomManufacturerModelName)
-	Register(dicomSoftwareVersion)
-	Register(dicomVendorData)
-	Register(dicomAETitle)
-	Register(dicomNetworkConnectionReference)
-	Register(dicomApplicationCluster)
-	Register(dicomAssociationInitiator)
-	Register(dicomAssociationAcceptor)
-	Register(dicomHostname)
-	Register(dicomPort)
-	Register(dicomSOPClass)
-	Register(dicomTransferRole)
-	Register(dicomTransferSyntax)
-	Register(dicomPrimaryDeviceType)
-	Register(dicomRelatedDeviceReference)
-	Register(dicomPreferredCalledAETitle)
-	Register(dicomTLSCyphersuite)
-	Register(dicomAuthorizedNodeCertificateReference)
-	Register(dicomThisNodeCertificateReference)
-	Register(dicomInstalled)
-	Register(dicomStationName)
-	Register(dicomDeviceSerialNumber)
-	Register(dicomInstitutionName)
-	Register(dicomInstitutionAddress)
-	Register(dicomInstitutionDepartmentName)
-	Register(dicomIssuerOfPatientID)
-	Register(dicomPreferredCallingAETitle)
-	Register(dicomSupportedCharacterSet)
-	Register(dicomConfigurationRoot)
-	Register(dicomDevicesRoot)
-	Register(dicomUniqueAETitlesRegistryRoot)
-	Register(dicomDevice)
-	Register(dicomNetworkAE)
-	Register(dicomNetworkConnection)
-	Register(dicomUniqueAETitle)
-	Register(dicomTransferCapability)
-	Register(UTC)
-	Register(AnatomicModifier2)
-	Register(AnatomicRegion4)
-	Register(TransducerApproach5)
-	Register(TransducerOrientation6)
-	Register(UltrasoundBeamPath7)
-	Register(AngiographicInterventionalDevice8)
-	Register(ImageGuidedTherapeuticProcedure9)
-	Register(InterventionalDrug10)
-	Register(AdministrationRoute11)
-	Register(ImagingContrastAgent12)
-	Register(ImagingContrastAgentIngredient13)
-	Register(RadiopharmaceuticalIsotope18)
-	Register(PatientOrientation19)
-	Register(PatientOrientationModifier20)
-	Register(PatientEquipmentRelationship21)
-	Register(CranioCaudadAngulation23)
-	Register(Radiopharmaceutical25)
-	Register(NuclearMedicineProjection26)
-	Register(AcquisitionModality29)
-	Register(DICOMDevice30)
-	Register(AbstractPrior31)
-	Register(NumericValueQualifier42)
-	Register(MeasurementUnit82)
-	Register(RealWorldValueMappingUnit83)
-	Register(SignificanceLevel220)
-	Register(MeasurementRangeConcept221)
-	Register(Normality222)
-	Register(NormalRangeValue223)
-	Register(SelectionMethod224)
-	Register(MeasurementUncertaintyConcept225)
-	Register(PopulationStatisticalDescriptor226)
-	Register(SampleStatisticalDescriptor227)
-	Register(EquationOrTable228)
-	Register(YesNo230)
-	Register(PresentAbsent240)
-	Register(NormalAbnormal242)
-	Register(Laterality244)
-	Register(PositiveNegative250)
-	Register(ComplicationSeverity251)
-	Register(ObserverType270)
-	Register(ObservationSubjectClass271)
-	Register(AudioChannelSource3000)
-	Register(ECGLead3001)
-	Register(HemodynamicWaveformSource3003)
-	Register(CardiovascularAnatomicStructure3010)
-	Register(ElectrophysiologyAnatomicLocation3011)
-	Register(CoronaryArterySegment3014)
-	Register(CoronaryArtery3015)
-	Register(CardiovascularAnatomicStructureModifier3019)
-	Register(CardiologyMeasurementUnit3082RETIRED)
-	Register(TimeSynchronizationChannelType3090)
-	Register(CardiacProceduralStateValue3101)
-	Register(ElectrophysiologyMeasurementFunctionTechnique3240)
-	Register(HemodynamicMeasurementTechnique3241)
-	Register(CatheterizationProcedurePhase3250)
-	Register(ElectrophysiologyProcedurePhase3254)
-	Register(StressProtocol3261)
-	Register(ECGPatientStateValue3262)
-	Register(ElectrodePlacementValue3263)
-	Register(XYZElectrodePlacementValues3264RETIRED)
-	Register(HemodynamicPhysiologicalChallenge3271)
-	Register(ECGAnnotation3335)
-	Register(HemodynamicAnnotation3337)
-	Register(ElectrophysiologyAnnotation3339)
-	Register(ProcedureLogTitle3400)
-	Register(LogNoteType3401)
-	Register(PatientStatusAndEvent3402)
-	Register(PercutaneousEntry3403)
-	Register(StaffAction3404)
-	Register(ProcedureActionValue3405)
-	Register(NonCoronaryTranscatheterIntervention3406)
-	Register(ObjectReferencePurpose3407)
-	Register(ConsumableAction3408)
-	Register(DrugContrastAdministration3409)
-	Register(DrugContrastNumericParameter3410)
-	Register(IntracoronaryDevice3411)
-	Register(InterventionActionStatus3412)
-	Register(AdverseOutcome3413)
-	Register(ProcedureUrgency3414)
-	Register(CardiacRhythm3415)
-	Register(RespirationRhythm3416)
-	Register(LesionRisk3418)
-	Register(FindingTitle3419)
-	Register(ProcedureAction3421)
-	Register(DeviceUseAction3422)
-	Register(NumericDeviceCharacteristic3423)
-	Register(InterventionParameter3425)
-	Register(ConsumablesParameter3426)
-	Register(EquipmentEvent3427)
-	Register(CardiovascularImagingProcedure3428)
-	Register(CatheterizationDevice3429)
-	Register(DateTimeQualifier3430)
-	Register(PeripheralPulseLocation3440)
-	Register(PatientAssessment3441)
-	Register(PeripheralPulseMethod3442)
-	Register(SkinCondition3446)
-	Register(AirwayAssessment3448)
-	Register(CalibrationObject3451)
-	Register(CalibrationMethod3452)
-	Register(CardiacVolumeMethod3453)
-	Register(IndexMethod3455)
-	Register(SubSegmentMethod3456)
-	Register(ContourRealignment3458)
-	Register(CircumferentialExtent3460)
-	Register(RegionalExtent3461)
-	Register(ChamberIdentification3462)
-	Register(QAReferenceMethod3465)
-	Register(PlaneIdentification3466)
-	Register(EjectionFraction3467)
-	Register(EDVolume3468)
-	Register(ESVolume3469)
-	Register(VesselLumenCrossSectionalAreaCalculationMethod3470)
-	Register(EstimatedVolume3471)
-	Register(CardiacContractionPhase3472)
-	Register(IVUSProcedurePhase3480)
-	Register(IVUSDistanceMeasurement3481)
-	Register(IVUSAreaMeasurement3482)
-	Register(IVUSLongitudinalMeasurement3483)
-	Register(IVUSIndexRatio3484)
-	Register(IVUSVolumeMeasurement3485)
-	Register(VascularMeasurementSite3486)
-	Register(IntravascularVolumetricRegion3487)
-	Register(MinMaxMean3488)
-	Register(CalciumDistribution3489)
-	Register(IVUSLesionMorphology3491)
-	Register(VascularDissectionClassification3492)
-	Register(IVUSRelativeStenosisSeverity3493)
-	Register(IVUSNonMorphologicalFinding3494)
-	Register(IVUSPlaqueComposition3495)
-	Register(IVUSFiducialPoint3496)
-	Register(IVUSArterialMorphology3497)
-	Register(PressureUnit3500)
-	Register(HemodynamicResistanceUnit3502)
-	Register(IndexedHemodynamicResistanceUnit3503)
-	Register(CatheterSizeUnit3510)
-	Register(SpecimenCollection3515)
-	Register(BloodSourceType3520)
-	Register(BloodGasPressure3524)
-	Register(BloodGasContent3525)
-	Register(BloodGasSaturation3526)
-	Register(BloodBaseExcess3527)
-	Register(BloodPH3528)
-	Register(ArterialVenousContent3529)
-	Register(OxygenAdministrationAction3530)
-	Register(OxygenAdministration3531)
-	Register(CirculatorySupportAction3550)
-	Register(VentilationAction3551)
-	Register(PacingAction3552)
-	Register(CirculatorySupport3553)
-	Register(Ventilation3554)
-	Register(Pacing3555)
-	Register(BloodPressureMethod3560)
-	Register(RelativeTime3600)
-	Register(HemodynamicPatientState3602)
-	Register(ArterialLesionLocation3604)
-	Register(ArterialSourceLocation3606)
-	Register(VenousSourceLocation3607)
-	Register(AtrialSourceLocation3608)
-	Register(VentricularSourceLocation3609)
-	Register(GradientSourceLocation3610)
-	Register(PressureMeasurement3611)
-	Register(BloodVelocityMeasurement3612)
-	Register(HemodynamicTimeMeasurement3613)
-	Register(NonMitralValveArea3614)
-	Register(ValveArea3615)
-	Register(HemodynamicPeriodMeasurement3616)
-	Register(ValveFlow3617)
-	Register(HemodynamicFlow3618)
-	Register(HemodynamicResistanceMeasurement3619)
-	Register(HemodynamicRatio3620)
-	Register(FractionalFlowReserve3621)
-	Register(MeasurementType3627)
-	Register(CardiacOutputMethod3628)
-	Register(ProcedureIntent3629)
-	Register(CardiovascularAnatomicLocation3630)
-	Register(Hypertension3640)
-	Register(HemodynamicAssessment3641)
-	Register(DegreeFinding3642)
-	Register(HemodynamicMeasurementPhase3651)
-	Register(BodySurfaceAreaEquation3663)
-	Register(OxygenConsumptionEquationTable3664)
-	Register(P50Equation3666)
-	Register(FraminghamScore3667)
-	Register(FraminghamTable3668)
-	Register(ECGProcedureType3670)
-	Register(ReasonForECGStudy3671)
-	Register(Pacemaker3672)
-	Register(Diagnosis3673RETIRED)
-	Register(OtherFilters3675RETIRED)
-	Register(LeadMeasurementTechnique3676)
-	Register(SummaryCodesECG3677)
-	Register(QTCorrectionAlgorithm3678)
-	Register(ECGMorphologyDescription3679RETIRED)
-	Register(ECGLeadNoiseDescription3680)
-	Register(ECGLeadNoiseModifier3681RETIRED)
-	Register(Probability3682RETIRED)
-	Register(Modifier3683RETIRED)
-	Register(Trend3684RETIRED)
-	Register(ConjunctiveTerm3685RETIRED)
-	Register(ECGInterpretiveStatement3686RETIRED)
-	Register(ElectrophysiologyWaveformDuration3687)
-	Register(ElectrophysiologyWaveformVoltage3688)
-	Register(CathDiagnosis3700)
-	Register(CardiacValveTract3701)
-	Register(WallMotion3703)
-	Register(MyocardiumWallMorphologyFinding3704)
-	Register(ChamberSize3705)
-	Register(OverallContractility3706)
-	Register(VSDDescription3707)
-	Register(AorticRootDescription3709)
-	Register(CoronaryDominance3710)
-	Register(ValvularAbnormality3711)
-	Register(VesselDescriptor3712)
-	Register(TIMIFlowCharacteristic3713)
-	Register(Thrombus3714)
-	Register(LesionMargin3715)
-	Register(Severity3716)
-	Register(LeftVentricleMyocardialWall17SegmentModel3717)
-	Register(MyocardialWallSegmentsInProjection3718)
-	Register(CanadianClinicalClassification3719)
-	Register(CardiacHistoryDate3720RETIRED)
-	Register(CardiovascularSurgery3721)
-	Register(DiabeticTherapy3722)
-	Register(MIType3723)
-	Register(SmokingHistory3724)
-	Register(CoronaryInterventionIndication3726)
-	Register(CatheterizationIndication3727)
-	Register(CathFinding3728)
-	Register(AdmissionStatus3729)
-	Register(InsurancePayor3730)
-	Register(PrimaryCauseOfDeath3733)
-	Register(AcuteCoronarySyndromeTimePeriod3735)
-	Register(NYHAClassification3736)
-	Register(IschemiaNonInvasiveTest3737)
-	Register(PreCathAnginaType3738)
-	Register(CathProcedureType3739)
-	Register(ThrombolyticAdministration3740)
-	Register(LabVisitMedicationAdministration3741)
-	Register(PCIMedicationAdministration3742)
-	Register(ClopidogrelTiclopidineAdministration3743)
-	Register(EFTestingMethod3744)
-	Register(CalculationMethod3745)
-	Register(PercutaneousEntrySite3746)
-	Register(PercutaneousClosure3747)
-	Register(AngiographicEFTestingMethod3748)
-	Register(PCIProcedureResult3749)
-	Register(PreviouslyDilatedLesion3750)
-	Register(GuidewireCrossing3752)
-	Register(VascularComplication3754)
-	Register(CathComplication3755)
-	Register(CardiacPatientRiskFactor3756)
-	Register(CardiacDiagnosticProcedure3757)
-	Register(CardiovascularFamilyHistory3758)
-	Register(HypertensionTherapy3760)
-	Register(AntilipemicAgent3761)
-	Register(AntiarrhythmicAgent3762)
-	Register(MyocardialInfarctionTherapy3764)
-	Register(ConcernType3769)
-	Register(ProblemStatus3770)
-	Register(HealthStatus3772)
-	Register(UseStatus3773)
-	Register(SocialHistory3774)
-	Register(CardiovascularImplant3777)
-	Register(PlaqueStructure3802)
-	Register(StenosisMeasurementMethod3804)
-	Register(StenosisType3805)
-	Register(StenosisShape3806)
-	Register(VolumeMeasurementMethod3807)
-	Register(AneurysmType3808)
-	Register(AssociatedCondition3809)
-	Register(VascularMorphology3810)
-	Register(StentFinding3813)
-	Register(StentComposition3814)
-	Register(SourceOfVascularFinding3815)
-	Register(VascularSclerosisType3817)
-	Register(NonInvasiveVascularProcedure3820)
-	Register(PapillaryMuscleIncludedExcluded3821)
-	Register(RespiratoryStatus3823)
-	Register(HeartRhythm3826)
-	Register(VesselSegment3827)
-	Register(PulmonaryArtery3829)
-	Register(StenosisLength3831)
-	Register(StenosisGrade3832)
-	Register(CardiacEjectionFraction3833)
-	Register(CardiacVolumeMeasurement3835)
-	Register(TimeBasedPerfusionMeasurement3836)
-	Register(FiducialFeature3837)
-	Register(DiameterDerivation3838)
-	Register(CoronaryVein3839)
-	Register(PulmonaryVein3840)
-	Register(MyocardialSubsegment3843)
-	Register(PartialViewSectionForMammography4005)
-	Register(DXAnatomyImaged4009)
-	Register(DXView4010)
-	Register(DXViewModifier4011)
-	Register(ProjectionEponymousName4012)
-	Register(AnatomicRegionForMammography4013)
-	Register(ViewForMammography4014)
-	Register(ViewModifierForMammography4015)
-	Register(AnatomicRegionForIntraOralRadiography4016)
-	Register(AnatomicRegionModifierForIntraOralRadiography4017)
-	Register(PrimaryAnatomicStructureForIntraOralRadiographyPermanentDentitionDesignationOfTeeth4018)
-	Register(PrimaryAnatomicStructureForIntraOralRadiographyDeciduousDentitionDesignationOfTeeth4019)
-	Register(PETRadionuclide4020)
-	Register(PETRadiopharmaceutical4021)
-	Register(CraniofacialAnatomicRegion4028)
-	Register(CTMRAndPETAnatomyImaged4030)
-	Register(CommonAnatomicRegion4031)
-	Register(MRSpectroscopyMetabolite4032)
-	Register(MRProtonSpectroscopyMetabolite4033)
-	Register(EndoscopyAnatomicRegion4040)
-	Register(XAXRFAnatomyImaged4042)
-	Register(DrugOrContrastAgentCharacteristic4050)
-	Register(GeneralDevice4051)
-	Register(PhantomDevice4052)
-	Register(OphthalmicImagingAgent4200)
-	Register(PatientEyeMovementCommand4201)
-	Register(OphthalmicPhotographyAcquisitionDevice4202)
-	Register(OphthalmicPhotographyIllumination4203)
-	Register(OphthalmicFilter4204)
-	Register(OphthalmicLens4205)
-	Register(OphthalmicChannelDescription4206)
-	Register(OphthalmicImagePosition4207)
-	Register(MydriaticAgent4208)
-	Register(OphthalmicAnatomicStructureImaged4209)
-	Register(OphthalmicTomographyAcquisitionDevice4210)
-	Register(OphthalmicOCTAnatomicStructureImaged4211)
-	Register(Language5000)
-	Register(Country5001)
-	Register(OverallBreastComposition6000)
-	Register(OverallBreastCompositionFromBIRADS6001)
-	Register(ChangeSinceLastMammogramOrPriorSurgery6002)
-	Register(ChangeSinceLastMammogramOrPriorSurgeryFromBIRADS6003)
-	Register(MammographyShapeCharacteristic6004)
-	Register(ShapeCharacteristicFromBIRADS6005)
-	Register(MammographyMarginCharacteristic6006)
-	Register(MarginCharacteristicFromBIRADS6007)
-	Register(DensityModifier6008)
-	Register(DensityModifierFromBIRADS6009)
-	Register(MammographyCalcificationType6010)
-	Register(CalcificationTypeFromBIRADS6011)
-	Register(CalcificationDistributionModifier6012)
-	Register(CalcificationDistributionModifierFromBIRADS6013)
-	Register(MammographySingleImageFinding6014)
-	Register(SingleImageFindingFromBIRADS6015)
-	Register(MammographyCompositeFeature6016)
-	Register(CompositeFeatureFromBIRADS6017)
-	Register(ClockfaceLocationOrRegion6018)
-	Register(ClockfaceLocationOrRegionFromBIRADS6019)
-	Register(QuadrantLocation6020)
-	Register(QuadrantLocationFromBIRADS6021)
-	Register(Side6022)
-	Register(SideFromBIRADS6023)
-	Register(Depth6024)
-	Register(DepthFromBIRADS6025)
-	Register(MammographyAssessment6026)
-	Register(AssessmentFromBIRADS6027)
-	Register(MammographyRecommendedFollowUp6028)
-	Register(RecommendedFollowUpFromBIRADS6029)
-	Register(MammographyPathologyCode6030)
-	Register(BenignPathologyCodeFromBIRADS6031)
-	Register(HighRiskLesionPathologyCodeFromBIRADS6032)
-	Register(MalignantPathologyCodeFromBIRADS6033)
-	Register(CADOutputIntendedUse6034)
-	Register(CompositeFeatureRelation6035)
-	Register(FeatureScope6036)
-	Register(MammographyQuantitativeTemporalDifferenceType6037)
-	Register(MammographyQualitativeTemporalDifferenceType6038)
-	Register(NippleCharacteristic6039)
-	Register(NonLesionObjectType6040)
-	Register(MammographyImageQualityFinding6041)
-	Register(ResultStatus6042)
-	Register(MammographyCADAnalysisType6043)
-	Register(ImageQualityAssessmentType6044)
-	Register(MammographyQualityControlStandardType6045)
-	Register(FollowUpIntervalUnit6046)
-	Register(CADProcessingAndFindingSummary6047)
-	Register(CADOperatingPointAxisLabel6048)
-	Register(BreastProcedureReported6050)
-	Register(BreastProcedureReason6051)
-	Register(BreastImagingReportSectionTitle6052)
-	Register(BreastImagingReportElement6053)
-	Register(BreastImagingFinding6054)
-	Register(BreastClinicalFindingOrIndicatedProblem6055)
-	Register(AssociatedFindingForBreast6056)
-	Register(DuctographyFindingForBreast6057)
-	Register(ProcedureModifiersForBreast6058)
-	Register(BreastImplantType6059)
-	Register(BreastBiopsyTechnique6060)
-	Register(BreastImagingProcedureModifier6061)
-	Register(InterventionalProcedureComplication6062)
-	Register(InterventionalProcedureResult6063)
-	Register(UltrasoundFindingForBreast6064)
-	Register(InstrumentApproach6065)
-	Register(TargetConfirmation6066)
-	Register(FluidColor6067)
-	Register(TumorStagesFromAJCC6068)
-	Register(NottinghamCombinedHistologicGrade6069)
-	Register(BloomRichardsonHistologicGrade6070)
-	Register(HistologicGradingMethod6071)
-	Register(BreastImplantFinding6072)
-	Register(GynecologicalHormone6080)
-	Register(BreastCancerRiskFactor6081)
-	Register(GynecologicalProcedure6082)
-	Register(ProceduresForBreast6083)
-	Register(MammoplastyProcedure6084)
-	Register(TherapiesForBreast6085)
-	Register(MenopausalPhase6086)
-	Register(GeneralRiskFactor6087)
-	Register(OBGYNMaternalRiskFactor6088)
-	Register(Substance6089)
-	Register(RelativeUsageExposureAmount6090)
-	Register(RelativeFrequencyOfEventValue6091)
-	Register(UsageExposureQualitativeConcept6092)
-	Register(UsageExposureAmountQualitativeConcept6093)
-	Register(UsageExposureFrequencyQualitativeConcept6094)
-	Register(ProcedureNumericProperty6095)
-	Register(PregnancyStatus6096)
-	Register(SideOfFamily6097)
-	Register(ChestComponentCategory6100)
-	Register(ChestFindingOrFeature6101)
-	Register(ChestFindingOrFeatureModifier6102)
-	Register(AbnormalLinesFindingOrFeature6103)
-	Register(AbnormalOpacityFindingOrFeature6104)
-	Register(AbnormalLucencyFindingOrFeature6105)
-	Register(AbnormalTextureFindingOrFeature6106)
-	Register(WidthDescriptor6107)
-	Register(ChestAnatomicStructureAbnormalDistribution6108)
-	Register(RadiographicAnatomyFindingOrFeature6109)
-	Register(LungAnatomyFindingOrFeature6110)
-	Register(BronchovascularAnatomyFindingOrFeature6111)
-	Register(PleuraAnatomyFindingOrFeature6112)
-	Register(MediastinumAnatomyFindingOrFeature6113)
-	Register(OsseousAnatomyFindingOrFeature6114)
-	Register(OsseousAnatomyModifier6115)
-	Register(MuscularAnatomy6116)
-	Register(VascularAnatomy6117)
-	Register(SizeDescriptor6118)
-	Register(ChestBorderShape6119)
-	Register(ChestBorderDefinition6120)
-	Register(ChestOrientationDescriptor6121)
-	Register(ChestContentDescriptor6122)
-	Register(ChestOpacityDescriptor6123)
-	Register(LocationInChest6124)
-	Register(GeneralChestLocation6125)
-	Register(LocationInLung6126)
-	Register(SegmentLocationInLung6127)
-	Register(ChestDistributionDescriptor6128)
-	Register(ChestSiteInvolvement6129)
-	Register(SeverityDescriptor6130)
-	Register(ChestTextureDescriptor6131)
-	Register(ChestCalcificationDescriptor6132)
-	Register(ChestQuantitativeTemporalDifferenceType6133)
-	Register(ChestQualitativeTemporalDifferenceType6134)
-	Register(ImageQualityFinding6135)
-	Register(ChestTypesOfQualityControlStandard6136)
-	Register(CADAnalysisType6137)
-	Register(ChestNonLesionObjectType6138)
-	Register(NonLesionModifier6139)
-	Register(CalculationMethod6140)
-	Register(AttenuationCoefficientMeasurement6141)
-	Register(CalculatedValue6142)
-	Register(LesionResponse6143)
-	Register(RECISTDefinedLesionResponse6144)
-	Register(BaselineCategory6145)
-	Register(BackgroundEchotexture6151)
-	Register(Orientation6152)
-	Register(LesionBoundary6153)
-	Register(EchoPattern6154)
-	Register(PosteriorAcousticFeature6155)
-	Register(Vascularity6157)
-	Register(CorrelationToOtherFinding6158)
-	Register(MalignancyType6159)
-	Register(BreastPrimaryTumorAssessmentFromAJCC6160)
-	Register(PathologicalRegionalLymphNodeAssessmentForBreast6161)
-	Register(AssessmentOfMetastasisForBreast6162)
-	Register(MenstrualCyclePhase6163)
-	Register(TimeInterval6164)
-	Register(BreastLinearMeasurement6165)
-	Register(CADGeometrySecondaryGraphicalRepresentation6166)
-	Register(DiagnosticImagingReportDocumentTitle7000)
-	Register(DiagnosticImagingReportHeading7001)
-	Register(DiagnosticImagingReportElement7002)
-	Register(DiagnosticImagingReportPurposeOfReference7003)
-	Register(WaveformPurposeOfReference7004)
-	Register(ContributingEquipmentPurposeOfReference7005)
-	Register(SRDocumentPurposeOfReference7006)
-	Register(SignaturePurpose7007)
-	Register(MediaImport7008)
-	Register(KeyObjectSelectionDocumentTitle7010)
-	Register(RejectedForQualityReason7011)
-	Register(BestInSet7012)
-	Register(DocumentTitle7020)
-	Register(RCSRegistrationMethodType7100)
-	Register(BrainAtlasFiducial7101)
-	Register(SegmentationPropertyCategory7150)
-	Register(SegmentationPropertyType7151)
-	Register(CardiacStructureSegmentationType7152)
-	Register(CNSSegmentationType7153)
-	Register(AbdominalSegmentationType7154)
-	Register(ThoracicSegmentationType7155)
-	Register(VascularSegmentationType7156)
-	Register(DeviceSegmentationType7157)
-	Register(ArtifactSegmentationType7158)
-	Register(LesionSegmentationType7159)
-	Register(PelvicOrganSegmentationType7160)
-	Register(PhysiologySegmentationType7161)
-	Register(ReferencedImagePurposeOfReference7201)
-	Register(SourceImagePurposeOfReference7202)
-	Register(ImageDerivation7203)
-	Register(PurposeOfReferenceToAlternateRepresentation7205)
-	Register(RelatedSeriesPurposeOfReference7210)
-	Register(MultiFrameSubsetType7250)
-	Register(PersonRole7450)
-	Register(FamilyMember7451)
-	Register(OrganizationalRole7452)
-	Register(PerformingRole7453)
-	Register(AnimalTaxonomicRankValue7454)
-	Register(Sex7455)
-	Register(AgeUnit7456)
-	Register(LinearMeasurementUnit7460)
-	Register(AreaMeasurementUnit7461)
-	Register(VolumeMeasurementUnit7462)
-	Register(LinearMeasurement7470)
-	Register(AreaMeasurement7471)
-	Register(VolumeMeasurement7472)
-	Register(GeneralAreaCalculationMethod7473)
-	Register(GeneralVolumeCalculationMethod7474)
-	Register(Breed7480)
-	Register(BreedRegistry7481)
-	Register(WorkitemDefinition9231)
-	Register(NonDICOMOutputTypes9232RETIRED)
-	Register(ProcedureDiscontinuationReason9300)
-	Register(ScopeOfAccumulation10000)
-	Register(UIDType10001)
-	Register(IrradiationEventType10002)
-	Register(EquipmentPlaneIdentification10003)
-	Register(FluoroMode10004)
-	Register(XRayFilterMaterial10006)
-	Register(XRayFilterType10007)
-	Register(DoseRelatedDistanceMeasurement10008)
-	Register(MeasuredCalculated10009)
-	Register(DoseMeasurementDevice10010)
-	Register(EffectiveDoseEvaluationMethod10011)
-	Register(CTAcquisitionType10013)
-	Register(CTIVContrastImagingTechnique10014)
-	Register(CTDoseReferenceAuthority10015)
-	Register(AnodeTargetMaterial10016)
-	Register(XRayGrid10017)
-	Register(UltrasoundProtocolType12001)
-	Register(UltrasoundProtocolStageType12002)
-	Register(OBGYNDate12003)
-	Register(FetalBiometryRatio12004)
-	Register(FetalBiometryMeasurement12005)
-	Register(FetalLongBonesBiometryMeasurement12006)
-	Register(FetalCraniumMeasurement12007)
-	Register(OBGYNAmnioticSacMeasurement12008)
-	Register(EarlyGestationBiometryMeasurement12009)
-	Register(UltrasoundPelvisAndUterusMeasurement12011)
-	Register(OBEquationTable12012)
-	Register(GestationalAgeEquationTable12013)
-	Register(OBFetalBodyWeightEquationTable12014)
-	Register(FetalGrowthEquationTable12015)
-	Register(EstimatedFetalWeightPercentileEquationTable12016)
-	Register(GrowthDistributionRank12017)
-	Register(OBGYNSummary12018)
-	Register(OBGYNFetusSummary12019)
-	Register(VascularSummary12101)
-	Register(TemporalPeriodRelatingToProcedureOrTherapy12102)
-	Register(VascularUltrasoundAnatomicLocation12103)
-	Register(ExtracranialArtery12104)
-	Register(IntracranialCerebralVessel12105)
-	Register(IntracranialCerebralVesselUnilateral12106)
-	Register(UpperExtremityArtery12107)
-	Register(UpperExtremityVein12108)
-	Register(LowerExtremityArtery12109)
-	Register(LowerExtremityVein12110)
-	Register(AbdominopelvicArteryPaired12111)
-	Register(AbdominopelvicArteryUnpaired12112)
-	Register(AbdominopelvicVeinPaired12113)
-	Register(AbdominopelvicVeinUnpaired12114)
-	Register(RenalVessel12115)
-	Register(VesselSegmentModifier12116)
-	Register(VesselBranchModifier12117)
-	Register(VascularUltrasoundProperty12119)
-	Register(UltrasoundBloodVelocityMeasurement12120)
-	Register(VascularIndexRatio12121)
-	Register(OtherVascularProperty12122)
-	Register(CarotidRatio12123)
-	Register(RenalRatio12124)
-	Register(PelvicVasculatureAnatomicalLocation12140)
-	Register(FetalVasculatureAnatomicalLocation12141)
-	Register(EchocardiographyLeftVentricleMeasurement12200)
-	Register(LeftVentricleLinearMeasurement12201)
-	Register(LeftVentricleVolumeMeasurement12202)
-	Register(LeftVentricleOtherMeasurement12203)
-	Register(EchocardiographyRightVentricleMeasurement12204)
-	Register(EchocardiographyLeftAtriumMeasurement12205)
-	Register(EchocardiographyRightAtriumMeasurement12206)
-	Register(EchocardiographyMitralValveMeasurement12207)
-	Register(EchocardiographyTricuspidValveMeasurement12208)
-	Register(EchocardiographyPulmonicValveMeasurement12209)
-	Register(EchocardiographyPulmonaryArteryMeasurement12210)
-	Register(EchocardiographyAorticValveMeasurement12211)
-	Register(EchocardiographyAortaMeasurement12212)
-	Register(EchocardiographyPulmonaryVeinMeasurement12214)
-	Register(EchocardiographyVenaCavaMeasurement12215)
-	Register(EchocardiographyHepaticVeinMeasurement12216)
-	Register(EchocardiographyCardiacShuntMeasurement12217)
-	Register(EchocardiographyCongenitalAnomalyMeasurement12218)
-	Register(PulmonaryVeinModifier12219)
-	Register(EchocardiographyCommonMeasurement12220)
-	Register(FlowDirection12221)
-	Register(OrificeFlowProperty12222)
-	Register(EchocardiographyStrokeVolumeOrigin12223)
-	Register(UltrasoundImageMode12224)
-	Register(EchocardiographyImageView12226)
-	Register(EchocardiographyMeasurementMethod12227)
-	Register(EchocardiographyVolumeMethod12228)
-	Register(EchocardiographyAreaMethod12229)
-	Register(GradientMethod12230)
-	Register(VolumeFlowMethod12231)
-	Register(MyocardiumMassMethod12232)
-	Register(CardiacPhase12233)
-	Register(RespirationState12234)
-	Register(MitralValveAnatomicSite12235)
-	Register(EchocardiographyAnatomicSite12236)
-	Register(EchocardiographyAnatomicSiteModifier12237)
-	Register(WallMotionScoringScheme12238)
-	Register(CardiacOutputProperty12239)
-	Register(LeftVentricleAreaMeasurement12240)
-	Register(TricuspidValveFindingSite12241)
-	Register(AorticValveFindingSite12242)
-	Register(LeftVentricleFindingSite12243)
-	Register(CongenitalFindingSite12244)
-	Register(SurfaceProcessingAlgorithmFamily7162)
-	Register(StressTestProcedurePhase3207)
-	Register(Stage3778)
-	Register(SMLSizeDescriptor252)
-	Register(MajorCoronaryArtery3016)
-	Register(RadioactivityUnit3083)
-	Register(RestStressState3102)
-	Register(PETCardiologyProtocol3106)
-	Register(PETCardiologyRadiopharmaceutical3107)
-	Register(NMPETProcedure3108)
-	Register(NuclearCardiologyProtocol3110)
-	Register(NuclearCardiologyRadiopharmaceutical3111)
-	Register(AttenuationCorrection3112)
-	Register(PerfusionDefectType3113)
-	Register(StudyQuality3114)
-	Register(StressImagingQualityIssue3115)
-	Register(NMExtracardiacFinding3116)
-	Register(AttenuationCorrectionMethod3117)
-	Register(LevelOfRisk3118)
-	Register(LVFunction3119)
-	Register(PerfusionFinding3120)
-	Register(PerfusionMorphology3121)
-	Register(VentricularEnlargement3122)
-	Register(StressTestProcedure3200)
-	Register(IndicationsForStressTest3201)
-	Register(ChestPain3202)
-	Register(ExerciserDevice3203)
-	Register(StressAgent3204)
-	Register(IndicationsForPharmacologicalStressTest3205)
-	Register(NonInvasiveCardiacImagingProcedure3206)
-	Register(ExerciseECGSummaryCode3208)
-	Register(StressImagingSummaryCode3209)
-	Register(SpeedOfResponse3210)
-	Register(BPResponse3211)
-	Register(TreadmillSpeed3212)
-	Register(StressHemodynamicFinding3213)
-	Register(PerfusionFindingMethod3215)
-	Register(ComparisonFinding3217)
-	Register(StressSymptom3220)
-	Register(StressTestTerminationReason3221)
-	Register(QTcMeasurement3227)
-	Register(ECGTimingMeasurement3228)
-	Register(ECGAxisMeasurement3229)
-	Register(ECGFinding3230)
-	Register(STSegmentFinding3231)
-	Register(STSegmentLocation3232)
-	Register(STSegmentMorphology3233)
-	Register(EctopicBeatMorphology3234)
-	Register(PerfusionComparisonFinding3235)
-	Register(ToleranceComparisonFinding3236)
-	Register(WallMotionComparisonFinding3237)
-	Register(StressScoringScale3238)
-	Register(PerceivedExertionScale3239)
-	Register(VentricleIdentification3463)
-	Register(ColonOverallAssessment6200)
-	Register(ColonFindingOrFeature6201)
-	Register(ColonFindingOrFeatureModifier6202)
-	Register(ColonNonLesionObjectType6203)
-	Register(AnatomicNonColonFinding6204)
-	Register(ClockfaceLocationForColon6205)
-	Register(RecumbentPatientOrientationForColon6206)
-	Register(ColonQuantitativeTemporalDifferenceType6207)
-	Register(ColonTypesOfQualityControlStandard6208)
-	Register(ColonMorphologyDescriptor6209)
-	Register(LocationInIntestinalTract6210)
-	Register(ColonCADMaterialDescription6211)
-	Register(CalculatedValueForColonFinding6212)
-	Register(OphthalmicHorizontalDirection4214)
-	Register(OphthalmicVerticalDirection4215)
-	Register(OphthalmicVisualAcuityType4216)
-	Register(ArterialPulseWaveform3004)
-	Register(RespirationWaveform3005)
-	Register(UltrasoundContrastBolusAgent12030)
-	Register(ProtocolIntervalEvent12031)
-	Register(TransducerScanPattern12032)
-	Register(UltrasoundTransducerGeometry12033)
-	Register(UltrasoundTransducerBeamSteering12034)
-	Register(UltrasoundTransducerApplication12035)
-	Register(InstanceAvailabilityStatus50)
-	Register(ModalityPPSDiscontinuationReason9301)
-	Register(MediaImportPPSDiscontinuationReason9302)
-	Register(DXAnatomyImagedForAnimal7482)
-	Register(CommonAnatomicRegionsForAnimal7483)
-	Register(DXViewForAnimal7484)
-	Register(InstitutionalDepartmentUnitService7030)
-	Register(PurposeOfReferenceToPredecessorReport7009)
-	Register(VisualFixationQualityDuringAcquisition4220)
-	Register(VisualFixationQualityProblem4221)
-	Register(OphthalmicMacularGridProblem4222)
-	Register(Organization5002)
-	Register(MixedBreed7486)
-	Register(BroselowLutenPediatricSizeCategory7040)
-	Register(CMDCTECCCalciumScoringPatientSizeCategory7042)
-	Register(CardiacUltrasoundReportTitle12245)
-	Register(CardiacUltrasoundIndicationForStudy12246)
-	Register(PediatricFetalAndCongenitalCardiacSurgicalIntervention12247)
-	Register(CardiacUltrasoundSummaryCode12248)
-	Register(CardiacUltrasoundFetalSummaryCode12249)
-	Register(CardiacUltrasoundCommonLinearMeasurement12250)
-	Register(CardiacUltrasoundLinearValveMeasurement12251)
-	Register(CardiacUltrasoundCardiacFunction12252)
-	Register(CardiacUltrasoundAreaMeasurement12253)
-	Register(CardiacUltrasoundHemodynamicMeasurement12254)
-	Register(CardiacUltrasoundMyocardiumMeasurement12255)
-	Register(CardiacUltrasoundLeftVentricleMeasurement12257)
-	Register(CardiacUltrasoundRightVentricleMeasurement12258)
-	Register(CardiacUltrasoundVentriclesMeasurement12259)
-	Register(CardiacUltrasoundPulmonaryArteryMeasurement12260)
-	Register(CardiacUltrasoundPulmonaryVein12261)
-	Register(CardiacUltrasoundPulmonaryValveMeasurement12262)
-	Register(CardiacUltrasoundVenousReturnPulmonaryMeasurement12263)
-	Register(CardiacUltrasoundVenousReturnSystemicMeasurement12264)
-	Register(CardiacUltrasoundAtriaAndAtrialSeptumMeasurement12265)
-	Register(CardiacUltrasoundMitralValveMeasurement12266)
-	Register(CardiacUltrasoundTricuspidValveMeasurement12267)
-	Register(CardiacUltrasoundAtrioventricularValveMeasurement12268)
-	Register(CardiacUltrasoundInterventricularSeptumMeasurement12269)
-	Register(CardiacUltrasoundAorticValveMeasurement12270)
-	Register(CardiacUltrasoundOutflowTractMeasurement12271)
-	Register(CardiacUltrasoundSemilunarValveAnnulateAndSinusMeasurement12272)
-	Register(CardiacUltrasoundAorticSinotubularJunctionMeasurement12273)
-	Register(CardiacUltrasoundAortaMeasurement12274)
-	Register(CardiacUltrasoundCoronaryArteryMeasurement12275)
-	Register(CardiacUltrasoundAortoPulmonaryConnectionMeasurement12276)
-	Register(CardiacUltrasoundPericardiumAndPleuraMeasurement12277)
-	Register(CardiacUltrasoundFetalGeneralMeasurement12279)
-	Register(CardiacUltrasoundTargetSite12280)
-	Register(CardiacUltrasoundTargetSiteModifier12281)
-	Register(CardiacUltrasoundVenousReturnSystemicFindingSite12282)
-	Register(CardiacUltrasoundVenousReturnPulmonaryFindingSite12283)
-	Register(CardiacUltrasoundAtriaAndAtrialSeptumFindingSite12284)
-	Register(CardiacUltrasoundAtrioventricularValveFindingSite12285)
-	Register(CardiacUltrasoundInterventricularSeptumFindingSite12286)
-	Register(CardiacUltrasoundVentricleFindingSite12287)
-	Register(CardiacUltrasoundOutflowTractFindingSite12288)
-	Register(CardiacUltrasoundSemilunarValveAnnulusAndSinusFindingSite12289)
-	Register(CardiacUltrasoundPulmonaryArteryFindingSite12290)
-	Register(CardiacUltrasoundAortaFindingSite12291)
-	Register(CardiacUltrasoundCoronaryArteryFindingSite12292)
-	Register(CardiacUltrasoundAortopulmonaryConnectionFindingSite12293)
-	Register(CardiacUltrasoundPericardiumAndPleuraFindingSite12294)
-	Register(OphthalmicUltrasoundAxialMeasurementsType4230)
-	Register(LensStatus4231)
-	Register(VitreousStatus4232)
-	Register(OphthalmicAxialLengthMeasurementsSegmentName4233)
-	Register(RefractiveSurgeryType4234)
-	Register(KeratometryDescriptor4235)
-	Register(IOLCalculationFormula4236)
-	Register(LensConstantType4237)
-	Register(RefractiveErrorType4238)
-	Register(AnteriorChamberDepthDefinition4239)
-	Register(OphthalmicMeasurementOrCalculationDataSource4240)
-	Register(OphthalmicAxialLengthSelectionMethod4241)
-	Register(OphthalmicQualityMetricType4243)
-	Register(OphthalmicAgentConcentrationUnit4244)
-	Register(FunctionalConditionPresentDuringAcquisition91)
-	Register(JointPositionDuringAcquisition92)
-	Register(JointPositioningMethod93)
-	Register(PhysicalForceAppliedDuringAcquisition94)
-	Register(ECGControlNumericVariable3690)
-	Register(ECGControlTextVariable3691)
-	Register(WholeSlideMicroscopyImageReferencedImagePurposeOfReference8120)
-	Register(MicroscopyLensType8121)
-	Register(MicroscopyIlluminatorAndSensorColor8122)
-	Register(MicroscopyIlluminationMethod8123)
-	Register(MicroscopyFilter8124)
-	Register(MicroscopyIlluminatorType8125)
-	Register(AuditEventID400)
-	Register(AuditEventTypeCode401)
-	Register(AuditActiveParticipantRoleIDCode402)
-	Register(SecurityAlertTypeCode403)
-	Register(AuditParticipantObjectIDTypeCode404)
-	Register(MediaTypeCode405)
-	Register(VisualFieldStaticPerimetryTestPattern4250)
-	Register(VisualFieldStaticPerimetryTestStrategy4251)
-	Register(VisualFieldStaticPerimetryScreeningTestMode4252)
-	Register(VisualFieldStaticPerimetryFixationStrategy4253)
-	Register(VisualFieldStaticPerimetryTestAnalysisResult4254)
-	Register(VisualFieldIlluminationColor4255)
-	Register(VisualFieldProcedureModifier4256)
-	Register(VisualFieldGlobalIndexName4257)
-	Register(AbstractMultiDimensionalImageModelComponentSemantic7180)
-	Register(AbstractMultiDimensionalImageModelComponentUnit7181)
-	Register(AbstractMultiDimensionalImageModelDimensionSemantic7182)
-	Register(AbstractMultiDimensionalImageModelDimensionUnit7183)
-	Register(AbstractMultiDimensionalImageModelAxisDirection7184)
-	Register(AbstractMultiDimensionalImageModelAxisOrientation7185)
-	Register(AbstractMultiDimensionalImageModelQualitativeDimensionSampleSemantic7186)
-	Register(PlanningMethod7320)
-	Register(DeIdentificationMethod7050)
-	Register(MeasurementOrientation12118)
-	Register(ECGGlobalWaveformDuration3689)
-	Register(ICD3692)
-	Register(RadiotherapyGeneralWorkitemDefinition9241)
-	Register(RadiotherapyAcquisitionWorkitemDefinition9242)
-	Register(RadiotherapyRegistrationWorkitemDefinition9243)
-	Register(ContrastBolusSubstance3850)
-	Register(LabelType10022)
-	Register(OphthalmicMappingUnitForRealWorldValueMapping4260)
-	Register(OphthalmicMappingAcquisitionMethod4261)
-	Register(RetinalThicknessDefinition4262)
-	Register(OphthalmicThicknessMapValueType4263)
-	Register(OphthalmicMapPurposeOfReference4264)
-	Register(OphthalmicThicknessDeviationCategory4265)
-	Register(OphthalmicAnatomicStructureReferencePoint4266)
-	Register(CardiacSynchronizationTechnique3104)
-	Register(StainingProtocol8130)
-	Register(SizeSpecificDoseEstimationMethodForCT10023)
-	Register(PathologyImagingProtocol8131)
-	Register(MagnificationSelection8132)
-	Register(TissueSelection8133)
-	Register(GeneralRegionOfInterestMeasurementModifier7464)
-	Register(MeasurementDerivedFromMultipleROIMeasurements7465)
-	Register(SurfaceScanAcquisitionType8201)
-	Register(SurfaceScanModeType8202)
-	Register(SurfaceScanRegistrationMethodType8203)
-	Register(BasicCardiacView27)
-	Register(CTReconstructionAlgorithm10033)
-	Register(DetectorType10030)
-	Register(CRDRMechanicalConfiguration10031)
-	Register(ProjectionXRayAcquisitionDeviceType10032)
-	Register(AbstractSegmentationType7165)
-	Register(CommonTissueSegmentationType7166)
-	Register(PeripheralNervousSystemSegmentationType7167)
-	Register(CornealTopographyMappingUnitForRealWorldValueMapping4267)
-	Register(CornealTopographyMapValueType4268)
-	Register(BrainStructureForVolumetricMeasurement7140)
-	Register(RTDoseDerivation7220)
-	Register(RTDosePurposeOfReference7221)
-	Register(SpectroscopyPurposeOfReference7215)
-	Register(ScheduledProcessingParameterConceptCodesForRTTreatment9250)
-	Register(RadiopharmaceuticalOrganDoseReferenceAuthority10040)
-	Register(SourceOfRadioisotopeActivityInformation10041)
-	Register(IntravenousExtravasationSymptom10043)
-	Register(RadiosensitiveOrgan10044)
-	Register(RadiopharmaceuticalPatientState10045)
-	Register(GFRMeasurement10046)
-	Register(GFRMeasurementMethod10047)
-	Register(VisualEvaluationMethod8300)
-	Register(TestPatternCode8301)
-	Register(MeasurementPatternCode8302)
-	Register(DisplayDeviceType8303)
-	Register(SUVUnit85)
-	Register(T1MeasurementMethod4100)
-	Register(TracerKineticModel4101)
-	Register(PerfusionMeasurementMethod4102)
-	Register(ArterialInputFunctionMeasurementMethod4103)
-	Register(BolusArrivalTimeDerivationMethod4104)
-	Register(PerfusionAnalysisMethod4105)
-	Register(QuantitativeMethodUsedForPerfusionAndTracerKineticModel4106)
-	Register(TracerKineticModelParameter4107)
-	Register(PerfusionModelParameter4108)
-	Register(ModelIndependentDynamicContrastAnalysisParameter4109)
-	Register(TracerKineticModelingCovariate4110)
-	Register(ContrastCharacteristic4111)
-	Register(MeasurementReportDocumentTitle7021)
-	Register(QuantitativeDiagnosticImagingProcedure100)
-	Register(PETRegionOfInterestMeasurement7466)
-	Register(GrayLevelCoOccurrenceMatrixMeasurement7467)
-	Register(TextureMeasurement7468)
-	Register(TimePointType6146)
-	Register(GenericIntensityAndSizeMeasurement7469)
-	Register(ResponseCriteria6147)
-	Register(FetalBiometryAnatomicSite12020)
-	Register(FetalLongBoneAnatomicSite12021)
-	Register(FetalCraniumAnatomicSite12022)
-	Register(PelvisAndUterusAnatomicSite12023)
-	Register(ParametricMapDerivationImagePurposeOfReference7222)
-	Register(PhysicalQuantityDescriptor9000)
-	Register(LymphNodeAnatomicSite7600)
-	Register(HeadAndNeckCancerAnatomicSite7601)
-	Register(FiberTractInBrainstem7701)
-	Register(ProjectionAndThalamicFiber7702)
-	Register(AssociationFiber7703)
-	Register(LimbicSystemTract7704)
-	Register(CommissuralFiber7705)
-	Register(CranialNerve7706)
-	Register(SpinalCordFiber7707)
-	Register(TractographyAnatomicSite7710)
-	Register(PrimaryAnatomicStructureForIntraOralRadiographySupernumeraryDentitionDesignationOfTeeth4025)
-	Register(PrimaryAnatomicStructureForIntraOralAndCraniofacialRadiographyTeeth4026)
-	Register(IEC61217DevicePositionParameter9401)
-	Register(IEC61217GantryPositionParameter9402)
-	Register(IEC61217PatientSupportPositionParameter9403)
-	Register(ActionableFindingClassification7035)
-	Register(ImageQualityAssessment7036)
-	Register(SummaryRadiationExposureQuantity10050)
-	Register(WideFieldOphthalmicPhotographyTransformationMethod4245)
-	Register(PETUnit84)
-	Register(ImplantMaterial7300)
-	Register(InterventionType7301)
-	Register(ImplantTemplateViewOrientation7302)
-	Register(ImplantTemplateModifiedViewOrientation7303)
-	Register(ImplantTargetAnatomy7304)
-	Register(ImplantPlanningLandmark7305)
-	Register(HumanHipImplantPlanningLandmark7306)
-	Register(ImplantComponentType7307)
-	Register(HumanHipImplantComponentType7308)
-	Register(HumanTraumaImplantComponentType7309)
-	Register(ImplantFixationMethod7310)
-	Register(DeviceParticipatingRole7445)
-	Register(ContainerType8101)
-	Register(ContainerComponentType8102)
-	Register(AnatomicPathologySpecimenType8103)
-	Register(BreastTissueSpecimenType8104)
-	Register(SpecimenCollectionProcedure8109)
-	Register(SpecimenSamplingProcedure8110)
-	Register(SpecimenPreparationProcedure8111)
-	Register(SpecimenStain8112)
-	Register(SpecimenPreparationStep8113)
-	Register(SpecimenFixative8114)
-	Register(SpecimenEmbeddingMedia8115)
-	Register(SourceOfProjectionXRayDoseInformation10020)
-	Register(SourceOfCTDoseInformation10021)
-	Register(RadiationDoseReferencePoint10025)
-	Register(VolumetricViewDescription501)
-	Register(VolumetricViewModifier502)
-	Register(DiffusionAcquisitionValueType7260)
-	Register(DiffusionModelValueType7261)
-	Register(DiffusionTractographyAlgorithmFamily7262)
-	Register(DiffusionTractographyMeasurementType7263)
-	Register(ResearchAnimalSourceRegistry7490)
-	Register(YesNoOnly231)
-	Register(BiosafetyLevel601)
-	Register(BiosafetyControlReason602)
-	Register(SexMaleFemaleOrBoth7457)
-	Register(AnimalRoomType603)
-	Register(DeviceReuse604)
-	Register(AnimalBeddingMaterial605)
-	Register(AnimalShelterType606)
-	Register(AnimalFeedType607)
-	Register(AnimalFeedSource608)
-	Register(AnimalFeedingMethod609)
-	Register(WaterType610)
-	Register(AnesthesiaCategoryCodeTypeForSmallAnimalAnesthesia611)
-	Register(AnesthesiaCategoryCodeTypeFromAnesthesiaQualityInitiative612)
-	Register(AnesthesiaInductionCodeTypeForSmallAnimalAnesthesia613)
-	Register(AnesthesiaInductionCodeTypeFromAnesthesiaQualityInitiative614)
-	Register(AnesthesiaMaintenanceCodeTypeForSmallAnimalAnesthesia615)
-	Register(AnesthesiaMaintenanceCodeTypeFromAnesthesiaQualityInitiative616)
-	Register(AirwayManagementMethodCodeTypeForSmallAnimalAnesthesia617)
-	Register(AirwayManagementMethodCodeTypeFromAnesthesiaQualityInitiative618)
-	Register(AirwayManagementSubMethodCodeTypeForSmallAnimalAnesthesia619)
-	Register(AirwayManagementSubMethodCodeTypeFromAnesthesiaQualityInitiative620)
-	Register(MedicationTypeForSmallAnimalAnesthesia621)
-	Register(MedicationTypeCodeTypeFromAnesthesiaQualityInitiative622)
-	Register(MedicationForSmallAnimalAnesthesia623)
-	Register(InhalationalAnesthesiaAgentForSmallAnimalAnesthesia624)
-	Register(InjectableAnesthesiaAgentForSmallAnimalAnesthesia625)
-	Register(PremedicationAgentForSmallAnimalAnesthesia626)
-	Register(NeuromuscularBlockingAgentForSmallAnimalAnesthesia627)
-	Register(AncillaryMedicationsForSmallAnimalAnesthesia628)
-	Register(CarrierGasesForSmallAnimalAnesthesia629)
-	Register(LocalAnestheticsForSmallAnimalAnesthesia630)
-	Register(ProcedurePhaseRequiringAnesthesia631)
-	Register(SurgicalProcedurePhaseRequiringAnesthesia632)
-	Register(PhaseOfImagingProcedureRequiringAnesthesia633RETIRED)
-	Register(AnimalHandlingPhase634)
-	Register(HeatingMethod635)
-	Register(TemperatureSensorDeviceComponentTypeForSmallAnimalProcedure636)
-	Register(ExogenousSubstanceType637)
-	Register(ExogenousSubstance638)
-	Register(TumorGraftHistologicType639)
-	Register(Fibril640)
-	Register(Virus641)
-	Register(Cytokine642)
-	Register(Toxin643)
-	Register(ExogenousSubstanceAdministrationSite644)
-	Register(ExogenousSubstanceOriginTissue645)
-	Register(PreclinicalSmallAnimalImagingProcedure646)
-	Register(PositionReferenceIndicatorForFrameOfReference647)
-	Register(PresentAbsentOnly241)
-	Register(WaterEquivalentDiameterMethod10024)
-	Register(RadiotherapyPurposeOfReference7022)
-	Register(ContentAssessmentType701)
-	Register(RTContentAssessmentType702)
-	Register(AssessmentBasis703)
-	Register(ReaderSpecialty7449)
-	Register(RequestedReportType9233)
-	Register(CTTransversePlaneReferenceBasis1000)
-	Register(AnatomicalReferenceBasis1001)
-	Register(AnatomicalReferenceBasisHead1002)
-	Register(AnatomicalReferenceBasisSpine1003)
-	Register(AnatomicalReferenceBasisChest1004)
-	Register(AnatomicalReferenceBasisAbdomenPelvis1005)
-	Register(AnatomicalReferenceBasisExtremity1006)
-	Register(ReferenceGeometryPlane1010)
-	Register(ReferenceGeometryPoint1011)
-	Register(PatientAlignmentMethod1015)
-	Register(ContraindicationsForCTImaging1200)
-	Register(FiducialCategory7110)
-	Register(Fiducial7111)
-	Register(NonImageSourceInstancePurposeOfReference7013)
-	Register(RTProcessOutput7023)
-	Register(RTProcessInput7024)
-	Register(RTProcessInputUsed7025)
-	Register(ProstateAnatomy6300)
-	Register(ProstateSectorAnatomyFromPIRADSV26301)
-	Register(ProstateSectorAnatomyFromEuropeanConcensus16SectorMinimalModel6302)
-	Register(ProstateSectorAnatomyFromEuropeanConcensus27SectorOptimalModel6303)
-	Register(MeasurementSelectionReason12301)
-	Register(EchoFindingObservationType12302)
-	Register(EchoMeasurementType12303)
-	Register(CardiovascularMeasuredProperty12304)
-	Register(BasicEchoAnatomicSite12305)
-	Register(EchoFlowDirection12306)
-	Register(CardiacPhaseAndTimePoint12307)
-	Register(CoreEchoMeasurement12300)
-	Register(OCTAProcessingAlgorithmFamily4270)
-	Register(EnFaceImageType4271)
-	Register(OPTScanPatternType4272)
-	Register(RetinalSegmentationSurface4273)
-	Register(OrganForRadiationDoseEstimate10060)
-	Register(AbsorbedRadiationDoseType10061)
-	Register(EquivalentRadiationDoseType10062)
-	Register(RadiationDoseEstimateDistributionRepresentation10063)
-	Register(PatientModelType10064)
-	Register(RadiationTransportModelType10065)
-	Register(AttenuatorCategory10066)
-	Register(RadiationAttenuatorMaterial10067)
-	Register(EstimateMethodType10068)
-	Register(RadiationDoseEstimateParameter10069)
-	Register(RadiationDoseType10070)
-	Register(MRDiffusionComponentSemantic7270)
-	Register(MRDiffusionAnisotropyIndex7271)
-	Register(MRDiffusionModelParameter7272)
-	Register(MRDiffusionModel7273)
-	Register(MRDiffusionModelFittingMethod7274)
-	Register(MRDiffusionModelSpecificMethod7275)
-	Register(MRDiffusionModelInput7276)
-	Register(DiffusionRateAreaOverTimeUnit7277)
-	Register(PediatricSizeCategory7039)
-	Register(CalciumScoringPatientSizeCategory7041)
-	Register(ReasonForRepeatingAcquisition10034)
-	Register(ProtocolAssertion800)
-	Register(RadiotherapeuticDoseMeasurementDevice7026)
-	Register(ExportAdditionalInformationDocumentTitle7014)
-	Register(ExportDelayReason7015)
-	Register(LevelOfDifficulty7016)
-	Register(CategoryOfTeachingMaterialImaging7017)
-	Register(MiscellaneousDocumentTitle7018)
-	Register(SegmentationNonImageSourcePurposeOfReference7019)
-	Register(LongitudinalTemporalEventType280)
-	Register(NonLesionObjectTypePhysicalObject6401)
-	Register(NonLesionObjectTypeSubstance6402)
-	Register(NonLesionObjectTypeTissue6403)
-	Register(ChestNonLesionObjectTypePhysicalObject6404)
-	Register(ChestNonLesionObjectTypeTissue6405)
-	Register(TissueSegmentationPropertyType7191)
-	Register(AnatomicalStructureSegmentationPropertyType7192)
-	Register(PhysicalObjectSegmentationPropertyType7193)
-	Register(MorphologicallyAbnormalStructureSegmentationPropertyType7194)
-	Register(FunctionSegmentationPropertyType7195)
-	Register(SpatialAndRelationalConceptSegmentationPropertyType7196)
-	Register(BodySubstanceSegmentationPropertyType7197)
-	Register(SubstanceSegmentationPropertyType7198)
-	Register(InterpretationRequestDiscontinuationReason9303)
-	Register(GrayLevelRunLengthBasedFeature7475)
-	Register(GrayLevelSizeZoneBasedFeature7476)
-	Register(EncapsulatedDocumentSourcePurposeOfReference7060)
-	Register(ModelDocumentTitle7061)
-	Register(PurposeOfReferenceToPredecessor3DModel7062)
-	Register(ModelScaleUnit7063)
-	Register(ModelUsage7064)
-	Register(RadiationDoseUnit10071)
-	Register(RadiotherapyFiducial7112)
-	Register(MultiEnergyRelevantMaterial300)
-	Register(MultiEnergyMaterialUnit301)
-	Register(DosimetricObjectiveType9500)
-	Register(PrescriptionAnatomyCategory9501)
-	Register(RTSegmentAnnotationCategory9502)
-	Register(RadiotherapyTherapeuticRoleCategory9503)
-	Register(RTGeometricInformation9504)
-	Register(FixationOrPositioningDevice9505)
-	Register(BrachytherapyDevice9506)
-	Register(ExternalBodyModel9507)
-	Register(NonSpecificVolume9508)
-	Register(PurposeOfReferenceForRTPhysicianIntentInput9509)
-	Register(PurposeOfReferenceForRTTreatmentPlanningInput9510)
-	Register(GeneralExternalRadiotherapyProcedureTechnique9511)
-	Register(TomotherapeuticRadiotherapyProcedureTechnique9512)
-	Register(FixationDevice9513)
-	Register(AnatomicalStructureForRadiotherapy9514)
-	Register(RTPatientSupportDevice9515)
-	Register(RadiotherapyBolusDeviceType9516)
-	Register(RadiotherapyBlockDeviceType9517)
-	Register(RadiotherapyAccessoryNoSlotHolderDeviceType9518)
-	Register(RadiotherapyAccessorySlotHolderDeviceType9519)
-	Register(SegmentedRTAccessoryDevice9520)
-	Register(RadiotherapyTreatmentEnergyUnit9521)
-	Register(MultiSourceRadiotherapyProcedureTechnique9522)
-	Register(RoboticRadiotherapyProcedureTechnique9523)
-	Register(RadiotherapyProcedureTechnique9524)
-	Register(RadiationTherapyParticle9525)
-	Register(IonTherapyParticle9526)
-	Register(TeletherapyIsotope9527)
-	Register(BrachytherapyIsotope9528)
-	Register(SingleDoseDosimetricObjective9529)
-	Register(PercentageAndDoseDosimetricObjective9530)
-	Register(VolumeAndDoseDosimetricObjective9531)
-	Register(NoParameterDosimetricObjective9532)
-	Register(DeliveryTimeStructure9533)
-	Register(RadiotherapyTarget9534)
-	Register(RadiotherapyDoseCalculationRole9535)
-	Register(RadiotherapyPrescribingAndSegmentingPersonRole9536)
-	Register(EffectiveDoseCalculationMethodCategory9537)
-	Register(RadiationTransportBasedEffectiveDoseMethodModifier9538)
-	Register(FractionationBasedEffectiveDoseMethodModifier9539)
-	Register(ImagingAgentAdministrationAdverseEvent60)
-	Register(TimeRelativeToProcedure61RETIRED)
-	Register(ImagingAgentAdministrationPhaseType62)
-	Register(ImagingAgentAdministrationMode63)
-	Register(ImagingAgentAdministrationPatientState64)
-	Register(ImagingAgentAdministrationPremedication65)
-	Register(ImagingAgentAdministrationMedication66)
-	Register(ImagingAgentAdministrationCompletionStatus67)
-	Register(ImagingAgentAdministrationPharmaceuticalPresentationUnit68)
-	Register(ImagingAgentAdministrationConsumable69)
-	Register(Flush70)
-	Register(ImagingAgentAdministrationInjectorEventType71)
-	Register(ImagingAgentAdministrationStepType72)
-	Register(BolusShapingCurve73)
-	Register(ImagingAgentAdministrationConsumableCatheterType74)
-	Register(LowHighOrEqual75)
-	Register(PremedicationType76)
-	Register(LateralityWithMedian245)
-	Register(DermatologyAnatomicSite4029)
-	Register(QuantitativeImageFeature218)
-	Register(GlobalShapeDescriptor7477)
-	Register(IntensityHistogramFeature7478)
-	Register(GreyLevelDistanceZoneBasedFeature7479)
-	Register(NeighbourhoodGreyToneDifferenceBasedFeature7500)
-	Register(NeighbouringGreyLevelDependenceBasedFeature7501)
-	Register(CorneaMeasurementMethodDescriptor4242)
-	Register(SegmentedRadiotherapeuticDoseMeasurementDevice7027)
-	Register(ClinicalCourseOfDisease6098)
-	Register(RacialGroup6099)
-	Register(RelativeLaterality246)
-	Register(BrainLesionSegmentationTypeWithNecrosis7168)
-	Register(BrainLesionSegmentationTypeWithoutNecrosis7169)
-	Register(NonAcquisitionModality32)
-	Register(Modality33)
-	Register(LateralityLeftRightOnly247)
-	Register(QualitativeEvaluationModifierType210)
-	Register(QualitativeEvaluationModifierValue211)
-	Register(GenericAnatomicLocationModifier212)
-	Register(BeamLimitingDeviceType9541)
-	Register(CompensatorDeviceType9542)
-	Register(RadiotherapyTreatmentMachineMode9543)
-	Register(RadiotherapyDistanceReferenceLocation9544)
-	Register(FixedBeamLimitingDeviceType9545)
-	Register(RadiotherapyWedgeType9546)
-	Register(RTBeamLimitingDeviceOrientationLabel9547)
-	Register(GeneralAccessoryDeviceType9548)
-	Register(RadiationGenerationModeType9549)
-	Register(CArmPhotonElectronDeliveryRateUnit9550)
-	Register(TreatmentDeliveryDeviceType9551)
-	Register(CArmPhotonElectronDosimeterUnit9552)
-	Register(TreatmentPoint9553)
-	Register(EquipmentReferencePoint9554)
-	Register(RadiotherapyTreatmentPlanningPersonRole9555)
-	Register(RealTimeVideoRenditionTitle7070)
-	Register(GeometryGraphicalRepresentation219)
-	Register(VisualExplanation217)
-	Register(ProstateSectorAnatomyFromPIRADSV216304)
-	Register(RadiotherapyRoboticNodeSet9556)
-	Register(TomotherapeuticDosimeterUnit9557)
-	Register(TomotherapeuticDoseRateUnit9558)
-	Register(RoboticDeliveryDeviceDosimeterUnit9559)
-	Register(RoboticDeliveryDeviceDoseRateUnit9560)
-	Register(AnatomicStructure8134)
-	Register(MediastinumFindingOrFeature6148)
-	Register(MediastinumAnatomy6149)
-	Register(VascularUltrasoundReportDocumentTitle12100)
-	Register(OrganPartNonLateralized12130)
-	Register(OrganPartLateralized12131)
-	Register(TreatmentTerminationReason9561)
-	Register(RadiotherapyTreatmentDeliveryPersonRole9562)
-	Register(RadiotherapyInterlockResolution9563)
-	Register(TreatmentSessionConfirmationAssertion9564)
-	Register(TreatmentToleranceViolationCause9565)
-	Register(ClinicalToleranceViolationType9566)
-	Register(MachineToleranceViolationType9567)
-	Register(RadiotherapyTreatmentInterlock9568)
-	Register(IsocentricPatientSupportPositionParameter9569)
-	Register(RTOverriddenTreatmentParameter9570)
-	Register(EEGLead3030)
-	Register(LeadLocationNearOrInMuscle3031)
-	Register(LeadLocationNearPeripheralNerve3032)
-	Register(EOGLead3033)
-	Register(BodyPositionChannel3034)
-	Register(EEGAnnotationNeurophysiologicEnumeration3035)
-	Register(EMGAnnotationNeurophysiologicalEnumeration3036)
-	Register(EOGAnnotationNeurophysiologicalEnumeration3037)
-	Register(PatternEvent3038)
-	Register(DeviceRelatedAndEnvironmentRelatedEvent3039)
-	Register(EEGAnnotationNeurologicalMonitoringMeasurement3040)
-	Register(OBGYNUltrasoundReportDocumentTitle12024)
-	Register(AutomationOfMeasurement7230)
-	Register(OBGYNUltrasoundBeamPath12025)
-	Register(AngleMeasurement7550)
-	Register(GenericPurposeOfReferenceToImagesAndCoordinatesInMeasurement7551)
-	Register(GenericPurposeOfReferenceToImagesInMeasurement7552)
-	Register(GenericPurposeOfReferenceToCoordinatesInMeasurement7553)
-	Register(FitzpatrickSkinType4401)
-	Register(HistoryOfMalignantMelanoma4402)
-	Register(HistoryOfMelanomaInSitu4403)
-	Register(HistoryOfNonMelanomaSkinCancer4404)
-	Register(SkinDisorder4405)
-	Register(PatientReportedLesionCharacteristic4406)
-	Register(LesionPalpationFinding4407)
-	Register(LesionVisualFinding4408)
-	Register(SkinProcedure4409)
-	Register(AbdominopelvicVessel12125)
-	Register(NumericValueFailureQualifier43)
-	Register(NumericValueUnknownQualifier44)
-	Register(CouinaudLiverSegment7170)
-	Register(LiverSegmentationType7171)
-	Register(ContraindicationsForXAImaging1201)
-	Register(NeurophysiologicStimulationMode3041)
-	Register(ReportedValueType10072)
-	Register(ValueTiming10073)
-	Register(RDSRFrameOfReferenceOrigin10074)
-	Register(MicroscopyAnnotationPropertyType8135)
-	Register(MicroscopyMeasurementType8136)
-	Register(ProstateReportingSystem6310)
-	Register(MRSignalIntensity6311)
-	Register(CrossSectionalScanPlaneOrientation6312)
-	Register(HistoryOfProstateDisease6313)
-	Register(ProstateMRIStudyQualityFinding6314)
-	Register(ProstateMRISeriesQualityFinding6315)
-	Register(MRImagingArtifact6316)
-	Register(ProstateDCEMRIQualityFinding6317)
-	Register(ProstateDWIMRIQualityFinding6318)
-	Register(AbdominalInterventionType6319)
-	Register(AbdominopelvicIntervention6320)
-	Register(ProstateCancerDiagnosticProcedure6321)
-	Register(ProstateCancerFamilyHistory6322)
-	Register(ProstateCancerTherapy6323)
-	Register(ProstateMRIAssessment6324)
-	Register(OverallAssessmentFromPIRADS6325)
-	Register(ImageQualityControlStandard6326)
-	Register(ProstateImagingIndication6327)
-	Register(PIRADSV2LesionAssessmentCategory6328)
-	Register(PIRADSV2T2WIPZLesionAssessmentCategory6329)
-	Register(PIRADSV2T2WITZLesionAssessmentCategory6330)
-	Register(PIRADSV2DWILesionAssessmentCategory6331)
-	Register(PIRADSV2DCELesionAssessmentCategory6332)
-	Register(mpMRIAssessmentType6333)
-	Register(mpMRIAssessmentTypeFromPIRADS6334)
-	Register(mpMRIAssessmentValue6335)
-	Register(MRIAbnormality6336)
-	Register(mpMRIProstateAbnormalityFromPIRADS6337)
-	Register(mpMRIBenignProstateAbnormalityFromPIRADS6338)
-	Register(MRIShapeCharacteristic6339)
-	Register(ProstateMRIShapeCharacteristicFromPIRADS6340)
-	Register(MRIMarginCharacteristic6341)
-	Register(ProstateMRIMarginCharacteristicFromPIRADS6342)
-	Register(MRISignalCharacteristic6343)
-	Register(ProstateMRISignalCharacteristicFromPIRADS6344)
-	Register(MRIEnhancementPattern6345)
-	Register(ProstateMRIEnhancementPatternFromPIRADS6346)
-	Register(ProstateMRIExtraProstaticFinding6347)
-	Register(ProstateMRIAssessmentOfExtraProstaticAnatomicSite6348)
-	Register(MRCoilType6349)
-	Register(EndorectalCoilFillSubstance6350)
-	Register(ProstateRelationalMeasurement6351)
-	Register(ProstateCancerDiagnosticBloodLabMeasurement6352)
-	Register(ProstateImagingTypesOfQualityControlStandard6353)
-	Register(UltrasoundShearWaveMeasurement12308)
-	Register(LeftVentricleMyocardialWall16SegmentModel3780RETIRED)
-	Register(LeftVentricleMyocardialWall18SegmentModel3781)
-	Register(LeftVentricleBasalWall6Segments3782)
-	Register(LeftVentricleMidlevelWall6Segments3783)
-	Register(LeftVentricleApicalWall4Segments3784)
-	Register(LeftVentricleApicalWall6Segments3785)
-	Register(PatientTreatmentPreparationMethod9571)
-	Register(PatientShieldingDevice9572)
-	Register(PatientTreatmentPreparationDevice9573)
-	Register(PatientPositionDisplacementReferencePoint9574)
-	Register(PatientAlignmentDevice9575)
-	Register(ReasonsForRTRadiationTreatmentOmission9576)
-	Register(PatientTreatmentPreparationProcedure9577)
-	Register(MotionManagementSetupDevice9578)
-	Register(CoreEchoStrainMeasurement12309)
-	Register(MyocardialStrainMethod12310)
-	Register(EchoMeasuredStrainProperty12311)
-	Register(AssessmentFromCADRADS3020)
-	Register(CADRADSStenosisAssessmentModifier3021)
-	Register(CADRADSAssessmentModifier3022)
-	Register(RTSegmentMaterial9579)
-	Register(VertebralAnatomicStructure7602)
-	Register(Vertebra7603)
-	Register(IntervertebralDisc7604)
-	Register(ImagingProcedure101)
-	Register(NICIPShortCodeImagingProcedure103)
-	Register(NICIPSNOMEDImagingProcedure104)
-	Register(ICD10PCSImagingProcedure105)
-	Register(ICD10PCSNuclearMedicineProcedure106)
-	Register(ICD10PCSRadiationTherapyProcedure107)
-	Register(RTSegmentationPropertyCategory9580)
-	Register(RadiotherapyRegistrationMark9581)
-	Register(RadiotherapyDoseRegion9582)
-	Register(AnatomicallyLocalizedLesionSegmentationType7199)
-	Register(ReasonForRemovalFromOperationalUse7031)
-	Register(GeneralUltrasoundReportDocumentTitle12320)
-	Register(ElastographySite12321)
-	Register(ElastographyMeasurementSite12322)
-	Register(UltrasoundRelevantPatientCondition12323)
-	Register(ShearWaveDetectionMethod12324)
-	Register(LiverUltrasoundStudyIndication12325)
-	Register(AnalogWaveformFilter3042)
-	Register(DigitalWaveformFilter3043)
-	Register(WaveformFilterLookupTableInputFrequencyUnit3044)
-	Register(WaveformFilterLookupTableOutputMagnitudeUnit3045)
-	Register(SpecificObservationSubjectClass272)
-	Register(MovableBeamLimitingDeviceType9540)
-	Register(RadiotherapyAcquisitionWorkItemSubtasks9260)
-	Register(PatientPositionAcquisitionRadiationSourceLocations9261)
-	Register(EnergyDerivationTypes9262)
-	Register(KVImagingAcquisitionTechniques9263)
-	Register(MVImagingAcquisitionTechniques9264)
-	Register(PatientPositionAcquisitionProjectionTechniques9265)
-	Register(PatientPositionAcquisitionCTTechniques9266)
-	Register(PatientPositioningRelatedObjectPurposes9267)
-	Register(PatientPositionAcquisitionDevices9268)
-	Register(RTRadiationMetersetUnits9269)
-	Register(AcquisitionInitiationTypes9270)
-	Register(RTImagePatientPositionAcquisitionDevices9271)
-	Register(PhotoacousticIlluminationMethod11001)
-	Register(AcousticCouplingMedium11002)
-	Register(UltrasoundTransducerTechnology11003)
-	Register(SpeedOfSoundCorrectionMechanisms11004)
-	Register(PhotoacousticReconstructionAlgorithmFamily11005)
-	Register(PhotoacousticImagedProperty11006)
-	Register(XRayRadiationDoseProcedureTypeReported10005)
-	Register(TopicalTreatment4410)
-	Register(LesionColor4411)
-	Register(SpecimenStainForConfocalMicroscopy4412)
-	Register(RTROIImageAcquisitionContext9272)
-	Register(LobeOfLung6170)
-	Register(ZoneOfLung6171)
-	Register(SleepStage3046)
-	Register(PatientPositionAcquisitionMRTechniques9273)
-	Register(RTPlanRadiotherapyProcedureTechnique9583)
-	Register(WaveformAnnotationClassification3047)
-	Register(WaveformAnnotationsDocumentTitle3048)
-	Register(EEGProcedure3049)
-	Register(PatientConsciousness3050)
-	Register(FollicleType12010)
-	Register(BreastTissueSegmentationType7163)
-	Register(ImplantedDevice3779)
-	Register(SimilarityMeasure281)
-	Register(WaveformAcquisitionModality34)
-	Register(EnFaceProcessingAlgorithmFamily4274)
-	Register(AnteriorEyeSegmentationSurface4275)
-	Register(FetalEchocardiographyImageView12312)
-	Register(CardiacUltrasoundFetalArrhythmiaMeasurements12313)
-	Register(CommonFetalEchocardiographyMeasurements12314)
-	Register(HeadAndNeckPrimaryAnatomicStructure4061)
-	Register(VLView4062)
-	Register(VLDentalView4063)
-	Register(VLViewModifier4064)
-	Register(VLDentalViewModifier4065)
-	Register(OrthognathicFunctionalCondition4066)
-	Register(OrthodonticFindingByInspection4067)
-	Register(OrthodonticObservableEntity4068)
-	Register(DentalOcclusion4069)
-	Register(OrthodonticTreatmentProgress4070)
-	Register(GeneralPhotographyDevice4071)
-	Register(DevicesForThePurposeOfDentalPhotography4072)
-	Register(CTDIPhantomDevice4053)
-	Register(DiagnosticImagingProcedureWithoutIVContrast108)
-	Register(DiagnosticImagingProcedureWithIVContrast109)
-	Register(StructuralHeartProcedure12331)
-	Register(StructuralHeartDevice12332)
-	Register(StructuralHeartMeasurement12333)
-	Register(AorticValveStructuralMeasurement12334)
-	Register(MitralValveStructuralMeasurement12335)
-	Register(TricuspidValveStructuralMeasurement12336)
-	Register(StructuralHeartEchoMeasurement12337)
-	Register(LeftAtrialAppendageClosureMeasurement12338)
-	Register(StructuralHeartProcedureAnatomicSite12339)
-	Register(IndicationForStructuralHeartProcedure12341)
-	Register(BradycardiacAgent12342)
-	Register(TransesophagealEchocardiographyScanPlane12343)
-	Register(StructuralHeartMeasurementReportDocumentTitle12344)
-	Register(PersonGenderIdentity7458)
-	Register(CategoryOfSexParametersForClinicalUse7459)
-	Register(ThirdPersonPronounSet7448)
-	Register(CardiacStructureCalcificationQualitativeEvaluation12345)
-	Register(VisualFieldMeasurements4280)
-	Register(OpticDiscKeyMeasurements4281)
-	Register(RetinalSectorMethods4282)
-	Register(RNFLSectorMeasurements4283)
-	Register(RNFLClockfaceMeasurements4284)
-	Register(MacularThicknessKeyMeasurements4285)
-	Register(GanglionCellMeasurementExtent4286)
-	Register(GanglionCellKeyMeasurements4287)
-	Register(GanglionCellSectorMeasurements4288)
-	Register(GanglionCellSectorMethods4289)
-	Register(EndothelialCellCountMeasurements4290)
-	Register(OphthalmicImageROIMeasurements4291)
-	Register(RTPlanApprovalAssertion9584)
-	Register(EstimatedDeliveryDateMethod12026)
-	Register(RTDoseCalculationAlgorithmFamily9585)
-	Register(DoseIndexForDoseCalibration10012)
-	Register(UltrasoundAttenuationImagingSite12036)
-	Register(FetalAnatomySurveyAssessment12040)
-	Register(FetalAnatomySurveyAssessmentHead12041)
-	Register(FetalAnatomySurveyAssessmentFaceAndNeck12042)
-	Register(FetalAnatomySurveyAssessmentChest12043)
-	Register(FetalAnatomySurveyAssessmentHeart12044)
-	Register(FetalAnatomySurveyAssessmentAbdomenAndPelvis12045)
-	Register(FetalAnatomySurveyAssessmentSpine12046)
-	Register(FetalAnatomySurveyAssessmentExtremities12047)
-	Register(FetalAnatomySurveyAssessmentMaternal12048)
-	Register(FetalAnatomySurveyPracticeGuideline12049)
-	Register(SensitiveContentCategory900)
-	Register(SensitiveContentDetail901)
-	Register(ApplicationTypeCode406)
-	Register(XRayModulationType10035)
-	Register(RadiotherapyDoseRealWorldUnits9586)
-	Register(RadiotherapyDoseInterpretedTypeCodes9587)
-	Register(RadiotherapyDoseInterpretedTypeModifierCodes9588)
-	Register(RadiotherapyDoseIntentCodes9589)
-	Register(QualitySegmentationPropertyType7164)
-	Register(UltrasoundZScorePopulationIndex12027)
-	Register(FetalUltrasoundZScoreReferenceAuthority12028)
-	Register(MetalArtifactReductionAlgorithmFamily10036)
+var generatedStandardUIDEntries = []*UID{
+	Verification,
+	ImplicitVRLittleEndian,
+	ExplicitVRLittleEndian,
+	EncapsulatedUncompressedExplicitVRLittleEndian,
+	DeflatedExplicitVRLittleEndian,
+	ExplicitVRBigEndianRETIRED,
+	JPEGBaseline8Bit,
+	JPEGExtended12Bit,
+	JPEGExtended35RETIRED,
+	JPEGSpectralSelectionNonHierarchical68RETIRED,
+	JPEGSpectralSelectionNonHierarchical79RETIRED,
+	JPEGFullProgressionNonHierarchical1012RETIRED,
+	JPEGFullProgressionNonHierarchical1113RETIRED,
+	JPEGLossless,
+	JPEGLosslessNonHierarchical15RETIRED,
+	JPEGExtendedHierarchical1618RETIRED,
+	JPEGExtendedHierarchical1719RETIRED,
+	JPEGSpectralSelectionHierarchical2022RETIRED,
+	JPEGSpectralSelectionHierarchical2123RETIRED,
+	JPEGFullProgressionHierarchical2426RETIRED,
+	JPEGFullProgressionHierarchical2527RETIRED,
+	JPEGLosslessHierarchical28RETIRED,
+	JPEGLosslessHierarchical29RETIRED,
+	JPEGLosslessSV1,
+	JPEGLSLossless,
+	JPEGLSNearLossless,
+	JPEG2000Lossless,
+	JPEG2000,
+	JPEG2000MCLossless,
+	JPEG2000MC,
+	JPIPReferenced,
+	JPIPReferencedDeflate,
+	MPEG2MPML,
+	MPEG2MPMLF,
+	MPEG2MPHL,
+	MPEG2MPHLF,
+	MPEG4HP41,
+	MPEG4HP41F,
+	MPEG4HP41BD,
+	MPEG4HP41BDF,
+	MPEG4HP422D,
+	MPEG4HP422DF,
+	MPEG4HP423D,
+	MPEG4HP423DF,
+	MPEG4HP42STEREO,
+	MPEG4HP42STEREOF,
+	HEVCMP51,
+	HEVCM10P51,
+	JPEGXLLossless,
+	JPEGXLJPEGRecompression,
+	JPEGXL,
+	HTJ2KLossless,
+	HTJ2KLosslessRPCL,
+	HTJ2K,
+	JPIPHTJ2KReferenced,
+	JPIPHTJ2KReferencedDeflate,
+	RLELossless,
+	RFC2557MIMEEncapsulationRETIRED,
+	XMLEncodingRETIRED,
+	SMPTEST211020UncompressedProgressiveActiveVideo,
+	SMPTEST211020UncompressedInterlacedActiveVideo,
+	SMPTEST211030PCMDigitalAudio,
+	DeflatedImageFrameCompression,
+	MediaStorageDirectoryStorage,
+	HotIronPalette,
+	PETPalette,
+	HotMetalBluePalette,
+	PET20StepPalette,
+	SpringPalette,
+	SummerPalette,
+	FallPalette,
+	WinterPalette,
+	BasicStudyContentNotificationRETIRED,
+	Papyrus3ImplicitVRLittleEndianRETIRED,
+	StorageCommitmentPushModel,
+	StorageCommitmentPushModelInstance,
+	StorageCommitmentPullModelRETIRED,
+	StorageCommitmentPullModelInstanceRETIRED,
+	ProceduralEventLogging,
+	ProceduralEventLoggingInstance,
+	SubstanceAdministrationLogging,
+	SubstanceAdministrationLoggingInstance,
+	DCMUID,
+	DCM,
+	MA,
+	UBERON,
+	ITIS_TSN,
+	MGI,
+	PUBCHEM_CID,
+	DC,
+	NYUMCCG,
+	MAYONRISBSASRG,
+	IBSI,
+	RO,
+	RADELEMENT,
+	I11,
+	UNS,
+	RRID,
+	DICOMApplicationContext,
+	DetachedPatientManagementRETIRED,
+	DetachedPatientManagementMetaRETIRED,
+	DetachedVisitManagementRETIRED,
+	DetachedStudyManagementRETIRED,
+	StudyComponentManagementRETIRED,
+	ModalityPerformedProcedureStep,
+	ModalityPerformedProcedureStepRetrieve,
+	ModalityPerformedProcedureStepNotification,
+	DetachedResultsManagementRETIRED,
+	DetachedResultsManagementMetaRETIRED,
+	DetachedStudyManagementMetaRETIRED,
+	DetachedInterpretationManagementRETIRED,
+	Storage,
+	BasicFilmSession,
+	BasicFilmBox,
+	BasicGrayscaleImageBox,
+	BasicColorImageBox,
+	ReferencedImageBoxRETIRED,
+	BasicGrayscalePrintManagementMeta,
+	ReferencedGrayscalePrintManagementMetaRETIRED,
+	PrintJob,
+	BasicAnnotationBox,
+	Printer,
+	PrinterConfigurationRetrieval,
+	PrinterInstance,
+	PrinterConfigurationRetrievalInstance,
+	BasicColorPrintManagementMeta,
+	ReferencedColorPrintManagementMetaRETIRED,
+	VOILUTBox,
+	PresentationLUT,
+	ImageOverlayBoxRETIRED,
+	BasicPrintImageOverlayBoxRETIRED,
+	PrintQueueInstanceRETIRED,
+	PrintQueueManagementRETIRED,
+	StoredPrintStorageRETIRED,
+	HardcopyGrayscaleImageStorageRETIRED,
+	HardcopyColorImageStorageRETIRED,
+	PullPrintRequestRETIRED,
+	PullStoredPrintManagementMetaRETIRED,
+	MediaCreationManagement,
+	DisplaySystem,
+	DisplaySystemInstance,
+	ComputedRadiographyImageStorage,
+	DigitalXRayImageStorageForPresentation,
+	DigitalXRayImageStorageForProcessing,
+	DigitalMammographyXRayImageStorageForPresentation,
+	DigitalMammographyXRayImageStorageForProcessing,
+	DigitalIntraOralXRayImageStorageForPresentation,
+	DigitalIntraOralXRayImageStorageForProcessing,
+	CTImageStorage,
+	EnhancedCTImageStorage,
+	LegacyConvertedEnhancedCTImageStorage,
+	UltrasoundMultiFrameImageStorageRetiredRETIRED,
+	UltrasoundMultiFrameImageStorage,
+	MRImageStorage,
+	EnhancedMRImageStorage,
+	MRSpectroscopyStorage,
+	EnhancedMRColorImageStorage,
+	LegacyConvertedEnhancedMRImageStorage,
+	NuclearMedicineImageStorageRetiredRETIRED,
+	UltrasoundImageStorageRetiredRETIRED,
+	UltrasoundImageStorage,
+	EnhancedUSVolumeStorage,
+	PhotoacousticImageStorage,
+	SecondaryCaptureImageStorage,
+	MultiFrameSingleBitSecondaryCaptureImageStorage,
+	MultiFrameGrayscaleByteSecondaryCaptureImageStorage,
+	MultiFrameGrayscaleWordSecondaryCaptureImageStorage,
+	MultiFrameTrueColorSecondaryCaptureImageStorage,
+	StandaloneOverlayStorageRETIRED,
+	StandaloneCurveStorageRETIRED,
+	WaveformStorageTrialRETIRED,
+	TwelveLeadECGWaveformStorage,
+	GeneralECGWaveformStorage,
+	AmbulatoryECGWaveformStorage,
+	General32bitECGWaveformStorage,
+	HemodynamicWaveformStorage,
+	CardiacElectrophysiologyWaveformStorage,
+	BasicVoiceAudioWaveformStorage,
+	GeneralAudioWaveformStorage,
+	ArterialPulseWaveformStorage,
+	RespiratoryWaveformStorage,
+	MultichannelRespiratoryWaveformStorage,
+	RoutineScalpElectroencephalogramWaveformStorage,
+	ElectromyogramWaveformStorage,
+	ElectrooculogramWaveformStorage,
+	SleepElectroencephalogramWaveformStorage,
+	BodyPositionWaveformStorage,
+	WaveformPresentationStateStorage,
+	WaveformAcquisitionPresentationStateStorage,
+	StandaloneModalityLUTStorageRETIRED,
+	StandaloneVOILUTStorageRETIRED,
+	GrayscaleSoftcopyPresentationStateStorage,
+	ColorSoftcopyPresentationStateStorage,
+	PseudoColorSoftcopyPresentationStateStorage,
+	BlendingSoftcopyPresentationStateStorage,
+	XAXRFGrayscaleSoftcopyPresentationStateStorage,
+	GrayscalePlanarMPRVolumetricPresentationStateStorage,
+	CompositingPlanarMPRVolumetricPresentationStateStorage,
+	AdvancedBlendingPresentationStateStorage,
+	VolumeRenderingVolumetricPresentationStateStorage,
+	SegmentedVolumeRenderingVolumetricPresentationStateStorage,
+	MultipleVolumeRenderingVolumetricPresentationStateStorage,
+	VariableModalityLUTSoftcopyPresentationStateStorage,
+	XRayAngiographicImageStorage,
+	EnhancedXAImageStorage,
+	XRayRadiofluoroscopicImageStorage,
+	EnhancedXRFImageStorage,
+	XRayAngiographicBiPlaneImageStorageRETIRED,
+	XRay3DAngiographicImageStorage,
+	XRay3DCraniofacialImageStorage,
+	BreastTomosynthesisImageStorage,
+	BreastProjectionXRayImageStorageForPresentation,
+	BreastProjectionXRayImageStorageForProcessing,
+	IntravascularOpticalCoherenceTomographyImageStorageForPresentation,
+	IntravascularOpticalCoherenceTomographyImageStorageForProcessing,
+	NuclearMedicineImageStorage,
+	ParametricMapStorage,
+	RawDataStorage,
+	SpatialRegistrationStorage,
+	SpatialFiducialsStorage,
+	DeformableSpatialRegistrationStorage,
+	SegmentationStorage,
+	SurfaceSegmentationStorage,
+	TractographyResultsStorage,
+	LabelMapSegmentationStorage,
+	HeightMapSegmentationStorage,
+	RealWorldValueMappingStorage,
+	SurfaceScanMeshStorage,
+	SurfaceScanPointCloudStorage,
+	VLImageStorageTrialRETIRED,
+	VLMultiFrameImageStorageTrialRETIRED,
+	VLEndoscopicImageStorage,
+	VideoEndoscopicImageStorage,
+	VLMicroscopicImageStorage,
+	VideoMicroscopicImageStorage,
+	VLSlideCoordinatesMicroscopicImageStorage,
+	VLPhotographicImageStorage,
+	VideoPhotographicImageStorage,
+	OphthalmicPhotography8BitImageStorage,
+	OphthalmicPhotography16BitImageStorage,
+	StereometricRelationshipStorage,
+	OphthalmicTomographyImageStorage,
+	WideFieldOphthalmicPhotographyStereographicProjectionImageStorage,
+	WideFieldOphthalmicPhotography3DCoordinatesImageStorage,
+	OphthalmicOpticalCoherenceTomographyEnFaceImageStorage,
+	OphthalmicOpticalCoherenceTomographyBscanVolumeAnalysisStorage,
+	VLWholeSlideMicroscopyImageStorage,
+	DermoscopicPhotographyImageStorage,
+	ConfocalMicroscopyImageStorage,
+	ConfocalMicroscopyTiledPyramidalImageStorage,
+	LensometryMeasurementsStorage,
+	AutorefractionMeasurementsStorage,
+	KeratometryMeasurementsStorage,
+	SubjectiveRefractionMeasurementsStorage,
+	VisualAcuityMeasurementsStorage,
+	SpectaclePrescriptionReportStorage,
+	OphthalmicAxialMeasurementsStorage,
+	IntraocularLensCalculationsStorage,
+	MacularGridThicknessAndVolumeReportStorage,
+	OphthalmicVisualFieldStaticPerimetryMeasurementsStorage,
+	OphthalmicThicknessMapStorage,
+	CornealTopographyMapStorage,
+	TextSRStorageTrialRETIRED,
+	AudioSRStorageTrialRETIRED,
+	DetailSRStorageTrialRETIRED,
+	ComprehensiveSRStorageTrialRETIRED,
+	BasicTextSRStorage,
+	EnhancedSRStorage,
+	ComprehensiveSRStorage,
+	Comprehensive3DSRStorage,
+	ExtensibleSRStorage,
+	ProcedureLogStorage,
+	MammographyCADSRStorage,
+	KeyObjectSelectionDocumentStorage,
+	ChestCADSRStorage,
+	XRayRadiationDoseSRStorage,
+	RadiopharmaceuticalRadiationDoseSRStorage,
+	ColonCADSRStorage,
+	ImplantationPlanSRStorage,
+	AcquisitionContextSRStorage,
+	SimplifiedAdultEchoSRStorage,
+	PatientRadiationDoseSRStorage,
+	PlannedImagingAgentAdministrationSRStorage,
+	PerformedImagingAgentAdministrationSRStorage,
+	EnhancedXRayRadiationDoseSRStorage,
+	WaveformAnnotationSRStorage,
+	ContentAssessmentResultsStorage,
+	MicroscopyBulkSimpleAnnotationsStorage,
+	EncapsulatedPDFStorage,
+	EncapsulatedCDAStorage,
+	EncapsulatedSTLStorage,
+	EncapsulatedOBJStorage,
+	EncapsulatedMTLStorage,
+	PositronEmissionTomographyImageStorage,
+	LegacyConvertedEnhancedPETImageStorage,
+	StandalonePETCurveStorageRETIRED,
+	EnhancedPETImageStorage,
+	BasicStructuredDisplayStorage,
+	CTDefinedProcedureProtocolStorage,
+	CTPerformedProcedureProtocolStorage,
+	ProtocolApprovalStorage,
+	ProtocolApprovalInformationModelFind,
+	ProtocolApprovalInformationModelMove,
+	ProtocolApprovalInformationModelGet,
+	XADefinedProcedureProtocolStorage,
+	XAPerformedProcedureProtocolStorage,
+	InventoryStorage,
+	InventoryFind,
+	InventoryMove,
+	InventoryGet,
+	InventoryCreation,
+	RepositoryQuery,
+	StorageManagementInstance,
+	RTImageStorage,
+	RTDoseStorage,
+	RTStructureSetStorage,
+	RTBeamsTreatmentRecordStorage,
+	RTPlanStorage,
+	RTBrachyTreatmentRecordStorage,
+	RTTreatmentSummaryRecordStorage,
+	RTIonPlanStorage,
+	RTIonBeamsTreatmentRecordStorage,
+	RTPhysicianIntentStorage,
+	RTSegmentAnnotationStorage,
+	RTRadiationSetStorage,
+	CArmPhotonElectronRadiationStorage,
+	TomotherapeuticRadiationStorage,
+	RoboticArmRadiationStorage,
+	RTRadiationRecordSetStorage,
+	RTRadiationSalvageRecordStorage,
+	TomotherapeuticRadiationRecordStorage,
+	CArmPhotonElectronRadiationRecordStorage,
+	RoboticRadiationRecordStorage,
+	RTRadiationSetDeliveryInstructionStorage,
+	RTTreatmentPreparationStorage,
+	EnhancedRTImageStorage,
+	EnhancedContinuousRTImageStorage,
+	RTPatientPositionAcquisitionInstructionStorage,
+	DICOSCTImageStorage,
+	DICOSDigitalXRayImageStorageForPresentation,
+	DICOSDigitalXRayImageStorageForProcessing,
+	DICOSThreatDetectionReportStorage,
+	DICOS2DAITStorage,
+	DICOS3DAITStorage,
+	DICOSQuadrupoleResonanceStorage,
+	EddyCurrentImageStorage,
+	EddyCurrentMultiFrameImageStorage,
+	ThermographyImageStorage,
+	ThermographyMultiFrameImageStorage,
+	UltrasoundWaveformStorage,
+	PatientRootQueryRetrieveInformationModelFind,
+	PatientRootQueryRetrieveInformationModelMove,
+	PatientRootQueryRetrieveInformationModelGet,
+	StudyRootQueryRetrieveInformationModelFind,
+	StudyRootQueryRetrieveInformationModelMove,
+	StudyRootQueryRetrieveInformationModelGet,
+	PatientStudyOnlyQueryRetrieveInformationModelFindRETIRED,
+	PatientStudyOnlyQueryRetrieveInformationModelMoveRETIRED,
+	PatientStudyOnlyQueryRetrieveInformationModelGetRETIRED,
+	CompositeInstanceRootRetrieveMove,
+	CompositeInstanceRootRetrieveGet,
+	CompositeInstanceRetrieveWithoutBulkDataGet,
+	DefinedProcedureProtocolInformationModelFind,
+	DefinedProcedureProtocolInformationModelMove,
+	DefinedProcedureProtocolInformationModelGet,
+	ModalityWorklistInformationModelFind,
+	GeneralPurposeWorklistManagementMetaRETIRED,
+	GeneralPurposeWorklistInformationModelFindRETIRED,
+	GeneralPurposeScheduledProcedureStepRETIRED,
+	GeneralPurposePerformedProcedureStepRETIRED,
+	InstanceAvailabilityNotification,
+	RTBeamsDeliveryInstructionStorageTrialRETIRED,
+	RTConventionalMachineVerificationTrialRETIRED,
+	RTIonMachineVerificationTrialRETIRED,
+	UnifiedWorklistAndProcedureStepTrialRETIRED,
+	UnifiedProcedureStepPushTrialRETIRED,
+	UnifiedProcedureStepWatchTrialRETIRED,
+	UnifiedProcedureStepPullTrialRETIRED,
+	UnifiedProcedureStepEventTrialRETIRED,
+	UPSGlobalSubscriptionInstance,
+	UPSFilteredGlobalSubscriptionInstance,
+	UnifiedWorklistAndProcedureStep,
+	UnifiedProcedureStepPush,
+	UnifiedProcedureStepWatch,
+	UnifiedProcedureStepPull,
+	UnifiedProcedureStepEvent,
+	UnifiedProcedureStepQuery,
+	RTBeamsDeliveryInstructionStorage,
+	RTConventionalMachineVerification,
+	RTIonMachineVerification,
+	RTBrachyApplicationSetupDeliveryInstructionStorage,
+	GeneralRelevantPatientInformationQuery,
+	BreastImagingRelevantPatientInformationQuery,
+	CardiacRelevantPatientInformationQuery,
+	HangingProtocolStorage,
+	HangingProtocolInformationModelFind,
+	HangingProtocolInformationModelMove,
+	HangingProtocolInformationModelGet,
+	ColorPaletteStorage,
+	ColorPaletteQueryRetrieveInformationModelFind,
+	ColorPaletteQueryRetrieveInformationModelMove,
+	ColorPaletteQueryRetrieveInformationModelGet,
+	ProductCharacteristicsQuery,
+	SubstanceApprovalQuery,
+	GenericImplantTemplateStorage,
+	GenericImplantTemplateInformationModelFind,
+	GenericImplantTemplateInformationModelMove,
+	GenericImplantTemplateInformationModelGet,
+	ImplantAssemblyTemplateStorage,
+	ImplantAssemblyTemplateInformationModelFind,
+	ImplantAssemblyTemplateInformationModelMove,
+	ImplantAssemblyTemplateInformationModelGet,
+	ImplantTemplateGroupStorage,
+	ImplantTemplateGroupInformationModelFind,
+	ImplantTemplateGroupInformationModelMove,
+	ImplantTemplateGroupInformationModelGet,
+	NativeDICOMModel,
+	AbstractMultiDimensionalImageModel,
+	DICOMContentMappingResource,
+	VideoEndoscopicImageRealTimeCommunication,
+	VideoPhotographicImageRealTimeCommunication,
+	AudioWaveformRealTimeCommunication,
+	RenditionSelectionDocumentRealTimeCommunication,
+	dicomDeviceName,
+	dicomDescription,
+	dicomManufacturer,
+	dicomManufacturerModelName,
+	dicomSoftwareVersion,
+	dicomVendorData,
+	dicomAETitle,
+	dicomNetworkConnectionReference,
+	dicomApplicationCluster,
+	dicomAssociationInitiator,
+	dicomAssociationAcceptor,
+	dicomHostname,
+	dicomPort,
+	dicomSOPClass,
+	dicomTransferRole,
+	dicomTransferSyntax,
+	dicomPrimaryDeviceType,
+	dicomRelatedDeviceReference,
+	dicomPreferredCalledAETitle,
+	dicomTLSCyphersuite,
+	dicomAuthorizedNodeCertificateReference,
+	dicomThisNodeCertificateReference,
+	dicomInstalled,
+	dicomStationName,
+	dicomDeviceSerialNumber,
+	dicomInstitutionName,
+	dicomInstitutionAddress,
+	dicomInstitutionDepartmentName,
+	dicomIssuerOfPatientID,
+	dicomPreferredCallingAETitle,
+	dicomSupportedCharacterSet,
+	dicomConfigurationRoot,
+	dicomDevicesRoot,
+	dicomUniqueAETitlesRegistryRoot,
+	dicomDevice,
+	dicomNetworkAE,
+	dicomNetworkConnection,
+	dicomUniqueAETitle,
+	dicomTransferCapability,
+	UTC,
+	AnatomicModifier2,
+	AnatomicRegion4,
+	TransducerApproach5,
+	TransducerOrientation6,
+	UltrasoundBeamPath7,
+	AngiographicInterventionalDevice8,
+	ImageGuidedTherapeuticProcedure9,
+	InterventionalDrug10,
+	AdministrationRoute11,
+	ImagingContrastAgent12,
+	ImagingContrastAgentIngredient13,
+	RadiopharmaceuticalIsotope18,
+	PatientOrientation19,
+	PatientOrientationModifier20,
+	PatientEquipmentRelationship21,
+	CranioCaudadAngulation23,
+	Radiopharmaceutical25,
+	NuclearMedicineProjection26,
+	AcquisitionModality29,
+	DICOMDevice30,
+	AbstractPrior31,
+	NumericValueQualifier42,
+	MeasurementUnit82,
+	RealWorldValueMappingUnit83,
+	SignificanceLevel220,
+	MeasurementRangeConcept221,
+	Normality222,
+	NormalRangeValue223,
+	SelectionMethod224,
+	MeasurementUncertaintyConcept225,
+	PopulationStatisticalDescriptor226,
+	SampleStatisticalDescriptor227,
+	EquationOrTable228,
+	YesNo230,
+	PresentAbsent240,
+	NormalAbnormal242,
+	Laterality244,
+	PositiveNegative250,
+	ComplicationSeverity251,
+	ObserverType270,
+	ObservationSubjectClass271,
+	AudioChannelSource3000,
+	ECGLead3001,
+	HemodynamicWaveformSource3003,
+	CardiovascularAnatomicStructure3010,
+	ElectrophysiologyAnatomicLocation3011,
+	CoronaryArterySegment3014,
+	CoronaryArtery3015,
+	CardiovascularAnatomicStructureModifier3019,
+	CardiologyMeasurementUnit3082RETIRED,
+	TimeSynchronizationChannelType3090,
+	CardiacProceduralStateValue3101,
+	ElectrophysiologyMeasurementFunctionTechnique3240,
+	HemodynamicMeasurementTechnique3241,
+	CatheterizationProcedurePhase3250,
+	ElectrophysiologyProcedurePhase3254,
+	StressProtocol3261,
+	ECGPatientStateValue3262,
+	ElectrodePlacementValue3263,
+	XYZElectrodePlacementValues3264RETIRED,
+	HemodynamicPhysiologicalChallenge3271,
+	ECGAnnotation3335,
+	HemodynamicAnnotation3337,
+	ElectrophysiologyAnnotation3339,
+	ProcedureLogTitle3400,
+	LogNoteType3401,
+	PatientStatusAndEvent3402,
+	PercutaneousEntry3403,
+	StaffAction3404,
+	ProcedureActionValue3405,
+	NonCoronaryTranscatheterIntervention3406,
+	ObjectReferencePurpose3407,
+	ConsumableAction3408,
+	DrugContrastAdministration3409,
+	DrugContrastNumericParameter3410,
+	IntracoronaryDevice3411,
+	InterventionActionStatus3412,
+	AdverseOutcome3413,
+	ProcedureUrgency3414,
+	CardiacRhythm3415,
+	RespirationRhythm3416,
+	LesionRisk3418,
+	FindingTitle3419,
+	ProcedureAction3421,
+	DeviceUseAction3422,
+	NumericDeviceCharacteristic3423,
+	InterventionParameter3425,
+	ConsumablesParameter3426,
+	EquipmentEvent3427,
+	CardiovascularImagingProcedure3428,
+	CatheterizationDevice3429,
+	DateTimeQualifier3430,
+	PeripheralPulseLocation3440,
+	PatientAssessment3441,
+	PeripheralPulseMethod3442,
+	SkinCondition3446,
+	AirwayAssessment3448,
+	CalibrationObject3451,
+	CalibrationMethod3452,
+	CardiacVolumeMethod3453,
+	IndexMethod3455,
+	SubSegmentMethod3456,
+	ContourRealignment3458,
+	CircumferentialExtent3460,
+	RegionalExtent3461,
+	ChamberIdentification3462,
+	QAReferenceMethod3465,
+	PlaneIdentification3466,
+	EjectionFraction3467,
+	EDVolume3468,
+	ESVolume3469,
+	VesselLumenCrossSectionalAreaCalculationMethod3470,
+	EstimatedVolume3471,
+	CardiacContractionPhase3472,
+	IVUSProcedurePhase3480,
+	IVUSDistanceMeasurement3481,
+	IVUSAreaMeasurement3482,
+	IVUSLongitudinalMeasurement3483,
+	IVUSIndexRatio3484,
+	IVUSVolumeMeasurement3485,
+	VascularMeasurementSite3486,
+	IntravascularVolumetricRegion3487,
+	MinMaxMean3488,
+	CalciumDistribution3489,
+	IVUSLesionMorphology3491,
+	VascularDissectionClassification3492,
+	IVUSRelativeStenosisSeverity3493,
+	IVUSNonMorphologicalFinding3494,
+	IVUSPlaqueComposition3495,
+	IVUSFiducialPoint3496,
+	IVUSArterialMorphology3497,
+	PressureUnit3500,
+	HemodynamicResistanceUnit3502,
+	IndexedHemodynamicResistanceUnit3503,
+	CatheterSizeUnit3510,
+	SpecimenCollection3515,
+	BloodSourceType3520,
+	BloodGasPressure3524,
+	BloodGasContent3525,
+	BloodGasSaturation3526,
+	BloodBaseExcess3527,
+	BloodPH3528,
+	ArterialVenousContent3529,
+	OxygenAdministrationAction3530,
+	OxygenAdministration3531,
+	CirculatorySupportAction3550,
+	VentilationAction3551,
+	PacingAction3552,
+	CirculatorySupport3553,
+	Ventilation3554,
+	Pacing3555,
+	BloodPressureMethod3560,
+	RelativeTime3600,
+	HemodynamicPatientState3602,
+	ArterialLesionLocation3604,
+	ArterialSourceLocation3606,
+	VenousSourceLocation3607,
+	AtrialSourceLocation3608,
+	VentricularSourceLocation3609,
+	GradientSourceLocation3610,
+	PressureMeasurement3611,
+	BloodVelocityMeasurement3612,
+	HemodynamicTimeMeasurement3613,
+	NonMitralValveArea3614,
+	ValveArea3615,
+	HemodynamicPeriodMeasurement3616,
+	ValveFlow3617,
+	HemodynamicFlow3618,
+	HemodynamicResistanceMeasurement3619,
+	HemodynamicRatio3620,
+	FractionalFlowReserve3621,
+	MeasurementType3627,
+	CardiacOutputMethod3628,
+	ProcedureIntent3629,
+	CardiovascularAnatomicLocation3630,
+	Hypertension3640,
+	HemodynamicAssessment3641,
+	DegreeFinding3642,
+	HemodynamicMeasurementPhase3651,
+	BodySurfaceAreaEquation3663,
+	OxygenConsumptionEquationTable3664,
+	P50Equation3666,
+	FraminghamScore3667,
+	FraminghamTable3668,
+	ECGProcedureType3670,
+	ReasonForECGStudy3671,
+	Pacemaker3672,
+	Diagnosis3673RETIRED,
+	OtherFilters3675RETIRED,
+	LeadMeasurementTechnique3676,
+	SummaryCodesECG3677,
+	QTCorrectionAlgorithm3678,
+	ECGMorphologyDescription3679RETIRED,
+	ECGLeadNoiseDescription3680,
+	ECGLeadNoiseModifier3681RETIRED,
+	Probability3682RETIRED,
+	Modifier3683RETIRED,
+	Trend3684RETIRED,
+	ConjunctiveTerm3685RETIRED,
+	ECGInterpretiveStatement3686RETIRED,
+	ElectrophysiologyWaveformDuration3687,
+	ElectrophysiologyWaveformVoltage3688,
+	CathDiagnosis3700,
+	CardiacValveTract3701,
+	WallMotion3703,
+	MyocardiumWallMorphologyFinding3704,
+	ChamberSize3705,
+	OverallContractility3706,
+	VSDDescription3707,
+	AorticRootDescription3709,
+	CoronaryDominance3710,
+	ValvularAbnormality3711,
+	VesselDescriptor3712,
+	TIMIFlowCharacteristic3713,
+	Thrombus3714,
+	LesionMargin3715,
+	Severity3716,
+	LeftVentricleMyocardialWall17SegmentModel3717,
+	MyocardialWallSegmentsInProjection3718,
+	CanadianClinicalClassification3719,
+	CardiacHistoryDate3720RETIRED,
+	CardiovascularSurgery3721,
+	DiabeticTherapy3722,
+	MIType3723,
+	SmokingHistory3724,
+	CoronaryInterventionIndication3726,
+	CatheterizationIndication3727,
+	CathFinding3728,
+	AdmissionStatus3729,
+	InsurancePayor3730,
+	PrimaryCauseOfDeath3733,
+	AcuteCoronarySyndromeTimePeriod3735,
+	NYHAClassification3736,
+	IschemiaNonInvasiveTest3737,
+	PreCathAnginaType3738,
+	CathProcedureType3739,
+	ThrombolyticAdministration3740,
+	LabVisitMedicationAdministration3741,
+	PCIMedicationAdministration3742,
+	ClopidogrelTiclopidineAdministration3743,
+	EFTestingMethod3744,
+	CalculationMethod3745,
+	PercutaneousEntrySite3746,
+	PercutaneousClosure3747,
+	AngiographicEFTestingMethod3748,
+	PCIProcedureResult3749,
+	PreviouslyDilatedLesion3750,
+	GuidewireCrossing3752,
+	VascularComplication3754,
+	CathComplication3755,
+	CardiacPatientRiskFactor3756,
+	CardiacDiagnosticProcedure3757,
+	CardiovascularFamilyHistory3758,
+	HypertensionTherapy3760,
+	AntilipemicAgent3761,
+	AntiarrhythmicAgent3762,
+	MyocardialInfarctionTherapy3764,
+	ConcernType3769,
+	ProblemStatus3770,
+	HealthStatus3772,
+	UseStatus3773,
+	SocialHistory3774,
+	CardiovascularImplant3777,
+	PlaqueStructure3802,
+	StenosisMeasurementMethod3804,
+	StenosisType3805,
+	StenosisShape3806,
+	VolumeMeasurementMethod3807,
+	AneurysmType3808,
+	AssociatedCondition3809,
+	VascularMorphology3810,
+	StentFinding3813,
+	StentComposition3814,
+	SourceOfVascularFinding3815,
+	VascularSclerosisType3817,
+	NonInvasiveVascularProcedure3820,
+	PapillaryMuscleIncludedExcluded3821,
+	RespiratoryStatus3823,
+	HeartRhythm3826,
+	VesselSegment3827,
+	PulmonaryArtery3829,
+	StenosisLength3831,
+	StenosisGrade3832,
+	CardiacEjectionFraction3833,
+	CardiacVolumeMeasurement3835,
+	TimeBasedPerfusionMeasurement3836,
+	FiducialFeature3837,
+	DiameterDerivation3838,
+	CoronaryVein3839,
+	PulmonaryVein3840,
+	MyocardialSubsegment3843,
+	PartialViewSectionForMammography4005,
+	DXAnatomyImaged4009,
+	DXView4010,
+	DXViewModifier4011,
+	ProjectionEponymousName4012,
+	AnatomicRegionForMammography4013,
+	ViewForMammography4014,
+	ViewModifierForMammography4015,
+	AnatomicRegionForIntraOralRadiography4016,
+	AnatomicRegionModifierForIntraOralRadiography4017,
+	PrimaryAnatomicStructureForIntraOralRadiographyPermanentDentitionDesignationOfTeeth4018,
+	PrimaryAnatomicStructureForIntraOralRadiographyDeciduousDentitionDesignationOfTeeth4019,
+	PETRadionuclide4020,
+	PETRadiopharmaceutical4021,
+	CraniofacialAnatomicRegion4028,
+	CTMRAndPETAnatomyImaged4030,
+	CommonAnatomicRegion4031,
+	MRSpectroscopyMetabolite4032,
+	MRProtonSpectroscopyMetabolite4033,
+	EndoscopyAnatomicRegion4040,
+	XAXRFAnatomyImaged4042,
+	DrugOrContrastAgentCharacteristic4050,
+	GeneralDevice4051,
+	PhantomDevice4052,
+	OphthalmicImagingAgent4200,
+	PatientEyeMovementCommand4201,
+	OphthalmicPhotographyAcquisitionDevice4202,
+	OphthalmicPhotographyIllumination4203,
+	OphthalmicFilter4204,
+	OphthalmicLens4205,
+	OphthalmicChannelDescription4206,
+	OphthalmicImagePosition4207,
+	MydriaticAgent4208,
+	OphthalmicAnatomicStructureImaged4209,
+	OphthalmicTomographyAcquisitionDevice4210,
+	OphthalmicOCTAnatomicStructureImaged4211,
+	Language5000,
+	Country5001,
+	OverallBreastComposition6000,
+	OverallBreastCompositionFromBIRADS6001,
+	ChangeSinceLastMammogramOrPriorSurgery6002,
+	ChangeSinceLastMammogramOrPriorSurgeryFromBIRADS6003,
+	MammographyShapeCharacteristic6004,
+	ShapeCharacteristicFromBIRADS6005,
+	MammographyMarginCharacteristic6006,
+	MarginCharacteristicFromBIRADS6007,
+	DensityModifier6008,
+	DensityModifierFromBIRADS6009,
+	MammographyCalcificationType6010,
+	CalcificationTypeFromBIRADS6011,
+	CalcificationDistributionModifier6012,
+	CalcificationDistributionModifierFromBIRADS6013,
+	MammographySingleImageFinding6014,
+	SingleImageFindingFromBIRADS6015,
+	MammographyCompositeFeature6016,
+	CompositeFeatureFromBIRADS6017,
+	ClockfaceLocationOrRegion6018,
+	ClockfaceLocationOrRegionFromBIRADS6019,
+	QuadrantLocation6020,
+	QuadrantLocationFromBIRADS6021,
+	Side6022,
+	SideFromBIRADS6023,
+	Depth6024,
+	DepthFromBIRADS6025,
+	MammographyAssessment6026,
+	AssessmentFromBIRADS6027,
+	MammographyRecommendedFollowUp6028,
+	RecommendedFollowUpFromBIRADS6029,
+	MammographyPathologyCode6030,
+	BenignPathologyCodeFromBIRADS6031,
+	HighRiskLesionPathologyCodeFromBIRADS6032,
+	MalignantPathologyCodeFromBIRADS6033,
+	CADOutputIntendedUse6034,
+	CompositeFeatureRelation6035,
+	FeatureScope6036,
+	MammographyQuantitativeTemporalDifferenceType6037,
+	MammographyQualitativeTemporalDifferenceType6038,
+	NippleCharacteristic6039,
+	NonLesionObjectType6040,
+	MammographyImageQualityFinding6041,
+	ResultStatus6042,
+	MammographyCADAnalysisType6043,
+	ImageQualityAssessmentType6044,
+	MammographyQualityControlStandardType6045,
+	FollowUpIntervalUnit6046,
+	CADProcessingAndFindingSummary6047,
+	CADOperatingPointAxisLabel6048,
+	BreastProcedureReported6050,
+	BreastProcedureReason6051,
+	BreastImagingReportSectionTitle6052,
+	BreastImagingReportElement6053,
+	BreastImagingFinding6054,
+	BreastClinicalFindingOrIndicatedProblem6055,
+	AssociatedFindingForBreast6056,
+	DuctographyFindingForBreast6057,
+	ProcedureModifiersForBreast6058,
+	BreastImplantType6059,
+	BreastBiopsyTechnique6060,
+	BreastImagingProcedureModifier6061,
+	InterventionalProcedureComplication6062,
+	InterventionalProcedureResult6063,
+	UltrasoundFindingForBreast6064,
+	InstrumentApproach6065,
+	TargetConfirmation6066,
+	FluidColor6067,
+	TumorStagesFromAJCC6068,
+	NottinghamCombinedHistologicGrade6069,
+	BloomRichardsonHistologicGrade6070,
+	HistologicGradingMethod6071,
+	BreastImplantFinding6072,
+	GynecologicalHormone6080,
+	BreastCancerRiskFactor6081,
+	GynecologicalProcedure6082,
+	ProceduresForBreast6083,
+	MammoplastyProcedure6084,
+	TherapiesForBreast6085,
+	MenopausalPhase6086,
+	GeneralRiskFactor6087,
+	OBGYNMaternalRiskFactor6088,
+	Substance6089,
+	RelativeUsageExposureAmount6090,
+	RelativeFrequencyOfEventValue6091,
+	UsageExposureQualitativeConcept6092,
+	UsageExposureAmountQualitativeConcept6093,
+	UsageExposureFrequencyQualitativeConcept6094,
+	ProcedureNumericProperty6095,
+	PregnancyStatus6096,
+	SideOfFamily6097,
+	ChestComponentCategory6100,
+	ChestFindingOrFeature6101,
+	ChestFindingOrFeatureModifier6102,
+	AbnormalLinesFindingOrFeature6103,
+	AbnormalOpacityFindingOrFeature6104,
+	AbnormalLucencyFindingOrFeature6105,
+	AbnormalTextureFindingOrFeature6106,
+	WidthDescriptor6107,
+	ChestAnatomicStructureAbnormalDistribution6108,
+	RadiographicAnatomyFindingOrFeature6109,
+	LungAnatomyFindingOrFeature6110,
+	BronchovascularAnatomyFindingOrFeature6111,
+	PleuraAnatomyFindingOrFeature6112,
+	MediastinumAnatomyFindingOrFeature6113,
+	OsseousAnatomyFindingOrFeature6114,
+	OsseousAnatomyModifier6115,
+	MuscularAnatomy6116,
+	VascularAnatomy6117,
+	SizeDescriptor6118,
+	ChestBorderShape6119,
+	ChestBorderDefinition6120,
+	ChestOrientationDescriptor6121,
+	ChestContentDescriptor6122,
+	ChestOpacityDescriptor6123,
+	LocationInChest6124,
+	GeneralChestLocation6125,
+	LocationInLung6126,
+	SegmentLocationInLung6127,
+	ChestDistributionDescriptor6128,
+	ChestSiteInvolvement6129,
+	SeverityDescriptor6130,
+	ChestTextureDescriptor6131,
+	ChestCalcificationDescriptor6132,
+	ChestQuantitativeTemporalDifferenceType6133,
+	ChestQualitativeTemporalDifferenceType6134,
+	ImageQualityFinding6135,
+	ChestTypesOfQualityControlStandard6136,
+	CADAnalysisType6137,
+	ChestNonLesionObjectType6138,
+	NonLesionModifier6139,
+	CalculationMethod6140,
+	AttenuationCoefficientMeasurement6141,
+	CalculatedValue6142,
+	LesionResponse6143,
+	RECISTDefinedLesionResponse6144,
+	BaselineCategory6145,
+	BackgroundEchotexture6151,
+	Orientation6152,
+	LesionBoundary6153,
+	EchoPattern6154,
+	PosteriorAcousticFeature6155,
+	Vascularity6157,
+	CorrelationToOtherFinding6158,
+	MalignancyType6159,
+	BreastPrimaryTumorAssessmentFromAJCC6160,
+	PathologicalRegionalLymphNodeAssessmentForBreast6161,
+	AssessmentOfMetastasisForBreast6162,
+	MenstrualCyclePhase6163,
+	TimeInterval6164,
+	BreastLinearMeasurement6165,
+	CADGeometrySecondaryGraphicalRepresentation6166,
+	DiagnosticImagingReportDocumentTitle7000,
+	DiagnosticImagingReportHeading7001,
+	DiagnosticImagingReportElement7002,
+	DiagnosticImagingReportPurposeOfReference7003,
+	WaveformPurposeOfReference7004,
+	ContributingEquipmentPurposeOfReference7005,
+	SRDocumentPurposeOfReference7006,
+	SignaturePurpose7007,
+	MediaImport7008,
+	KeyObjectSelectionDocumentTitle7010,
+	RejectedForQualityReason7011,
+	BestInSet7012,
+	DocumentTitle7020,
+	RCSRegistrationMethodType7100,
+	BrainAtlasFiducial7101,
+	SegmentationPropertyCategory7150,
+	SegmentationPropertyType7151,
+	CardiacStructureSegmentationType7152,
+	CNSSegmentationType7153,
+	AbdominalSegmentationType7154,
+	ThoracicSegmentationType7155,
+	VascularSegmentationType7156,
+	DeviceSegmentationType7157,
+	ArtifactSegmentationType7158,
+	LesionSegmentationType7159,
+	PelvicOrganSegmentationType7160,
+	PhysiologySegmentationType7161,
+	ReferencedImagePurposeOfReference7201,
+	SourceImagePurposeOfReference7202,
+	ImageDerivation7203,
+	PurposeOfReferenceToAlternateRepresentation7205,
+	RelatedSeriesPurposeOfReference7210,
+	MultiFrameSubsetType7250,
+	PersonRole7450,
+	FamilyMember7451,
+	OrganizationalRole7452,
+	PerformingRole7453,
+	AnimalTaxonomicRankValue7454,
+	Sex7455,
+	AgeUnit7456,
+	LinearMeasurementUnit7460,
+	AreaMeasurementUnit7461,
+	VolumeMeasurementUnit7462,
+	LinearMeasurement7470,
+	AreaMeasurement7471,
+	VolumeMeasurement7472,
+	GeneralAreaCalculationMethod7473,
+	GeneralVolumeCalculationMethod7474,
+	Breed7480,
+	BreedRegistry7481,
+	WorkitemDefinition9231,
+	NonDICOMOutputTypes9232RETIRED,
+	ProcedureDiscontinuationReason9300,
+	ScopeOfAccumulation10000,
+	UIDType10001,
+	IrradiationEventType10002,
+	EquipmentPlaneIdentification10003,
+	FluoroMode10004,
+	XRayFilterMaterial10006,
+	XRayFilterType10007,
+	DoseRelatedDistanceMeasurement10008,
+	MeasuredCalculated10009,
+	DoseMeasurementDevice10010,
+	EffectiveDoseEvaluationMethod10011,
+	CTAcquisitionType10013,
+	CTIVContrastImagingTechnique10014,
+	CTDoseReferenceAuthority10015,
+	AnodeTargetMaterial10016,
+	XRayGrid10017,
+	UltrasoundProtocolType12001,
+	UltrasoundProtocolStageType12002,
+	OBGYNDate12003,
+	FetalBiometryRatio12004,
+	FetalBiometryMeasurement12005,
+	FetalLongBonesBiometryMeasurement12006,
+	FetalCraniumMeasurement12007,
+	OBGYNAmnioticSacMeasurement12008,
+	EarlyGestationBiometryMeasurement12009,
+	UltrasoundPelvisAndUterusMeasurement12011,
+	OBEquationTable12012,
+	GestationalAgeEquationTable12013,
+	OBFetalBodyWeightEquationTable12014,
+	FetalGrowthEquationTable12015,
+	EstimatedFetalWeightPercentileEquationTable12016,
+	GrowthDistributionRank12017,
+	OBGYNSummary12018,
+	OBGYNFetusSummary12019,
+	VascularSummary12101,
+	TemporalPeriodRelatingToProcedureOrTherapy12102,
+	VascularUltrasoundAnatomicLocation12103,
+	ExtracranialArtery12104,
+	IntracranialCerebralVessel12105,
+	IntracranialCerebralVesselUnilateral12106,
+	UpperExtremityArtery12107,
+	UpperExtremityVein12108,
+	LowerExtremityArtery12109,
+	LowerExtremityVein12110,
+	AbdominopelvicArteryPaired12111,
+	AbdominopelvicArteryUnpaired12112,
+	AbdominopelvicVeinPaired12113,
+	AbdominopelvicVeinUnpaired12114,
+	RenalVessel12115,
+	VesselSegmentModifier12116,
+	VesselBranchModifier12117,
+	VascularUltrasoundProperty12119,
+	UltrasoundBloodVelocityMeasurement12120,
+	VascularIndexRatio12121,
+	OtherVascularProperty12122,
+	CarotidRatio12123,
+	RenalRatio12124,
+	PelvicVasculatureAnatomicalLocation12140,
+	FetalVasculatureAnatomicalLocation12141,
+	EchocardiographyLeftVentricleMeasurement12200,
+	LeftVentricleLinearMeasurement12201,
+	LeftVentricleVolumeMeasurement12202,
+	LeftVentricleOtherMeasurement12203,
+	EchocardiographyRightVentricleMeasurement12204,
+	EchocardiographyLeftAtriumMeasurement12205,
+	EchocardiographyRightAtriumMeasurement12206,
+	EchocardiographyMitralValveMeasurement12207,
+	EchocardiographyTricuspidValveMeasurement12208,
+	EchocardiographyPulmonicValveMeasurement12209,
+	EchocardiographyPulmonaryArteryMeasurement12210,
+	EchocardiographyAorticValveMeasurement12211,
+	EchocardiographyAortaMeasurement12212,
+	EchocardiographyPulmonaryVeinMeasurement12214,
+	EchocardiographyVenaCavaMeasurement12215,
+	EchocardiographyHepaticVeinMeasurement12216,
+	EchocardiographyCardiacShuntMeasurement12217,
+	EchocardiographyCongenitalAnomalyMeasurement12218,
+	PulmonaryVeinModifier12219,
+	EchocardiographyCommonMeasurement12220,
+	FlowDirection12221,
+	OrificeFlowProperty12222,
+	EchocardiographyStrokeVolumeOrigin12223,
+	UltrasoundImageMode12224,
+	EchocardiographyImageView12226,
+	EchocardiographyMeasurementMethod12227,
+	EchocardiographyVolumeMethod12228,
+	EchocardiographyAreaMethod12229,
+	GradientMethod12230,
+	VolumeFlowMethod12231,
+	MyocardiumMassMethod12232,
+	CardiacPhase12233,
+	RespirationState12234,
+	MitralValveAnatomicSite12235,
+	EchocardiographyAnatomicSite12236,
+	EchocardiographyAnatomicSiteModifier12237,
+	WallMotionScoringScheme12238,
+	CardiacOutputProperty12239,
+	LeftVentricleAreaMeasurement12240,
+	TricuspidValveFindingSite12241,
+	AorticValveFindingSite12242,
+	LeftVentricleFindingSite12243,
+	CongenitalFindingSite12244,
+	SurfaceProcessingAlgorithmFamily7162,
+	StressTestProcedurePhase3207,
+	Stage3778,
+	SMLSizeDescriptor252,
+	MajorCoronaryArtery3016,
+	RadioactivityUnit3083,
+	RestStressState3102,
+	PETCardiologyProtocol3106,
+	PETCardiologyRadiopharmaceutical3107,
+	NMPETProcedure3108,
+	NuclearCardiologyProtocol3110,
+	NuclearCardiologyRadiopharmaceutical3111,
+	AttenuationCorrection3112,
+	PerfusionDefectType3113,
+	StudyQuality3114,
+	StressImagingQualityIssue3115,
+	NMExtracardiacFinding3116,
+	AttenuationCorrectionMethod3117,
+	LevelOfRisk3118,
+	LVFunction3119,
+	PerfusionFinding3120,
+	PerfusionMorphology3121,
+	VentricularEnlargement3122,
+	StressTestProcedure3200,
+	IndicationsForStressTest3201,
+	ChestPain3202,
+	ExerciserDevice3203,
+	StressAgent3204,
+	IndicationsForPharmacologicalStressTest3205,
+	NonInvasiveCardiacImagingProcedure3206,
+	ExerciseECGSummaryCode3208,
+	StressImagingSummaryCode3209,
+	SpeedOfResponse3210,
+	BPResponse3211,
+	TreadmillSpeed3212,
+	StressHemodynamicFinding3213,
+	PerfusionFindingMethod3215,
+	ComparisonFinding3217,
+	StressSymptom3220,
+	StressTestTerminationReason3221,
+	QTcMeasurement3227,
+	ECGTimingMeasurement3228,
+	ECGAxisMeasurement3229,
+	ECGFinding3230,
+	STSegmentFinding3231,
+	STSegmentLocation3232,
+	STSegmentMorphology3233,
+	EctopicBeatMorphology3234,
+	PerfusionComparisonFinding3235,
+	ToleranceComparisonFinding3236,
+	WallMotionComparisonFinding3237,
+	StressScoringScale3238,
+	PerceivedExertionScale3239,
+	VentricleIdentification3463,
+	ColonOverallAssessment6200,
+	ColonFindingOrFeature6201,
+	ColonFindingOrFeatureModifier6202,
+	ColonNonLesionObjectType6203,
+	AnatomicNonColonFinding6204,
+	ClockfaceLocationForColon6205,
+	RecumbentPatientOrientationForColon6206,
+	ColonQuantitativeTemporalDifferenceType6207,
+	ColonTypesOfQualityControlStandard6208,
+	ColonMorphologyDescriptor6209,
+	LocationInIntestinalTract6210,
+	ColonCADMaterialDescription6211,
+	CalculatedValueForColonFinding6212,
+	OphthalmicHorizontalDirection4214,
+	OphthalmicVerticalDirection4215,
+	OphthalmicVisualAcuityType4216,
+	ArterialPulseWaveform3004,
+	RespirationWaveform3005,
+	UltrasoundContrastBolusAgent12030,
+	ProtocolIntervalEvent12031,
+	TransducerScanPattern12032,
+	UltrasoundTransducerGeometry12033,
+	UltrasoundTransducerBeamSteering12034,
+	UltrasoundTransducerApplication12035,
+	InstanceAvailabilityStatus50,
+	ModalityPPSDiscontinuationReason9301,
+	MediaImportPPSDiscontinuationReason9302,
+	DXAnatomyImagedForAnimal7482,
+	CommonAnatomicRegionsForAnimal7483,
+	DXViewForAnimal7484,
+	InstitutionalDepartmentUnitService7030,
+	PurposeOfReferenceToPredecessorReport7009,
+	VisualFixationQualityDuringAcquisition4220,
+	VisualFixationQualityProblem4221,
+	OphthalmicMacularGridProblem4222,
+	Organization5002,
+	MixedBreed7486,
+	BroselowLutenPediatricSizeCategory7040,
+	CMDCTECCCalciumScoringPatientSizeCategory7042,
+	CardiacUltrasoundReportTitle12245,
+	CardiacUltrasoundIndicationForStudy12246,
+	PediatricFetalAndCongenitalCardiacSurgicalIntervention12247,
+	CardiacUltrasoundSummaryCode12248,
+	CardiacUltrasoundFetalSummaryCode12249,
+	CardiacUltrasoundCommonLinearMeasurement12250,
+	CardiacUltrasoundLinearValveMeasurement12251,
+	CardiacUltrasoundCardiacFunction12252,
+	CardiacUltrasoundAreaMeasurement12253,
+	CardiacUltrasoundHemodynamicMeasurement12254,
+	CardiacUltrasoundMyocardiumMeasurement12255,
+	CardiacUltrasoundLeftVentricleMeasurement12257,
+	CardiacUltrasoundRightVentricleMeasurement12258,
+	CardiacUltrasoundVentriclesMeasurement12259,
+	CardiacUltrasoundPulmonaryArteryMeasurement12260,
+	CardiacUltrasoundPulmonaryVein12261,
+	CardiacUltrasoundPulmonaryValveMeasurement12262,
+	CardiacUltrasoundVenousReturnPulmonaryMeasurement12263,
+	CardiacUltrasoundVenousReturnSystemicMeasurement12264,
+	CardiacUltrasoundAtriaAndAtrialSeptumMeasurement12265,
+	CardiacUltrasoundMitralValveMeasurement12266,
+	CardiacUltrasoundTricuspidValveMeasurement12267,
+	CardiacUltrasoundAtrioventricularValveMeasurement12268,
+	CardiacUltrasoundInterventricularSeptumMeasurement12269,
+	CardiacUltrasoundAorticValveMeasurement12270,
+	CardiacUltrasoundOutflowTractMeasurement12271,
+	CardiacUltrasoundSemilunarValveAnnulateAndSinusMeasurement12272,
+	CardiacUltrasoundAorticSinotubularJunctionMeasurement12273,
+	CardiacUltrasoundAortaMeasurement12274,
+	CardiacUltrasoundCoronaryArteryMeasurement12275,
+	CardiacUltrasoundAortoPulmonaryConnectionMeasurement12276,
+	CardiacUltrasoundPericardiumAndPleuraMeasurement12277,
+	CardiacUltrasoundFetalGeneralMeasurement12279,
+	CardiacUltrasoundTargetSite12280,
+	CardiacUltrasoundTargetSiteModifier12281,
+	CardiacUltrasoundVenousReturnSystemicFindingSite12282,
+	CardiacUltrasoundVenousReturnPulmonaryFindingSite12283,
+	CardiacUltrasoundAtriaAndAtrialSeptumFindingSite12284,
+	CardiacUltrasoundAtrioventricularValveFindingSite12285,
+	CardiacUltrasoundInterventricularSeptumFindingSite12286,
+	CardiacUltrasoundVentricleFindingSite12287,
+	CardiacUltrasoundOutflowTractFindingSite12288,
+	CardiacUltrasoundSemilunarValveAnnulusAndSinusFindingSite12289,
+	CardiacUltrasoundPulmonaryArteryFindingSite12290,
+	CardiacUltrasoundAortaFindingSite12291,
+	CardiacUltrasoundCoronaryArteryFindingSite12292,
+	CardiacUltrasoundAortopulmonaryConnectionFindingSite12293,
+	CardiacUltrasoundPericardiumAndPleuraFindingSite12294,
+	OphthalmicUltrasoundAxialMeasurementsType4230,
+	LensStatus4231,
+	VitreousStatus4232,
+	OphthalmicAxialLengthMeasurementsSegmentName4233,
+	RefractiveSurgeryType4234,
+	KeratometryDescriptor4235,
+	IOLCalculationFormula4236,
+	LensConstantType4237,
+	RefractiveErrorType4238,
+	AnteriorChamberDepthDefinition4239,
+	OphthalmicMeasurementOrCalculationDataSource4240,
+	OphthalmicAxialLengthSelectionMethod4241,
+	OphthalmicQualityMetricType4243,
+	OphthalmicAgentConcentrationUnit4244,
+	FunctionalConditionPresentDuringAcquisition91,
+	JointPositionDuringAcquisition92,
+	JointPositioningMethod93,
+	PhysicalForceAppliedDuringAcquisition94,
+	ECGControlNumericVariable3690,
+	ECGControlTextVariable3691,
+	WholeSlideMicroscopyImageReferencedImagePurposeOfReference8120,
+	MicroscopyLensType8121,
+	MicroscopyIlluminatorAndSensorColor8122,
+	MicroscopyIlluminationMethod8123,
+	MicroscopyFilter8124,
+	MicroscopyIlluminatorType8125,
+	AuditEventID400,
+	AuditEventTypeCode401,
+	AuditActiveParticipantRoleIDCode402,
+	SecurityAlertTypeCode403,
+	AuditParticipantObjectIDTypeCode404,
+	MediaTypeCode405,
+	VisualFieldStaticPerimetryTestPattern4250,
+	VisualFieldStaticPerimetryTestStrategy4251,
+	VisualFieldStaticPerimetryScreeningTestMode4252,
+	VisualFieldStaticPerimetryFixationStrategy4253,
+	VisualFieldStaticPerimetryTestAnalysisResult4254,
+	VisualFieldIlluminationColor4255,
+	VisualFieldProcedureModifier4256,
+	VisualFieldGlobalIndexName4257,
+	AbstractMultiDimensionalImageModelComponentSemantic7180,
+	AbstractMultiDimensionalImageModelComponentUnit7181,
+	AbstractMultiDimensionalImageModelDimensionSemantic7182,
+	AbstractMultiDimensionalImageModelDimensionUnit7183,
+	AbstractMultiDimensionalImageModelAxisDirection7184,
+	AbstractMultiDimensionalImageModelAxisOrientation7185,
+	AbstractMultiDimensionalImageModelQualitativeDimensionSampleSemantic7186,
+	PlanningMethod7320,
+	DeIdentificationMethod7050,
+	MeasurementOrientation12118,
+	ECGGlobalWaveformDuration3689,
+	ICD3692,
+	RadiotherapyGeneralWorkitemDefinition9241,
+	RadiotherapyAcquisitionWorkitemDefinition9242,
+	RadiotherapyRegistrationWorkitemDefinition9243,
+	ContrastBolusSubstance3850,
+	LabelType10022,
+	OphthalmicMappingUnitForRealWorldValueMapping4260,
+	OphthalmicMappingAcquisitionMethod4261,
+	RetinalThicknessDefinition4262,
+	OphthalmicThicknessMapValueType4263,
+	OphthalmicMapPurposeOfReference4264,
+	OphthalmicThicknessDeviationCategory4265,
+	OphthalmicAnatomicStructureReferencePoint4266,
+	CardiacSynchronizationTechnique3104,
+	StainingProtocol8130,
+	SizeSpecificDoseEstimationMethodForCT10023,
+	PathologyImagingProtocol8131,
+	MagnificationSelection8132,
+	TissueSelection8133,
+	GeneralRegionOfInterestMeasurementModifier7464,
+	MeasurementDerivedFromMultipleROIMeasurements7465,
+	SurfaceScanAcquisitionType8201,
+	SurfaceScanModeType8202,
+	SurfaceScanRegistrationMethodType8203,
+	BasicCardiacView27,
+	CTReconstructionAlgorithm10033,
+	DetectorType10030,
+	CRDRMechanicalConfiguration10031,
+	ProjectionXRayAcquisitionDeviceType10032,
+	AbstractSegmentationType7165,
+	CommonTissueSegmentationType7166,
+	PeripheralNervousSystemSegmentationType7167,
+	CornealTopographyMappingUnitForRealWorldValueMapping4267,
+	CornealTopographyMapValueType4268,
+	BrainStructureForVolumetricMeasurement7140,
+	RTDoseDerivation7220,
+	RTDosePurposeOfReference7221,
+	SpectroscopyPurposeOfReference7215,
+	ScheduledProcessingParameterConceptCodesForRTTreatment9250,
+	RadiopharmaceuticalOrganDoseReferenceAuthority10040,
+	SourceOfRadioisotopeActivityInformation10041,
+	IntravenousExtravasationSymptom10043,
+	RadiosensitiveOrgan10044,
+	RadiopharmaceuticalPatientState10045,
+	GFRMeasurement10046,
+	GFRMeasurementMethod10047,
+	VisualEvaluationMethod8300,
+	TestPatternCode8301,
+	MeasurementPatternCode8302,
+	DisplayDeviceType8303,
+	SUVUnit85,
+	T1MeasurementMethod4100,
+	TracerKineticModel4101,
+	PerfusionMeasurementMethod4102,
+	ArterialInputFunctionMeasurementMethod4103,
+	BolusArrivalTimeDerivationMethod4104,
+	PerfusionAnalysisMethod4105,
+	QuantitativeMethodUsedForPerfusionAndTracerKineticModel4106,
+	TracerKineticModelParameter4107,
+	PerfusionModelParameter4108,
+	ModelIndependentDynamicContrastAnalysisParameter4109,
+	TracerKineticModelingCovariate4110,
+	ContrastCharacteristic4111,
+	MeasurementReportDocumentTitle7021,
+	QuantitativeDiagnosticImagingProcedure100,
+	PETRegionOfInterestMeasurement7466,
+	GrayLevelCoOccurrenceMatrixMeasurement7467,
+	TextureMeasurement7468,
+	TimePointType6146,
+	GenericIntensityAndSizeMeasurement7469,
+	ResponseCriteria6147,
+	FetalBiometryAnatomicSite12020,
+	FetalLongBoneAnatomicSite12021,
+	FetalCraniumAnatomicSite12022,
+	PelvisAndUterusAnatomicSite12023,
+	ParametricMapDerivationImagePurposeOfReference7222,
+	PhysicalQuantityDescriptor9000,
+	LymphNodeAnatomicSite7600,
+	HeadAndNeckCancerAnatomicSite7601,
+	FiberTractInBrainstem7701,
+	ProjectionAndThalamicFiber7702,
+	AssociationFiber7703,
+	LimbicSystemTract7704,
+	CommissuralFiber7705,
+	CranialNerve7706,
+	SpinalCordFiber7707,
+	TractographyAnatomicSite7710,
+	PrimaryAnatomicStructureForIntraOralRadiographySupernumeraryDentitionDesignationOfTeeth4025,
+	PrimaryAnatomicStructureForIntraOralAndCraniofacialRadiographyTeeth4026,
+	IEC61217DevicePositionParameter9401,
+	IEC61217GantryPositionParameter9402,
+	IEC61217PatientSupportPositionParameter9403,
+	ActionableFindingClassification7035,
+	ImageQualityAssessment7036,
+	SummaryRadiationExposureQuantity10050,
+	WideFieldOphthalmicPhotographyTransformationMethod4245,
+	PETUnit84,
+	ImplantMaterial7300,
+	InterventionType7301,
+	ImplantTemplateViewOrientation7302,
+	ImplantTemplateModifiedViewOrientation7303,
+	ImplantTargetAnatomy7304,
+	ImplantPlanningLandmark7305,
+	HumanHipImplantPlanningLandmark7306,
+	ImplantComponentType7307,
+	HumanHipImplantComponentType7308,
+	HumanTraumaImplantComponentType7309,
+	ImplantFixationMethod7310,
+	DeviceParticipatingRole7445,
+	ContainerType8101,
+	ContainerComponentType8102,
+	AnatomicPathologySpecimenType8103,
+	BreastTissueSpecimenType8104,
+	SpecimenCollectionProcedure8109,
+	SpecimenSamplingProcedure8110,
+	SpecimenPreparationProcedure8111,
+	SpecimenStain8112,
+	SpecimenPreparationStep8113,
+	SpecimenFixative8114,
+	SpecimenEmbeddingMedia8115,
+	SourceOfProjectionXRayDoseInformation10020,
+	SourceOfCTDoseInformation10021,
+	RadiationDoseReferencePoint10025,
+	VolumetricViewDescription501,
+	VolumetricViewModifier502,
+	DiffusionAcquisitionValueType7260,
+	DiffusionModelValueType7261,
+	DiffusionTractographyAlgorithmFamily7262,
+	DiffusionTractographyMeasurementType7263,
+	ResearchAnimalSourceRegistry7490,
+	YesNoOnly231,
+	BiosafetyLevel601,
+	BiosafetyControlReason602,
+	SexMaleFemaleOrBoth7457,
+	AnimalRoomType603,
+	DeviceReuse604,
+	AnimalBeddingMaterial605,
+	AnimalShelterType606,
+	AnimalFeedType607,
+	AnimalFeedSource608,
+	AnimalFeedingMethod609,
+	WaterType610,
+	AnesthesiaCategoryCodeTypeForSmallAnimalAnesthesia611,
+	AnesthesiaCategoryCodeTypeFromAnesthesiaQualityInitiative612,
+	AnesthesiaInductionCodeTypeForSmallAnimalAnesthesia613,
+	AnesthesiaInductionCodeTypeFromAnesthesiaQualityInitiative614,
+	AnesthesiaMaintenanceCodeTypeForSmallAnimalAnesthesia615,
+	AnesthesiaMaintenanceCodeTypeFromAnesthesiaQualityInitiative616,
+	AirwayManagementMethodCodeTypeForSmallAnimalAnesthesia617,
+	AirwayManagementMethodCodeTypeFromAnesthesiaQualityInitiative618,
+	AirwayManagementSubMethodCodeTypeForSmallAnimalAnesthesia619,
+	AirwayManagementSubMethodCodeTypeFromAnesthesiaQualityInitiative620,
+	MedicationTypeForSmallAnimalAnesthesia621,
+	MedicationTypeCodeTypeFromAnesthesiaQualityInitiative622,
+	MedicationForSmallAnimalAnesthesia623,
+	InhalationalAnesthesiaAgentForSmallAnimalAnesthesia624,
+	InjectableAnesthesiaAgentForSmallAnimalAnesthesia625,
+	PremedicationAgentForSmallAnimalAnesthesia626,
+	NeuromuscularBlockingAgentForSmallAnimalAnesthesia627,
+	AncillaryMedicationsForSmallAnimalAnesthesia628,
+	CarrierGasesForSmallAnimalAnesthesia629,
+	LocalAnestheticsForSmallAnimalAnesthesia630,
+	ProcedurePhaseRequiringAnesthesia631,
+	SurgicalProcedurePhaseRequiringAnesthesia632,
+	PhaseOfImagingProcedureRequiringAnesthesia633RETIRED,
+	AnimalHandlingPhase634,
+	HeatingMethod635,
+	TemperatureSensorDeviceComponentTypeForSmallAnimalProcedure636,
+	ExogenousSubstanceType637,
+	ExogenousSubstance638,
+	TumorGraftHistologicType639,
+	Fibril640,
+	Virus641,
+	Cytokine642,
+	Toxin643,
+	ExogenousSubstanceAdministrationSite644,
+	ExogenousSubstanceOriginTissue645,
+	PreclinicalSmallAnimalImagingProcedure646,
+	PositionReferenceIndicatorForFrameOfReference647,
+	PresentAbsentOnly241,
+	WaterEquivalentDiameterMethod10024,
+	RadiotherapyPurposeOfReference7022,
+	ContentAssessmentType701,
+	RTContentAssessmentType702,
+	AssessmentBasis703,
+	ReaderSpecialty7449,
+	RequestedReportType9233,
+	CTTransversePlaneReferenceBasis1000,
+	AnatomicalReferenceBasis1001,
+	AnatomicalReferenceBasisHead1002,
+	AnatomicalReferenceBasisSpine1003,
+	AnatomicalReferenceBasisChest1004,
+	AnatomicalReferenceBasisAbdomenPelvis1005,
+	AnatomicalReferenceBasisExtremity1006,
+	ReferenceGeometryPlane1010,
+	ReferenceGeometryPoint1011,
+	PatientAlignmentMethod1015,
+	ContraindicationsForCTImaging1200,
+	FiducialCategory7110,
+	Fiducial7111,
+	NonImageSourceInstancePurposeOfReference7013,
+	RTProcessOutput7023,
+	RTProcessInput7024,
+	RTProcessInputUsed7025,
+	ProstateAnatomy6300,
+	ProstateSectorAnatomyFromPIRADSV26301,
+	ProstateSectorAnatomyFromEuropeanConcensus16SectorMinimalModel6302,
+	ProstateSectorAnatomyFromEuropeanConcensus27SectorOptimalModel6303,
+	MeasurementSelectionReason12301,
+	EchoFindingObservationType12302,
+	EchoMeasurementType12303,
+	CardiovascularMeasuredProperty12304,
+	BasicEchoAnatomicSite12305,
+	EchoFlowDirection12306,
+	CardiacPhaseAndTimePoint12307,
+	CoreEchoMeasurement12300,
+	OCTAProcessingAlgorithmFamily4270,
+	EnFaceImageType4271,
+	OPTScanPatternType4272,
+	RetinalSegmentationSurface4273,
+	OrganForRadiationDoseEstimate10060,
+	AbsorbedRadiationDoseType10061,
+	EquivalentRadiationDoseType10062,
+	RadiationDoseEstimateDistributionRepresentation10063,
+	PatientModelType10064,
+	RadiationTransportModelType10065,
+	AttenuatorCategory10066,
+	RadiationAttenuatorMaterial10067,
+	EstimateMethodType10068,
+	RadiationDoseEstimateParameter10069,
+	RadiationDoseType10070,
+	MRDiffusionComponentSemantic7270,
+	MRDiffusionAnisotropyIndex7271,
+	MRDiffusionModelParameter7272,
+	MRDiffusionModel7273,
+	MRDiffusionModelFittingMethod7274,
+	MRDiffusionModelSpecificMethod7275,
+	MRDiffusionModelInput7276,
+	DiffusionRateAreaOverTimeUnit7277,
+	PediatricSizeCategory7039,
+	CalciumScoringPatientSizeCategory7041,
+	ReasonForRepeatingAcquisition10034,
+	ProtocolAssertion800,
+	RadiotherapeuticDoseMeasurementDevice7026,
+	ExportAdditionalInformationDocumentTitle7014,
+	ExportDelayReason7015,
+	LevelOfDifficulty7016,
+	CategoryOfTeachingMaterialImaging7017,
+	MiscellaneousDocumentTitle7018,
+	SegmentationNonImageSourcePurposeOfReference7019,
+	LongitudinalTemporalEventType280,
+	NonLesionObjectTypePhysicalObject6401,
+	NonLesionObjectTypeSubstance6402,
+	NonLesionObjectTypeTissue6403,
+	ChestNonLesionObjectTypePhysicalObject6404,
+	ChestNonLesionObjectTypeTissue6405,
+	TissueSegmentationPropertyType7191,
+	AnatomicalStructureSegmentationPropertyType7192,
+	PhysicalObjectSegmentationPropertyType7193,
+	MorphologicallyAbnormalStructureSegmentationPropertyType7194,
+	FunctionSegmentationPropertyType7195,
+	SpatialAndRelationalConceptSegmentationPropertyType7196,
+	BodySubstanceSegmentationPropertyType7197,
+	SubstanceSegmentationPropertyType7198,
+	InterpretationRequestDiscontinuationReason9303,
+	GrayLevelRunLengthBasedFeature7475,
+	GrayLevelSizeZoneBasedFeature7476,
+	EncapsulatedDocumentSourcePurposeOfReference7060,
+	ModelDocumentTitle7061,
+	PurposeOfReferenceToPredecessor3DModel7062,
+	ModelScaleUnit7063,
+	ModelUsage7064,
+	RadiationDoseUnit10071,
+	RadiotherapyFiducial7112,
+	MultiEnergyRelevantMaterial300,
+	MultiEnergyMaterialUnit301,
+	DosimetricObjectiveType9500,
+	PrescriptionAnatomyCategory9501,
+	RTSegmentAnnotationCategory9502,
+	RadiotherapyTherapeuticRoleCategory9503,
+	RTGeometricInformation9504,
+	FixationOrPositioningDevice9505,
+	BrachytherapyDevice9506,
+	ExternalBodyModel9507,
+	NonSpecificVolume9508,
+	PurposeOfReferenceForRTPhysicianIntentInput9509,
+	PurposeOfReferenceForRTTreatmentPlanningInput9510,
+	GeneralExternalRadiotherapyProcedureTechnique9511,
+	TomotherapeuticRadiotherapyProcedureTechnique9512,
+	FixationDevice9513,
+	AnatomicalStructureForRadiotherapy9514,
+	RTPatientSupportDevice9515,
+	RadiotherapyBolusDeviceType9516,
+	RadiotherapyBlockDeviceType9517,
+	RadiotherapyAccessoryNoSlotHolderDeviceType9518,
+	RadiotherapyAccessorySlotHolderDeviceType9519,
+	SegmentedRTAccessoryDevice9520,
+	RadiotherapyTreatmentEnergyUnit9521,
+	MultiSourceRadiotherapyProcedureTechnique9522,
+	RoboticRadiotherapyProcedureTechnique9523,
+	RadiotherapyProcedureTechnique9524,
+	RadiationTherapyParticle9525,
+	IonTherapyParticle9526,
+	TeletherapyIsotope9527,
+	BrachytherapyIsotope9528,
+	SingleDoseDosimetricObjective9529,
+	PercentageAndDoseDosimetricObjective9530,
+	VolumeAndDoseDosimetricObjective9531,
+	NoParameterDosimetricObjective9532,
+	DeliveryTimeStructure9533,
+	RadiotherapyTarget9534,
+	RadiotherapyDoseCalculationRole9535,
+	RadiotherapyPrescribingAndSegmentingPersonRole9536,
+	EffectiveDoseCalculationMethodCategory9537,
+	RadiationTransportBasedEffectiveDoseMethodModifier9538,
+	FractionationBasedEffectiveDoseMethodModifier9539,
+	ImagingAgentAdministrationAdverseEvent60,
+	TimeRelativeToProcedure61RETIRED,
+	ImagingAgentAdministrationPhaseType62,
+	ImagingAgentAdministrationMode63,
+	ImagingAgentAdministrationPatientState64,
+	ImagingAgentAdministrationPremedication65,
+	ImagingAgentAdministrationMedication66,
+	ImagingAgentAdministrationCompletionStatus67,
+	ImagingAgentAdministrationPharmaceuticalPresentationUnit68,
+	ImagingAgentAdministrationConsumable69,
+	Flush70,
+	ImagingAgentAdministrationInjectorEventType71,
+	ImagingAgentAdministrationStepType72,
+	BolusShapingCurve73,
+	ImagingAgentAdministrationConsumableCatheterType74,
+	LowHighOrEqual75,
+	PremedicationType76,
+	LateralityWithMedian245,
+	DermatologyAnatomicSite4029,
+	QuantitativeImageFeature218,
+	GlobalShapeDescriptor7477,
+	IntensityHistogramFeature7478,
+	GreyLevelDistanceZoneBasedFeature7479,
+	NeighbourhoodGreyToneDifferenceBasedFeature7500,
+	NeighbouringGreyLevelDependenceBasedFeature7501,
+	CorneaMeasurementMethodDescriptor4242,
+	SegmentedRadiotherapeuticDoseMeasurementDevice7027,
+	ClinicalCourseOfDisease6098,
+	RacialGroup6099,
+	RelativeLaterality246,
+	BrainLesionSegmentationTypeWithNecrosis7168,
+	BrainLesionSegmentationTypeWithoutNecrosis7169,
+	NonAcquisitionModality32,
+	Modality33,
+	LateralityLeftRightOnly247,
+	QualitativeEvaluationModifierType210,
+	QualitativeEvaluationModifierValue211,
+	GenericAnatomicLocationModifier212,
+	BeamLimitingDeviceType9541,
+	CompensatorDeviceType9542,
+	RadiotherapyTreatmentMachineMode9543,
+	RadiotherapyDistanceReferenceLocation9544,
+	FixedBeamLimitingDeviceType9545,
+	RadiotherapyWedgeType9546,
+	RTBeamLimitingDeviceOrientationLabel9547,
+	GeneralAccessoryDeviceType9548,
+	RadiationGenerationModeType9549,
+	CArmPhotonElectronDeliveryRateUnit9550,
+	TreatmentDeliveryDeviceType9551,
+	CArmPhotonElectronDosimeterUnit9552,
+	TreatmentPoint9553,
+	EquipmentReferencePoint9554,
+	RadiotherapyTreatmentPlanningPersonRole9555,
+	RealTimeVideoRenditionTitle7070,
+	GeometryGraphicalRepresentation219,
+	VisualExplanation217,
+	ProstateSectorAnatomyFromPIRADSV216304,
+	RadiotherapyRoboticNodeSet9556,
+	TomotherapeuticDosimeterUnit9557,
+	TomotherapeuticDoseRateUnit9558,
+	RoboticDeliveryDeviceDosimeterUnit9559,
+	RoboticDeliveryDeviceDoseRateUnit9560,
+	AnatomicStructure8134,
+	MediastinumFindingOrFeature6148,
+	MediastinumAnatomy6149,
+	VascularUltrasoundReportDocumentTitle12100,
+	OrganPartNonLateralized12130,
+	OrganPartLateralized12131,
+	TreatmentTerminationReason9561,
+	RadiotherapyTreatmentDeliveryPersonRole9562,
+	RadiotherapyInterlockResolution9563,
+	TreatmentSessionConfirmationAssertion9564,
+	TreatmentToleranceViolationCause9565,
+	ClinicalToleranceViolationType9566,
+	MachineToleranceViolationType9567,
+	RadiotherapyTreatmentInterlock9568,
+	IsocentricPatientSupportPositionParameter9569,
+	RTOverriddenTreatmentParameter9570,
+	EEGLead3030,
+	LeadLocationNearOrInMuscle3031,
+	LeadLocationNearPeripheralNerve3032,
+	EOGLead3033,
+	BodyPositionChannel3034,
+	EEGAnnotationNeurophysiologicEnumeration3035,
+	EMGAnnotationNeurophysiologicalEnumeration3036,
+	EOGAnnotationNeurophysiologicalEnumeration3037,
+	PatternEvent3038,
+	DeviceRelatedAndEnvironmentRelatedEvent3039,
+	EEGAnnotationNeurologicalMonitoringMeasurement3040,
+	OBGYNUltrasoundReportDocumentTitle12024,
+	AutomationOfMeasurement7230,
+	OBGYNUltrasoundBeamPath12025,
+	AngleMeasurement7550,
+	GenericPurposeOfReferenceToImagesAndCoordinatesInMeasurement7551,
+	GenericPurposeOfReferenceToImagesInMeasurement7552,
+	GenericPurposeOfReferenceToCoordinatesInMeasurement7553,
+	FitzpatrickSkinType4401,
+	HistoryOfMalignantMelanoma4402,
+	HistoryOfMelanomaInSitu4403,
+	HistoryOfNonMelanomaSkinCancer4404,
+	SkinDisorder4405,
+	PatientReportedLesionCharacteristic4406,
+	LesionPalpationFinding4407,
+	LesionVisualFinding4408,
+	SkinProcedure4409,
+	AbdominopelvicVessel12125,
+	NumericValueFailureQualifier43,
+	NumericValueUnknownQualifier44,
+	CouinaudLiverSegment7170,
+	LiverSegmentationType7171,
+	ContraindicationsForXAImaging1201,
+	NeurophysiologicStimulationMode3041,
+	ReportedValueType10072,
+	ValueTiming10073,
+	RDSRFrameOfReferenceOrigin10074,
+	MicroscopyAnnotationPropertyType8135,
+	MicroscopyMeasurementType8136,
+	ProstateReportingSystem6310,
+	MRSignalIntensity6311,
+	CrossSectionalScanPlaneOrientation6312,
+	HistoryOfProstateDisease6313,
+	ProstateMRIStudyQualityFinding6314,
+	ProstateMRISeriesQualityFinding6315,
+	MRImagingArtifact6316,
+	ProstateDCEMRIQualityFinding6317,
+	ProstateDWIMRIQualityFinding6318,
+	AbdominalInterventionType6319,
+	AbdominopelvicIntervention6320,
+	ProstateCancerDiagnosticProcedure6321,
+	ProstateCancerFamilyHistory6322,
+	ProstateCancerTherapy6323,
+	ProstateMRIAssessment6324,
+	OverallAssessmentFromPIRADS6325,
+	ImageQualityControlStandard6326,
+	ProstateImagingIndication6327,
+	PIRADSV2LesionAssessmentCategory6328,
+	PIRADSV2T2WIPZLesionAssessmentCategory6329,
+	PIRADSV2T2WITZLesionAssessmentCategory6330,
+	PIRADSV2DWILesionAssessmentCategory6331,
+	PIRADSV2DCELesionAssessmentCategory6332,
+	mpMRIAssessmentType6333,
+	mpMRIAssessmentTypeFromPIRADS6334,
+	mpMRIAssessmentValue6335,
+	MRIAbnormality6336,
+	mpMRIProstateAbnormalityFromPIRADS6337,
+	mpMRIBenignProstateAbnormalityFromPIRADS6338,
+	MRIShapeCharacteristic6339,
+	ProstateMRIShapeCharacteristicFromPIRADS6340,
+	MRIMarginCharacteristic6341,
+	ProstateMRIMarginCharacteristicFromPIRADS6342,
+	MRISignalCharacteristic6343,
+	ProstateMRISignalCharacteristicFromPIRADS6344,
+	MRIEnhancementPattern6345,
+	ProstateMRIEnhancementPatternFromPIRADS6346,
+	ProstateMRIExtraProstaticFinding6347,
+	ProstateMRIAssessmentOfExtraProstaticAnatomicSite6348,
+	MRCoilType6349,
+	EndorectalCoilFillSubstance6350,
+	ProstateRelationalMeasurement6351,
+	ProstateCancerDiagnosticBloodLabMeasurement6352,
+	ProstateImagingTypesOfQualityControlStandard6353,
+	UltrasoundShearWaveMeasurement12308,
+	LeftVentricleMyocardialWall16SegmentModel3780RETIRED,
+	LeftVentricleMyocardialWall18SegmentModel3781,
+	LeftVentricleBasalWall6Segments3782,
+	LeftVentricleMidlevelWall6Segments3783,
+	LeftVentricleApicalWall4Segments3784,
+	LeftVentricleApicalWall6Segments3785,
+	PatientTreatmentPreparationMethod9571,
+	PatientShieldingDevice9572,
+	PatientTreatmentPreparationDevice9573,
+	PatientPositionDisplacementReferencePoint9574,
+	PatientAlignmentDevice9575,
+	ReasonsForRTRadiationTreatmentOmission9576,
+	PatientTreatmentPreparationProcedure9577,
+	MotionManagementSetupDevice9578,
+	CoreEchoStrainMeasurement12309,
+	MyocardialStrainMethod12310,
+	EchoMeasuredStrainProperty12311,
+	AssessmentFromCADRADS3020,
+	CADRADSStenosisAssessmentModifier3021,
+	CADRADSAssessmentModifier3022,
+	RTSegmentMaterial9579,
+	VertebralAnatomicStructure7602,
+	Vertebra7603,
+	IntervertebralDisc7604,
+	ImagingProcedure101,
+	NICIPShortCodeImagingProcedure103,
+	NICIPSNOMEDImagingProcedure104,
+	ICD10PCSImagingProcedure105,
+	ICD10PCSNuclearMedicineProcedure106,
+	ICD10PCSRadiationTherapyProcedure107,
+	RTSegmentationPropertyCategory9580,
+	RadiotherapyRegistrationMark9581,
+	RadiotherapyDoseRegion9582,
+	AnatomicallyLocalizedLesionSegmentationType7199,
+	ReasonForRemovalFromOperationalUse7031,
+	GeneralUltrasoundReportDocumentTitle12320,
+	ElastographySite12321,
+	ElastographyMeasurementSite12322,
+	UltrasoundRelevantPatientCondition12323,
+	ShearWaveDetectionMethod12324,
+	LiverUltrasoundStudyIndication12325,
+	AnalogWaveformFilter3042,
+	DigitalWaveformFilter3043,
+	WaveformFilterLookupTableInputFrequencyUnit3044,
+	WaveformFilterLookupTableOutputMagnitudeUnit3045,
+	SpecificObservationSubjectClass272,
+	MovableBeamLimitingDeviceType9540,
+	RadiotherapyAcquisitionWorkItemSubtasks9260,
+	PatientPositionAcquisitionRadiationSourceLocations9261,
+	EnergyDerivationTypes9262,
+	KVImagingAcquisitionTechniques9263,
+	MVImagingAcquisitionTechniques9264,
+	PatientPositionAcquisitionProjectionTechniques9265,
+	PatientPositionAcquisitionCTTechniques9266,
+	PatientPositioningRelatedObjectPurposes9267,
+	PatientPositionAcquisitionDevices9268,
+	RTRadiationMetersetUnits9269,
+	AcquisitionInitiationTypes9270,
+	RTImagePatientPositionAcquisitionDevices9271,
+	PhotoacousticIlluminationMethod11001,
+	AcousticCouplingMedium11002,
+	UltrasoundTransducerTechnology11003,
+	SpeedOfSoundCorrectionMechanisms11004,
+	PhotoacousticReconstructionAlgorithmFamily11005,
+	PhotoacousticImagedProperty11006,
+	XRayRadiationDoseProcedureTypeReported10005,
+	TopicalTreatment4410,
+	LesionColor4411,
+	SpecimenStainForConfocalMicroscopy4412,
+	RTROIImageAcquisitionContext9272,
+	LobeOfLung6170,
+	ZoneOfLung6171,
+	SleepStage3046,
+	PatientPositionAcquisitionMRTechniques9273,
+	RTPlanRadiotherapyProcedureTechnique9583,
+	WaveformAnnotationClassification3047,
+	WaveformAnnotationsDocumentTitle3048,
+	EEGProcedure3049,
+	PatientConsciousness3050,
+	FollicleType12010,
+	BreastTissueSegmentationType7163,
+	ImplantedDevice3779,
+	SimilarityMeasure281,
+	WaveformAcquisitionModality34,
+	EnFaceProcessingAlgorithmFamily4274,
+	AnteriorEyeSegmentationSurface4275,
+	FetalEchocardiographyImageView12312,
+	CardiacUltrasoundFetalArrhythmiaMeasurements12313,
+	CommonFetalEchocardiographyMeasurements12314,
+	HeadAndNeckPrimaryAnatomicStructure4061,
+	VLView4062,
+	VLDentalView4063,
+	VLViewModifier4064,
+	VLDentalViewModifier4065,
+	OrthognathicFunctionalCondition4066,
+	OrthodonticFindingByInspection4067,
+	OrthodonticObservableEntity4068,
+	DentalOcclusion4069,
+	OrthodonticTreatmentProgress4070,
+	GeneralPhotographyDevice4071,
+	DevicesForThePurposeOfDentalPhotography4072,
+	CTDIPhantomDevice4053,
+	DiagnosticImagingProcedureWithoutIVContrast108,
+	DiagnosticImagingProcedureWithIVContrast109,
+	StructuralHeartProcedure12331,
+	StructuralHeartDevice12332,
+	StructuralHeartMeasurement12333,
+	AorticValveStructuralMeasurement12334,
+	MitralValveStructuralMeasurement12335,
+	TricuspidValveStructuralMeasurement12336,
+	StructuralHeartEchoMeasurement12337,
+	LeftAtrialAppendageClosureMeasurement12338,
+	StructuralHeartProcedureAnatomicSite12339,
+	IndicationForStructuralHeartProcedure12341,
+	BradycardiacAgent12342,
+	TransesophagealEchocardiographyScanPlane12343,
+	StructuralHeartMeasurementReportDocumentTitle12344,
+	PersonGenderIdentity7458,
+	CategoryOfSexParametersForClinicalUse7459,
+	ThirdPersonPronounSet7448,
+	CardiacStructureCalcificationQualitativeEvaluation12345,
+	VisualFieldMeasurements4280,
+	OpticDiscKeyMeasurements4281,
+	RetinalSectorMethods4282,
+	RNFLSectorMeasurements4283,
+	RNFLClockfaceMeasurements4284,
+	MacularThicknessKeyMeasurements4285,
+	GanglionCellMeasurementExtent4286,
+	GanglionCellKeyMeasurements4287,
+	GanglionCellSectorMeasurements4288,
+	GanglionCellSectorMethods4289,
+	EndothelialCellCountMeasurements4290,
+	OphthalmicImageROIMeasurements4291,
+	RTPlanApprovalAssertion9584,
+	EstimatedDeliveryDateMethod12026,
+	RTDoseCalculationAlgorithmFamily9585,
+	DoseIndexForDoseCalibration10012,
+	UltrasoundAttenuationImagingSite12036,
+	FetalAnatomySurveyAssessment12040,
+	FetalAnatomySurveyAssessmentHead12041,
+	FetalAnatomySurveyAssessmentFaceAndNeck12042,
+	FetalAnatomySurveyAssessmentChest12043,
+	FetalAnatomySurveyAssessmentHeart12044,
+	FetalAnatomySurveyAssessmentAbdomenAndPelvis12045,
+	FetalAnatomySurveyAssessmentSpine12046,
+	FetalAnatomySurveyAssessmentExtremities12047,
+	FetalAnatomySurveyAssessmentMaternal12048,
+	FetalAnatomySurveyPracticeGuideline12049,
+	SensitiveContentCategory900,
+	SensitiveContentDetail901,
+	ApplicationTypeCode406,
+	XRayModulationType10035,
+	RadiotherapyDoseRealWorldUnits9586,
+	RadiotherapyDoseInterpretedTypeCodes9587,
+	RadiotherapyDoseInterpretedTypeModifierCodes9588,
+	RadiotherapyDoseIntentCodes9589,
+	QualitySegmentationPropertyType7164,
+	UltrasoundZScorePopulationIndex12027,
+	FetalUltrasoundZScoreReferenceAuthority12028,
+	MetalArtifactReductionAlgorithmFamily10036,
+}
+
+var generatedStandardUIDIndex = map[string]*UID{
+	"1.2.840.10008.1.1":                Verification,
+	"1.2.840.10008.1.2":                ImplicitVRLittleEndian,
+	"1.2.840.10008.1.2.1":              ExplicitVRLittleEndian,
+	"1.2.840.10008.1.2.1.98":           EncapsulatedUncompressedExplicitVRLittleEndian,
+	"1.2.840.10008.1.2.1.99":           DeflatedExplicitVRLittleEndian,
+	"1.2.840.10008.1.2.2":              ExplicitVRBigEndianRETIRED,
+	"1.2.840.10008.1.2.4.50":           JPEGBaseline8Bit,
+	"1.2.840.10008.1.2.4.51":           JPEGExtended12Bit,
+	"1.2.840.10008.1.2.4.52":           JPEGExtended35RETIRED,
+	"1.2.840.10008.1.2.4.53":           JPEGSpectralSelectionNonHierarchical68RETIRED,
+	"1.2.840.10008.1.2.4.54":           JPEGSpectralSelectionNonHierarchical79RETIRED,
+	"1.2.840.10008.1.2.4.55":           JPEGFullProgressionNonHierarchical1012RETIRED,
+	"1.2.840.10008.1.2.4.56":           JPEGFullProgressionNonHierarchical1113RETIRED,
+	"1.2.840.10008.1.2.4.57":           JPEGLossless,
+	"1.2.840.10008.1.2.4.58":           JPEGLosslessNonHierarchical15RETIRED,
+	"1.2.840.10008.1.2.4.59":           JPEGExtendedHierarchical1618RETIRED,
+	"1.2.840.10008.1.2.4.60":           JPEGExtendedHierarchical1719RETIRED,
+	"1.2.840.10008.1.2.4.61":           JPEGSpectralSelectionHierarchical2022RETIRED,
+	"1.2.840.10008.1.2.4.62":           JPEGSpectralSelectionHierarchical2123RETIRED,
+	"1.2.840.10008.1.2.4.63":           JPEGFullProgressionHierarchical2426RETIRED,
+	"1.2.840.10008.1.2.4.64":           JPEGFullProgressionHierarchical2527RETIRED,
+	"1.2.840.10008.1.2.4.65":           JPEGLosslessHierarchical28RETIRED,
+	"1.2.840.10008.1.2.4.66":           JPEGLosslessHierarchical29RETIRED,
+	"1.2.840.10008.1.2.4.70":           JPEGLosslessSV1,
+	"1.2.840.10008.1.2.4.80":           JPEGLSLossless,
+	"1.2.840.10008.1.2.4.81":           JPEGLSNearLossless,
+	"1.2.840.10008.1.2.4.90":           JPEG2000Lossless,
+	"1.2.840.10008.1.2.4.91":           JPEG2000,
+	"1.2.840.10008.1.2.4.92":           JPEG2000MCLossless,
+	"1.2.840.10008.1.2.4.93":           JPEG2000MC,
+	"1.2.840.10008.1.2.4.94":           JPIPReferenced,
+	"1.2.840.10008.1.2.4.95":           JPIPReferencedDeflate,
+	"1.2.840.10008.1.2.4.100":          MPEG2MPML,
+	"1.2.840.10008.1.2.4.100.1":        MPEG2MPMLF,
+	"1.2.840.10008.1.2.4.101":          MPEG2MPHL,
+	"1.2.840.10008.1.2.4.101.1":        MPEG2MPHLF,
+	"1.2.840.10008.1.2.4.102":          MPEG4HP41,
+	"1.2.840.10008.1.2.4.102.1":        MPEG4HP41F,
+	"1.2.840.10008.1.2.4.103":          MPEG4HP41BD,
+	"1.2.840.10008.1.2.4.103.1":        MPEG4HP41BDF,
+	"1.2.840.10008.1.2.4.104":          MPEG4HP422D,
+	"1.2.840.10008.1.2.4.104.1":        MPEG4HP422DF,
+	"1.2.840.10008.1.2.4.105":          MPEG4HP423D,
+	"1.2.840.10008.1.2.4.105.1":        MPEG4HP423DF,
+	"1.2.840.10008.1.2.4.106":          MPEG4HP42STEREO,
+	"1.2.840.10008.1.2.4.106.1":        MPEG4HP42STEREOF,
+	"1.2.840.10008.1.2.4.107":          HEVCMP51,
+	"1.2.840.10008.1.2.4.108":          HEVCM10P51,
+	"1.2.840.10008.1.2.4.110":          JPEGXLLossless,
+	"1.2.840.10008.1.2.4.111":          JPEGXLJPEGRecompression,
+	"1.2.840.10008.1.2.4.112":          JPEGXL,
+	"1.2.840.10008.1.2.4.201":          HTJ2KLossless,
+	"1.2.840.10008.1.2.4.202":          HTJ2KLosslessRPCL,
+	"1.2.840.10008.1.2.4.203":          HTJ2K,
+	"1.2.840.10008.1.2.4.204":          JPIPHTJ2KReferenced,
+	"1.2.840.10008.1.2.4.205":          JPIPHTJ2KReferencedDeflate,
+	"1.2.840.10008.1.2.5":              RLELossless,
+	"1.2.840.10008.1.2.6.1":            RFC2557MIMEEncapsulationRETIRED,
+	"1.2.840.10008.1.2.6.2":            XMLEncodingRETIRED,
+	"1.2.840.10008.1.2.7.1":            SMPTEST211020UncompressedProgressiveActiveVideo,
+	"1.2.840.10008.1.2.7.2":            SMPTEST211020UncompressedInterlacedActiveVideo,
+	"1.2.840.10008.1.2.7.3":            SMPTEST211030PCMDigitalAudio,
+	"1.2.840.10008.1.2.8.1":            DeflatedImageFrameCompression,
+	"1.2.840.10008.1.3.10":             MediaStorageDirectoryStorage,
+	"1.2.840.10008.1.5.1":              HotIronPalette,
+	"1.2.840.10008.1.5.2":              PETPalette,
+	"1.2.840.10008.1.5.3":              HotMetalBluePalette,
+	"1.2.840.10008.1.5.4":              PET20StepPalette,
+	"1.2.840.10008.1.5.5":              SpringPalette,
+	"1.2.840.10008.1.5.6":              SummerPalette,
+	"1.2.840.10008.1.5.7":              FallPalette,
+	"1.2.840.10008.1.5.8":              WinterPalette,
+	"1.2.840.10008.1.9":                BasicStudyContentNotificationRETIRED,
+	"1.2.840.10008.1.20":               Papyrus3ImplicitVRLittleEndianRETIRED,
+	"1.2.840.10008.1.20.1":             StorageCommitmentPushModel,
+	"1.2.840.10008.1.20.1.1":           StorageCommitmentPushModelInstance,
+	"1.2.840.10008.1.20.2":             StorageCommitmentPullModelRETIRED,
+	"1.2.840.10008.1.20.2.1":           StorageCommitmentPullModelInstanceRETIRED,
+	"1.2.840.10008.1.40":               ProceduralEventLogging,
+	"1.2.840.10008.1.40.1":             ProceduralEventLoggingInstance,
+	"1.2.840.10008.1.42":               SubstanceAdministrationLogging,
+	"1.2.840.10008.1.42.1":             SubstanceAdministrationLoggingInstance,
+	"1.2.840.10008.2.6.1":              DCMUID,
+	"1.2.840.10008.2.16.4":             DCM,
+	"1.2.840.10008.2.16.5":             MA,
+	"1.2.840.10008.2.16.6":             UBERON,
+	"1.2.840.10008.2.16.7":             ITIS_TSN,
+	"1.2.840.10008.2.16.8":             MGI,
+	"1.2.840.10008.2.16.9":             PUBCHEM_CID,
+	"1.2.840.10008.2.16.10":            DC,
+	"1.2.840.10008.2.16.11":            NYUMCCG,
+	"1.2.840.10008.2.16.12":            MAYONRISBSASRG,
+	"1.2.840.10008.2.16.13":            IBSI,
+	"1.2.840.10008.2.16.14":            RO,
+	"1.2.840.10008.2.16.15":            RADELEMENT,
+	"1.2.840.10008.2.16.16":            I11,
+	"1.2.840.10008.2.16.17":            UNS,
+	"1.2.840.10008.2.16.18":            RRID,
+	"1.2.840.10008.3.1.1.1":            DICOMApplicationContext,
+	"1.2.840.10008.3.1.2.1.1":          DetachedPatientManagementRETIRED,
+	"1.2.840.10008.3.1.2.1.4":          DetachedPatientManagementMetaRETIRED,
+	"1.2.840.10008.3.1.2.2.1":          DetachedVisitManagementRETIRED,
+	"1.2.840.10008.3.1.2.3.1":          DetachedStudyManagementRETIRED,
+	"1.2.840.10008.3.1.2.3.2":          StudyComponentManagementRETIRED,
+	"1.2.840.10008.3.1.2.3.3":          ModalityPerformedProcedureStep,
+	"1.2.840.10008.3.1.2.3.4":          ModalityPerformedProcedureStepRetrieve,
+	"1.2.840.10008.3.1.2.3.5":          ModalityPerformedProcedureStepNotification,
+	"1.2.840.10008.3.1.2.5.1":          DetachedResultsManagementRETIRED,
+	"1.2.840.10008.3.1.2.5.4":          DetachedResultsManagementMetaRETIRED,
+	"1.2.840.10008.3.1.2.5.5":          DetachedStudyManagementMetaRETIRED,
+	"1.2.840.10008.3.1.2.6.1":          DetachedInterpretationManagementRETIRED,
+	"1.2.840.10008.4.2":                Storage,
+	"1.2.840.10008.5.1.1.1":            BasicFilmSession,
+	"1.2.840.10008.5.1.1.2":            BasicFilmBox,
+	"1.2.840.10008.5.1.1.4":            BasicGrayscaleImageBox,
+	"1.2.840.10008.5.1.1.4.1":          BasicColorImageBox,
+	"1.2.840.10008.5.1.1.4.2":          ReferencedImageBoxRETIRED,
+	"1.2.840.10008.5.1.1.9":            BasicGrayscalePrintManagementMeta,
+	"1.2.840.10008.5.1.1.9.1":          ReferencedGrayscalePrintManagementMetaRETIRED,
+	"1.2.840.10008.5.1.1.14":           PrintJob,
+	"1.2.840.10008.5.1.1.15":           BasicAnnotationBox,
+	"1.2.840.10008.5.1.1.16":           Printer,
+	"1.2.840.10008.5.1.1.16.376":       PrinterConfigurationRetrieval,
+	"1.2.840.10008.5.1.1.17":           PrinterInstance,
+	"1.2.840.10008.5.1.1.17.376":       PrinterConfigurationRetrievalInstance,
+	"1.2.840.10008.5.1.1.18":           BasicColorPrintManagementMeta,
+	"1.2.840.10008.5.1.1.18.1":         ReferencedColorPrintManagementMetaRETIRED,
+	"1.2.840.10008.5.1.1.22":           VOILUTBox,
+	"1.2.840.10008.5.1.1.23":           PresentationLUT,
+	"1.2.840.10008.5.1.1.24":           ImageOverlayBoxRETIRED,
+	"1.2.840.10008.5.1.1.24.1":         BasicPrintImageOverlayBoxRETIRED,
+	"1.2.840.10008.5.1.1.25":           PrintQueueInstanceRETIRED,
+	"1.2.840.10008.5.1.1.26":           PrintQueueManagementRETIRED,
+	"1.2.840.10008.5.1.1.27":           StoredPrintStorageRETIRED,
+	"1.2.840.10008.5.1.1.29":           HardcopyGrayscaleImageStorageRETIRED,
+	"1.2.840.10008.5.1.1.30":           HardcopyColorImageStorageRETIRED,
+	"1.2.840.10008.5.1.1.31":           PullPrintRequestRETIRED,
+	"1.2.840.10008.5.1.1.32":           PullStoredPrintManagementMetaRETIRED,
+	"1.2.840.10008.5.1.1.33":           MediaCreationManagement,
+	"1.2.840.10008.5.1.1.40":           DisplaySystem,
+	"1.2.840.10008.5.1.1.40.1":         DisplaySystemInstance,
+	"1.2.840.10008.5.1.4.1.1.1":        ComputedRadiographyImageStorage,
+	"1.2.840.10008.5.1.4.1.1.1.1":      DigitalXRayImageStorageForPresentation,
+	"1.2.840.10008.5.1.4.1.1.1.1.1":    DigitalXRayImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.1.2":      DigitalMammographyXRayImageStorageForPresentation,
+	"1.2.840.10008.5.1.4.1.1.1.2.1":    DigitalMammographyXRayImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.1.3":      DigitalIntraOralXRayImageStorageForPresentation,
+	"1.2.840.10008.5.1.4.1.1.1.3.1":    DigitalIntraOralXRayImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.2":        CTImageStorage,
+	"1.2.840.10008.5.1.4.1.1.2.1":      EnhancedCTImageStorage,
+	"1.2.840.10008.5.1.4.1.1.2.2":      LegacyConvertedEnhancedCTImageStorage,
+	"1.2.840.10008.5.1.4.1.1.3":        UltrasoundMultiFrameImageStorageRetiredRETIRED,
+	"1.2.840.10008.5.1.4.1.1.3.1":      UltrasoundMultiFrameImageStorage,
+	"1.2.840.10008.5.1.4.1.1.4":        MRImageStorage,
+	"1.2.840.10008.5.1.4.1.1.4.1":      EnhancedMRImageStorage,
+	"1.2.840.10008.5.1.4.1.1.4.2":      MRSpectroscopyStorage,
+	"1.2.840.10008.5.1.4.1.1.4.3":      EnhancedMRColorImageStorage,
+	"1.2.840.10008.5.1.4.1.1.4.4":      LegacyConvertedEnhancedMRImageStorage,
+	"1.2.840.10008.5.1.4.1.1.5":        NuclearMedicineImageStorageRetiredRETIRED,
+	"1.2.840.10008.5.1.4.1.1.6":        UltrasoundImageStorageRetiredRETIRED,
+	"1.2.840.10008.5.1.4.1.1.6.1":      UltrasoundImageStorage,
+	"1.2.840.10008.5.1.4.1.1.6.2":      EnhancedUSVolumeStorage,
+	"1.2.840.10008.5.1.4.1.1.6.3":      PhotoacousticImageStorage,
+	"1.2.840.10008.5.1.4.1.1.7":        SecondaryCaptureImageStorage,
+	"1.2.840.10008.5.1.4.1.1.7.1":      MultiFrameSingleBitSecondaryCaptureImageStorage,
+	"1.2.840.10008.5.1.4.1.1.7.2":      MultiFrameGrayscaleByteSecondaryCaptureImageStorage,
+	"1.2.840.10008.5.1.4.1.1.7.3":      MultiFrameGrayscaleWordSecondaryCaptureImageStorage,
+	"1.2.840.10008.5.1.4.1.1.7.4":      MultiFrameTrueColorSecondaryCaptureImageStorage,
+	"1.2.840.10008.5.1.4.1.1.8":        StandaloneOverlayStorageRETIRED,
+	"1.2.840.10008.5.1.4.1.1.9":        StandaloneCurveStorageRETIRED,
+	"1.2.840.10008.5.1.4.1.1.9.1":      WaveformStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.1.1.9.1.1":    TwelveLeadECGWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.1.2":    GeneralECGWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.1.3":    AmbulatoryECGWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.1.4":    General32bitECGWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.2.1":    HemodynamicWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.3.1":    CardiacElectrophysiologyWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.4.1":    BasicVoiceAudioWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.4.2":    GeneralAudioWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.5.1":    ArterialPulseWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.6.1":    RespiratoryWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.6.2":    MultichannelRespiratoryWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.7.1":    RoutineScalpElectroencephalogramWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.7.2":    ElectromyogramWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.7.3":    ElectrooculogramWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.7.4":    SleepElectroencephalogramWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.8.1":    BodyPositionWaveformStorage,
+	"1.2.840.10008.5.1.4.1.1.9.100.1":  WaveformPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.9.100.2":  WaveformAcquisitionPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.10":       StandaloneModalityLUTStorageRETIRED,
+	"1.2.840.10008.5.1.4.1.1.11":       StandaloneVOILUTStorageRETIRED,
+	"1.2.840.10008.5.1.4.1.1.11.1":     GrayscaleSoftcopyPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.2":     ColorSoftcopyPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.3":     PseudoColorSoftcopyPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.4":     BlendingSoftcopyPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.5":     XAXRFGrayscaleSoftcopyPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.6":     GrayscalePlanarMPRVolumetricPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.7":     CompositingPlanarMPRVolumetricPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.8":     AdvancedBlendingPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.9":     VolumeRenderingVolumetricPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.10":    SegmentedVolumeRenderingVolumetricPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.11":    MultipleVolumeRenderingVolumetricPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.11.12":    VariableModalityLUTSoftcopyPresentationStateStorage,
+	"1.2.840.10008.5.1.4.1.1.12.1":     XRayAngiographicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.12.1.1":   EnhancedXAImageStorage,
+	"1.2.840.10008.5.1.4.1.1.12.2":     XRayRadiofluoroscopicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.12.2.1":   EnhancedXRFImageStorage,
+	"1.2.840.10008.5.1.4.1.1.12.3":     XRayAngiographicBiPlaneImageStorageRETIRED,
+	"1.2.840.10008.5.1.4.1.1.13.1.1":   XRay3DAngiographicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.13.1.2":   XRay3DCraniofacialImageStorage,
+	"1.2.840.10008.5.1.4.1.1.13.1.3":   BreastTomosynthesisImageStorage,
+	"1.2.840.10008.5.1.4.1.1.13.1.4":   BreastProjectionXRayImageStorageForPresentation,
+	"1.2.840.10008.5.1.4.1.1.13.1.5":   BreastProjectionXRayImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.14.1":     IntravascularOpticalCoherenceTomographyImageStorageForPresentation,
+	"1.2.840.10008.5.1.4.1.1.14.2":     IntravascularOpticalCoherenceTomographyImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.20":       NuclearMedicineImageStorage,
+	"1.2.840.10008.5.1.4.1.1.30":       ParametricMapStorage,
+	"1.2.840.10008.5.1.4.1.1.66":       RawDataStorage,
+	"1.2.840.10008.5.1.4.1.1.66.1":     SpatialRegistrationStorage,
+	"1.2.840.10008.5.1.4.1.1.66.2":     SpatialFiducialsStorage,
+	"1.2.840.10008.5.1.4.1.1.66.3":     DeformableSpatialRegistrationStorage,
+	"1.2.840.10008.5.1.4.1.1.66.4":     SegmentationStorage,
+	"1.2.840.10008.5.1.4.1.1.66.5":     SurfaceSegmentationStorage,
+	"1.2.840.10008.5.1.4.1.1.66.6":     TractographyResultsStorage,
+	"1.2.840.10008.5.1.4.1.1.66.7":     LabelMapSegmentationStorage,
+	"1.2.840.10008.5.1.4.1.1.66.8":     HeightMapSegmentationStorage,
+	"1.2.840.10008.5.1.4.1.1.67":       RealWorldValueMappingStorage,
+	"1.2.840.10008.5.1.4.1.1.68.1":     SurfaceScanMeshStorage,
+	"1.2.840.10008.5.1.4.1.1.68.2":     SurfaceScanPointCloudStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1":     VLImageStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.1.1.77.2":     VLMultiFrameImageStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.1.1.77.1.1":   VLEndoscopicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.1.1": VideoEndoscopicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.2":   VLMicroscopicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.2.1": VideoMicroscopicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.3":   VLSlideCoordinatesMicroscopicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.4":   VLPhotographicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.4.1": VideoPhotographicImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.1": OphthalmicPhotography8BitImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.2": OphthalmicPhotography16BitImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.3": StereometricRelationshipStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.4": OphthalmicTomographyImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.5": WideFieldOphthalmicPhotographyStereographicProjectionImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.6": WideFieldOphthalmicPhotography3DCoordinatesImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.7": OphthalmicOpticalCoherenceTomographyEnFaceImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.5.8": OphthalmicOpticalCoherenceTomographyBscanVolumeAnalysisStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.6":   VLWholeSlideMicroscopyImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.7":   DermoscopicPhotographyImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.8":   ConfocalMicroscopyImageStorage,
+	"1.2.840.10008.5.1.4.1.1.77.1.9":   ConfocalMicroscopyTiledPyramidalImageStorage,
+	"1.2.840.10008.5.1.4.1.1.78.1":     LensometryMeasurementsStorage,
+	"1.2.840.10008.5.1.4.1.1.78.2":     AutorefractionMeasurementsStorage,
+	"1.2.840.10008.5.1.4.1.1.78.3":     KeratometryMeasurementsStorage,
+	"1.2.840.10008.5.1.4.1.1.78.4":     SubjectiveRefractionMeasurementsStorage,
+	"1.2.840.10008.5.1.4.1.1.78.5":     VisualAcuityMeasurementsStorage,
+	"1.2.840.10008.5.1.4.1.1.78.6":     SpectaclePrescriptionReportStorage,
+	"1.2.840.10008.5.1.4.1.1.78.7":     OphthalmicAxialMeasurementsStorage,
+	"1.2.840.10008.5.1.4.1.1.78.8":     IntraocularLensCalculationsStorage,
+	"1.2.840.10008.5.1.4.1.1.79.1":     MacularGridThicknessAndVolumeReportStorage,
+	"1.2.840.10008.5.1.4.1.1.80.1":     OphthalmicVisualFieldStaticPerimetryMeasurementsStorage,
+	"1.2.840.10008.5.1.4.1.1.81.1":     OphthalmicThicknessMapStorage,
+	"1.2.840.10008.5.1.4.1.1.82.1":     CornealTopographyMapStorage,
+	"1.2.840.10008.5.1.4.1.1.88.1":     TextSRStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.1.1.88.2":     AudioSRStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.1.1.88.3":     DetailSRStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.1.1.88.4":     ComprehensiveSRStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.1.1.88.11":    BasicTextSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.22":    EnhancedSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.33":    ComprehensiveSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.34":    Comprehensive3DSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.35":    ExtensibleSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.40":    ProcedureLogStorage,
+	"1.2.840.10008.5.1.4.1.1.88.50":    MammographyCADSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.59":    KeyObjectSelectionDocumentStorage,
+	"1.2.840.10008.5.1.4.1.1.88.65":    ChestCADSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.67":    XRayRadiationDoseSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.68":    RadiopharmaceuticalRadiationDoseSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.69":    ColonCADSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.70":    ImplantationPlanSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.71":    AcquisitionContextSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.72":    SimplifiedAdultEchoSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.73":    PatientRadiationDoseSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.74":    PlannedImagingAgentAdministrationSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.75":    PerformedImagingAgentAdministrationSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.76":    EnhancedXRayRadiationDoseSRStorage,
+	"1.2.840.10008.5.1.4.1.1.88.77":    WaveformAnnotationSRStorage,
+	"1.2.840.10008.5.1.4.1.1.90.1":     ContentAssessmentResultsStorage,
+	"1.2.840.10008.5.1.4.1.1.91.1":     MicroscopyBulkSimpleAnnotationsStorage,
+	"1.2.840.10008.5.1.4.1.1.104.1":    EncapsulatedPDFStorage,
+	"1.2.840.10008.5.1.4.1.1.104.2":    EncapsulatedCDAStorage,
+	"1.2.840.10008.5.1.4.1.1.104.3":    EncapsulatedSTLStorage,
+	"1.2.840.10008.5.1.4.1.1.104.4":    EncapsulatedOBJStorage,
+	"1.2.840.10008.5.1.4.1.1.104.5":    EncapsulatedMTLStorage,
+	"1.2.840.10008.5.1.4.1.1.128":      PositronEmissionTomographyImageStorage,
+	"1.2.840.10008.5.1.4.1.1.128.1":    LegacyConvertedEnhancedPETImageStorage,
+	"1.2.840.10008.5.1.4.1.1.129":      StandalonePETCurveStorageRETIRED,
+	"1.2.840.10008.5.1.4.1.1.130":      EnhancedPETImageStorage,
+	"1.2.840.10008.5.1.4.1.1.131":      BasicStructuredDisplayStorage,
+	"1.2.840.10008.5.1.4.1.1.200.1":    CTDefinedProcedureProtocolStorage,
+	"1.2.840.10008.5.1.4.1.1.200.2":    CTPerformedProcedureProtocolStorage,
+	"1.2.840.10008.5.1.4.1.1.200.3":    ProtocolApprovalStorage,
+	"1.2.840.10008.5.1.4.1.1.200.4":    ProtocolApprovalInformationModelFind,
+	"1.2.840.10008.5.1.4.1.1.200.5":    ProtocolApprovalInformationModelMove,
+	"1.2.840.10008.5.1.4.1.1.200.6":    ProtocolApprovalInformationModelGet,
+	"1.2.840.10008.5.1.4.1.1.200.7":    XADefinedProcedureProtocolStorage,
+	"1.2.840.10008.5.1.4.1.1.200.8":    XAPerformedProcedureProtocolStorage,
+	"1.2.840.10008.5.1.4.1.1.201.1":    InventoryStorage,
+	"1.2.840.10008.5.1.4.1.1.201.2":    InventoryFind,
+	"1.2.840.10008.5.1.4.1.1.201.3":    InventoryMove,
+	"1.2.840.10008.5.1.4.1.1.201.4":    InventoryGet,
+	"1.2.840.10008.5.1.4.1.1.201.5":    InventoryCreation,
+	"1.2.840.10008.5.1.4.1.1.201.6":    RepositoryQuery,
+	"1.2.840.10008.5.1.4.1.1.201.1.1":  StorageManagementInstance,
+	"1.2.840.10008.5.1.4.1.1.481.1":    RTImageStorage,
+	"1.2.840.10008.5.1.4.1.1.481.2":    RTDoseStorage,
+	"1.2.840.10008.5.1.4.1.1.481.3":    RTStructureSetStorage,
+	"1.2.840.10008.5.1.4.1.1.481.4":    RTBeamsTreatmentRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.5":    RTPlanStorage,
+	"1.2.840.10008.5.1.4.1.1.481.6":    RTBrachyTreatmentRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.7":    RTTreatmentSummaryRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.8":    RTIonPlanStorage,
+	"1.2.840.10008.5.1.4.1.1.481.9":    RTIonBeamsTreatmentRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.10":   RTPhysicianIntentStorage,
+	"1.2.840.10008.5.1.4.1.1.481.11":   RTSegmentAnnotationStorage,
+	"1.2.840.10008.5.1.4.1.1.481.12":   RTRadiationSetStorage,
+	"1.2.840.10008.5.1.4.1.1.481.13":   CArmPhotonElectronRadiationStorage,
+	"1.2.840.10008.5.1.4.1.1.481.14":   TomotherapeuticRadiationStorage,
+	"1.2.840.10008.5.1.4.1.1.481.15":   RoboticArmRadiationStorage,
+	"1.2.840.10008.5.1.4.1.1.481.16":   RTRadiationRecordSetStorage,
+	"1.2.840.10008.5.1.4.1.1.481.17":   RTRadiationSalvageRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.18":   TomotherapeuticRadiationRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.19":   CArmPhotonElectronRadiationRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.20":   RoboticRadiationRecordStorage,
+	"1.2.840.10008.5.1.4.1.1.481.21":   RTRadiationSetDeliveryInstructionStorage,
+	"1.2.840.10008.5.1.4.1.1.481.22":   RTTreatmentPreparationStorage,
+	"1.2.840.10008.5.1.4.1.1.481.23":   EnhancedRTImageStorage,
+	"1.2.840.10008.5.1.4.1.1.481.24":   EnhancedContinuousRTImageStorage,
+	"1.2.840.10008.5.1.4.1.1.481.25":   RTPatientPositionAcquisitionInstructionStorage,
+	"1.2.840.10008.5.1.4.1.1.501.1":    DICOSCTImageStorage,
+	"1.2.840.10008.5.1.4.1.1.501.2.1":  DICOSDigitalXRayImageStorageForPresentation,
+	"1.2.840.10008.5.1.4.1.1.501.2.2":  DICOSDigitalXRayImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.501.3":    DICOSThreatDetectionReportStorage,
+	"1.2.840.10008.5.1.4.1.1.501.4":    DICOS2DAITStorage,
+	"1.2.840.10008.5.1.4.1.1.501.5":    DICOS3DAITStorage,
+	"1.2.840.10008.5.1.4.1.1.501.6":    DICOSQuadrupoleResonanceStorage,
+	"1.2.840.10008.5.1.4.1.1.601.1":    EddyCurrentImageStorage,
+	"1.2.840.10008.5.1.4.1.1.601.2":    EddyCurrentMultiFrameImageStorage,
+	"1.2.840.10008.5.1.4.1.1.601.3":    ThermographyImageStorage,
+	"1.2.840.10008.5.1.4.1.1.601.4":    ThermographyMultiFrameImageStorage,
+	"1.2.840.10008.5.1.4.1.1.601.5":    UltrasoundWaveformStorage,
+	"1.2.840.10008.5.1.4.1.2.1.1":      PatientRootQueryRetrieveInformationModelFind,
+	"1.2.840.10008.5.1.4.1.2.1.2":      PatientRootQueryRetrieveInformationModelMove,
+	"1.2.840.10008.5.1.4.1.2.1.3":      PatientRootQueryRetrieveInformationModelGet,
+	"1.2.840.10008.5.1.4.1.2.2.1":      StudyRootQueryRetrieveInformationModelFind,
+	"1.2.840.10008.5.1.4.1.2.2.2":      StudyRootQueryRetrieveInformationModelMove,
+	"1.2.840.10008.5.1.4.1.2.2.3":      StudyRootQueryRetrieveInformationModelGet,
+	"1.2.840.10008.5.1.4.1.2.3.1":      PatientStudyOnlyQueryRetrieveInformationModelFindRETIRED,
+	"1.2.840.10008.5.1.4.1.2.3.2":      PatientStudyOnlyQueryRetrieveInformationModelMoveRETIRED,
+	"1.2.840.10008.5.1.4.1.2.3.3":      PatientStudyOnlyQueryRetrieveInformationModelGetRETIRED,
+	"1.2.840.10008.5.1.4.1.2.4.2":      CompositeInstanceRootRetrieveMove,
+	"1.2.840.10008.5.1.4.1.2.4.3":      CompositeInstanceRootRetrieveGet,
+	"1.2.840.10008.5.1.4.1.2.5.3":      CompositeInstanceRetrieveWithoutBulkDataGet,
+	"1.2.840.10008.5.1.4.20.1":         DefinedProcedureProtocolInformationModelFind,
+	"1.2.840.10008.5.1.4.20.2":         DefinedProcedureProtocolInformationModelMove,
+	"1.2.840.10008.5.1.4.20.3":         DefinedProcedureProtocolInformationModelGet,
+	"1.2.840.10008.5.1.4.31":           ModalityWorklistInformationModelFind,
+	"1.2.840.10008.5.1.4.32":           GeneralPurposeWorklistManagementMetaRETIRED,
+	"1.2.840.10008.5.1.4.32.1":         GeneralPurposeWorklistInformationModelFindRETIRED,
+	"1.2.840.10008.5.1.4.32.2":         GeneralPurposeScheduledProcedureStepRETIRED,
+	"1.2.840.10008.5.1.4.32.3":         GeneralPurposePerformedProcedureStepRETIRED,
+	"1.2.840.10008.5.1.4.33":           InstanceAvailabilityNotification,
+	"1.2.840.10008.5.1.4.34.1":         RTBeamsDeliveryInstructionStorageTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.2":         RTConventionalMachineVerificationTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.3":         RTIonMachineVerificationTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.4":         UnifiedWorklistAndProcedureStepTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.4.1":       UnifiedProcedureStepPushTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.4.2":       UnifiedProcedureStepWatchTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.4.3":       UnifiedProcedureStepPullTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.4.4":       UnifiedProcedureStepEventTrialRETIRED,
+	"1.2.840.10008.5.1.4.34.5":         UPSGlobalSubscriptionInstance,
+	"1.2.840.10008.5.1.4.34.5.1":       UPSFilteredGlobalSubscriptionInstance,
+	"1.2.840.10008.5.1.4.34.6":         UnifiedWorklistAndProcedureStep,
+	"1.2.840.10008.5.1.4.34.6.1":       UnifiedProcedureStepPush,
+	"1.2.840.10008.5.1.4.34.6.2":       UnifiedProcedureStepWatch,
+	"1.2.840.10008.5.1.4.34.6.3":       UnifiedProcedureStepPull,
+	"1.2.840.10008.5.1.4.34.6.4":       UnifiedProcedureStepEvent,
+	"1.2.840.10008.5.1.4.34.6.5":       UnifiedProcedureStepQuery,
+	"1.2.840.10008.5.1.4.34.7":         RTBeamsDeliveryInstructionStorage,
+	"1.2.840.10008.5.1.4.34.8":         RTConventionalMachineVerification,
+	"1.2.840.10008.5.1.4.34.9":         RTIonMachineVerification,
+	"1.2.840.10008.5.1.4.34.10":        RTBrachyApplicationSetupDeliveryInstructionStorage,
+	"1.2.840.10008.5.1.4.37.1":         GeneralRelevantPatientInformationQuery,
+	"1.2.840.10008.5.1.4.37.2":         BreastImagingRelevantPatientInformationQuery,
+	"1.2.840.10008.5.1.4.37.3":         CardiacRelevantPatientInformationQuery,
+	"1.2.840.10008.5.1.4.38.1":         HangingProtocolStorage,
+	"1.2.840.10008.5.1.4.38.2":         HangingProtocolInformationModelFind,
+	"1.2.840.10008.5.1.4.38.3":         HangingProtocolInformationModelMove,
+	"1.2.840.10008.5.1.4.38.4":         HangingProtocolInformationModelGet,
+	"1.2.840.10008.5.1.4.39.1":         ColorPaletteStorage,
+	"1.2.840.10008.5.1.4.39.2":         ColorPaletteQueryRetrieveInformationModelFind,
+	"1.2.840.10008.5.1.4.39.3":         ColorPaletteQueryRetrieveInformationModelMove,
+	"1.2.840.10008.5.1.4.39.4":         ColorPaletteQueryRetrieveInformationModelGet,
+	"1.2.840.10008.5.1.4.41":           ProductCharacteristicsQuery,
+	"1.2.840.10008.5.1.4.42":           SubstanceApprovalQuery,
+	"1.2.840.10008.5.1.4.43.1":         GenericImplantTemplateStorage,
+	"1.2.840.10008.5.1.4.43.2":         GenericImplantTemplateInformationModelFind,
+	"1.2.840.10008.5.1.4.43.3":         GenericImplantTemplateInformationModelMove,
+	"1.2.840.10008.5.1.4.43.4":         GenericImplantTemplateInformationModelGet,
+	"1.2.840.10008.5.1.4.44.1":         ImplantAssemblyTemplateStorage,
+	"1.2.840.10008.5.1.4.44.2":         ImplantAssemblyTemplateInformationModelFind,
+	"1.2.840.10008.5.1.4.44.3":         ImplantAssemblyTemplateInformationModelMove,
+	"1.2.840.10008.5.1.4.44.4":         ImplantAssemblyTemplateInformationModelGet,
+	"1.2.840.10008.5.1.4.45.1":         ImplantTemplateGroupStorage,
+	"1.2.840.10008.5.1.4.45.2":         ImplantTemplateGroupInformationModelFind,
+	"1.2.840.10008.5.1.4.45.3":         ImplantTemplateGroupInformationModelMove,
+	"1.2.840.10008.5.1.4.45.4":         ImplantTemplateGroupInformationModelGet,
+	"1.2.840.10008.7.1.1":              NativeDICOMModel,
+	"1.2.840.10008.7.1.2":              AbstractMultiDimensionalImageModel,
+	"1.2.840.10008.8.1.1":              DICOMContentMappingResource,
+	"1.2.840.10008.10.1":               VideoEndoscopicImageRealTimeCommunication,
+	"1.2.840.10008.10.2":               VideoPhotographicImageRealTimeCommunication,
+	"1.2.840.10008.10.3":               AudioWaveformRealTimeCommunication,
+	"1.2.840.10008.10.4":               RenditionSelectionDocumentRealTimeCommunication,
+	"1.2.840.10008.15.0.3.1":           dicomDeviceName,
+	"1.2.840.10008.15.0.3.2":           dicomDescription,
+	"1.2.840.10008.15.0.3.3":           dicomManufacturer,
+	"1.2.840.10008.15.0.3.4":           dicomManufacturerModelName,
+	"1.2.840.10008.15.0.3.5":           dicomSoftwareVersion,
+	"1.2.840.10008.15.0.3.6":           dicomVendorData,
+	"1.2.840.10008.15.0.3.7":           dicomAETitle,
+	"1.2.840.10008.15.0.3.8":           dicomNetworkConnectionReference,
+	"1.2.840.10008.15.0.3.9":           dicomApplicationCluster,
+	"1.2.840.10008.15.0.3.10":          dicomAssociationInitiator,
+	"1.2.840.10008.15.0.3.11":          dicomAssociationAcceptor,
+	"1.2.840.10008.15.0.3.12":          dicomHostname,
+	"1.2.840.10008.15.0.3.13":          dicomPort,
+	"1.2.840.10008.15.0.3.14":          dicomSOPClass,
+	"1.2.840.10008.15.0.3.15":          dicomTransferRole,
+	"1.2.840.10008.15.0.3.16":          dicomTransferSyntax,
+	"1.2.840.10008.15.0.3.17":          dicomPrimaryDeviceType,
+	"1.2.840.10008.15.0.3.18":          dicomRelatedDeviceReference,
+	"1.2.840.10008.15.0.3.19":          dicomPreferredCalledAETitle,
+	"1.2.840.10008.15.0.3.20":          dicomTLSCyphersuite,
+	"1.2.840.10008.15.0.3.21":          dicomAuthorizedNodeCertificateReference,
+	"1.2.840.10008.15.0.3.22":          dicomThisNodeCertificateReference,
+	"1.2.840.10008.15.0.3.23":          dicomInstalled,
+	"1.2.840.10008.15.0.3.24":          dicomStationName,
+	"1.2.840.10008.15.0.3.25":          dicomDeviceSerialNumber,
+	"1.2.840.10008.15.0.3.26":          dicomInstitutionName,
+	"1.2.840.10008.15.0.3.27":          dicomInstitutionAddress,
+	"1.2.840.10008.15.0.3.28":          dicomInstitutionDepartmentName,
+	"1.2.840.10008.15.0.3.29":          dicomIssuerOfPatientID,
+	"1.2.840.10008.15.0.3.30":          dicomPreferredCallingAETitle,
+	"1.2.840.10008.15.0.3.31":          dicomSupportedCharacterSet,
+	"1.2.840.10008.15.0.4.1":           dicomConfigurationRoot,
+	"1.2.840.10008.15.0.4.2":           dicomDevicesRoot,
+	"1.2.840.10008.15.0.4.3":           dicomUniqueAETitlesRegistryRoot,
+	"1.2.840.10008.15.0.4.4":           dicomDevice,
+	"1.2.840.10008.15.0.4.5":           dicomNetworkAE,
+	"1.2.840.10008.15.0.4.6":           dicomNetworkConnection,
+	"1.2.840.10008.15.0.4.7":           dicomUniqueAETitle,
+	"1.2.840.10008.15.0.4.8":           dicomTransferCapability,
+	"1.2.840.10008.15.1.1":             UTC,
+	"1.2.840.10008.6.1.1":              AnatomicModifier2,
+	"1.2.840.10008.6.1.2":              AnatomicRegion4,
+	"1.2.840.10008.6.1.3":              TransducerApproach5,
+	"1.2.840.10008.6.1.4":              TransducerOrientation6,
+	"1.2.840.10008.6.1.5":              UltrasoundBeamPath7,
+	"1.2.840.10008.6.1.6":              AngiographicInterventionalDevice8,
+	"1.2.840.10008.6.1.7":              ImageGuidedTherapeuticProcedure9,
+	"1.2.840.10008.6.1.8":              InterventionalDrug10,
+	"1.2.840.10008.6.1.9":              AdministrationRoute11,
+	"1.2.840.10008.6.1.10":             ImagingContrastAgent12,
+	"1.2.840.10008.6.1.11":             ImagingContrastAgentIngredient13,
+	"1.2.840.10008.6.1.12":             RadiopharmaceuticalIsotope18,
+	"1.2.840.10008.6.1.13":             PatientOrientation19,
+	"1.2.840.10008.6.1.14":             PatientOrientationModifier20,
+	"1.2.840.10008.6.1.15":             PatientEquipmentRelationship21,
+	"1.2.840.10008.6.1.16":             CranioCaudadAngulation23,
+	"1.2.840.10008.6.1.17":             Radiopharmaceutical25,
+	"1.2.840.10008.6.1.18":             NuclearMedicineProjection26,
+	"1.2.840.10008.6.1.19":             AcquisitionModality29,
+	"1.2.840.10008.6.1.20":             DICOMDevice30,
+	"1.2.840.10008.6.1.21":             AbstractPrior31,
+	"1.2.840.10008.6.1.22":             NumericValueQualifier42,
+	"1.2.840.10008.6.1.23":             MeasurementUnit82,
+	"1.2.840.10008.6.1.24":             RealWorldValueMappingUnit83,
+	"1.2.840.10008.6.1.25":             SignificanceLevel220,
+	"1.2.840.10008.6.1.26":             MeasurementRangeConcept221,
+	"1.2.840.10008.6.1.27":             Normality222,
+	"1.2.840.10008.6.1.28":             NormalRangeValue223,
+	"1.2.840.10008.6.1.29":             SelectionMethod224,
+	"1.2.840.10008.6.1.30":             MeasurementUncertaintyConcept225,
+	"1.2.840.10008.6.1.31":             PopulationStatisticalDescriptor226,
+	"1.2.840.10008.6.1.32":             SampleStatisticalDescriptor227,
+	"1.2.840.10008.6.1.33":             EquationOrTable228,
+	"1.2.840.10008.6.1.34":             YesNo230,
+	"1.2.840.10008.6.1.35":             PresentAbsent240,
+	"1.2.840.10008.6.1.36":             NormalAbnormal242,
+	"1.2.840.10008.6.1.37":             Laterality244,
+	"1.2.840.10008.6.1.38":             PositiveNegative250,
+	"1.2.840.10008.6.1.39":             ComplicationSeverity251,
+	"1.2.840.10008.6.1.40":             ObserverType270,
+	"1.2.840.10008.6.1.41":             ObservationSubjectClass271,
+	"1.2.840.10008.6.1.42":             AudioChannelSource3000,
+	"1.2.840.10008.6.1.43":             ECGLead3001,
+	"1.2.840.10008.6.1.44":             HemodynamicWaveformSource3003,
+	"1.2.840.10008.6.1.45":             CardiovascularAnatomicStructure3010,
+	"1.2.840.10008.6.1.46":             ElectrophysiologyAnatomicLocation3011,
+	"1.2.840.10008.6.1.47":             CoronaryArterySegment3014,
+	"1.2.840.10008.6.1.48":             CoronaryArtery3015,
+	"1.2.840.10008.6.1.49":             CardiovascularAnatomicStructureModifier3019,
+	"1.2.840.10008.6.1.50":             CardiologyMeasurementUnit3082RETIRED,
+	"1.2.840.10008.6.1.51":             TimeSynchronizationChannelType3090,
+	"1.2.840.10008.6.1.52":             CardiacProceduralStateValue3101,
+	"1.2.840.10008.6.1.53":             ElectrophysiologyMeasurementFunctionTechnique3240,
+	"1.2.840.10008.6.1.54":             HemodynamicMeasurementTechnique3241,
+	"1.2.840.10008.6.1.55":             CatheterizationProcedurePhase3250,
+	"1.2.840.10008.6.1.56":             ElectrophysiologyProcedurePhase3254,
+	"1.2.840.10008.6.1.57":             StressProtocol3261,
+	"1.2.840.10008.6.1.58":             ECGPatientStateValue3262,
+	"1.2.840.10008.6.1.59":             ElectrodePlacementValue3263,
+	"1.2.840.10008.6.1.60":             XYZElectrodePlacementValues3264RETIRED,
+	"1.2.840.10008.6.1.61":             HemodynamicPhysiologicalChallenge3271,
+	"1.2.840.10008.6.1.62":             ECGAnnotation3335,
+	"1.2.840.10008.6.1.63":             HemodynamicAnnotation3337,
+	"1.2.840.10008.6.1.64":             ElectrophysiologyAnnotation3339,
+	"1.2.840.10008.6.1.65":             ProcedureLogTitle3400,
+	"1.2.840.10008.6.1.66":             LogNoteType3401,
+	"1.2.840.10008.6.1.67":             PatientStatusAndEvent3402,
+	"1.2.840.10008.6.1.68":             PercutaneousEntry3403,
+	"1.2.840.10008.6.1.69":             StaffAction3404,
+	"1.2.840.10008.6.1.70":             ProcedureActionValue3405,
+	"1.2.840.10008.6.1.71":             NonCoronaryTranscatheterIntervention3406,
+	"1.2.840.10008.6.1.72":             ObjectReferencePurpose3407,
+	"1.2.840.10008.6.1.73":             ConsumableAction3408,
+	"1.2.840.10008.6.1.74":             DrugContrastAdministration3409,
+	"1.2.840.10008.6.1.75":             DrugContrastNumericParameter3410,
+	"1.2.840.10008.6.1.76":             IntracoronaryDevice3411,
+	"1.2.840.10008.6.1.77":             InterventionActionStatus3412,
+	"1.2.840.10008.6.1.78":             AdverseOutcome3413,
+	"1.2.840.10008.6.1.79":             ProcedureUrgency3414,
+	"1.2.840.10008.6.1.80":             CardiacRhythm3415,
+	"1.2.840.10008.6.1.81":             RespirationRhythm3416,
+	"1.2.840.10008.6.1.82":             LesionRisk3418,
+	"1.2.840.10008.6.1.83":             FindingTitle3419,
+	"1.2.840.10008.6.1.84":             ProcedureAction3421,
+	"1.2.840.10008.6.1.85":             DeviceUseAction3422,
+	"1.2.840.10008.6.1.86":             NumericDeviceCharacteristic3423,
+	"1.2.840.10008.6.1.87":             InterventionParameter3425,
+	"1.2.840.10008.6.1.88":             ConsumablesParameter3426,
+	"1.2.840.10008.6.1.89":             EquipmentEvent3427,
+	"1.2.840.10008.6.1.90":             CardiovascularImagingProcedure3428,
+	"1.2.840.10008.6.1.91":             CatheterizationDevice3429,
+	"1.2.840.10008.6.1.92":             DateTimeQualifier3430,
+	"1.2.840.10008.6.1.93":             PeripheralPulseLocation3440,
+	"1.2.840.10008.6.1.94":             PatientAssessment3441,
+	"1.2.840.10008.6.1.95":             PeripheralPulseMethod3442,
+	"1.2.840.10008.6.1.96":             SkinCondition3446,
+	"1.2.840.10008.6.1.97":             AirwayAssessment3448,
+	"1.2.840.10008.6.1.98":             CalibrationObject3451,
+	"1.2.840.10008.6.1.99":             CalibrationMethod3452,
+	"1.2.840.10008.6.1.100":            CardiacVolumeMethod3453,
+	"1.2.840.10008.6.1.101":            IndexMethod3455,
+	"1.2.840.10008.6.1.102":            SubSegmentMethod3456,
+	"1.2.840.10008.6.1.103":            ContourRealignment3458,
+	"1.2.840.10008.6.1.104":            CircumferentialExtent3460,
+	"1.2.840.10008.6.1.105":            RegionalExtent3461,
+	"1.2.840.10008.6.1.106":            ChamberIdentification3462,
+	"1.2.840.10008.6.1.107":            QAReferenceMethod3465,
+	"1.2.840.10008.6.1.108":            PlaneIdentification3466,
+	"1.2.840.10008.6.1.109":            EjectionFraction3467,
+	"1.2.840.10008.6.1.110":            EDVolume3468,
+	"1.2.840.10008.6.1.111":            ESVolume3469,
+	"1.2.840.10008.6.1.112":            VesselLumenCrossSectionalAreaCalculationMethod3470,
+	"1.2.840.10008.6.1.113":            EstimatedVolume3471,
+	"1.2.840.10008.6.1.114":            CardiacContractionPhase3472,
+	"1.2.840.10008.6.1.115":            IVUSProcedurePhase3480,
+	"1.2.840.10008.6.1.116":            IVUSDistanceMeasurement3481,
+	"1.2.840.10008.6.1.117":            IVUSAreaMeasurement3482,
+	"1.2.840.10008.6.1.118":            IVUSLongitudinalMeasurement3483,
+	"1.2.840.10008.6.1.119":            IVUSIndexRatio3484,
+	"1.2.840.10008.6.1.120":            IVUSVolumeMeasurement3485,
+	"1.2.840.10008.6.1.121":            VascularMeasurementSite3486,
+	"1.2.840.10008.6.1.122":            IntravascularVolumetricRegion3487,
+	"1.2.840.10008.6.1.123":            MinMaxMean3488,
+	"1.2.840.10008.6.1.124":            CalciumDistribution3489,
+	"1.2.840.10008.6.1.125":            IVUSLesionMorphology3491,
+	"1.2.840.10008.6.1.126":            VascularDissectionClassification3492,
+	"1.2.840.10008.6.1.127":            IVUSRelativeStenosisSeverity3493,
+	"1.2.840.10008.6.1.128":            IVUSNonMorphologicalFinding3494,
+	"1.2.840.10008.6.1.129":            IVUSPlaqueComposition3495,
+	"1.2.840.10008.6.1.130":            IVUSFiducialPoint3496,
+	"1.2.840.10008.6.1.131":            IVUSArterialMorphology3497,
+	"1.2.840.10008.6.1.132":            PressureUnit3500,
+	"1.2.840.10008.6.1.133":            HemodynamicResistanceUnit3502,
+	"1.2.840.10008.6.1.134":            IndexedHemodynamicResistanceUnit3503,
+	"1.2.840.10008.6.1.135":            CatheterSizeUnit3510,
+	"1.2.840.10008.6.1.136":            SpecimenCollection3515,
+	"1.2.840.10008.6.1.137":            BloodSourceType3520,
+	"1.2.840.10008.6.1.138":            BloodGasPressure3524,
+	"1.2.840.10008.6.1.139":            BloodGasContent3525,
+	"1.2.840.10008.6.1.140":            BloodGasSaturation3526,
+	"1.2.840.10008.6.1.141":            BloodBaseExcess3527,
+	"1.2.840.10008.6.1.142":            BloodPH3528,
+	"1.2.840.10008.6.1.143":            ArterialVenousContent3529,
+	"1.2.840.10008.6.1.144":            OxygenAdministrationAction3530,
+	"1.2.840.10008.6.1.145":            OxygenAdministration3531,
+	"1.2.840.10008.6.1.146":            CirculatorySupportAction3550,
+	"1.2.840.10008.6.1.147":            VentilationAction3551,
+	"1.2.840.10008.6.1.148":            PacingAction3552,
+	"1.2.840.10008.6.1.149":            CirculatorySupport3553,
+	"1.2.840.10008.6.1.150":            Ventilation3554,
+	"1.2.840.10008.6.1.151":            Pacing3555,
+	"1.2.840.10008.6.1.152":            BloodPressureMethod3560,
+	"1.2.840.10008.6.1.153":            RelativeTime3600,
+	"1.2.840.10008.6.1.154":            HemodynamicPatientState3602,
+	"1.2.840.10008.6.1.155":            ArterialLesionLocation3604,
+	"1.2.840.10008.6.1.156":            ArterialSourceLocation3606,
+	"1.2.840.10008.6.1.157":            VenousSourceLocation3607,
+	"1.2.840.10008.6.1.158":            AtrialSourceLocation3608,
+	"1.2.840.10008.6.1.159":            VentricularSourceLocation3609,
+	"1.2.840.10008.6.1.160":            GradientSourceLocation3610,
+	"1.2.840.10008.6.1.161":            PressureMeasurement3611,
+	"1.2.840.10008.6.1.162":            BloodVelocityMeasurement3612,
+	"1.2.840.10008.6.1.163":            HemodynamicTimeMeasurement3613,
+	"1.2.840.10008.6.1.164":            NonMitralValveArea3614,
+	"1.2.840.10008.6.1.165":            ValveArea3615,
+	"1.2.840.10008.6.1.166":            HemodynamicPeriodMeasurement3616,
+	"1.2.840.10008.6.1.167":            ValveFlow3617,
+	"1.2.840.10008.6.1.168":            HemodynamicFlow3618,
+	"1.2.840.10008.6.1.169":            HemodynamicResistanceMeasurement3619,
+	"1.2.840.10008.6.1.170":            HemodynamicRatio3620,
+	"1.2.840.10008.6.1.171":            FractionalFlowReserve3621,
+	"1.2.840.10008.6.1.172":            MeasurementType3627,
+	"1.2.840.10008.6.1.173":            CardiacOutputMethod3628,
+	"1.2.840.10008.6.1.174":            ProcedureIntent3629,
+	"1.2.840.10008.6.1.175":            CardiovascularAnatomicLocation3630,
+	"1.2.840.10008.6.1.176":            Hypertension3640,
+	"1.2.840.10008.6.1.177":            HemodynamicAssessment3641,
+	"1.2.840.10008.6.1.178":            DegreeFinding3642,
+	"1.2.840.10008.6.1.179":            HemodynamicMeasurementPhase3651,
+	"1.2.840.10008.6.1.180":            BodySurfaceAreaEquation3663,
+	"1.2.840.10008.6.1.181":            OxygenConsumptionEquationTable3664,
+	"1.2.840.10008.6.1.182":            P50Equation3666,
+	"1.2.840.10008.6.1.183":            FraminghamScore3667,
+	"1.2.840.10008.6.1.184":            FraminghamTable3668,
+	"1.2.840.10008.6.1.185":            ECGProcedureType3670,
+	"1.2.840.10008.6.1.186":            ReasonForECGStudy3671,
+	"1.2.840.10008.6.1.187":            Pacemaker3672,
+	"1.2.840.10008.6.1.188":            Diagnosis3673RETIRED,
+	"1.2.840.10008.6.1.189":            OtherFilters3675RETIRED,
+	"1.2.840.10008.6.1.190":            LeadMeasurementTechnique3676,
+	"1.2.840.10008.6.1.191":            SummaryCodesECG3677,
+	"1.2.840.10008.6.1.192":            QTCorrectionAlgorithm3678,
+	"1.2.840.10008.6.1.193":            ECGMorphologyDescription3679RETIRED,
+	"1.2.840.10008.6.1.194":            ECGLeadNoiseDescription3680,
+	"1.2.840.10008.6.1.195":            ECGLeadNoiseModifier3681RETIRED,
+	"1.2.840.10008.6.1.196":            Probability3682RETIRED,
+	"1.2.840.10008.6.1.197":            Modifier3683RETIRED,
+	"1.2.840.10008.6.1.198":            Trend3684RETIRED,
+	"1.2.840.10008.6.1.199":            ConjunctiveTerm3685RETIRED,
+	"1.2.840.10008.6.1.200":            ECGInterpretiveStatement3686RETIRED,
+	"1.2.840.10008.6.1.201":            ElectrophysiologyWaveformDuration3687,
+	"1.2.840.10008.6.1.202":            ElectrophysiologyWaveformVoltage3688,
+	"1.2.840.10008.6.1.203":            CathDiagnosis3700,
+	"1.2.840.10008.6.1.204":            CardiacValveTract3701,
+	"1.2.840.10008.6.1.205":            WallMotion3703,
+	"1.2.840.10008.6.1.206":            MyocardiumWallMorphologyFinding3704,
+	"1.2.840.10008.6.1.207":            ChamberSize3705,
+	"1.2.840.10008.6.1.208":            OverallContractility3706,
+	"1.2.840.10008.6.1.209":            VSDDescription3707,
+	"1.2.840.10008.6.1.210":            AorticRootDescription3709,
+	"1.2.840.10008.6.1.211":            CoronaryDominance3710,
+	"1.2.840.10008.6.1.212":            ValvularAbnormality3711,
+	"1.2.840.10008.6.1.213":            VesselDescriptor3712,
+	"1.2.840.10008.6.1.214":            TIMIFlowCharacteristic3713,
+	"1.2.840.10008.6.1.215":            Thrombus3714,
+	"1.2.840.10008.6.1.216":            LesionMargin3715,
+	"1.2.840.10008.6.1.217":            Severity3716,
+	"1.2.840.10008.6.1.218":            LeftVentricleMyocardialWall17SegmentModel3717,
+	"1.2.840.10008.6.1.219":            MyocardialWallSegmentsInProjection3718,
+	"1.2.840.10008.6.1.220":            CanadianClinicalClassification3719,
+	"1.2.840.10008.6.1.221":            CardiacHistoryDate3720RETIRED,
+	"1.2.840.10008.6.1.222":            CardiovascularSurgery3721,
+	"1.2.840.10008.6.1.223":            DiabeticTherapy3722,
+	"1.2.840.10008.6.1.224":            MIType3723,
+	"1.2.840.10008.6.1.225":            SmokingHistory3724,
+	"1.2.840.10008.6.1.226":            CoronaryInterventionIndication3726,
+	"1.2.840.10008.6.1.227":            CatheterizationIndication3727,
+	"1.2.840.10008.6.1.228":            CathFinding3728,
+	"1.2.840.10008.6.1.229":            AdmissionStatus3729,
+	"1.2.840.10008.6.1.230":            InsurancePayor3730,
+	"1.2.840.10008.6.1.231":            PrimaryCauseOfDeath3733,
+	"1.2.840.10008.6.1.232":            AcuteCoronarySyndromeTimePeriod3735,
+	"1.2.840.10008.6.1.233":            NYHAClassification3736,
+	"1.2.840.10008.6.1.234":            IschemiaNonInvasiveTest3737,
+	"1.2.840.10008.6.1.235":            PreCathAnginaType3738,
+	"1.2.840.10008.6.1.236":            CathProcedureType3739,
+	"1.2.840.10008.6.1.237":            ThrombolyticAdministration3740,
+	"1.2.840.10008.6.1.238":            LabVisitMedicationAdministration3741,
+	"1.2.840.10008.6.1.239":            PCIMedicationAdministration3742,
+	"1.2.840.10008.6.1.240":            ClopidogrelTiclopidineAdministration3743,
+	"1.2.840.10008.6.1.241":            EFTestingMethod3744,
+	"1.2.840.10008.6.1.242":            CalculationMethod3745,
+	"1.2.840.10008.6.1.243":            PercutaneousEntrySite3746,
+	"1.2.840.10008.6.1.244":            PercutaneousClosure3747,
+	"1.2.840.10008.6.1.245":            AngiographicEFTestingMethod3748,
+	"1.2.840.10008.6.1.246":            PCIProcedureResult3749,
+	"1.2.840.10008.6.1.247":            PreviouslyDilatedLesion3750,
+	"1.2.840.10008.6.1.248":            GuidewireCrossing3752,
+	"1.2.840.10008.6.1.249":            VascularComplication3754,
+	"1.2.840.10008.6.1.250":            CathComplication3755,
+	"1.2.840.10008.6.1.251":            CardiacPatientRiskFactor3756,
+	"1.2.840.10008.6.1.252":            CardiacDiagnosticProcedure3757,
+	"1.2.840.10008.6.1.253":            CardiovascularFamilyHistory3758,
+	"1.2.840.10008.6.1.254":            HypertensionTherapy3760,
+	"1.2.840.10008.6.1.255":            AntilipemicAgent3761,
+	"1.2.840.10008.6.1.256":            AntiarrhythmicAgent3762,
+	"1.2.840.10008.6.1.257":            MyocardialInfarctionTherapy3764,
+	"1.2.840.10008.6.1.258":            ConcernType3769,
+	"1.2.840.10008.6.1.259":            ProblemStatus3770,
+	"1.2.840.10008.6.1.260":            HealthStatus3772,
+	"1.2.840.10008.6.1.261":            UseStatus3773,
+	"1.2.840.10008.6.1.262":            SocialHistory3774,
+	"1.2.840.10008.6.1.263":            CardiovascularImplant3777,
+	"1.2.840.10008.6.1.264":            PlaqueStructure3802,
+	"1.2.840.10008.6.1.265":            StenosisMeasurementMethod3804,
+	"1.2.840.10008.6.1.266":            StenosisType3805,
+	"1.2.840.10008.6.1.267":            StenosisShape3806,
+	"1.2.840.10008.6.1.268":            VolumeMeasurementMethod3807,
+	"1.2.840.10008.6.1.269":            AneurysmType3808,
+	"1.2.840.10008.6.1.270":            AssociatedCondition3809,
+	"1.2.840.10008.6.1.271":            VascularMorphology3810,
+	"1.2.840.10008.6.1.272":            StentFinding3813,
+	"1.2.840.10008.6.1.273":            StentComposition3814,
+	"1.2.840.10008.6.1.274":            SourceOfVascularFinding3815,
+	"1.2.840.10008.6.1.275":            VascularSclerosisType3817,
+	"1.2.840.10008.6.1.276":            NonInvasiveVascularProcedure3820,
+	"1.2.840.10008.6.1.277":            PapillaryMuscleIncludedExcluded3821,
+	"1.2.840.10008.6.1.278":            RespiratoryStatus3823,
+	"1.2.840.10008.6.1.279":            HeartRhythm3826,
+	"1.2.840.10008.6.1.280":            VesselSegment3827,
+	"1.2.840.10008.6.1.281":            PulmonaryArtery3829,
+	"1.2.840.10008.6.1.282":            StenosisLength3831,
+	"1.2.840.10008.6.1.283":            StenosisGrade3832,
+	"1.2.840.10008.6.1.284":            CardiacEjectionFraction3833,
+	"1.2.840.10008.6.1.285":            CardiacVolumeMeasurement3835,
+	"1.2.840.10008.6.1.286":            TimeBasedPerfusionMeasurement3836,
+	"1.2.840.10008.6.1.287":            FiducialFeature3837,
+	"1.2.840.10008.6.1.288":            DiameterDerivation3838,
+	"1.2.840.10008.6.1.289":            CoronaryVein3839,
+	"1.2.840.10008.6.1.290":            PulmonaryVein3840,
+	"1.2.840.10008.6.1.291":            MyocardialSubsegment3843,
+	"1.2.840.10008.6.1.292":            PartialViewSectionForMammography4005,
+	"1.2.840.10008.6.1.293":            DXAnatomyImaged4009,
+	"1.2.840.10008.6.1.294":            DXView4010,
+	"1.2.840.10008.6.1.295":            DXViewModifier4011,
+	"1.2.840.10008.6.1.296":            ProjectionEponymousName4012,
+	"1.2.840.10008.6.1.297":            AnatomicRegionForMammography4013,
+	"1.2.840.10008.6.1.298":            ViewForMammography4014,
+	"1.2.840.10008.6.1.299":            ViewModifierForMammography4015,
+	"1.2.840.10008.6.1.300":            AnatomicRegionForIntraOralRadiography4016,
+	"1.2.840.10008.6.1.301":            AnatomicRegionModifierForIntraOralRadiography4017,
+	"1.2.840.10008.6.1.302":            PrimaryAnatomicStructureForIntraOralRadiographyPermanentDentitionDesignationOfTeeth4018,
+	"1.2.840.10008.6.1.303":            PrimaryAnatomicStructureForIntraOralRadiographyDeciduousDentitionDesignationOfTeeth4019,
+	"1.2.840.10008.6.1.304":            PETRadionuclide4020,
+	"1.2.840.10008.6.1.305":            PETRadiopharmaceutical4021,
+	"1.2.840.10008.6.1.306":            CraniofacialAnatomicRegion4028,
+	"1.2.840.10008.6.1.307":            CTMRAndPETAnatomyImaged4030,
+	"1.2.840.10008.6.1.308":            CommonAnatomicRegion4031,
+	"1.2.840.10008.6.1.309":            MRSpectroscopyMetabolite4032,
+	"1.2.840.10008.6.1.310":            MRProtonSpectroscopyMetabolite4033,
+	"1.2.840.10008.6.1.311":            EndoscopyAnatomicRegion4040,
+	"1.2.840.10008.6.1.312":            XAXRFAnatomyImaged4042,
+	"1.2.840.10008.6.1.313":            DrugOrContrastAgentCharacteristic4050,
+	"1.2.840.10008.6.1.314":            GeneralDevice4051,
+	"1.2.840.10008.6.1.315":            PhantomDevice4052,
+	"1.2.840.10008.6.1.316":            OphthalmicImagingAgent4200,
+	"1.2.840.10008.6.1.317":            PatientEyeMovementCommand4201,
+	"1.2.840.10008.6.1.318":            OphthalmicPhotographyAcquisitionDevice4202,
+	"1.2.840.10008.6.1.319":            OphthalmicPhotographyIllumination4203,
+	"1.2.840.10008.6.1.320":            OphthalmicFilter4204,
+	"1.2.840.10008.6.1.321":            OphthalmicLens4205,
+	"1.2.840.10008.6.1.322":            OphthalmicChannelDescription4206,
+	"1.2.840.10008.6.1.323":            OphthalmicImagePosition4207,
+	"1.2.840.10008.6.1.324":            MydriaticAgent4208,
+	"1.2.840.10008.6.1.325":            OphthalmicAnatomicStructureImaged4209,
+	"1.2.840.10008.6.1.326":            OphthalmicTomographyAcquisitionDevice4210,
+	"1.2.840.10008.6.1.327":            OphthalmicOCTAnatomicStructureImaged4211,
+	"1.2.840.10008.6.1.328":            Language5000,
+	"1.2.840.10008.6.1.329":            Country5001,
+	"1.2.840.10008.6.1.330":            OverallBreastComposition6000,
+	"1.2.840.10008.6.1.331":            OverallBreastCompositionFromBIRADS6001,
+	"1.2.840.10008.6.1.332":            ChangeSinceLastMammogramOrPriorSurgery6002,
+	"1.2.840.10008.6.1.333":            ChangeSinceLastMammogramOrPriorSurgeryFromBIRADS6003,
+	"1.2.840.10008.6.1.334":            MammographyShapeCharacteristic6004,
+	"1.2.840.10008.6.1.335":            ShapeCharacteristicFromBIRADS6005,
+	"1.2.840.10008.6.1.336":            MammographyMarginCharacteristic6006,
+	"1.2.840.10008.6.1.337":            MarginCharacteristicFromBIRADS6007,
+	"1.2.840.10008.6.1.338":            DensityModifier6008,
+	"1.2.840.10008.6.1.339":            DensityModifierFromBIRADS6009,
+	"1.2.840.10008.6.1.340":            MammographyCalcificationType6010,
+	"1.2.840.10008.6.1.341":            CalcificationTypeFromBIRADS6011,
+	"1.2.840.10008.6.1.342":            CalcificationDistributionModifier6012,
+	"1.2.840.10008.6.1.343":            CalcificationDistributionModifierFromBIRADS6013,
+	"1.2.840.10008.6.1.344":            MammographySingleImageFinding6014,
+	"1.2.840.10008.6.1.345":            SingleImageFindingFromBIRADS6015,
+	"1.2.840.10008.6.1.346":            MammographyCompositeFeature6016,
+	"1.2.840.10008.6.1.347":            CompositeFeatureFromBIRADS6017,
+	"1.2.840.10008.6.1.348":            ClockfaceLocationOrRegion6018,
+	"1.2.840.10008.6.1.349":            ClockfaceLocationOrRegionFromBIRADS6019,
+	"1.2.840.10008.6.1.350":            QuadrantLocation6020,
+	"1.2.840.10008.6.1.351":            QuadrantLocationFromBIRADS6021,
+	"1.2.840.10008.6.1.352":            Side6022,
+	"1.2.840.10008.6.1.353":            SideFromBIRADS6023,
+	"1.2.840.10008.6.1.354":            Depth6024,
+	"1.2.840.10008.6.1.355":            DepthFromBIRADS6025,
+	"1.2.840.10008.6.1.356":            MammographyAssessment6026,
+	"1.2.840.10008.6.1.357":            AssessmentFromBIRADS6027,
+	"1.2.840.10008.6.1.358":            MammographyRecommendedFollowUp6028,
+	"1.2.840.10008.6.1.359":            RecommendedFollowUpFromBIRADS6029,
+	"1.2.840.10008.6.1.360":            MammographyPathologyCode6030,
+	"1.2.840.10008.6.1.361":            BenignPathologyCodeFromBIRADS6031,
+	"1.2.840.10008.6.1.362":            HighRiskLesionPathologyCodeFromBIRADS6032,
+	"1.2.840.10008.6.1.363":            MalignantPathologyCodeFromBIRADS6033,
+	"1.2.840.10008.6.1.364":            CADOutputIntendedUse6034,
+	"1.2.840.10008.6.1.365":            CompositeFeatureRelation6035,
+	"1.2.840.10008.6.1.366":            FeatureScope6036,
+	"1.2.840.10008.6.1.367":            MammographyQuantitativeTemporalDifferenceType6037,
+	"1.2.840.10008.6.1.368":            MammographyQualitativeTemporalDifferenceType6038,
+	"1.2.840.10008.6.1.369":            NippleCharacteristic6039,
+	"1.2.840.10008.6.1.370":            NonLesionObjectType6040,
+	"1.2.840.10008.6.1.371":            MammographyImageQualityFinding6041,
+	"1.2.840.10008.6.1.372":            ResultStatus6042,
+	"1.2.840.10008.6.1.373":            MammographyCADAnalysisType6043,
+	"1.2.840.10008.6.1.374":            ImageQualityAssessmentType6044,
+	"1.2.840.10008.6.1.375":            MammographyQualityControlStandardType6045,
+	"1.2.840.10008.6.1.376":            FollowUpIntervalUnit6046,
+	"1.2.840.10008.6.1.377":            CADProcessingAndFindingSummary6047,
+	"1.2.840.10008.6.1.378":            CADOperatingPointAxisLabel6048,
+	"1.2.840.10008.6.1.379":            BreastProcedureReported6050,
+	"1.2.840.10008.6.1.380":            BreastProcedureReason6051,
+	"1.2.840.10008.6.1.381":            BreastImagingReportSectionTitle6052,
+	"1.2.840.10008.6.1.382":            BreastImagingReportElement6053,
+	"1.2.840.10008.6.1.383":            BreastImagingFinding6054,
+	"1.2.840.10008.6.1.384":            BreastClinicalFindingOrIndicatedProblem6055,
+	"1.2.840.10008.6.1.385":            AssociatedFindingForBreast6056,
+	"1.2.840.10008.6.1.386":            DuctographyFindingForBreast6057,
+	"1.2.840.10008.6.1.387":            ProcedureModifiersForBreast6058,
+	"1.2.840.10008.6.1.388":            BreastImplantType6059,
+	"1.2.840.10008.6.1.389":            BreastBiopsyTechnique6060,
+	"1.2.840.10008.6.1.390":            BreastImagingProcedureModifier6061,
+	"1.2.840.10008.6.1.391":            InterventionalProcedureComplication6062,
+	"1.2.840.10008.6.1.392":            InterventionalProcedureResult6063,
+	"1.2.840.10008.6.1.393":            UltrasoundFindingForBreast6064,
+	"1.2.840.10008.6.1.394":            InstrumentApproach6065,
+	"1.2.840.10008.6.1.395":            TargetConfirmation6066,
+	"1.2.840.10008.6.1.396":            FluidColor6067,
+	"1.2.840.10008.6.1.397":            TumorStagesFromAJCC6068,
+	"1.2.840.10008.6.1.398":            NottinghamCombinedHistologicGrade6069,
+	"1.2.840.10008.6.1.399":            BloomRichardsonHistologicGrade6070,
+	"1.2.840.10008.6.1.400":            HistologicGradingMethod6071,
+	"1.2.840.10008.6.1.401":            BreastImplantFinding6072,
+	"1.2.840.10008.6.1.402":            GynecologicalHormone6080,
+	"1.2.840.10008.6.1.403":            BreastCancerRiskFactor6081,
+	"1.2.840.10008.6.1.404":            GynecologicalProcedure6082,
+	"1.2.840.10008.6.1.405":            ProceduresForBreast6083,
+	"1.2.840.10008.6.1.406":            MammoplastyProcedure6084,
+	"1.2.840.10008.6.1.407":            TherapiesForBreast6085,
+	"1.2.840.10008.6.1.408":            MenopausalPhase6086,
+	"1.2.840.10008.6.1.409":            GeneralRiskFactor6087,
+	"1.2.840.10008.6.1.410":            OBGYNMaternalRiskFactor6088,
+	"1.2.840.10008.6.1.411":            Substance6089,
+	"1.2.840.10008.6.1.412":            RelativeUsageExposureAmount6090,
+	"1.2.840.10008.6.1.413":            RelativeFrequencyOfEventValue6091,
+	"1.2.840.10008.6.1.414":            UsageExposureQualitativeConcept6092,
+	"1.2.840.10008.6.1.415":            UsageExposureAmountQualitativeConcept6093,
+	"1.2.840.10008.6.1.416":            UsageExposureFrequencyQualitativeConcept6094,
+	"1.2.840.10008.6.1.417":            ProcedureNumericProperty6095,
+	"1.2.840.10008.6.1.418":            PregnancyStatus6096,
+	"1.2.840.10008.6.1.419":            SideOfFamily6097,
+	"1.2.840.10008.6.1.420":            ChestComponentCategory6100,
+	"1.2.840.10008.6.1.421":            ChestFindingOrFeature6101,
+	"1.2.840.10008.6.1.422":            ChestFindingOrFeatureModifier6102,
+	"1.2.840.10008.6.1.423":            AbnormalLinesFindingOrFeature6103,
+	"1.2.840.10008.6.1.424":            AbnormalOpacityFindingOrFeature6104,
+	"1.2.840.10008.6.1.425":            AbnormalLucencyFindingOrFeature6105,
+	"1.2.840.10008.6.1.426":            AbnormalTextureFindingOrFeature6106,
+	"1.2.840.10008.6.1.427":            WidthDescriptor6107,
+	"1.2.840.10008.6.1.428":            ChestAnatomicStructureAbnormalDistribution6108,
+	"1.2.840.10008.6.1.429":            RadiographicAnatomyFindingOrFeature6109,
+	"1.2.840.10008.6.1.430":            LungAnatomyFindingOrFeature6110,
+	"1.2.840.10008.6.1.431":            BronchovascularAnatomyFindingOrFeature6111,
+	"1.2.840.10008.6.1.432":            PleuraAnatomyFindingOrFeature6112,
+	"1.2.840.10008.6.1.433":            MediastinumAnatomyFindingOrFeature6113,
+	"1.2.840.10008.6.1.434":            OsseousAnatomyFindingOrFeature6114,
+	"1.2.840.10008.6.1.435":            OsseousAnatomyModifier6115,
+	"1.2.840.10008.6.1.436":            MuscularAnatomy6116,
+	"1.2.840.10008.6.1.437":            VascularAnatomy6117,
+	"1.2.840.10008.6.1.438":            SizeDescriptor6118,
+	"1.2.840.10008.6.1.439":            ChestBorderShape6119,
+	"1.2.840.10008.6.1.440":            ChestBorderDefinition6120,
+	"1.2.840.10008.6.1.441":            ChestOrientationDescriptor6121,
+	"1.2.840.10008.6.1.442":            ChestContentDescriptor6122,
+	"1.2.840.10008.6.1.443":            ChestOpacityDescriptor6123,
+	"1.2.840.10008.6.1.444":            LocationInChest6124,
+	"1.2.840.10008.6.1.445":            GeneralChestLocation6125,
+	"1.2.840.10008.6.1.446":            LocationInLung6126,
+	"1.2.840.10008.6.1.447":            SegmentLocationInLung6127,
+	"1.2.840.10008.6.1.448":            ChestDistributionDescriptor6128,
+	"1.2.840.10008.6.1.449":            ChestSiteInvolvement6129,
+	"1.2.840.10008.6.1.450":            SeverityDescriptor6130,
+	"1.2.840.10008.6.1.451":            ChestTextureDescriptor6131,
+	"1.2.840.10008.6.1.452":            ChestCalcificationDescriptor6132,
+	"1.2.840.10008.6.1.453":            ChestQuantitativeTemporalDifferenceType6133,
+	"1.2.840.10008.6.1.454":            ChestQualitativeTemporalDifferenceType6134,
+	"1.2.840.10008.6.1.455":            ImageQualityFinding6135,
+	"1.2.840.10008.6.1.456":            ChestTypesOfQualityControlStandard6136,
+	"1.2.840.10008.6.1.457":            CADAnalysisType6137,
+	"1.2.840.10008.6.1.458":            ChestNonLesionObjectType6138,
+	"1.2.840.10008.6.1.459":            NonLesionModifier6139,
+	"1.2.840.10008.6.1.460":            CalculationMethod6140,
+	"1.2.840.10008.6.1.461":            AttenuationCoefficientMeasurement6141,
+	"1.2.840.10008.6.1.462":            CalculatedValue6142,
+	"1.2.840.10008.6.1.463":            LesionResponse6143,
+	"1.2.840.10008.6.1.464":            RECISTDefinedLesionResponse6144,
+	"1.2.840.10008.6.1.465":            BaselineCategory6145,
+	"1.2.840.10008.6.1.466":            BackgroundEchotexture6151,
+	"1.2.840.10008.6.1.467":            Orientation6152,
+	"1.2.840.10008.6.1.468":            LesionBoundary6153,
+	"1.2.840.10008.6.1.469":            EchoPattern6154,
+	"1.2.840.10008.6.1.470":            PosteriorAcousticFeature6155,
+	"1.2.840.10008.6.1.471":            Vascularity6157,
+	"1.2.840.10008.6.1.472":            CorrelationToOtherFinding6158,
+	"1.2.840.10008.6.1.473":            MalignancyType6159,
+	"1.2.840.10008.6.1.474":            BreastPrimaryTumorAssessmentFromAJCC6160,
+	"1.2.840.10008.6.1.475":            PathologicalRegionalLymphNodeAssessmentForBreast6161,
+	"1.2.840.10008.6.1.476":            AssessmentOfMetastasisForBreast6162,
+	"1.2.840.10008.6.1.477":            MenstrualCyclePhase6163,
+	"1.2.840.10008.6.1.478":            TimeInterval6164,
+	"1.2.840.10008.6.1.479":            BreastLinearMeasurement6165,
+	"1.2.840.10008.6.1.480":            CADGeometrySecondaryGraphicalRepresentation6166,
+	"1.2.840.10008.6.1.481":            DiagnosticImagingReportDocumentTitle7000,
+	"1.2.840.10008.6.1.482":            DiagnosticImagingReportHeading7001,
+	"1.2.840.10008.6.1.483":            DiagnosticImagingReportElement7002,
+	"1.2.840.10008.6.1.484":            DiagnosticImagingReportPurposeOfReference7003,
+	"1.2.840.10008.6.1.485":            WaveformPurposeOfReference7004,
+	"1.2.840.10008.6.1.486":            ContributingEquipmentPurposeOfReference7005,
+	"1.2.840.10008.6.1.487":            SRDocumentPurposeOfReference7006,
+	"1.2.840.10008.6.1.488":            SignaturePurpose7007,
+	"1.2.840.10008.6.1.489":            MediaImport7008,
+	"1.2.840.10008.6.1.490":            KeyObjectSelectionDocumentTitle7010,
+	"1.2.840.10008.6.1.491":            RejectedForQualityReason7011,
+	"1.2.840.10008.6.1.492":            BestInSet7012,
+	"1.2.840.10008.6.1.493":            DocumentTitle7020,
+	"1.2.840.10008.6.1.494":            RCSRegistrationMethodType7100,
+	"1.2.840.10008.6.1.495":            BrainAtlasFiducial7101,
+	"1.2.840.10008.6.1.496":            SegmentationPropertyCategory7150,
+	"1.2.840.10008.6.1.497":            SegmentationPropertyType7151,
+	"1.2.840.10008.6.1.498":            CardiacStructureSegmentationType7152,
+	"1.2.840.10008.6.1.499":            CNSSegmentationType7153,
+	"1.2.840.10008.6.1.500":            AbdominalSegmentationType7154,
+	"1.2.840.10008.6.1.501":            ThoracicSegmentationType7155,
+	"1.2.840.10008.6.1.502":            VascularSegmentationType7156,
+	"1.2.840.10008.6.1.503":            DeviceSegmentationType7157,
+	"1.2.840.10008.6.1.504":            ArtifactSegmentationType7158,
+	"1.2.840.10008.6.1.505":            LesionSegmentationType7159,
+	"1.2.840.10008.6.1.506":            PelvicOrganSegmentationType7160,
+	"1.2.840.10008.6.1.507":            PhysiologySegmentationType7161,
+	"1.2.840.10008.6.1.508":            ReferencedImagePurposeOfReference7201,
+	"1.2.840.10008.6.1.509":            SourceImagePurposeOfReference7202,
+	"1.2.840.10008.6.1.510":            ImageDerivation7203,
+	"1.2.840.10008.6.1.511":            PurposeOfReferenceToAlternateRepresentation7205,
+	"1.2.840.10008.6.1.512":            RelatedSeriesPurposeOfReference7210,
+	"1.2.840.10008.6.1.513":            MultiFrameSubsetType7250,
+	"1.2.840.10008.6.1.514":            PersonRole7450,
+	"1.2.840.10008.6.1.515":            FamilyMember7451,
+	"1.2.840.10008.6.1.516":            OrganizationalRole7452,
+	"1.2.840.10008.6.1.517":            PerformingRole7453,
+	"1.2.840.10008.6.1.518":            AnimalTaxonomicRankValue7454,
+	"1.2.840.10008.6.1.519":            Sex7455,
+	"1.2.840.10008.6.1.520":            AgeUnit7456,
+	"1.2.840.10008.6.1.521":            LinearMeasurementUnit7460,
+	"1.2.840.10008.6.1.522":            AreaMeasurementUnit7461,
+	"1.2.840.10008.6.1.523":            VolumeMeasurementUnit7462,
+	"1.2.840.10008.6.1.524":            LinearMeasurement7470,
+	"1.2.840.10008.6.1.525":            AreaMeasurement7471,
+	"1.2.840.10008.6.1.526":            VolumeMeasurement7472,
+	"1.2.840.10008.6.1.527":            GeneralAreaCalculationMethod7473,
+	"1.2.840.10008.6.1.528":            GeneralVolumeCalculationMethod7474,
+	"1.2.840.10008.6.1.529":            Breed7480,
+	"1.2.840.10008.6.1.530":            BreedRegistry7481,
+	"1.2.840.10008.6.1.531":            WorkitemDefinition9231,
+	"1.2.840.10008.6.1.532":            NonDICOMOutputTypes9232RETIRED,
+	"1.2.840.10008.6.1.533":            ProcedureDiscontinuationReason9300,
+	"1.2.840.10008.6.1.534":            ScopeOfAccumulation10000,
+	"1.2.840.10008.6.1.535":            UIDType10001,
+	"1.2.840.10008.6.1.536":            IrradiationEventType10002,
+	"1.2.840.10008.6.1.537":            EquipmentPlaneIdentification10003,
+	"1.2.840.10008.6.1.538":            FluoroMode10004,
+	"1.2.840.10008.6.1.539":            XRayFilterMaterial10006,
+	"1.2.840.10008.6.1.540":            XRayFilterType10007,
+	"1.2.840.10008.6.1.541":            DoseRelatedDistanceMeasurement10008,
+	"1.2.840.10008.6.1.542":            MeasuredCalculated10009,
+	"1.2.840.10008.6.1.543":            DoseMeasurementDevice10010,
+	"1.2.840.10008.6.1.544":            EffectiveDoseEvaluationMethod10011,
+	"1.2.840.10008.6.1.545":            CTAcquisitionType10013,
+	"1.2.840.10008.6.1.546":            CTIVContrastImagingTechnique10014,
+	"1.2.840.10008.6.1.547":            CTDoseReferenceAuthority10015,
+	"1.2.840.10008.6.1.548":            AnodeTargetMaterial10016,
+	"1.2.840.10008.6.1.549":            XRayGrid10017,
+	"1.2.840.10008.6.1.550":            UltrasoundProtocolType12001,
+	"1.2.840.10008.6.1.551":            UltrasoundProtocolStageType12002,
+	"1.2.840.10008.6.1.552":            OBGYNDate12003,
+	"1.2.840.10008.6.1.553":            FetalBiometryRatio12004,
+	"1.2.840.10008.6.1.554":            FetalBiometryMeasurement12005,
+	"1.2.840.10008.6.1.555":            FetalLongBonesBiometryMeasurement12006,
+	"1.2.840.10008.6.1.556":            FetalCraniumMeasurement12007,
+	"1.2.840.10008.6.1.557":            OBGYNAmnioticSacMeasurement12008,
+	"1.2.840.10008.6.1.558":            EarlyGestationBiometryMeasurement12009,
+	"1.2.840.10008.6.1.559":            UltrasoundPelvisAndUterusMeasurement12011,
+	"1.2.840.10008.6.1.560":            OBEquationTable12012,
+	"1.2.840.10008.6.1.561":            GestationalAgeEquationTable12013,
+	"1.2.840.10008.6.1.562":            OBFetalBodyWeightEquationTable12014,
+	"1.2.840.10008.6.1.563":            FetalGrowthEquationTable12015,
+	"1.2.840.10008.6.1.564":            EstimatedFetalWeightPercentileEquationTable12016,
+	"1.2.840.10008.6.1.565":            GrowthDistributionRank12017,
+	"1.2.840.10008.6.1.566":            OBGYNSummary12018,
+	"1.2.840.10008.6.1.567":            OBGYNFetusSummary12019,
+	"1.2.840.10008.6.1.568":            VascularSummary12101,
+	"1.2.840.10008.6.1.569":            TemporalPeriodRelatingToProcedureOrTherapy12102,
+	"1.2.840.10008.6.1.570":            VascularUltrasoundAnatomicLocation12103,
+	"1.2.840.10008.6.1.571":            ExtracranialArtery12104,
+	"1.2.840.10008.6.1.572":            IntracranialCerebralVessel12105,
+	"1.2.840.10008.6.1.573":            IntracranialCerebralVesselUnilateral12106,
+	"1.2.840.10008.6.1.574":            UpperExtremityArtery12107,
+	"1.2.840.10008.6.1.575":            UpperExtremityVein12108,
+	"1.2.840.10008.6.1.576":            LowerExtremityArtery12109,
+	"1.2.840.10008.6.1.577":            LowerExtremityVein12110,
+	"1.2.840.10008.6.1.578":            AbdominopelvicArteryPaired12111,
+	"1.2.840.10008.6.1.579":            AbdominopelvicArteryUnpaired12112,
+	"1.2.840.10008.6.1.580":            AbdominopelvicVeinPaired12113,
+	"1.2.840.10008.6.1.581":            AbdominopelvicVeinUnpaired12114,
+	"1.2.840.10008.6.1.582":            RenalVessel12115,
+	"1.2.840.10008.6.1.583":            VesselSegmentModifier12116,
+	"1.2.840.10008.6.1.584":            VesselBranchModifier12117,
+	"1.2.840.10008.6.1.585":            VascularUltrasoundProperty12119,
+	"1.2.840.10008.6.1.586":            UltrasoundBloodVelocityMeasurement12120,
+	"1.2.840.10008.6.1.587":            VascularIndexRatio12121,
+	"1.2.840.10008.6.1.588":            OtherVascularProperty12122,
+	"1.2.840.10008.6.1.589":            CarotidRatio12123,
+	"1.2.840.10008.6.1.590":            RenalRatio12124,
+	"1.2.840.10008.6.1.591":            PelvicVasculatureAnatomicalLocation12140,
+	"1.2.840.10008.6.1.592":            FetalVasculatureAnatomicalLocation12141,
+	"1.2.840.10008.6.1.593":            EchocardiographyLeftVentricleMeasurement12200,
+	"1.2.840.10008.6.1.594":            LeftVentricleLinearMeasurement12201,
+	"1.2.840.10008.6.1.595":            LeftVentricleVolumeMeasurement12202,
+	"1.2.840.10008.6.1.596":            LeftVentricleOtherMeasurement12203,
+	"1.2.840.10008.6.1.597":            EchocardiographyRightVentricleMeasurement12204,
+	"1.2.840.10008.6.1.598":            EchocardiographyLeftAtriumMeasurement12205,
+	"1.2.840.10008.6.1.599":            EchocardiographyRightAtriumMeasurement12206,
+	"1.2.840.10008.6.1.600":            EchocardiographyMitralValveMeasurement12207,
+	"1.2.840.10008.6.1.601":            EchocardiographyTricuspidValveMeasurement12208,
+	"1.2.840.10008.6.1.602":            EchocardiographyPulmonicValveMeasurement12209,
+	"1.2.840.10008.6.1.603":            EchocardiographyPulmonaryArteryMeasurement12210,
+	"1.2.840.10008.6.1.604":            EchocardiographyAorticValveMeasurement12211,
+	"1.2.840.10008.6.1.605":            EchocardiographyAortaMeasurement12212,
+	"1.2.840.10008.6.1.606":            EchocardiographyPulmonaryVeinMeasurement12214,
+	"1.2.840.10008.6.1.607":            EchocardiographyVenaCavaMeasurement12215,
+	"1.2.840.10008.6.1.608":            EchocardiographyHepaticVeinMeasurement12216,
+	"1.2.840.10008.6.1.609":            EchocardiographyCardiacShuntMeasurement12217,
+	"1.2.840.10008.6.1.610":            EchocardiographyCongenitalAnomalyMeasurement12218,
+	"1.2.840.10008.6.1.611":            PulmonaryVeinModifier12219,
+	"1.2.840.10008.6.1.612":            EchocardiographyCommonMeasurement12220,
+	"1.2.840.10008.6.1.613":            FlowDirection12221,
+	"1.2.840.10008.6.1.614":            OrificeFlowProperty12222,
+	"1.2.840.10008.6.1.615":            EchocardiographyStrokeVolumeOrigin12223,
+	"1.2.840.10008.6.1.616":            UltrasoundImageMode12224,
+	"1.2.840.10008.6.1.617":            EchocardiographyImageView12226,
+	"1.2.840.10008.6.1.618":            EchocardiographyMeasurementMethod12227,
+	"1.2.840.10008.6.1.619":            EchocardiographyVolumeMethod12228,
+	"1.2.840.10008.6.1.620":            EchocardiographyAreaMethod12229,
+	"1.2.840.10008.6.1.621":            GradientMethod12230,
+	"1.2.840.10008.6.1.622":            VolumeFlowMethod12231,
+	"1.2.840.10008.6.1.623":            MyocardiumMassMethod12232,
+	"1.2.840.10008.6.1.624":            CardiacPhase12233,
+	"1.2.840.10008.6.1.625":            RespirationState12234,
+	"1.2.840.10008.6.1.626":            MitralValveAnatomicSite12235,
+	"1.2.840.10008.6.1.627":            EchocardiographyAnatomicSite12236,
+	"1.2.840.10008.6.1.628":            EchocardiographyAnatomicSiteModifier12237,
+	"1.2.840.10008.6.1.629":            WallMotionScoringScheme12238,
+	"1.2.840.10008.6.1.630":            CardiacOutputProperty12239,
+	"1.2.840.10008.6.1.631":            LeftVentricleAreaMeasurement12240,
+	"1.2.840.10008.6.1.632":            TricuspidValveFindingSite12241,
+	"1.2.840.10008.6.1.633":            AorticValveFindingSite12242,
+	"1.2.840.10008.6.1.634":            LeftVentricleFindingSite12243,
+	"1.2.840.10008.6.1.635":            CongenitalFindingSite12244,
+	"1.2.840.10008.6.1.636":            SurfaceProcessingAlgorithmFamily7162,
+	"1.2.840.10008.6.1.637":            StressTestProcedurePhase3207,
+	"1.2.840.10008.6.1.638":            Stage3778,
+	"1.2.840.10008.6.1.735":            SMLSizeDescriptor252,
+	"1.2.840.10008.6.1.736":            MajorCoronaryArtery3016,
+	"1.2.840.10008.6.1.737":            RadioactivityUnit3083,
+	"1.2.840.10008.6.1.738":            RestStressState3102,
+	"1.2.840.10008.6.1.739":            PETCardiologyProtocol3106,
+	"1.2.840.10008.6.1.740":            PETCardiologyRadiopharmaceutical3107,
+	"1.2.840.10008.6.1.741":            NMPETProcedure3108,
+	"1.2.840.10008.6.1.742":            NuclearCardiologyProtocol3110,
+	"1.2.840.10008.6.1.743":            NuclearCardiologyRadiopharmaceutical3111,
+	"1.2.840.10008.6.1.744":            AttenuationCorrection3112,
+	"1.2.840.10008.6.1.745":            PerfusionDefectType3113,
+	"1.2.840.10008.6.1.746":            StudyQuality3114,
+	"1.2.840.10008.6.1.747":            StressImagingQualityIssue3115,
+	"1.2.840.10008.6.1.748":            NMExtracardiacFinding3116,
+	"1.2.840.10008.6.1.749":            AttenuationCorrectionMethod3117,
+	"1.2.840.10008.6.1.750":            LevelOfRisk3118,
+	"1.2.840.10008.6.1.751":            LVFunction3119,
+	"1.2.840.10008.6.1.752":            PerfusionFinding3120,
+	"1.2.840.10008.6.1.753":            PerfusionMorphology3121,
+	"1.2.840.10008.6.1.754":            VentricularEnlargement3122,
+	"1.2.840.10008.6.1.755":            StressTestProcedure3200,
+	"1.2.840.10008.6.1.756":            IndicationsForStressTest3201,
+	"1.2.840.10008.6.1.757":            ChestPain3202,
+	"1.2.840.10008.6.1.758":            ExerciserDevice3203,
+	"1.2.840.10008.6.1.759":            StressAgent3204,
+	"1.2.840.10008.6.1.760":            IndicationsForPharmacologicalStressTest3205,
+	"1.2.840.10008.6.1.761":            NonInvasiveCardiacImagingProcedure3206,
+	"1.2.840.10008.6.1.763":            ExerciseECGSummaryCode3208,
+	"1.2.840.10008.6.1.764":            StressImagingSummaryCode3209,
+	"1.2.840.10008.6.1.765":            SpeedOfResponse3210,
+	"1.2.840.10008.6.1.766":            BPResponse3211,
+	"1.2.840.10008.6.1.767":            TreadmillSpeed3212,
+	"1.2.840.10008.6.1.768":            StressHemodynamicFinding3213,
+	"1.2.840.10008.6.1.769":            PerfusionFindingMethod3215,
+	"1.2.840.10008.6.1.770":            ComparisonFinding3217,
+	"1.2.840.10008.6.1.771":            StressSymptom3220,
+	"1.2.840.10008.6.1.772":            StressTestTerminationReason3221,
+	"1.2.840.10008.6.1.773":            QTcMeasurement3227,
+	"1.2.840.10008.6.1.774":            ECGTimingMeasurement3228,
+	"1.2.840.10008.6.1.775":            ECGAxisMeasurement3229,
+	"1.2.840.10008.6.1.776":            ECGFinding3230,
+	"1.2.840.10008.6.1.777":            STSegmentFinding3231,
+	"1.2.840.10008.6.1.778":            STSegmentLocation3232,
+	"1.2.840.10008.6.1.779":            STSegmentMorphology3233,
+	"1.2.840.10008.6.1.780":            EctopicBeatMorphology3234,
+	"1.2.840.10008.6.1.781":            PerfusionComparisonFinding3235,
+	"1.2.840.10008.6.1.782":            ToleranceComparisonFinding3236,
+	"1.2.840.10008.6.1.783":            WallMotionComparisonFinding3237,
+	"1.2.840.10008.6.1.784":            StressScoringScale3238,
+	"1.2.840.10008.6.1.785":            PerceivedExertionScale3239,
+	"1.2.840.10008.6.1.786":            VentricleIdentification3463,
+	"1.2.840.10008.6.1.787":            ColonOverallAssessment6200,
+	"1.2.840.10008.6.1.788":            ColonFindingOrFeature6201,
+	"1.2.840.10008.6.1.789":            ColonFindingOrFeatureModifier6202,
+	"1.2.840.10008.6.1.790":            ColonNonLesionObjectType6203,
+	"1.2.840.10008.6.1.791":            AnatomicNonColonFinding6204,
+	"1.2.840.10008.6.1.792":            ClockfaceLocationForColon6205,
+	"1.2.840.10008.6.1.793":            RecumbentPatientOrientationForColon6206,
+	"1.2.840.10008.6.1.794":            ColonQuantitativeTemporalDifferenceType6207,
+	"1.2.840.10008.6.1.795":            ColonTypesOfQualityControlStandard6208,
+	"1.2.840.10008.6.1.796":            ColonMorphologyDescriptor6209,
+	"1.2.840.10008.6.1.797":            LocationInIntestinalTract6210,
+	"1.2.840.10008.6.1.798":            ColonCADMaterialDescription6211,
+	"1.2.840.10008.6.1.799":            CalculatedValueForColonFinding6212,
+	"1.2.840.10008.6.1.800":            OphthalmicHorizontalDirection4214,
+	"1.2.840.10008.6.1.801":            OphthalmicVerticalDirection4215,
+	"1.2.840.10008.6.1.802":            OphthalmicVisualAcuityType4216,
+	"1.2.840.10008.6.1.803":            ArterialPulseWaveform3004,
+	"1.2.840.10008.6.1.804":            RespirationWaveform3005,
+	"1.2.840.10008.6.1.805":            UltrasoundContrastBolusAgent12030,
+	"1.2.840.10008.6.1.806":            ProtocolIntervalEvent12031,
+	"1.2.840.10008.6.1.807":            TransducerScanPattern12032,
+	"1.2.840.10008.6.1.808":            UltrasoundTransducerGeometry12033,
+	"1.2.840.10008.6.1.809":            UltrasoundTransducerBeamSteering12034,
+	"1.2.840.10008.6.1.810":            UltrasoundTransducerApplication12035,
+	"1.2.840.10008.6.1.811":            InstanceAvailabilityStatus50,
+	"1.2.840.10008.6.1.812":            ModalityPPSDiscontinuationReason9301,
+	"1.2.840.10008.6.1.813":            MediaImportPPSDiscontinuationReason9302,
+	"1.2.840.10008.6.1.814":            DXAnatomyImagedForAnimal7482,
+	"1.2.840.10008.6.1.815":            CommonAnatomicRegionsForAnimal7483,
+	"1.2.840.10008.6.1.816":            DXViewForAnimal7484,
+	"1.2.840.10008.6.1.817":            InstitutionalDepartmentUnitService7030,
+	"1.2.840.10008.6.1.818":            PurposeOfReferenceToPredecessorReport7009,
+	"1.2.840.10008.6.1.819":            VisualFixationQualityDuringAcquisition4220,
+	"1.2.840.10008.6.1.820":            VisualFixationQualityProblem4221,
+	"1.2.840.10008.6.1.821":            OphthalmicMacularGridProblem4222,
+	"1.2.840.10008.6.1.822":            Organization5002,
+	"1.2.840.10008.6.1.823":            MixedBreed7486,
+	"1.2.840.10008.6.1.824":            BroselowLutenPediatricSizeCategory7040,
+	"1.2.840.10008.6.1.825":            CMDCTECCCalciumScoringPatientSizeCategory7042,
+	"1.2.840.10008.6.1.826":            CardiacUltrasoundReportTitle12245,
+	"1.2.840.10008.6.1.827":            CardiacUltrasoundIndicationForStudy12246,
+	"1.2.840.10008.6.1.828":            PediatricFetalAndCongenitalCardiacSurgicalIntervention12247,
+	"1.2.840.10008.6.1.829":            CardiacUltrasoundSummaryCode12248,
+	"1.2.840.10008.6.1.830":            CardiacUltrasoundFetalSummaryCode12249,
+	"1.2.840.10008.6.1.831":            CardiacUltrasoundCommonLinearMeasurement12250,
+	"1.2.840.10008.6.1.832":            CardiacUltrasoundLinearValveMeasurement12251,
+	"1.2.840.10008.6.1.833":            CardiacUltrasoundCardiacFunction12252,
+	"1.2.840.10008.6.1.834":            CardiacUltrasoundAreaMeasurement12253,
+	"1.2.840.10008.6.1.835":            CardiacUltrasoundHemodynamicMeasurement12254,
+	"1.2.840.10008.6.1.836":            CardiacUltrasoundMyocardiumMeasurement12255,
+	"1.2.840.10008.6.1.838":            CardiacUltrasoundLeftVentricleMeasurement12257,
+	"1.2.840.10008.6.1.839":            CardiacUltrasoundRightVentricleMeasurement12258,
+	"1.2.840.10008.6.1.840":            CardiacUltrasoundVentriclesMeasurement12259,
+	"1.2.840.10008.6.1.841":            CardiacUltrasoundPulmonaryArteryMeasurement12260,
+	"1.2.840.10008.6.1.842":            CardiacUltrasoundPulmonaryVein12261,
+	"1.2.840.10008.6.1.843":            CardiacUltrasoundPulmonaryValveMeasurement12262,
+	"1.2.840.10008.6.1.844":            CardiacUltrasoundVenousReturnPulmonaryMeasurement12263,
+	"1.2.840.10008.6.1.845":            CardiacUltrasoundVenousReturnSystemicMeasurement12264,
+	"1.2.840.10008.6.1.846":            CardiacUltrasoundAtriaAndAtrialSeptumMeasurement12265,
+	"1.2.840.10008.6.1.847":            CardiacUltrasoundMitralValveMeasurement12266,
+	"1.2.840.10008.6.1.848":            CardiacUltrasoundTricuspidValveMeasurement12267,
+	"1.2.840.10008.6.1.849":            CardiacUltrasoundAtrioventricularValveMeasurement12268,
+	"1.2.840.10008.6.1.850":            CardiacUltrasoundInterventricularSeptumMeasurement12269,
+	"1.2.840.10008.6.1.851":            CardiacUltrasoundAorticValveMeasurement12270,
+	"1.2.840.10008.6.1.852":            CardiacUltrasoundOutflowTractMeasurement12271,
+	"1.2.840.10008.6.1.853":            CardiacUltrasoundSemilunarValveAnnulateAndSinusMeasurement12272,
+	"1.2.840.10008.6.1.854":            CardiacUltrasoundAorticSinotubularJunctionMeasurement12273,
+	"1.2.840.10008.6.1.855":            CardiacUltrasoundAortaMeasurement12274,
+	"1.2.840.10008.6.1.856":            CardiacUltrasoundCoronaryArteryMeasurement12275,
+	"1.2.840.10008.6.1.857":            CardiacUltrasoundAortoPulmonaryConnectionMeasurement12276,
+	"1.2.840.10008.6.1.858":            CardiacUltrasoundPericardiumAndPleuraMeasurement12277,
+	"1.2.840.10008.6.1.859":            CardiacUltrasoundFetalGeneralMeasurement12279,
+	"1.2.840.10008.6.1.860":            CardiacUltrasoundTargetSite12280,
+	"1.2.840.10008.6.1.861":            CardiacUltrasoundTargetSiteModifier12281,
+	"1.2.840.10008.6.1.862":            CardiacUltrasoundVenousReturnSystemicFindingSite12282,
+	"1.2.840.10008.6.1.863":            CardiacUltrasoundVenousReturnPulmonaryFindingSite12283,
+	"1.2.840.10008.6.1.864":            CardiacUltrasoundAtriaAndAtrialSeptumFindingSite12284,
+	"1.2.840.10008.6.1.865":            CardiacUltrasoundAtrioventricularValveFindingSite12285,
+	"1.2.840.10008.6.1.866":            CardiacUltrasoundInterventricularSeptumFindingSite12286,
+	"1.2.840.10008.6.1.867":            CardiacUltrasoundVentricleFindingSite12287,
+	"1.2.840.10008.6.1.868":            CardiacUltrasoundOutflowTractFindingSite12288,
+	"1.2.840.10008.6.1.869":            CardiacUltrasoundSemilunarValveAnnulusAndSinusFindingSite12289,
+	"1.2.840.10008.6.1.870":            CardiacUltrasoundPulmonaryArteryFindingSite12290,
+	"1.2.840.10008.6.1.871":            CardiacUltrasoundAortaFindingSite12291,
+	"1.2.840.10008.6.1.872":            CardiacUltrasoundCoronaryArteryFindingSite12292,
+	"1.2.840.10008.6.1.873":            CardiacUltrasoundAortopulmonaryConnectionFindingSite12293,
+	"1.2.840.10008.6.1.874":            CardiacUltrasoundPericardiumAndPleuraFindingSite12294,
+	"1.2.840.10008.6.1.876":            OphthalmicUltrasoundAxialMeasurementsType4230,
+	"1.2.840.10008.6.1.877":            LensStatus4231,
+	"1.2.840.10008.6.1.878":            VitreousStatus4232,
+	"1.2.840.10008.6.1.879":            OphthalmicAxialLengthMeasurementsSegmentName4233,
+	"1.2.840.10008.6.1.880":            RefractiveSurgeryType4234,
+	"1.2.840.10008.6.1.881":            KeratometryDescriptor4235,
+	"1.2.840.10008.6.1.882":            IOLCalculationFormula4236,
+	"1.2.840.10008.6.1.883":            LensConstantType4237,
+	"1.2.840.10008.6.1.884":            RefractiveErrorType4238,
+	"1.2.840.10008.6.1.885":            AnteriorChamberDepthDefinition4239,
+	"1.2.840.10008.6.1.886":            OphthalmicMeasurementOrCalculationDataSource4240,
+	"1.2.840.10008.6.1.887":            OphthalmicAxialLengthSelectionMethod4241,
+	"1.2.840.10008.6.1.889":            OphthalmicQualityMetricType4243,
+	"1.2.840.10008.6.1.890":            OphthalmicAgentConcentrationUnit4244,
+	"1.2.840.10008.6.1.891":            FunctionalConditionPresentDuringAcquisition91,
+	"1.2.840.10008.6.1.892":            JointPositionDuringAcquisition92,
+	"1.2.840.10008.6.1.893":            JointPositioningMethod93,
+	"1.2.840.10008.6.1.894":            PhysicalForceAppliedDuringAcquisition94,
+	"1.2.840.10008.6.1.895":            ECGControlNumericVariable3690,
+	"1.2.840.10008.6.1.896":            ECGControlTextVariable3691,
+	"1.2.840.10008.6.1.897":            WholeSlideMicroscopyImageReferencedImagePurposeOfReference8120,
+	"1.2.840.10008.6.1.898":            MicroscopyLensType8121,
+	"1.2.840.10008.6.1.899":            MicroscopyIlluminatorAndSensorColor8122,
+	"1.2.840.10008.6.1.900":            MicroscopyIlluminationMethod8123,
+	"1.2.840.10008.6.1.901":            MicroscopyFilter8124,
+	"1.2.840.10008.6.1.902":            MicroscopyIlluminatorType8125,
+	"1.2.840.10008.6.1.903":            AuditEventID400,
+	"1.2.840.10008.6.1.904":            AuditEventTypeCode401,
+	"1.2.840.10008.6.1.905":            AuditActiveParticipantRoleIDCode402,
+	"1.2.840.10008.6.1.906":            SecurityAlertTypeCode403,
+	"1.2.840.10008.6.1.907":            AuditParticipantObjectIDTypeCode404,
+	"1.2.840.10008.6.1.908":            MediaTypeCode405,
+	"1.2.840.10008.6.1.909":            VisualFieldStaticPerimetryTestPattern4250,
+	"1.2.840.10008.6.1.910":            VisualFieldStaticPerimetryTestStrategy4251,
+	"1.2.840.10008.6.1.911":            VisualFieldStaticPerimetryScreeningTestMode4252,
+	"1.2.840.10008.6.1.912":            VisualFieldStaticPerimetryFixationStrategy4253,
+	"1.2.840.10008.6.1.913":            VisualFieldStaticPerimetryTestAnalysisResult4254,
+	"1.2.840.10008.6.1.914":            VisualFieldIlluminationColor4255,
+	"1.2.840.10008.6.1.915":            VisualFieldProcedureModifier4256,
+	"1.2.840.10008.6.1.916":            VisualFieldGlobalIndexName4257,
+	"1.2.840.10008.6.1.917":            AbstractMultiDimensionalImageModelComponentSemantic7180,
+	"1.2.840.10008.6.1.918":            AbstractMultiDimensionalImageModelComponentUnit7181,
+	"1.2.840.10008.6.1.919":            AbstractMultiDimensionalImageModelDimensionSemantic7182,
+	"1.2.840.10008.6.1.920":            AbstractMultiDimensionalImageModelDimensionUnit7183,
+	"1.2.840.10008.6.1.921":            AbstractMultiDimensionalImageModelAxisDirection7184,
+	"1.2.840.10008.6.1.922":            AbstractMultiDimensionalImageModelAxisOrientation7185,
+	"1.2.840.10008.6.1.923":            AbstractMultiDimensionalImageModelQualitativeDimensionSampleSemantic7186,
+	"1.2.840.10008.6.1.924":            PlanningMethod7320,
+	"1.2.840.10008.6.1.925":            DeIdentificationMethod7050,
+	"1.2.840.10008.6.1.926":            MeasurementOrientation12118,
+	"1.2.840.10008.6.1.927":            ECGGlobalWaveformDuration3689,
+	"1.2.840.10008.6.1.930":            ICD3692,
+	"1.2.840.10008.6.1.931":            RadiotherapyGeneralWorkitemDefinition9241,
+	"1.2.840.10008.6.1.932":            RadiotherapyAcquisitionWorkitemDefinition9242,
+	"1.2.840.10008.6.1.933":            RadiotherapyRegistrationWorkitemDefinition9243,
+	"1.2.840.10008.6.1.934":            ContrastBolusSubstance3850,
+	"1.2.840.10008.6.1.935":            LabelType10022,
+	"1.2.840.10008.6.1.936":            OphthalmicMappingUnitForRealWorldValueMapping4260,
+	"1.2.840.10008.6.1.937":            OphthalmicMappingAcquisitionMethod4261,
+	"1.2.840.10008.6.1.938":            RetinalThicknessDefinition4262,
+	"1.2.840.10008.6.1.939":            OphthalmicThicknessMapValueType4263,
+	"1.2.840.10008.6.1.940":            OphthalmicMapPurposeOfReference4264,
+	"1.2.840.10008.6.1.941":            OphthalmicThicknessDeviationCategory4265,
+	"1.2.840.10008.6.1.942":            OphthalmicAnatomicStructureReferencePoint4266,
+	"1.2.840.10008.6.1.943":            CardiacSynchronizationTechnique3104,
+	"1.2.840.10008.6.1.944":            StainingProtocol8130,
+	"1.2.840.10008.6.1.947":            SizeSpecificDoseEstimationMethodForCT10023,
+	"1.2.840.10008.6.1.948":            PathologyImagingProtocol8131,
+	"1.2.840.10008.6.1.949":            MagnificationSelection8132,
+	"1.2.840.10008.6.1.950":            TissueSelection8133,
+	"1.2.840.10008.6.1.951":            GeneralRegionOfInterestMeasurementModifier7464,
+	"1.2.840.10008.6.1.952":            MeasurementDerivedFromMultipleROIMeasurements7465,
+	"1.2.840.10008.6.1.953":            SurfaceScanAcquisitionType8201,
+	"1.2.840.10008.6.1.954":            SurfaceScanModeType8202,
+	"1.2.840.10008.6.1.956":            SurfaceScanRegistrationMethodType8203,
+	"1.2.840.10008.6.1.957":            BasicCardiacView27,
+	"1.2.840.10008.6.1.958":            CTReconstructionAlgorithm10033,
+	"1.2.840.10008.6.1.959":            DetectorType10030,
+	"1.2.840.10008.6.1.960":            CRDRMechanicalConfiguration10031,
+	"1.2.840.10008.6.1.961":            ProjectionXRayAcquisitionDeviceType10032,
+	"1.2.840.10008.6.1.962":            AbstractSegmentationType7165,
+	"1.2.840.10008.6.1.963":            CommonTissueSegmentationType7166,
+	"1.2.840.10008.6.1.964":            PeripheralNervousSystemSegmentationType7167,
+	"1.2.840.10008.6.1.965":            CornealTopographyMappingUnitForRealWorldValueMapping4267,
+	"1.2.840.10008.6.1.966":            CornealTopographyMapValueType4268,
+	"1.2.840.10008.6.1.967":            BrainStructureForVolumetricMeasurement7140,
+	"1.2.840.10008.6.1.968":            RTDoseDerivation7220,
+	"1.2.840.10008.6.1.969":            RTDosePurposeOfReference7221,
+	"1.2.840.10008.6.1.970":            SpectroscopyPurposeOfReference7215,
+	"1.2.840.10008.6.1.971":            ScheduledProcessingParameterConceptCodesForRTTreatment9250,
+	"1.2.840.10008.6.1.972":            RadiopharmaceuticalOrganDoseReferenceAuthority10040,
+	"1.2.840.10008.6.1.973":            SourceOfRadioisotopeActivityInformation10041,
+	"1.2.840.10008.6.1.975":            IntravenousExtravasationSymptom10043,
+	"1.2.840.10008.6.1.976":            RadiosensitiveOrgan10044,
+	"1.2.840.10008.6.1.977":            RadiopharmaceuticalPatientState10045,
+	"1.2.840.10008.6.1.978":            GFRMeasurement10046,
+	"1.2.840.10008.6.1.979":            GFRMeasurementMethod10047,
+	"1.2.840.10008.6.1.980":            VisualEvaluationMethod8300,
+	"1.2.840.10008.6.1.981":            TestPatternCode8301,
+	"1.2.840.10008.6.1.982":            MeasurementPatternCode8302,
+	"1.2.840.10008.6.1.983":            DisplayDeviceType8303,
+	"1.2.840.10008.6.1.984":            SUVUnit85,
+	"1.2.840.10008.6.1.985":            T1MeasurementMethod4100,
+	"1.2.840.10008.6.1.986":            TracerKineticModel4101,
+	"1.2.840.10008.6.1.987":            PerfusionMeasurementMethod4102,
+	"1.2.840.10008.6.1.988":            ArterialInputFunctionMeasurementMethod4103,
+	"1.2.840.10008.6.1.989":            BolusArrivalTimeDerivationMethod4104,
+	"1.2.840.10008.6.1.990":            PerfusionAnalysisMethod4105,
+	"1.2.840.10008.6.1.991":            QuantitativeMethodUsedForPerfusionAndTracerKineticModel4106,
+	"1.2.840.10008.6.1.992":            TracerKineticModelParameter4107,
+	"1.2.840.10008.6.1.993":            PerfusionModelParameter4108,
+	"1.2.840.10008.6.1.994":            ModelIndependentDynamicContrastAnalysisParameter4109,
+	"1.2.840.10008.6.1.995":            TracerKineticModelingCovariate4110,
+	"1.2.840.10008.6.1.996":            ContrastCharacteristic4111,
+	"1.2.840.10008.6.1.997":            MeasurementReportDocumentTitle7021,
+	"1.2.840.10008.6.1.998":            QuantitativeDiagnosticImagingProcedure100,
+	"1.2.840.10008.6.1.999":            PETRegionOfInterestMeasurement7466,
+	"1.2.840.10008.6.1.1000":           GrayLevelCoOccurrenceMatrixMeasurement7467,
+	"1.2.840.10008.6.1.1001":           TextureMeasurement7468,
+	"1.2.840.10008.6.1.1002":           TimePointType6146,
+	"1.2.840.10008.6.1.1003":           GenericIntensityAndSizeMeasurement7469,
+	"1.2.840.10008.6.1.1004":           ResponseCriteria6147,
+	"1.2.840.10008.6.1.1005":           FetalBiometryAnatomicSite12020,
+	"1.2.840.10008.6.1.1006":           FetalLongBoneAnatomicSite12021,
+	"1.2.840.10008.6.1.1007":           FetalCraniumAnatomicSite12022,
+	"1.2.840.10008.6.1.1008":           PelvisAndUterusAnatomicSite12023,
+	"1.2.840.10008.6.1.1009":           ParametricMapDerivationImagePurposeOfReference7222,
+	"1.2.840.10008.6.1.1010":           PhysicalQuantityDescriptor9000,
+	"1.2.840.10008.6.1.1011":           LymphNodeAnatomicSite7600,
+	"1.2.840.10008.6.1.1012":           HeadAndNeckCancerAnatomicSite7601,
+	"1.2.840.10008.6.1.1013":           FiberTractInBrainstem7701,
+	"1.2.840.10008.6.1.1014":           ProjectionAndThalamicFiber7702,
+	"1.2.840.10008.6.1.1015":           AssociationFiber7703,
+	"1.2.840.10008.6.1.1016":           LimbicSystemTract7704,
+	"1.2.840.10008.6.1.1017":           CommissuralFiber7705,
+	"1.2.840.10008.6.1.1018":           CranialNerve7706,
+	"1.2.840.10008.6.1.1019":           SpinalCordFiber7707,
+	"1.2.840.10008.6.1.1020":           TractographyAnatomicSite7710,
+	"1.2.840.10008.6.1.1021":           PrimaryAnatomicStructureForIntraOralRadiographySupernumeraryDentitionDesignationOfTeeth4025,
+	"1.2.840.10008.6.1.1022":           PrimaryAnatomicStructureForIntraOralAndCraniofacialRadiographyTeeth4026,
+	"1.2.840.10008.6.1.1023":           IEC61217DevicePositionParameter9401,
+	"1.2.840.10008.6.1.1024":           IEC61217GantryPositionParameter9402,
+	"1.2.840.10008.6.1.1025":           IEC61217PatientSupportPositionParameter9403,
+	"1.2.840.10008.6.1.1026":           ActionableFindingClassification7035,
+	"1.2.840.10008.6.1.1027":           ImageQualityAssessment7036,
+	"1.2.840.10008.6.1.1028":           SummaryRadiationExposureQuantity10050,
+	"1.2.840.10008.6.1.1029":           WideFieldOphthalmicPhotographyTransformationMethod4245,
+	"1.2.840.10008.6.1.1030":           PETUnit84,
+	"1.2.840.10008.6.1.1031":           ImplantMaterial7300,
+	"1.2.840.10008.6.1.1032":           InterventionType7301,
+	"1.2.840.10008.6.1.1033":           ImplantTemplateViewOrientation7302,
+	"1.2.840.10008.6.1.1034":           ImplantTemplateModifiedViewOrientation7303,
+	"1.2.840.10008.6.1.1035":           ImplantTargetAnatomy7304,
+	"1.2.840.10008.6.1.1036":           ImplantPlanningLandmark7305,
+	"1.2.840.10008.6.1.1037":           HumanHipImplantPlanningLandmark7306,
+	"1.2.840.10008.6.1.1038":           ImplantComponentType7307,
+	"1.2.840.10008.6.1.1039":           HumanHipImplantComponentType7308,
+	"1.2.840.10008.6.1.1040":           HumanTraumaImplantComponentType7309,
+	"1.2.840.10008.6.1.1041":           ImplantFixationMethod7310,
+	"1.2.840.10008.6.1.1042":           DeviceParticipatingRole7445,
+	"1.2.840.10008.6.1.1043":           ContainerType8101,
+	"1.2.840.10008.6.1.1044":           ContainerComponentType8102,
+	"1.2.840.10008.6.1.1045":           AnatomicPathologySpecimenType8103,
+	"1.2.840.10008.6.1.1046":           BreastTissueSpecimenType8104,
+	"1.2.840.10008.6.1.1047":           SpecimenCollectionProcedure8109,
+	"1.2.840.10008.6.1.1048":           SpecimenSamplingProcedure8110,
+	"1.2.840.10008.6.1.1049":           SpecimenPreparationProcedure8111,
+	"1.2.840.10008.6.1.1050":           SpecimenStain8112,
+	"1.2.840.10008.6.1.1051":           SpecimenPreparationStep8113,
+	"1.2.840.10008.6.1.1052":           SpecimenFixative8114,
+	"1.2.840.10008.6.1.1053":           SpecimenEmbeddingMedia8115,
+	"1.2.840.10008.6.1.1054":           SourceOfProjectionXRayDoseInformation10020,
+	"1.2.840.10008.6.1.1055":           SourceOfCTDoseInformation10021,
+	"1.2.840.10008.6.1.1056":           RadiationDoseReferencePoint10025,
+	"1.2.840.10008.6.1.1057":           VolumetricViewDescription501,
+	"1.2.840.10008.6.1.1058":           VolumetricViewModifier502,
+	"1.2.840.10008.6.1.1059":           DiffusionAcquisitionValueType7260,
+	"1.2.840.10008.6.1.1060":           DiffusionModelValueType7261,
+	"1.2.840.10008.6.1.1061":           DiffusionTractographyAlgorithmFamily7262,
+	"1.2.840.10008.6.1.1062":           DiffusionTractographyMeasurementType7263,
+	"1.2.840.10008.6.1.1063":           ResearchAnimalSourceRegistry7490,
+	"1.2.840.10008.6.1.1064":           YesNoOnly231,
+	"1.2.840.10008.6.1.1065":           BiosafetyLevel601,
+	"1.2.840.10008.6.1.1066":           BiosafetyControlReason602,
+	"1.2.840.10008.6.1.1067":           SexMaleFemaleOrBoth7457,
+	"1.2.840.10008.6.1.1068":           AnimalRoomType603,
+	"1.2.840.10008.6.1.1069":           DeviceReuse604,
+	"1.2.840.10008.6.1.1070":           AnimalBeddingMaterial605,
+	"1.2.840.10008.6.1.1071":           AnimalShelterType606,
+	"1.2.840.10008.6.1.1072":           AnimalFeedType607,
+	"1.2.840.10008.6.1.1073":           AnimalFeedSource608,
+	"1.2.840.10008.6.1.1074":           AnimalFeedingMethod609,
+	"1.2.840.10008.6.1.1075":           WaterType610,
+	"1.2.840.10008.6.1.1076":           AnesthesiaCategoryCodeTypeForSmallAnimalAnesthesia611,
+	"1.2.840.10008.6.1.1077":           AnesthesiaCategoryCodeTypeFromAnesthesiaQualityInitiative612,
+	"1.2.840.10008.6.1.1078":           AnesthesiaInductionCodeTypeForSmallAnimalAnesthesia613,
+	"1.2.840.10008.6.1.1079":           AnesthesiaInductionCodeTypeFromAnesthesiaQualityInitiative614,
+	"1.2.840.10008.6.1.1080":           AnesthesiaMaintenanceCodeTypeForSmallAnimalAnesthesia615,
+	"1.2.840.10008.6.1.1081":           AnesthesiaMaintenanceCodeTypeFromAnesthesiaQualityInitiative616,
+	"1.2.840.10008.6.1.1082":           AirwayManagementMethodCodeTypeForSmallAnimalAnesthesia617,
+	"1.2.840.10008.6.1.1083":           AirwayManagementMethodCodeTypeFromAnesthesiaQualityInitiative618,
+	"1.2.840.10008.6.1.1084":           AirwayManagementSubMethodCodeTypeForSmallAnimalAnesthesia619,
+	"1.2.840.10008.6.1.1085":           AirwayManagementSubMethodCodeTypeFromAnesthesiaQualityInitiative620,
+	"1.2.840.10008.6.1.1086":           MedicationTypeForSmallAnimalAnesthesia621,
+	"1.2.840.10008.6.1.1087":           MedicationTypeCodeTypeFromAnesthesiaQualityInitiative622,
+	"1.2.840.10008.6.1.1088":           MedicationForSmallAnimalAnesthesia623,
+	"1.2.840.10008.6.1.1089":           InhalationalAnesthesiaAgentForSmallAnimalAnesthesia624,
+	"1.2.840.10008.6.1.1090":           InjectableAnesthesiaAgentForSmallAnimalAnesthesia625,
+	"1.2.840.10008.6.1.1091":           PremedicationAgentForSmallAnimalAnesthesia626,
+	"1.2.840.10008.6.1.1092":           NeuromuscularBlockingAgentForSmallAnimalAnesthesia627,
+	"1.2.840.10008.6.1.1093":           AncillaryMedicationsForSmallAnimalAnesthesia628,
+	"1.2.840.10008.6.1.1094":           CarrierGasesForSmallAnimalAnesthesia629,
+	"1.2.840.10008.6.1.1095":           LocalAnestheticsForSmallAnimalAnesthesia630,
+	"1.2.840.10008.6.1.1096":           ProcedurePhaseRequiringAnesthesia631,
+	"1.2.840.10008.6.1.1097":           SurgicalProcedurePhaseRequiringAnesthesia632,
+	"1.2.840.10008.6.1.1098":           PhaseOfImagingProcedureRequiringAnesthesia633RETIRED,
+	"1.2.840.10008.6.1.1099":           AnimalHandlingPhase634,
+	"1.2.840.10008.6.1.1100":           HeatingMethod635,
+	"1.2.840.10008.6.1.1101":           TemperatureSensorDeviceComponentTypeForSmallAnimalProcedure636,
+	"1.2.840.10008.6.1.1102":           ExogenousSubstanceType637,
+	"1.2.840.10008.6.1.1103":           ExogenousSubstance638,
+	"1.2.840.10008.6.1.1104":           TumorGraftHistologicType639,
+	"1.2.840.10008.6.1.1105":           Fibril640,
+	"1.2.840.10008.6.1.1106":           Virus641,
+	"1.2.840.10008.6.1.1107":           Cytokine642,
+	"1.2.840.10008.6.1.1108":           Toxin643,
+	"1.2.840.10008.6.1.1109":           ExogenousSubstanceAdministrationSite644,
+	"1.2.840.10008.6.1.1110":           ExogenousSubstanceOriginTissue645,
+	"1.2.840.10008.6.1.1111":           PreclinicalSmallAnimalImagingProcedure646,
+	"1.2.840.10008.6.1.1112":           PositionReferenceIndicatorForFrameOfReference647,
+	"1.2.840.10008.6.1.1113":           PresentAbsentOnly241,
+	"1.2.840.10008.6.1.1114":           WaterEquivalentDiameterMethod10024,
+	"1.2.840.10008.6.1.1115":           RadiotherapyPurposeOfReference7022,
+	"1.2.840.10008.6.1.1116":           ContentAssessmentType701,
+	"1.2.840.10008.6.1.1117":           RTContentAssessmentType702,
+	"1.2.840.10008.6.1.1118":           AssessmentBasis703,
+	"1.2.840.10008.6.1.1119":           ReaderSpecialty7449,
+	"1.2.840.10008.6.1.1120":           RequestedReportType9233,
+	"1.2.840.10008.6.1.1121":           CTTransversePlaneReferenceBasis1000,
+	"1.2.840.10008.6.1.1122":           AnatomicalReferenceBasis1001,
+	"1.2.840.10008.6.1.1123":           AnatomicalReferenceBasisHead1002,
+	"1.2.840.10008.6.1.1124":           AnatomicalReferenceBasisSpine1003,
+	"1.2.840.10008.6.1.1125":           AnatomicalReferenceBasisChest1004,
+	"1.2.840.10008.6.1.1126":           AnatomicalReferenceBasisAbdomenPelvis1005,
+	"1.2.840.10008.6.1.1127":           AnatomicalReferenceBasisExtremity1006,
+	"1.2.840.10008.6.1.1128":           ReferenceGeometryPlane1010,
+	"1.2.840.10008.6.1.1129":           ReferenceGeometryPoint1011,
+	"1.2.840.10008.6.1.1130":           PatientAlignmentMethod1015,
+	"1.2.840.10008.6.1.1131":           ContraindicationsForCTImaging1200,
+	"1.2.840.10008.6.1.1132":           FiducialCategory7110,
+	"1.2.840.10008.6.1.1133":           Fiducial7111,
+	"1.2.840.10008.6.1.1134":           NonImageSourceInstancePurposeOfReference7013,
+	"1.2.840.10008.6.1.1135":           RTProcessOutput7023,
+	"1.2.840.10008.6.1.1136":           RTProcessInput7024,
+	"1.2.840.10008.6.1.1137":           RTProcessInputUsed7025,
+	"1.2.840.10008.6.1.1138":           ProstateAnatomy6300,
+	"1.2.840.10008.6.1.1139":           ProstateSectorAnatomyFromPIRADSV26301,
+	"1.2.840.10008.6.1.1140":           ProstateSectorAnatomyFromEuropeanConcensus16SectorMinimalModel6302,
+	"1.2.840.10008.6.1.1141":           ProstateSectorAnatomyFromEuropeanConcensus27SectorOptimalModel6303,
+	"1.2.840.10008.6.1.1142":           MeasurementSelectionReason12301,
+	"1.2.840.10008.6.1.1143":           EchoFindingObservationType12302,
+	"1.2.840.10008.6.1.1144":           EchoMeasurementType12303,
+	"1.2.840.10008.6.1.1145":           CardiovascularMeasuredProperty12304,
+	"1.2.840.10008.6.1.1146":           BasicEchoAnatomicSite12305,
+	"1.2.840.10008.6.1.1147":           EchoFlowDirection12306,
+	"1.2.840.10008.6.1.1148":           CardiacPhaseAndTimePoint12307,
+	"1.2.840.10008.6.1.1149":           CoreEchoMeasurement12300,
+	"1.2.840.10008.6.1.1150":           OCTAProcessingAlgorithmFamily4270,
+	"1.2.840.10008.6.1.1151":           EnFaceImageType4271,
+	"1.2.840.10008.6.1.1152":           OPTScanPatternType4272,
+	"1.2.840.10008.6.1.1153":           RetinalSegmentationSurface4273,
+	"1.2.840.10008.6.1.1154":           OrganForRadiationDoseEstimate10060,
+	"1.2.840.10008.6.1.1155":           AbsorbedRadiationDoseType10061,
+	"1.2.840.10008.6.1.1156":           EquivalentRadiationDoseType10062,
+	"1.2.840.10008.6.1.1157":           RadiationDoseEstimateDistributionRepresentation10063,
+	"1.2.840.10008.6.1.1158":           PatientModelType10064,
+	"1.2.840.10008.6.1.1159":           RadiationTransportModelType10065,
+	"1.2.840.10008.6.1.1160":           AttenuatorCategory10066,
+	"1.2.840.10008.6.1.1161":           RadiationAttenuatorMaterial10067,
+	"1.2.840.10008.6.1.1162":           EstimateMethodType10068,
+	"1.2.840.10008.6.1.1163":           RadiationDoseEstimateParameter10069,
+	"1.2.840.10008.6.1.1164":           RadiationDoseType10070,
+	"1.2.840.10008.6.1.1165":           MRDiffusionComponentSemantic7270,
+	"1.2.840.10008.6.1.1166":           MRDiffusionAnisotropyIndex7271,
+	"1.2.840.10008.6.1.1167":           MRDiffusionModelParameter7272,
+	"1.2.840.10008.6.1.1168":           MRDiffusionModel7273,
+	"1.2.840.10008.6.1.1169":           MRDiffusionModelFittingMethod7274,
+	"1.2.840.10008.6.1.1170":           MRDiffusionModelSpecificMethod7275,
+	"1.2.840.10008.6.1.1171":           MRDiffusionModelInput7276,
+	"1.2.840.10008.6.1.1172":           DiffusionRateAreaOverTimeUnit7277,
+	"1.2.840.10008.6.1.1173":           PediatricSizeCategory7039,
+	"1.2.840.10008.6.1.1174":           CalciumScoringPatientSizeCategory7041,
+	"1.2.840.10008.6.1.1175":           ReasonForRepeatingAcquisition10034,
+	"1.2.840.10008.6.1.1176":           ProtocolAssertion800,
+	"1.2.840.10008.6.1.1177":           RadiotherapeuticDoseMeasurementDevice7026,
+	"1.2.840.10008.6.1.1178":           ExportAdditionalInformationDocumentTitle7014,
+	"1.2.840.10008.6.1.1179":           ExportDelayReason7015,
+	"1.2.840.10008.6.1.1180":           LevelOfDifficulty7016,
+	"1.2.840.10008.6.1.1181":           CategoryOfTeachingMaterialImaging7017,
+	"1.2.840.10008.6.1.1182":           MiscellaneousDocumentTitle7018,
+	"1.2.840.10008.6.1.1183":           SegmentationNonImageSourcePurposeOfReference7019,
+	"1.2.840.10008.6.1.1184":           LongitudinalTemporalEventType280,
+	"1.2.840.10008.6.1.1185":           NonLesionObjectTypePhysicalObject6401,
+	"1.2.840.10008.6.1.1186":           NonLesionObjectTypeSubstance6402,
+	"1.2.840.10008.6.1.1187":           NonLesionObjectTypeTissue6403,
+	"1.2.840.10008.6.1.1188":           ChestNonLesionObjectTypePhysicalObject6404,
+	"1.2.840.10008.6.1.1189":           ChestNonLesionObjectTypeTissue6405,
+	"1.2.840.10008.6.1.1190":           TissueSegmentationPropertyType7191,
+	"1.2.840.10008.6.1.1191":           AnatomicalStructureSegmentationPropertyType7192,
+	"1.2.840.10008.6.1.1192":           PhysicalObjectSegmentationPropertyType7193,
+	"1.2.840.10008.6.1.1193":           MorphologicallyAbnormalStructureSegmentationPropertyType7194,
+	"1.2.840.10008.6.1.1194":           FunctionSegmentationPropertyType7195,
+	"1.2.840.10008.6.1.1195":           SpatialAndRelationalConceptSegmentationPropertyType7196,
+	"1.2.840.10008.6.1.1196":           BodySubstanceSegmentationPropertyType7197,
+	"1.2.840.10008.6.1.1197":           SubstanceSegmentationPropertyType7198,
+	"1.2.840.10008.6.1.1198":           InterpretationRequestDiscontinuationReason9303,
+	"1.2.840.10008.6.1.1199":           GrayLevelRunLengthBasedFeature7475,
+	"1.2.840.10008.6.1.1200":           GrayLevelSizeZoneBasedFeature7476,
+	"1.2.840.10008.6.1.1201":           EncapsulatedDocumentSourcePurposeOfReference7060,
+	"1.2.840.10008.6.1.1202":           ModelDocumentTitle7061,
+	"1.2.840.10008.6.1.1203":           PurposeOfReferenceToPredecessor3DModel7062,
+	"1.2.840.10008.6.1.1204":           ModelScaleUnit7063,
+	"1.2.840.10008.6.1.1205":           ModelUsage7064,
+	"1.2.840.10008.6.1.1206":           RadiationDoseUnit10071,
+	"1.2.840.10008.6.1.1207":           RadiotherapyFiducial7112,
+	"1.2.840.10008.6.1.1208":           MultiEnergyRelevantMaterial300,
+	"1.2.840.10008.6.1.1209":           MultiEnergyMaterialUnit301,
+	"1.2.840.10008.6.1.1210":           DosimetricObjectiveType9500,
+	"1.2.840.10008.6.1.1211":           PrescriptionAnatomyCategory9501,
+	"1.2.840.10008.6.1.1212":           RTSegmentAnnotationCategory9502,
+	"1.2.840.10008.6.1.1213":           RadiotherapyTherapeuticRoleCategory9503,
+	"1.2.840.10008.6.1.1214":           RTGeometricInformation9504,
+	"1.2.840.10008.6.1.1215":           FixationOrPositioningDevice9505,
+	"1.2.840.10008.6.1.1216":           BrachytherapyDevice9506,
+	"1.2.840.10008.6.1.1217":           ExternalBodyModel9507,
+	"1.2.840.10008.6.1.1218":           NonSpecificVolume9508,
+	"1.2.840.10008.6.1.1219":           PurposeOfReferenceForRTPhysicianIntentInput9509,
+	"1.2.840.10008.6.1.1220":           PurposeOfReferenceForRTTreatmentPlanningInput9510,
+	"1.2.840.10008.6.1.1221":           GeneralExternalRadiotherapyProcedureTechnique9511,
+	"1.2.840.10008.6.1.1222":           TomotherapeuticRadiotherapyProcedureTechnique9512,
+	"1.2.840.10008.6.1.1223":           FixationDevice9513,
+	"1.2.840.10008.6.1.1224":           AnatomicalStructureForRadiotherapy9514,
+	"1.2.840.10008.6.1.1225":           RTPatientSupportDevice9515,
+	"1.2.840.10008.6.1.1226":           RadiotherapyBolusDeviceType9516,
+	"1.2.840.10008.6.1.1227":           RadiotherapyBlockDeviceType9517,
+	"1.2.840.10008.6.1.1228":           RadiotherapyAccessoryNoSlotHolderDeviceType9518,
+	"1.2.840.10008.6.1.1229":           RadiotherapyAccessorySlotHolderDeviceType9519,
+	"1.2.840.10008.6.1.1230":           SegmentedRTAccessoryDevice9520,
+	"1.2.840.10008.6.1.1231":           RadiotherapyTreatmentEnergyUnit9521,
+	"1.2.840.10008.6.1.1232":           MultiSourceRadiotherapyProcedureTechnique9522,
+	"1.2.840.10008.6.1.1233":           RoboticRadiotherapyProcedureTechnique9523,
+	"1.2.840.10008.6.1.1234":           RadiotherapyProcedureTechnique9524,
+	"1.2.840.10008.6.1.1235":           RadiationTherapyParticle9525,
+	"1.2.840.10008.6.1.1236":           IonTherapyParticle9526,
+	"1.2.840.10008.6.1.1237":           TeletherapyIsotope9527,
+	"1.2.840.10008.6.1.1238":           BrachytherapyIsotope9528,
+	"1.2.840.10008.6.1.1239":           SingleDoseDosimetricObjective9529,
+	"1.2.840.10008.6.1.1240":           PercentageAndDoseDosimetricObjective9530,
+	"1.2.840.10008.6.1.1241":           VolumeAndDoseDosimetricObjective9531,
+	"1.2.840.10008.6.1.1242":           NoParameterDosimetricObjective9532,
+	"1.2.840.10008.6.1.1243":           DeliveryTimeStructure9533,
+	"1.2.840.10008.6.1.1244":           RadiotherapyTarget9534,
+	"1.2.840.10008.6.1.1245":           RadiotherapyDoseCalculationRole9535,
+	"1.2.840.10008.6.1.1246":           RadiotherapyPrescribingAndSegmentingPersonRole9536,
+	"1.2.840.10008.6.1.1247":           EffectiveDoseCalculationMethodCategory9537,
+	"1.2.840.10008.6.1.1248":           RadiationTransportBasedEffectiveDoseMethodModifier9538,
+	"1.2.840.10008.6.1.1249":           FractionationBasedEffectiveDoseMethodModifier9539,
+	"1.2.840.10008.6.1.1250":           ImagingAgentAdministrationAdverseEvent60,
+	"1.2.840.10008.6.1.1251":           TimeRelativeToProcedure61RETIRED,
+	"1.2.840.10008.6.1.1252":           ImagingAgentAdministrationPhaseType62,
+	"1.2.840.10008.6.1.1253":           ImagingAgentAdministrationMode63,
+	"1.2.840.10008.6.1.1254":           ImagingAgentAdministrationPatientState64,
+	"1.2.840.10008.6.1.1255":           ImagingAgentAdministrationPremedication65,
+	"1.2.840.10008.6.1.1256":           ImagingAgentAdministrationMedication66,
+	"1.2.840.10008.6.1.1257":           ImagingAgentAdministrationCompletionStatus67,
+	"1.2.840.10008.6.1.1258":           ImagingAgentAdministrationPharmaceuticalPresentationUnit68,
+	"1.2.840.10008.6.1.1259":           ImagingAgentAdministrationConsumable69,
+	"1.2.840.10008.6.1.1260":           Flush70,
+	"1.2.840.10008.6.1.1261":           ImagingAgentAdministrationInjectorEventType71,
+	"1.2.840.10008.6.1.1262":           ImagingAgentAdministrationStepType72,
+	"1.2.840.10008.6.1.1263":           BolusShapingCurve73,
+	"1.2.840.10008.6.1.1264":           ImagingAgentAdministrationConsumableCatheterType74,
+	"1.2.840.10008.6.1.1265":           LowHighOrEqual75,
+	"1.2.840.10008.6.1.1266":           PremedicationType76,
+	"1.2.840.10008.6.1.1267":           LateralityWithMedian245,
+	"1.2.840.10008.6.1.1268":           DermatologyAnatomicSite4029,
+	"1.2.840.10008.6.1.1269":           QuantitativeImageFeature218,
+	"1.2.840.10008.6.1.1270":           GlobalShapeDescriptor7477,
+	"1.2.840.10008.6.1.1271":           IntensityHistogramFeature7478,
+	"1.2.840.10008.6.1.1272":           GreyLevelDistanceZoneBasedFeature7479,
+	"1.2.840.10008.6.1.1273":           NeighbourhoodGreyToneDifferenceBasedFeature7500,
+	"1.2.840.10008.6.1.1274":           NeighbouringGreyLevelDependenceBasedFeature7501,
+	"1.2.840.10008.6.1.1275":           CorneaMeasurementMethodDescriptor4242,
+	"1.2.840.10008.6.1.1276":           SegmentedRadiotherapeuticDoseMeasurementDevice7027,
+	"1.2.840.10008.6.1.1277":           ClinicalCourseOfDisease6098,
+	"1.2.840.10008.6.1.1278":           RacialGroup6099,
+	"1.2.840.10008.6.1.1279":           RelativeLaterality246,
+	"1.2.840.10008.6.1.1280":           BrainLesionSegmentationTypeWithNecrosis7168,
+	"1.2.840.10008.6.1.1281":           BrainLesionSegmentationTypeWithoutNecrosis7169,
+	"1.2.840.10008.6.1.1282":           NonAcquisitionModality32,
+	"1.2.840.10008.6.1.1283":           Modality33,
+	"1.2.840.10008.6.1.1284":           LateralityLeftRightOnly247,
+	"1.2.840.10008.6.1.1285":           QualitativeEvaluationModifierType210,
+	"1.2.840.10008.6.1.1286":           QualitativeEvaluationModifierValue211,
+	"1.2.840.10008.6.1.1287":           GenericAnatomicLocationModifier212,
+	"1.2.840.10008.6.1.1288":           BeamLimitingDeviceType9541,
+	"1.2.840.10008.6.1.1289":           CompensatorDeviceType9542,
+	"1.2.840.10008.6.1.1290":           RadiotherapyTreatmentMachineMode9543,
+	"1.2.840.10008.6.1.1291":           RadiotherapyDistanceReferenceLocation9544,
+	"1.2.840.10008.6.1.1292":           FixedBeamLimitingDeviceType9545,
+	"1.2.840.10008.6.1.1293":           RadiotherapyWedgeType9546,
+	"1.2.840.10008.6.1.1294":           RTBeamLimitingDeviceOrientationLabel9547,
+	"1.2.840.10008.6.1.1295":           GeneralAccessoryDeviceType9548,
+	"1.2.840.10008.6.1.1296":           RadiationGenerationModeType9549,
+	"1.2.840.10008.6.1.1297":           CArmPhotonElectronDeliveryRateUnit9550,
+	"1.2.840.10008.6.1.1298":           TreatmentDeliveryDeviceType9551,
+	"1.2.840.10008.6.1.1299":           CArmPhotonElectronDosimeterUnit9552,
+	"1.2.840.10008.6.1.1300":           TreatmentPoint9553,
+	"1.2.840.10008.6.1.1301":           EquipmentReferencePoint9554,
+	"1.2.840.10008.6.1.1302":           RadiotherapyTreatmentPlanningPersonRole9555,
+	"1.2.840.10008.6.1.1303":           RealTimeVideoRenditionTitle7070,
+	"1.2.840.10008.6.1.1304":           GeometryGraphicalRepresentation219,
+	"1.2.840.10008.6.1.1305":           VisualExplanation217,
+	"1.2.840.10008.6.1.1306":           ProstateSectorAnatomyFromPIRADSV216304,
+	"1.2.840.10008.6.1.1307":           RadiotherapyRoboticNodeSet9556,
+	"1.2.840.10008.6.1.1308":           TomotherapeuticDosimeterUnit9557,
+	"1.2.840.10008.6.1.1309":           TomotherapeuticDoseRateUnit9558,
+	"1.2.840.10008.6.1.1310":           RoboticDeliveryDeviceDosimeterUnit9559,
+	"1.2.840.10008.6.1.1311":           RoboticDeliveryDeviceDoseRateUnit9560,
+	"1.2.840.10008.6.1.1312":           AnatomicStructure8134,
+	"1.2.840.10008.6.1.1313":           MediastinumFindingOrFeature6148,
+	"1.2.840.10008.6.1.1314":           MediastinumAnatomy6149,
+	"1.2.840.10008.6.1.1315":           VascularUltrasoundReportDocumentTitle12100,
+	"1.2.840.10008.6.1.1316":           OrganPartNonLateralized12130,
+	"1.2.840.10008.6.1.1317":           OrganPartLateralized12131,
+	"1.2.840.10008.6.1.1318":           TreatmentTerminationReason9561,
+	"1.2.840.10008.6.1.1319":           RadiotherapyTreatmentDeliveryPersonRole9562,
+	"1.2.840.10008.6.1.1320":           RadiotherapyInterlockResolution9563,
+	"1.2.840.10008.6.1.1321":           TreatmentSessionConfirmationAssertion9564,
+	"1.2.840.10008.6.1.1322":           TreatmentToleranceViolationCause9565,
+	"1.2.840.10008.6.1.1323":           ClinicalToleranceViolationType9566,
+	"1.2.840.10008.6.1.1324":           MachineToleranceViolationType9567,
+	"1.2.840.10008.6.1.1325":           RadiotherapyTreatmentInterlock9568,
+	"1.2.840.10008.6.1.1326":           IsocentricPatientSupportPositionParameter9569,
+	"1.2.840.10008.6.1.1327":           RTOverriddenTreatmentParameter9570,
+	"1.2.840.10008.6.1.1328":           EEGLead3030,
+	"1.2.840.10008.6.1.1329":           LeadLocationNearOrInMuscle3031,
+	"1.2.840.10008.6.1.1330":           LeadLocationNearPeripheralNerve3032,
+	"1.2.840.10008.6.1.1331":           EOGLead3033,
+	"1.2.840.10008.6.1.1332":           BodyPositionChannel3034,
+	"1.2.840.10008.6.1.1333":           EEGAnnotationNeurophysiologicEnumeration3035,
+	"1.2.840.10008.6.1.1334":           EMGAnnotationNeurophysiologicalEnumeration3036,
+	"1.2.840.10008.6.1.1335":           EOGAnnotationNeurophysiologicalEnumeration3037,
+	"1.2.840.10008.6.1.1336":           PatternEvent3038,
+	"1.2.840.10008.6.1.1337":           DeviceRelatedAndEnvironmentRelatedEvent3039,
+	"1.2.840.10008.6.1.1338":           EEGAnnotationNeurologicalMonitoringMeasurement3040,
+	"1.2.840.10008.6.1.1339":           OBGYNUltrasoundReportDocumentTitle12024,
+	"1.2.840.10008.6.1.1340":           AutomationOfMeasurement7230,
+	"1.2.840.10008.6.1.1341":           OBGYNUltrasoundBeamPath12025,
+	"1.2.840.10008.6.1.1342":           AngleMeasurement7550,
+	"1.2.840.10008.6.1.1343":           GenericPurposeOfReferenceToImagesAndCoordinatesInMeasurement7551,
+	"1.2.840.10008.6.1.1344":           GenericPurposeOfReferenceToImagesInMeasurement7552,
+	"1.2.840.10008.6.1.1345":           GenericPurposeOfReferenceToCoordinatesInMeasurement7553,
+	"1.2.840.10008.6.1.1346":           FitzpatrickSkinType4401,
+	"1.2.840.10008.6.1.1347":           HistoryOfMalignantMelanoma4402,
+	"1.2.840.10008.6.1.1348":           HistoryOfMelanomaInSitu4403,
+	"1.2.840.10008.6.1.1349":           HistoryOfNonMelanomaSkinCancer4404,
+	"1.2.840.10008.6.1.1350":           SkinDisorder4405,
+	"1.2.840.10008.6.1.1351":           PatientReportedLesionCharacteristic4406,
+	"1.2.840.10008.6.1.1352":           LesionPalpationFinding4407,
+	"1.2.840.10008.6.1.1353":           LesionVisualFinding4408,
+	"1.2.840.10008.6.1.1354":           SkinProcedure4409,
+	"1.2.840.10008.6.1.1355":           AbdominopelvicVessel12125,
+	"1.2.840.10008.6.1.1356":           NumericValueFailureQualifier43,
+	"1.2.840.10008.6.1.1357":           NumericValueUnknownQualifier44,
+	"1.2.840.10008.6.1.1358":           CouinaudLiverSegment7170,
+	"1.2.840.10008.6.1.1359":           LiverSegmentationType7171,
+	"1.2.840.10008.6.1.1360":           ContraindicationsForXAImaging1201,
+	"1.2.840.10008.6.1.1361":           NeurophysiologicStimulationMode3041,
+	"1.2.840.10008.6.1.1362":           ReportedValueType10072,
+	"1.2.840.10008.6.1.1363":           ValueTiming10073,
+	"1.2.840.10008.6.1.1364":           RDSRFrameOfReferenceOrigin10074,
+	"1.2.840.10008.6.1.1365":           MicroscopyAnnotationPropertyType8135,
+	"1.2.840.10008.6.1.1366":           MicroscopyMeasurementType8136,
+	"1.2.840.10008.6.1.1367":           ProstateReportingSystem6310,
+	"1.2.840.10008.6.1.1368":           MRSignalIntensity6311,
+	"1.2.840.10008.6.1.1369":           CrossSectionalScanPlaneOrientation6312,
+	"1.2.840.10008.6.1.1370":           HistoryOfProstateDisease6313,
+	"1.2.840.10008.6.1.1371":           ProstateMRIStudyQualityFinding6314,
+	"1.2.840.10008.6.1.1372":           ProstateMRISeriesQualityFinding6315,
+	"1.2.840.10008.6.1.1373":           MRImagingArtifact6316,
+	"1.2.840.10008.6.1.1374":           ProstateDCEMRIQualityFinding6317,
+	"1.2.840.10008.6.1.1375":           ProstateDWIMRIQualityFinding6318,
+	"1.2.840.10008.6.1.1376":           AbdominalInterventionType6319,
+	"1.2.840.10008.6.1.1377":           AbdominopelvicIntervention6320,
+	"1.2.840.10008.6.1.1378":           ProstateCancerDiagnosticProcedure6321,
+	"1.2.840.10008.6.1.1379":           ProstateCancerFamilyHistory6322,
+	"1.2.840.10008.6.1.1380":           ProstateCancerTherapy6323,
+	"1.2.840.10008.6.1.1381":           ProstateMRIAssessment6324,
+	"1.2.840.10008.6.1.1382":           OverallAssessmentFromPIRADS6325,
+	"1.2.840.10008.6.1.1383":           ImageQualityControlStandard6326,
+	"1.2.840.10008.6.1.1384":           ProstateImagingIndication6327,
+	"1.2.840.10008.6.1.1385":           PIRADSV2LesionAssessmentCategory6328,
+	"1.2.840.10008.6.1.1386":           PIRADSV2T2WIPZLesionAssessmentCategory6329,
+	"1.2.840.10008.6.1.1387":           PIRADSV2T2WITZLesionAssessmentCategory6330,
+	"1.2.840.10008.6.1.1388":           PIRADSV2DWILesionAssessmentCategory6331,
+	"1.2.840.10008.6.1.1389":           PIRADSV2DCELesionAssessmentCategory6332,
+	"1.2.840.10008.6.1.1390":           mpMRIAssessmentType6333,
+	"1.2.840.10008.6.1.1391":           mpMRIAssessmentTypeFromPIRADS6334,
+	"1.2.840.10008.6.1.1392":           mpMRIAssessmentValue6335,
+	"1.2.840.10008.6.1.1393":           MRIAbnormality6336,
+	"1.2.840.10008.6.1.1394":           mpMRIProstateAbnormalityFromPIRADS6337,
+	"1.2.840.10008.6.1.1395":           mpMRIBenignProstateAbnormalityFromPIRADS6338,
+	"1.2.840.10008.6.1.1396":           MRIShapeCharacteristic6339,
+	"1.2.840.10008.6.1.1397":           ProstateMRIShapeCharacteristicFromPIRADS6340,
+	"1.2.840.10008.6.1.1398":           MRIMarginCharacteristic6341,
+	"1.2.840.10008.6.1.1399":           ProstateMRIMarginCharacteristicFromPIRADS6342,
+	"1.2.840.10008.6.1.1400":           MRISignalCharacteristic6343,
+	"1.2.840.10008.6.1.1401":           ProstateMRISignalCharacteristicFromPIRADS6344,
+	"1.2.840.10008.6.1.1402":           MRIEnhancementPattern6345,
+	"1.2.840.10008.6.1.1403":           ProstateMRIEnhancementPatternFromPIRADS6346,
+	"1.2.840.10008.6.1.1404":           ProstateMRIExtraProstaticFinding6347,
+	"1.2.840.10008.6.1.1405":           ProstateMRIAssessmentOfExtraProstaticAnatomicSite6348,
+	"1.2.840.10008.6.1.1406":           MRCoilType6349,
+	"1.2.840.10008.6.1.1407":           EndorectalCoilFillSubstance6350,
+	"1.2.840.10008.6.1.1408":           ProstateRelationalMeasurement6351,
+	"1.2.840.10008.6.1.1409":           ProstateCancerDiagnosticBloodLabMeasurement6352,
+	"1.2.840.10008.6.1.1410":           ProstateImagingTypesOfQualityControlStandard6353,
+	"1.2.840.10008.6.1.1411":           UltrasoundShearWaveMeasurement12308,
+	"1.2.840.10008.6.1.1412":           LeftVentricleMyocardialWall16SegmentModel3780RETIRED,
+	"1.2.840.10008.6.1.1413":           LeftVentricleMyocardialWall18SegmentModel3781,
+	"1.2.840.10008.6.1.1414":           LeftVentricleBasalWall6Segments3782,
+	"1.2.840.10008.6.1.1415":           LeftVentricleMidlevelWall6Segments3783,
+	"1.2.840.10008.6.1.1416":           LeftVentricleApicalWall4Segments3784,
+	"1.2.840.10008.6.1.1417":           LeftVentricleApicalWall6Segments3785,
+	"1.2.840.10008.6.1.1418":           PatientTreatmentPreparationMethod9571,
+	"1.2.840.10008.6.1.1419":           PatientShieldingDevice9572,
+	"1.2.840.10008.6.1.1420":           PatientTreatmentPreparationDevice9573,
+	"1.2.840.10008.6.1.1421":           PatientPositionDisplacementReferencePoint9574,
+	"1.2.840.10008.6.1.1422":           PatientAlignmentDevice9575,
+	"1.2.840.10008.6.1.1423":           ReasonsForRTRadiationTreatmentOmission9576,
+	"1.2.840.10008.6.1.1424":           PatientTreatmentPreparationProcedure9577,
+	"1.2.840.10008.6.1.1425":           MotionManagementSetupDevice9578,
+	"1.2.840.10008.6.1.1426":           CoreEchoStrainMeasurement12309,
+	"1.2.840.10008.6.1.1427":           MyocardialStrainMethod12310,
+	"1.2.840.10008.6.1.1428":           EchoMeasuredStrainProperty12311,
+	"1.2.840.10008.6.1.1429":           AssessmentFromCADRADS3020,
+	"1.2.840.10008.6.1.1430":           CADRADSStenosisAssessmentModifier3021,
+	"1.2.840.10008.6.1.1431":           CADRADSAssessmentModifier3022,
+	"1.2.840.10008.6.1.1432":           RTSegmentMaterial9579,
+	"1.2.840.10008.6.1.1433":           VertebralAnatomicStructure7602,
+	"1.2.840.10008.6.1.1434":           Vertebra7603,
+	"1.2.840.10008.6.1.1435":           IntervertebralDisc7604,
+	"1.2.840.10008.6.1.1436":           ImagingProcedure101,
+	"1.2.840.10008.6.1.1437":           NICIPShortCodeImagingProcedure103,
+	"1.2.840.10008.6.1.1438":           NICIPSNOMEDImagingProcedure104,
+	"1.2.840.10008.6.1.1439":           ICD10PCSImagingProcedure105,
+	"1.2.840.10008.6.1.1440":           ICD10PCSNuclearMedicineProcedure106,
+	"1.2.840.10008.6.1.1441":           ICD10PCSRadiationTherapyProcedure107,
+	"1.2.840.10008.6.1.1442":           RTSegmentationPropertyCategory9580,
+	"1.2.840.10008.6.1.1443":           RadiotherapyRegistrationMark9581,
+	"1.2.840.10008.6.1.1444":           RadiotherapyDoseRegion9582,
+	"1.2.840.10008.6.1.1445":           AnatomicallyLocalizedLesionSegmentationType7199,
+	"1.2.840.10008.6.1.1446":           ReasonForRemovalFromOperationalUse7031,
+	"1.2.840.10008.6.1.1447":           GeneralUltrasoundReportDocumentTitle12320,
+	"1.2.840.10008.6.1.1448":           ElastographySite12321,
+	"1.2.840.10008.6.1.1449":           ElastographyMeasurementSite12322,
+	"1.2.840.10008.6.1.1450":           UltrasoundRelevantPatientCondition12323,
+	"1.2.840.10008.6.1.1451":           ShearWaveDetectionMethod12324,
+	"1.2.840.10008.6.1.1452":           LiverUltrasoundStudyIndication12325,
+	"1.2.840.10008.6.1.1453":           AnalogWaveformFilter3042,
+	"1.2.840.10008.6.1.1454":           DigitalWaveformFilter3043,
+	"1.2.840.10008.6.1.1455":           WaveformFilterLookupTableInputFrequencyUnit3044,
+	"1.2.840.10008.6.1.1456":           WaveformFilterLookupTableOutputMagnitudeUnit3045,
+	"1.2.840.10008.6.1.1457":           SpecificObservationSubjectClass272,
+	"1.2.840.10008.6.1.1458":           MovableBeamLimitingDeviceType9540,
+	"1.2.840.10008.6.1.1459":           RadiotherapyAcquisitionWorkItemSubtasks9260,
+	"1.2.840.10008.6.1.1460":           PatientPositionAcquisitionRadiationSourceLocations9261,
+	"1.2.840.10008.6.1.1461":           EnergyDerivationTypes9262,
+	"1.2.840.10008.6.1.1462":           KVImagingAcquisitionTechniques9263,
+	"1.2.840.10008.6.1.1463":           MVImagingAcquisitionTechniques9264,
+	"1.2.840.10008.6.1.1464":           PatientPositionAcquisitionProjectionTechniques9265,
+	"1.2.840.10008.6.1.1465":           PatientPositionAcquisitionCTTechniques9266,
+	"1.2.840.10008.6.1.1466":           PatientPositioningRelatedObjectPurposes9267,
+	"1.2.840.10008.6.1.1467":           PatientPositionAcquisitionDevices9268,
+	"1.2.840.10008.6.1.1468":           RTRadiationMetersetUnits9269,
+	"1.2.840.10008.6.1.1469":           AcquisitionInitiationTypes9270,
+	"1.2.840.10008.6.1.1470":           RTImagePatientPositionAcquisitionDevices9271,
+	"1.2.840.10008.6.1.1471":           PhotoacousticIlluminationMethod11001,
+	"1.2.840.10008.6.1.1472":           AcousticCouplingMedium11002,
+	"1.2.840.10008.6.1.1473":           UltrasoundTransducerTechnology11003,
+	"1.2.840.10008.6.1.1474":           SpeedOfSoundCorrectionMechanisms11004,
+	"1.2.840.10008.6.1.1475":           PhotoacousticReconstructionAlgorithmFamily11005,
+	"1.2.840.10008.6.1.1476":           PhotoacousticImagedProperty11006,
+	"1.2.840.10008.6.1.1477":           XRayRadiationDoseProcedureTypeReported10005,
+	"1.2.840.10008.6.1.1478":           TopicalTreatment4410,
+	"1.2.840.10008.6.1.1479":           LesionColor4411,
+	"1.2.840.10008.6.1.1480":           SpecimenStainForConfocalMicroscopy4412,
+	"1.2.840.10008.6.1.1481":           RTROIImageAcquisitionContext9272,
+	"1.2.840.10008.6.1.1482":           LobeOfLung6170,
+	"1.2.840.10008.6.1.1483":           ZoneOfLung6171,
+	"1.2.840.10008.6.1.1484":           SleepStage3046,
+	"1.2.840.10008.6.1.1485":           PatientPositionAcquisitionMRTechniques9273,
+	"1.2.840.10008.6.1.1486":           RTPlanRadiotherapyProcedureTechnique9583,
+	"1.2.840.10008.6.1.1487":           WaveformAnnotationClassification3047,
+	"1.2.840.10008.6.1.1488":           WaveformAnnotationsDocumentTitle3048,
+	"1.2.840.10008.6.1.1489":           EEGProcedure3049,
+	"1.2.840.10008.6.1.1490":           PatientConsciousness3050,
+	"1.2.840.10008.6.1.1491":           FollicleType12010,
+	"1.2.840.10008.6.1.1492":           BreastTissueSegmentationType7163,
+	"1.2.840.10008.6.1.1493":           ImplantedDevice3779,
+	"1.2.840.10008.6.1.1494":           SimilarityMeasure281,
+	"1.2.840.10008.6.1.1495":           WaveformAcquisitionModality34,
+	"1.2.840.10008.6.1.1496":           EnFaceProcessingAlgorithmFamily4274,
+	"1.2.840.10008.6.1.1497":           AnteriorEyeSegmentationSurface4275,
+	"1.2.840.10008.6.1.1498":           FetalEchocardiographyImageView12312,
+	"1.2.840.10008.6.1.1499":           CardiacUltrasoundFetalArrhythmiaMeasurements12313,
+	"1.2.840.10008.6.1.1500":           CommonFetalEchocardiographyMeasurements12314,
+	"1.2.840.10008.6.1.1501":           HeadAndNeckPrimaryAnatomicStructure4061,
+	"1.2.840.10008.6.1.1502":           VLView4062,
+	"1.2.840.10008.6.1.1503":           VLDentalView4063,
+	"1.2.840.10008.6.1.1504":           VLViewModifier4064,
+	"1.2.840.10008.6.1.1505":           VLDentalViewModifier4065,
+	"1.2.840.10008.6.1.1506":           OrthognathicFunctionalCondition4066,
+	"1.2.840.10008.6.1.1507":           OrthodonticFindingByInspection4067,
+	"1.2.840.10008.6.1.1508":           OrthodonticObservableEntity4068,
+	"1.2.840.10008.6.1.1509":           DentalOcclusion4069,
+	"1.2.840.10008.6.1.1510":           OrthodonticTreatmentProgress4070,
+	"1.2.840.10008.6.1.1511":           GeneralPhotographyDevice4071,
+	"1.2.840.10008.6.1.1512":           DevicesForThePurposeOfDentalPhotography4072,
+	"1.2.840.10008.6.1.1513":           CTDIPhantomDevice4053,
+	"1.2.840.10008.6.1.1514":           DiagnosticImagingProcedureWithoutIVContrast108,
+	"1.2.840.10008.6.1.1515":           DiagnosticImagingProcedureWithIVContrast109,
+	"1.2.840.10008.6.1.1516":           StructuralHeartProcedure12331,
+	"1.2.840.10008.6.1.1517":           StructuralHeartDevice12332,
+	"1.2.840.10008.6.1.1518":           StructuralHeartMeasurement12333,
+	"1.2.840.10008.6.1.1519":           AorticValveStructuralMeasurement12334,
+	"1.2.840.10008.6.1.1520":           MitralValveStructuralMeasurement12335,
+	"1.2.840.10008.6.1.1521":           TricuspidValveStructuralMeasurement12336,
+	"1.2.840.10008.6.1.1522":           StructuralHeartEchoMeasurement12337,
+	"1.2.840.10008.6.1.1523":           LeftAtrialAppendageClosureMeasurement12338,
+	"1.2.840.10008.6.1.1524":           StructuralHeartProcedureAnatomicSite12339,
+	"1.2.840.10008.6.1.1525":           IndicationForStructuralHeartProcedure12341,
+	"1.2.840.10008.6.1.1526":           BradycardiacAgent12342,
+	"1.2.840.10008.6.1.1527":           TransesophagealEchocardiographyScanPlane12343,
+	"1.2.840.10008.6.1.1528":           StructuralHeartMeasurementReportDocumentTitle12344,
+	"1.2.840.10008.6.1.1529":           PersonGenderIdentity7458,
+	"1.2.840.10008.6.1.1530":           CategoryOfSexParametersForClinicalUse7459,
+	"1.2.840.10008.6.1.1531":           ThirdPersonPronounSet7448,
+	"1.2.840.10008.6.1.1532":           CardiacStructureCalcificationQualitativeEvaluation12345,
+	"1.2.840.10008.6.1.1533":           VisualFieldMeasurements4280,
+	"1.2.840.10008.6.1.1534":           OpticDiscKeyMeasurements4281,
+	"1.2.840.10008.6.1.1535":           RetinalSectorMethods4282,
+	"1.2.840.10008.6.1.1536":           RNFLSectorMeasurements4283,
+	"1.2.840.10008.6.1.1537":           RNFLClockfaceMeasurements4284,
+	"1.2.840.10008.6.1.1538":           MacularThicknessKeyMeasurements4285,
+	"1.2.840.10008.6.1.1539":           GanglionCellMeasurementExtent4286,
+	"1.2.840.10008.6.1.1540":           GanglionCellKeyMeasurements4287,
+	"1.2.840.10008.6.1.1541":           GanglionCellSectorMeasurements4288,
+	"1.2.840.10008.6.1.1542":           GanglionCellSectorMethods4289,
+	"1.2.840.10008.6.1.1543":           EndothelialCellCountMeasurements4290,
+	"1.2.840.10008.6.1.1544":           OphthalmicImageROIMeasurements4291,
+	"1.2.840.10008.6.1.1545":           RTPlanApprovalAssertion9584,
+	"1.2.840.10008.6.1.1546":           EstimatedDeliveryDateMethod12026,
+	"1.2.840.10008.6.1.1547":           RTDoseCalculationAlgorithmFamily9585,
+	"1.2.840.10008.6.1.1548":           DoseIndexForDoseCalibration10012,
+	"1.2.840.10008.6.1.1549":           UltrasoundAttenuationImagingSite12036,
+	"1.2.840.10008.6.1.1550":           FetalAnatomySurveyAssessment12040,
+	"1.2.840.10008.6.1.1551":           FetalAnatomySurveyAssessmentHead12041,
+	"1.2.840.10008.6.1.1552":           FetalAnatomySurveyAssessmentFaceAndNeck12042,
+	"1.2.840.10008.6.1.1553":           FetalAnatomySurveyAssessmentChest12043,
+	"1.2.840.10008.6.1.1554":           FetalAnatomySurveyAssessmentHeart12044,
+	"1.2.840.10008.6.1.1555":           FetalAnatomySurveyAssessmentAbdomenAndPelvis12045,
+	"1.2.840.10008.6.1.1556":           FetalAnatomySurveyAssessmentSpine12046,
+	"1.2.840.10008.6.1.1557":           FetalAnatomySurveyAssessmentExtremities12047,
+	"1.2.840.10008.6.1.1558":           FetalAnatomySurveyAssessmentMaternal12048,
+	"1.2.840.10008.6.1.1559":           FetalAnatomySurveyPracticeGuideline12049,
+	"1.2.840.10008.6.1.1560":           SensitiveContentCategory900,
+	"1.2.840.10008.6.1.1561":           SensitiveContentDetail901,
+	"1.2.840.10008.6.1.1562":           ApplicationTypeCode406,
+	"1.2.840.10008.6.1.1563":           XRayModulationType10035,
+	"1.2.840.10008.6.1.1564":           RadiotherapyDoseRealWorldUnits9586,
+	"1.2.840.10008.6.1.1565":           RadiotherapyDoseInterpretedTypeCodes9587,
+	"1.2.840.10008.6.1.1566":           RadiotherapyDoseInterpretedTypeModifierCodes9588,
+	"1.2.840.10008.6.1.1567":           RadiotherapyDoseIntentCodes9589,
+	"1.2.840.10008.6.1.1568":           QualitySegmentationPropertyType7164,
+	"1.2.840.10008.6.1.1569":           UltrasoundZScorePopulationIndex12027,
+	"1.2.840.10008.6.1.1570":           FetalUltrasoundZScoreReferenceAuthority12028,
+	"1.2.840.10008.6.1.1571":           MetalArtifactReductionAlgorithmFamily10036,
 }

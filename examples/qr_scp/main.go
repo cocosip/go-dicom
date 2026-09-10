@@ -119,7 +119,6 @@ func main() {
 		return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
 	})
 
-	//nolint:staticcheck // this example also demonstrates the legacy slice handler.
 	srv.SetCFindHandler(repo.handleCFind)
 	srv.SetCMoveHandler(repo.handleCMove)
 	srv.SetCGetHandler(repo.handleCGet)
@@ -156,22 +155,21 @@ func main() {
 	fmt.Println("Server stopped.")
 }
 
-func (r *qrRepository) handleCFind(_ context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
-	matched := r.filterRecords(req.QueryLevel(), req.DataDataset())
-	results := reduceResults(req.QueryLevel(), matched)
+func (r *qrRepository) handleCFind(_ context.Context, op service.CFindOperation) error {
+	matched := r.filterRecords(op.QueryLevel(), op.Identifier())
+	results := reduceResults(op.QueryLevel(), matched)
 
 	if *verbose {
-		log.Printf("C-FIND level=%s matched=%d", req.QueryLevel(), len(results))
+		log.Printf("C-FIND level=%s matched=%d", op.QueryLevel(), len(results))
 	}
 
-	responses := make([]*dimse.CFindResponse, 0, len(results)+1)
 	for _, rec := range results {
-		identifier := buildFindIdentifier(req.QueryLevel(), rec)
-		responses = append(responses, dimse.NewCFindResponseFromRequest(req, status.CFindPending, identifier))
+		identifier := buildFindIdentifier(op.QueryLevel(), rec)
+		if err := op.SendPending(identifier); err != nil {
+			return err
+		}
 	}
-
-	responses = append(responses, dimse.NewCFindResponseFromRequest(req, status.Success, nil))
-	return responses, nil
+	return op.SendFinal(status.Success)
 }
 
 func (r *qrRepository) handleCMove(ctx context.Context, op service.CMoveOperation) error {

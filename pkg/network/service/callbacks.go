@@ -96,7 +96,7 @@ func (r *AssociationResponderFuncs) SendReject(ctx context.Context, result, sour
 //	            pc.AcceptTransferSyntaxes(false, pc.ProposedTransferSyntaxes...)
 //	        } else if pc.AbstractSyntax == uid.CTImageStorage.UID() {
 //	            // Accept CT images with specific transfer syntaxes
-//	            ts, _ := transfer.Lookup(uid.ExplicitVRLittleEndian)
+//	            ts, _ := transfer.Parse(uid.ExplicitVRLittleEndian.UID())
 //	            pc.AcceptTransferSyntaxes(true, ts)
 //	        } else {
 //	            // Reject unsupported abstract syntaxes

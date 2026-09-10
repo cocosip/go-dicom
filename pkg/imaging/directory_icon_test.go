@@ -12,6 +12,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 )
 
 func TestDirectoryIconGeneratorPreservesAspectRatioWithin128Pixels(t *testing.T) {
@@ -26,7 +28,7 @@ func TestDirectoryIconGeneratorPreservesAspectRatioWithin128Pixels(t *testing.T)
 		{name: "small image", width: 40, height: 20, wantWidth: 40, wantHeight: 20},
 		{name: "thin image", width: 300, height: 1, wantWidth: 128, wantHeight: 1},
 	}
-	generator := NewDirectoryIconGenerator()
+	generator := NewDirectoryIconGenerator(codec.NewRegistry())
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pixels := make([]byte, tt.width*tt.height)
@@ -56,9 +58,9 @@ func TestDirectoryIconGeneratorPreservesAspectRatioWithin128Pixels(t *testing.T)
 }
 
 func TestDirectoryIconGeneratorRendersMonochromeAndColor(t *testing.T) {
-	generator := NewDirectoryIconGenerator()
+	generator := NewDirectoryIconGenerator(codec.NewRegistry())
 
-	mono := iconTestDataset(t, 2, 1, 1, photometricMonochrome1, []byte{0, 255})
+	mono := iconTestDataset(t, 2, 1, 1, pixel.Monochrome1.Value, []byte{0, 255})
 	_, _, monoPixels, err := generator.GenerateDirectoryIcon(mono, 0)
 	if err != nil {
 		t.Fatalf("MONOCHROME1 GenerateDirectoryIcon() error = %v", err)
@@ -84,7 +86,7 @@ func TestDirectoryIconGeneratorUsesRequestedFrame(t *testing.T) {
 		t.Fatalf("set NumberOfFrames: %v", err)
 	}
 
-	_, _, pixels, err := NewDirectoryIconGenerator().GenerateDirectoryIcon(ds, 1)
+	_, _, pixels, err := NewDirectoryIconGenerator(codec.NewRegistry()).GenerateDirectoryIcon(ds, 1)
 	if err != nil {
 		t.Fatalf("GenerateDirectoryIcon(frame=1) error = %v", err)
 	}
@@ -96,7 +98,7 @@ func TestDirectoryIconGeneratorUsesRequestedFrame(t *testing.T) {
 func TestDirectoryIconGeneratorRejectsInvalidFrame(t *testing.T) {
 	ds := iconTestDataset(t, 1, 1, 1, "MONOCHROME2", []byte{0})
 	for _, frame := range []int{-1, 1} {
-		if _, _, _, err := NewDirectoryIconGenerator().GenerateDirectoryIcon(ds, frame); err == nil {
+		if _, _, _, err := NewDirectoryIconGenerator(codec.NewRegistry()).GenerateDirectoryIcon(ds, frame); err == nil {
 			t.Fatalf("GenerateDirectoryIcon(frame=%d) succeeded", frame)
 		}
 	}

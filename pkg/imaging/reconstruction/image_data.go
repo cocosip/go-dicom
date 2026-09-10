@@ -4,6 +4,8 @@
 package reconstruction
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,13 +13,31 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
-	"github.com/cocosip/go-dicom/pkg/imaging"
-	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/geometry"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
+
+// ErrTranscodeManagerRequired indicates that an encapsulated reconstruction
+// source cannot be decoded without an explicitly configured Manager.
+var ErrTranscodeManagerRequired = errors.New("reconstruction transcode manager required")
+
+type imageDataConfig struct {
+	transcodeManager *transcode.Manager
+}
+
+// ImageDataOption configures reconstruction source decoding.
+type ImageDataOption func(*imageDataConfig)
+
+// WithTranscodeManager sets the Manager used to decode encapsulated source frames.
+func WithTranscodeManager(manager *transcode.Manager) ImageDataOption {
+	return func(config *imageDataConfig) {
+		config.transcodeManager = manager
+	}
+}
 
 const (
 	maxReconstructionFrames     = 65535
@@ -32,7 +52,7 @@ type ImageData struct {
 	dataset              *dataset.Dataset
 	frameIndex           int
 	geometry             *geometry.FrameGeometry
-	pixelData            *imaging.DicomPixelData
+	pixelData            *pixeldata.Data
 	sourceSOPClassUID    string
 	sourceSOPInstanceUID string
 	sortingPosition      float64
@@ -42,8 +62,8 @@ type ImageData struct {
 }
 
 // NewImageData builds one source-frame view. Native frame bytes are retained;
-// encapsulated inputs are decoded one frame at a time through the codec registry.
-func NewImageData(ds *dataset.Dataset, frame int) (*ImageData, error) {
+// encapsulated inputs are decoded one frame at a time through the configured Manager.
+func NewImageData(ds *dataset.Dataset, frame int, options ...ImageDataOption) (*ImageData, error) {
 	if ds == nil {
 		return nil, fmt.Errorf("reconstruction source dataset is nil")
 	}
@@ -57,14 +77,20 @@ func NewImageData(ds *dataset.Dataset, frame int) (*ImageData, error) {
 	if err := validateSourceDimensions(ds, count); err != nil {
 		return nil, err
 	}
-	pixels, err := imaging.CreatePixelData(ds)
+	pixels, err := pixeldata.FromDataset(ds)
 	if err != nil {
 		return nil, fmt.Errorf("read frame %d pixel data: %w", frame, err)
 	}
-	return newImageData(ds, frame, pixels)
+	config := &imageDataConfig{}
+	for _, option := range options {
+		if option != nil {
+			option(config)
+		}
+	}
+	return newImageData(ds, frame, pixels, config.transcodeManager)
 }
 
-func newImageData(ds *dataset.Dataset, frame int, sourcePixels *imaging.DicomPixelData) (*ImageData, error) {
+func newImageData(ds *dataset.Dataset, frame int, sourcePixels *pixeldata.Data, manager *transcode.Manager) (*ImageData, error) {
 	sopClass := ds.TryGetString(tag.SOPClassUID)
 	if !supportedSourceSOPClass(sopClass) {
 		return nil, fmt.Errorf("unsupported reconstruction SOP Class UID %q", sopClass)
@@ -99,8 +125,8 @@ func newImageData(ds *dataset.Dataset, frame int, sourcePixels *imaging.DicomPix
 	}
 
 	pixelFrame := frame
-	if pixels.IsEncapsulated() {
-		pixels, err = decodeFrame(ds, pixels, frame)
+	if pixels.Encapsulated() {
+		pixels, err = decodeFrame(ds, pixels, frame, manager)
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +154,7 @@ func newImageData(ds *dataset.Dataset, frame int, sourcePixels *imaging.DicomPix
 }
 
 // NewImageDataFromDataset expands all frames in a classic or Enhanced CT/MR dataset.
-func NewImageDataFromDataset(ds *dataset.Dataset) ([]*ImageData, error) {
+func NewImageDataFromDataset(ds *dataset.Dataset, options ...ImageDataOption) ([]*ImageData, error) {
 	if ds == nil {
 		return nil, fmt.Errorf("reconstruction source dataset is nil")
 	}
@@ -142,13 +168,19 @@ func NewImageDataFromDataset(ds *dataset.Dataset) ([]*ImageData, error) {
 	if err := validateSourceDimensions(ds, count); err != nil {
 		return nil, err
 	}
-	pixels, err := imaging.CreatePixelData(ds)
+	pixels, err := pixeldata.FromDataset(ds)
 	if err != nil {
 		return nil, fmt.Errorf("read pixel data: %w", err)
 	}
+	config := &imageDataConfig{}
+	for _, option := range options {
+		if option != nil {
+			option(config)
+		}
+	}
 	images := make([]*ImageData, count)
 	for frame := range count {
-		image, err := newImageData(ds, frame, pixels)
+		image, err := newImageData(ds, frame, pixels, config.transcodeManager)
 		if err != nil {
 			return nil, err
 		}
@@ -307,7 +339,7 @@ func (image *ImageData) ValueAt(x, y int) (float64, bool, error) {
 	if image == nil || image.pixelData == nil {
 		return 0, false, fmt.Errorf("image pixel data is nil")
 	}
-	stored, err := image.pixelData.GetSample(image.pixelFrame, x, y, 0)
+	stored, err := image.pixelData.Sample(image.pixelFrame, x, y, 0)
 	if err != nil {
 		return 0, false, err
 	}
@@ -386,7 +418,10 @@ func supportedSourceSOPClass(value string) bool {
 		value == uid.MRImageStorage.UID() || value == uid.EnhancedMRImageStorage.UID()
 }
 
-func decodeFrame(ds *dataset.Dataset, source *imaging.DicomPixelData, frame int) (*imaging.DicomPixelData, error) {
+func decodeFrame(ds *dataset.Dataset, source *pixeldata.Data, frame int, manager *transcode.Manager) (*pixeldata.Data, error) {
+	if manager == nil {
+		return nil, ErrTranscodeManagerRequired
+	}
 	inputSyntax := ds.InternalTransferSyntax()
 	if inputSyntax == nil {
 		parsed, err := transfer.Parse(source.Info.TransferSyntaxUID)
@@ -395,11 +430,11 @@ func decodeFrame(ds *dataset.Dataset, source *imaging.DicomPixelData, frame int)
 		}
 		inputSyntax = parsed
 	}
-	transcoder, err := codec.GetDefaultManager().CreateTranscoder(inputSyntax, transfer.ExplicitVRLittleEndian)
+	transcoder, err := manager.NewTranscoder(inputSyntax, transfer.ExplicitVRLittleEndian)
 	if err != nil {
 		return nil, fmt.Errorf("prepare decoder for frame %d: %w", frame, err)
 	}
-	data, err := transcoder.DecodeFrame(ds, frame)
+	data, err := transcoder.DecodeFrame(context.Background(), ds, frame)
 	if err != nil {
 		return nil, fmt.Errorf("decode frame %d: %w", frame, err)
 	}
@@ -407,7 +442,7 @@ func decodeFrame(ds *dataset.Dataset, source *imaging.DicomPixelData, frame int)
 	info.NumberOfFrames = 1
 	info.Encapsulated = false
 	info.TransferSyntaxUID = transfer.ExplicitVRLittleEndian.UID().UID()
-	return imaging.NewDicomPixelDataFromBytes(&info, data)
+	return pixeldata.NewFromBytes(&info, data)
 }
 
 func frameRescale(ds *dataset.Dataset, frame int) (float64, float64, error) {

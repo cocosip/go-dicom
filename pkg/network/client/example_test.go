@@ -245,8 +245,8 @@ func ExampleClient_CStoreMultiple() {
 	fmt.Printf("Successfully stored %d datasets\n", count)
 }
 
-// ExampleClient_Ping demonstrates using Ping to verify connection health.
-func ExampleClient_Ping() {
+// ExampleClient_CEcho_connectionHealth demonstrates using C-ECHO to verify connection health.
+func ExampleClient_CEcho_connectionHealth() {
 	c := client.New(
 		client.WithCallingAE("MY_SCU"),
 		client.WithCalledAE("PACS_SCP"),
@@ -266,8 +266,8 @@ func ExampleClient_Ping() {
 	}
 	defer func() { _ = c.Close() }()
 
-	// Use Ping to verify connection is still alive
-	if err := c.Ping(ctx); err != nil {
+	// Use C-ECHO to verify connection is still alive
+	if err := c.CEcho(ctx); err != nil {
 		log.Fatalf("Connection is down: %v", err)
 	}
 
@@ -290,8 +290,8 @@ func ExampleDial() {
 	defer func() { _ = c.Close() }()
 
 	// Client is ready to use
-	if err := c.Ping(ctx); err != nil {
-		log.Fatalf("Ping failed: %v", err)
+	if err := c.CEcho(ctx); err != nil {
+		log.Fatalf("C-ECHO failed: %v", err)
 	}
 
 	fmt.Println("Connected and verified successfully")

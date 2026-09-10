@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/charset"
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 	"golang.org/x/text/encoding"
 )
 

@@ -10,6 +10,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 // NewDicomImageFromDataset creates a renderable image from a DICOM dataset.
@@ -17,13 +19,13 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 	if ds == nil {
 		return nil, fmt.Errorf("dataset is nil")
 	}
-	config := &dicomImageConfig{codecRegistry: codec.GetGlobalRegistry()}
+	config := &dicomImageConfig{codecRegistry: codec.GlobalRegistry()}
 	for _, option := range options {
 		if option != nil {
 			option(config)
 		}
 	}
-	pixelData, err := CreatePixelData(ds)
+	pixelData, err := pixeldata.FromDataset(ds)
 	if err != nil {
 		return nil, fmt.Errorf("create pixel data: %w", err)
 	}
@@ -33,25 +35,25 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 	image.voiLUTIndex = config.voiLUTIndex
 	image.autoApplyLUTToAllFrames = true
 	image.overlays = imageOverlays(image.dataset, pixelData)
-	if pixelData.IsEncapsulated() {
+	if pixelData.Encapsulated() {
 		syntax, err := transfer.Parse(pixelData.Info.TransferSyntaxUID)
 		if err != nil {
 			return nil, fmt.Errorf("parse pixel data transfer syntax: %w", err)
 		}
-		decoder, ok := config.codecRegistry.GetCodec(syntax)
+		decoder, ok := config.codecRegistry.Lookup(syntax)
 		if !ok {
 			return nil, fmt.Errorf("no codec available for transfer syntax %s", pixelData.Info.TransferSyntaxUID)
 		}
 		parameters := config.codecParameters
 		if parameters == nil {
-			parameters = decoder.GetDefaultParameters()
+			parameters = decoder.DefaultParameters()
 		}
 		if err := image.DecodeIfNeeded(decoder, parameters); err != nil {
 			return nil, err
 		}
 		if image.pixelData.Info.PhotometricInterpretation != nil &&
-			image.pixelData.Info.PhotometricInterpretation.Value == photometricPaletteColor {
-			if err := convertPaletteToRGB(image.dataset, image.pixelData); err != nil {
+			image.pixelData.Info.PhotometricInterpretation.Value == pixel.PaletteColor.Value {
+			if err := pixeldata.ConvertPaletteToRGB(image.dataset, image.pixelData); err != nil {
 				return nil, fmt.Errorf("palette conversion failed: %w", err)
 			}
 		}

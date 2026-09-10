@@ -12,7 +12,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
@@ -86,9 +85,9 @@ func TestWriteReadSingleFrame(t *testing.T) {
 	pixelDataSize := int(rows) * int(cols) * 2 // 2 bytes per pixel for 16-bit
 	pixelData := make([]byte, pixelDataSize)
 
-	// Fill with pattern data (gradient) with explicit bounds check to satisfy gosec G115.
+	// i is bounded by 256*256 pixels, so every value fits in uint16.
 	for i := 0; i < pixelDataSize/2; i++ {
-		value := testutil.SafeUint16FromInt(i)
+		value := uint16(i) // #nosec G115 -- i is in [0, 65535]
 		pixelData[i*2] = byte(value & 0xFF)
 		pixelData[i*2+1] = byte((value >> 8) & 0xFF)
 	}
@@ -257,14 +256,12 @@ func TestWriteReadMultiFrame(t *testing.T) {
 	// Fill each frame with different pattern
 	for frame := 0; frame < numFrames; frame++ {
 		frameOffset := frame * frameSize
-		// Safe multiplication with bounds-check to avoid int->uint16 overflow
-		prod := int(uint32(frame) * 6000)
-		baseValue := testutil.SafeUint16FromInt(prod) // Different base value per frame
+		// frame is in [0, 9], so the base value is at most 54000.
+		baseValue := uint16(frame * 6000) // #nosec G115 -- bounded by numFrames
 
 		for i := 0; i < frameSize/2; i++ {
-			// Safe addition with bounds-check
-			sum := int(baseValue) + (i % 1000)
-			value := testutil.SafeUint16FromInt(sum)
+			// baseValue + 999 is at most 54999 and cannot overflow uint16.
+			value := baseValue + uint16(i%1000) // #nosec G115 -- modulo bounds the value
 			pixelData[frameOffset+i*2] = byte(value & 0xFF)
 			pixelData[frameOffset+i*2+1] = byte((value >> 8) & 0xFF)
 		}

@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/status"
@@ -41,6 +44,28 @@ func TestNew(t *testing.T) {
 	}
 	if config.TransportWriteTimeout != 30*time.Second {
 		t.Errorf("Expected TransportWriteTimeout 30s, got %v", config.TransportWriteTimeout)
+	}
+	if config.TranscodeManager == nil {
+		t.Fatal("default server has no transcode Manager")
+	}
+}
+
+func TestNewUsesConfiguredTranscodeManager(t *testing.T) {
+	manager, err := transcode.NewManager(codec.NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := New(WithTranscodeManager(manager))
+	if server.GetConfig().TranscodeManager != manager {
+		t.Fatal("New did not retain the configured transcode Manager")
+	}
+}
+
+func TestNewUsesConfiguredTransferSyntaxRegistry(t *testing.T) {
+	registry := transfer.NewRegistry()
+	server := New(WithTransferSyntaxRegistry(registry))
+	if server.GetConfig().TransferSyntaxRegistry != registry {
+		t.Fatal("New did not retain the configured Transfer Syntax Registry")
 	}
 }
 
@@ -101,12 +126,9 @@ func TestSetHandlers(_ *testing.T) {
 	})
 
 	// Set C-FIND handler
-	server.SetCFindHandler(func(_ context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
-		return []*dimse.CFindResponse{
-			dimse.NewCFindResponseFromRequest(req, status.Success, nil),
-		}, nil
+	server.SetCFindHandler(func(_ context.Context, operation service.CFindOperation) error {
+		return operation.SendFinal(status.Success)
 	})
-	server.SetCFindStreamHandler(func(_ context.Context, _ service.CFindOperation) error { return nil })
 
 	// Note: Handlers are now stored as service options and cannot be directly verified.
 	// They will be tested through integration tests that actually invoke the handlers.

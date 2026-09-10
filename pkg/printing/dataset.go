@@ -10,10 +10,10 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	dicomendian "github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	dicomendian "github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 const (

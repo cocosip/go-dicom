@@ -74,8 +74,9 @@ func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T)
 		ServerResponse: []byte("server-token"),
 	}
 
-	assoc := FromAAssociateRQ(rq)
-	if err := ApplyAAssociateAC(assoc, ac); err != nil {
+	registry := transfer.NewRegistry()
+	assoc := FromAAssociateRQ(rq, registry)
+	if err := ApplyAAssociateAC(assoc, ac, registry); err != nil {
 		t.Fatalf("ApplyAAssociateAC() error = %v", err)
 	}
 
@@ -127,7 +128,7 @@ func TestFromAAssociateRQCombinesCommonAndApplicationNegotiation(t *testing.T) {
 		RelatedGeneralSOPClassUIDs: []string{testRelatedGeneralSOPClassUID1, testRelatedGeneralSOPClassUID2},
 	}}
 
-	assoc := FromAAssociateRQ(rq)
+	assoc := FromAAssociateRQ(rq, transfer.NewRegistry())
 	if len(assoc.ExtendedNegotiations) != 1 {
 		t.Fatalf("extended negotiations = %#v, want one combined entry", assoc.ExtendedNegotiations)
 	}
@@ -144,6 +145,70 @@ func TestFromAAssociateRQCombinesCommonAndApplicationNegotiation(t *testing.T) {
 	if negotiation.RequestedApplicationInfo[0] != 1 ||
 		negotiation.RelatedGeneralSOPClassUIDs[0] != testRelatedGeneralSOPClassUID1 {
 		t.Fatalf("association retained caller-owned slices: %#v", negotiation)
+	}
+}
+
+func TestFromAAssociateRQUsesTransferSyntaxRegistry(t *testing.T) {
+	registry := transfer.NewRegistry()
+	replacement := transfer.NewBuilder(transfer.ExplicitVRLittleEndian.UID()).
+		SetExplicitVR(true).
+		Build()
+	if _, err := registry.Replace(replacement); err != nil {
+		t.Fatalf("Registry.Replace() error = %v", err)
+	}
+	rq := pdu.NewAAssociateRQ()
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID:               1,
+		AbstractSyntax:   testStorageSOPClassUID,
+		TransferSyntaxes: []string{testExplicitVRLittleEndianUID},
+	}}
+
+	assoc := FromAAssociateRQ(rq, registry)
+	if got := assoc.PresentationContexts[0].ProposedTransferSyntaxes[0]; got != replacement {
+		t.Fatal("FromAAssociateRQ() did not use the configured Transfer Syntax Registry")
+	}
+}
+
+func TestFromAAssociateACStoresAcceptedApplicationInfo(t *testing.T) {
+	ac := pdu.NewAAssociateAC()
+	ac.UserInformation.ExtendedNegotiations = []pdu.ExtendedNegotiation{{
+		SOPClassUID:         testExtendedSOPClassUID,
+		ServiceClassAppInfo: []byte{1, 0, 1},
+	}}
+
+	assoc := FromAAssociateAC(ac, transfer.NewRegistry())
+	negotiation := assoc.FindExtendedNegotiation(testExtendedSOPClassUID)
+	if negotiation == nil {
+		t.Fatal("accepted extended negotiation was not retained")
+	}
+	if negotiation.RequestedApplicationInfo != nil {
+		t.Fatalf("requested application info = %v, want nil for an AC-only association", negotiation.RequestedApplicationInfo)
+	}
+	if !bytes.Equal(negotiation.AcceptedApplicationInfo, []byte{1, 0, 1}) {
+		t.Fatalf("accepted application info = %v, want [1 0 1]", negotiation.AcceptedApplicationInfo)
+	}
+	ac.UserInformation.ExtendedNegotiations[0].ServiceClassAppInfo[0] = 9
+	if negotiation.AcceptedApplicationInfo[0] != 1 {
+		t.Fatal("association retained the AC PDU application-info slice")
+	}
+}
+
+func TestExtendedNegotiationCloneOwnsRequestedAndAcceptedApplicationInfo(t *testing.T) {
+	original := &ExtendedNegotiation{
+		SOPClassUID:              testExtendedSOPClassUID,
+		RequestedApplicationInfo: []byte{1, 1, 0},
+		AcceptedApplicationInfo:  []byte{1, 0, 1},
+	}
+
+	clone := original.Clone()
+	clone.RequestedApplicationInfo[0] = 9
+	clone.AcceptedApplicationInfo[0] = 8
+
+	if !bytes.Equal(original.RequestedApplicationInfo, []byte{1, 1, 0}) {
+		t.Fatalf("clone retained requested application-info storage: %v", original.RequestedApplicationInfo)
+	}
+	if !bytes.Equal(original.AcceptedApplicationInfo, []byte{1, 0, 1}) {
+		t.Fatalf("clone retained accepted application-info storage: %v", original.AcceptedApplicationInfo)
 	}
 }
 
@@ -192,7 +257,7 @@ func TestToAAssociateACIncludesOnlyExplicitlyAcceptedNegotiation(t *testing.T) {
 		PrimaryField:              []byte("request-token"),
 	}
 
-	assoc := FromAAssociateRQ(rq)
+	assoc := FromAAssociateRQ(rq, transfer.NewRegistry())
 	assoc.PresentationContexts[0].Accept(assoc.PresentationContexts[0].ProposedTransferSyntaxes[0])
 	withoutAcceptance := ToAAssociateAC(assoc)
 	if got := withoutAcceptance.UserInformation.ExtendedNegotiations; len(got) != 0 {
@@ -262,7 +327,8 @@ func TestApplyAAssociateACRejectsRoleNotRequested(t *testing.T) {
 		SCPRole:     1,
 	}}
 
-	err := ApplyAAssociateAC(FromAAssociateRQ(rq), ac)
+	registry := transfer.NewRegistry()
+	err := ApplyAAssociateAC(FromAAssociateRQ(rq, registry), ac, registry)
 	if err == nil || !strings.Contains(err.Error(), "unrequested SCP role") {
 		t.Fatalf("ApplyAAssociateAC error = %v, want unrequested SCP role error", err)
 	}

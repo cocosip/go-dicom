@@ -11,17 +11,20 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	golangdraw "golang.org/x/image/draw"
 )
 
 const maximumDirectoryIconDimension = 128
 
 // DirectoryIconGenerator renders DICOM datasets as DICOMDIR-compatible icons.
-type DirectoryIconGenerator struct{}
+type DirectoryIconGenerator struct {
+	registry *codec.Registry
+}
 
-// NewDirectoryIconGenerator creates a pure-Go DICOMDIR icon generator.
-func NewDirectoryIconGenerator() *DirectoryIconGenerator {
-	return &DirectoryIconGenerator{}
+// NewDirectoryIconGenerator creates a pure-Go DICOMDIR icon generator using registry.
+func NewDirectoryIconGenerator(registry *codec.Registry) *DirectoryIconGenerator {
+	return &DirectoryIconGenerator{registry: registry}
 }
 
 // GenerateDirectoryIcon renders frame as an 8-bit grayscale image no larger than 128x128.
@@ -32,7 +35,7 @@ func (g *DirectoryIconGenerator) GenerateDirectoryIcon(ds *dataset.Dataset, fram
 	if ds == nil {
 		return 0, 0, nil, fmt.Errorf("DICOM Dataset cannot be nil")
 	}
-	pixelData, err := CreatePixelData(ds)
+	pixelData, err := pixeldata.FromDataset(ds)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("create DICOM pixel data: %w", err)
 	}
@@ -42,15 +45,18 @@ func (g *DirectoryIconGenerator) GenerateDirectoryIcon(ds *dataset.Dataset, fram
 
 	dicomImage := NewDicomImage(pixelData)
 	if pixelData.Info.Encapsulated {
+		if g.registry == nil {
+			return 0, 0, nil, fmt.Errorf("directory icon codec registry is nil")
+		}
 		syntax, err := transfer.Parse(pixelData.Info.TransferSyntaxUID)
 		if err != nil {
 			return 0, 0, nil, fmt.Errorf("parse pixel transfer syntax: %w", err)
 		}
-		decoder, ok := codec.GetGlobalRegistry().GetCodec(syntax)
+		decoder, ok := g.registry.Lookup(syntax)
 		if !ok {
 			return 0, 0, nil, fmt.Errorf("no codec registered for transfer syntax %s", syntax.UID().UID())
 		}
-		if err := dicomImage.DecodeIfNeeded(decoder, decoder.GetDefaultParameters()); err != nil {
+		if err := dicomImage.DecodeIfNeeded(decoder, decoder.DefaultParameters()); err != nil {
 			return 0, 0, nil, err
 		}
 	}

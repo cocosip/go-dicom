@@ -10,8 +10,8 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
-	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
@@ -100,8 +100,12 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	message := req.message
 	var pc *association.PresentationContext
 	if req.message.CommandField() == uint16(dimse.CommandCStoreRQ) {
+		ctx := req.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		var err error
-		pc, message, err = prepareCStoreMessage(assoc, req.message)
+		pc, message, err = s.prepareCStoreMessage(ctx, assoc, req.message)
 		if err != nil {
 			return err
 		}
@@ -189,7 +193,7 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	return nil
 }
 
-func prepareCStoreMessage(assoc *association.Association, message dimse.Message) (*association.PresentationContext, dimse.Message, error) {
+func (s *Service) prepareCStoreMessage(ctx context.Context, assoc *association.Association, message dimse.Message) (*association.PresentationContext, dimse.Message, error) {
 	dataDS := message.DataDataset()
 	if dataDS == nil {
 		return nil, message, nil
@@ -238,17 +242,21 @@ func prepareCStoreMessage(assoc *association.Association, message dimse.Message)
 		return candidates[0], message, nil
 	}
 
-	manager := codec.GetDefaultManager()
+	manager := s.config.transcodeManager
+	if manager == nil {
+		return nil, nil, fmt.Errorf("%w: cannot convert C-STORE SOP Class %s from %s",
+			ErrTranscodeManagerUnavailable, sopClassUID, sourceSyntax.UID().UID())
+	}
 	for _, candidate := range candidates {
 		if !manager.CanTranscode(sourceSyntax, candidate.AcceptedTransferSyntax) {
 			continue
 		}
-		transcoder, err := manager.CreateTranscoder(sourceSyntax, candidate.AcceptedTransferSyntax)
+		transcoder, err := manager.NewTranscoder(sourceSyntax, candidate.AcceptedTransferSyntax)
 		if err != nil {
 			return nil, nil, fmt.Errorf("create C-STORE transcoder from %s to %s: %w",
 				sourceSyntax.UID().UID(), candidate.AcceptedTransferSyntax.UID().UID(), err)
 		}
-		transcoded, err := transcoder.Transcode(dataDS)
+		transcoded, err := transcoder.Transcode(ctx, dataDS)
 		if err != nil {
 			return nil, nil, fmt.Errorf("transcode C-STORE dataset from %s to %s: %w",
 				sourceSyntax.UID().UID(), candidate.AcceptedTransferSyntax.UID().UID(), err)
@@ -261,7 +269,8 @@ func prepareCStoreMessage(assoc *association.Association, message dimse.Message)
 		acceptedSyntaxes = append(acceptedSyntaxes, candidate.AcceptedTransferSyntax.UID().UID())
 	}
 	return nil, nil, fmt.Errorf(
-		"no accepted transfer syntax for C-STORE SOP Class %s is directly usable or transcodable from %s; accepted transfer syntaxes: %s",
+		"%w: no accepted transfer syntax for C-STORE SOP Class %s is directly usable or transcodable from %s; accepted transfer syntaxes: %s",
+		transcode.ErrCodecUnavailable,
 		sopClassUID, sourceSyntax.UID().UID(), strings.Join(acceptedSyntaxes, ", "))
 }
 

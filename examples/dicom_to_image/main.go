@@ -10,6 +10,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/imaging"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 )
 
@@ -77,7 +79,7 @@ func main() {
 
 	// Create DICOM image from dataset
 	fmt.Println("Extracting pixel data...")
-	pixelData, err := imaging.CreatePixelData(result.Dataset)
+	pixelData, err := pixeldata.FromDataset(result.Dataset)
 	if err != nil {
 		fmt.Printf("Failed to extract pixel data: %v\n", err)
 		fmt.Println("\nPress Enter to exit...")
@@ -106,7 +108,7 @@ func main() {
 	}
 
 	// Print some pixel values for debugging
-	frameData, err := pixelData.GetFrame(*frame)
+	frameData, err := pixelData.Frame(context.Background(), *frame)
 	if err == nil && len(frameData) > 0 {
 		fmt.Printf("\nPixel data sample (first 10 bytes):\n  ")
 		for i := 0; i < 10 && i < len(frameData); i++ {

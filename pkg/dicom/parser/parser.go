@@ -23,11 +23,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
@@ -152,14 +152,15 @@ type parseContext struct {
 	ctx context.Context
 
 	// Configuration options
-	maxElementSize        uint32           // Maximum element size to read (default 500MB, 0 = unlimited)
-	stopAtTag             *tag.Tag         // Stop parsing when this tag is reached
-	stopBeforePixelData   bool             // Stop before pixel values at any dataset depth
-	readOption            ReadOption       // How to handle large elements
-	largeObjectSize       uint32           // Size threshold for "large" objects (default 64KB)
-	assumedTransferSyntax *transfer.Syntax // Transfer syntax to use for raw datasets without file meta
-	sequenceItemObserver  SequenceItemObserver
-	position              *readerPosition
+	maxElementSize         uint32           // Maximum element size to read (default 500MB, 0 = unlimited)
+	stopAtTag              *tag.Tag         // Stop parsing when this tag is reached
+	stopBeforePixelData    bool             // Stop before pixel values at any dataset depth
+	readOption             ReadOption       // How to handle large elements
+	largeObjectSize        uint32           // Size threshold for "large" objects (default 64KB)
+	assumedTransferSyntax  *transfer.Syntax // Transfer syntax to use for raw datasets without file meta
+	transferSyntaxRegistry *transfer.Registry
+	sequenceItemObserver   SequenceItemObserver
+	position               *readerPosition
 
 	// File format detection
 	detectedFormat FileFormat
@@ -240,6 +241,14 @@ func WithAssumedTransferSyntax(ts *transfer.Syntax) Option {
 	}
 }
 
+// WithTransferSyntaxRegistry sets the isolated registry used to resolve the
+// Transfer Syntax UID from File Meta Information.
+func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
+	return func(ctx *parseContext) {
+		ctx.transferSyntaxRegistry = registry
+	}
+}
+
 // WithContext sets the context for cancellation during parsing.
 // The context is checked before each blocking read operation. If the context
 // is cancelled, the parse is aborted with the context error.
@@ -256,15 +265,16 @@ func WithContext(parent context.Context) Option {
 // newParseContext creates a new parse context with the given options.
 func newParseContext(opts ...Option) *parseContext {
 	ctx := &parseContext{
-		ctx:             context.Background(),
-		byteOrder:       binary.LittleEndian,
-		isExplicitVR:    true,
-		textEncoding:    charset.Default,
-		textEncodings:   []encoding.Encoding{charset.Default},
-		readOption:      ReadDefault,
-		largeObjectSize: 65536,     // Default 64KB
-		maxElementSize:  524288000, // Default 500MB (prevent runaway allocation)
-		detectedFormat:  FormatUnknown,
+		ctx:                    context.Background(),
+		byteOrder:              binary.LittleEndian,
+		isExplicitVR:           true,
+		textEncoding:           charset.Default,
+		textEncodings:          []encoding.Encoding{charset.Default},
+		readOption:             ReadDefault,
+		largeObjectSize:        65536,     // Default 64KB
+		maxElementSize:         524288000, // Default 500MB (prevent runaway allocation)
+		detectedFormat:         FormatUnknown,
+		transferSyntaxRegistry: transfer.NewRegistry(),
 	}
 	for _, opt := range opts {
 		opt(ctx)
@@ -658,7 +668,13 @@ func (p *parseContext) setTransferSyntax(metaDS *dataset.Dataset) error {
 	}
 
 	// Look up transfer syntax
-	ts, err := transfer.Parse(tsUID)
+	var ts *transfer.Syntax
+	var err error
+	if p.transferSyntaxRegistry == nil {
+		ts, err = transfer.Parse(tsUID)
+	} else {
+		ts, err = p.transferSyntaxRegistry.Parse(tsUID)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to parse transfer syntax UID %s: %w", tsUID, err)
 	}

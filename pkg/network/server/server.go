@@ -14,6 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
@@ -104,6 +107,13 @@ type Config struct {
 	// MetricsObserver receives vendor-neutral network metrics.
 	MetricsObserver observability.MetricsObserver
 
+	// TranscodeManager selects codecs for C-STORE Dataset transcoding.
+	TranscodeManager *transcode.Manager
+
+	// TransferSyntaxRegistry resolves standard and application-defined syntaxes
+	// during association negotiation.
+	TransferSyntaxRegistry *transfer.Registry
+
 	// Port is the TCP port to listen on
 	// Default: 104 (standard DICOM port)
 	Port int
@@ -163,6 +173,20 @@ func WithEventObserver(observer observability.EventObserver) Option {
 // WithMetricsObserver sets the vendor-neutral network metrics observer.
 func WithMetricsObserver(observer observability.MetricsObserver) Option {
 	return func(o *Config) { o.MetricsObserver = observer }
+}
+
+// WithTranscodeManager sets the Manager passed to each network Service.
+func WithTranscodeManager(manager *transcode.Manager) Option {
+	return func(o *Config) {
+		o.TranscodeManager = manager
+	}
+}
+
+// WithTransferSyntaxRegistry sets the isolated registry used during association negotiation.
+func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
+	return func(o *Config) {
+		o.TransferSyntaxRegistry = registry
+	}
 }
 
 // WithPort sets the listening port.
@@ -247,6 +271,10 @@ func WithTLSConfig(tlsConfig *tls.Config) Option {
 
 // defaultServerConfig returns the default server configuration.
 func defaultServerConfig() *Config {
+	manager, err := transcode.NewManager(codec.GlobalRegistry())
+	if err != nil {
+		panic(fmt.Sprintf("create default transcode manager: %v", err))
+	}
 	return &Config{
 		Port:                      104,
 		MaxPDULength:              16384,
@@ -259,6 +287,8 @@ func defaultServerConfig() *Config {
 		ImplementationVersionName: "GO-DICOM-1.0",
 		MaxConnections:            0, // No limit
 		TLSConfig:                 nil,
+		TranscodeManager:          manager,
+		TransferSyntaxRegistry:    transfer.NewRegistry(),
 	}
 }
 
@@ -304,21 +334,11 @@ func (s *Server) SetCStoreHandler(handler func(context.Context, *dimse.CStoreReq
 	s.serviceOptions = append(s.serviceOptions, service.WithCStoreHandler(handler))
 }
 
-// SetCFindHandler sets the legacy C-FIND request handler.
-//
-// Deprecated: use SetCFindStreamHandler for large result sets.
-func (s *Server) SetCFindHandler(handler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)) {
+// SetCFindHandler sets a C-FIND handler that sends results as they become available.
+func (s *Server) SetCFindHandler(handler func(context.Context, service.CFindOperation) error) {
 	s.optionsMu.Lock()
 	defer s.optionsMu.Unlock()
 	s.serviceOptions = append(s.serviceOptions, service.WithCFindHandler(handler))
-}
-
-// SetCFindStreamHandler sets a C-FIND handler that sends results as they
-// become available without first constructing a complete response slice.
-func (s *Server) SetCFindStreamHandler(handler func(context.Context, service.CFindOperation) error) {
-	s.optionsMu.Lock()
-	defer s.optionsMu.Unlock()
-	s.serviceOptions = append(s.serviceOptions, service.WithCFindStreamHandler(handler))
 }
 
 // SetCMoveHandler sets the C-MOVE handler via a CMoveOperation interface.
@@ -724,6 +744,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 func (s *Server) serviceOptionsForConnection(connectionID observability.ConnectionID) []service.Option {
 	return []service.Option{
 		service.WithConnectionID(connectionID),
+		service.WithTranscodeManager(s.config.TranscodeManager),
+		service.WithTransferSyntaxRegistry(s.config.TransferSyntaxRegistry),
 		service.WithEventObserver(s.config.EventObserver),
 		service.WithMetricsObserver(s.config.MetricsObserver),
 		service.WithMaxPDULength(s.config.MaxPDULength),

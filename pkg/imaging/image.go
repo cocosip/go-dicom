@@ -19,10 +19,12 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 	"github.com/cocosip/go-dicom/pkg/imaging/interpolation"
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 	"github.com/cocosip/go-dicom/pkg/imaging/transform"
 	"github.com/cocosip/go-dicom/pkg/logging"
@@ -40,7 +42,6 @@ type FrameRenderOptions struct {
 }
 
 const (
-	monochrome2                          = "MONOCHROME2"
 	transferSyntaxExplicitVRBigEndian    = "1.2.840.10008.1.2.2"
 	transferSyntaxExplicitVRLittleEndian = "1.2.840.10008.1.2.1"
 	transferSyntaxImplicitVRLittleEndian = "1.2.840.10008.1.2"
@@ -51,7 +52,7 @@ type DicomImage struct {
 	mu sync.RWMutex
 
 	// Pixel data
-	pixelData *DicomPixelData
+	pixelData *pixeldata.Data
 	dataset   *dataset.Dataset
 
 	// Current frame index
@@ -66,28 +67,24 @@ type DicomImage struct {
 	// Whether to show overlays
 	showOverlays            bool
 	overlays                []*DicomOverlayData
-	overlayColor            imagetypes.Color32
+	overlayColor            colorconv.Color32
 	autoApplyLUTToAllFrames bool
-	grayscaleColorMaps      map[int][256]imagetypes.Color32
+	grayscaleColorMaps      map[int][256]colorconv.Color32
 	windowIndex             int
 	voiLUTIndex             int
-
-	// Converter for pixel data format conversion
-	converter *PixelDataConverter
 }
 
-// NewDicomImage creates a new DicomImage from DicomPixelData
-func NewDicomImage(pixelData *DicomPixelData) *DicomImage {
+// NewDicomImage creates a new DicomImage from pixel data.
+func NewDicomImage(pixelData *pixeldata.Data) *DicomImage {
 	return &DicomImage{
 		pixelData:               pixelData,
 		currentFrame:            0,
 		pipelines:               make(map[int]render.Pipeline),
 		scale:                   1.0,
 		showOverlays:            true,
-		overlayColor:            imagetypes.Color32{A: 255, R: 255, B: 255},
+		overlayColor:            colorconv.Color32{A: 255, R: 255, B: 255},
 		autoApplyLUTToAllFrames: false,
-		grayscaleColorMaps:      make(map[int][256]imagetypes.Color32),
-		converter:               NewPixelDataConverter(),
+		grayscaleColorMaps:      make(map[int][256]colorconv.Color32),
 	}
 }
 
@@ -112,7 +109,7 @@ func (img *DicomImage) IsGrayscale() bool {
 	if pi == nil {
 		return true // Default to grayscale
 	}
-	return pi.Value == photometricMonochrome1 || pi.Value == monochrome2
+	return pi.Value == pixel.Monochrome1.Value || pi.Value == pixel.Monochrome2.Value
 }
 
 // CurrentFrame returns the current frame index
@@ -186,7 +183,7 @@ func (img *DicomImage) newFallbackPipeline() render.Pipeline {
 	if img.pixelData.Info.BitsStored == 0 {
 		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false)
 	}
-	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, img.pixelData.Info.PixelRepresentation == SignedPixels)
+	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, img.pixelData.Info.PixelRepresentation == pixel.SignedPixels)
 	windowCenter, windowWidth := 1.0, 1.0
 	if img.pixelData.Info.BitsStored != 1 {
 		windowCenter, windowWidth = img.pixelData.CalculateOptimalWindow()
@@ -207,7 +204,7 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false), nil
 	}
 
-	pixelSigned := img.pixelData.Info.PixelRepresentation == SignedPixels
+	pixelSigned := img.pixelData.Info.PixelRepresentation == pixel.SignedPixels
 	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, pixelSigned)
 
 	// Calculate a fallback window from actual pixel data.
@@ -216,7 +213,7 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 		windowCenter, windowWidth = img.pixelData.CalculateOptimalWindow()
 	}
 	rescaleSlope, rescaleIntercept := 1.0, 0.0
-	var modalityLUT render.ModalityLUT
+	var modalityLUT lut.LUT
 	voiDescriptorSigned := pixelSigned
 	hasExplicitWindow := false
 	functional := (*dataset.Dataset)(nil)
@@ -241,7 +238,7 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 	if !hasExplicitWindow && img.dataset != nil && img.pixelData.Info.BitsStored != 1 {
 		minimum, maximum, err := 0.0, 0.0, fmt.Errorf("image pixel value range is unavailable")
 		if img.dataset != nil {
-			minimum, maximum, err = imagePixelValueRange(img.dataset)
+			minimum, maximum, err = pixeldata.DatasetValueRange(img.dataset)
 		}
 		if err != nil {
 			minimum, maximum, err = img.pixelData.MinMax(true)
@@ -265,20 +262,20 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 			pipeline.SetModalityLUT(modalityLUT)
 		}
 		if datasetWithAnyTag(img.dataset, functional, tag.VOILUTSequence) != nil {
-			voiLUT, err := imageVOILUTFromAt(img.dataset, functional, voiDescriptorSigned, img.voiLUTIndex)
+			voiLUT, err := pixeldata.VOILUTFrom(img.dataset, functional, voiDescriptorSigned, img.voiLUTIndex)
 			if err != nil {
 				return nil, err
 			}
 			pipeline.SetVOILUT(voiLUT)
 		}
 		if function, ok := imageStringFrom(img.dataset, functional, tag.VOILUTFunction); ok {
-			pipeline.SetVOILUTFunction(imagetypes.VOILUTFunction(function))
+			pipeline.SetVOILUTFunction(lut.VOILUTFunction(function))
 		}
 	}
-	function := imagetypes.VOILUTFunctionLinear
+	function := lut.VOILUTFunctionLinear
 	if img.dataset != nil {
 		if value, ok := imageStringFrom(img.dataset, functional, tag.VOILUTFunction); ok {
-			function = imagetypes.VOILUTFunction(value)
+			function = lut.VOILUTFunction(value)
 		}
 	}
 	if _, err := lut.CreateValidatedVOILUT(function, windowCenter, windowWidth); err != nil {
@@ -520,7 +517,7 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 	if frame < 0 || frame >= img.NumberOfFrames() {
 		return nil, fmt.Errorf("frame index out of range: %d", frame)
 	}
-	frameData, err := img.pixelData.GetFrame(frame)
+	frameData, err := img.pixelData.Frame(ctx, frame)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get frame data: %w", err)
 	}
@@ -531,7 +528,7 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 	exporter := render.NewImageExporter(pipeline)
 	switch img.pixelData.Info.SamplesPerPixel {
 	case 1:
-		photometric := monochrome2
+		photometric := pixel.Monochrome2.Value
 		if img.pixelData.Info.PhotometricInterpretation != nil {
 			photometric = img.pixelData.Info.PhotometricInterpretation.Value
 		}
@@ -542,14 +539,14 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 			int(img.pixelData.Info.BitsAllocated),
 			int(img.pixelData.Info.BitsStored),
 			int(img.pixelData.Info.HighBit),
-			img.pixelData.Info.PixelRepresentation == SignedPixels,
+			img.pixelData.Info.PixelRepresentation == pixel.SignedPixels,
 			photometric,
 		)
 		if err == nil && img.supplementalPaletteEligible() {
-			rendered, err = img.applySupplementalPalette(rendered, frameData)
+			rendered, err = img.applySupplementalPalette(rendered, frame)
 		}
 	case 3:
-		photometric := photometricRGB
+		photometric := pixel.RGBPhotometric.Value
 		if img.pixelData.Info.PhotometricInterpretation != nil {
 			photometric = img.pixelData.Info.PhotometricInterpretation.Value
 		}
@@ -580,11 +577,11 @@ func (img *DicomImage) supplementalPaletteEligible() bool {
 	if img.dataset == nil || img.pixelData.Info.NumberOfFrames <= 1 || img.pixelData.Info.SamplesPerPixel != 1 {
 		return false
 	}
-	photometric := monochrome2
+	photometric := pixel.Monochrome2.Value
 	if img.pixelData.Info.PhotometricInterpretation != nil {
 		photometric = img.pixelData.Info.PhotometricInterpretation.Value
 	}
-	if photometric != photometricMonochrome1 && photometric != monochrome2 {
+	if photometric != pixel.Monochrome1.Value && photometric != pixel.Monochrome2.Value {
 		return false
 	}
 	presentation, ok := img.dataset.GetString(tag.PixelPresentation)
@@ -598,19 +595,12 @@ func (img *DicomImage) supplementalPaletteEligible() bool {
 	) != nil
 }
 
-func (img *DicomImage) applySupplementalPalette(grayscale image.Image, frameData []byte) (image.Image, error) {
-	palette, err := buildPaletteLUT(img.dataset)
+func (img *DicomImage) applySupplementalPalette(grayscale image.Image, frame int) (image.Image, error) {
+	first, entries, err := pixeldata.PaletteColors(img.dataset)
 	if err != nil {
 		return nil, fmt.Errorf("build Supplemental Palette Color LUT: %w", err)
 	}
-	bytesPerSample := img.pixelData.Info.BytesAllocated()
-	if bytesPerSample != 1 && bytesPerSample != 2 && bytesPerSample != 4 {
-		return nil, fmt.Errorf("unsupported BytesAllocated=%d for Supplemental Palette Color LUT", bytesPerSample)
-	}
 	pixelCount := int(img.Width()) * int(img.Height())
-	if len(frameData) < pixelCount*bytesPerSample {
-		return nil, fmt.Errorf("pixel data too short for Supplemental Palette Color LUT")
-	}
 	result := image.NewNRGBA(grayscale.Bounds())
 	for index := 0; index < pixelCount; index++ {
 		x := index % int(img.Width())
@@ -618,15 +608,18 @@ func (img *DicomImage) applySupplementalPalette(grayscale image.Image, frameData
 		gray := color.GrayModel.Convert(grayscale.At(x, y)).(color.Gray)
 		result.SetNRGBA(x, y, color.NRGBA{R: gray.Y, G: gray.Y, B: gray.Y, A: 255})
 
-		value, ok := decodePixelSampleLE(frameData, index*bytesPerSample, img.pixelData.Info)
-		if !ok || value < int64(palette.first) {
+		value, sampleErr := img.pixelData.Sample(frame, x, y, 0)
+		if sampleErr != nil {
+			return nil, sampleErr
+		}
+		if value < int64(first) {
 			continue
 		}
-		paletteIndex := int(value - int64(palette.first))
-		if paletteIndex >= len(palette.entries) {
-			paletteIndex = len(palette.entries) - 1
+		paletteIndex := int(value - int64(first))
+		if paletteIndex >= len(entries) {
+			paletteIndex = len(entries) - 1
 		}
-		entry := palette.entries[paletteIndex]
+		entry := entries[paletteIndex]
 		result.SetNRGBA(x, y, color.NRGBA{R: entry.R, G: entry.G, B: entry.B, A: entry.A})
 	}
 	return result, nil
@@ -721,7 +714,7 @@ func (img *DicomImage) DecodeIfNeededContext(ctx context.Context, c codec.Codec,
 	}
 
 	// Decode
-	decoded, err := img.pixelData.Decode(c, params)
+	decoded, err := img.pixelData.Decode(ctx, c, params)
 	if err != nil {
 		return fmt.Errorf("failed to decode pixel data: %w", err)
 	}
@@ -741,17 +734,7 @@ func (img *DicomImage) DecodeIfNeededContext(ctx context.Context, c codec.Codec,
 func (img *DicomImage) Clone() *DicomImage {
 	img.mu.RLock()
 
-	// Clone pixel data
-	clonedPixelData := &DicomPixelData{
-		Info:   img.pixelData.Info, // Info can be shared (read-only)
-		frames: make([][]byte, len(img.pixelData.frames)),
-	}
-
-	for i, frame := range img.pixelData.frames {
-		clonedFrame := make([]byte, len(frame))
-		copy(clonedFrame, frame)
-		clonedPixelData.frames[i] = clonedFrame
-	}
+	clonedPixelData := img.pixelData.Clone()
 
 	// Create new image
 	cloned := &DicomImage{
@@ -763,10 +746,9 @@ func (img *DicomImage) Clone() *DicomImage {
 		overlays:                append([]*DicomOverlayData(nil), img.overlays...),
 		overlayColor:            img.overlayColor,
 		autoApplyLUTToAllFrames: img.autoApplyLUTToAllFrames,
-		grayscaleColorMaps:      make(map[int][256]imagetypes.Color32, len(img.grayscaleColorMaps)),
+		grayscaleColorMaps:      make(map[int][256]colorconv.Color32, len(img.grayscaleColorMaps)),
 		windowIndex:             img.windowIndex,
 		voiLUTIndex:             img.voiLUTIndex,
-		converter:               NewPixelDataConverter(),
 	}
 	if img.dataset != nil {
 		cloned.dataset = img.dataset.Clone()

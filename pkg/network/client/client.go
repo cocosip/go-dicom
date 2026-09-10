@@ -14,6 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
@@ -21,49 +24,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
-
-// serviceInterface defines the interface for DIMSE service operations.
-// This allows for mocking in tests.
-type serviceInterface interface {
-	// Association management
-	GetAssociation() *association.Association
-	SetAssociation(assoc *association.Association)
-	SendAssociationRequest(ctx context.Context, rq *pdu.AAssociateRQ) error
-	ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssociateAC, error)
-	Start() error
-	GracefulRelease(ctx context.Context) error
-	Abort(ctx context.Context, source byte, reason byte) error
-
-	// DIMSE operations
-	SendCEcho(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error)
-	SendCStore(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
-	SendCFind(ctx context.Context, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, error)
-	SendCMove(ctx context.Context, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, error)
-	SendCGet(ctx context.Context, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, error)
-	SendCCancel(ctx context.Context, messageID uint16, presentationContextID byte) error
-	SendNCreate(ctx context.Context, req *dimse.NCreateRequest) (*dimse.NCreateResponse, error)
-	SendNGet(ctx context.Context, req *dimse.NGetRequest) (*dimse.NGetResponse, error)
-	SendNSet(ctx context.Context, req *dimse.NSetRequest) (*dimse.NSetResponse, error)
-	SendNDelete(ctx context.Context, req *dimse.NDeleteRequest) (*dimse.NDeleteResponse, error)
-	SendNAction(ctx context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error)
-	SendNEventReport(ctx context.Context, req *dimse.NEventReportRequest) (*dimse.NEventReportResponse, error)
-}
-
-// cFindErrorService is implemented by service.Service. It is intentionally
-// separate from serviceInterface so existing test and third-party service
-// adapters remain source compatible while Client can surface asynchronous
-// C-FIND terminal errors when the underlying implementation supports them.
-type cFindErrorService interface {
-	SendCFindWithError(context.Context, *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error)
-}
-
-type cMoveErrorService interface {
-	SendCMoveWithError(context.Context, *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, <-chan error, error)
-}
-
-type cGetErrorService interface {
-	SendCGetWithError(context.Context, *dimse.CGetRequest) (<-chan *dimse.CGetResponse, <-chan error, error)
-}
 
 // Client represents a DICOM SCU (Service Class User) client.
 // It provides a high-level API for connecting to DICOM servers
@@ -90,7 +50,7 @@ type Client struct {
 	conn net.Conn
 
 	// Service layer
-	service serviceInterface
+	service *service.Service
 
 	// Association information
 	assoc *association.Association
@@ -125,6 +85,13 @@ type Config struct {
 
 	// MetricsObserver receives vendor-neutral network metrics.
 	MetricsObserver observability.MetricsObserver
+
+	// TranscodeManager selects codecs for C-STORE Dataset transcoding.
+	TranscodeManager *transcode.Manager
+
+	// TransferSyntaxRegistry resolves standard and application-defined syntaxes
+	// during association negotiation.
+	TransferSyntaxRegistry *transfer.Registry
 
 	// CallingAE is the AE Title of this client (SCU)
 	CallingAE string
@@ -226,6 +193,20 @@ func WithEventObserver(observer observability.EventObserver) Option {
 // WithMetricsObserver sets the vendor-neutral network metrics observer.
 func WithMetricsObserver(observer observability.MetricsObserver) Option {
 	return func(o *Config) { o.MetricsObserver = observer }
+}
+
+// WithTranscodeManager sets the Manager passed to each network Service.
+func WithTranscodeManager(manager *transcode.Manager) Option {
+	return func(o *Config) {
+		o.TranscodeManager = manager
+	}
+}
+
+// WithTransferSyntaxRegistry sets the isolated registry used during association negotiation.
+func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
+	return func(o *Config) {
+		o.TransferSyntaxRegistry = registry
+	}
 }
 
 // WithCallingAE sets the calling AE title.
@@ -367,6 +348,10 @@ func WithRequireSuccessfulUserIdentityNegotiation(require bool) Option {
 
 // defaultClientConfig returns the default client configuration.
 func defaultClientConfig() *Config {
+	manager, err := transcode.NewManager(codec.GlobalRegistry())
+	if err != nil {
+		panic(fmt.Sprintf("create default transcode manager: %v", err))
+	}
 	return &Config{
 		CallingAE:                                "GO_DICOM_SCU",
 		CalledAE:                                 "ANY_SCP",
@@ -381,6 +366,8 @@ func defaultClientConfig() *Config {
 		RoleSelections:                           make([]*association.RoleSelection, 0),
 		ExtendedNegotiations:                     make([]*association.ExtendedNegotiation, 0),
 		RequireSuccessfulUserIdentityNegotiation: true,
+		TranscodeManager:                         manager,
+		TransferSyntaxRegistry:                   transfer.NewRegistry(),
 	}
 }
 
@@ -480,7 +467,7 @@ func (c *Client) IsConnected() bool {
 	return c.connected && c.state != clientClosing
 }
 
-func (c *Client) activeService() (serviceInterface, error) {
+func (c *Client) activeService() (*service.Service, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.connected || c.service == nil {
@@ -637,7 +624,7 @@ func (c *Client) finishTransition(done chan struct{}) {
 // handleServiceClosed receives the lifecycle notification emitted by the
 // current service. The identity check prevents an old association's receive
 // loop from clearing a newer client session.
-func (c *Client) handleServiceClosed(closed serviceInterface) {
+func (c *Client) handleServiceClosed(closed *service.Service) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.service != closed {
@@ -755,7 +742,6 @@ func upsertExtendedNegotiation(values []*association.ExtendedNegotiation, negoti
 			merged := value.Clone()
 			if copyNegotiation.RequestedApplicationInfo != nil {
 				merged.RequestedApplicationInfo = append([]byte(nil), copyNegotiation.RequestedApplicationInfo...)
-				merged.ServiceClassAppInfo = merged.RequestedApplicationInfo
 			}
 			if copyNegotiation.HasCommonExtendedNegotiation() {
 				merged.ServiceClassUID = copyNegotiation.ServiceClassUID
@@ -813,8 +799,8 @@ func (c *Client) buildAcceptedAssociation(rq *pdu.AAssociateRQ, ac *pdu.AAssocia
 	if err := c.validateAssociateAC(ac); err != nil {
 		return nil, err
 	}
-	assoc := association.FromAAssociateRQ(rq)
-	if err := association.ApplyAAssociateAC(assoc, ac); err != nil {
+	assoc := association.FromAAssociateRQ(rq, c.config.TransferSyntaxRegistry)
+	if err := association.ApplyAAssociateAC(assoc, ac, c.config.TransferSyntaxRegistry); err != nil {
 		return nil, err
 	}
 	identity := assoc.UserIdentity
@@ -886,6 +872,8 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	// Create service
 	svcOpts := []service.Option{
 		service.WithAssociationRequestor(true),
+		service.WithTranscodeManager(c.config.TranscodeManager),
+		service.WithTransferSyntaxRegistry(c.config.TransferSyntaxRegistry),
 		service.WithConnectionID(c.connectionID),
 		service.WithEventObserver(c.config.EventObserver),
 		service.WithMetricsObserver(c.config.MetricsObserver),
@@ -921,7 +909,7 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	rq := c.buildAssociateRQ()
 	// Keep the proposed contexts on the service so the accepted-association log
 	// can merge AC results back onto their Abstract Syntax values.
-	svc.SetAssociation(association.FromAAssociateRQ(rq))
+	svc.SetAssociation(association.FromAAssociateRQ(rq, c.config.TransferSyntaxRegistry))
 	if err := svc.SendAssociationRequest(assocCtx, rq); err != nil {
 		return fmt.Errorf("failed to send A-ASSOCIATE-RQ: %w", err)
 	}

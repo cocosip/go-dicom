@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 )
@@ -65,7 +66,7 @@ func TestNewServiceWithCustomOptions(t *testing.T) {
 		WithMaxPDULength(32768),
 		WithReadTimeout(10*time.Second),
 		WithWriteTimeout(10*time.Second),
-		WithDIMSETimeout(30*time.Second),
+		WithHandlerShutdownTimeout(30*time.Second),
 		WithSendQueueSize(50))
 	defer func() { _ = service.Close() }()
 
@@ -296,6 +297,11 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestServiceOptions(t *testing.T) {
 	config := defaultServiceConfig()
+	registry := transfer.NewRegistry()
+	WithTransferSyntaxRegistry(registry)(config)
+	if config.transferSyntaxRegistry != registry {
+		t.Fatal("WithTransferSyntaxRegistry failed")
+	}
 
 	// Test WithMaxPDULength
 	WithMaxPDULength(32768)(config)
@@ -313,12 +319,6 @@ func TestServiceOptions(t *testing.T) {
 	WithWriteTimeout(15 * time.Second)(config)
 	if config.writeTimeout != 15*time.Second {
 		t.Errorf("WithWriteTimeout failed")
-	}
-
-	// Test WithDIMSETimeout
-	WithDIMSETimeout(45 * time.Second)(config)
-	if config.handlerShutdownTimeout != 45*time.Second {
-		t.Errorf("WithDIMSETimeout compatibility alias failed")
 	}
 
 	WithHandlerShutdownTimeout(50 * time.Second)(config)

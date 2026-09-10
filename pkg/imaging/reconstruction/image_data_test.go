@@ -4,6 +4,8 @@
 package reconstruction
 
 import (
+	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,10 +14,64 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
+
+type reconstructionTestCodec struct{}
+
+func (reconstructionTestCodec) Name() string { return "reconstruction-test" }
+
+func (reconstructionTestCodec) TransferSyntax() *transfer.Syntax { return transfer.JPEG2000Lossless }
+
+func (reconstructionTestCodec) DefaultParameters() codec.Parameters { return codec.NoParameters{} }
+
+func (reconstructionTestCodec) Encode(context.Context, codec.FrameSource, codec.FrameSink, codec.Parameters) error {
+	return nil
+}
+
+func (reconstructionTestCodec) Decode(ctx context.Context, _ codec.FrameSource, sink codec.FrameSink, _ codec.Parameters) error {
+	return sink.AddFrame(ctx, []byte{1, 0, 2, 0, 3, 0, 4, 0})
+}
+
+func testReconstructionManager(t *testing.T) *transcode.Manager {
+	t.Helper()
+	registry := codec.NewRegistry()
+	if err := registry.Register(reconstructionTestCodec{}); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := transcode.NewManager(registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manager
+}
+
+func TestNewImageDataRequiresInjectedManagerForEncapsulatedSource(t *testing.T) {
+	ds := testClassicImageDataset(t, uid.CTImageStorage.UID(), "1.2.3.100", 5, []uint16{1, 2, 3, 4})
+	ds.SetInternalTransferSyntax(transfer.JPEG2000Lossless)
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	fragments.AddFragment(buffer.NewMemory([]byte{0xff, 0x4f}))
+	if err := ds.AddOrUpdate(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewImageData(ds, 0); !errors.Is(err, ErrTranscodeManagerRequired) {
+		t.Fatalf("NewImageData() error = %v, want ErrTranscodeManagerRequired", err)
+	}
+	image, err := NewImageData(ds, 0, WithTranscodeManager(testReconstructionManager(t)))
+	if err != nil {
+		t.Fatalf("NewImageData(WithTranscodeManager) error = %v", err)
+	}
+	value, valid, err := image.ValueAt(1, 1)
+	if err != nil || !valid || value != 4 {
+		t.Fatalf("ValueAt(1,1) = %v/%v/%v, want 4/true/nil", value, valid, err)
+	}
+}
 
 func TestNewImageDataReadsClassicGeometryAndModalityValues(t *testing.T) {
 	ds := testClassicImageDataset(t, uid.CTImageStorage.UID(), "1.2.3.1", 5, []uint16{1, 2, 3, 4})

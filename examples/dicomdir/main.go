@@ -13,6 +13,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/imaging"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/media"
 )
 
@@ -35,7 +36,7 @@ func run() error {
 	if *icons {
 		options = append(options,
 			media.WithImageIcons(true),
-			media.WithIconGenerator(imaging.NewDirectoryIconGenerator()),
+			media.WithIconGenerator(imaging.NewDirectoryIconGenerator(codec.GlobalRegistry())),
 		)
 	}
 	directory, err := media.NewDirectory(options...)

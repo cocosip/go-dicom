@@ -83,11 +83,11 @@ func (r *jsonReader) parseTag(s string) (tag.Tag, error) {
 	}
 
 	// Try as keyword
-	t, err := tag.ParseKeyword(s)
-	if err != nil {
+	t := r.config.lookup.LookupKeyword(s)
+	if t == nil {
 		return tag.Tag{}, fmt.Errorf("invalid tag or keyword: %s", s)
 	}
-	return t, nil
+	return *t, nil
 }
 
 // readElement reads a JSON element object

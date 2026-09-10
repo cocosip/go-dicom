@@ -12,6 +12,8 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
@@ -26,13 +28,13 @@ func TestRenderFrameImageWritesDebugSlogRecord(t *testing.T) {
 	}
 	t.Cleanup(logging.Disable)
 
-	pixelData, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+	pixelData, err := pixeldata.NewFromBytes(&pixeldata.Info{
 		Width: 1, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
-		PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome2,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.Monochrome2,
 	}, []byte{128})
 	if err != nil {
-		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
 	}
 	if _, err := NewDicomImage(pixelData).RenderFrameImage(0); err != nil {
 		t.Fatalf("RenderFrameImage() error = %v", err)
@@ -61,16 +63,16 @@ func TestDecodeIfNeededWritesSafeSlogRecord(t *testing.T) {
 	}
 	t.Cleanup(logging.Disable)
 
-	pixelData, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+	pixelData, err := pixeldata.NewFromBytes(&pixeldata.Info{
 		Width: 1, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
-		PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome2,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.Monochrome2,
 		TransferSyntaxUID: transfer.JPEG2000Lossless.UID().UID(),
 	}, []byte{128})
 	if err != nil {
-		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
 	}
-	if err := NewDicomImage(pixelData).DecodeIfNeeded(imagePassthroughCodec{}, codec.NewBaseParameters()); err != nil {
+	if err := NewDicomImage(pixelData).DecodeIfNeeded(imagePassthroughCodec{}, codec.NoParameters{}); err != nil {
 		t.Fatalf("DecodeIfNeeded() error = %v", err)
 	}
 
@@ -94,13 +96,13 @@ func TestRenderFrameImageContextPassesContextToLogHandler(t *testing.T) {
 	}
 	t.Cleanup(logging.Disable)
 
-	pixelData, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+	pixelData, err := pixeldata.NewFromBytes(&pixeldata.Info{
 		Width: 1, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
-		PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome2,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.Monochrome2,
 	}, []byte{128})
 	if err != nil {
-		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
 	}
 	ctx := context.WithValue(context.Background(), imagingLogContextKey{}, "render-request")
 	if _, err := NewDicomImage(pixelData).RenderFrameImageContext(ctx, 0); err != nil {

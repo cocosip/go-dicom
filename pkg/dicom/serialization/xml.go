@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
@@ -87,12 +86,10 @@ func (w *xmlWriter) writeElement(elem element.Element) error {
 	w.writeAttribute("vr", elem.ValueRepresentation().String())
 
 	// Add keyword if available
-	entryIface := elem.Tag().DictionaryEntry()
-	if entryIface != nil {
-		if entry, ok := entryIface.(*dict.Entry); ok && entry != nil {
-			if kw := entry.Keyword(); kw != "" {
-				w.writeAttribute("keyword", kw)
-			}
+	entry := w.config.lookup.Lookup(elem.Tag())
+	if entry != nil {
+		if kw := entry.Keyword(); kw != "" {
+			w.writeAttribute("keyword", kw)
 		}
 	}
 
@@ -379,12 +376,10 @@ func (w *xmlWriter) writeSequence(seq *dataset.Sequence) error {
 	w.writeAttribute("vr", seq.ValueRepresentation().String())
 
 	// Add keyword if available
-	entryIface := seq.Tag().DictionaryEntry()
-	if entryIface != nil {
-		if entry, ok := entryIface.(*dict.Entry); ok && entry != nil {
-			if kw := entry.Keyword(); kw != "" {
-				w.writeAttribute("keyword", kw)
-			}
+	entry := w.config.lookup.Lookup(seq.Tag())
+	if entry != nil {
+		if kw := entry.Keyword(); kw != "" {
+			w.writeAttribute("keyword", kw)
 		}
 	}
 
@@ -563,9 +558,18 @@ type xmlItem struct {
 // readAttribute parses a dicomAttribute into an element.Element
 func (r *xmlReader) readAttribute(attr dicomAttribute) (element.Element, error) {
 	// Parse tag
-	t, err := tag.Parse(attr.Tag)
-	if err != nil {
-		return nil, fmt.Errorf("invalid tag %q: %w", attr.Tag, err)
+	var t *tag.Tag
+	var err error
+	if attr.Tag != "" {
+		t, err = tag.Parse(attr.Tag)
+		if err != nil {
+			return nil, fmt.Errorf("invalid tag %q: %w", attr.Tag, err)
+		}
+	} else {
+		t = r.config.lookup.LookupKeyword(attr.Keyword)
+		if t == nil {
+			return nil, fmt.Errorf("invalid tag keyword %q", attr.Keyword)
+		}
 	}
 
 	// Parse VR

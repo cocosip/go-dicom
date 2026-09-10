@@ -4,11 +4,13 @@
 package transfer_test
 
 import (
+	"sort"
+	"sync"
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 func TestImplicitVRLittleEndian(t *testing.T) {
@@ -122,6 +124,9 @@ func TestParse(t *testing.T) {
 	if !ts.Equals(transfer.ImplicitVRLittleEndian) {
 		t.Error("Parse() did not return ImplicitVRLittleEndian")
 	}
+	if ts != transfer.ImplicitVRLittleEndian {
+		t.Error("Parse() did not preserve canonical standard object identity")
+	}
 
 	// Test parsing explicit VR Little Endian
 	ts, err = transfer.Parse("1.2.840.10008.1.2.1")
@@ -133,10 +138,32 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestStandardSyntaxParseIsImmutable(t *testing.T) {
+	standard := transfer.ImplicitVRLittleEndian
+	originalUID := standard.UID().UID()
+	originalExplicit := standard.IsExplicitVR()
+
+	if err := standard.Parse(transfer.ExplicitVRLittleEndian.UID().UID()); err == nil {
+		t.Fatal("Parse() on a standard syntax should fail")
+	}
+	if standard.UID().UID() != originalUID || standard.IsExplicitVR() != originalExplicit {
+		t.Fatal("Parse() changed the standard syntax")
+	}
+
+	custom := transfer.NewBuilder(uid.New("1.2.3.4.5.7", "Custom", uid.TypeTransferSyntax, false)).Build()
+	if err := custom.Parse(transfer.ExplicitVRLittleEndian.UID().UID()); err != nil {
+		t.Fatalf("Parse() on a non-standard syntax = %v", err)
+	}
+	if custom.UID() != transfer.ExplicitVRLittleEndian.UID() {
+		t.Fatal("Parse() did not apply the canonical syntax to the custom receiver")
+	}
+}
+
 func TestLookup(t *testing.T) {
+	registry := transfer.NewRegistry()
 	// Test lookup of a known transfer syntax
 	u := uid.ImplicitVRLittleEndian
-	ts, err := transfer.Lookup(u)
+	ts, err := registry.Lookup(u)
 	if err != nil {
 		t.Fatalf("Lookup() error = %v", err)
 	}
@@ -145,14 +172,14 @@ func TestLookup(t *testing.T) {
 	}
 
 	// Test lookup of nil UID
-	_, err = transfer.Lookup(nil)
+	_, err = registry.Lookup(nil)
 	if err == nil {
 		t.Error("Lookup(nil) should return error")
 	}
 
 	// Test lookup of non-transfer-syntax UID
 	nonTS := uid.New("1.2.3.4.5", "Not a Transfer Syntax", uid.TypeSOPClass, false)
-	_, err = transfer.Lookup(nonTS)
+	_, err = registry.Lookup(nonTS)
 	if err == nil {
 		t.Error("Lookup() should return error for non-transfer-syntax UID")
 	}
@@ -175,58 +202,55 @@ func TestNewRegistryIncludesStandardTransferSyntaxes(t *testing.T) {
 		t.Fatal("ImplicitVRLittleEndian from isolated registry should not be encapsulated")
 	}
 
-	if len(registry.KnownEntries()) == 0 {
+	if len(registry.List()) == 0 {
 		t.Fatal("isolated registry should include standard transfer syntaxes")
 	}
 }
 
-func TestNewRegistryIsolatedFromDefaultRegistryMutation(t *testing.T) {
-	if !transfer.Unregister(transfer.ImplicitVRLittleEndian.UID()) {
-		t.Fatal("expected ImplicitVRLittleEndian to be registered in default registry")
+func TestRegistryStandardIdentityOverlayMaskAndIsolation(t *testing.T) {
+	first := transfer.NewRegistry()
+	second := transfer.NewRegistry()
+	standard := transfer.ImplicitVRLittleEndian
+
+	if got := first.Query(standard.UID()); got != standard {
+		t.Fatal("Query() did not return the canonical standard syntax")
 	}
-	defer transfer.Register(transfer.ImplicitVRLittleEndian)
+	if err := first.Register(standard); err == nil {
+		t.Fatal("Register() accepted an effective standard duplicate")
+	}
 
-	registry := transfer.NewRegistry()
-
-	ts, err := registry.Lookup(uid.ImplicitVRLittleEndian)
+	replacement := transfer.NewBuilder(uid.ImplicitVRLittleEndian).
+		SetExplicitVR(true).
+		SetEncapsulated(true).
+		Build()
+	previous, err := first.Replace(replacement)
+	if err != nil || previous != standard {
+		t.Fatalf("Replace() = %v, %v", previous, err)
+	}
+	if first.Query(standard.UID()) != replacement {
+		t.Fatal("replacement was not visible in the target registry")
+	}
+	parsed, err := transfer.Parse(standard.UID().UID())
 	if err != nil {
-		t.Fatalf("Lookup() error = %v", err)
+		t.Fatalf("Parse(standard) error = %v", err)
 	}
-	if !ts.Equals(transfer.ImplicitVRLittleEndian) {
-		t.Fatal("isolated registry should still include ImplicitVRLittleEndian")
+	if second.Query(standard.UID()) != standard || parsed != standard {
+		t.Fatal("registry replacement changed another registry or the standard catalog")
 	}
-}
 
-func TestNewRegistryBuiltInEntriesDoNotAliasGlobalSyntaxes(t *testing.T) {
-	registry := transfer.NewRegistry()
-
-	ts, err := registry.Lookup(uid.ImplicitVRLittleEndian)
+	removed, found := first.Unregister(standard.UID())
+	if !found || removed != replacement {
+		t.Fatalf("Unregister() = %v, %v", removed, found)
+	}
+	if first.Query(standard.UID()) != nil {
+		t.Fatal("Unregister() did not mask the standard syntax")
+	}
+	unknown, err := first.Lookup(standard.UID())
 	if err != nil {
-		t.Fatalf("Lookup() error = %v", err)
+		t.Fatalf("Lookup(masked standard) error = %v", err)
 	}
-
-	if err := ts.Parse(uid.ExplicitVRLittleEndian.UID()); err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-
-	global := transfer.ImplicitVRLittleEndian
-	if global.UID().UID() != uid.ImplicitVRLittleEndian.UID() {
-		t.Fatalf("global implicit syntax UID = %q, want %q", global.UID().UID(), uid.ImplicitVRLittleEndian.UID())
-	}
-	if global.IsExplicitVR() {
-		t.Fatal("global implicit syntax should remain implicit after isolated registry mutation")
-	}
-
-	defaultLookup, err := transfer.Lookup(uid.ImplicitVRLittleEndian)
-	if err != nil {
-		t.Fatalf("Lookup() error = %v", err)
-	}
-	if defaultLookup.UID().UID() != uid.ImplicitVRLittleEndian.UID() {
-		t.Fatalf("default registry implicit syntax UID = %q, want %q",
-			defaultLookup.UID().UID(), uid.ImplicitVRLittleEndian.UID())
-	}
-	if defaultLookup.IsExplicitVR() {
-		t.Fatal("default registry implicit syntax should remain implicit after isolated registry mutation")
+	if unknown == standard || !unknown.IsExplicitVR() || !unknown.IsEncapsulated() {
+		t.Fatalf("Lookup(masked standard) = %#v", unknown)
 	}
 }
 
@@ -295,6 +319,7 @@ func TestString(t *testing.T) {
 }
 
 func TestRegisterAndQuery(t *testing.T) {
+	registry := transfer.NewRegistry()
 	// Create a custom transfer syntax
 	customUID := uid.New("1.2.3.4.5.6", "Custom Transfer Syntax", uid.TypeTransferSyntax, false)
 	customTS := transfer.NewBuilder(customUID).
@@ -302,8 +327,18 @@ func TestRegisterAndQuery(t *testing.T) {
 		SetEndian(endian.Little).
 		Build()
 
+	if registry.Query(customUID) != nil {
+		t.Fatal("Builder.Build() registered a transfer syntax")
+	}
+	if err := registry.Register(customTS); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := registry.Register(customTS); err == nil {
+		t.Fatal("Register() accepted a duplicate")
+	}
+
 	// Query should now find it
-	queried := transfer.Query(customUID)
+	queried := registry.Query(customUID)
 	if queried == nil {
 		t.Fatal("Query() returned nil for registered transfer syntax")
 	}
@@ -312,21 +347,23 @@ func TestRegisterAndQuery(t *testing.T) {
 	}
 
 	// Unregister it
-	if !transfer.Unregister(customUID) {
-		t.Error("Unregister() should return true for existing entry")
+	removed, found := registry.Unregister(customUID)
+	if !found || removed != customTS {
+		t.Errorf("Unregister() = %v, %v", removed, found)
 	}
 
 	// Query should not find it anymore
-	queried = transfer.Query(customUID)
+	queried = registry.Query(customUID)
 	if queried != nil {
 		t.Error("Query() should return nil after unregister")
 	}
 }
 
-func TestKnownEntries(t *testing.T) {
-	entries := transfer.KnownEntries()
+func TestList(t *testing.T) {
+	registry := transfer.NewRegistry()
+	entries := registry.List()
 	if len(entries) == 0 {
-		t.Error("KnownEntries() should return non-empty list")
+		t.Error("List() should return non-empty list")
 	}
 
 	// Should contain at least the basic transfer syntaxes
@@ -338,7 +375,65 @@ func TestKnownEntries(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("KnownEntries() should contain ImplicitVRLittleEndian")
+		t.Error("List() should contain ImplicitVRLittleEndian")
+	}
+	values := make([]string, len(entries))
+	for i, entry := range entries {
+		values[i] = entry.UID().UID()
+	}
+	if !sort.StringsAreSorted(values) {
+		t.Fatal("List() is not sorted by UID")
+	}
+	entries[0] = nil
+	if registry.List()[0] == nil {
+		t.Fatal("List() returned shared slice storage")
+	}
+}
+
+func TestStandardTransferSyntaxListHasUniqueUIDs(t *testing.T) {
+	entries := transfer.NewRegistry().List()
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		key := entry.UID().UID()
+		if _, duplicate := seen[key]; duplicate {
+			t.Fatalf("List() contains duplicate UID %q", key)
+		}
+		seen[key] = struct{}{}
+	}
+	if len(seen) != len(entries) {
+		t.Fatalf("List() returned %d entries but %d unique UIDs", len(entries), len(seen))
+	}
+}
+
+func TestRegistryConcurrentAccess(t *testing.T) {
+	registry := transfer.NewRegistry()
+	customUID := uid.New("1.2.3.4.9", "Concurrent Transfer Syntax", uid.TypeTransferSyntax, false)
+	custom := transfer.NewBuilder(customUID).SetExplicitVR(true).SetEndian(endian.Little).Build()
+	if err := registry.Register(custom); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			registry.Query(customUID)
+		}()
+		go func() {
+			defer wg.Done()
+			registry.List()
+		}()
+		go func() {
+			defer wg.Done()
+			replacement := transfer.NewBuilder(customUID).SetExplicitVR(true).SetEndian(endian.Little).Build()
+			_, _ = registry.Replace(replacement)
+		}()
+	}
+	wg.Wait()
+
+	if got := registry.Query(customUID); got == nil || got.UID().UID() != customUID.UID() {
+		t.Fatalf("Query() after concurrent access = %v", got)
 	}
 }
 

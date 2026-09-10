@@ -63,8 +63,8 @@ func TestClonePathClonesTagsAndPreservesPrivateCreator(t *testing.T) {
 	}
 }
 
-func TestValidationPathAliasRemainsAssignable(t *testing.T) {
-	var path []ValidationPathSegment = Path{{Tag: tag.PatientName}}
+func TestValidationErrorAcceptsPath(t *testing.T) {
+	path := Path{{Tag: tag.PatientName}}
 	err := &ValidationError{Kind: ValidationValue, Path: path}
 
 	if got := err.Error(); !strings.Contains(got, "(0010,0010)") {

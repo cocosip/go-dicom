@@ -4,127 +4,16 @@
 package imaging
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	dicomendian "github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/imaging/render"
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
-
-func datasetByteOrder(ds *dataset.Dataset) binary.ByteOrder {
-	if ds != nil {
-		if syntax := ds.InternalTransferSyntax(); syntax != nil && syntax.Endian() == dicomendian.Big {
-			return binary.BigEndian
-		}
-	}
-	return binary.LittleEndian
-}
-
-func datasetShortValue(ds *dataset.Dataset, t *tag.Tag) (int, error) {
-	elem, ok := ds.Get(t)
-	if !ok {
-		return 0, fmt.Errorf("element %s not found", t)
-	}
-	switch value := elem.(type) {
-	case *element.SignedShort:
-		entry, err := value.GetValue(0)
-		return int(entry), err
-	case *element.UnsignedShort:
-		entry, err := value.GetValue(0)
-		return int(entry), err
-	default:
-		return 0, fmt.Errorf("element %s is not SignedShort or UnsignedShort", t)
-	}
-}
-
-func imagePixelValueRange(ds *dataset.Dataset) (float64, float64, error) {
-	minimum, err := datasetShortValue(ds, tag.SmallestImagePixelValue)
-	if err != nil {
-		return 0, 0, err
-	}
-	maximum, err := datasetShortValue(ds, tag.LargestImagePixelValue)
-	if err != nil {
-		return 0, 0, err
-	}
-	if minimum >= maximum {
-		return 0, 0, fmt.Errorf("invalid image pixel value range %d..%d", minimum, maximum)
-	}
-	return float64(minimum), float64(maximum), nil
-}
-
-func imageVOILUT(ds *dataset.Dataset, signed bool) (render.LUT, error) {
-	return imageVOILUTAt(ds, signed, 0)
-}
-
-func imageVOILUTAt(ds *dataset.Dataset, signed bool, index int) (render.LUT, error) {
-	sequence, err := ds.GetSequence(tag.VOILUTSequence)
-	if err != nil || sequence.Count() == 0 {
-		return nil, fmt.Errorf("VOI LUT Sequence is missing or empty")
-	}
-	if index < 0 || index >= sequence.Count() {
-		return nil, fmt.Errorf("VOI LUT Sequence item index %d is out of range [0, %d)", index, sequence.Count())
-	}
-	item := sequence.GetItem(index)
-	if item == nil {
-		return nil, fmt.Errorf("VOI LUT Sequence item %d is nil", index)
-	}
-	descriptor, err := readLUTDescriptor(item, tag.LUTDescriptor, signed)
-	if err != nil {
-		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
-	}
-	if err := validateImageVOILUTDescriptor(descriptor); err != nil {
-		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
-	}
-	values, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
-	if err != nil {
-		return nil, fmt.Errorf("read VOI LUT Data: %w", err)
-	}
-	table := &voiTableLUT{values: values, first: descriptor.firstMappedValue}
-	maximumOutput := float64(uint32(1)<<descriptor.bitsPerEntry - 1)
-	return scaledVOITable(table, 0, maximumOutput), nil
-}
-
-func imageVOILUTFromAt(primary, fallback *dataset.Dataset, signed bool, index int) (render.LUT, error) {
-	if primary != nil && primary.Contains(tag.VOILUTSequence) {
-		return imageVOILUTAt(primary, signed, index)
-	}
-	if fallback != nil && fallback.Contains(tag.VOILUTSequence) {
-		return imageVOILUTAt(fallback, signed, index)
-	}
-	return nil, fmt.Errorf("VOI LUT Sequence is missing")
-}
-
-func imageModalityLUT(ds *dataset.Dataset, signed bool) (render.ModalityLUT, error) {
-	sequence, err := ds.GetSequence(tag.ModalityLUTSequence)
-	if err != nil {
-		return nil, fmt.Errorf("modality LUT Sequence is missing: %w", err)
-	}
-	if sequence.Count() != 1 || sequence.GetItem(0) == nil {
-		return nil, fmt.Errorf("modality LUT Sequence must contain exactly one item, got %d", sequence.Count())
-	}
-	item := sequence.GetItem(0)
-	descriptor, err := readLUTDescriptor(item, tag.LUTDescriptor, signed)
-	if err != nil {
-		return nil, fmt.Errorf("read Modality LUT descriptor: %w", err)
-	}
-	if descriptor.bitsPerEntry != 8 && descriptor.bitsPerEntry != 16 {
-		return nil, fmt.Errorf("read Modality LUT descriptor: bits per entry must be 8 or 16, got %d", descriptor.bitsPerEntry)
-	}
-	entries, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
-	if err != nil {
-		return nil, fmt.Errorf("read Modality LUT Data: %w", err)
-	}
-	values := make([]float64, len(entries))
-	for index, entry := range entries {
-		values[index] = float64(entry)
-	}
-	return render.NewModalitySequenceLUT(values, descriptor.firstMappedValue, signed), nil
-}
 
 func imageWindowPairAt(primary, fallback *dataset.Dataset, index int) (float64, float64, error) {
 	source := datasetWithCompletePair(primary, fallback, tag.WindowCenter, tag.WindowWidth)
@@ -185,7 +74,7 @@ func datasetWithAnyTag(primary, fallback *dataset.Dataset, tags ...*tag.Tag) *da
 }
 
 func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool, minInput, maxInput float64) (
-	modalityLUT render.ModalityLUT,
+	modalityLUT lut.LUT,
 	slope float64,
 	intercept float64,
 	voiDescriptorSigned bool,
@@ -198,7 +87,7 @@ func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool
 		return nil, 0, 0, false, fmt.Errorf("modality LUT sequence cannot coexist with rescale slope/intercept")
 	}
 	if modalitySource != nil {
-		modalityLUT, err = imageModalityLUT(modalitySource, pixelSigned)
+		modalityLUT, err = pixeldata.ModalityLUT(modalitySource, pixelSigned)
 		if err != nil {
 			return nil, 0, 0, false, err
 		}

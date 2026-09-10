@@ -150,8 +150,8 @@ func TestAssociation_ExtendedNegotiation(t *testing.T) {
 	if found == nil {
 		t.Fatal("Expected to find extended negotiation")
 	}
-	if len(found.ServiceClassAppInfo) != 3 {
-		t.Errorf("Expected 3 bytes of app info, got %d", len(found.ServiceClassAppInfo))
+	if len(found.RequestedApplicationInfo) != 3 {
+		t.Errorf("Expected 3 bytes of app info, got %d", len(found.RequestedApplicationInfo))
 	}
 
 	// Find non-existing

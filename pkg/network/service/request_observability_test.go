@@ -263,24 +263,26 @@ func TestOutboundRequestObservabilityPendingOrder(t *testing.T) {
 	clientRecorder := &observationRecorder{}
 	serverRecorder := &observationRecorder{}
 	clientService := startObservedServicePair(t, clientRecorder, serverRecorder, &Handlers{
-		CFindHandler: func(_ context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
-			return []*dimse.CFindResponse{
-				dimse.NewCFindResponseFromRequest(req, status.Pending, nil),
-				dimse.NewCFindResponseFromRequest(req, status.PendingWarning, nil),
-				dimse.NewCFindResponseFromRequest(req, status.Success, nil),
-			}, nil
+		CFindHandler: func(_ context.Context, operation CFindOperation) error {
+			if err := operation.SendPending(nil); err != nil {
+				return err
+			}
+			if err := operation.SendPendingWithStatus(nil, status.PendingWarning); err != nil {
+				return err
+			}
+			return operation.SendFinal(status.Success)
 		},
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	responses, err := clientService.SendCFind(ctx, dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()))
+	responseEvents, err := clientService.SendCFind(ctx, dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()))
 	if err != nil {
 		t.Fatalf("SendCFind() error = %v", err)
 	}
-	for response := range responses {
-		if response == nil {
-			t.Fatal("SendCFind() returned a nil response")
+	for event := range responseEvents {
+		if event.Err != nil || event.Response == nil {
+			t.Fatalf("SendCFind() event = %#v, want a response", event)
 		}
 	}
 
@@ -390,18 +392,18 @@ func TestInboundRequestObservabilityPeerCancellation(t *testing.T) {
 	handlerStarted := make(chan struct{})
 	handlerCancelled := make(chan struct{})
 	clientService := startObservedServicePair(t, clientRecorder, serverRecorder, &Handlers{
-		CFindHandler: func(ctx context.Context, _ *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
+		CFindHandler: func(ctx context.Context, _ CFindOperation) error {
 			close(handlerStarted)
 			<-ctx.Done()
 			close(handlerCancelled)
-			return nil, ctx.Err()
+			return ctx.Err()
 		},
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
-	responses, err := clientService.SendCFind(ctx, req)
+	responseEvents, err := clientService.SendCFind(ctx, req)
 	if err != nil {
 		t.Fatalf("SendCFind() error = %v", err)
 	}
@@ -410,9 +412,9 @@ func TestInboundRequestObservabilityPeerCancellation(t *testing.T) {
 		t.Fatalf("SendCCancel() error = %v", err)
 	}
 	<-handlerCancelled
-	for response := range responses {
-		if response == nil {
-			t.Fatal("SendCFind() returned a nil response")
+	for event := range responseEvents {
+		if event.Err != nil || event.Response == nil {
+			t.Fatalf("SendCFind() event = %#v, want a response", event)
 		}
 	}
 

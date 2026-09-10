@@ -194,7 +194,7 @@ func TestCompositeLUTEmpty(t *testing.T) {
 
 func TestCompositeLUTIsValid(t *testing.T) {
 	// Create composite with modality LUT (always valid) and invert LUT (always valid)
-	lut1 := NewModalityRescaleLUT(1.0, 0, 0, 100)
+	lut1 := lut.NewModalityRescaleLUT(1.0, 0, 0, 100)
 	lut2 := lut.NewInvertLUT(0, 255)
 	composite := lut.NewCompositeLUT()
 	composite.Add(lut1)
@@ -216,7 +216,7 @@ func TestCompositeLUTIsValid(t *testing.T) {
 }
 
 func TestCompositeLUTRecalculate(_ *testing.T) {
-	lut1 := NewModalityRescaleLUT(1.0, 0, 0, 100)
+	lut1 := lut.NewModalityRescaleLUT(1.0, 0, 0, 100)
 	lut2 := lut.NewVOILinearLUT(128, 256)
 	composite := lut.NewCompositeLUT()
 	composite.Add(lut1)

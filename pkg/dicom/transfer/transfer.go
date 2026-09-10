@@ -5,12 +5,15 @@
 package transfer
 
 import (
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/parseable"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 var _ parseable.Parseable = (*Syntax)(nil)
@@ -37,9 +40,19 @@ type Syntax struct {
 // Use NewRegistry to create an isolated registry preloaded with standard
 // transfer syntaxes.
 type Registry struct {
-	mu    sync.RWMutex
-	items map[string]*Syntax
+	mu      sync.RWMutex
+	overlay map[string]*Syntax
+	masked  map[string]struct{}
 }
+
+var (
+	// ErrNilSyntax indicates that a registry operation received a nil Syntax.
+	ErrNilSyntax = errors.New("transfer syntax cannot be nil")
+	// ErrInvalidSyntax indicates that a registry operation received an invalid transfer syntax UID.
+	ErrInvalidSyntax = errors.New("invalid transfer syntax")
+	// ErrSyntaxAlreadyRegistered indicates that Register would replace an effective entry.
+	ErrSyntaxAlreadyRegistered = errors.New("transfer syntax already registered")
+)
 
 var standardTransferSyntaxes = []*Syntax{
 	ImplicitVRLittleEndian,
@@ -49,10 +62,8 @@ var standardTransferSyntaxes = []*Syntax{
 	GEPrivateImplicitVRBigEndian,
 	Papyrus3ImplicitVRLittleEndianRetired,
 	DeflatedExplicitVRLittleEndian,
-	JPEGProcess1,
 	JPEGBaseline8Bit,
 	JPEGExtended12Bit,
-	JPEGProcess2_4,
 	JPEGProcess3_5Retired,
 	JPEGProcess6_8Retired,
 	JPEGProcess7_9Retired,
@@ -103,32 +114,14 @@ var standardTransferSyntaxes = []*Syntax{
 	XMLEncoding,
 }
 
-// DefaultRegistry is the package-level registry used by Register, Lookup, etc.
-var DefaultRegistry = newEmptyRegistry()
+var standardTransferSyntaxIndex = buildSyntaxIndex(standardTransferSyntaxes)
 
-// NewRegistry creates a new isolated transfer syntax registry containing the
-// standard transfer syntaxes known to the default registry.
+// NewRegistry creates an isolated registry layered over the immutable standard catalog.
 func NewRegistry() *Registry {
-	r := newEmptyRegistry()
-	for _, ts := range standardTransferSyntaxes {
-		r.Register(cloneSyntax(ts))
-	}
-	return r
-}
-
-func newEmptyRegistry() *Registry {
 	return &Registry{
-		items: make(map[string]*Syntax),
+		overlay: make(map[string]*Syntax),
+		masked:  make(map[string]struct{}),
 	}
-}
-
-func cloneSyntax(ts *Syntax) *Syntax {
-	if ts == nil {
-		return nil
-	}
-
-	cloned := *ts
-	return &cloned
 }
 
 // New creates a new TransferSyntax with the given UID.
@@ -206,18 +199,7 @@ func (ts *Syntax) Equals(other *Syntax) bool {
 // Parse parses a transfer syntax UID string and returns the corresponding TransferSyntax.
 func Parse(uidString string) (*Syntax, error) {
 	u := uid.Parse(uidString, "", uid.TypeTransferSyntax)
-	return Lookup(u)
-}
-
-// Lookup looks up a transfer syntax by UID in the default registry.
-//
-// If the UID is registered, returns the registered transfer syntax.
-// Otherwise, creates a new transfer syntax with default properties:
-// - Explicit VR
-// - Encapsulated
-// - Little Endian
-func Lookup(u *uid.UID) (*Syntax, error) {
-	return DefaultRegistry.Lookup(u)
+	return lookupSyntax(u, func(value *uid.UID) *Syntax { return standardTransferSyntaxIndex[value.UID()] })
 }
 
 // Lookup looks up a transfer syntax by UID in this registry.
@@ -228,6 +210,15 @@ func Lookup(u *uid.UID) (*Syntax, error) {
 // - Encapsulated
 // - Little Endian
 func (r *Registry) Lookup(u *uid.UID) (*Syntax, error) {
+	return lookupSyntax(u, r.Query)
+}
+
+// Parse normalizes a UID string and resolves it through this Registry.
+func (r *Registry) Parse(value string) (*Syntax, error) {
+	return r.Lookup(uid.Parse(value, "", uid.TypeTransferSyntax))
+}
+
+func lookupSyntax(u *uid.UID, query func(*uid.UID) *Syntax) (*Syntax, error) {
 	if u == nil {
 		return nil, fmt.Errorf("UID cannot be nil")
 	}
@@ -236,11 +227,8 @@ func (r *Registry) Lookup(u *uid.UID) (*Syntax, error) {
 		return nil, fmt.Errorf("UID %s is not a transfer syntax type", u.UID())
 	}
 
-	r.mu.RLock()
-	ts, found := r.items[u.UID()]
-	r.mu.RUnlock()
-
-	if found {
+	ts := query(u)
+	if ts != nil {
 		return ts, nil
 	}
 
@@ -255,6 +243,9 @@ func (r *Registry) Lookup(u *uid.UID) (*Syntax, error) {
 
 // Parse implements parseable.Parseable interface.
 func (ts *Syntax) Parse(s string) error {
+	if ts != nil && ts.uid != nil && standardTransferSyntaxIndex[ts.uid.UID()] == ts {
+		return fmt.Errorf("cannot modify standard transfer syntax %s", ts.UID().UID())
+	}
 	parsed, err := Parse(s)
 	if err != nil {
 		return err
@@ -263,49 +254,53 @@ func (ts *Syntax) Parse(s string) error {
 	return nil
 }
 
-// Register registers a transfer syntax in the default registry.
-// This is the package-level convenience function.
-func Register(ts *Syntax) {
-	DefaultRegistry.Register(ts)
-}
-
-// Register adds a transfer syntax to this registry.
-func (r *Registry) Register(ts *Syntax) {
-	if ts == nil || ts.uid == nil {
-		return
+// Register adds a transfer syntax without replacing an effective entry.
+func (r *Registry) Register(ts *Syntax) error {
+	key, err := syntaxRegistryKey(ts)
+	if err != nil {
+		return err
 	}
-
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.items[ts.uid.UID()] = ts
+	if r.queryLocked(key) != nil {
+		return fmt.Errorf("%w: %s", ErrSyntaxAlreadyRegistered, key)
+	}
+	r.overlay[key] = ts
+	delete(r.masked, key)
+	return nil
 }
 
-// Unregister removes a transfer syntax from the default registry.
-// This is the package-level convenience function.
-func Unregister(u *uid.UID) bool {
-	return DefaultRegistry.Unregister(u)
+// Replace adds or replaces a transfer syntax and returns the previous effective entry.
+func (r *Registry) Replace(ts *Syntax) (*Syntax, error) {
+	key, err := syntaxRegistryKey(ts)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	previous := r.queryLocked(key)
+	r.overlay[key] = ts
+	delete(r.masked, key)
+	return previous, nil
 }
 
-// Unregister removes a transfer syntax from this registry.
-func (r *Registry) Unregister(u *uid.UID) bool {
+// Unregister removes the effective syntax and masks a standard syntax in this Registry.
+func (r *Registry) Unregister(u *uid.UID) (*Syntax, bool) {
 	if u == nil {
-		return false
+		return nil, false
 	}
+	key := normalizeTransferUID(u.UID())
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	_, exists := r.items[u.UID()]
-	if exists {
-		delete(r.items, u.UID())
+	previous := r.queryLocked(key)
+	if previous == nil {
+		return nil, false
 	}
-	return exists
-}
-
-// Query queries a transfer syntax by UID in the default registry. Returns nil if not found.
-// This is the package-level convenience function.
-func Query(u *uid.UID) *Syntax {
-	return DefaultRegistry.Query(u)
+	delete(r.overlay, key)
+	r.masked[key] = struct{}{}
+	return previous, true
 }
 
 // Query returns the transfer syntax registered under the given UID, or nil if not found.
@@ -313,28 +308,67 @@ func (r *Registry) Query(u *uid.UID) *Syntax {
 	if u == nil {
 		return nil
 	}
+	key := normalizeTransferUID(u.UID())
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.items[u.UID()]
+	return r.queryLocked(key)
 }
 
-// KnownEntries returns all transfer syntaxes registered in the default registry.
-// This is the package-level convenience function.
-func KnownEntries() []*Syntax {
-	return DefaultRegistry.KnownEntries()
-}
-
-// KnownEntries returns all transfer syntaxes in this registry.
-func (r *Registry) KnownEntries() []*Syntax {
+// List returns an independent UID-sorted snapshot of all effective syntaxes.
+func (r *Registry) List() []*Syntax {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
-	entries := make([]*Syntax, 0, len(r.items))
-	for _, ts := range r.items {
+	values := make(map[string]*Syntax, len(standardTransferSyntaxes)+len(r.overlay))
+	for _, ts := range standardTransferSyntaxes {
+		if _, masked := r.masked[ts.UID().UID()]; !masked {
+			values[ts.UID().UID()] = ts
+		}
+	}
+	for key, ts := range r.overlay {
+		values[key] = ts
+	}
+	entries := make([]*Syntax, 0, len(values))
+	for _, ts := range values {
 		entries = append(entries, ts)
 	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].UID().UID() < entries[j].UID().UID()
+	})
 	return entries
+}
+
+func (r *Registry) queryLocked(value string) *Syntax {
+	if ts := r.overlay[value]; ts != nil {
+		return ts
+	}
+	if _, masked := r.masked[value]; masked {
+		return nil
+	}
+	return standardTransferSyntaxIndex[value]
+}
+
+func syntaxRegistryKey(ts *Syntax) (string, error) {
+	if ts == nil || ts.UID() == nil {
+		return "", ErrNilSyntax
+	}
+	key := normalizeTransferUID(ts.UID().UID())
+	if ts.UID().Type() != uid.TypeTransferSyntax || !uid.IsValid(key) {
+		return "", fmt.Errorf("%w: %s", ErrInvalidSyntax, ts.UID().UID())
+	}
+	return key, nil
+}
+
+func normalizeTransferUID(value string) string {
+	return strings.TrimRight(value, " \x00")
+}
+
+func buildSyntaxIndex(values []*Syntax) map[string]*Syntax {
+	index := make(map[string]*Syntax, len(values))
+	for _, value := range values {
+		index[value.UID().UID()] = value
+	}
+	return index
 }
 
 // Builder is a helper for constructing TransferSyntax instances with custom properties.
@@ -392,8 +426,7 @@ func (b *Builder) SetSwapPixelData(swap bool) *Builder {
 	return b
 }
 
-// Build returns the constructed TransferSyntax and registers it in the default registry.
+// Build returns the constructed TransferSyntax without registering it.
 func (b *Builder) Build() *Syntax {
-	DefaultRegistry.Register(b.ts)
 	return b.ts
 }
