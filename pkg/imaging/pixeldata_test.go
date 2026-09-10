@@ -1475,7 +1475,7 @@ func TestDicomPixelData_VOILUTSequenceReadsBigEndianData(t *testing.T) {
 }
 
 func TestApplyVOILUTRejectsInvalidBitsPerEntry(t *testing.T) {
-	for _, bitsPerEntry := range []uint16{17, 32} {
+	for _, bitsPerEntry := range []uint16{9, 12, 15, 17, 32} {
 		t.Run(fmt.Sprintf("bits_%d", bitsPerEntry), func(t *testing.T) {
 			ds := dataset.New()
 			lutItem := dataset.New()

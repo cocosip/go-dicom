@@ -84,11 +84,14 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor lutDescriptor
 	switch value := elem.(type) {
 	case *element.OtherByte:
 		if descriptor.bitsPerEntry <= 8 {
-			return readCompactLUTBytes(value.GetData(), dataTag, descriptor)
+			entries, err := readCompactLUTBytes(value.GetData(), dataTag, descriptor)
+			return validateLUTDataRange(entries, dataTag, descriptor, err)
 		}
-		return readLUTWords(value.GetData(), dataTag, descriptor, byteOrder)
+		entries, err := readLUTWords(value.GetData(), dataTag, descriptor, byteOrder)
+		return validateLUTDataRange(entries, dataTag, descriptor, err)
 	case *element.OtherWord:
-		return readOtherWordLUTData(value.GetData(), dataTag, descriptor, byteOrder)
+		entries, err := readOtherWordLUTData(value.GetData(), dataTag, descriptor, byteOrder)
+		return validateLUTDataRange(entries, dataTag, descriptor, err)
 	case *element.UnsignedShort:
 		entries, err := value.GetValues()
 		if err != nil {
@@ -122,6 +125,24 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor lutDescriptor
 		return nil, fmt.Errorf("unsupported LUT Data element %T", elem)
 	}
 
+	return validateLUTDataRange(values, dataTag, descriptor, nil)
+}
+
+func validateLUTDataRange(values []uint16, dataTag *tag.Tag, descriptor lutDescriptor, err error) ([]uint16, error) {
+	if err != nil {
+		return nil, err
+	}
+	if descriptor.bitsPerEntry <= 8 || descriptor.bitsPerEntry == 16 {
+		return values, nil
+	}
+
+	maximum := uint16((uint32(1) << descriptor.bitsPerEntry) - 1)
+	for index, value := range values {
+		if value > maximum {
+			return nil, fmt.Errorf("element %s entry %d has value %d, exceeds %d-bit maximum %d",
+				dataTag, index, value, descriptor.bitsPerEntry, maximum)
+		}
+	}
 	return values, nil
 }
 

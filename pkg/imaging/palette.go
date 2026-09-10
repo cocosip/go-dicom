@@ -29,12 +29,15 @@ type PaletteColorLUT struct {
 
 // NewPaletteColorLUT creates a new palette color LUT from descriptor and data
 func NewPaletteColorLUT(descriptorRed []uint16, red, green, blue []byte) (*PaletteColorLUT, error) {
-	if len(descriptorRed) < 3 {
-		return nil, fmt.Errorf("palette descriptor must have at least 3 values")
+	if len(descriptorRed) != 3 {
+		return nil, fmt.Errorf("palette descriptor must have exactly 3 values")
 	}
 
 	size := int(descriptorRed[0])
 	bits := int(descriptorRed[2])
+	if bits != 8 && bits != 16 {
+		return nil, fmt.Errorf("palette LUT bits per entry must be 8 or 16, got %d", bits)
+	}
 
 	// If the LUT size is 0, that means it's 65536 in size
 	if size == 0 {
@@ -61,35 +64,42 @@ func NewPaletteColorLUT(descriptorRed []uint16, red, green, blue []byte) (*Palet
 
 // parseLUT parses the raw palette data into Color32 entries
 func (p *PaletteColorLUT) parseLUT() error {
-	if len(p.Red) == p.Size && len(p.Green) == p.Size && len(p.Blue) == p.Size {
+	compactLength := p.Size
+	if compactLength%2 != 0 {
+		compactLength++
+	}
+	wordLength := p.Size * 2
+
+	if p.Bits == 8 && paletteDataLengthsEqual(p, p.Size, compactLength) {
 		// 8-bit LUT entries
 		for i := 0; i < p.Size; i++ {
 			p.LUT[i] = imagetypes.NewColor32(0xFF, p.Red[i], p.Green[i], p.Blue[i])
 		}
-	} else if len(p.Red) >= p.Size*2 && len(p.Green) >= p.Size*2 && len(p.Blue) >= p.Size*2 {
-		// 16-bit LUT entries... we only support 8-bit until someone can find a sample image with a 16-bit palette
-
-		// 8-bit entries with 16-bits allocated
+	} else if paletteDataLengthsEqual(p, wordLength) {
 		offset := 0
-
-		// 16-bit entries with 8-bits stored
 		if p.Bits == 16 {
 			offset = 1
 		}
 
 		for i := 0; i < p.Size; i++ {
 			idx := i*2 + offset
-			if idx >= len(p.Red) || idx >= len(p.Green) || idx >= len(p.Blue) {
-				return fmt.Errorf("palette LUT index out of range")
-			}
 			p.LUT[i] = imagetypes.NewColor32(0xFF, p.Red[idx], p.Green[idx], p.Blue[idx])
 		}
 	} else {
-		return fmt.Errorf("invalid palette color LUT data size: red=%d, green=%d, blue=%d, expected size=%d",
-			len(p.Red), len(p.Green), len(p.Blue), p.Size)
+		return fmt.Errorf("invalid palette color LUT data size: red=%d, green=%d, blue=%d, expected compact length %d or word length %d",
+			len(p.Red), len(p.Green), len(p.Blue), compactLength, wordLength)
 	}
 
 	return nil
+}
+
+func paletteDataLengthsEqual(p *PaletteColorLUT, lengths ...int) bool {
+	for _, length := range lengths {
+		if len(p.Red) == length && len(p.Green) == length && len(p.Blue) == length {
+			return true
+		}
+	}
+	return false
 }
 
 // GetColor returns the color for the specified pixel value

@@ -34,6 +34,9 @@ func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, _, _ float64, ignorePa
 	if err != nil {
 		return nil, fmt.Errorf("missing LUT Descriptor: %w", err)
 	}
+	if err := validateImageVOILUTDescriptor(descriptor); err != nil {
+		return nil, fmt.Errorf("invalid LUT Descriptor: %w", err)
+	}
 	values, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
 	if err != nil {
 		return nil, fmt.Errorf("read LUT Data: %w", err)
@@ -53,8 +56,15 @@ type voiTableLUT struct {
 	first  int
 }
 
+func validateImageVOILUTDescriptor(descriptor lutDescriptor) error {
+	if descriptor.bitsPerEntry != 8 && descriptor.bitsPerEntry != 16 {
+		return fmt.Errorf("bits per entry must be 8 or 16 for an Image IOD, got %d", descriptor.bitsPerEntry)
+	}
+	return nil
+}
+
 func (v *voiTableLUT) IsValid() bool {
-	return false
+	return len(v.values) > 0
 }
 
 func (v *voiTableLUT) MinimumOutputValue() float64 {

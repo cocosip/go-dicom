@@ -470,6 +470,50 @@ func TestVOILUTSequencePrecedesWindow(t *testing.T) {
 	}
 }
 
+func TestImageVOILUTReportsValidForStandardSequence(t *testing.T) {
+	ds := dataset.New()
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8})); err != nil {
+		t.Fatalf("add LUT Descriptor: %v", err)
+	}
+	if err := item.Add(element.NewOtherByte(tag.LUTData, []byte{0, 100, 200})); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("add VOI LUT Sequence: %v", err)
+	}
+
+	table, err := imageVOILUT(ds, false)
+	if err != nil {
+		t.Fatalf("imageVOILUT() error = %v", err)
+	}
+	if !table.IsValid() {
+		t.Fatal("imageVOILUT() returned a LUT that reports itself invalid")
+	}
+}
+
+func TestImageVOILUTRejectsPresentationStateBitDepths(t *testing.T) {
+	for _, bitsPerEntry := range []uint16{9, 12, 15} {
+		t.Run(fmt.Sprintf("bits_%d", bitsPerEntry), func(t *testing.T) {
+			ds := dataset.New()
+			item := dataset.New()
+			if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, bitsPerEntry})); err != nil {
+				t.Fatalf("add LUT Descriptor: %v", err)
+			}
+			if err := item.Add(element.NewOtherWord(tag.LUTData, []byte{0, 0})); err != nil {
+				t.Fatalf("add LUT Data: %v", err)
+			}
+			if err := ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item})); err != nil {
+				t.Fatalf("add VOI LUT Sequence: %v", err)
+			}
+
+			if _, err := imageVOILUT(ds, false); err == nil {
+				t.Fatalf("imageVOILUT() accepted image VOI LUT bitsPerEntry=%d", bitsPerEntry)
+			}
+		})
+	}
+}
+
 func TestVOILUTSequenceNormalizes16BitEntries(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 3, 1, []byte{0, 1, 2})
 	lutItem := dataset.New()

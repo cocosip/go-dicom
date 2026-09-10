@@ -77,6 +77,9 @@ func imageVOILUT(ds *dataset.Dataset, signed bool) (render.LUT, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
 	}
+	if err := validateImageVOILUTDescriptor(descriptor); err != nil {
+		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
+	}
 	values, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
 	if err != nil {
 		return nil, fmt.Errorf("read VOI LUT Data: %w", err)

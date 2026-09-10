@@ -37,3 +37,32 @@ func TestReadLUTDataRejectsAmbiguousEightBitWordLength(t *testing.T) {
 		t.Fatal("readLUTData() accepted a length that is neither compact nor one-word-per-entry")
 	}
 }
+
+func TestReadLUTDataRejectsValuesOutsideDeclaredRange(t *testing.T) {
+	tests := []struct {
+		name string
+		data element.Element
+	}{
+		{
+			name: "US",
+			data: element.NewUnsignedShort(tag.LUTData, []uint16{0, 1024}),
+		},
+		{
+			name: "OW",
+			data: element.NewOtherWord(tag.LUTData, []byte{0, 0, 0, 4}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := dataset.New()
+			if err := ds.Add(tt.data); err != nil {
+				t.Fatalf("add LUT Data: %v", err)
+			}
+
+			if _, err := readLUTData(ds, tag.LUTData, lutDescriptor{entryCount: 2, bitsPerEntry: 10}, binary.LittleEndian); err == nil {
+				t.Fatal("readLUTData() accepted value 1024 for a 10-bit LUT")
+			}
+		})
+	}
+}

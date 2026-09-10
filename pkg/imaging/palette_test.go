@@ -230,14 +230,14 @@ func TestPaletteColorLUT_ApplyToPixelData_16bit(t *testing.T) {
 }
 
 func TestPaletteColorLUT_InvalidDescriptor(t *testing.T) {
-	descriptor := []uint16{256, 0} // Missing bits field
-	red := make([]byte, 256)
-	green := make([]byte, 256)
-	blue := make([]byte, 256)
-
-	_, err := NewPaletteColorLUT(descriptor, red, green, blue)
-	if err == nil {
-		t.Error("Expected error for invalid descriptor, got nil")
+	for _, descriptor := range [][]uint16{
+		{256, 0},
+		{256, 0, 8, 0},
+	} {
+		_, err := NewPaletteColorLUT(descriptor, make([]byte, 256), make([]byte, 256), make([]byte, 256))
+		if err == nil {
+			t.Errorf("NewPaletteColorLUT() accepted descriptor VM %d", len(descriptor))
+		}
 	}
 }
 
@@ -250,5 +250,34 @@ func TestPaletteColorLUT_InvalidDataSize(t *testing.T) {
 	_, err := NewPaletteColorLUT(descriptor, red, green, blue)
 	if err == nil {
 		t.Error("Expected error for invalid data size, got nil")
+	}
+}
+
+func TestPaletteColorLUTRejectsNonStandardBitDepth(t *testing.T) {
+	data := []byte{0, 0, 0, 0}
+	if _, err := NewPaletteColorLUT([]uint16{2, 0, 12}, data, data, data); err == nil {
+		t.Fatal("NewPaletteColorLUT() accepted bits per entry other than 8 or 16")
+	}
+}
+
+func TestPaletteColorLUTRejectsTrailingWordData(t *testing.T) {
+	data := []byte{0, 0, 0, 0, 0, 0}
+	if _, err := NewPaletteColorLUT([]uint16{2, 0, 16}, data, data, data); err == nil {
+		t.Fatal("NewPaletteColorLUT() accepted LUT Data longer than the descriptor")
+	}
+}
+
+func TestPaletteColorLUTAcceptsEvenLengthPaddingForOddEightBitData(t *testing.T) {
+	lut, err := NewPaletteColorLUT(
+		[]uint16{3, 0, 8},
+		[]byte{10, 20, 30, 0},
+		[]byte{40, 50, 60, 0},
+		[]byte{70, 80, 90, 0},
+	)
+	if err != nil {
+		t.Fatalf("NewPaletteColorLUT() error = %v", err)
+	}
+	if got := lut.GetColor(2); got != imagetypes.NewColor32(255, 30, 60, 90) {
+		t.Fatalf("GetColor(2) = %#v, want final unpadded LUT entry", got)
 	}
 }
