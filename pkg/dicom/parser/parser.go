@@ -1014,6 +1014,12 @@ func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 	if isPrivateCreatorTag(t) {
 		return vr.LO, nil
 	}
+	// PS3.5 A.1 assigns OW to native Pixel Data in Implicit VR Little Endian.
+	// The dictionary lists OB/OW for explicit transfer syntaxes, so taking its
+	// first VR would incorrectly reconstruct implicit Pixel Data as OB.
+	if t.Equals(tag.PixelData) {
+		return vr.OW, nil
+	}
 
 	// Implicit VR: look up in dictionary
 	// Use provided dictionary, or default dictionary if not provided

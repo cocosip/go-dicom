@@ -80,52 +80,22 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor lutDescriptor
 	}
 
 	values := make([]uint16, 0, descriptor.entryCount)
-	appendWords := func(raw []byte) error {
-		if len(raw) < descriptor.entryCount*2 {
-			return fmt.Errorf("element %s has %d bytes, want at least %d", dataTag, len(raw), descriptor.entryCount*2)
-		}
-		for index := 0; index < descriptor.entryCount; index++ {
-			entry := byteOrder.Uint16(raw[index*2:])
-			if descriptor.bitsPerEntry <= 8 {
-				entry &= 0x00ff
-			}
-			values = append(values, entry)
-		}
-		return nil
-	}
 
 	switch value := elem.(type) {
 	case *element.OtherByte:
-		raw := value.GetData()
 		if descriptor.bitsPerEntry <= 8 {
-			if len(raw) < descriptor.entryCount {
-				return nil, fmt.Errorf("element %s has %d bytes, want at least %d", dataTag, len(raw), descriptor.entryCount)
-			}
-			for _, entry := range raw[:descriptor.entryCount] {
-				values = append(values, uint16(entry))
-			}
-		} else if err := appendWords(raw); err != nil {
-			return nil, err
+			return readCompactLUTBytes(value.GetData(), dataTag, descriptor)
 		}
+		return readLUTWords(value.GetData(), dataTag, descriptor, byteOrder)
 	case *element.OtherWord:
-		raw := value.GetData()
-		if descriptor.bitsPerEntry <= 8 && len(raw) < descriptor.entryCount*2 {
-			if len(raw) < descriptor.entryCount {
-				return nil, fmt.Errorf("element %s has %d bytes, want at least %d", dataTag, len(raw), descriptor.entryCount)
-			}
-			for _, entry := range raw[:descriptor.entryCount] {
-				values = append(values, uint16(entry))
-			}
-		} else if err := appendWords(raw); err != nil {
-			return nil, err
-		}
+		return readOtherWordLUTData(value.GetData(), dataTag, descriptor, byteOrder)
 	case *element.UnsignedShort:
 		entries, err := value.GetValues()
 		if err != nil {
 			return nil, err
 		}
-		if len(entries) < descriptor.entryCount {
-			return nil, fmt.Errorf("element %s has %d entries, want at least %d", dataTag, len(entries), descriptor.entryCount)
+		if len(entries) != descriptor.entryCount {
+			return nil, fmt.Errorf("element %s has %d entries, want %d", dataTag, len(entries), descriptor.entryCount)
 		}
 		for _, entry := range entries[:descriptor.entryCount] {
 			if descriptor.bitsPerEntry <= 8 {
@@ -138,8 +108,8 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor lutDescriptor
 		if err != nil {
 			return nil, err
 		}
-		if len(entries) < descriptor.entryCount {
-			return nil, fmt.Errorf("element %s has %d entries, want at least %d", dataTag, len(entries), descriptor.entryCount)
+		if len(entries) != descriptor.entryCount {
+			return nil, fmt.Errorf("element %s has %d entries, want %d", dataTag, len(entries), descriptor.entryCount)
 		}
 		for _, entry := range entries[:descriptor.entryCount] {
 			word := uint16(entry)
@@ -152,5 +122,55 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor lutDescriptor
 		return nil, fmt.Errorf("unsupported LUT Data element %T", elem)
 	}
 
+	return values, nil
+}
+
+func readOtherWordLUTData(raw []byte, dataTag *tag.Tag, descriptor lutDescriptor, byteOrder binary.ByteOrder) ([]uint16, error) {
+	if descriptor.bitsPerEntry > 8 {
+		return readLUTWords(raw, dataTag, descriptor, byteOrder)
+	}
+	compactLength := descriptor.entryCount
+	if compactLength%2 != 0 {
+		compactLength++
+	}
+	switch len(raw) {
+	case descriptor.entryCount, compactLength:
+		return readCompactLUTBytes(raw, dataTag, descriptor)
+	case descriptor.entryCount * 2:
+		return readLUTWords(raw, dataTag, descriptor, byteOrder)
+	default:
+		return nil, fmt.Errorf("element %s has %d bytes, want compact length %d or word length %d",
+			dataTag, len(raw), compactLength, descriptor.entryCount*2)
+	}
+}
+
+func readLUTWords(raw []byte, dataTag *tag.Tag, descriptor lutDescriptor, byteOrder binary.ByteOrder) ([]uint16, error) {
+	expectedLength := descriptor.entryCount * 2
+	if len(raw) != expectedLength {
+		return nil, fmt.Errorf("element %s has %d bytes, want %d", dataTag, len(raw), expectedLength)
+	}
+	values := make([]uint16, descriptor.entryCount)
+	for index := range values {
+		values[index] = byteOrder.Uint16(raw[index*2:])
+		if descriptor.bitsPerEntry <= 8 {
+			values[index] &= 0x00ff
+		}
+	}
+	return values, nil
+}
+
+func readCompactLUTBytes(raw []byte, dataTag *tag.Tag, descriptor lutDescriptor) ([]uint16, error) {
+	unpaddedLength := descriptor.entryCount
+	paddedLength := unpaddedLength
+	if paddedLength%2 != 0 {
+		paddedLength++
+	}
+	if len(raw) != unpaddedLength && len(raw) != paddedLength {
+		return nil, fmt.Errorf("element %s has %d bytes, want %d bytes plus optional even-length padding", dataTag, len(raw), unpaddedLength)
+	}
+	values := make([]uint16, descriptor.entryCount)
+	for index, entry := range raw[:descriptor.entryCount] {
+		values[index] = uint16(entry)
+	}
 	return values, nil
 }

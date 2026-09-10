@@ -512,13 +512,15 @@ transcoder := codec.NewTranscoder(
 )
 
 // VR 选择规则：
-// strictDICOMVR = true (强制):
-//   - 非压缩数据: BitsAllocated ≤8 → OB, >8 → OW
-//   - 压缩数据: 强制 OB
+// strictDICOMVR = true (默认，符合标准):
+//   - 封装压缩数据: 强制 OB
 //
-// strictDICOMVR = false (兼容模式 ):
-//   - 非压缩数据: BitsAllocated ≤8 → OB, >8 → OW
-//   - 压缩数据: BitsAllocated ≤8 → OB, >8 → OW
+// strictDICOMVR = false (兼容模式):
+//   - 封装压缩数据: BitsAllocated ≤8 → OB, >8 → OW
+//
+// 此选项不影响原生（非压缩）Pixel Data：
+//   - Implicit VR Little Endian: 固定使用 OW（DICOM PS3.5 A.1）
+//   - Explicit VR: BitsAllocated >8 使用 OW；≤8 可使用 OB 或 OW
 ```
 
 ---

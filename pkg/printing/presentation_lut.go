@@ -119,6 +119,12 @@ func (p *PresentationLUT) IsValid() bool {
 	if len(p.LUTData) != entryCount {
 		return false
 	}
+	maxValue := uint16((uint32(1) << bitsPerEntry) - 1)
+	for _, value := range p.LUTData {
+		if value > maxValue {
+			return false
+		}
+	}
 
 	// First value mapped should be 0
 	if p.GetFirstValueMapped() != 0 {

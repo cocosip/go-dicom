@@ -103,6 +103,9 @@ func imageModalityLUT(ds *dataset.Dataset, signed bool) (render.ModalityLUT, err
 	if err != nil {
 		return nil, fmt.Errorf("read Modality LUT descriptor: %w", err)
 	}
+	if descriptor.bitsPerEntry != 8 && descriptor.bitsPerEntry != 16 {
+		return nil, fmt.Errorf("read Modality LUT descriptor: bits per entry must be 8 or 16, got %d", descriptor.bitsPerEntry)
+	}
 	entries, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
 	if err != nil {
 		return nil, fmt.Errorf("read Modality LUT Data: %w", err)

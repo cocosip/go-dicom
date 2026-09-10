@@ -541,6 +541,45 @@ func TestDicomPixelData_EncodeDecodeNative(t *testing.T) {
 	}
 }
 
+func TestDicomPixelDataDecodeSelectsNativeWordVRFor16BitOutput(t *testing.T) {
+	source, err := NewDicomPixelData(&PixelDataInfo{
+		Width:                     1,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             16,
+		BitsStored:                12,
+		HighBit:                   11,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+		VRCode:                    "OB",
+		Encapsulated:              true,
+		TransferSyntaxUID:         transfer.JPEG2000Lossless.UID().UID(),
+	})
+	if err != nil {
+		t.Fatalf("NewDicomPixelData() error = %v", err)
+	}
+	if err := source.AddFrame([]byte{0x34, 0x12}); err != nil {
+		t.Fatalf("AddFrame() error = %v", err)
+	}
+
+	decoded, err := source.Decode(codec.NewExplicitVRLittleEndianCodec(), nil)
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if decoded.Info.VRCode != "OW" {
+		t.Fatalf("decoded VRCode = %q, want OW", decoded.Info.VRCode)
+	}
+	elem, err := decoded.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+	if _, ok := elem.(*element.OtherWord); !ok {
+		t.Fatalf("decoded ToElement() = %T, want *element.OtherWord", elem)
+	}
+}
+
 func TestDicomPixelData_EnsureInterleaved(t *testing.T) {
 	info := &PixelDataInfo{
 		Width:                     2,
@@ -1012,6 +1051,65 @@ func TestExpandSegmentedLUTStandardSegments(t *testing.T) {
 				t.Fatalf("expandSegmentedLUT() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestExpandSegmentedLUTBigEndianIndirectOffsetUsesLowWordFirst(t *testing.T) {
+	raw := words(binary.BigEndian,
+		0, 1, 5,
+		0, 1, 10,
+		2, 1, 6, 0,
+	)
+
+	got, err := expandSegmentedLUT(raw, 3, binary.BigEndian)
+	if err != nil {
+		t.Fatalf("expandSegmentedLUT() error = %v", err)
+	}
+	if want := []uint16{5, 10, 10}; !slices.Equal(got, want) {
+		t.Fatalf("expandSegmentedLUT() = %v, want %v", got, want)
+	}
+}
+
+func TestExpandSegmentedLUTRejectsIndirectToIndirectReference(t *testing.T) {
+	raw := words(binary.LittleEndian,
+		0, 1, 5,
+		2, 1, 0, 0,
+		2, 1, 6, 0,
+	)
+
+	if _, err := expandSegmentedLUT(raw, 3, binary.LittleEndian); err == nil {
+		t.Fatal("expandSegmentedLUT() accepted an indirect segment that references another indirect segment")
+	}
+}
+
+func TestExpandSegmentedLUTRejectsIndirectFirstSegment(t *testing.T) {
+	raw := words(binary.LittleEndian,
+		2, 1, 8, 0,
+		0, 1, 5,
+	)
+
+	if _, err := expandSegmentedLUT(raw, 2, binary.LittleEndian); err == nil {
+		t.Fatal("expandSegmentedLUT() accepted an indirect first segment")
+	}
+}
+
+func TestBuildPaletteLUTRejectsNonStandardBitDepth(t *testing.T) {
+	ds := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 12}),
+		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 12}),
+		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 12}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, words(binary.LittleEndian, 0, 4095)),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, words(binary.LittleEndian, 0, 4095)),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, words(binary.LittleEndian, 0, 4095)),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	if _, err := buildPaletteLUT(ds); err == nil {
+		t.Fatal("buildPaletteLUT() accepted a Palette LUT bit depth other than 8 or 16")
 	}
 }
 
@@ -1575,6 +1673,63 @@ func TestNewDicomPixelDataFromBytes(t *testing.T) {
 	}
 	if !bytes.Equal(data[100:200], frame1) {
 		t.Error("Frame 1 data mismatch")
+	}
+}
+
+func TestNewDicomPixelDataFromBytesUsesWordVRForImplicitSyntax(t *testing.T) {
+	pd, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+		Width:                     1,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+		TransferSyntaxUID:         transfer.ImplicitVRLittleEndian.UID().UID(),
+	}, []byte{0x7f})
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+	if pd.Info.VRCode != "OW" {
+		t.Fatalf("VRCode = %q, want OW for Implicit VR Little Endian", pd.Info.VRCode)
+	}
+	elem, err := pd.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+	if _, ok := elem.(*element.OtherWord); !ok {
+		t.Fatalf("ToElement() = %T, want *element.OtherWord", elem)
+	}
+}
+
+func TestDicomPixelDataToElementPreservesLegalNativeEightBitWordVR(t *testing.T) {
+	pd, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+		Width:                     1,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           1,
+		PixelRepresentation:       UnsignedPixels,
+		PlanarConfiguration:       InterleavedPlanar,
+		PhotometricInterpretation: Monochrome2,
+		VRCode:                    "OW",
+		TransferSyntaxUID:         transfer.ExplicitVRLittleEndian.UID().UID(),
+	}, []byte{0x7f})
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	elem, err := pd.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+	if _, ok := elem.(*element.OtherWord); !ok {
+		t.Fatalf("ToElement() = %T, want *element.OtherWord", elem)
 	}
 }
 

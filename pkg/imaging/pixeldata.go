@@ -175,11 +175,7 @@ func NewDicomPixelData(info *PixelDataInfo) (*DicomPixelData, error) {
 func NewDicomPixelDataFromBytes(info *PixelDataInfo, data []byte) (*DicomPixelData, error) {
 	info.Encapsulated = false
 	if info.VRCode == "" {
-		if info.BitsAllocated <= 8 {
-			info.VRCode = "OB"
-		} else {
-			info.VRCode = "OW"
-		}
+		info.VRCode = nativePixelDataVR(info)
 	}
 	pd, err := NewDicomPixelData(info)
 	if err != nil {
@@ -618,10 +614,17 @@ func (pd *DicomPixelData) ToElement() (element.Element, error) {
 		return nil, fmt.Errorf("pixel data is empty")
 	}
 
-	if pd.Info.BitsAllocated <= 8 || pd.Info.VRCode == "OB" {
-		return element.NewOtherByte(tag.PixelData, all), nil
+	if nativePixelDataVR(pd.Info) == "OW" {
+		return element.NewOtherWord(tag.PixelData, all), nil
 	}
-	return element.NewOtherWord(tag.PixelData, all), nil
+	return element.NewOtherByte(tag.PixelData, all), nil
+}
+
+func nativePixelDataVR(info *PixelDataInfo) string {
+	if info.TransferSyntaxUID == transferSyntaxImplicitVRLittleEndian || info.BitsAllocated > 8 || info.VRCode == "OW" {
+		return "OW"
+	}
+	return "OB"
 }
 
 // IsEncapsulated returns true if pixel data is encapsulated.
@@ -713,8 +716,8 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 		PixelRepresentation:       pd.Info.PixelRepresentation,
 		PlanarConfiguration:       pd.Info.PlanarConfiguration,
 		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
-		VRCode:                    pd.Info.VRCode, // Keep original VR
-		Encapsulated:              false,          // Decoded data is not encapsulated
+		VRCode:                    "",
+		Encapsulated:              false, // Decoded data is not encapsulated
 		TransferSyntaxUID:         transferSyntaxExplicitVRLittleEndian,
 		IsLossy:                   pd.Info.IsLossy,
 		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
@@ -722,6 +725,7 @@ func (pd *DicomPixelData) Decode(c codec.Codec, params codec.Parameters) (*Dicom
 		PixelPaddingValue:         pd.Info.PixelPaddingValue,
 		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
 	}
+	newInfo.VRCode = nativePixelDataVR(newInfo)
 
 	newPD, err := NewDicomPixelData(newInfo)
 	if err != nil {
@@ -1042,6 +1046,9 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 	if rDescriptor != gDescriptor || rDescriptor != bDescriptor {
 		return nil, fmt.Errorf("palette LUT descriptors do not match")
 	}
+	if rDescriptor.bitsPerEntry != 8 && rDescriptor.bitsPerEntry != 16 {
+		return nil, fmt.Errorf("palette LUT bits per entry must be 8 or 16, got %d", rDescriptor.bitsPerEntry)
+	}
 
 	// Prefer standard LUT data; if missing, try segmented LUT data
 	rLUT, err := readLUTData(ds, tag.RedPaletteColorLookupTableData, rDescriptor, byteOrder)
@@ -1120,6 +1127,9 @@ func expandSegmentedLUT(raw []byte, expectedSize int, byteOrder binary.ByteOrder
 	}
 	if len(raw)%2 != 0 {
 		return nil, fmt.Errorf("segmented LUT data has odd byte length %d", len(raw))
+	}
+	if byteOrder.Uint16(raw) == 2 {
+		return nil, fmt.Errorf("segmented LUT first segment must not be indirect")
 	}
 	decoder := segmentedLUTDecoder{
 		raw:          raw,
@@ -1200,12 +1210,20 @@ func (d *segmentedLUTDecoder) decodeSegment(position int) (int, error) {
 		if payload+4 > len(d.raw) {
 			return 0, fmt.Errorf("segmented LUT indirect segment at byte offset %d is truncated", position)
 		}
-		offset := int(d.byteOrder.Uint32(d.raw[payload:]))
+		lowWord := d.byteOrder.Uint16(d.raw[payload:])
+		highWord := d.byteOrder.Uint16(d.raw[payload+2:])
+		offset := int(uint32(lowWord) | uint32(highWord)<<16)
 		if offset < 0 || offset%2 != 0 || offset >= len(d.raw) {
 			return 0, fmt.Errorf("segmented LUT indirect byte offset %d is out of range", offset)
 		}
 		referencedPosition := offset
 		for segment := 0; segment < length; segment++ {
+			if referencedPosition+2 > len(d.raw) {
+				return 0, fmt.Errorf("segmented LUT indirect reference at byte offset %d is truncated", referencedPosition)
+			}
+			if d.byteOrder.Uint16(d.raw[referencedPosition:]) == 2 {
+				return 0, fmt.Errorf("segmented LUT indirect segment at byte offset %d references another indirect segment", position)
+			}
 			var err error
 			referencedPosition, err = d.decodeSegment(referencedPosition)
 			if err != nil {

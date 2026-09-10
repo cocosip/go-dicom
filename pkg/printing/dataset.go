@@ -4,11 +4,13 @@
 package printing
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strconv"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	dicomendian "github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
@@ -572,7 +574,15 @@ func (p *PresentationLUT) ToDataset() (*dataset.Dataset, error) {
 	if err := addString(lutItem, tag.LUTExplanation, p.LUTExplanation, vr.LO); err != nil {
 		return nil, err
 	}
-	if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
+	if len(p.LUTData)*2 > int(^uint16(0)) {
+		raw := make([]byte, len(p.LUTData)*2)
+		for index, value := range p.LUTData {
+			binary.LittleEndian.PutUint16(raw[index*2:], value)
+		}
+		if err := addElement(lutItem, element.NewOtherWord(tag.LUTData, raw)); err != nil {
+			return nil, err
+		}
+	} else if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
 		return nil, err
 	}
 	if err := addElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
@@ -591,7 +601,7 @@ func NewPresentationLUTFromDataset(sopInstanceUID string, ds *dataset.Dataset) (
 		return nil, err
 	}
 	p := NewPresentationLUT(instanceUID)
-	shape, hasShape := ds.GetString(tag.PresentationLUTShape)
+	_, hasShape := ds.Get(tag.PresentationLUTShape)
 	_, hasSequence := ds.Get(tag.PresentationLUTSequence)
 	_, hasLegacyDescriptor := ds.Get(tag.LUTDescriptor)
 	_, hasLegacyData := ds.Get(tag.LUTData)
@@ -600,6 +610,10 @@ func NewPresentationLUTFromDataset(sopInstanceUID string, ds *dataset.Dataset) (
 		return nil, fmt.Errorf("printing: Presentation LUT Shape and LUT Sequence are mutually exclusive")
 	}
 	if hasShape {
+		shape, ok := ds.GetString(tag.PresentationLUTShape)
+		if !ok {
+			return nil, fmt.Errorf("printing: invalid Presentation LUT Shape element")
+		}
 		p.PresentationLUTShape = PresentationLUTShape(shape)
 		if !p.IsValid() {
 			return nil, fmt.Errorf("printing: invalid Presentation LUT Shape %q", shape)
@@ -626,11 +640,57 @@ func NewPresentationLUTFromDataset(sopInstanceUID string, ds *dataset.Dataset) (
 	if value, ok := lutValues.GetString(tag.LUTExplanation); ok {
 		p.LUTExplanation = value
 	}
-	if values, err := lutValues.GetUInt16s(tag.LUTData); err == nil {
-		p.LUTData = append([]uint16(nil), values...)
+	if len(p.LUTDescriptor) == 3 {
+		values, err := presentationLUTData(ds, lutValues, p.LUTDescriptor)
+		if err != nil {
+			return nil, err
+		}
+		p.LUTData = values
 	}
 	if !p.IsValid() {
 		return nil, fmt.Errorf("printing: invalid Presentation LUT Sequence")
 	}
 	return p, nil
+}
+
+func presentationLUTData(root, values *dataset.Dataset, descriptor []uint16) ([]uint16, error) {
+	elem, ok := values.Get(tag.LUTData)
+	if !ok {
+		return nil, fmt.Errorf("printing: missing LUT Data")
+	}
+	entryCount := int(descriptor[0])
+	if entryCount == 0 {
+		entryCount = 65536
+	}
+	switch value := elem.(type) {
+	case *element.UnsignedShort:
+		entries, err := value.GetValues()
+		if err != nil {
+			return nil, fmt.Errorf("printing: read LUT Data: %w", err)
+		}
+		if len(entries) != entryCount {
+			return nil, fmt.Errorf("printing: LUT Data has %d entries, want %d", len(entries), entryCount)
+		}
+		return append([]uint16(nil), entries...), nil
+	case *element.OtherWord:
+		raw := value.GetData()
+		if len(raw) != entryCount*2 {
+			return nil, fmt.Errorf("printing: LUT Data has %d bytes, want %d", len(raw), entryCount*2)
+		}
+		var byteOrder binary.ByteOrder = binary.LittleEndian
+		syntax := values.InternalTransferSyntax()
+		if syntax == nil && root != nil {
+			syntax = root.InternalTransferSyntax()
+		}
+		if syntax != nil && syntax.Endian() == dicomendian.Big {
+			byteOrder = binary.BigEndian
+		}
+		entries := make([]uint16, entryCount)
+		for index := range entries {
+			entries[index] = byteOrder.Uint16(raw[index*2:])
+		}
+		return entries, nil
+	default:
+		return nil, fmt.Errorf("printing: LUT Data has unsupported VR %s", elem.ValueRepresentation())
+	}
 }

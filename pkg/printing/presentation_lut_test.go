@@ -114,6 +114,13 @@ func TestPresentationLUT_IsValid(t *testing.T) {
 			},
 			expected: false,
 		},
+		{
+			name: "invalid: LUT data exceeds declared output range",
+			setup: func(lut *PresentationLUT) {
+				_ = lut.SetLUT(2, 0, 10, []uint16{0, 1024})
+			},
+			expected: false,
+		},
 	}
 
 	for _, tc := range testCases {

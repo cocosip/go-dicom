@@ -298,6 +298,24 @@ func TestModalityLUTSequencePrecedesRescale(t *testing.T) {
 	}
 }
 
+func TestModalityLUTRejectsNonStandardBitDepth(t *testing.T) {
+	ds := dataset.New()
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 12})); err != nil {
+		t.Fatalf("add LUT Descriptor: %v", err)
+	}
+	if err := item.Add(element.NewOtherWord(tag.LUTData, []byte{0xff, 0x0f})); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("add Modality LUT Sequence: %v", err)
+	}
+
+	if _, err := imageModalityLUT(ds, false); err == nil {
+		t.Fatal("imageModalityLUT() accepted a bit depth other than 8 or 16")
+	}
+}
+
 func TestDatasetImageReadsBigEndianModalityLUTData(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 3, 1, []byte{0, 1, 2})
 	ds.SetInternalTransferSyntax(transfer.ExplicitVRBigEndian)

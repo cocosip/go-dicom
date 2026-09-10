@@ -103,15 +103,14 @@ func WithCodecRegistry(registry *Registry) TranscoderOption {
 	}
 }
 
-// WithStrictDICOMVR controls VR selection for pixel data according to DICOM standard.
-// When true (default, recommended):
-//   - Uncompressed data: VR selected based on BitsAllocated (OB for <=8 bits, OW for >8 bits)
-//   - Compressed data: VR is always OB (DICOM Part 5 Section 8.2)
+// WithStrictDICOMVR controls VR selection for encapsulated pixel data.
+// When true (default), encapsulated data always uses OB as required by PS3.5
+// Section 8.2. When false, 16-bit encapsulated data uses the non-standard OW
+// VR for compatibility with systems that emit or expect that representation.
 //
-// When false (compatibility mode):
-//   - Both compressed and uncompressed data: VR selected based on BitsAllocated
-//
-// Note: Setting this to false may violate DICOM standard but might be needed for compatibility.
+// Native pixel data is independent of this option: Implicit VR Little Endian
+// uses OW (PS3.5 A.1), while explicit VR uses OW above 8 Bits Allocated and
+// may use OB or OW at 8 Bits Allocated or below.
 func WithStrictDICOMVR(strict bool) TranscoderOption {
 	return func(t *Transcoder) {
 		t.strictDICOMVR = strict
@@ -389,6 +388,9 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 	if inputEndian == outputEndian {
 		newDS := ds.Clone()
 		newDS.SetInternalTransferSyntax(t.outputSyntax)
+		if err := normalizeImplicitPixelDataVR(newDS, t.outputSyntax); err != nil {
+			return nil, err
+		}
 		return newDS, nil
 	}
 
@@ -409,6 +411,9 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 		// 8-bit data doesn't need byte order conversion
 		newDS := ds.Clone()
 		newDS.SetInternalTransferSyntax(t.outputSyntax)
+		if err := normalizeImplicitPixelDataVR(newDS, t.outputSyntax); err != nil {
+			return nil, err
+		}
 		return newDS, nil
 	case *element.OtherWord:
 		pixelData = elem.GetData()
@@ -455,6 +460,24 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 	_ = newDS.Add(element.NewOtherWord(tag.PixelData, convertedData))
 
 	return newDS, nil
+}
+
+func normalizeImplicitPixelDataVR(ds *dataset.Dataset, outputSyntax *transfer.Syntax) error {
+	if outputSyntax == nil || outputSyntax.UID().UID() != transfer.ImplicitVRLittleEndian.UID().UID() {
+		return nil
+	}
+	pixelData, ok := ds.Get(tag.PixelData)
+	if !ok {
+		return nil
+	}
+	otherByte, ok := pixelData.(*element.OtherByte)
+	if !ok {
+		return nil
+	}
+	if err := ds.AddOrUpdate(element.NewOtherWord(tag.PixelData, otherByte.GetData())); err != nil {
+		return fmt.Errorf("normalize implicit VR Pixel Data: %w", err)
+	}
+	return nil
 }
 
 // decode decompresses pixel data from a dataset using the high-level codec.Decode method.

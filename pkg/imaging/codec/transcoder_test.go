@@ -11,9 +11,11 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
@@ -770,5 +772,98 @@ func TestTranscoder_VRSelection(t *testing.T) {
 					actualVR, tt.expectedVRType, tt.bitsAllocated)
 			}
 		})
+	}
+}
+
+func TestTranscoderPixelDataVRRoundTripsThroughWriter(t *testing.T) {
+	tests := []struct {
+		name   string
+		strict bool
+		wantVR *vr.VR
+	}{
+		{name: "strict encapsulated Pixel Data uses OB", strict: true, wantVR: vr.OB},
+		{name: "compatibility mode preserves 16-bit OW", strict: false, wantVR: vr.OW},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := newCodecTestDataset(t, transfer.ExplicitVRLittleEndian)
+			for _, elem := range []element.Element{
+				element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}),
+				element.NewString(tag.SOPInstanceUID, vr.UI, []string{"2.25.146"}),
+				element.NewOtherWord(tag.PixelData, []byte{0x34, 0x12}),
+			} {
+				if err := ds.Add(elem); err != nil {
+					t.Fatalf("add %s: %v", elem.Tag(), err)
+				}
+			}
+
+			encodedDS, err := NewTranscoder(
+				transfer.ExplicitVRLittleEndian,
+				transfer.JPEG2000Lossless,
+				WithOutputCodec(echoDecodeCodec{}),
+				WithStrictDICOMVR(tt.strict),
+			).Transcode(ds)
+			if err != nil {
+				t.Fatalf("Transcode() error = %v", err)
+			}
+
+			var encoded bytes.Buffer
+			if err := writer.Write(&encoded, encodedDS); err != nil {
+				t.Fatalf("writer.Write() error = %v", err)
+			}
+			parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+			if err != nil {
+				t.Fatalf("parser.Parse() error = %v", err)
+			}
+			pixelData, ok := parsed.Dataset.Get(tag.PixelData)
+			if !ok {
+				t.Fatal("round-tripped dataset has no Pixel Data")
+			}
+			if got := pixelData.ValueRepresentation(); got != tt.wantVR {
+				t.Fatalf("round-tripped Pixel Data VR = %s, want %s", got, tt.wantVR)
+			}
+		})
+	}
+}
+
+func TestTranscoderUsesWordVRForImplicitNativePixelData(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}),
+		element.NewString(tag.SOPInstanceUID, vr.UI, []string{"2.25.147"}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewOtherByte(tag.PixelData, []byte{0x7f, 0x00}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	got, err := NewTranscoder(transfer.ExplicitVRLittleEndian, transfer.ImplicitVRLittleEndian).Transcode(ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	pixelData, ok := got.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("transcoded dataset has no Pixel Data")
+	}
+	if _, ok := pixelData.(*element.OtherWord); !ok {
+		t.Fatalf("transcoded Pixel Data = %T, want *element.OtherWord", pixelData)
+	}
+
+	var encoded bytes.Buffer
+	if err := writer.Write(&encoded, got); err != nil {
+		t.Fatalf("writer.Write() error = %v", err)
+	}
+	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		t.Fatalf("parser.Parse() error = %v", err)
+	}
+	roundTripped, ok := parsed.Dataset.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("round-tripped dataset has no Pixel Data")
+	}
+	if _, ok := roundTripped.(*element.OtherWord); !ok {
+		t.Fatalf("round-tripped Pixel Data = %T, want *element.OtherWord", roundTripped)
 	}
 }

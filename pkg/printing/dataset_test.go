@@ -4,6 +4,8 @@
 package printing
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
@@ -11,9 +13,12 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -610,6 +615,81 @@ func TestPresentationLUTDatasetUsesCanonicalSequence(t *testing.T) {
 	}
 }
 
+func TestPresentationLUTDatasetReadsOtherWordData(t *testing.T) {
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 12})); err != nil {
+		t.Fatalf("add LUT Descriptor: %v", err)
+	}
+	raw := make([]byte, 4)
+	binary.BigEndian.PutUint16(raw[0:], 11)
+	binary.BigEndian.PutUint16(raw[2:], 22)
+	if err := item.Add(element.NewOtherWord(tag.LUTData, raw)); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	for _, elem := range []element.Element{
+		element.NewString(tag.SOPClassUID, vr.UI, []string{presentationLUTSOPClassUID}),
+		element.NewString(tag.SOPInstanceUID, vr.UI, []string{"2.25.143"}),
+		dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	got, err := NewPresentationLUTFromDataset("", ds)
+	if err != nil {
+		t.Fatalf("NewPresentationLUTFromDataset() error = %v", err)
+	}
+	if !reflect.DeepEqual(got.LUTData, []uint16{11, 22}) {
+		t.Fatalf("LUT Data = %v, want [11 22]", got.LUTData)
+	}
+}
+
+func TestPresentationLUTDatasetWrites65536EntriesAsOtherWord(t *testing.T) {
+	values := make([]uint16, 65536)
+	for index := range values {
+		values[index] = uint16(index)
+	}
+	lut := NewPresentationLUT("2.25.144")
+	if err := lut.SetLUT(0, 0, 16, values); err != nil {
+		t.Fatalf("SetLUT() error = %v", err)
+	}
+
+	ds, err := lut.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	sequence, err := ds.GetSequence(tag.PresentationLUTSequence)
+	if err != nil {
+		t.Fatalf("PresentationLUTSequence missing: %v", err)
+	}
+	dataElement, ok := sequence.GetItem(0).Get(tag.LUTData)
+	if !ok || dataElement.ValueRepresentation() != vr.OW {
+		t.Fatalf("LUT Data VR = %v, want OW", dataElement.ValueRepresentation())
+	}
+	var encoded bytes.Buffer
+	if err := writer.Write(&encoded, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+		t.Fatalf("write Presentation LUT Dataset: %v", err)
+	}
+	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		t.Fatalf("parse Presentation LUT Dataset: %v", err)
+	}
+	roundTripped, err := NewPresentationLUTFromDataset("", parsed.Dataset)
+	if err != nil {
+		t.Fatalf("read round-tripped Presentation LUT: %v", err)
+	}
+	if len(roundTripped.LUTData) != 65536 {
+		t.Fatalf("round-tripped LUT Data length = %d, want 65536", len(roundTripped.LUTData))
+	}
+	if roundTripped.LUTData[0] != 0 || roundTripped.LUTData[65535] != 65535 {
+		t.Fatalf("round-tripped LUT Data boundaries = first %d, last %d, want 0 and 65535",
+			roundTripped.LUTData[0], roundTripped.LUTData[65535])
+	}
+}
+
 func TestPresentationLUTDatasetReadsLegacyTopLevelValues(t *testing.T) {
 	ds := dataset.New()
 	legacy := []element.Element{
@@ -651,6 +731,25 @@ func TestPresentationLUTDatasetRejectsShapeAndSequence(t *testing.T) {
 
 	if _, err := NewPresentationLUTFromDataset("", ds); err == nil {
 		t.Fatal("NewPresentationLUTFromDataset() accepted both Shape and Sequence")
+	}
+}
+
+func TestPresentationLUTDatasetRejectsWrongVRShapeAndSequence(t *testing.T) {
+	lut := NewPresentationLUT("2.25.145")
+	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
+		t.Fatalf("SetLUT() error = %v", err)
+	}
+	ds, err := lut.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	ds.SetAutoValidate(false)
+	if err := ds.AddOrUpdate(element.NewUnsignedShort(tag.PresentationLUTShape, []uint16{1})); err != nil {
+		t.Fatalf("add malformed PresentationLUTShape: %v", err)
+	}
+
+	if _, err := NewPresentationLUTFromDataset("", ds); err == nil {
+		t.Fatal("NewPresentationLUTFromDataset() accepted Shape and Sequence when Shape had the wrong VR")
 	}
 }
 
