@@ -112,20 +112,47 @@ func TestPaletteColorLUT_SizeZero(t *testing.T) {
 }
 
 func TestPaletteColorLUT_GetColor_OutOfRange(t *testing.T) {
-	descriptor := []uint16{256, 0, 8}
-	red := make([]byte, 256)
-	green := make([]byte, 256)
-	blue := make([]byte, 256)
+	descriptor := []uint16{2, 0, 8}
+	red := []byte{10, 20}
+	green := []byte{30, 40}
+	blue := []byte{50, 60}
 
 	lut, _ := NewPaletteColorLUT(descriptor, red, green, blue)
 
 	// Request color beyond LUT size
 	color := lut.GetColor(500)
 
-	// Should return black
-	if color.R != 0 || color.G != 0 || color.B != 0 {
-		t.Errorf("Out of range color should be black, got RGB(%d,%d,%d)",
+	// Values above the range use the final LUT entry.
+	if color.R != 20 || color.G != 40 || color.B != 60 {
+		t.Errorf("Out of range color should clamp to the final entry, got RGB(%d,%d,%d)",
 			color.R, color.G, color.B)
+	}
+}
+
+func TestPaletteColorLUTAppliesFirstMappedValueAndClamps(t *testing.T) {
+	lut, err := NewPaletteColorLUT(
+		[]uint16{2, 10, 8},
+		[]byte{10, 20},
+		[]byte{30, 40},
+		[]byte{50, 60},
+	)
+	if err != nil {
+		t.Fatalf("NewPaletteColorLUT() error = %v", err)
+	}
+
+	tests := []struct {
+		input uint16
+		want  imagetypes.Color32
+	}{
+		{input: 9, want: imagetypes.NewColor32(255, 10, 30, 50)},
+		{input: 10, want: imagetypes.NewColor32(255, 10, 30, 50)},
+		{input: 11, want: imagetypes.NewColor32(255, 20, 40, 60)},
+		{input: 12, want: imagetypes.NewColor32(255, 20, 40, 60)},
+	}
+	for _, tt := range tests {
+		if got := lut.GetColor(tt.input); got != tt.want {
+			t.Errorf("GetColor(%d) = %#v, want %#v", tt.input, got, tt.want)
+		}
 	}
 }
 

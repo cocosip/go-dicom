@@ -289,6 +289,17 @@ func TestPrecalculatedLUT_Clamping(t *testing.T) {
 	}
 }
 
+func TestPrecalculatedLUTInitializesFromValidSource(t *testing.T) {
+	source := NewInvertLUT(0, 255)
+	precalculated := NewPrecalculatedLUT(source, 0, 255)
+
+	for _, input := range []float64{0, 64, 255} {
+		if got, want := precalculated.Transform(input), source.Transform(input); got != want {
+			t.Fatalf("Transform(%v) = %v, want %v", input, got, want)
+		}
+	}
+}
+
 func TestCompositeLUT_AddNil(t *testing.T) {
 	composite := NewCompositeLUT()
 	composite.Add(nil)

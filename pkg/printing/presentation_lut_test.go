@@ -17,6 +17,9 @@ func TestNewPresentationLUT(t *testing.T) {
 	if lut.PresentationLUTShape != PresentationLUTShapeIdentity {
 		t.Errorf("Expected PresentationLUTShape=IDENTITY, got '%s'", lut.PresentationLUTShape)
 	}
+	if !lut.IsValid() {
+		t.Fatal("default IDENTITY Presentation LUT is not valid")
+	}
 }
 
 func TestPresentationLUT_SetLUT(t *testing.T) {
@@ -43,6 +46,9 @@ func TestPresentationLUT_SetLUT(t *testing.T) {
 	if len(lut.LUTData) != 5 {
 		t.Errorf("Expected LUTData length=5, got %d", len(lut.LUTData))
 	}
+	if lut.PresentationLUTShape != "" {
+		t.Fatalf("SetLUT() left PresentationLUTShape=%q, want empty sequence mode", lut.PresentationLUTShape)
+	}
 }
 
 func TestPresentationLUT_IsValid(t *testing.T) {
@@ -51,6 +57,19 @@ func TestPresentationLUT_IsValid(t *testing.T) {
 		setup    func(*PresentationLUT)
 		expected bool
 	}{
+		{
+			name:     "valid IDENTITY shape",
+			setup:    func(_ *PresentationLUT) {},
+			expected: true,
+		},
+		{
+			name: "invalid: shape and LUT both present",
+			setup: func(lut *PresentationLUT) {
+				lut.LUTDescriptor = []uint16{2, 0, 12}
+				lut.LUTData = []uint16{10, 20}
+			},
+			expected: false,
+		},
 		{
 			name: "valid LUT",
 			setup: func(lut *PresentationLUT) {
@@ -126,7 +145,6 @@ func TestPresentationLUT_TransformValue_Identity(t *testing.T) {
 
 func TestPresentationLUT_TransformValue_LUT(t *testing.T) {
 	lut := NewPresentationLUT(testSOPInstanceUID)
-	lut.PresentationLUTShape = PresentationLUTShapeLinOD
 
 	// Create a simple LUT: input 0-4 maps to output 0, 100, 200, 300, 400
 	lutData := []uint16{0, 100, 200, 300, 400}
@@ -157,7 +175,6 @@ func TestPresentationLUT_TransformValue_LUT(t *testing.T) {
 
 func TestPresentationLUT_TransformValue_Clamp(t *testing.T) {
 	lut := NewPresentationLUT(testSOPInstanceUID)
-	lut.PresentationLUTShape = PresentationLUTShapeLinOD
 
 	lutData := []uint16{100, 200, 300}
 	if err := lut.SetLUT(3, 0, 12, lutData); err != nil {

@@ -17,11 +17,12 @@ package lut
 //
 // Based on fo-dicom PrecalculatedLUT
 type PrecalculatedLUT struct {
-	sourceLUT LUT
-	minValue  int
-	maxValue  int
-	offset    int
-	table     []int
+	sourceLUT   LUT
+	minValue    int
+	maxValue    int
+	offset      int
+	table       []int
+	initialized bool
 }
 
 // NewPrecalculatedLUT creates a new precalculated LUT wrapping the source LUT.
@@ -53,7 +54,7 @@ func (p *PrecalculatedLUT) IsValid() bool {
 	if p.sourceLUT == nil {
 		return false
 	}
-	return p.sourceLUT.IsValid()
+	return p.initialized && p.sourceLUT.IsValid()
 }
 
 // MinimumOutputValue returns the minimum output value from the source LUT
@@ -99,8 +100,8 @@ func (p *PrecalculatedLUT) Recalculate() {
 		return
 	}
 
-	// Only recalculate if source LUT is invalid (needs recalc)
-	if p.IsValid() {
+	// A valid source does not imply that this LUT's table has been initialized.
+	if p.initialized && p.sourceLUT.IsValid() {
 		return
 	}
 
@@ -112,6 +113,7 @@ func (p *PrecalculatedLUT) Recalculate() {
 		tableIndex := i + p.offset
 		p.table[tableIndex] = int(p.sourceLUT.Transform(float64(i)))
 	}
+	p.initialized = true
 }
 
 // TableSize returns the size of the precalculated table

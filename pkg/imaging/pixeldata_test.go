@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -811,8 +812,45 @@ func TestCreatePixelData_PaletteToRGB(t *testing.T) {
 	}
 }
 
+func TestCreatePixelDataPaletteAppliesFirstMappedValue(t *testing.T) {
+	ds, err := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{4}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricPaletteColor}),
+		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
+		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
+		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
+		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
+		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
+		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
+		element.NewOtherByte(tag.PixelData, []byte{9, 10, 11, 12}),
+	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
+
+	pd, err := CreatePixelData(ds)
+	if err != nil {
+		t.Fatalf("CreatePixelData() error = %v", err)
+	}
+	want := []byte{
+		10, 30, 50,
+		10, 30, 50,
+		20, 40, 60,
+		20, 40, 60,
+	}
+	if got := pd.GetAllFrames(); !bytes.Equal(got, want) {
+		t.Fatalf("palette RGB data = %v, want %v", got, want)
+	}
+}
+
 func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
-	// Use segmented LUT: two segments, values 0 and 255
+	// Standard discrete segment: opcode 0, length 2, values 0 and 255.
 	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
 		element.NewUnsignedShort(tag.Columns, []uint16{2}),
@@ -826,10 +864,9 @@ func TestCreatePixelData_PaletteSegmentedToRGB(t *testing.T) {
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
-		// segmented data: segment type 0, count=1 (2 values), values 0,255 => desc=0x0001
-		element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, []byte{0x01, 0x00, 0x00, 0x00, 0xFF, 0x00}),
-		element.NewOtherWord(tag.SegmentedGreenPaletteColorLookupTableData, []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00}),
-		element.NewOtherWord(tag.SegmentedBluePaletteColorLookupTableData, []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00}),
+		element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, words(binary.LittleEndian, 0, 2, 0, 255)),
+		element.NewOtherWord(tag.SegmentedGreenPaletteColorLookupTableData, words(binary.LittleEndian, 0, 2, 0, 0)),
+		element.NewOtherWord(tag.SegmentedBluePaletteColorLookupTableData, words(binary.LittleEndian, 0, 2, 0, 0)),
 		element.NewOtherByte(tag.PixelData, []byte{0, 1}),
 	})
 	if err != nil {
@@ -865,9 +902,9 @@ func TestCreatePixelData_BigEndianPaletteToRGB(t *testing.T) {
 		},
 		{
 			name:  "segmented",
-			red:   element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, []byte{0, 1, 0, 0, 0x80, 0}),
-			green: element.NewOtherWord(tag.SegmentedGreenPaletteColorLookupTableData, []byte{0, 1, 0, 0, 0, 0}),
-			blue:  element.NewOtherWord(tag.SegmentedBluePaletteColorLookupTableData, []byte{0, 1, 0, 0, 0, 0}),
+			red:   element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, words(binary.BigEndian, 0, 2, 0, 0x8000)),
+			green: element.NewOtherWord(tag.SegmentedGreenPaletteColorLookupTableData, words(binary.BigEndian, 0, 2, 0, 0)),
+			blue:  element.NewOtherWord(tag.SegmentedBluePaletteColorLookupTableData, words(binary.BigEndian, 0, 2, 0, 0)),
 		},
 	}
 	for _, tt := range tests {
@@ -905,6 +942,115 @@ func TestCreatePixelData_BigEndianPaletteToRGB(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreatePixelDataReadsEightBitPaletteEntriesFromWordData(t *testing.T) {
+	tests := []struct {
+		name   string
+		syntax *transfer.Syntax
+		order  binary.ByteOrder
+	}{
+		{name: "little endian", order: binary.LittleEndian},
+		{name: "big endian", syntax: transfer.ExplicitVRBigEndian, order: binary.BigEndian},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := dataset.New()
+			if tt.syntax != nil {
+				ds.SetInternalTransferSyntax(tt.syntax)
+			}
+			for _, elem := range []element.Element{
+				element.NewUnsignedShort(tag.Rows, []uint16{1}),
+				element.NewUnsignedShort(tag.Columns, []uint16{2}),
+				element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+				element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+				element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+				element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+				element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+				element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricPaletteColor}),
+				element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+				element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+				element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+				element.NewOtherWord(tag.RedPaletteColorLookupTableData, words(tt.order, 17, 34)),
+				element.NewOtherWord(tag.GreenPaletteColorLookupTableData, words(tt.order, 0, 0)),
+				element.NewOtherWord(tag.BluePaletteColorLookupTableData, words(tt.order, 0, 0)),
+				element.NewOtherByte(tag.PixelData, []byte{0, 1}),
+			} {
+				if err := ds.Add(elem); err != nil {
+					t.Fatalf("add %s: %v", elem.Tag(), err)
+				}
+			}
+
+			pd, err := CreatePixelData(ds)
+			if err != nil {
+				t.Fatalf("CreatePixelData() error = %v", err)
+			}
+			if got, want := pd.GetAllFrames(), []byte{17, 0, 0, 34, 0, 0}; !bytes.Equal(got, want) {
+				t.Fatalf("palette RGB data = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestExpandSegmentedLUTStandardSegments(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+		want []uint16
+	}{
+		{name: "discrete", raw: words(binary.LittleEndian, 0, 2, 0, 255), want: []uint16{0, 255}},
+		{name: "linear", raw: words(binary.LittleEndian, 0, 1, 0, 1, 3, 300), want: []uint16{0, 100, 200, 300}},
+		{name: "indirect", raw: words(binary.LittleEndian, 0, 2, 10, 20, 2, 1, 0, 0), want: []uint16{10, 20, 10, 20}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := expandSegmentedLUT(tt.raw, len(tt.want), binary.LittleEndian)
+			if err != nil {
+				t.Fatalf("expandSegmentedLUT() error = %v", err)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Fatalf("expandSegmentedLUT() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExpandSegmentedLUTRejectsMalformedData(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+		size int
+	}{
+		{name: "empty", size: 1},
+		{name: "odd byte length", raw: []byte{0}, size: 1},
+		{name: "truncated discrete", raw: words(binary.LittleEndian, 0, 2, 10), size: 2},
+		{name: "linear without prior value", raw: words(binary.LittleEndian, 1, 2, 10), size: 2},
+		{name: "truncated linear", raw: words(binary.LittleEndian, 0, 1, 10, 1, 2), size: 3},
+		{name: "indirect offset out of range", raw: words(binary.LittleEndian, 0, 1, 10, 2, 1, 100, 0), size: 2},
+		{name: "indirect cycle", raw: words(binary.LittleEndian, 2, 1, 0, 0), size: 1},
+		{name: "unknown opcode", raw: words(binary.LittleEndian, 3, 0), size: 1},
+		{name: "output count mismatch", raw: words(binary.LittleEndian, 0, 1, 10), size: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					t.Errorf("expandSegmentedLUT() panicked: %v", recovered)
+				}
+			}()
+			if _, err := expandSegmentedLUT(tt.raw, tt.size, binary.LittleEndian); err == nil {
+				t.Fatal("expandSegmentedLUT() accepted malformed data")
+			}
+		})
+	}
+}
+
+func words(order binary.ByteOrder, values ...uint16) []byte {
+	raw := make([]byte, len(values)*2)
+	for index, value := range values {
+		order.PutUint16(raw[index*2:], value)
+	}
+	return raw
 }
 
 func TestDicomPixelData_ConvertYBRPartial422ToRGB(t *testing.T) {
@@ -1023,7 +1169,7 @@ func TestDicomPixelData_ConvertYBRRCTToRGB(t *testing.T) {
 }
 
 func TestDicomPixelData_VOILUTSequence(t *testing.T) {
-	// Build dataset with a non-full-range 8-bit LUT; legacy mapping preserves entry values.
+	// Descriptor bit depth defines the output range; entries are not stretched by their extrema.
 	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
 		element.NewUnsignedShort(tag.Columns, []uint16{3}),
@@ -1063,6 +1209,89 @@ func TestDicomPixelData_VOILUTSequence(t *testing.T) {
 	expected := []byte{0, 100, 200}
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("VOI LUT mapping mismatch, got %v want %v", got, expected)
+	}
+}
+
+func TestApplyVOILUTReadsEightBitEntriesFromWordData(t *testing.T) {
+	tests := []struct {
+		name   string
+		syntax *transfer.Syntax
+		data   []byte
+	}{
+		{name: "little endian", data: []byte{10, 0, 20, 0, 30, 0}},
+		{name: "big endian", syntax: transfer.ExplicitVRBigEndian, data: []byte{0, 10, 0, 20, 0, 30}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := dataset.New()
+			if tt.syntax != nil {
+				ds.SetInternalTransferSyntax(tt.syntax)
+			}
+			item := dataset.New()
+			_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
+			_ = item.Add(element.NewOtherWord(tag.LUTData, tt.data))
+			_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+			pd, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+				Width: 3, Height: 1, NumberOfFrames: 1,
+				BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
+				PhotometricInterpretation: Monochrome2,
+			}, []byte{0, 1, 2})
+			if err != nil {
+				t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+			}
+
+			got, err := applyVOILUT(pd, ds, 0, 0, false)
+			if err != nil {
+				t.Fatalf("applyVOILUT() error = %v", err)
+			}
+			if want := []byte{10, 20, 30}; !bytes.Equal(got[0], want) {
+				t.Fatalf("applyVOILUT() = %v, want %v", got[0], want)
+			}
+		})
+	}
+}
+
+func TestApplyVOILUTKeepsUnsignedFirstMappedValue(t *testing.T) {
+	ds := dataset.New()
+	item := dataset.New()
+	_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 40000, 8}))
+	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20}))
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+	pd, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+		Width: 2, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 16, BitsStored: 16, HighBit: 15, SamplesPerPixel: 1,
+		PixelRepresentation: UnsignedPixels, PhotometricInterpretation: Monochrome2,
+	}, []byte{0x40, 0x9c, 0x41, 0x9c})
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	got, err := applyVOILUT(pd, ds, 0, 0, false)
+	if err != nil {
+		t.Fatalf("applyVOILUT() error = %v", err)
+	}
+	if want := []byte{10, 20}; !bytes.Equal(got[0], want) {
+		t.Fatalf("applyVOILUT() = %v, want %v", got[0], want)
+	}
+}
+
+func TestApplyVOILUTRejectsShortData(t *testing.T) {
+	ds := dataset.New()
+	item := dataset.New()
+	_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
+	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20}))
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+	pd, err := NewDicomPixelDataFromBytes(&PixelDataInfo{
+		Width: 1, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
+		PhotometricInterpretation: Monochrome2,
+	}, []byte{0})
+	if err != nil {
+		t.Fatalf("NewDicomPixelDataFromBytes() error = %v", err)
+	}
+
+	if _, err := applyVOILUT(pd, ds, 0, 0, false); err == nil {
+		t.Fatal("applyVOILUT() accepted LUT Data shorter than the descriptor")
 	}
 }
 

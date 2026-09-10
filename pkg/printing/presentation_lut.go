@@ -60,6 +60,7 @@ func (p *PresentationLUT) SetLUT(numberOfEntries, firstValueMapped, bitsPerEntry
 	p.LUTDescriptor = []uint16{numberOfEntries, firstValueMapped, bitsPerEntry}
 	p.LUTData = make([]uint16, len(lutData))
 	copy(p.LUTData, lutData)
+	p.PresentationLUTShape = ""
 	return nil
 }
 
@@ -89,7 +90,16 @@ func (p *PresentationLUT) GetBitsPerEntry() uint16 {
 
 // IsValid checks if the Presentation LUT configuration is valid
 func (p *PresentationLUT) IsValid() bool {
-	// Check descriptor
+	hasShape := p.PresentationLUTShape != ""
+	hasLUT := len(p.LUTDescriptor) != 0 || len(p.LUTData) != 0
+	if hasShape {
+		return !hasLUT && (p.PresentationLUTShape == PresentationLUTShapeIdentity ||
+			p.PresentationLUTShape == PresentationLUTShapeLinOD)
+	}
+	if !hasLUT {
+		return false
+	}
+
 	if len(p.LUTDescriptor) != 3 {
 		return false
 	}
@@ -102,8 +112,11 @@ func (p *PresentationLUT) IsValid() bool {
 		return false
 	}
 
-	// LUT data size should match number of entries
-	if len(p.LUTData) != int(numberOfEntries) {
+	entryCount := int(numberOfEntries)
+	if entryCount == 0 {
+		entryCount = 65536
+	}
+	if len(p.LUTData) != entryCount {
 		return false
 	}
 
@@ -117,17 +130,10 @@ func (p *PresentationLUT) IsValid() bool {
 
 // TransformValue applies the LUT transformation to an input value
 func (p *PresentationLUT) TransformValue(inputValue uint16) uint16 {
-	if p.PresentationLUTShape == PresentationLUTShapeIdentity {
-		// IDENTITY: output = input
+	if len(p.LUTData) == 0 || len(p.LUTDescriptor) != 3 {
 		return inputValue
 	}
 
-	// Apply LUT transformation
-	if len(p.LUTData) == 0 {
-		return inputValue
-	}
-
-	numberOfEntries := p.GetNumberOfEntries()
 	firstValue := p.GetFirstValueMapped()
 
 	// Calculate index
@@ -137,8 +143,8 @@ func (p *PresentationLUT) TransformValue(inputValue uint16) uint16 {
 	if index < 0 {
 		return p.LUTData[0]
 	}
-	if index >= int(numberOfEntries) {
-		return p.LUTData[numberOfEntries-1]
+	if index >= len(p.LUTData) {
+		return p.LUTData[len(p.LUTData)-1]
 	}
 
 	return p.LUTData[index]

@@ -517,7 +517,6 @@ func TestImageBoxDatasetRejectsMalformedImageSequence(t *testing.T) {
 func TestPresentationLUTDatasetRoundTrip(t *testing.T) {
 	want := NewPresentationLUT("2.25.104")
 	want.LUTExplanation = "calibrated"
-	want.PresentationLUTShape = PresentationLUTShapeLinOD
 	if err := want.SetLUT(3, 0, 12, []uint16{10, 20, 30}); err != nil {
 		t.Fatalf("SetLUT() error = %v", err)
 	}
@@ -542,6 +541,37 @@ func TestPresentationLUTDatasetRoundTrip(t *testing.T) {
 	want.LUTData[0] = 99
 	if got.LUTDescriptor[0] != 3 || got.LUTData[0] != 10 {
 		t.Fatal("loaded PresentationLUT aliases source slices")
+	}
+}
+
+func TestPresentationLUTDatasetWritesOnlyShapeMode(t *testing.T) {
+	lut := NewPresentationLUT("2.25.140")
+	ds, err := lut.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if got, ok := ds.GetString(tag.PresentationLUTShape); !ok || got != string(PresentationLUTShapeIdentity) {
+		t.Fatalf("PresentationLUTShape = %q, %v", got, ok)
+	}
+	if _, ok := ds.Get(tag.PresentationLUTSequence); ok {
+		t.Fatal("shape-mode dataset contains PresentationLUTSequence")
+	}
+}
+
+func TestPresentationLUTDatasetWritesOnlySequenceMode(t *testing.T) {
+	lut := NewPresentationLUT("2.25.141")
+	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
+		t.Fatalf("SetLUT() error = %v", err)
+	}
+	ds, err := lut.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if _, err := ds.GetSequence(tag.PresentationLUTSequence); err != nil {
+		t.Fatalf("PresentationLUTSequence missing: %v", err)
+	}
+	if _, ok := ds.Get(tag.PresentationLUTShape); ok {
+		t.Fatal("sequence-mode dataset contains PresentationLUTShape")
 	}
 }
 
@@ -588,7 +618,6 @@ func TestPresentationLUTDatasetReadsLegacyTopLevelValues(t *testing.T) {
 		element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 12}),
 		element.NewString(tag.LUTExplanation, vr.LO, []string{"legacy"}),
 		element.NewUnsignedShort(tag.LUTData, []uint16{33, 44}),
-		element.NewString(tag.PresentationLUTShape, vr.CS, []string{string(PresentationLUTShapeIdentity)}),
 	}
 	for _, value := range legacy {
 		if err := ds.Add(value); err != nil {
@@ -604,6 +633,24 @@ func TestPresentationLUTDatasetReadsLegacyTopLevelValues(t *testing.T) {
 		lut.LUTExplanation != "legacy" ||
 		!reflect.DeepEqual(lut.LUTData, []uint16{33, 44}) {
 		t.Fatalf("legacy LUT values = %#v", lut)
+	}
+}
+
+func TestPresentationLUTDatasetRejectsShapeAndSequence(t *testing.T) {
+	lut := NewPresentationLUT("2.25.142")
+	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
+		t.Fatalf("SetLUT() error = %v", err)
+	}
+	ds, err := lut.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.PresentationLUTShape, vr.CS, []string{string(PresentationLUTShapeIdentity)})); err != nil {
+		t.Fatalf("add PresentationLUTShape: %v", err)
+	}
+
+	if _, err := NewPresentationLUTFromDataset("", ds); err == nil {
+		t.Fatal("NewPresentationLUTFromDataset() accepted both Shape and Sequence")
 	}
 }
 

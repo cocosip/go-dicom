@@ -155,6 +155,14 @@ func TestVOILinearExactLUT_Transform(t *testing.T) {
 	}
 }
 
+func TestVOILinearExactLUTWidthOneUsesExactFormula(t *testing.T) {
+	lut := NewVOILinearExactLUT(100, 1)
+
+	if got, want := lut.Transform(100), 127.5; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("Transform(center) = %v, want %v", got, want)
+	}
+}
+
 func TestNewVOISigmoidLUT(t *testing.T) {
 	lut := NewVOISigmoidLUT(128.0, 256.0)
 
@@ -237,6 +245,16 @@ func TestCreateVOILUT(t *testing.T) {
 				t.Errorf("Transform result %f out of valid range", result)
 			}
 		})
+	}
+}
+
+func TestCreateVOILUTUsesLinearExactForSubUnitLinearWidth(t *testing.T) {
+	created := CreateVOILUT(VOILUTFunctionLinear, 100, 0.5)
+	if _, ok := created.(*VOILinearExactLUT); !ok {
+		t.Fatalf("CreateVOILUT(LINEAR, width=0.5) returned %T, want *VOILinearExactLUT", created)
+	}
+	if got, want := created.Transform(100), 127.5; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("Transform(center) = %v, want %v", got, want)
 	}
 }
 

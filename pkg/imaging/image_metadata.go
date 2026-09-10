@@ -73,58 +73,17 @@ func imageVOILUT(ds *dataset.Dataset, signed bool) (render.LUT, error) {
 		return nil, fmt.Errorf("VOI LUT Sequence is missing or empty")
 	}
 	item := sequence.GetItem(0)
-	entryCount, err := item.GetUInt16(tag.LUTDescriptor, 0)
+	descriptor, err := readLUTDescriptor(item, tag.LUTDescriptor, signed)
 	if err != nil {
 		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
 	}
-	count := int(entryCount)
-	if count == 0 {
-		count = 65536
-	}
-	firstRaw, err := item.GetUInt16(tag.LUTDescriptor, 1)
+	values, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
 	if err != nil {
-		return nil, fmt.Errorf("read VOI LUT first mapped value: %w", err)
+		return nil, fmt.Errorf("read VOI LUT Data: %w", err)
 	}
-	first := int(firstRaw)
-	if signed {
-		first = int(int16(firstRaw))
-	}
-	lutElement, ok := item.Get(tag.LUTData)
-	if !ok {
-		return nil, fmt.Errorf("VOI LUT Data is missing")
-	}
-	values := make([]uint16, 0, count)
-	byteOrder := datasetByteOrder(ds)
-	switch value := lutElement.(type) {
-	case *element.OtherWord:
-		raw := value.GetData()
-		for offset := 0; offset+1 < len(raw) && len(values) < count; offset += 2 {
-			values = append(values, byteOrder.Uint16(raw[offset:]))
-		}
-	case *element.OtherByte:
-		for _, entry := range value.GetData() {
-			if len(values) == count {
-				break
-			}
-			values = append(values, uint16(entry))
-		}
-	case *element.UnsignedShort:
-		entries, err := value.GetValues()
-		if err != nil {
-			return nil, fmt.Errorf("read VOI LUT Data: %w", err)
-		}
-		if len(entries) > count {
-			entries = entries[:count]
-		}
-		values = append(values, entries...)
-	default:
-		return nil, fmt.Errorf("unsupported VOI LUT Data element %T", lutElement)
-	}
-	if len(values) != count {
-		return nil, fmt.Errorf("VOI LUT Data has %d entries, want %d", len(values), count)
-	}
-	table := &voiTableLUT{values: values, first: first}
-	return normalizedVOITable(table), nil
+	table := &voiTableLUT{values: values, first: descriptor.firstMappedValue}
+	maximumOutput := float64(uint32(1)<<descriptor.bitsPerEntry - 1)
+	return scaledVOITable(table, 0, maximumOutput), nil
 }
 
 func imageVOILUTFrom(primary, fallback *dataset.Dataset, signed bool) (render.LUT, error) {
@@ -140,59 +99,19 @@ func imageModalityLUT(ds *dataset.Dataset, signed bool) (render.ModalityLUT, err
 		return nil, fmt.Errorf("modality LUT Sequence is missing or empty")
 	}
 	item := sequence.GetItem(0)
-	entryCount, err := item.GetUInt16(tag.LUTDescriptor, 0)
+	descriptor, err := readLUTDescriptor(item, tag.LUTDescriptor, signed)
 	if err != nil {
 		return nil, fmt.Errorf("read Modality LUT descriptor: %w", err)
 	}
-	count := int(entryCount)
-	if count == 0 {
-		count = 65536
-	}
-	firstRaw, err := item.GetUInt16(tag.LUTDescriptor, 1)
+	entries, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
 	if err != nil {
-		return nil, fmt.Errorf("read Modality LUT first mapped value: %w", err)
+		return nil, fmt.Errorf("read Modality LUT Data: %w", err)
 	}
-	first := int(firstRaw)
-	if signed {
-		first = int(int16(firstRaw))
+	values := make([]float64, len(entries))
+	for index, entry := range entries {
+		values[index] = float64(entry)
 	}
-	lutElement, ok := item.Get(tag.LUTData)
-	if !ok {
-		return nil, fmt.Errorf("modality LUT Data is missing")
-	}
-	values := make([]float64, 0, count)
-	byteOrder := datasetByteOrder(ds)
-	switch value := lutElement.(type) {
-	case *element.OtherWord:
-		raw := value.GetData()
-		for offset := 0; offset+1 < len(raw) && len(values) < count; offset += 2 {
-			values = append(values, float64(byteOrder.Uint16(raw[offset:])))
-		}
-	case *element.OtherByte:
-		for _, entry := range value.GetData() {
-			if len(values) == count {
-				break
-			}
-			values = append(values, float64(entry))
-		}
-	case *element.UnsignedShort:
-		entries, err := value.GetValues()
-		if err != nil {
-			return nil, fmt.Errorf("read Modality LUT Data: %w", err)
-		}
-		for _, entry := range entries {
-			if len(values) == count {
-				break
-			}
-			values = append(values, float64(entry))
-		}
-	default:
-		return nil, fmt.Errorf("unsupported Modality LUT Data element %T", lutElement)
-	}
-	if len(values) != count {
-		return nil, fmt.Errorf("modality LUT Data has %d entries, want %d", len(values), count)
-	}
-	return render.NewModalitySequenceLUT(values, first, signed), nil
+	return render.NewModalitySequenceLUT(values, descriptor.firstMappedValue, signed), nil
 }
 
 func imageDecimalFrom(primary, fallback *dataset.Dataset, t *tag.Tag) (float64, error) {

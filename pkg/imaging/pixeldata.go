@@ -996,11 +996,12 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 
 func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 	byteOrder := datasetByteOrder(ds)
+	signed := ds.TryGetUInt16(tag.PixelRepresentation, 0) == uint16(SignedPixels)
 	// Enhanced Palette Color LUT Sequence (0028,140B)
 	if seqElem, ok := ds.Get(tag.EnhancedPaletteColorLookupTableSequence); ok {
 		if seq, ok2 := seqElem.(*dataset.Sequence); ok2 && seq.Count() > 0 {
 			for i := 0; i < seq.Count(); i++ {
-				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder); err == nil {
+				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder, signed); err == nil {
 					return lut, nil
 				}
 			}
@@ -1011,7 +1012,7 @@ func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 	if seqElem, ok := ds.Get(tag.PaletteColorLookupTableSequence); ok {
 		if seq, ok2 := seqElem.(*dataset.Sequence); ok2 && seq.Count() > 0 {
 			for i := 0; i < seq.Count(); i++ {
-				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder); err == nil {
+				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder, signed); err == nil {
 					return lut, nil
 				}
 			}
@@ -1019,82 +1020,37 @@ func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 	}
 
 	// Fall back to top-level descriptors/data
-	return buildPaletteLUTFromDataset(ds, byteOrder)
+	return buildPaletteLUTFromDataset(ds, byteOrder, signed)
 }
 
 // buildPaletteLUTFromDataset builds palette LUT using descriptors/data in the provided dataset (no sequence recursion).
 //
 //nolint:gocyclo // Complex function handling palette LUT variations
-func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder) (*paletteLUT, error) {
-	// Descriptors
-	rDesc, err := ds.GetUInt16(tag.RedPaletteColorLookupTableDescriptor, 0)
+func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder, signed bool) (*paletteLUT, error) {
+	rDescriptor, err := readLUTDescriptor(ds, tag.RedPaletteColorLookupTableDescriptor, signed)
 	if err != nil {
 		return nil, fmt.Errorf("missing Red Palette LUT Descriptor: %w", err)
 	}
-	_, _ = ds.GetUInt16(tag.GreenPaletteColorLookupTableDescriptor, 0) // for validation, but not used directly
-	_, _ = ds.GetUInt16(tag.BluePaletteColorLookupTableDescriptor, 0)
-
-	rFirst := ds.TryGetUInt16(tag.RedPaletteColorLookupTableDescriptor, 1)
-	gFirst := ds.TryGetUInt16(tag.GreenPaletteColorLookupTableDescriptor, 1)
-	bFirst := ds.TryGetUInt16(tag.BluePaletteColorLookupTableDescriptor, 1)
-
-	rBits := ds.TryGetUInt16(tag.RedPaletteColorLookupTableDescriptor, 2)
-	gBits := ds.TryGetUInt16(tag.GreenPaletteColorLookupTableDescriptor, 2)
-	bBits := ds.TryGetUInt16(tag.BluePaletteColorLookupTableDescriptor, 2)
-
-	size := int(rDesc)
-	if size == 0 {
-		size = 65536
+	gDescriptor, err := readLUTDescriptor(ds, tag.GreenPaletteColorLookupTableDescriptor, signed)
+	if err != nil {
+		return nil, fmt.Errorf("missing Green Palette LUT Descriptor: %w", err)
 	}
-
-	// use max bits among channels
-	bits := int(rBits)
-	if int(gBits) > bits {
-		bits = int(gBits)
+	bDescriptor, err := readLUTDescriptor(ds, tag.BluePaletteColorLookupTableDescriptor, signed)
+	if err != nil {
+		return nil, fmt.Errorf("missing Blue Palette LUT Descriptor: %w", err)
 	}
-	if int(bBits) > bits {
-		bits = int(bBits)
-	}
-	if bits == 0 {
-		bits = 8
-	}
-
-	loadLUT := func(dataTag *tag.Tag, expectedBits uint16) ([]uint16, error) {
-		elem, ok := ds.Get(dataTag)
-		if !ok {
-			return nil, fmt.Errorf("missing palette data %s", dataTag)
-		}
-		var raw []byte
-		switch v := elem.(type) {
-		case *element.OtherByte:
-			raw = v.GetData()
-		case *element.OtherWord:
-			raw = v.GetData()
-		default:
-			return nil, fmt.Errorf("unsupported palette data element type %T for %s", elem, dataTag)
-		}
-
-		out := make([]uint16, size)
-		if expectedBits <= 8 {
-			for i := 0; i < size && i < len(raw); i++ {
-				out[i] = uint16(raw[i])
-			}
-		} else {
-			for i := 0; i < size && (i*2+1) < len(raw); i++ {
-				out[i] = byteOrder.Uint16(raw[i*2:])
-			}
-		}
-		return out, nil
+	if rDescriptor != gDescriptor || rDescriptor != bDescriptor {
+		return nil, fmt.Errorf("palette LUT descriptors do not match")
 	}
 
 	// Prefer standard LUT data; if missing, try segmented LUT data
-	rLUT, err := loadLUT(tag.RedPaletteColorLookupTableData, rBits)
+	rLUT, err := readLUTData(ds, tag.RedPaletteColorLookupTableData, rDescriptor, byteOrder)
 	if err != nil {
 		if seg, ok := ds.Get(tag.SegmentedRedPaletteColorLookupTableData); ok {
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				rLUT, err = expandSegmentedLUT(ob.GetData(), size, byteOrder)
+				rLUT, err = expandSegmentedLUT(ob.GetData(), rDescriptor.entryCount, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				rLUT, err = expandSegmentedLUT(ow.GetData(), size, byteOrder)
+				rLUT, err = expandSegmentedLUT(ow.GetData(), rDescriptor.entryCount, byteOrder)
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1103,13 +1059,13 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder)
 			return nil, err
 		}
 	}
-	gLUT, err := loadLUT(tag.GreenPaletteColorLookupTableData, gBits)
+	gLUT, err := readLUTData(ds, tag.GreenPaletteColorLookupTableData, gDescriptor, byteOrder)
 	if err != nil {
 		if seg, ok := ds.Get(tag.SegmentedGreenPaletteColorLookupTableData); ok {
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				gLUT, err = expandSegmentedLUT(ob.GetData(), size, byteOrder)
+				gLUT, err = expandSegmentedLUT(ob.GetData(), gDescriptor.entryCount, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				gLUT, err = expandSegmentedLUT(ow.GetData(), size, byteOrder)
+				gLUT, err = expandSegmentedLUT(ow.GetData(), gDescriptor.entryCount, byteOrder)
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1118,13 +1074,13 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder)
 			return nil, err
 		}
 	}
-	bLUT, err := loadLUT(tag.BluePaletteColorLookupTableData, bBits)
+	bLUT, err := readLUTData(ds, tag.BluePaletteColorLookupTableData, bDescriptor, byteOrder)
 	if err != nil {
 		if seg, ok := ds.Get(tag.SegmentedBluePaletteColorLookupTableData); ok {
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				bLUT, err = expandSegmentedLUT(ob.GetData(), size, byteOrder)
+				bLUT, err = expandSegmentedLUT(ob.GetData(), bDescriptor.entryCount, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				bLUT, err = expandSegmentedLUT(ow.GetData(), size, byteOrder)
+				bLUT, err = expandSegmentedLUT(ow.GetData(), bDescriptor.entryCount, byteOrder)
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1134,30 +1090,9 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder)
 		}
 	}
 
-	// Align sizes
-	minLen := len(rLUT)
-	if len(gLUT) < minLen {
-		minLen = len(gLUT)
-	}
-	if len(bLUT) < minLen {
-		minLen = len(bLUT)
-	}
-	rLUT = rLUT[:minLen]
-	gLUT = gLUT[:minLen]
-	bLUT = bLUT[:minLen]
-
-	first := int32(rFirst)
-	// if first differs among channels, use min
-	if int32(gFirst) < first {
-		first = int32(gFirst)
-	}
-	if int32(bFirst) < first {
-		first = int32(bFirst)
-	}
-
 	return &paletteLUT{
-		first:   first,
-		entries: buildPaletteEntries(bits, rLUT, gLUT, bLUT),
+		first:   int32(rDescriptor.firstMappedValue),
+		entries: buildPaletteEntries(int(rDescriptor.bitsPerEntry), rLUT, gLUT, bLUT),
 	}, nil
 }
 
@@ -1179,53 +1114,115 @@ func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []imagetypes.Color
 	return entries
 }
 
-// expandSegmentedLUT expands DICOM segmented palette LUT data (Type 0/1 segments).
-// Supports discrete and linear segments; skips unsupported imagetypes.
 func expandSegmentedLUT(raw []byte, expectedSize int, byteOrder binary.ByteOrder) ([]uint16, error) {
-	var out []uint16
-	for i := 0; i+1 < len(raw); {
-		desc := byteOrder.Uint16(raw[i:])
-		i += 2
-		segType := desc >> 14
-		count := int(desc & 0x3FFF)
-
-		switch segType {
-		case 0: // discrete: count+1 values follow
-			n := count + 1
-			for j := 0; j < n && i+1 < len(raw); j++ {
-				val := byteOrder.Uint16(raw[i:])
-				out = append(out, val)
-				i += 2
-			}
-		case 1: // linear: count+1 values generated from start/end
-			if i+3 >= len(raw) {
-				return nil, fmt.Errorf("segmented LUT linear segment truncated")
-			}
-			start := byteOrder.Uint16(raw[i:])
-			end := byteOrder.Uint16(raw[i+2:])
-			i += 4
-			n := count + 1
-			for k := 0; k < n; k++ {
-				val := uint16(float64(start) + float64(end-start)*float64(k)/float64(n-1))
-				out = append(out, val)
-			}
-		default:
-			// unsupported segment types -> skip safely
-			return nil, fmt.Errorf("unsupported segmented LUT segment type %d", segType)
-		}
-		if expectedSize > 0 && len(out) >= expectedSize {
-			break
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("segmented LUT data is empty")
+	}
+	if len(raw)%2 != 0 {
+		return nil, fmt.Errorf("segmented LUT data has odd byte length %d", len(raw))
+	}
+	decoder := segmentedLUTDecoder{
+		raw:          raw,
+		byteOrder:    byteOrder,
+		expectedSize: expectedSize,
+		active:       make(map[int]bool),
+	}
+	position := 0
+	for position < len(raw) {
+		var err error
+		position, err = decoder.decodeSegment(position)
+		if err != nil {
+			return nil, err
 		}
 	}
-
-	if expectedSize > 0 && len(out) < expectedSize {
-		// pad if short
-		for len(out) < expectedSize {
-			out = append(out, out[len(out)-1])
-		}
+	if len(decoder.output) != expectedSize {
+		return nil, fmt.Errorf("segmented LUT produced %d entries, want %d", len(decoder.output), expectedSize)
 	}
+	return decoder.output, nil
+}
 
-	return out, nil
+type segmentedLUTDecoder struct {
+	raw          []byte
+	byteOrder    binary.ByteOrder
+	expectedSize int
+	output       []uint16
+	active       map[int]bool
+}
+
+func (d *segmentedLUTDecoder) decodeSegment(position int) (int, error) {
+	if position < 0 || position%2 != 0 || position+4 > len(d.raw) {
+		return 0, fmt.Errorf("segmented LUT segment at byte offset %d is truncated or unaligned", position)
+	}
+	if d.active[position] {
+		return 0, fmt.Errorf("segmented LUT indirect segment cycle at byte offset %d", position)
+	}
+	d.active[position] = true
+	defer delete(d.active, position)
+
+	opcode := d.byteOrder.Uint16(d.raw[position:])
+	length := int(d.byteOrder.Uint16(d.raw[position+2:]))
+	if length == 0 {
+		return 0, fmt.Errorf("segmented LUT opcode %d has zero length", opcode)
+	}
+	payload := position + 4
+
+	switch opcode {
+	case 0:
+		end := payload + length*2
+		if end > len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT discrete segment at byte offset %d is truncated", position)
+		}
+		if err := d.reserve(length); err != nil {
+			return 0, err
+		}
+		for offset := payload; offset < end; offset += 2 {
+			d.output = append(d.output, d.byteOrder.Uint16(d.raw[offset:]))
+		}
+		return end, nil
+	case 1:
+		if len(d.output) == 0 {
+			return 0, fmt.Errorf("segmented LUT linear segment at byte offset %d has no prior value", position)
+		}
+		if payload+2 > len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT linear segment at byte offset %d is truncated", position)
+		}
+		if err := d.reserve(length); err != nil {
+			return 0, err
+		}
+		start := int(d.output[len(d.output)-1])
+		end := int(d.byteOrder.Uint16(d.raw[payload:]))
+		for step := 1; step <= length; step++ {
+			value := math.Round(float64(start) + float64(end-start)*float64(step)/float64(length))
+			d.output = append(d.output, uint16(value))
+		}
+		return payload + 2, nil
+	case 2:
+		if payload+4 > len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT indirect segment at byte offset %d is truncated", position)
+		}
+		offset := int(d.byteOrder.Uint32(d.raw[payload:]))
+		if offset < 0 || offset%2 != 0 || offset >= len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT indirect byte offset %d is out of range", offset)
+		}
+		referencedPosition := offset
+		for segment := 0; segment < length; segment++ {
+			var err error
+			referencedPosition, err = d.decodeSegment(referencedPosition)
+			if err != nil {
+				return 0, err
+			}
+		}
+		return payload + 4, nil
+	default:
+		return 0, fmt.Errorf("unsupported segmented LUT opcode %d", opcode)
+	}
+}
+
+func (d *segmentedLUTDecoder) reserve(count int) error {
+	if d.expectedSize >= 0 && len(d.output)+count > d.expectedSize {
+		return fmt.Errorf("segmented LUT produces more than %d entries", d.expectedSize)
+	}
+	return nil
 }
 
 // framesFromFragments builds per-frame compressed data using fragments and an optional BOT.

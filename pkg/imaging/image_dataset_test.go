@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image/color"
+	"math"
 	"path/filepath"
 	"testing"
 
@@ -223,7 +224,7 @@ func TestPerFrameFunctionalGroupVOILUTSequenceIsUsed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderFrameImage(0) error = %v", err)
 	}
-	for x, want := range []uint8{0, 128, 255} {
+	for x, want := range []uint8{0, 100, 200} {
 		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != want {
 			t.Fatalf("pixel %d = %d, want %d", x, got, want)
 		}
@@ -327,6 +328,83 @@ func TestDatasetImageReadsBigEndianModalityLUTData(t *testing.T) {
 	}
 }
 
+func TestSignedShortModalityLUTDescriptorMapsSignedInputs(t *testing.T) {
+	ds := dataset.New()
+	item := dataset.New()
+	_ = item.Add(element.NewSignedShort(tag.LUTDescriptor, []int16{3, -1, 8}))
+	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item}))
+
+	table, err := imageModalityLUT(ds, true)
+	if err != nil {
+		t.Fatalf("imageModalityLUT() error = %v", err)
+	}
+	for input, want := range map[int]float64{-1: 10, 0: 20, 1: 30} {
+		if got := table.Transform(float64(input)); got != want {
+			t.Fatalf("Transform(%d) = %v, want %v", input, got, want)
+		}
+	}
+}
+
+func TestSignedShortVOILUTDescriptorMapsSignedInputs(t *testing.T) {
+	ds := dataset.New()
+	item := dataset.New()
+	_ = item.Add(element.NewSignedShort(tag.LUTDescriptor, []int16{3, -1, 8}))
+	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+
+	table, err := imageVOILUT(ds, true)
+	if err != nil {
+		t.Fatalf("imageVOILUT() error = %v", err)
+	}
+	for input, want := range map[int]float64{-1: 10, 0: 20, 1: 30} {
+		if got := table.Transform(float64(input)); math.Abs(got-want) > 1e-9 {
+			t.Fatalf("Transform(%d) = %v, want %v", input, got, want)
+		}
+	}
+}
+
+func TestUnsignedShortLUTDescriptorUsesSignedPixelRepresentation(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		tag  *tag.Tag
+		load func(*dataset.Dataset) (render.LUT, error)
+	}{
+		{
+			name: "modality",
+			tag:  tag.ModalityLUTSequence,
+			load: func(ds *dataset.Dataset) (render.LUT, error) {
+				return imageModalityLUT(ds, true)
+			},
+		},
+		{
+			name: "VOI",
+			tag:  tag.VOILUTSequence,
+			load: func(ds *dataset.Dataset) (render.LUT, error) {
+				return imageVOILUT(ds, true)
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := dataset.New()
+			item := dataset.New()
+			_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0xffff, 8}))
+			_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
+			_ = ds.Add(dataset.NewSequenceWithItems(tt.tag, []*dataset.Dataset{item}))
+
+			table, err := tt.load(ds)
+			if err != nil {
+				t.Fatalf("load LUT error = %v", err)
+			}
+			for input, want := range map[int]float64{-1: 10, 0: 20, 1: 30} {
+				if got := table.Transform(float64(input)); math.Abs(got-want) > 1e-9 {
+					t.Fatalf("Transform(%d) = %v, want %v", input, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestVOILUTSequencePrecedesWindow(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 3, 1, []byte{0, 1, 2})
 	lutItem := dataset.New()
@@ -354,7 +432,7 @@ func TestVOILUTSequencePrecedesWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderFrameImage(0) error = %v", err)
 	}
-	want := []uint8{0, 128, 255}
+	want := []uint8{0, 100, 200}
 	for x, expected := range want {
 		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != expected {
 			t.Fatalf("pixel %d = %d, want %d", x, got, expected)

@@ -15,6 +15,8 @@ type PaletteColorLUT struct {
 	Size int
 	// Bits is the number of bits per entry (8 or 16)
 	Bits int
+	// FirstMappedValue is the input value mapped to LUT entry zero.
+	FirstMappedValue int
 	// Red channel LUT data
 	Red []byte
 	// Green channel LUT data
@@ -40,12 +42,13 @@ func NewPaletteColorLUT(descriptorRed []uint16, red, green, blue []byte) (*Palet
 	}
 
 	p := &PaletteColorLUT{
-		Size:  size,
-		Bits:  bits,
-		Red:   red,
-		Green: green,
-		Blue:  blue,
-		LUT:   make([]imagetypes.Color32, size),
+		Size:             size,
+		Bits:             bits,
+		FirstMappedValue: int(descriptorRed[1]),
+		Red:              red,
+		Green:            green,
+		Blue:             blue,
+		LUT:              make([]imagetypes.Color32, size),
 	}
 
 	// Parse the LUT
@@ -91,11 +94,17 @@ func (p *PaletteColorLUT) parseLUT() error {
 
 // GetColor returns the color for the specified pixel value
 func (p *PaletteColorLUT) GetColor(pixelValue uint16) imagetypes.Color32 {
-	if int(pixelValue) >= len(p.LUT) {
-		// Return black for out of range values
+	if len(p.LUT) == 0 {
 		return imagetypes.NewColor32(0xFF, 0, 0, 0)
 	}
-	return p.LUT[pixelValue]
+	index := int(pixelValue) - p.FirstMappedValue
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(p.LUT) {
+		index = len(p.LUT) - 1
+	}
+	return p.LUT[index]
 }
 
 // ApplyToPixelData applies the palette LUT to pixel data

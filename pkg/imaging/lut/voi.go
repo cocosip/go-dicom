@@ -147,13 +147,6 @@ func NewVOILinearExactLUT(windowCenter, windowWidth float64) *VOILinearExactLUT 
 func (v *VOILinearExactLUT) Transform(input float64) float64 {
 	v.Recalculate()
 
-	if v.windowWidth == 1 {
-		if input < v.windowCenterMin {
-			return v.MinimumOutputValue()
-		}
-		return v.MaximumOutputValue()
-	}
-
 	// Exact linear transformation per DICOM spec
 	output := ((input-v.windowCenter)/v.windowWidth + 0.5) * v.outputRange
 	return math.Min(v.MaximumOutputValue(), math.Max(v.MinimumOutputValue(), output))
@@ -201,6 +194,9 @@ func CreateVOILUT(function VOILUTFunction, windowCenter, windowWidth float64) VO
 	case "LINEAR_EXACT":
 		return NewVOILinearExactLUT(windowCenter, windowWidth)
 	default:
+		if windowWidth > 0 && windowWidth < 1 {
+			return NewVOILinearExactLUT(windowCenter, windowWidth)
+		}
 		return NewVOILinearLUT(windowCenter, windowWidth)
 	}
 }

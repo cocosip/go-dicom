@@ -7,13 +7,11 @@ import (
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 )
 
-// applyVOILUT applies VOI LUT Sequence if present; otherwise falls back to windowing.
-// For now, LUT output is clamped to 8-bit; LUT entry values are assumed to be 8 or 16 bit.
+// applyVOILUT applies VOI LUT Sequence and maps its declared output range to 8-bit.
 func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, _, _ float64, ignorePadding bool) ([][]byte, error) {
 	if ds == nil {
 		return nil, fmt.Errorf("dataset is nil for VOI LUT")
@@ -31,55 +29,21 @@ func applyVOILUT(pd *DicomPixelData, ds *dataset.Dataset, _, _ float64, ignorePa
 	// Take first LUT item (fo-dicom also picks first)
 	item := seq.GetItem(0)
 
-	// LUT Descriptor: [#entries, first mapped pixel value, bits per entry]
-	descVal, err := item.GetUInt16(tag.LUTDescriptor, 0)
+	signed := pd != nil && pd.Info != nil && pd.Info.PixelRepresentation == SignedPixels
+	descriptor, err := readLUTDescriptor(item, tag.LUTDescriptor, signed)
 	if err != nil {
 		return nil, fmt.Errorf("missing LUT Descriptor: %w", err)
 	}
-	numEntries := int(descVal)
-	firstMap := int16(item.TryGetUInt16(tag.LUTDescriptor, 1))
-	bitsPerEntry := item.TryGetUInt16(tag.LUTDescriptor, 2)
-	if numEntries == 0 {
-		numEntries = 65536
-	}
-	if bitsPerEntry == 0 {
-		bitsPerEntry = 16
-	}
-	if bitsPerEntry < 8 || bitsPerEntry > 16 {
-		return nil, fmt.Errorf("invalid VOI LUT bits per entry: %d", bitsPerEntry)
-	}
-
-	lutDataElem, ok := item.Get(tag.LUTData)
-	if !ok {
-		return nil, fmt.Errorf("missing LUT Data")
-	}
-	var lutRaw []byte
-	switch v := lutDataElem.(type) {
-	case *element.OtherByte:
-		lutRaw = v.GetData()
-	case *element.OtherWord:
-		lutRaw = v.GetData()
-	default:
-		return nil, fmt.Errorf("unsupported LUT Data element %T", lutDataElem)
-	}
-
-	values := make([]uint16, numEntries)
-	byteOrder := datasetByteOrder(ds)
-	if bitsPerEntry <= 8 {
-		for i := 0; i < numEntries && i < len(lutRaw); i++ {
-			values[i] = uint16(lutRaw[i])
-		}
-	} else {
-		for i := 0; i < numEntries && (i*2+1) < len(lutRaw); i++ {
-			values[i] = byteOrder.Uint16(lutRaw[i*2:])
-		}
+	values, err := readLUTData(item, tag.LUTData, descriptor, datasetByteOrder(ds))
+	if err != nil {
+		return nil, fmt.Errorf("read LUT Data: %w", err)
 	}
 
 	table := &voiTableLUT{
 		values: values,
-		first:  int(firstMap),
+		first:  descriptor.firstMappedValue,
 	}
-	maximumOutput := float64(uint32(1)<<bitsPerEntry - 1)
+	maximumOutput := float64(uint32(1)<<descriptor.bitsPerEntry - 1)
 	return mapThroughLUT(pd, scaledVOITable(table, 0, maximumOutput), ignorePadding)
 }
 
@@ -155,10 +119,6 @@ func (v *voiOutputScaleLUT) Transform(input float64) float64 {
 		return 255
 	}
 	return (input - v.minimum) * 255 / (v.maximum - v.minimum)
-}
-
-func normalizedVOITable(table *voiTableLUT) lut.LUT {
-	return scaledVOITable(table, table.MinimumOutputValue(), table.MaximumOutputValue())
 }
 
 func scaledVOITable(table *voiTableLUT, minimum, maximum float64) lut.LUT {

@@ -548,6 +548,9 @@ func (p *PresentationLUT) ToDataset() (*dataset.Dataset, error) {
 	if p.SOPInstanceUID == "" {
 		return nil, fmt.Errorf("printing: PresentationLUT requires an SOP Instance UID")
 	}
+	if !p.IsValid() {
+		return nil, fmt.Errorf("printing: invalid PresentationLUT configuration")
+	}
 	ds := dataset.New()
 	if err := addString(ds, tag.SOPClassUID, presentationLUTSOPClassUID, vr.UI); err != nil {
 		return nil, err
@@ -555,24 +558,24 @@ func (p *PresentationLUT) ToDataset() (*dataset.Dataset, error) {
 	if err := addString(ds, tag.SOPInstanceUID, p.SOPInstanceUID, vr.UI); err != nil {
 		return nil, err
 	}
-	lutItem := dataset.New()
-	if len(p.LUTDescriptor) > 0 {
-		if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTDescriptor, append([]uint16(nil), p.LUTDescriptor...))); err != nil {
+	if p.PresentationLUTShape != "" {
+		if err := addString(ds, tag.PresentationLUTShape, string(p.PresentationLUTShape), vr.CS); err != nil {
 			return nil, err
 		}
+		return ds, nil
+	}
+
+	lutItem := dataset.New()
+	if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTDescriptor, append([]uint16(nil), p.LUTDescriptor...))); err != nil {
+		return nil, err
 	}
 	if err := addString(lutItem, tag.LUTExplanation, p.LUTExplanation, vr.LO); err != nil {
 		return nil, err
 	}
-	if len(p.LUTData) > 0 {
-		if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
-			return nil, err
-		}
-	}
-	if err := addElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
+	if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
 		return nil, err
 	}
-	if err := addString(ds, tag.PresentationLUTShape, string(p.PresentationLUTShape), vr.CS); err != nil {
+	if err := addElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
 		return nil, err
 	}
 	return ds, nil
@@ -588,6 +591,23 @@ func NewPresentationLUTFromDataset(sopInstanceUID string, ds *dataset.Dataset) (
 		return nil, err
 	}
 	p := NewPresentationLUT(instanceUID)
+	shape, hasShape := ds.GetString(tag.PresentationLUTShape)
+	_, hasSequence := ds.Get(tag.PresentationLUTSequence)
+	_, hasLegacyDescriptor := ds.Get(tag.LUTDescriptor)
+	_, hasLegacyData := ds.Get(tag.LUTData)
+	hasLegacyLUT := hasLegacyDescriptor || hasLegacyData
+	if hasShape && (hasSequence || hasLegacyLUT) {
+		return nil, fmt.Errorf("printing: Presentation LUT Shape and LUT Sequence are mutually exclusive")
+	}
+	if hasShape {
+		p.PresentationLUTShape = PresentationLUTShape(shape)
+		if !p.IsValid() {
+			return nil, fmt.Errorf("printing: invalid Presentation LUT Shape %q", shape)
+		}
+		return p, nil
+	}
+
+	p.PresentationLUTShape = ""
 	lutValues := ds
 	sequence, sequenceErr := ds.GetSequence(tag.PresentationLUTSequence)
 	if sequenceErr != nil {
@@ -609,8 +629,8 @@ func NewPresentationLUTFromDataset(sopInstanceUID string, ds *dataset.Dataset) (
 	if values, err := lutValues.GetUInt16s(tag.LUTData); err == nil {
 		p.LUTData = append([]uint16(nil), values...)
 	}
-	if value, ok := ds.GetString(tag.PresentationLUTShape); ok {
-		p.PresentationLUTShape = PresentationLUTShape(value)
+	if !p.IsValid() {
+		return nil, fmt.Errorf("printing: invalid Presentation LUT Sequence")
 	}
 	return p, nil
 }
