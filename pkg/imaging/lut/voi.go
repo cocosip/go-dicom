@@ -4,6 +4,7 @@
 package lut
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -109,7 +110,7 @@ func (v *VOILinearLUT) Transform(input float64) float64 {
 	v.Recalculate()
 
 	if v.windowWidth == 1 {
-		if input < v.windowCenterMin {
+		if input <= v.windowCenterMin {
 			return v.MinimumOutputValue()
 		}
 		return v.MaximumOutputValue()
@@ -194,9 +195,37 @@ func CreateVOILUT(function VOILUTFunction, windowCenter, windowWidth float64) VO
 	case "LINEAR_EXACT":
 		return NewVOILinearExactLUT(windowCenter, windowWidth)
 	default:
-		if windowWidth > 0 && windowWidth < 1 {
-			return NewVOILinearExactLUT(windowCenter, windowWidth)
-		}
 		return NewVOILinearLUT(windowCenter, windowWidth)
+	}
+}
+
+// CreateValidatedVOILUT creates a VOI LUT after validating the DICOM-defined
+// function and window constraints from PS3.3 C.11.2.1.2 and C.11.2.1.3.
+func CreateValidatedVOILUT(function VOILUTFunction, windowCenter, windowWidth float64) (VOILUT, error) {
+	if math.IsNaN(windowCenter) || math.IsInf(windowCenter, 0) {
+		return nil, fmt.Errorf("window center must be finite")
+	}
+	if math.IsNaN(windowWidth) || math.IsInf(windowWidth, 0) {
+		return nil, fmt.Errorf("window width must be finite")
+	}
+
+	switch strings.ToUpper(string(function)) {
+	case string(VOILUTFunctionLinear):
+		if windowWidth < 1 {
+			return nil, fmt.Errorf("LINEAR window width must be at least 1, got %g", windowWidth)
+		}
+		return NewVOILinearLUT(windowCenter, windowWidth), nil
+	case string(VOILUTFunctionLinearExact):
+		if windowWidth <= 0 {
+			return nil, fmt.Errorf("LINEAR_EXACT window width must be greater than 0, got %g", windowWidth)
+		}
+		return NewVOILinearExactLUT(windowCenter, windowWidth), nil
+	case string(VOILUTFunctionSigmoid):
+		if windowWidth <= 0 {
+			return nil, fmt.Errorf("SIGMOID window width must be greater than 0, got %g", windowWidth)
+		}
+		return NewVOISigmoidLUT(windowCenter, windowWidth), nil
+	default:
+		return nil, fmt.Errorf("unsupported VOI LUT Function %q", function)
 	}
 }

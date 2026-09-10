@@ -95,6 +95,12 @@ func TestVOILinearLUT_WindowWidth1(t *testing.T) {
 		t.Errorf("Expected 0.0 for value below center, got %f", result)
 	}
 
+	// PS3.3 C.11.2.1.2 uses x <= c - 0.5 for the lower branch.
+	result = lut.Transform(127.5)
+	if result != 0.0 {
+		t.Errorf("Expected 0.0 at c-0.5, got %f", result)
+	}
+
 	// At or above center: should be 255
 	result = lut.Transform(128.0)
 	if result != 255.0 {
@@ -248,13 +254,45 @@ func TestCreateVOILUT(t *testing.T) {
 	}
 }
 
-func TestCreateVOILUTUsesLinearExactForSubUnitLinearWidth(t *testing.T) {
+func TestCreateVOILUTDoesNotReinterpretInvalidLinearWidth(t *testing.T) {
 	created := CreateVOILUT(VOILUTFunctionLinear, 100, 0.5)
-	if _, ok := created.(*VOILinearExactLUT); !ok {
-		t.Fatalf("CreateVOILUT(LINEAR, width=0.5) returned %T, want *VOILinearExactLUT", created)
+	if _, ok := created.(*VOILinearLUT); !ok {
+		t.Fatalf("CreateVOILUT(LINEAR, width=0.5) returned %T, want *VOILinearLUT", created)
 	}
-	if got, want := created.Transform(100), 127.5; math.Abs(got-want) > 1e-9 {
-		t.Fatalf("Transform(center) = %v, want %v", got, want)
+}
+
+func TestCreateValidatedVOILUT(t *testing.T) {
+	tests := []struct {
+		name     string
+		function VOILUTFunction
+		width    float64
+		wantErr  bool
+	}{
+		{name: "LINEAR width one", function: VOILUTFunctionLinear, width: 1},
+		{name: "LINEAR below one", function: VOILUTFunctionLinear, width: 0.5, wantErr: true},
+		{name: "LINEAR_EXACT positive", function: VOILUTFunctionLinearExact, width: 0.5},
+		{name: "LINEAR_EXACT zero", function: VOILUTFunctionLinearExact, width: 0, wantErr: true},
+		{name: "SIGMOID positive", function: VOILUTFunctionSigmoid, width: 0.5},
+		{name: "SIGMOID zero", function: VOILUTFunctionSigmoid, width: 0, wantErr: true},
+		{name: "unknown function", function: "UNKNOWN", width: 1, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CreateValidatedVOILUT(tt.function, 100, tt.width)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("CreateValidatedVOILUT() = %T, nil; want error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("CreateValidatedVOILUT() error = %v", err)
+			}
+			if got == nil {
+				t.Fatal("CreateValidatedVOILUT() returned nil LUT")
+			}
+		})
 	}
 }
 

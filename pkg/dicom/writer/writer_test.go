@@ -8,10 +8,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
@@ -133,9 +135,10 @@ func (w *closeErrorWriter) Close() error {
 }
 
 type trackingBuffer struct {
-	data          []byte
-	dataCalled    bool
-	writeToCalled bool
+	data            []byte
+	dataCalled      bool
+	byteRangeCalled bool
+	writeToCalled   bool
 }
 
 func (b *trackingBuffer) IsMemory() bool {
@@ -152,6 +155,7 @@ func (b *trackingBuffer) Data() []byte {
 }
 
 func (b *trackingBuffer) GetByteRange(offset, count uint32, output []byte) error {
+	b.byteRangeCalled = true
 	copy(output[:count], b.data[offset:offset+count])
 	return nil
 }
@@ -160,6 +164,228 @@ func (b *trackingBuffer) WriteTo(w io.Writer) (int64, error) {
 	b.writeToCalled = true
 	n, err := w.Write(b.data)
 	return int64(n), err
+}
+
+func TestWriteElementConvertsNumericValueByteOrder(t *testing.T) {
+	testTag := tag.New(0x7777, 0x0010)
+	tests := []struct {
+		name   string
+		elem   element.Element
+		target *transfer.Syntax
+		want   []byte
+	}{
+		{
+			name: "US",
+			elem: element.NewUnsignedShortWithEndian(testTag, []uint16{0x0102, 0x0304}, endian.Big),
+			want: []byte{0x02, 0x01, 0x04, 0x03},
+		},
+		{
+			name:   "US little to big",
+			elem:   element.NewUnsignedShortWithEndian(testTag, []uint16{0x0102, 0x0304}, endian.Little),
+			target: transfer.ExplicitVRBigEndian,
+			want:   []byte{0x01, 0x02, 0x03, 0x04},
+		},
+		{
+			name: "UL",
+			elem: element.NewUnsignedLongWithEndian(testTag, []uint32{0x01020304}, endian.Big),
+			want: []byte{0x04, 0x03, 0x02, 0x01},
+		},
+		{
+			name: "FD",
+			elem: element.NewDoubleWithEndian(testTag, []float64{1}, endian.Big),
+			want: []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f},
+		},
+		{
+			name: "AT swaps 16-bit components",
+			elem: element.NewAttributeTagWithEndian(testTag, []*tag.Tag{tag.New(0x0102, 0x0304)}, endian.Big),
+			want: []byte{0x02, 0x01, 0x04, 0x03},
+		},
+		{
+			name: "OW",
+			elem: func() element.Element {
+				e := element.NewOtherWord(testTag, []byte{0x01, 0x02, 0x03, 0x04})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte{0x02, 0x01, 0x04, 0x03},
+		},
+		{
+			name: "OF",
+			elem: func() element.Element {
+				e := element.NewOtherFloat(testTag, []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte{0x04, 0x03, 0x02, 0x01, 0x08, 0x07, 0x06, 0x05},
+		},
+		{
+			name: "OL",
+			elem: func() element.Element {
+				e := element.NewOtherLong(testTag, []byte{0x01, 0x02, 0x03, 0x04})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte{0x04, 0x03, 0x02, 0x01},
+		},
+		{
+			name: "OD",
+			elem: func() element.Element {
+				e := element.NewOtherDouble(testTag, []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01},
+		},
+		{
+			name: "OV",
+			elem: func() element.Element {
+				e := element.NewOtherVeryLong(testTag, []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01},
+		},
+		{
+			name: "OB is endian-neutral",
+			elem: func() element.Element {
+				e := element.NewOtherByte(testTag, []byte{0x01, 0x02, 0x03, 0x04})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte{0x01, 0x02, 0x03, 0x04},
+		},
+		{
+			name: "UN is endian-neutral",
+			elem: func() element.Element {
+				e := element.NewUnknown(testTag, []byte{0x01, 0x02, 0x03, 0x04})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte{0x01, 0x02, 0x03, 0x04},
+		},
+		{
+			name: "text is endian-neutral",
+			elem: func() element.Element {
+				e := element.NewString(testTag, vr.LO, []string{"AB"})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			}(),
+			want: []byte("AB"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			target := tt.target
+			if target == nil {
+				target = transfer.ExplicitVRLittleEndian
+			}
+			w := New(target)
+			w.writer = &output
+			if err := w.writeElement(tt.elem); err != nil {
+				t.Fatalf("writeElement() error = %v", err)
+			}
+
+			headerLength := 8
+			if !tt.elem.ValueRepresentation().Is16bitLength() {
+				headerLength = 12
+			}
+			if got := output.Bytes()[headerLength:]; !bytes.Equal(got, tt.want) {
+				t.Fatalf("value bytes = % x, want % x", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWriteElementStreamsByteOrderConversion(t *testing.T) {
+	source := &trackingBuffer{data: []byte{0x01, 0x02, 0x03, 0x04}}
+	elem := element.NewOtherWordFromBuffer(tag.PixelData, source)
+	element.SetByteOrder(elem, binary.BigEndian)
+
+	var output bytes.Buffer
+	w := New(transfer.ExplicitVRLittleEndian)
+	w.writer = &output
+	if err := w.writeElement(elem); err != nil {
+		t.Fatalf("writeElement() error = %v", err)
+	}
+
+	if source.dataCalled {
+		t.Fatal("writeElement() called Data(); want bounded byte-range reads")
+	}
+	if source.writeToCalled {
+		t.Fatal("writeElement() called WriteTo(); want byte-order conversion")
+	}
+	if !source.byteRangeCalled {
+		t.Fatal("writeElement() did not read the source through GetByteRange")
+	}
+	if got, want := output.Bytes()[12:], []byte{0x02, 0x01, 0x04, 0x03}; !bytes.Equal(got, want) {
+		t.Fatalf("value bytes = % x, want % x", got, want)
+	}
+}
+
+func TestWriteElementPreservesUnspecifiedRawByteOrder(t *testing.T) {
+	elem := element.NewOtherWord(tag.PixelData, []byte{0x12, 0x34})
+
+	var output bytes.Buffer
+	w := New(transfer.ExplicitVRBigEndian)
+	w.writer = &output
+	if err := w.writeElement(elem); err != nil {
+		t.Fatalf("writeElement() error = %v", err)
+	}
+
+	if got, want := output.Bytes()[12:], []byte{0x12, 0x34}; !bytes.Equal(got, want) {
+		t.Fatalf("value bytes = % x, want unchanged unspecified raw bytes % x", got, want)
+	}
+}
+
+func TestWriteElementPreservesUnspecifiedRawByteOrderAfterClone(t *testing.T) {
+	source := element.NewOtherWord(tag.PixelData, []byte{0x12, 0x34})
+	checkedClone, err := element.DeepCloneChecked(source)
+	if err != nil {
+		t.Fatalf("DeepCloneChecked() error = %v", err)
+	}
+
+	clones := []struct {
+		name string
+		elem element.Element
+	}{
+		{name: "DeepClone", elem: element.DeepClone(source)},
+		{name: "DeepCloneChecked", elem: checkedClone},
+	}
+
+	for _, tt := range clones {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			w := New(transfer.ExplicitVRBigEndian)
+			w.writer = &output
+			if err := w.writeElement(tt.elem); err != nil {
+				t.Fatalf("writeElement() error = %v", err)
+			}
+
+			if got, want := output.Bytes()[12:], []byte{0x12, 0x34}; !bytes.Equal(got, want) {
+				t.Fatalf("value bytes = % x, want unchanged unspecified raw bytes % x", got, want)
+			}
+		})
+	}
+}
+
+func TestWriteElementRejectsInvalidByteSwapLength(t *testing.T) {
+	for _, sourceOrder := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		elem := element.NewOtherLong(tag.New(0x7777, 0x0020), []byte{0x01, 0x02})
+		element.SetByteOrder(elem, sourceOrder)
+
+		var output bytes.Buffer
+		w := New(transfer.ExplicitVRLittleEndian)
+		w.writer = &output
+		err := w.writeElement(elem)
+		if err == nil {
+			t.Fatalf("writeElement() with source order %T error = nil, want invalid byte-swap length error", sourceOrder)
+		}
+		if !strings.Contains(err.Error(), "not divisible") {
+			t.Fatalf("writeElement() error = %v, want divisibility detail", err)
+		}
+	}
 }
 
 // TestWriteTag tests tag writing

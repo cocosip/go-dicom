@@ -261,6 +261,20 @@ func (e *ImageExporter) RenderRGBImage(
 	return img, nil
 }
 
+// RenderRGBAImage renders interleaved straight-alpha RGBA pixel data.
+func (e *ImageExporter) RenderRGBAImage(pixelData []byte, width, height int) (*image.NRGBA, error) {
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("image dimensions must be positive")
+	}
+	required := width * height * 4
+	if len(pixelData) < required {
+		return nil, fmt.Errorf("RGBA pixel data too short: got %d bytes, need %d", len(pixelData), required)
+	}
+	result := image.NewNRGBA(image.Rect(0, 0, width, height))
+	copy(result.Pix, pixelData[:required])
+	return result, nil
+}
+
 func (e *ImageExporter) encodeImage(writer io.Writer, img image.Image, options *ExportOptions) error {
 	switch options.Format {
 	case FormatPNG:
@@ -307,6 +321,12 @@ func (e *ImageExporter) RenderFrame(
 	case 3:
 		// RGB/YBR
 		return e.ExportRGB(writer, frameData, width, height, photometric, planarConfig, options)
+	case 4:
+		img, err := e.RenderRGBAImage(frameData, width, height)
+		if err != nil {
+			return err
+		}
+		return e.ExportImage(writer, img, options)
 	default:
 		return fmt.Errorf("unsupported samples per pixel: %d", samplesPerPixel)
 	}

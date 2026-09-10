@@ -6,6 +6,7 @@ package codec
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"io"
 	"testing"
 
@@ -289,6 +290,108 @@ func TestTranscoder_TranscodeUncompressedToUncompressed(t *testing.T) {
 	// Verify pixel data is present
 	if !result.Contains(tag.PixelData) {
 		t.Error("PixelData not found in transcoded dataset")
+	}
+}
+
+func TestTranscoderNativePixelDataByteOrderUsesVR(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      *transfer.Syntax
+		output     *transfer.Syntax
+		pixelData  func() element.Element
+		want       []byte
+		wantOrder  binary.ByteOrder
+		wantWordVR bool
+	}{
+		{
+			name:   "8-bit OW little to big swaps words",
+			input:  transfer.ExplicitVRLittleEndian,
+			output: transfer.ExplicitVRBigEndian,
+			pixelData: func() element.Element {
+				return element.NewOtherWord(tag.PixelData, []byte{0x01, 0x02, 0x03, 0x04})
+			},
+			want:       []byte{0x02, 0x01, 0x04, 0x03},
+			wantOrder:  binary.BigEndian,
+			wantWordVR: true,
+		},
+		{
+			name:   "8-bit OW big to little swaps words",
+			input:  transfer.ExplicitVRBigEndian,
+			output: transfer.ExplicitVRLittleEndian,
+			pixelData: func() element.Element {
+				e := element.NewOtherWord(tag.PixelData, []byte{0x01, 0x02, 0x03, 0x04})
+				element.SetByteOrder(e, binary.BigEndian)
+				return e
+			},
+			want:       []byte{0x02, 0x01, 0x04, 0x03},
+			wantOrder:  binary.LittleEndian,
+			wantWordVR: true,
+		},
+		{
+			name:   "8-bit OB little to big remains byte-identical",
+			input:  transfer.ExplicitVRLittleEndian,
+			output: transfer.ExplicitVRBigEndian,
+			pixelData: func() element.Element {
+				return element.NewOtherByte(tag.PixelData, []byte{0x01, 0x02, 0x03, 0x04})
+			},
+			want: []byte{0x01, 0x02, 0x03, 0x04},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := dataset.NewWithTransferSyntax(tt.input)
+			for _, elem := range []element.Element{
+				element.NewUnsignedShort(tag.Rows, []uint16{1}),
+				element.NewUnsignedShort(tag.Columns, []uint16{4}),
+				element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+				element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+				element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+				element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+				element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+				element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometricMonochrome2}),
+				tt.pixelData(),
+			} {
+				if err := ds.Add(elem); err != nil {
+					t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+				}
+			}
+
+			gotDS, err := NewTranscoder(tt.input, tt.output).Transcode(ds)
+			if err != nil {
+				t.Fatalf("Transcode() error = %v", err)
+			}
+			gotElem, ok := gotDS.Get(tag.PixelData)
+			if !ok {
+				t.Fatal("transcoded dataset has no Pixel Data")
+			}
+			var got []byte
+			switch value := gotElem.(type) {
+			case *element.OtherByte:
+				got = value.GetData()
+				if tt.wantWordVR {
+					t.Fatalf("transcoded Pixel Data = %T, want OW", gotElem)
+				}
+			case *element.OtherWord:
+				got = value.GetData()
+				if !tt.wantWordVR {
+					t.Fatalf("transcoded Pixel Data = %T, want OB", gotElem)
+				}
+			default:
+				t.Fatalf("transcoded Pixel Data = %T, want native OB or OW", gotElem)
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Fatalf("Pixel Data = % x, want % x", got, tt.want)
+			}
+			gotOrder, known := element.NumericByteOrder(gotElem)
+			if tt.wantOrder == nil {
+				if known {
+					t.Fatalf("endian-neutral Pixel Data unexpectedly has byte order %T", gotOrder)
+				}
+			} else if !known || gotOrder.Uint16([]byte{0x01, 0x02}) != tt.wantOrder.Uint16([]byte{0x01, 0x02}) {
+				t.Fatalf("Pixel Data byte order = %T, want %T", gotOrder, tt.wantOrder)
+			}
+		})
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
@@ -749,24 +750,32 @@ func (w *Writer) writeElement(elem element.Element) error {
 		return fmt.Errorf("container element %s must be written through Dataset Walk", elem.Tag())
 	}
 
+	buf := elem.Buffer()
+	if buf == nil {
+		buf = buffer.Empty
+	}
+	valueLength := buf.Size()
+	elemVR := elem.ValueRepresentation()
+	swapUnit := byteSwapUnit(elemVR)
+	sourceByteOrder, sourceByteOrderKnown := element.NumericByteOrder(elem)
+	needsByteSwap := sourceByteOrderKnown && swapUnit > 1 && !sameByteOrder(sourceByteOrder, w.byteOrder)
+	if swapUnit > 1 && valueLength%uint32(swapUnit) != 0 { //nolint:gosec // swap units are positive and at most 8
+		return fmt.Errorf("value length %d for tag %s and VR %s is not divisible by byte-swap unit %d",
+			valueLength, elem.Tag(), elemVR, swapUnit)
+	}
+
 	// Write tag
 	if err := w.writeTag(elem.Tag()); err != nil {
 		return fmt.Errorf("failed to write tag %s: %w", elem.Tag(), err)
 	}
 
 	// Write VR (if Explicit VR)
-	elemVR := elem.ValueRepresentation()
 	if w.isExplicitVR {
 		if err := w.writeVR(elemVR); err != nil {
 			return fmt.Errorf("failed to write VR for tag %s: %w", elem.Tag(), err)
 		}
 	}
 
-	buf := elem.Buffer()
-	if buf == nil {
-		buf = buffer.Empty
-	}
-	valueLength := buf.Size()
 	paddedLength := valueLength
 	needsPadding := valueLength%2 != 0
 	if needsPadding {
@@ -783,25 +792,31 @@ func (w *Writer) writeElement(elem element.Element) error {
 
 	// Write value
 	if valueLength > 0 {
-		streamLargeValue := !buf.IsMemory()
-		if !streamLargeValue && w.largeObjectSize > 0 && valueLength > w.largeObjectSize {
-			streamLargeValue = true
-		}
-		if streamLargeValue {
-			written, err := buf.WriteTo(w.writer)
-			if err != nil {
-				return fmt.Errorf("failed to stream value for tag %s: %w", elem.Tag(), err)
-			}
-			if written != int64(valueLength) {
-				return fmt.Errorf("short write for tag %s: wrote %d bytes, expected %d", elem.Tag(), written, valueLength)
+		if needsByteSwap {
+			if err := w.writeByteSwappedValue(buf, valueLength, swapUnit); err != nil {
+				return fmt.Errorf("failed to convert byte order for tag %s: %w", elem.Tag(), err)
 			}
 		} else {
-			valueBytes := buf.Data()
-			if uint32(len(valueBytes)) != valueLength { //nolint:gosec // buffer sizes are uint32 by interface contract
-				return fmt.Errorf("buffer size mismatch for tag %s: got %d bytes, expected %d", elem.Tag(), len(valueBytes), valueLength)
+			streamLargeValue := !buf.IsMemory()
+			if !streamLargeValue && w.largeObjectSize > 0 && valueLength > w.largeObjectSize {
+				streamLargeValue = true
 			}
-			if err := writeAll(w.writer, valueBytes); err != nil {
-				return fmt.Errorf("failed to write value for tag %s: %w", elem.Tag(), err)
+			if streamLargeValue {
+				written, err := buf.WriteTo(w.writer)
+				if err != nil {
+					return fmt.Errorf("failed to stream value for tag %s: %w", elem.Tag(), err)
+				}
+				if written != int64(valueLength) {
+					return fmt.Errorf("short write for tag %s: wrote %d bytes, expected %d", elem.Tag(), written, valueLength)
+				}
+			} else {
+				valueBytes := buf.Data()
+				if uint32(len(valueBytes)) != valueLength { //nolint:gosec // buffer sizes are uint32 by interface contract
+					return fmt.Errorf("buffer size mismatch for tag %s: got %d bytes, expected %d", elem.Tag(), len(valueBytes), valueLength)
+				}
+				if err := writeAll(w.writer, valueBytes); err != nil {
+					return fmt.Errorf("failed to write value for tag %s: %w", elem.Tag(), err)
+				}
 			}
 		}
 	}
@@ -811,6 +826,47 @@ func (w *Writer) writeElement(elem element.Element) error {
 		}
 	}
 
+	return nil
+}
+
+func byteSwapUnit(v *vr.VR) int {
+	if v == nil || v.ByteSwap() <= 1 {
+		return 0
+	}
+	return v.ByteSwap()
+}
+
+func sameByteOrder(a, b binary.ByteOrder) bool {
+	if a == nil {
+		a = binary.LittleEndian
+	}
+	if b == nil {
+		b = binary.LittleEndian
+	}
+	probe := []byte{0x01, 0x02}
+	return a.Uint16(probe) == b.Uint16(probe)
+}
+
+func (w *Writer) writeByteSwappedValue(buf buffer.ByteBuffer, valueLength uint32, swapUnit int) error {
+	const maxChunkSize uint32 = 1024 * 1024
+
+	chunkCapacity := maxChunkSize - maxChunkSize%uint32(swapUnit) //nolint:gosec // swap units are positive
+	chunk := make([]byte, chunkCapacity)
+	for offset := uint32(0); offset < valueLength; {
+		count := valueLength - offset
+		if count > chunkCapacity {
+			count = chunkCapacity
+		}
+		current := chunk[:count]
+		if err := buf.GetByteRange(offset, count, current); err != nil {
+			return err
+		}
+		endian.SwapBytesN(swapUnit, current, len(current))
+		if err := writeAll(w.writer, current); err != nil {
+			return err
+		}
+		offset += count
+	}
 	return nil
 }
 

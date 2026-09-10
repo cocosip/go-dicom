@@ -4,6 +4,8 @@
 package imaging
 
 import (
+	"bytes"
+	"encoding/binary"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
@@ -23,6 +25,62 @@ func TestNewColor32(t *testing.T) {
 	}
 	if color.B != 200 {
 		t.Errorf("Expected B=200, got %d", color.B)
+	}
+}
+
+func TestPaletteColorLUTApplyToPixelDataWithByteOrder(t *testing.T) {
+	lut, err := NewPaletteColorLUT(
+		[]uint16{2, 0, 8},
+		[]byte{10, 20},
+		[]byte{30, 40},
+		[]byte{50, 60},
+	)
+	if err != nil {
+		t.Fatalf("NewPaletteColorLUT() error = %v", err)
+	}
+
+	got, err := lut.ApplyToPixelDataWithByteOrder([]byte{0, 0, 0, 1}, 16, binary.BigEndian)
+	if err != nil {
+		t.Fatalf("ApplyToPixelDataWithByteOrder() error = %v", err)
+	}
+	if want := []byte{10, 30, 50, 20, 40, 60}; !bytes.Equal(got, want) {
+		t.Fatalf("palette output = %v, want %v", got, want)
+	}
+	if _, err := lut.ApplyToPixelDataWithByteOrder([]byte{0}, 16, binary.BigEndian); err == nil {
+		t.Fatal("ApplyToPixelDataWithByteOrder() accepted odd-length 16-bit pixels")
+	}
+}
+
+func TestPaletteColorLUTWithAlphaOutputsRGBA(t *testing.T) {
+	lut, err := NewPaletteColorLUTWithAlpha(
+		[]uint16{2, 0, 8},
+		[]uint16{2, 0, 8},
+		[]byte{10, 20},
+		[]byte{30, 40},
+		[]byte{50, 60},
+		[]byte{70, 80},
+	)
+	if err != nil {
+		t.Fatalf("NewPaletteColorLUTWithAlpha() error = %v", err)
+	}
+	got, err := lut.ApplyToPixelData([]byte{0, 1}, 8)
+	if err != nil {
+		t.Fatalf("ApplyToPixelData() error = %v", err)
+	}
+	if want := []byte{10, 30, 50, 70, 20, 40, 60, 80}; !bytes.Equal(got, want) {
+		t.Fatalf("palette RGBA output = %v, want %v", got, want)
+	}
+
+	for _, alphaDescriptor := range [][]uint16{
+		{2, 1, 8},
+		{2, 0, 16},
+	} {
+		if _, err := NewPaletteColorLUTWithAlpha(
+			[]uint16{2, 0, 8}, alphaDescriptor,
+			[]byte{10, 20}, []byte{30, 40}, []byte{50, 60}, []byte{70, 80},
+		); err == nil {
+			t.Fatalf("NewPaletteColorLUTWithAlpha() accepted descriptor %v", alphaDescriptor)
+		}
 	}
 }
 

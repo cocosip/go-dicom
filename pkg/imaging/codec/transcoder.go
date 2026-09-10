@@ -421,22 +421,10 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 		return nil, fmt.Errorf("unexpected pixel data element type for uncompressed data")
 	}
 
-	// Get frame info
-	frameInfo, err := t.buildFrameInfoFromDataset(ds)
-	if err != nil {
-		return nil, err
-	}
-
-	// Only need to swap bytes for multi-byte data (BitsAllocated > 8)
-	if frameInfo.BitsAllocated <= 8 {
-		newDS := ds.Clone()
-		newDS.SetInternalTransferSyntax(t.outputSyntax)
-		return newDS, nil
-	}
-
-	// Swap byte order for 16-bit data
+	// OW is always a sequence of 16-bit words, including native Pixel Data
+	// whose Bits Allocated is 8 or less. OB is handled above and never swapped.
 	if len(pixelData)%2 != 0 {
-		return nil, fmt.Errorf("pixel data length is not even for 16-bit data")
+		return nil, fmt.Errorf("pixel data length is not even for OW data")
 	}
 
 	convertedData := make([]byte, len(pixelData))
@@ -457,7 +445,9 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 	}
 
 	// Add converted pixel data
-	_ = newDS.Add(element.NewOtherWord(tag.PixelData, convertedData))
+	convertedPixelData := element.NewOtherWord(tag.PixelData, convertedData)
+	element.SetByteOrder(convertedPixelData, outputEndian.ByteOrder())
+	_ = newDS.Add(convertedPixelData)
 
 	return newDS, nil
 }

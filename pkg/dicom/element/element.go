@@ -73,16 +73,16 @@ type base struct {
 
 // newBase creates a new base element with the given tag, VR, and buffer.
 func newBase(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) *base {
-	return newBaseWithByteOrder(t, v, buf, binary.LittleEndian)
+	if buf == nil {
+		buf = buffer.Empty
+	}
+	return &base{tag: t, vr: v, buffer: buf}
 }
 
 // newBaseWithByteOrder creates a new base element with explicit byte order.
 func newBaseWithByteOrder(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer, order binary.ByteOrder) *base {
 	if buf == nil {
 		buf = buffer.Empty
-	}
-	if order == nil {
-		order = binary.LittleEndian
 	}
 	return &base{
 		tag:       t,
@@ -154,6 +154,29 @@ func (e *base) getByteOrder() binary.ByteOrder {
 		return binary.LittleEndian
 	}
 	return e.byteOrder
+}
+
+func (e *base) numericByteOrder() (binary.ByteOrder, bool) {
+	if e == nil || e.byteOrder == nil {
+		return nil, false
+	}
+	return e.byteOrder, true
+}
+
+// NumericByteOrder returns the byte order used by an element's numeric value
+// buffer and whether that order was explicitly established. Raw binary
+// constructors leave the order unspecified so callers can inherit it from the
+// containing Dataset's transfer syntax.
+func NumericByteOrder(elem Element) (binary.ByteOrder, bool) {
+	if elem == nil {
+		return nil, false
+	}
+	if ordered, ok := elem.(interface {
+		numericByteOrder() (binary.ByteOrder, bool)
+	}); ok {
+		return ordered.numericByteOrder()
+	}
+	return nil, false
 }
 
 // SetByteOrder sets byte order for an element when decoding numeric data.

@@ -588,10 +588,8 @@ func (pd *DicomPixelData) MaskPadding() (frames [][]byte, masks [][]bool, err er
 
 // WindowOrLUTTo8bit applies VOI LUT if present, otherwise window.
 func (pd *DicomPixelData) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ignorePadding bool) ([][]byte, error) {
-	if ds != nil {
-		if frames, err := applyVOILUT(pd, ds, center, width, ignorePadding); err == nil {
-			return frames, nil
-		}
+	if ds != nil && ds.Contains(tag.VOILUTSequence) {
+		return applyVOILUT(pd, ds, center, width, ignorePadding)
 	}
 	return applyWindowTo8bit(pd, center, width, ignorePadding)
 }
@@ -943,8 +941,9 @@ func CreatePixelData(ds *dataset.Dataset) (*DicomPixelData, error) {
 }
 
 type paletteLUT struct {
-	first   int32
-	entries []imagetypes.Color32
+	first    int32
+	entries  []imagetypes.Color32
+	hasAlpha bool
 }
 
 // convertPaletteToRGB loads palette LUT from dataset and converts frames to RGB using shared LUT Color32 type.
@@ -961,7 +960,11 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 
 	for fi, frame := range pd.frames {
 		pixelCount := len(frame) / bytesPerSample
-		out := make([]byte, pixelCount*3)
+		channels := 3
+		if lut.hasAlpha {
+			channels = 4
+		}
+		out := make([]byte, pixelCount*channels)
 
 		for idx, off := 0, 0; idx < pixelCount; idx, off = idx+1, off+bytesPerSample {
 			val, ok := decodePixelSampleLE(frame, off, pd.Info)
@@ -978,10 +981,13 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 			}
 
 			color := lut.entries[idxLUT]
-			base := idx * 3
+			base := idx * channels
 			out[base] = color.R
 			out[base+1] = color.G
 			out[base+2] = color.B
+			if lut.hasAlpha {
+				out[base+3] = color.A
+			}
 		}
 
 		pd.frames[fi] = out
@@ -989,7 +995,10 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 
 	// Update metadata to RGB
 	pd.Info.PhotometricInterpretation = RGBPhotometric
-	pd.Info.SamplesPerPixel = 3
+	pd.Info.SamplesPerPixel = uint16(3)
+	if lut.hasAlpha {
+		pd.Info.SamplesPerPixel = 4
+	}
 	pd.Info.PlanarConfiguration = InterleavedPlanar
 	pd.Info.BitsAllocated = 8
 	pd.Info.BitsStored = 8
@@ -1001,30 +1010,45 @@ func convertPaletteToRGB(ds *dataset.Dataset, pd *DicomPixelData) error {
 func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 	byteOrder := datasetByteOrder(ds)
 	signed := ds.TryGetUInt16(tag.PixelRepresentation, 0) == uint16(SignedPixels)
-	// Enhanced Palette Color LUT Sequence (0028,140B)
-	if seqElem, ok := ds.Get(tag.EnhancedPaletteColorLookupTableSequence); ok {
-		if seq, ok2 := seqElem.(*dataset.Sequence); ok2 && seq.Count() > 0 {
-			for i := 0; i < seq.Count(); i++ {
-				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder, signed); err == nil {
-					return lut, nil
-				}
-			}
+	for _, sequenceTag := range []*tag.Tag{
+		tag.EnhancedPaletteColorLookupTableSequence,
+		tag.PaletteColorLookupTableSequence,
+	} {
+		lut, present, err := buildPaletteLUTFromSequence(ds, sequenceTag, byteOrder, signed)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	// Palette Color LUT Sequence (0048,0120)
-	if seqElem, ok := ds.Get(tag.PaletteColorLookupTableSequence); ok {
-		if seq, ok2 := seqElem.(*dataset.Sequence); ok2 && seq.Count() > 0 {
-			for i := 0; i < seq.Count(); i++ {
-				if lut, err := buildPaletteLUTFromDataset(seq.GetItem(i), byteOrder, signed); err == nil {
-					return lut, nil
-				}
-			}
+		if present {
+			return lut, nil
 		}
 	}
 
 	// Fall back to top-level descriptors/data
 	return buildPaletteLUTFromDataset(ds, byteOrder, signed)
+}
+
+func buildPaletteLUTFromSequence(
+	ds *dataset.Dataset,
+	sequenceTag *tag.Tag,
+	byteOrder binary.ByteOrder,
+	signed bool,
+) (*paletteLUT, bool, error) {
+	sequenceElement, present := ds.Get(sequenceTag)
+	if !present {
+		return nil, false, nil
+	}
+	sequence, ok := sequenceElement.(*dataset.Sequence)
+	if !ok {
+		return nil, true, fmt.Errorf("%s must use SQ VR", sequenceTag)
+	}
+	if sequence.Count() == 0 || sequence.GetItem(0) == nil {
+		return nil, true, fmt.Errorf("%s must contain a non-nil item", sequenceTag)
+	}
+	lut, err := buildPaletteLUTFromDataset(sequence.GetItem(0), byteOrder, signed)
+	if err != nil {
+		return nil, true, fmt.Errorf("read %s item 0: %w", sequenceTag, err)
+	}
+	return lut, true, nil
 }
 
 // buildPaletteLUTFromDataset builds palette LUT using descriptors/data in the provided dataset (no sequence recursion).
@@ -1057,7 +1081,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
 				rLUT, err = expandSegmentedLUT(ob.GetData(), rDescriptor.entryCount, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				rLUT, err = expandSegmentedLUT(ow.GetData(), rDescriptor.entryCount, byteOrder)
+				rLUT, err = expandSegmentedLUT(ow.GetData(), rDescriptor.entryCount, numericByteOrderOr(ow, byteOrder))
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1072,7 +1096,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
 				gLUT, err = expandSegmentedLUT(ob.GetData(), gDescriptor.entryCount, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				gLUT, err = expandSegmentedLUT(ow.GetData(), gDescriptor.entryCount, byteOrder)
+				gLUT, err = expandSegmentedLUT(ow.GetData(), gDescriptor.entryCount, numericByteOrderOr(ow, byteOrder))
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1087,7 +1111,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 			if ob, ok2 := seg.(*element.OtherByte); ok2 {
 				bLUT, err = expandSegmentedLUT(ob.GetData(), bDescriptor.entryCount, byteOrder)
 			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				bLUT, err = expandSegmentedLUT(ow.GetData(), bDescriptor.entryCount, byteOrder)
+				bLUT, err = expandSegmentedLUT(ow.GetData(), bDescriptor.entryCount, numericByteOrderOr(ow, byteOrder))
 			} else {
 				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
 			}
@@ -1097,13 +1121,72 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 		}
 	}
 
+	alphaDescriptorPresent := ds.Contains(tag.AlphaPaletteColorLookupTableDescriptor)
+	alphaDataPresent := ds.Contains(tag.AlphaPaletteColorLookupTableData) ||
+		ds.Contains(tag.SegmentedAlphaPaletteColorLookupTableData)
+	if alphaDescriptorPresent != alphaDataPresent {
+		return nil, fmt.Errorf("alpha palette descriptor and data must both be present")
+	}
+	var alphaLUT []uint16
+	if alphaDescriptorPresent {
+		descriptorElement, _ := ds.Get(tag.AlphaPaletteColorLookupTableDescriptor)
+		if _, ok := descriptorElement.(*element.UnsignedShort); !ok {
+			return nil, fmt.Errorf("alpha palette LUT descriptor must use US VR")
+		}
+		alphaDescriptor, err := readLUTDescriptor(ds, tag.AlphaPaletteColorLookupTableDescriptor, false)
+		if err != nil {
+			return nil, fmt.Errorf("read Alpha Palette LUT Descriptor: %w", err)
+		}
+		if alphaDescriptor.entryCount != rDescriptor.entryCount ||
+			alphaDescriptor.firstMappedValue != rDescriptor.firstMappedValue {
+			return nil, fmt.Errorf("alpha palette descriptor must match RGB entry count and first mapped value")
+		}
+		if alphaDescriptor.bitsPerEntry != 8 {
+			return nil, fmt.Errorf("alpha palette LUT bits per entry must be 8, got %d", alphaDescriptor.bitsPerEntry)
+		}
+		alphaLUT, err = readPaletteLUTChannel(ds,
+			tag.AlphaPaletteColorLookupTableData,
+			tag.SegmentedAlphaPaletteColorLookupTableData,
+			alphaDescriptor,
+			byteOrder,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("read Alpha Palette LUT Data: %w", err)
+		}
+	}
+
 	return &paletteLUT{
-		first:   int32(rDescriptor.firstMappedValue),
-		entries: buildPaletteEntries(int(rDescriptor.bitsPerEntry), rLUT, gLUT, bLUT),
+		first:    int32(rDescriptor.firstMappedValue),
+		entries:  buildPaletteEntries(int(rDescriptor.bitsPerEntry), rLUT, gLUT, bLUT, alphaLUT),
+		hasAlpha: alphaDescriptorPresent,
 	}, nil
 }
 
-func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []imagetypes.Color32 {
+func readPaletteLUTChannel(
+	ds *dataset.Dataset,
+	directTag, segmentedTag *tag.Tag,
+	descriptor lutDescriptor,
+	byteOrder binary.ByteOrder,
+) ([]uint16, error) {
+	values, err := readLUTData(ds, directTag, descriptor, byteOrder)
+	if err == nil {
+		return values, nil
+	}
+	segmented, ok := ds.Get(segmentedTag)
+	if !ok {
+		return nil, err
+	}
+	switch value := segmented.(type) {
+	case *element.OtherByte:
+		return expandSegmentedLUT(value.GetData(), descriptor.entryCount, byteOrder)
+	case *element.OtherWord:
+		return expandSegmentedLUT(value.GetData(), descriptor.entryCount, numericByteOrderOr(value, byteOrder))
+	default:
+		return nil, fmt.Errorf("unsupported segmented palette element type %T", segmented)
+	}
+}
+
+func buildPaletteEntries(bits int, rLUT, gLUT, bLUT, alphaLUT []uint16) []imagetypes.Color32 {
 	shift := 0
 	if bits > 8 {
 		shift = bits - 8
@@ -1111,8 +1194,12 @@ func buildPaletteEntries(bits int, rLUT, gLUT, bLUT []uint16) []imagetypes.Color
 
 	entries := make([]imagetypes.Color32, len(rLUT))
 	for i := 0; i < len(rLUT); i++ {
+		alpha := uint8(255)
+		if alphaLUT != nil {
+			alpha = clampByte(int(alphaLUT[i]))
+		}
 		entries[i] = imagetypes.Color32{
-			A: 255,
+			A: alpha,
 			R: clampByte(int(rLUT[i] >> shift)),
 			G: clampByte(int(gLUT[i] >> shift)),
 			B: clampByte(int(bLUT[i] >> shift)),

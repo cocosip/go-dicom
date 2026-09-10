@@ -90,7 +90,7 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor lutDescriptor
 		entries, err := readLUTWords(value.GetData(), dataTag, descriptor, byteOrder)
 		return validateLUTDataRange(entries, dataTag, descriptor, err)
 	case *element.OtherWord:
-		entries, err := readOtherWordLUTData(value.GetData(), dataTag, descriptor, byteOrder)
+		entries, err := readOtherWordLUTData(value.GetData(), dataTag, descriptor, numericByteOrderOr(value, byteOrder))
 		return validateLUTDataRange(entries, dataTag, descriptor, err)
 	case *element.UnsignedShort:
 		entries, err := value.GetValues()
@@ -126,6 +126,16 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor lutDescriptor
 	}
 
 	return validateLUTDataRange(values, dataTag, descriptor, nil)
+}
+
+func numericByteOrderOr(elem element.Element, fallback binary.ByteOrder) binary.ByteOrder {
+	if order, ok := element.NumericByteOrder(elem); ok {
+		return order
+	}
+	if fallback == nil {
+		return binary.LittleEndian
+	}
+	return fallback
 }
 
 func validateLUTDataRange(values []uint16, dataTag *tag.Tag, descriptor lutDescriptor, err error) ([]uint16, error) {

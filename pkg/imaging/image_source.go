@@ -29,6 +29,8 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 	}
 	image := NewDicomImage(pixelData)
 	image.dataset = ds.Clone()
+	image.windowIndex = config.windowIndex
+	image.voiLUTIndex = config.voiLUTIndex
 	image.autoApplyLUTToAllFrames = true
 	image.overlays = imageOverlays(image.dataset, pixelData)
 	if pixelData.IsEncapsulated() {

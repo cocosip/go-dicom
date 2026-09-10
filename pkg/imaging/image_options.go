@@ -8,6 +8,24 @@ import "github.com/cocosip/go-dicom/pkg/imaging/codec"
 type dicomImageConfig struct {
 	codecRegistry   *codec.Registry
 	codecParameters codec.Parameters
+	windowIndex     int
+	voiLUTIndex     int
+}
+
+// WithWindowIndex selects one alternative Window Center/Width pair. The
+// default is the first pair.
+func WithWindowIndex(index int) DicomImageOption {
+	return func(config *dicomImageConfig) {
+		config.windowIndex = index
+	}
+}
+
+// WithVOILUTIndex selects one alternative VOI LUT Sequence item. The default
+// is the first item.
+func WithVOILUTIndex(index int) DicomImageOption {
+	return func(config *dicomImageConfig) {
+		config.voiLUTIndex = index
+	}
 }
 
 // DicomImageOption configures Dataset and file based DicomImage constructors.

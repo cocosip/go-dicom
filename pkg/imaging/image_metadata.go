@@ -6,6 +6,8 @@ package imaging
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -21,18 +23,6 @@ func datasetByteOrder(ds *dataset.Dataset) binary.ByteOrder {
 		}
 	}
 	return binary.LittleEndian
-}
-
-func imageDecimal(ds *dataset.Dataset, t *tag.Tag) (float64, error) {
-	elem, ok := ds.Get(t)
-	if !ok {
-		return 0, fmt.Errorf("element %s not found", t)
-	}
-	value, ok := elem.(*element.DecimalString)
-	if !ok {
-		return 0, fmt.Errorf("element %s is not DecimalString", t)
-	}
-	return value.GetFloat(0)
 }
 
 func datasetShortValue(ds *dataset.Dataset, t *tag.Tag) (int, error) {
@@ -68,11 +58,21 @@ func imagePixelValueRange(ds *dataset.Dataset) (float64, float64, error) {
 }
 
 func imageVOILUT(ds *dataset.Dataset, signed bool) (render.LUT, error) {
+	return imageVOILUTAt(ds, signed, 0)
+}
+
+func imageVOILUTAt(ds *dataset.Dataset, signed bool, index int) (render.LUT, error) {
 	sequence, err := ds.GetSequence(tag.VOILUTSequence)
-	if err != nil || sequence.Count() == 0 || sequence.GetItem(0) == nil {
+	if err != nil || sequence.Count() == 0 {
 		return nil, fmt.Errorf("VOI LUT Sequence is missing or empty")
 	}
-	item := sequence.GetItem(0)
+	if index < 0 || index >= sequence.Count() {
+		return nil, fmt.Errorf("VOI LUT Sequence item index %d is out of range [0, %d)", index, sequence.Count())
+	}
+	item := sequence.GetItem(index)
+	if item == nil {
+		return nil, fmt.Errorf("VOI LUT Sequence item %d is nil", index)
+	}
 	descriptor, err := readLUTDescriptor(item, tag.LUTDescriptor, signed)
 	if err != nil {
 		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
@@ -89,17 +89,23 @@ func imageVOILUT(ds *dataset.Dataset, signed bool) (render.LUT, error) {
 	return scaledVOITable(table, 0, maximumOutput), nil
 }
 
-func imageVOILUTFrom(primary, fallback *dataset.Dataset, signed bool) (render.LUT, error) {
-	if value, err := imageVOILUT(primary, signed); err == nil {
-		return value, nil
+func imageVOILUTFromAt(primary, fallback *dataset.Dataset, signed bool, index int) (render.LUT, error) {
+	if primary != nil && primary.Contains(tag.VOILUTSequence) {
+		return imageVOILUTAt(primary, signed, index)
 	}
-	return imageVOILUT(fallback, signed)
+	if fallback != nil && fallback.Contains(tag.VOILUTSequence) {
+		return imageVOILUTAt(fallback, signed, index)
+	}
+	return nil, fmt.Errorf("VOI LUT Sequence is missing")
 }
 
 func imageModalityLUT(ds *dataset.Dataset, signed bool) (render.ModalityLUT, error) {
 	sequence, err := ds.GetSequence(tag.ModalityLUTSequence)
-	if err != nil || sequence.Count() == 0 || sequence.GetItem(0) == nil {
-		return nil, fmt.Errorf("modality LUT Sequence is missing or empty")
+	if err != nil {
+		return nil, fmt.Errorf("modality LUT Sequence is missing: %w", err)
+	}
+	if sequence.Count() != 1 || sequence.GetItem(0) == nil {
+		return nil, fmt.Errorf("modality LUT Sequence must contain exactly one item, got %d", sequence.Count())
 	}
 	item := sequence.GetItem(0)
 	descriptor, err := readLUTDescriptor(item, tag.LUTDescriptor, signed)
@@ -120,35 +126,130 @@ func imageModalityLUT(ds *dataset.Dataset, signed bool) (render.ModalityLUT, err
 	return render.NewModalitySequenceLUT(values, descriptor.firstMappedValue, signed), nil
 }
 
-func imageDecimalFrom(primary, fallback *dataset.Dataset, t *tag.Tag) (float64, error) {
-	if value, err := imageDecimal(primary, t); err == nil {
-		return value, nil
+func imageWindowPairAt(primary, fallback *dataset.Dataset, index int) (float64, float64, error) {
+	source := datasetWithCompletePair(primary, fallback, tag.WindowCenter, tag.WindowWidth)
+	if source == nil {
+		source = datasetWithAnyTag(primary, fallback, tag.WindowCenter, tag.WindowWidth)
 	}
-	return imageDecimal(fallback, t)
-}
-
-func imageWindowPair(primary, fallback *dataset.Dataset) (float64, float64, error) {
-	if center, err := imageDecimal(primary, tag.WindowCenter); err == nil {
-		if width, err := imageDecimal(primary, tag.WindowWidth); err == nil && width > 0 {
-			return center, width, nil
-		}
+	if source == nil {
+		return 0, 0, fmt.Errorf("window center and width are missing")
 	}
-	center, err := imageDecimal(fallback, tag.WindowCenter)
+	centerElement, centerOK := source.Get(tag.WindowCenter)
+	widthElement, widthOK := source.Get(tag.WindowWidth)
+	if !centerOK || !widthOK {
+		return 0, 0, fmt.Errorf("window center and width must both be present")
+	}
+	centers, centerOK := centerElement.(*element.DecimalString)
+	widths, widthOK := widthElement.(*element.DecimalString)
+	if !centerOK || !widthOK {
+		return 0, 0, fmt.Errorf("window center and width must use Decimal String VR")
+	}
+	if centers.Count() != widths.Count() {
+		return 0, 0, fmt.Errorf("window center and width value counts differ: %d and %d", centers.Count(), widths.Count())
+	}
+	if index < 0 || index >= centers.Count() {
+		return 0, 0, fmt.Errorf("window index %d is out of range [0, %d)", index, centers.Count())
+	}
+	center, err := centers.GetFloat(index)
 	if err != nil {
 		return 0, 0, err
 	}
-	width, err := imageDecimal(fallback, tag.WindowWidth)
-	if err != nil || width <= 0 {
-		return 0, 0, fmt.Errorf("functional-group window is missing or invalid")
+	width, err := widths.GetFloat(index)
+	if err != nil {
+		return 0, 0, err
 	}
 	return center, width, nil
 }
 
-func imageStringFrom(primary, fallback *dataset.Dataset, t *tag.Tag) (string, bool) {
-	if value, ok := primary.GetString(t); ok {
-		return value, true
+func datasetWithCompletePair(primary, fallback *dataset.Dataset, first, second *tag.Tag) *dataset.Dataset {
+	for _, ds := range []*dataset.Dataset{primary, fallback} {
+		if ds != nil && ds.Contains(first) && ds.Contains(second) {
+			return ds
+		}
 	}
-	return fallback.GetString(t)
+	return nil
+}
+
+func datasetWithAnyTag(primary, fallback *dataset.Dataset, tags ...*tag.Tag) *dataset.Dataset {
+	for _, ds := range []*dataset.Dataset{primary, fallback} {
+		if ds == nil {
+			continue
+		}
+		for _, t := range tags {
+			if ds.Contains(t) {
+				return ds
+			}
+		}
+	}
+	return nil
+}
+
+func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool, minInput, maxInput float64) (
+	modalityLUT render.ModalityLUT,
+	slope float64,
+	intercept float64,
+	voiDescriptorSigned bool,
+	err error,
+) {
+	slope, intercept = 1, 0
+	modalitySource := datasetWithAnyTag(primary, fallback, tag.ModalityLUTSequence)
+	rescaleSource := datasetWithAnyTag(primary, fallback, tag.RescaleSlope, tag.RescaleIntercept)
+	if modalitySource != nil && rescaleSource != nil {
+		return nil, 0, 0, false, fmt.Errorf("modality LUT sequence cannot coexist with rescale slope/intercept")
+	}
+	if modalitySource != nil {
+		modalityLUT, err = imageModalityLUT(modalitySource, pixelSigned)
+		if err != nil {
+			return nil, 0, 0, false, err
+		}
+		return modalityLUT, slope, intercept, false, nil
+	}
+	if rescaleSource == nil {
+		return nil, slope, intercept, pixelSigned, nil
+	}
+	if !rescaleSource.Contains(tag.RescaleSlope) || !rescaleSource.Contains(tag.RescaleIntercept) {
+		return nil, 0, 0, false, fmt.Errorf("rescale slope and intercept must both be present")
+	}
+	slope, err = imageSingleDecimal(rescaleSource, tag.RescaleSlope)
+	if err != nil {
+		return nil, 0, 0, false, err
+	}
+	if slope == 0 || math.IsNaN(slope) || math.IsInf(slope, 0) {
+		return nil, 0, 0, false, fmt.Errorf("rescale slope must be finite and non-zero")
+	}
+	intercept, err = imageSingleDecimal(rescaleSource, tag.RescaleIntercept)
+	if err != nil {
+		return nil, 0, 0, false, err
+	}
+	if math.IsNaN(intercept) || math.IsInf(intercept, 0) {
+		return nil, 0, 0, false, fmt.Errorf("rescale intercept must be finite")
+	}
+	minimum := math.Min(minInput*slope+intercept, maxInput*slope+intercept)
+	return nil, slope, intercept, minimum < 0, nil
+}
+
+func imageSingleDecimal(ds *dataset.Dataset, t *tag.Tag) (float64, error) {
+	elem, ok := ds.Get(t)
+	if !ok {
+		return 0, fmt.Errorf("element %s not found", t)
+	}
+	value, ok := elem.(*element.DecimalString)
+	if !ok || value.Count() != 1 {
+		return 0, fmt.Errorf("element %s must contain exactly one Decimal String value", t)
+	}
+	return value.GetFloat(0)
+}
+
+func imageStringFrom(primary, fallback *dataset.Dataset, t *tag.Tag) (string, bool) {
+	for _, source := range []*dataset.Dataset{primary, fallback} {
+		if value, ok := source.GetString(t); ok {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				return value, true
+			}
+		}
+	}
+	return "", false
 }
 
 // imageFunctionalGroupValues flattens the first item of each shared and

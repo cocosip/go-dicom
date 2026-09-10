@@ -242,7 +242,7 @@ func cloneBase(source *base) *base {
 	if source == nil {
 		return nil
 	}
-	return newBaseWithByteOrder(source.tag.Clone(), source.vr, cloneBuffer(source.buffer), source.getByteOrder())
+	return newBaseWithByteOrder(source.tag.Clone(), source.vr, cloneBuffer(source.buffer), source.byteOrder)
 }
 
 func cloneString(source *String) *String {
@@ -280,7 +280,7 @@ func cloneBaseChecked(source *base) (*base, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newBaseWithByteOrder(source.tag.Clone(), source.vr, clonedBuffer, source.getByteOrder()), nil
+	return newBaseWithByteOrder(source.tag.Clone(), source.vr, clonedBuffer, source.byteOrder), nil
 }
 
 func cloneStringChecked(source *String) (*String, error) {

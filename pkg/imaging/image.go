@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/imaging/interpolation"
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 	"github.com/cocosip/go-dicom/pkg/imaging/transform"
@@ -67,6 +69,8 @@ type DicomImage struct {
 	overlayColor            imagetypes.Color32
 	autoApplyLUTToAllFrames bool
 	grayscaleColorMaps      map[int][256]imagetypes.Color32
+	windowIndex             int
+	voiLUTIndex             int
 
 	// Converter for pixel data format conversion
 	converter *PixelDataConverter
@@ -150,29 +154,61 @@ func (img *DicomImage) SetScale(scale float64) {
 // GetOrCreatePipeline returns the rendering pipeline for the specified frame
 // Creates a default pipeline if it doesn't exist
 func (img *DicomImage) GetOrCreatePipeline(frame int) render.Pipeline {
+	pipeline, err := img.GetOrCreatePipelineWithError(frame)
+	if err == nil {
+		return pipeline
+	}
+	return img.newFallbackPipeline()
+}
+
+// GetOrCreatePipelineWithError returns a standards-validated rendering
+// pipeline. Dataset rendering uses this path so malformed modality and VOI
+// attributes are surfaced instead of silently falling back.
+func (img *DicomImage) GetOrCreatePipelineWithError(frame int) (render.Pipeline, error) {
+	if frame < 0 || frame >= img.NumberOfFrames() {
+		return nil, fmt.Errorf("frame index out of range: %d", frame)
+	}
 	img.mu.Lock()
 	defer img.mu.Unlock()
 
 	if pipeline, exists := img.pipelines[frame]; exists {
-		return pipeline
+		return pipeline, nil
 	}
+	pipeline, err := img.createGrayscalePipeline(frame)
+	if err != nil {
+		return nil, err
+	}
+	img.pipelines[frame] = pipeline
+	return pipeline, nil
+}
 
-	// Create default pipeline
+func (img *DicomImage) newFallbackPipeline() render.Pipeline {
 	if img.pixelData.Info.BitsStored == 0 {
-		// DICOM requires BitsStored to be at least 1
 		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false)
 	}
-
-	// Use pixel representation to determine min/max input values
-	var minInput, maxInput float64
-	if img.pixelData.Info.PixelRepresentation == SignedPixels {
-		rangeSize := math.Pow(2, float64(img.pixelData.Info.BitsStored-1))
-		minInput = -rangeSize
-		maxInput = rangeSize - 1
-	} else {
-		minInput = 0
-		maxInput = math.Pow(2, float64(img.pixelData.Info.BitsStored)) - 1
+	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, img.pixelData.Info.PixelRepresentation == SignedPixels)
+	windowCenter, windowWidth := 1.0, 1.0
+	if img.pixelData.Info.BitsStored != 1 {
+		windowCenter, windowWidth = img.pixelData.CalculateOptimalWindow()
 	}
+	return render.NewGrayscalePipeline(1, 0, windowCenter, windowWidth, minInput, maxInput, false)
+}
+
+func imageStoredValueRange(bitsStored uint16, signed bool) (float64, float64) {
+	if signed {
+		rangeSize := math.Pow(2, float64(bitsStored-1))
+		return -rangeSize, rangeSize - 1
+	}
+	return 0, math.Pow(2, float64(bitsStored)) - 1
+}
+
+func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipeline, error) {
+	if img.pixelData.Info.BitsStored == 0 {
+		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false), nil
+	}
+
+	pixelSigned := img.pixelData.Info.PixelRepresentation == SignedPixels
+	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, pixelSigned)
 
 	// Calculate a fallback window from actual pixel data.
 	windowCenter, windowWidth := 1.0, 1.0
@@ -181,20 +217,26 @@ func (img *DicomImage) GetOrCreatePipeline(frame int) render.Pipeline {
 	}
 	rescaleSlope, rescaleIntercept := 1.0, 0.0
 	var modalityLUT render.ModalityLUT
+	voiDescriptorSigned := pixelSigned
 	hasExplicitWindow := false
+	functional := (*dataset.Dataset)(nil)
 	if img.dataset != nil {
-		functional := imageFunctionalGroupValues(img.dataset, frame)
-		if value, err := imageDecimalFrom(img.dataset, functional, tag.RescaleSlope); err == nil {
-			rescaleSlope = value
+		functional = imageFunctionalGroupValues(img.dataset, frame)
+		var err error
+		modalityLUT, rescaleSlope, rescaleIntercept, voiDescriptorSigned, err = imageModalityTransform(
+			img.dataset, functional, pixelSigned, minInput, maxInput,
+		)
+		if err != nil {
+			return nil, err
 		}
-		if value, err := imageDecimalFrom(img.dataset, functional, tag.RescaleIntercept); err == nil {
-			rescaleIntercept = value
-		}
-		if center, width, err := imageWindowPair(img.dataset, functional); err == nil {
+		if datasetWithAnyTag(img.dataset, functional, tag.WindowCenter, tag.WindowWidth) != nil {
+			center, width, err := imageWindowPairAt(img.dataset, functional, img.windowIndex)
+			if err != nil {
+				return nil, err
+			}
 			windowCenter, windowWidth = center, width
 			hasExplicitWindow = true
 		}
-		modalityLUT, _ = imageModalityLUT(img.dataset, img.pixelData.Info.PixelRepresentation == SignedPixels)
 	}
 	if !hasExplicitWindow && img.dataset != nil && img.pixelData.Info.BitsStored != 1 {
 		minimum, maximum, err := 0.0, 0.0, fmt.Errorf("image pixel value range is unavailable")
@@ -219,20 +261,30 @@ func (img *DicomImage) GetOrCreatePipeline(frame int) render.Pipeline {
 
 	pipeline := render.NewGrayscalePipeline(rescaleSlope, rescaleIntercept, windowCenter, windowWidth, minInput, maxInput, false)
 	if img.dataset != nil {
-		functional := imageFunctionalGroupValues(img.dataset, frame)
 		if modalityLUT != nil {
 			pipeline.SetModalityLUT(modalityLUT)
 		}
-		if voiLUT, err := imageVOILUTFrom(img.dataset, functional, img.pixelData.Info.PixelRepresentation == SignedPixels); err == nil {
+		if datasetWithAnyTag(img.dataset, functional, tag.VOILUTSequence) != nil {
+			voiLUT, err := imageVOILUTFromAt(img.dataset, functional, voiDescriptorSigned, img.voiLUTIndex)
+			if err != nil {
+				return nil, err
+			}
 			pipeline.SetVOILUT(voiLUT)
 		}
 		if function, ok := imageStringFrom(img.dataset, functional, tag.VOILUTFunction); ok {
 			pipeline.SetVOILUTFunction(imagetypes.VOILUTFunction(function))
 		}
 	}
-	img.pipelines[frame] = pipeline
-
-	return pipeline
+	function := imagetypes.VOILUTFunctionLinear
+	if img.dataset != nil {
+		if value, ok := imageStringFrom(img.dataset, functional, tag.VOILUTFunction); ok {
+			function = imagetypes.VOILUTFunction(value)
+		}
+	}
+	if _, err := lut.CreateValidatedVOILUT(function, windowCenter, windowWidth); err != nil {
+		return nil, err
+	}
+	return pipeline, nil
 }
 
 // SetPipeline sets the rendering pipeline for the specified frame.
@@ -472,7 +524,11 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 	if err != nil {
 		return nil, fmt.Errorf("failed to get frame data: %w", err)
 	}
-	exporter := render.NewImageExporter(img.GetOrCreatePipeline(frame))
+	pipeline, err := img.GetOrCreatePipelineWithError(frame)
+	if err != nil {
+		return nil, fmt.Errorf("create rendering pipeline: %w", err)
+	}
+	exporter := render.NewImageExporter(pipeline)
 	switch img.pixelData.Info.SamplesPerPixel {
 	case 1:
 		photometric := monochrome2
@@ -489,6 +545,9 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 			img.pixelData.Info.PixelRepresentation == SignedPixels,
 			photometric,
 		)
+		if err == nil && img.supplementalPaletteEligible() {
+			rendered, err = img.applySupplementalPalette(rendered, frameData)
+		}
 	case 3:
 		photometric := photometricRGB
 		if img.pixelData.Info.PhotometricInterpretation != nil {
@@ -501,6 +560,8 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 			photometric,
 			int(img.pixelData.Info.PlanarConfiguration),
 		)
+	case 4:
+		rendered, err = exporter.RenderRGBAImage(frameData, int(img.Width()), int(img.Height()))
 	default:
 		return nil, fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Info.SamplesPerPixel)
 	}
@@ -513,6 +574,62 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 		rendered = img.scaleImage(rendered)
 	}
 	return rendered, nil
+}
+
+func (img *DicomImage) supplementalPaletteEligible() bool {
+	if img.dataset == nil || img.pixelData.Info.NumberOfFrames <= 1 || img.pixelData.Info.SamplesPerPixel != 1 {
+		return false
+	}
+	photometric := monochrome2
+	if img.pixelData.Info.PhotometricInterpretation != nil {
+		photometric = img.pixelData.Info.PhotometricInterpretation.Value
+	}
+	if photometric != photometricMonochrome1 && photometric != monochrome2 {
+		return false
+	}
+	presentation, ok := img.dataset.GetString(tag.PixelPresentation)
+	if !ok || strings.ToUpper(strings.TrimSpace(presentation)) != "COLOR" {
+		return false
+	}
+	return datasetWithAnyTag(img.dataset, nil,
+		tag.RedPaletteColorLookupTableDescriptor,
+		tag.EnhancedPaletteColorLookupTableSequence,
+		tag.PaletteColorLookupTableSequence,
+	) != nil
+}
+
+func (img *DicomImage) applySupplementalPalette(grayscale image.Image, frameData []byte) (image.Image, error) {
+	palette, err := buildPaletteLUT(img.dataset)
+	if err != nil {
+		return nil, fmt.Errorf("build Supplemental Palette Color LUT: %w", err)
+	}
+	bytesPerSample := img.pixelData.Info.BytesAllocated()
+	if bytesPerSample != 1 && bytesPerSample != 2 && bytesPerSample != 4 {
+		return nil, fmt.Errorf("unsupported BytesAllocated=%d for Supplemental Palette Color LUT", bytesPerSample)
+	}
+	pixelCount := int(img.Width()) * int(img.Height())
+	if len(frameData) < pixelCount*bytesPerSample {
+		return nil, fmt.Errorf("pixel data too short for Supplemental Palette Color LUT")
+	}
+	result := image.NewNRGBA(grayscale.Bounds())
+	for index := 0; index < pixelCount; index++ {
+		x := index % int(img.Width())
+		y := index / int(img.Width())
+		gray := color.GrayModel.Convert(grayscale.At(x, y)).(color.Gray)
+		result.SetNRGBA(x, y, color.NRGBA{R: gray.Y, G: gray.Y, B: gray.Y, A: 255})
+
+		value, ok := decodePixelSampleLE(frameData, index*bytesPerSample, img.pixelData.Info)
+		if !ok || value < int64(palette.first) {
+			continue
+		}
+		paletteIndex := int(value - int64(palette.first))
+		if paletteIndex >= len(palette.entries) {
+			paletteIndex = len(palette.entries) - 1
+		}
+		entry := palette.entries[paletteIndex]
+		result.SetNRGBA(x, y, color.NRGBA{R: entry.R, G: entry.G, B: entry.B, A: entry.A})
+	}
+	return result, nil
 }
 
 func (img *DicomImage) scaleImage(source image.Image) image.Image {
@@ -647,6 +764,8 @@ func (img *DicomImage) Clone() *DicomImage {
 		overlayColor:            img.overlayColor,
 		autoApplyLUTToAllFrames: img.autoApplyLUTToAllFrames,
 		grayscaleColorMaps:      make(map[int][256]imagetypes.Color32, len(img.grayscaleColorMaps)),
+		windowIndex:             img.windowIndex,
+		voiLUTIndex:             img.voiLUTIndex,
 		converter:               NewPixelDataConverter(),
 	}
 	if img.dataset != nil {
