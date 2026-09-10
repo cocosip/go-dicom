@@ -16,8 +16,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/cocosip/go-dicom/pkg/dicom/dictif"
 )
 
 // Tag represents a DICOM tag, which uniquely identifies a data element.
@@ -283,20 +281,7 @@ func Parse(s string) (*Tag, error) {
 
 		creatorStr = strings.TrimSuffix(creatorStr, ")")
 
-		// Look up private creator in dictionary if available
-		lookup := getDictionaryLookup()
-		if lookup != nil {
-			dictPC := lookup.GetPrivateCreator(creatorStr)
-			if dictPC != nil {
-				// Convert dictif.PrivateCreator to tag.PrivateCreator
-				tag.privateCreator = NewPrivateCreator(dictPC.Creator())
-			} else {
-				tag.privateCreator = NewPrivateCreator(creatorStr)
-			}
-		} else {
-			// Fallback: create a simple private creator if dictionary not initialized
-			tag.privateCreator = NewPrivateCreator(creatorStr)
-		}
+		tag.privateCreator = NewPrivateCreator(creatorStr)
 	}
 
 	return tag, nil
@@ -317,60 +302,3 @@ var (
 	// Unknown represents an unknown tag (FFFF,FFFF)
 	Unknown = New(0xFFFF, 0xFFFF)
 )
-
-// DictionaryEntry returns the dictionary entry for this tag.
-//
-// The dictionary entry contains metadata about the tag including its name,
-// keyword, value representation(s), value multiplicity, and retirement status.
-//
-// Returns nil if the tag is not found in the dictionary or if the dictionary
-// has not been initialized.
-//
-// Note: The returned interface{} should be type-asserted to *dict.Entry.
-// This design avoids circular dependencies between tag and dict packages.
-func (t *Tag) DictionaryEntry() interface{} {
-	lookup := getDictionaryLookup()
-	if lookup == nil {
-		return nil
-	}
-	return lookup.LookupTag(t)
-}
-
-// Uint32 returns the tag as a 32-bit unsigned integer.
-// This is an alias for ToUint32() for convenience.
-func (t *Tag) Uint32() uint32 {
-	return t.ToUint32()
-}
-
-// getDictionaryLookup returns the global dictionary lookup implementation.
-// This helper function wraps dictif.GlobalLookup() for convenience.
-func getDictionaryLookup() dictif.Lookup {
-	return dictif.GlobalLookup()
-}
-
-// ParseKeyword parses a tag from its DICOM keyword.
-//
-// Examples:
-//   - "PatientName" -> (0010,0010)
-//   - "Rows" -> (0028,0010)
-//   - "PixelData" -> (7FE0,0010)
-//
-// Returns an error if the keyword is not found in the dictionary or if the
-// dictionary has not been initialized.
-func ParseKeyword(keyword string) (Tag, error) {
-	lookup := getDictionaryLookup()
-	if lookup == nil {
-		return Tag{}, fmt.Errorf("keyword lookup not available (dictionary not initialized)")
-	}
-
-	dictTag := lookup.LookupKeyword(keyword)
-	if dictTag == nil {
-		return Tag{}, fmt.Errorf("keyword not found: %s", keyword)
-	}
-
-	// Convert dictif.Tag to tag.Tag
-	return Tag{
-		group:   dictTag.Group(),
-		element: dictTag.Element(),
-	}, nil
-}

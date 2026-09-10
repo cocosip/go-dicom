@@ -59,6 +59,7 @@ type Service struct {
 	config *serviceConfig
 
 	// Message tracking
+	messageIDGenerator    *dimse.MessageIDGenerator
 	pendingRequests       map[uint16]*pendingRequest
 	pendingRequestsMu     sync.RWMutex
 	activeOperations      map[uint16]*activeOperation
@@ -132,16 +133,9 @@ type Handlers struct {
 	// CStoreHandler handles C-STORE requests.
 	CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
 
-	// CFindHandler handles C-FIND requests.
-	//
-	// Deprecated: use CFindStreamHandler so results can be sent without first
-	// accumulating the complete response set in memory.
-	// Returns multiple responses (Pending + final Success/Failed).
-	CFindHandler func(context.Context, *dimse.CFindRequest) ([]*dimse.CFindResponse, error)
-
-	// CFindStreamHandler handles C-FIND requests as a streaming operation.
+	// CFindHandler handles C-FIND requests as a streaming operation.
 	// SendPending blocks until its response has entered the service send queue.
-	CFindStreamHandler func(context.Context, CFindOperation) error
+	CFindHandler func(context.Context, CFindOperation) error
 
 	// CMoveHandler handles C-MOVE requests via a CMoveOperation interface.
 	// The handler calls op.SendPending after each sub-operation completes, enabling
@@ -227,6 +221,7 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		shutdownCh:                 make(chan struct{}),
 		errCh:                      make(chan error, 1),
 		config:                     config,
+		messageIDGenerator:         dimse.NewMessageIDGenerator(),
 		pendingRequests:            make(map[uint16]*pendingRequest),
 		activeOperations:           make(map[uint16]*activeOperation),
 		inboundRequests:            make(map[uint16]*requestLifecycle),

@@ -109,7 +109,6 @@ func (e *Entry) ValueRepresentations() []*vr.VR {
 }
 
 // VRs returns the allowed VR codes as strings.
-// This method is part of the dictif.Entry interface.
 func (e *Entry) VRs() []string {
 	vrs := make([]string, len(e.valueRepresentations))
 	for i, v := range e.valueRepresentations {
@@ -119,7 +118,6 @@ func (e *Entry) VRs() []string {
 }
 
 // VM returns the value multiplicity specification as a string.
-// This method is part of the dictif.Entry interface.
 func (e *Entry) VM() string {
 	if e.valueMultiplicity == nil {
 		return ""

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 // TestCompositeByteBuffer tests the composite buffer
@@ -125,7 +125,7 @@ func TestEndianByteBuffer(t *testing.T) {
 	endianBuf := buffer.NewEndian(mem, endian.Big, 2)
 
 	t.Run("No wrapping for matching endian", func(t *testing.T) {
-		sameEndian := buffer.NewEndian(mem, endian.LocalMachine, 2)
+		sameEndian := buffer.NewEndian(mem, endian.Native(), 2)
 		// Should return the original buffer
 		if sameEndian != mem {
 			t.Error("NewEndian should return original buffer when endianness matches")

@@ -22,6 +22,7 @@ type CFindOperation interface {
 	QueryLevel() dimse.QueryRetrieveLevel
 	Identifier() *dataset.Dataset
 	SendPending(identifier *dataset.Dataset) error
+	SendPendingWithStatus(identifier *dataset.Dataset, s *status.Status) error
 	SendFinal(s *status.Status) error
 }
 
@@ -51,7 +52,17 @@ func (op *cFindOperation) QueryLevel() dimse.QueryRetrieveLevel { return op.req.
 func (op *cFindOperation) Identifier() *dataset.Dataset         { return op.req.DataDataset() }
 
 func (op *cFindOperation) SendPending(identifier *dataset.Dataset) error {
-	return op.forward(dimse.NewCFindResponseFromRequest(op.req, status.CFindPending, identifier), op.sendPending)
+	return op.SendPendingWithStatus(identifier, status.CFindPending)
+}
+
+func (op *cFindOperation) SendPendingWithStatus(identifier *dataset.Dataset, s *status.Status) error {
+	if s == nil {
+		return fmt.Errorf("C-FIND pending status is nil")
+	}
+	if !s.IsPending() {
+		return fmt.Errorf("C-FIND pending response requires a pending status, got %s", s)
+	}
+	return op.forward(dimse.NewCFindResponseFromRequest(op.req, s, identifier), op.sendPending)
 }
 
 func (op *cFindOperation) SendFinal(s *status.Status) error {

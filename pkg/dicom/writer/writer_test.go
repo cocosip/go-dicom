@@ -13,14 +13,13 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/testutil"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	bufferio "github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 const dicmPrefix = "DICM"
@@ -821,9 +820,7 @@ func BenchmarkWriteSmallDataset(b *testing.B) {
 func BenchmarkWriteMediumDataset(b *testing.B) {
 	// Create a medium dataset with 50 elements
 	ds := dataset.New()
-	for i := 0; i < 50; i++ {
-		// Use safe conversion helper to satisfy gosec
-		elem := testutil.SafeUint16FromInt(i)
+	for elem := uint16(0); elem < 50; elem++ {
 		t := tag.New(0x0010, elem)
 		_ = ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
 	}
@@ -838,9 +835,7 @@ func BenchmarkWriteMediumDataset(b *testing.B) {
 func BenchmarkWriteLargeDataset(b *testing.B) {
 	// Create a large dataset with 200 elements
 	ds := dataset.New()
-	for i := 0; i < 200; i++ {
-		// Use safe conversion helper
-		elem := testutil.SafeUint16FromInt(i % 256)
+	for elem := uint16(0); elem < 200; elem++ {
 		t := tag.New(0x0010, elem)
 		_ = ds.Add(element.NewString(t, vr.LO, []string{"TestValue"}))
 	}

@@ -17,7 +17,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
-	"github.com/cocosip/go-dicom/pkg/network/service"
 )
 
 const (
@@ -285,8 +284,8 @@ func TestNewCMoveAndCGetJobsDeriveQueryRetrieveContexts(t *testing.T) {
 	}
 }
 
-func TestManagedCMoveAndCGetJobsPropagateTerminalErrors(t *testing.T) {
-	client, mockService := setupMockClient()
+func TestManagedCMoveAndCGetJobsPropagateClientErrors(t *testing.T) {
+	client := New()
 	identifier := dataset.New()
 	moveJob, err := NewCMoveJob(dimse.QueryRetrieveLevelStudy, "MOVE_DEST", identifier, nil, nil)
 	if err != nil {
@@ -297,13 +296,11 @@ func TestManagedCMoveAndCGetJobsPropagateTerminalErrors(t *testing.T) {
 		t.Fatalf("NewCGetJob() error = %v", err)
 	}
 
-	mockService.moveTerminalErr = service.ErrRequestTimeout
-	if err := moveJob.Execute(context.Background(), client); !errors.Is(err, service.ErrRequestTimeout) {
-		t.Fatalf("C-MOVE Job Execute() error = %v, want ErrRequestTimeout", err)
+	if err := moveJob.Execute(context.Background(), client); !errors.Is(err, ErrClientNotConnected) {
+		t.Fatalf("C-MOVE Job Execute() error = %v, want ErrClientNotConnected", err)
 	}
-	mockService.getTerminalErr = service.ErrServiceClosed
-	if err := getJob.Execute(context.Background(), client); !errors.Is(err, service.ErrServiceClosed) {
-		t.Fatalf("C-GET Job Execute() error = %v, want ErrServiceClosed", err)
+	if err := getJob.Execute(context.Background(), client); !errors.Is(err, ErrClientNotConnected) {
+		t.Fatalf("C-GET Job Execute() error = %v, want ErrClientNotConnected", err)
 	}
 }
 

@@ -40,6 +40,10 @@ var (
 	// ErrMessageTooLarge indicates a message exceeds the maximum PDU length.
 	ErrMessageTooLarge = errors.New("message exceeds maximum PDU length")
 
+	// ErrTranscodeManagerUnavailable indicates that C-STORE needs Dataset
+	// transcoding but the Service was not configured with a transcode Manager.
+	ErrTranscodeManagerUnavailable = errors.New("C-STORE transcode manager unavailable")
+
 	// ErrInvalidPDU indicates a received PDU is invalid.
 	ErrInvalidPDU = errors.New("invalid PDU")
 
@@ -49,10 +53,6 @@ var (
 	// ErrCFindOperationCompleted indicates that a C-FIND handler attempted to
 	// send another response after its final response.
 	ErrCFindOperationCompleted = errors.New("C-FIND operation already completed")
-
-	// ErrCFindHandlerConflict indicates that both legacy and streaming C-FIND
-	// handlers were configured for the same service.
-	ErrCFindHandlerConflict = errors.New("C-FIND stream and legacy handlers cannot both be configured")
 
 	// ErrHandlerShutdownTimeout indicates that Service.Close stopped waiting
 	// because an inbound request handler did not exit before the configured

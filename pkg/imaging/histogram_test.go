@@ -18,7 +18,7 @@ func TestHistogramCountsAndClearsBins(t *testing.T) {
 	}
 	histogram.Clear(2)
 	if histogram.Total() != 3 || histogram.Count(2) != 0 {
-		t.Fatalf("Clear(2): total=%d count=%d", histogram.Total(), histogram.Count(2))
+		 t.Fatalf("Clear(2): total=%d count=%d", histogram.Total(), histogram.Count(2))
 	}
 }
 

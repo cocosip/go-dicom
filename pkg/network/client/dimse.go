@@ -10,6 +10,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
@@ -235,66 +236,19 @@ func (c *Client) cfindWithRequest(ctx context.Context, req *dimse.CFindRequest) 
 	}
 
 	// Send request
-	respCh, terminalErrCh, err := sendCFind(ctx, svc, req)
+	eventCh, err := sendCFind(ctx, svc, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send C-FIND: %w", err)
 	}
 
-	// Collect all responses
 	var results []*dataset.Dataset
-
-	for {
-		select {
-		case resp, ok := <-respCh:
-			if !ok {
-				if contextErr := progressiveContextError(ctx, svc, req, false); contextErr != nil {
-					return results, contextErr
-				}
-				if err := receiveTerminalError(terminalErrCh); err != nil {
-					return results, err
-				}
-				// Channel closed after a final response.
-				return results, nil
-			}
-
-			// Pending status - more results coming
-			if resp.IsPending() {
-				if contextErr := progressiveContextError(ctx, svc, req, false); contextErr != nil {
-					return results, contextErr
-				}
-				// Extract identifier dataset
-				if resp.HasIdentifier() {
-					identifier := resp.DataDataset()
-					if identifier != nil {
-						results = append(results, identifier)
-					}
-				}
-				continue
-			}
-
-			// Success status - final response
-			return results, cFindFinalStatusError(resp.StatusCode(), false)
-
-		case terminalErr, ok := <-terminalErrCh:
-			if ctx.Err() != nil {
-				if final, finalErr := bufferedCFindFinal(respCh, false); final {
-					return results, finalErr
-				}
-			}
-			if contextErr := progressiveContextError(ctx, svc, req, false); contextErr != nil {
-				return results, contextErr
-			}
-			if ok && terminalErr != nil {
-				return results, terminalErr
-			}
-			terminalErrCh = nil
-		case <-ctx.Done():
-			if final, finalErr := bufferedCFindFinal(respCh, false); final {
-				return results, finalErr
-			}
-			return results, progressiveContextError(ctx, svc, req, false)
-		}
-	}
+	err = consumeCFindEvents(ctx, eventCh, func(identifier *dataset.Dataset) bool {
+		results = append(results, identifier)
+		return true
+	}, func() error {
+		return sendAutomaticCancel(ctx, svc, req)
+	})
+	return results, err
 }
 
 // CFindWithCallback sends a C-FIND request and calls the callback for each result.
@@ -334,67 +288,68 @@ func (c *Client) cfindWithRequestAndCallback(ctx context.Context, req *dimse.CFi
 	}
 
 	// Send request - returns channel of responses
-	respCh, terminalErrCh, err := sendCFind(ctx, svc, req)
+	eventCh, err := sendCFind(ctx, svc, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-FIND: %w", err)
 	}
 
-	// Process responses
+	return consumeCFindEvents(ctx, eventCh, callback, func() error {
+		return sendAutomaticCancel(ctx, svc, req)
+	})
+}
+
+func consumeCFindEvents(
+	ctx context.Context,
+	eventCh <-chan service.ResponseEvent[*dimse.CFindResponse],
+	callback func(*dataset.Dataset) bool,
+	cancelRequest func() error,
+) error {
 	cancelRequested := false
 	for {
 		select {
-		case resp, ok := <-respCh:
+		case event, ok := <-eventCh:
 			if !ok {
-				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
 					return contextErr
-				}
-				if err := receiveTerminalError(terminalErrCh); err != nil {
-					return err
 				}
 				if cancelRequested {
 					return fmt.Errorf("C-FIND cancellation ended without a final response")
 				}
-				// Channel closed after a final response.
-				return nil
+				return fmt.Errorf("C-FIND event stream closed without a final response or terminal error")
 			}
-
-			// Pending status - more results coming
-			if resp.IsPending() {
-				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+			if event.Response != nil && event.Err != nil {
+				return fmt.Errorf("C-FIND event contains both response and error")
+			}
+			if event.Err != nil {
+				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
 					return contextErr
 				}
-				if !cancelRequested && resp.HasIdentifier() {
-					identifier := resp.DataDataset()
-					if identifier != nil && !callback(identifier) {
-						if err := sendAutomaticCancel(ctx, svc, req); err != nil {
-							return fmt.Errorf("failed to send C-CANCEL for C-FIND: %w", err)
-						}
-						cancelRequested = true
-					}
-				}
-				continue
+				return event.Err
 			}
-
-			return cFindFinalStatusError(resp.StatusCode(), cancelRequested)
-
-		case terminalErr, ok := <-terminalErrCh:
-			if ctx.Err() != nil {
-				if final, finalErr := bufferedCFindFinal(respCh, cancelRequested); final {
-					return finalErr
-				}
+			response := event.Response
+			if response == nil {
+				return fmt.Errorf("C-FIND event contains neither response nor error")
 			}
-			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
+			if !response.IsPending() {
+				return cFindFinalStatusError(response.StatusCode(), cancelRequested)
+			}
+			if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
 				return contextErr
 			}
-			if ok && terminalErr != nil {
-				return terminalErr
+			if !cancelRequested && response.HasIdentifier() {
+				identifier := response.DataDataset()
+				if identifier != nil && !callback(identifier) {
+					if err := cancelRequest(); err != nil {
+						return fmt.Errorf("failed to send C-CANCEL for C-FIND: %w", err)
+					}
+					cancelRequested = true
+				}
 			}
-			terminalErrCh = nil
 		case <-ctx.Done():
-			if final, finalErr := bufferedCFindFinal(respCh, cancelRequested); final {
+			if final, finalErr := bufferedCFindFinal(eventCh, cancelRequested); final {
 				return finalErr
 			}
-			return progressiveContextError(ctx, svc, req, cancelRequested)
+			return eventContextError(ctx, cancelRequest, cancelRequested)
 		}
 	}
 }
@@ -406,40 +361,31 @@ func cFindFinalStatusError(statusCode uint16, cancelRequested bool) error {
 	return fmt.Errorf("C-FIND failed with status: 0x%04X", statusCode)
 }
 
-func bufferedCFindFinal(respCh <-chan *dimse.CFindResponse, cancelRequested bool) (bool, error) {
+func bufferedCFindFinal(eventCh <-chan service.ResponseEvent[*dimse.CFindResponse], cancelRequested bool) (bool, error) {
 	select {
-	case resp, ok := <-respCh:
-		if ok && !resp.IsPending() {
-			return true, cFindFinalStatusError(resp.StatusCode(), cancelRequested)
+	case event, ok := <-eventCh:
+		if !ok {
+			return true, fmt.Errorf("C-FIND event stream closed without a final response or terminal error")
+		}
+		if event.Err != nil {
+			return true, event.Err
+		}
+		if event.Response == nil {
+			return true, fmt.Errorf("C-FIND event contains neither response nor error")
+		}
+		if !event.Response.IsPending() {
+			return true, cFindFinalStatusError(event.Response.StatusCode(), cancelRequested)
 		}
 	default:
 	}
 	return false, nil
 }
 
-func sendCFind(ctx context.Context, svc serviceInterface, req *dimse.CFindRequest) (<-chan *dimse.CFindResponse, <-chan error, error) {
-	if errorService, ok := svc.(cFindErrorService); ok {
-		return errorService.SendCFindWithError(ctx, req)
-	}
-	responses, err := svc.SendCFind(ctx, req)
-	return responses, nil, err
+func sendCFind(ctx context.Context, svc *service.Service, req *dimse.CFindRequest) (<-chan service.ResponseEvent[*dimse.CFindResponse], error) {
+	return svc.SendCFind(ctx, req)
 }
 
-func receiveTerminalError(errors <-chan error) error {
-	if errors == nil {
-		return nil
-	}
-	select {
-	case err, ok := <-errors:
-		if ok {
-			return err
-		}
-	default:
-	}
-	return nil
-}
-
-func sendAutomaticCancel(ctx context.Context, svc serviceInterface, req dimse.Request) error {
+func sendAutomaticCancel(ctx context.Context, svc *service.Service, req dimse.Request) error {
 	if req.MessageID() == 0 {
 		return fmt.Errorf("cannot send C-CANCEL without an assigned message ID")
 	}
@@ -449,17 +395,6 @@ func sendAutomaticCancel(ctx context.Context, svc serviceInterface, req dimse.Re
 	cancelCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), automaticCancelTimeout)
 	defer cancel()
 	return svc.SendCCancel(cancelCtx, req.MessageID(), req.PresentationContextID())
-}
-
-func progressiveContextError(ctx context.Context, svc serviceInterface, req dimse.Request, cancelSent bool) error {
-	err := ctx.Err()
-	if err == nil {
-		return nil
-	}
-	if !cancelSent {
-		_ = sendAutomaticCancel(ctx, svc, req)
-	}
-	return err
 }
 
 // CStoreWithPriority stores a dataset with a specific priority.
@@ -569,12 +504,6 @@ func (c *Client) CStoreMultiple(ctx context.Context, datasets []*dataset.Dataset
 	return len(datasets), nil
 }
 
-// Ping sends a C-ECHO request to verify the connection is still alive.
-// This is an alias for CEcho with a more intuitive name.
-func (c *Client) Ping(ctx context.Context) error {
-	return c.CEcho(ctx)
-}
-
 // CMoveCallback is called for each C-MOVE response.
 // Return false to stop receiving updates.
 type CMoveCallback func(remaining, completed, failed, warning uint16) bool
@@ -619,72 +548,25 @@ func (c *Client) CMove(ctx context.Context, level dimse.QueryRetrieveLevel, move
 	req := dimse.NewCMoveRequest(level, moveDestination, identifier)
 
 	// Send request - returns channel of responses
-	respCh, terminalErrCh, err := sendCMove(ctx, svc, req)
+	eventCh, err := sendCMove(ctx, svc, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-MOVE: %w", err)
 	}
 
-	// Process responses
-	cancelRequested := false
-	for {
-		select {
-		case resp, ok := <-respCh:
-			if !ok {
-				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-					return contextErr
-				}
-				if err := receiveTerminalError(terminalErrCh); err != nil {
-					return err
-				}
-				if cancelRequested {
-					return fmt.Errorf("C-MOVE cancellation ended without a final response")
-				}
-				return nil
-			}
+	return consumeCMoveEvents(ctx, eventCh, callback, func() error {
+		return sendAutomaticCancel(ctx, svc, req)
+	})
+}
 
-			// Pending status - sub-operations in progress
-			if resp.IsPending() {
-				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-					return contextErr
-				}
-				if !cancelRequested && callback != nil && resp.HasSubOperationCounts() {
-					if !callback(
-						resp.NumberOfRemainingSubOperations(),
-						resp.NumberOfCompletedSubOperations(),
-						resp.NumberOfFailedSubOperations(),
-						resp.NumberOfWarningSubOperations(),
-					) {
-						if err := sendAutomaticCancel(ctx, svc, req); err != nil {
-							return fmt.Errorf("failed to send C-CANCEL for C-MOVE: %w", err)
-						}
-						cancelRequested = true
-					}
-				}
-				continue
-			}
-
-			return cMoveFinalStatusError(resp.StatusCode(), cancelRequested)
-
-		case terminalErr, ok := <-terminalErrCh:
-			if ctx.Err() != nil {
-				if final, finalErr := bufferedCMoveFinal(respCh, cancelRequested); final {
-					return finalErr
-				}
-			}
-			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-				return contextErr
-			}
-			if ok && terminalErr != nil {
-				return terminalErr
-			}
-			terminalErrCh = nil
-		case <-ctx.Done():
-			if final, finalErr := bufferedCMoveFinal(respCh, cancelRequested); final {
-				return finalErr
-			}
-			return progressiveContextError(ctx, svc, req, cancelRequested)
-		}
-	}
+func consumeCMoveEvents(
+	ctx context.Context,
+	eventCh <-chan service.ResponseEvent[*dimse.CMoveResponse],
+	callback CMoveCallback,
+	cancelRequest func() error,
+) error {
+	return consumeSubOperationEvents(
+		ctx, "C-MOVE", eventCh, callback, cMoveFinalStatusError, cancelRequest,
+	)
 }
 
 func cMoveFinalStatusError(statusCode uint16, cancelRequested bool) error {
@@ -695,23 +577,8 @@ func cMoveFinalStatusError(statusCode uint16, cancelRequested bool) error {
 	return fmt.Errorf("C-MOVE failed with status: 0x%04X", statusCode)
 }
 
-func bufferedCMoveFinal(respCh <-chan *dimse.CMoveResponse, cancelRequested bool) (bool, error) {
-	select {
-	case resp, ok := <-respCh:
-		if ok && !resp.IsPending() {
-			return true, cMoveFinalStatusError(resp.StatusCode(), cancelRequested)
-		}
-	default:
-	}
-	return false, nil
-}
-
-func sendCMove(ctx context.Context, svc serviceInterface, req *dimse.CMoveRequest) (<-chan *dimse.CMoveResponse, <-chan error, error) {
-	if errorService, ok := svc.(cMoveErrorService); ok {
-		return errorService.SendCMoveWithError(ctx, req)
-	}
-	responses, err := svc.SendCMove(ctx, req)
-	return responses, nil, err
+func sendCMove(ctx context.Context, svc *service.Service, req *dimse.CMoveRequest) (<-chan service.ResponseEvent[*dimse.CMoveResponse], error) {
+	return svc.SendCMove(ctx, req)
 }
 
 // CGetCallback is called for each C-GET response with sub-operation progress.
@@ -756,72 +623,25 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 	req := dimse.NewCGetRequest(level, identifier)
 
 	// Send request - returns channel of responses
-	respCh, terminalErrCh, err := sendCGet(ctx, svc, req)
+	eventCh, err := sendCGet(ctx, svc, req)
 	if err != nil {
 		return fmt.Errorf("failed to send C-GET: %w", err)
 	}
 
-	// Process responses
-	cancelRequested := false
-	for {
-		select {
-		case resp, ok := <-respCh:
-			if !ok {
-				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-					return contextErr
-				}
-				if err := receiveTerminalError(terminalErrCh); err != nil {
-					return err
-				}
-				if cancelRequested {
-					return fmt.Errorf("C-GET cancellation ended without a final response")
-				}
-				return nil
-			}
+	return consumeCGetEvents(ctx, eventCh, callback, func() error {
+		return sendAutomaticCancel(ctx, svc, req)
+	})
+}
 
-			// Pending status - sub-operations in progress
-			if resp.IsPending() {
-				if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-					return contextErr
-				}
-				if !cancelRequested && callback != nil && resp.HasSubOperationCounts() {
-					if !callback(
-						resp.NumberOfRemainingSubOperations(),
-						resp.NumberOfCompletedSubOperations(),
-						resp.NumberOfFailedSubOperations(),
-						resp.NumberOfWarningSubOperations(),
-					) {
-						if err := sendAutomaticCancel(ctx, svc, req); err != nil {
-							return fmt.Errorf("failed to send C-CANCEL for C-GET: %w", err)
-						}
-						cancelRequested = true
-					}
-				}
-				continue
-			}
-
-			return cGetFinalStatusError(resp.StatusCode(), cancelRequested)
-
-		case terminalErr, ok := <-terminalErrCh:
-			if ctx.Err() != nil {
-				if final, finalErr := bufferedCGetFinal(respCh, cancelRequested); final {
-					return finalErr
-				}
-			}
-			if contextErr := progressiveContextError(ctx, svc, req, cancelRequested); contextErr != nil {
-				return contextErr
-			}
-			if ok && terminalErr != nil {
-				return terminalErr
-			}
-			terminalErrCh = nil
-		case <-ctx.Done():
-			if final, finalErr := bufferedCGetFinal(respCh, cancelRequested); final {
-				return finalErr
-			}
-			return progressiveContextError(ctx, svc, req, cancelRequested)
-		}
-	}
+func consumeCGetEvents(
+	ctx context.Context,
+	eventCh <-chan service.ResponseEvent[*dimse.CGetResponse],
+	callback CGetCallback,
+	cancelRequest func() error,
+) error {
+	return consumeSubOperationEvents(
+		ctx, "C-GET", eventCh, callback, cGetFinalStatusError, cancelRequest,
+	)
 }
 
 func cGetFinalStatusError(statusCode uint16, cancelRequested bool) error {
@@ -832,21 +652,116 @@ func cGetFinalStatusError(statusCode uint16, cancelRequested bool) error {
 	return fmt.Errorf("C-GET failed with status: 0x%04X", statusCode)
 }
 
-func bufferedCGetFinal(respCh <-chan *dimse.CGetResponse, cancelRequested bool) (bool, error) {
+type subOperationResponse interface {
+	dimse.Response
+	*dimse.CMoveResponse | *dimse.CGetResponse
+	IsPending() bool
+	StatusCode() uint16
+	HasSubOperationCounts() bool
+	NumberOfRemainingSubOperations() uint16
+	NumberOfCompletedSubOperations() uint16
+	NumberOfFailedSubOperations() uint16
+	NumberOfWarningSubOperations() uint16
+}
+
+func consumeSubOperationEvents[T subOperationResponse](
+	ctx context.Context,
+	operation string,
+	eventCh <-chan service.ResponseEvent[T],
+	callback func(uint16, uint16, uint16, uint16) bool,
+	finalStatus func(uint16, bool) error,
+	cancelRequest func() error,
+) error {
+	cancelRequested := false
+	for {
+		select {
+		case event, ok := <-eventCh:
+			if !ok {
+				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+					return contextErr
+				}
+				if cancelRequested {
+					return fmt.Errorf("%s cancellation ended without a final response", operation)
+				}
+				return fmt.Errorf("%s event stream closed without a final response or terminal error", operation)
+			}
+			if event.Response != nil && event.Err != nil {
+				return fmt.Errorf("%s event contains both response and error", operation)
+			}
+			if event.Err != nil {
+				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+					return contextErr
+				}
+				return event.Err
+			}
+			response := event.Response
+			if response == nil {
+				return fmt.Errorf("%s event contains neither response nor error", operation)
+			}
+			if !response.IsPending() {
+				return finalStatus(response.StatusCode(), cancelRequested)
+			}
+			if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+				return contextErr
+			}
+			if !cancelRequested && callback != nil && response.HasSubOperationCounts() {
+				if !callback(
+					response.NumberOfRemainingSubOperations(),
+					response.NumberOfCompletedSubOperations(),
+					response.NumberOfFailedSubOperations(),
+					response.NumberOfWarningSubOperations(),
+				) {
+					if err := cancelRequest(); err != nil {
+						return fmt.Errorf("failed to send C-CANCEL for %s: %w", operation, err)
+					}
+					cancelRequested = true
+				}
+			}
+		case <-ctx.Done():
+			if final, finalErr := bufferedSubOperationFinal(operation, eventCh, cancelRequested, finalStatus); final {
+				return finalErr
+			}
+			return eventContextError(ctx, cancelRequest, cancelRequested)
+		}
+	}
+}
+
+func bufferedSubOperationFinal[T subOperationResponse](
+	operation string,
+	eventCh <-chan service.ResponseEvent[T],
+	cancelRequested bool,
+	finalStatus func(uint16, bool) error,
+) (bool, error) {
 	select {
-	case resp, ok := <-respCh:
-		if ok && !resp.IsPending() {
-			return true, cGetFinalStatusError(resp.StatusCode(), cancelRequested)
+	case event, ok := <-eventCh:
+		if !ok {
+			return true, fmt.Errorf("%s event stream closed without a final response or terminal error", operation)
+		}
+		if event.Err != nil {
+			return true, event.Err
+		}
+		if event.Response == nil {
+			return true, fmt.Errorf("%s event contains neither response nor error", operation)
+		}
+		if !event.Response.IsPending() {
+			return true, finalStatus(event.Response.StatusCode(), cancelRequested)
 		}
 	default:
 	}
 	return false, nil
 }
 
-func sendCGet(ctx context.Context, svc serviceInterface, req *dimse.CGetRequest) (<-chan *dimse.CGetResponse, <-chan error, error) {
-	if errorService, ok := svc.(cGetErrorService); ok {
-		return errorService.SendCGetWithError(ctx, req)
+func sendCGet(ctx context.Context, svc *service.Service, req *dimse.CGetRequest) (<-chan service.ResponseEvent[*dimse.CGetResponse], error) {
+	return svc.SendCGet(ctx, req)
+}
+
+func eventContextError(ctx context.Context, cancelRequest func() error, cancelSent bool) error {
+	err := ctx.Err()
+	if err == nil {
+		return nil
 	}
-	responses, err := svc.SendCGet(ctx, req)
-	return responses, nil, err
+	if !cancelSent {
+		_ = cancelRequest()
+	}
+	return err
 }

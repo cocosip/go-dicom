@@ -21,7 +21,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
-	"github.com/cocosip/go-dicom/pkg/imaging"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 const testMonochrome1 = "MONOCHROME1"
@@ -118,11 +118,11 @@ func TestDicomGeneratorCreatesClassicDerivedSeriesAndRoundTrips(t *testing.T) {
 		if parsed.TransferSyntax != transfer.ExplicitVRLittleEndian {
 			t.Fatalf("parsed output %d transfer syntax = %v", index, parsed.TransferSyntax)
 		}
-		pixels, err := imaging.CreatePixelData(parsed.Dataset)
+		pixels, err := pixeldata.FromDataset(parsed.Dataset)
 		if err != nil {
-			t.Fatalf("CreatePixelData(parsed output %d) error = %v", index, err)
+			t.Fatalf("pixeldata.FromDataset(parsed output %d) error = %v", index, err)
 		}
-		first, err := pixels.GetSample(0, 0, 0, 0)
+		first, err := pixels.Sample(0, 0, 0, 0)
 		if err != nil {
 			t.Fatalf("GetSample(parsed output %d) error = %v", index, err)
 		}

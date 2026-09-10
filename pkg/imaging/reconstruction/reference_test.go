@@ -44,7 +44,7 @@ func TestEnhancedMRFixtureMatchesFoDicomReferenceAndRoundTrips(t *testing.T) {
 		if !closeReference(frameGeometry.TopLeft.Z, reference.z, 1e-9) {
 			t.Fatalf("frame %d top-left Z = %.12g, want %.12g", reference.frame, frameGeometry.TopLeft.Z, reference.z)
 		}
-		stored, err := images[reference.frame].pixelData.GetSample(images[reference.frame].pixelFrame, frameGeometry.Columns/2, frameGeometry.Rows/2, 0)
+		stored, err := images[reference.frame].pixelData.Sample(images[reference.frame].pixelFrame, frameGeometry.Columns/2, frameGeometry.Rows/2, 0)
 		if err != nil || stored != reference.centerStored {
 			t.Fatalf("frame %d stored center sample = %v, error %v; want fo-dicom reference %v", reference.frame, stored, err, reference.centerStored)
 		}

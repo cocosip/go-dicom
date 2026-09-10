@@ -21,9 +21,6 @@ type PathSegment struct {
 // Path identifies a location in a Dataset hierarchy.
 type Path []PathSegment
 
-// ValidationPathSegment is retained as an alias for source compatibility.
-type ValidationPathSegment = PathSegment
-
 // ClonePath returns an independent path snapshot, including mutable Tags and
 // index values.
 func ClonePath(path Path) Path {

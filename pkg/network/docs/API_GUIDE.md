@@ -48,6 +48,7 @@ c := client.New(
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association 协商超时 |
 | `WithImplementationClassUID(uid)` | string | "1.2.826.0.1.3680043.10.854" | 实现类 UID |
 | `WithImplementationVersionName(name)` | string | "GO-DICOM-1.0" | 实现版本名称 |
+| `WithTransferSyntaxRegistry(registry)` | `*transfer.Registry` | 独立标准目录视图 | 显式注入自定义 Transfer Syntax；未注册时仍可解析标准和未知语法 |
 
 ### 添加 Presentation Context
 
@@ -73,6 +74,11 @@ if err := c.AddPresentationContext(
     "1.2.840.10008.1.2.1",
 ); err != nil { return err }
 ```
+
+Transfer Syntax 标准条目来自不可变目录。需要应用自定义语法时，先在
+`transfer.NewRegistry()` 返回的实例上调用 `Register` 或 `Replace`，再通过
+`WithTransferSyntaxRegistry` 注入；`transfer.NewBuilder(...).Build()` 只构造对象，不会修改任何
+进程级状态。
 
 **常用 SOP Class UIDs**:
 
@@ -121,11 +127,6 @@ if err := c.Abort(ctx); err != nil {
 // 基本用法
 if err := c.CEcho(ctx); err != nil {
     return fmt.Errorf("C-ECHO failed: %w", err)
-}
-
-// 别名：Ping
-if err := c.Ping(ctx); err != nil {
-    return fmt.Errorf("ping failed: %w", err)
 }
 ```
 
@@ -377,29 +378,23 @@ srv.SetCStoreHandler(func(ctx context.Context, req *dimse.CStoreRequest) (*dimse
 #### C-FIND Handler
 
 ```go
-srv.SetCFindHandler(func(ctx context.Context, req *dimse.CFindRequest) ([]*dimse.CFindResponse, error) {
-    query := req.DataDataset()
-    level := req.QueryRetrieveLevel()
+srv.SetCFindHandler(func(ctx context.Context, op service.CFindOperation) error {
+    query := op.Identifier()
+    level := op.QueryLevel()
 
     log.Printf("C-FIND query at %s level\n", level)
 
     // 在数据库中查询
     results := searchInDatabase(query, level)
 
-    // 构建响应
-    responses := make([]*dimse.CFindResponse, 0, len(results)+1)
-
-    // Pending responses（每个结果一个）
+    // 每个匹配项立即发送一个 Pending response，并接受发送队列背压。
     for _, result := range results {
-        resp := dimse.NewCFindResponsePending(req, result)
-        responses = append(responses, resp)
+        if err := op.SendPending(result); err != nil {
+            return err
+        }
     }
 
-    // Final success response
-    finalResp := dimse.NewCFindResponseSuccess(req)
-    responses = append(responses, finalResp)
-
-    return responses, nil
+    return op.SendFinal(status.Success)
 })
 ```
 

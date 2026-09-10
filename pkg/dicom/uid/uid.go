@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/parseable"
 )
@@ -87,10 +86,6 @@ type UID struct {
 var (
 	// RootUID is the base UID for generating new UIDs
 	RootUID = "1.2.826.0.1.3680043.2.1343.1"
-
-	// UID registry
-	uidRegistry = make(map[string]*UID)
-	uidMutex    sync.RWMutex
 
 	// UID validation regex: digits and dots, starting and ending with digit
 	uidPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
@@ -192,28 +187,15 @@ func (u *UID) Equals(other *UID) bool {
 	return u.uid == other.uid
 }
 
-// Register registers a UID in the global registry.
-func Register(u *UID) {
-	uidMutex.Lock()
-	defer uidMutex.Unlock()
-	uidRegistry[u.uid] = u
-}
-
 // Parse parses a UID string and returns the corresponding UID.
 //
-// If the UID is registered, returns the registered instance.
-// Otherwise, creates a new UID with the given name and type.
+// If the UID is in the immutable standard catalog, Parse returns its canonical
+// instance. Otherwise, it creates a UID with the supplied name and type. Use a
+// Registry when application-defined UIDs must be resolved.
 func Parse(s string, name string, uidType Type) *UID {
-	// Trim trailing spaces and null characters
-	s = strings.TrimRight(s, " \x00")
-
-	// Look up in registry
-	uidMutex.RLock()
-	registered, found := uidRegistry[s]
-	uidMutex.RUnlock()
-
-	if found {
-		return registered
+	s = normalize(s)
+	if standard, found := resolveStandard(s); found {
+		return standard
 	}
 
 	// Create new UID
@@ -232,6 +214,11 @@ func MustParse(s string) *UID {
 func (u *UID) Parse(s string) error {
 	if !IsValid(s) {
 		return fmt.Errorf("invalid UID: %s", s)
+	}
+	if u != nil {
+		if canonical, found := resolveStandard(u.uid); found && canonical == u {
+			return fmt.Errorf("cannot modify standard UID %s", u.UID())
+		}
 	}
 	*u = *Parse(s, "Unknown", TypeUnknown)
 	return nil
@@ -279,14 +266,6 @@ func Append(baseUID *UID, seq int64) *UID {
 	return New(newUID, "SOP Instance UID", TypeSOPInstance, false)
 }
 
-// Enumerate returns all registered UIDs.
-func Enumerate() []*UID {
-	uidMutex.RLock()
-	defer uidMutex.RUnlock()
-
-	result := make([]*UID, 0, len(uidRegistry))
-	for _, u := range uidRegistry {
-		result = append(result, u)
-	}
-	return result
+func normalize(value string) string {
+	return strings.TrimRight(value, " \x00")
 }

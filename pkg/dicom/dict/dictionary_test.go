@@ -12,6 +12,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
+var _ dict.Lookup = (*dict.Dictionary)(nil)
+
 const (
 	testKeywordPatientName      = "PatientName"
 	testKeywordStudyInstanceUID = "StudyInstanceUID"
@@ -235,44 +237,31 @@ func TestDefaultDictionary(t *testing.T) {
 	}
 }
 
-func TestTagDictionaryEntryIntegration(t *testing.T) {
+func TestDefaultDictionaryLookup(t *testing.T) {
 	// The default dictionary should already have PatientName entry loaded from generated data
 	testTag := tag.New(0x0010, 0x0010)
 
-	// Now use Tag.DictionaryEntry() method to look it up
-	dictEntry := testTag.DictionaryEntry()
+	dictEntry := dict.Default().Lookup(testTag)
 
 	if dictEntry == nil {
-		t.Fatal("Tag.DictionaryEntry() returned nil")
+		t.Fatal("Default().Lookup() returned nil")
 	}
 
-	// Type assert to *dict.Entry
-	e, ok := dictEntry.(*dict.Entry)
-	if !ok {
-		t.Fatalf("Tag.DictionaryEntry() returned %T, want *dict.Entry", dictEntry)
+	if dictEntry.Name() != testNamePatientNameDICOM {
+		t.Errorf("Entry.Name() = %q, want %q", dictEntry.Name(), testNamePatientNameDICOM)
 	}
-
-	if e.Name() != testNamePatientNameDICOM {
-		t.Errorf("Entry.Name() = %q, want %q", e.Name(), testNamePatientNameDICOM)
-	}
-	if e.Keyword() != testKeywordPatientName {
-		t.Errorf("Entry.Keyword() = %q, want %q", e.Keyword(), testKeywordPatientName)
+	if dictEntry.Keyword() != testKeywordPatientName {
+		t.Errorf("Entry.Keyword() = %q, want %q", dictEntry.Keyword(), testKeywordPatientName)
 	}
 }
 
-func TestTagDictionaryEntryNotFound(t *testing.T) {
+func TestDefaultDictionaryLookupNotFound(t *testing.T) {
 	// Create a tag that's not in the dictionary
 	unknownTag := tag.New(0xEEEE, 0xEEEE)
 
-	dictEntry := unknownTag.DictionaryEntry()
-
-	// Should return nil for tags not in the dictionary
-	// Note: dictEntry might be a typed nil (*dict.Entry)(nil), so we need to check carefully
+	dictEntry := dict.Default().Lookup(unknownTag)
 	if dictEntry != nil {
-		// Try to type assert - if successful but nil, that's OK
-		if e, ok := dictEntry.(*dict.Entry); ok && e != nil {
-			t.Errorf("Tag.DictionaryEntry() for unknown tag returned %v, want nil", dictEntry)
-		}
+		t.Errorf("Default().Lookup() for unknown tag returned %v, want nil", dictEntry)
 	}
 }
 

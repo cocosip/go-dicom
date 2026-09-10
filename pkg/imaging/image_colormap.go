@@ -7,11 +7,11 @@ import (
 	"image"
 	"image/color"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 )
 
 // SetGrayscaleColorMap applies a 256-entry color map to rendered grayscale values.
-func (img *DicomImage) SetGrayscaleColorMap(colorMap [256]imagetypes.Color32) {
+func (img *DicomImage) SetGrayscaleColorMap(colorMap [256]colorconv.Color32) {
 	from, to := img.lutFrameRange()
 	img.mu.Lock()
 	defer img.mu.Unlock()
@@ -21,7 +21,7 @@ func (img *DicomImage) SetGrayscaleColorMap(colorMap [256]imagetypes.Color32) {
 }
 
 // GrayscaleColorMap returns the current frame color map and whether one is set.
-func (img *DicomImage) GrayscaleColorMap() ([256]imagetypes.Color32, bool) {
+func (img *DicomImage) GrayscaleColorMap() ([256]colorconv.Color32, bool) {
 	img.mu.RLock()
 	defer img.mu.RUnlock()
 	colorMap, ok := img.grayscaleColorMaps[img.currentFrame]

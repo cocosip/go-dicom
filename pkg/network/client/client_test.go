@@ -12,8 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
+	"github.com/cocosip/go-dicom/pkg/network/service"
 )
 
 const verificationSOPClassUID = "1.2.840.10008.1.1"
@@ -50,6 +54,28 @@ func TestNew(t *testing.T) {
 	}
 	if opts.AssociationTimeout != 10*time.Second {
 		t.Errorf("Expected AssociationTimeout 10s, got %v", opts.AssociationTimeout)
+	}
+	if opts.TranscodeManager == nil {
+		t.Fatal("default client has no transcode Manager")
+	}
+}
+
+func TestNewUsesConfiguredTranscodeManager(t *testing.T) {
+	manager, err := transcode.NewManager(codec.NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := New(WithTranscodeManager(manager))
+	if client.GetConfig().TranscodeManager != manager {
+		t.Fatal("New did not retain the configured transcode Manager")
+	}
+}
+
+func TestNewUsesConfiguredTransferSyntaxRegistry(t *testing.T) {
+	registry := transfer.NewRegistry()
+	client := New(WithTransferSyntaxRegistry(registry))
+	if client.GetConfig().TransferSyntaxRegistry != registry {
+		t.Fatal("New did not retain the configured Transfer Syntax Registry")
 	}
 }
 
@@ -530,8 +556,12 @@ func TestConnectRejectsConcurrentAttemptAndCloseCancelsConnectingAttempt(t *test
 
 func TestHandleServiceClosedOnlyClearsCurrentSession(t *testing.T) {
 	client := New()
-	current := &mockServiceForDIMSE{}
-	old := &mockServiceForDIMSE{}
+	current := service.NewService(nil, nil)
+	old := service.NewService(nil, nil)
+	t.Cleanup(func() {
+		_ = current.Close()
+		_ = old.Close()
+	})
 	client.mu.Lock()
 	client.service = current
 	client.assoc = &association.Association{}

@@ -6,6 +6,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"strings"
@@ -15,15 +16,30 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
+
+func newServiceTranscodeManager(t *testing.T, codecs ...codec.Codec) *transcode.Manager {
+	t.Helper()
+	registry := codec.NewRegistry()
+	for _, registered := range codecs {
+		if _, err := registry.Replace(registered); err != nil {
+			t.Fatalf("Registry.Replace() error = %v", err)
+		}
+	}
+	manager, err := transcode.NewManager(registry)
+	if err != nil {
+		t.Fatalf("transcode.NewManager() error = %v", err)
+	}
+	return manager
+}
 
 func TestEncodeDIMSEMessage(t *testing.T) {
 	// Create a C-ECHO request
@@ -237,7 +253,10 @@ func TestSendMessageTranscodesCStoreToAcceptedTransferSyntax(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := NewService(conn, assoc,
+		WithAssociationRequestor(true),
+		WithTranscodeManager(newServiceTranscodeManager(t)),
+	)
 	if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("sendMessage() error = %v", err)
 	}
@@ -264,16 +283,23 @@ func TestSendMessageTranscodesCStoreToAcceptedTransferSyntax(t *testing.T) {
 	}
 }
 
-func TestSendMessageRejectsCStoreWithoutUsableTransferSyntax(t *testing.T) {
-	registry := codec.GetGlobalRegistry()
-	previousCodec, hadPreviousCodec := registry.GetCodec(transfer.JPEG2000Lossless)
-	registry.UnregisterCodec(transfer.JPEG2000Lossless)
-	t.Cleanup(func() {
-		if hadPreviousCodec {
-			registry.RegisterCodec(transfer.JPEG2000Lossless, previousCodec)
-		}
-	})
+func TestSendMessageRejectsCStoreTranscodingWithoutManager(t *testing.T) {
+	assoc := association.NewAssociation("TEST-SCU", "TEST-SCP")
+	addAcceptedPresentationContext(t, assoc, 3, transfer.ExplicitVRBigEndian)
+	ds := newCStorePixelDataset(t, transfer.ExplicitVRLittleEndian, []byte{0x34, 0x12})
+	msg, err := dimse.NewCStoreRequest(ds)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	service := NewService(&recordingConn{}, assoc, WithAssociationRequestor(true))
+	err = service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)})
+	if !errors.Is(err, ErrTranscodeManagerUnavailable) {
+		t.Fatalf("sendMessage() error = %v, want ErrTranscodeManagerUnavailable", err)
+	}
+}
+
+func TestSendMessageRejectsCStoreWithoutUsableTransferSyntax(t *testing.T) {
 	assoc := association.NewAssociation("TEST-SCU", "TEST-SCP")
 	addAcceptedPresentationContext(t, assoc, 3, transfer.ExplicitVRLittleEndian)
 
@@ -289,10 +315,16 @@ func TestSendMessageRejectsCStoreWithoutUsableTransferSyntax(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := NewService(conn, assoc,
+		WithAssociationRequestor(true),
+		WithTranscodeManager(newServiceTranscodeManager(t)),
+	)
 	err = service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)})
 	if err == nil {
 		t.Fatal("sendMessage() error = nil, want untranscodable transfer syntax error")
+	}
+	if !errors.Is(err, transcode.ErrCodecUnavailable) {
+		t.Fatalf("sendMessage() error = %v, want ErrCodecUnavailable", err)
 	}
 	for _, want := range []string{
 		testCTImageStorageUID,
@@ -309,17 +341,6 @@ func TestSendMessageRejectsCStoreWithoutUsableTransferSyntax(t *testing.T) {
 }
 
 func TestSendMessageUsesRegisteredCodecForCStoreTranscoding(t *testing.T) {
-	registry := codec.GetGlobalRegistry()
-	previousCodec, hadPreviousCodec := registry.GetCodec(transfer.JPEG2000Lossless)
-	registry.RegisterCodec(transfer.JPEG2000Lossless, passthroughCodec{syntax: transfer.JPEG2000Lossless})
-	t.Cleanup(func() {
-		if hadPreviousCodec {
-			registry.RegisterCodec(transfer.JPEG2000Lossless, previousCodec)
-		} else {
-			registry.UnregisterCodec(transfer.JPEG2000Lossless)
-		}
-	})
-
 	assoc := association.NewAssociation("TEST-SCU", "TEST-SCP")
 	addAcceptedPresentationContext(t, assoc, 3, transfer.ExplicitVRLittleEndian)
 
@@ -335,7 +356,12 @@ func TestSendMessageUsesRegisteredCodecForCStoreTranscoding(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := NewService(conn, assoc,
+		WithAssociationRequestor(true),
+		WithTranscodeManager(newServiceTranscodeManager(t,
+			passthroughCodec{syntax: transfer.JPEG2000Lossless},
+		)),
+	)
 	if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("sendMessage() error = %v", err)
 	}
@@ -358,17 +384,6 @@ func TestSendMessageUsesRegisteredCodecForCStoreTranscoding(t *testing.T) {
 }
 
 func TestSendMessageConvertsDecodedCStorePixelsToAcceptedBigEndian(t *testing.T) {
-	registry := codec.GetGlobalRegistry()
-	previousCodec, hadPreviousCodec := registry.GetCodec(transfer.JPEG2000Lossless)
-	registry.RegisterCodec(transfer.JPEG2000Lossless, passthroughCodec{syntax: transfer.JPEG2000Lossless})
-	t.Cleanup(func() {
-		if hadPreviousCodec {
-			registry.RegisterCodec(transfer.JPEG2000Lossless, previousCodec)
-		} else {
-			registry.UnregisterCodec(transfer.JPEG2000Lossless)
-		}
-	})
-
 	assoc := association.NewAssociation("TEST-SCU", "TEST-SCP")
 	addAcceptedPresentationContext(t, assoc, 3, transfer.ExplicitVRBigEndian)
 	ds := newCStorePixelDataset(t, transfer.JPEG2000Lossless, []byte{0x00, 0x00})
@@ -383,7 +398,12 @@ func TestSendMessageConvertsDecodedCStorePixelsToAcceptedBigEndian(t *testing.T)
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := NewService(conn, assoc,
+		WithAssociationRequestor(true),
+		WithTranscodeManager(newServiceTranscodeManager(t,
+			passthroughCodec{syntax: transfer.JPEG2000Lossless},
+		)),
+	)
 	if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("sendMessage() error = %v", err)
 	}
@@ -414,25 +434,35 @@ func (c passthroughCodec) TransferSyntax() *transfer.Syntax {
 	return c.syntax
 }
 
-func (passthroughCodec) GetDefaultParameters() codec.Parameters {
-	return codec.NewBaseParameters()
+func (passthroughCodec) DefaultParameters() codec.Parameters {
+	return codec.NoParameters{}
 }
 
-func (passthroughCodec) Encode(oldPixelData, newPixelData imagetypes.PixelData, _ codec.Parameters) error {
-	return copyPixelFrames(oldPixelData, newPixelData)
+func (passthroughCodec) Encode(
+	ctx context.Context,
+	oldPixelData codec.FrameSource,
+	newPixelData codec.FrameSink,
+	_ codec.Parameters,
+) error {
+	return copyPixelFrames(ctx, oldPixelData, newPixelData)
 }
 
-func (passthroughCodec) Decode(oldPixelData, newPixelData imagetypes.PixelData, _ codec.Parameters) error {
-	return copyPixelFrames(oldPixelData, newPixelData)
+func (passthroughCodec) Decode(
+	ctx context.Context,
+	oldPixelData codec.FrameSource,
+	newPixelData codec.FrameSink,
+	_ codec.Parameters,
+) error {
+	return copyPixelFrames(ctx, oldPixelData, newPixelData)
 }
 
-func copyPixelFrames(oldPixelData, newPixelData imagetypes.PixelData) error {
+func copyPixelFrames(ctx context.Context, oldPixelData codec.FrameSource, newPixelData codec.FrameSink) error {
 	for i := 0; i < oldPixelData.FrameCount(); i++ {
-		frame, err := oldPixelData.GetFrame(i)
+		frame, err := oldPixelData.Frame(ctx, i)
 		if err != nil {
 			return err
 		}
-		if err := newPixelData.AddFrame(frame); err != nil {
+		if err := newPixelData.AddFrame(ctx, frame); err != nil {
 			return err
 		}
 	}
@@ -465,15 +495,6 @@ func TestSendMessageRejectsCStorePixelDataWithoutSourceTransferSyntax(t *testing
 }
 
 func TestSendMessageDoesNotRequireCodecWithoutPixelData(t *testing.T) {
-	registry := codec.GetGlobalRegistry()
-	previousCodec, hadPreviousCodec := registry.GetCodec(transfer.JPEG2000Lossless)
-	registry.UnregisterCodec(transfer.JPEG2000Lossless)
-	t.Cleanup(func() {
-		if hadPreviousCodec {
-			registry.RegisterCodec(transfer.JPEG2000Lossless, previousCodec)
-		}
-	})
-
 	assoc := association.NewAssociation("TEST-SCU", "TEST-SCP")
 	addAcceptedPresentationContext(t, assoc, 3, transfer.ExplicitVRLittleEndian)
 	ds := dataset.NewWithTransferSyntax(transfer.JPEG2000Lossless)
@@ -600,7 +621,10 @@ func TestSendMessageHonorsExplicitCStorePresentationContext(t *testing.T) {
 	msg.SetPresentationContextID(3)
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := NewService(conn, assoc,
+		WithAssociationRequestor(true),
+		WithTranscodeManager(newServiceTranscodeManager(t)),
+	)
 	if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("sendMessage() error = %v", err)
 	}

@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 )
 
 // PaletteColorLUT represents a palette color lookup table
@@ -29,7 +29,7 @@ type PaletteColorLUT struct {
 	// HasAlpha reports whether an Alpha Palette Color LUT was supplied.
 	HasAlpha bool
 	// LUT is the parsed color lookup table
-	LUT []imagetypes.Color32
+	LUT []colorconv.Color32
 }
 
 // NewPaletteColorLUT creates a new palette color LUT from descriptor and data
@@ -84,7 +84,7 @@ func newPaletteColorLUT(descriptorRed, descriptorAlpha []uint16, red, green, blu
 		Blue:             blue,
 		Alpha:            alpha,
 		HasAlpha:         descriptorAlpha != nil,
-		LUT:              make([]imagetypes.Color32, size),
+		LUT:              make([]colorconv.Color32, size),
 	}
 
 	// Parse the LUT
@@ -106,7 +106,7 @@ func (p *PaletteColorLUT) parseLUT() error {
 	if p.Bits == 8 && paletteDataLengthsEqual(p, p.Size, compactLength) {
 		// 8-bit LUT entries
 		for i := 0; i < p.Size; i++ {
-			p.LUT[i] = imagetypes.NewColor32(0xFF, p.Red[i], p.Green[i], p.Blue[i])
+			p.LUT[i] = colorconv.NewColor32(0xFF, p.Red[i], p.Green[i], p.Blue[i])
 		}
 	} else if paletteDataLengthsEqual(p, wordLength) {
 		offset := 0
@@ -116,7 +116,7 @@ func (p *PaletteColorLUT) parseLUT() error {
 
 		for i := 0; i < p.Size; i++ {
 			idx := i*2 + offset
-			p.LUT[i] = imagetypes.NewColor32(0xFF, p.Red[idx], p.Green[idx], p.Blue[idx])
+			p.LUT[i] = colorconv.NewColor32(0xFF, p.Red[idx], p.Green[idx], p.Blue[idx])
 		}
 	} else {
 		return fmt.Errorf("invalid palette color LUT data size: red=%d, green=%d, blue=%d, expected compact length %d or word length %d",
@@ -150,9 +150,9 @@ func paletteDataLengthsEqual(p *PaletteColorLUT, lengths ...int) bool {
 }
 
 // GetColor returns the color for the specified pixel value
-func (p *PaletteColorLUT) GetColor(pixelValue uint16) imagetypes.Color32 {
+func (p *PaletteColorLUT) GetColor(pixelValue uint16) colorconv.Color32 {
 	if len(p.LUT) == 0 {
-		return imagetypes.NewColor32(0xFF, 0, 0, 0)
+		return colorconv.NewColor32(0xFF, 0, 0, 0)
 	}
 	index := int(pixelValue) - p.FirstMappedValue
 	if index < 0 {
@@ -213,7 +213,7 @@ func (p *PaletteColorLUT) ApplyToPixelDataWithByteOrder(pixelData []byte, bitsAl
 	return colorData, nil
 }
 
-func writePaletteColor(output []byte, offset int, value imagetypes.Color32, alpha bool) {
+func writePaletteColor(output []byte, offset int, value colorconv.Color32, alpha bool) {
 	output[offset] = value.R
 	output[offset+1] = value.G
 	output[offset+2] = value.B

@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/dict"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
@@ -127,12 +126,7 @@ func (w *jsonWriter) writeDataset(ds *dataset.Dataset) error {
 // writeTagKey writes the tag as a JSON key (either as hex tag or keyword)
 func (w *jsonWriter) writeTagKey(elem element.Element) error {
 	t := elem.Tag()
-	entryIface := t.DictionaryEntry()
-
-	var entry *dict.Entry
-	if entryIface != nil {
-		entry, _ = entryIface.(*dict.Entry)
-	}
+	entry := w.config.lookup.Lookup(t)
 
 	// Check if we can write as keyword
 	unknown := entry == nil ||
@@ -218,11 +212,7 @@ func (w *jsonWriter) writeKeywordAndName(elem element.Element) {
 		return
 	}
 
-	entryIface := elem.Tag().DictionaryEntry()
-	var entry *dict.Entry
-	if entryIface != nil {
-		entry, _ = entryIface.(*dict.Entry)
-	}
+	entry := w.config.lookup.Lookup(elem.Tag())
 
 	unknown := entry == nil ||
 		entry.Keyword() == "" ||
@@ -622,7 +612,7 @@ func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
 				continue
 			}
 			w.buf.WriteString(`"`)
-			fmt.Fprintf(w.buf, "%08X", val.Uint32())
+			fmt.Fprintf(w.buf, "%08X", val.ToUint32())
 			w.buf.WriteString(`"`)
 		}
 		w.buf.WriteString("]")
@@ -651,7 +641,7 @@ func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
 				w.buf.WriteString("null")
 			} else {
 				w.buf.WriteString(`"`)
-				fmt.Fprintf(w.buf, "%08X", t.Uint32())
+				fmt.Fprintf(w.buf, "%08X", t.ToUint32())
 				w.buf.WriteString(`"`)
 			}
 		}

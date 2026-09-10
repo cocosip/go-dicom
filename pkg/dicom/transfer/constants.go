@@ -4,8 +4,8 @@
 package transfer
 
 import (
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 // Standard DICOM Transfer Syntaxes
@@ -74,9 +74,6 @@ var (
 				SetEndian(endian.Little).
 				Build()
 
-	// JPEGProcess1 is an alias for JPEGBaseline8Bit.
-	JPEGProcess1 = JPEGBaseline8Bit
-
 	// JPEGExtended12Bit is JPEG Extended (Process 2 & 4).
 	// Lossy JPEG compression, 12-bit.
 	JPEGExtended12Bit = NewBuilder(uid.JPEGExtended12Bit).
@@ -85,9 +82,6 @@ var (
 				SetLossy(true, "ISO_10918_1").
 				SetEndian(endian.Little).
 				Build()
-
-	// JPEGProcess2_4 is an alias for JPEGExtended12Bit.
-	JPEGProcess2_4 = JPEGExtended12Bit
 
 	// JPEGProcess3_5Retired is JPEG Extended (Process 3 & 5) (Retired).
 	JPEGProcess3_5Retired = NewBuilder(uid.JPEGExtended35RETIRED).
@@ -141,9 +135,6 @@ var (
 			SetEncapsulated(true).
 			SetEndian(endian.Little).
 			Build()
-
-	// JPEGProcess14 is an alias for JPEGLossless.
-	JPEGProcess14 = JPEGLossless
 
 	// JPEGProcess15Retired is JPEG Lossless, Non-Hierarchical (Process 15) (Retired).
 	JPEGProcess15Retired = NewBuilder(uid.JPEGLosslessNonHierarchical15RETIRED).
@@ -231,9 +222,6 @@ var (
 			SetEndian(endian.Little).
 			Build()
 
-	// JPEGProcess14SV1 is an alias for JPEGLosslessSV1.
-	JPEGProcess14SV1 = JPEGLosslessSV1
-
 	// JPEGLSLossless is JPEG-LS Lossless Image Compression.
 	JPEGLSLossless = NewBuilder(uid.JPEGLSLossless).
 			SetExplicitVR(true).
@@ -264,9 +252,6 @@ var (
 			SetLossy(true, "ISO_15444_1").
 			SetEndian(endian.Little).
 			Build()
-
-	// JPEG2000Lossy is an alias for JPEG2000.
-	JPEG2000Lossy = JPEG2000
 
 	// JPEG2000Part2MultiComponentLosslessOnly is JPEG 2000 Part 2 Multi-component Image Compression (Lossless Only).
 	JPEG2000Part2MultiComponentLosslessOnly = NewBuilder(uid.JPEG2000MCLossless).

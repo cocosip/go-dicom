@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 // Compile-time checks to ensure all numeric types implement Element interface
@@ -32,7 +32,7 @@ type UnsignedShort struct {
 
 // NewUnsignedShort creates a new US element with the given values.
 func NewUnsignedShort(t *tag.Tag, values []uint16) *UnsignedShort {
-	return NewUnsignedShortWithEndian(t, values, endian.LocalMachine)
+	return NewUnsignedShortWithEndian(t, values, endian.Native())
 }
 
 // NewUnsignedShortWithEndian creates a new US element with specific byte order.
@@ -105,7 +105,7 @@ type UnsignedLong struct {
 
 // NewUnsignedLong creates a new UL element with the given values.
 func NewUnsignedLong(t *tag.Tag, values []uint32) *UnsignedLong {
-	return NewUnsignedLongWithEndian(t, values, endian.LocalMachine)
+	return NewUnsignedLongWithEndian(t, values, endian.Native())
 }
 
 // NewUnsignedLongWithEndian creates a new UL element with specific byte order.
@@ -178,7 +178,7 @@ type SignedShort struct {
 
 // NewSignedShort creates a new SS element with the given values.
 func NewSignedShort(t *tag.Tag, values []int16) *SignedShort {
-	return NewSignedShortWithEndian(t, values, endian.LocalMachine)
+	return NewSignedShortWithEndian(t, values, endian.Native())
 }
 
 // NewSignedShortWithEndian creates a new SS element with specific byte order.
@@ -251,7 +251,7 @@ type SignedLong struct {
 
 // NewSignedLong creates a new SL element with the given values.
 func NewSignedLong(t *tag.Tag, values []int32) *SignedLong {
-	return NewSignedLongWithEndian(t, values, endian.LocalMachine)
+	return NewSignedLongWithEndian(t, values, endian.Native())
 }
 
 // NewSignedLongWithEndian creates a new SL element with specific byte order.
@@ -324,7 +324,7 @@ type Float struct {
 
 // NewFloat creates a new FL element with the given values.
 func NewFloat(t *tag.Tag, values []float32) *Float {
-	return NewFloatWithEndian(t, values, endian.LocalMachine)
+	return NewFloatWithEndian(t, values, endian.Native())
 }
 
 // NewFloatWithEndian creates a new FL element with specific byte order.
@@ -399,7 +399,7 @@ type Double struct {
 
 // NewDouble creates a new FD element with the given values.
 func NewDouble(t *tag.Tag, values []float64) *Double {
-	return NewDoubleWithEndian(t, values, endian.LocalMachine)
+	return NewDoubleWithEndian(t, values, endian.Native())
 }
 
 // NewDoubleWithEndian creates a new FD element with specific byte order.
@@ -474,7 +474,7 @@ type SignedVeryLong struct {
 
 // NewSignedVeryLong creates a new SV element with the given values.
 func NewSignedVeryLong(t *tag.Tag, values []int64) *SignedVeryLong {
-	return NewSignedVeryLongWithEndian(t, values, endian.LocalMachine)
+	return NewSignedVeryLongWithEndian(t, values, endian.Native())
 }
 
 // NewSignedVeryLongWithEndian creates a new SV element with specific byte order.
@@ -547,7 +547,7 @@ type UnsignedVeryLong struct {
 
 // NewUnsignedVeryLong creates a new UV element with the given values.
 func NewUnsignedVeryLong(t *tag.Tag, values []uint64) *UnsignedVeryLong {
-	return NewUnsignedVeryLongWithEndian(t, values, endian.LocalMachine)
+	return NewUnsignedVeryLongWithEndian(t, values, endian.Native())
 }
 
 // NewUnsignedVeryLongWithEndian creates a new UV element with specific byte order.

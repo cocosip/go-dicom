@@ -6,12 +6,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 
 	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
+	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 )
@@ -65,10 +67,18 @@ func main() {
 
 	// Step 3: Create transcoder and transcode with metadata preservation
 	fmt.Println("\nTranscoding...")
-	transcoder := codec.NewTranscoder(result.TransferSyntax, outputTS)
+	manager, err := transcode.NewManager(codec.GlobalRegistry())
+	if err != nil {
+		log.Fatalf("Failed to create transcode manager: %v", err)
+	}
+	transcoder, err := manager.NewTranscoder(result.TransferSyntax, outputTS)
+	if err != nil {
+		log.Fatalf("Failed to create transcoder: %v", err)
+	}
 
 	// Use the new TranscodeWithMetadata method with FileMetaInformation type
 	newDS, newMeta, err := transcoder.TranscodeWithMetadata(
+		context.Background(),
 		result.Dataset,
 		result.FileMetaInformation) // Pass FileMetaInformation directly
 	if err != nil {

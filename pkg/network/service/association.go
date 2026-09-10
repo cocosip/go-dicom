@@ -440,7 +440,7 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 	}
 
 	// Build Association from A-ASSOCIATE-RQ
-	assoc := association.FromAAssociateRQ(rq)
+	assoc := association.FromAAssociateRQ(rq, s.config.transferSyntaxRegistry)
 
 	// Create responder for the negotiator
 	responder := &serviceResponder{

@@ -12,7 +12,6 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
-	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
@@ -58,11 +57,6 @@ type Association struct {
 	// Association state
 	IsEstablished bool
 
-	// MessageID generator for this association
-	// Each association maintains its own MessageID counter that is
-	// unique within the scope of this association/connection
-	messageIDGen *dimse.MessageIDGenerator
-
 	// Thread safety
 	mu sync.RWMutex
 }
@@ -81,7 +75,6 @@ func NewAssociation(callingAE, calledAE string) *Association {
 		RoleSelections:            make([]*RoleSelection, 0),
 		RequestedRoleSelections:   make([]*RoleSelection, 0),
 		IsEstablished:             false,
-		messageIDGen:              dimse.NewMessageIDGenerator(), // One generator per association
 	}
 }
 
@@ -214,20 +207,6 @@ func (a *Association) SetEstablished(isEstablished bool) {
 	a.IsEstablished = isEstablished
 }
 
-// NextMessageID returns the next available MessageID for this association.
-// String returns a human-readable representation of the association.
-// This is thread-safe and can be called concurrently.
-func (a *Association) NextMessageID() uint16 {
-	return a.messageIDGen.Next()
-}
-
-// AssignMessageID assigns a MessageID to a DIMSE message if it doesn't have one.
-// If the message already has a MessageID, it will be preserved.
-// This is the recommended way to assign MessageIDs to ensure uniqueness within the association.
-func (a *Association) AssignMessageID(msg dimse.Message) (uint16, error) {
-	return a.messageIDGen.AssignMessageID(msg)
-}
-
 func (a *Association) String() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -293,14 +272,19 @@ func NewPresentationContext(id byte, abstractSyntax string, transferSyntaxes ...
 }
 
 // NewPresentationContextFromUID creates a presentation context using UID objects.
-func NewPresentationContextFromUID(id byte, abstractSyntaxUID *uid.UID, transferSyntaxUIDs ...*uid.UID) (*PresentationContext, error) {
+func NewPresentationContextFromUID(
+	registry *transfer.Registry,
+	id byte,
+	abstractSyntaxUID *uid.UID,
+	transferSyntaxUIDs ...*uid.UID,
+) (*PresentationContext, error) {
 	// Convert abstract syntax UID
 	abstractSyntax := abstractSyntaxUID.UID()
 
 	// Convert transfer syntax UIDs to TransferSyntax objects
 	transferSyntaxes := make([]*transfer.Syntax, len(transferSyntaxUIDs))
 	for i, tsUID := range transferSyntaxUIDs {
-		ts, err := transfer.Lookup(tsUID)
+		ts, err := lookupTransferSyntax(registry, tsUID)
 		if err != nil {
 			return nil, fmt.Errorf("unknown transfer syntax: %s: %w", tsUID.UID(), err)
 		}
@@ -408,10 +392,6 @@ type ExtendedNegotiation struct {
 	// SOPClassUID is the SOP Class UID
 	SOPClassUID string
 
-	// ServiceClassAppInfo is the application information (SOP Class specific)
-	// Deprecated: use RequestedApplicationInfo and AcceptedApplicationInfo.
-	ServiceClassAppInfo []byte
-
 	// RequestedApplicationInfo is the application information proposed by the requestor.
 	RequestedApplicationInfo []byte
 
@@ -428,11 +408,9 @@ type ExtendedNegotiation struct {
 
 // NewExtendedNegotiation creates a new extended negotiation item.
 func NewExtendedNegotiation(sopClassUID string, appInfo []byte) *ExtendedNegotiation {
-	requested := append([]byte(nil), appInfo...)
 	return &ExtendedNegotiation{
 		SOPClassUID:              sopClassUID,
-		ServiceClassAppInfo:      requested,
-		RequestedApplicationInfo: requested,
+		RequestedApplicationInfo: append([]byte(nil), appInfo...),
 	}
 }
 
@@ -459,19 +437,13 @@ func (e *ExtendedNegotiation) Clone() *ExtendedNegotiation {
 	if e == nil {
 		return nil
 	}
-	requested := append([]byte(nil), e.RequestedApplicationInfo...)
-	legacy := append([]byte(nil), e.ServiceClassAppInfo...)
-	if e.RequestedApplicationInfo != nil {
-		legacy = requested
-	}
 	var relatedGeneralSOPClassUIDs []string
 	if e.RelatedGeneralSOPClassUIDs != nil {
 		relatedGeneralSOPClassUIDs = append([]string{}, e.RelatedGeneralSOPClassUIDs...)
 	}
 	return &ExtendedNegotiation{
 		SOPClassUID:                e.SOPClassUID,
-		ServiceClassAppInfo:        legacy,
-		RequestedApplicationInfo:   requested,
+		RequestedApplicationInfo:   append([]byte(nil), e.RequestedApplicationInfo...),
 		AcceptedApplicationInfo:    append([]byte(nil), e.AcceptedApplicationInfo...),
 		ServiceClassUID:            e.ServiceClassUID,
 		RelatedGeneralSOPClassUIDs: relatedGeneralSOPClassUIDs,
@@ -479,13 +451,8 @@ func (e *ExtendedNegotiation) Clone() *ExtendedNegotiation {
 }
 
 func mergeExtendedNegotiation(existing, incoming *ExtendedNegotiation) {
-	if incoming.RequestedApplicationInfo != nil || incoming.ServiceClassAppInfo != nil {
-		requested := incoming.RequestedApplicationInfo
-		if requested == nil {
-			requested = incoming.ServiceClassAppInfo
-		}
-		existing.RequestedApplicationInfo = append([]byte(nil), requested...)
-		existing.ServiceClassAppInfo = existing.RequestedApplicationInfo
+	if incoming.RequestedApplicationInfo != nil {
+		existing.RequestedApplicationInfo = append([]byte(nil), incoming.RequestedApplicationInfo...)
 	}
 	if incoming.AcceptedApplicationInfo != nil {
 		existing.AcceptedApplicationInfo = append([]byte(nil), incoming.AcceptedApplicationInfo...)
@@ -792,7 +759,7 @@ func NewAsynchronousOperationsWindow(maxInvoked, maxPerformed uint16) *Asynchron
 // This is typically used by an SCP (server) after receiving a connection request from an SCU (client).
 // The returned Association will have all presentation contexts in "Proposed" state (Result=255).
 // The server should then negotiate these contexts (accept/reject) before sending A-ASSOCIATE-AC.
-func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
+func FromAAssociateRQ(rq *pdu.AAssociateRQ, registry *transfer.Registry) *Association {
 	assoc := NewAssociation(rq.CallingAETitle, rq.CalledAETitle)
 	assoc.ProtocolVersion = rq.ProtocolVersion
 
@@ -851,7 +818,7 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
 		// Parse transfer syntaxes
 		transferSyntaxes := make([]*transfer.Syntax, 0, len(pcRQ.TransferSyntaxes))
 		for _, tsUID := range pcRQ.TransferSyntaxes {
-			ts, err := transfer.Parse(tsUID)
+			ts, err := parseTransferSyntax(registry, tsUID)
 			if err != nil {
 				// Skip invalid transfer syntaxes
 				continue
@@ -881,7 +848,7 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ) *Association {
 
 // ApplyAAssociateAC merges an association acceptance into the original request
 // association so callers can inspect both proposed and accepted values.
-func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC) error {
+func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC, registry *transfer.Registry) error {
 	if assoc == nil || ac == nil {
 		return fmt.Errorf("association request and acceptance cannot be nil")
 	}
@@ -911,7 +878,7 @@ func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC) error {
 			if accepted.TransferSyntax == "" {
 				return fmt.Errorf("accepted presentation context %d has no transfer syntax", accepted.ID)
 			}
-			syntax, err := transfer.Parse(accepted.TransferSyntax)
+			syntax, err := parseTransferSyntax(registry, accepted.TransferSyntax)
 			if err != nil {
 				return fmt.Errorf("accepted presentation context %d transfer syntax: %w", accepted.ID, err)
 			}
@@ -1007,7 +974,7 @@ func findRoleSelection(values []*RoleSelection, sopClassUID string) *RoleSelecti
 
 // FromAAssociateAC creates an Association from an A-ASSOCIATE-AC PDU.
 // This is typically used by an SCU (client) after receiving acceptance from an SCP (server).
-func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
+func FromAAssociateAC(ac *pdu.AAssociateAC, registry *transfer.Registry) *Association {
 	assoc := NewAssociation(ac.CallingAETitle, ac.CalledAETitle)
 	assoc.ProtocolVersion = ac.ProtocolVersion
 
@@ -1037,8 +1004,8 @@ func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
 		// Extended negotiations
 		for _, en := range ac.UserInformation.ExtendedNegotiations {
 			assoc.AddExtendedNegotiation(&ExtendedNegotiation{
-				SOPClassUID:         en.SOPClassUID,
-				ServiceClassAppInfo: en.ServiceClassAppInfo,
+				SOPClassUID:             en.SOPClassUID,
+				AcceptedApplicationInfo: append([]byte(nil), en.ServiceClassAppInfo...),
 			})
 		}
 	}
@@ -1051,7 +1018,7 @@ func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
 
 		// Only set transfer syntax if accepted
 		if pcAC.Result == pdu.ResultAcceptance && pcAC.TransferSyntax != "" {
-			ts, err := transfer.Parse(pcAC.TransferSyntax)
+			ts, err := parseTransferSyntax(registry, pcAC.TransferSyntax)
 			if err != nil {
 				// If we can't parse it, treat as rejected
 				pcAC.Result = pdu.ResultTransferSyntaxesNotSupported
@@ -1075,6 +1042,26 @@ func FromAAssociateAC(ac *pdu.AAssociateAC) *Association {
 
 	assoc.IsEstablished = true
 	return assoc
+}
+
+func parseTransferSyntax(registry *transfer.Registry, value string) (*transfer.Syntax, error) {
+	if registry == nil {
+		return transfer.Parse(value)
+	}
+	return registry.Parse(value)
+}
+
+func lookupTransferSyntax(registry *transfer.Registry, value *uid.UID) (*transfer.Syntax, error) {
+	if registry == nil {
+		if value == nil {
+			return nil, fmt.Errorf("UID cannot be nil")
+		}
+		if value.Type() != uid.TypeTransferSyntax {
+			return nil, fmt.Errorf("UID %s is not a transfer syntax type", value.UID())
+		}
+		return transfer.Parse(value.UID())
+	}
+	return registry.Lookup(value)
 }
 
 // ToAAssociateAC converts an Association to an A-ASSOCIATE-AC PDU.

@@ -1,0 +1,1569 @@
+// Copyright (c) 2025 go-dicom contributors.
+// Licensed under the Microsoft Public License (MS-PL).
+
+package pixeldata
+
+import (
+	"context"
+	"encoding/binary"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
+	"github.com/cocosip/go-dicom/pkg/imaging/internal/dicomlut"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
+)
+
+// Info contains metadata about DICOM pixel data.
+type Info struct {
+	// Image dimensions
+	Width  uint16
+	Height uint16
+
+	// Number of frames (1 for single frame)
+	NumberOfFrames int
+
+	// Bit depth information
+	BitsAllocated uint16
+	BitsStored    uint16
+	HighBit       uint16
+
+	// Sampling information
+	SamplesPerPixel uint16
+
+	// Pixel representation
+	PixelRepresentation pixel.Representation
+
+	// Planar configuration
+	PlanarConfiguration pixel.PlanarConfiguration
+
+	// Photometric interpretation
+	PhotometricInterpretation *pixel.PhotometricInterpretation
+
+	// VR code for pixel data (OB/OW) and whether encapsulated
+	VRCode       string
+	Encapsulated bool
+
+	// Transfer syntax UID
+	TransferSyntaxUID string
+
+	// Lossy compression information
+	IsLossy                bool
+	LossyCompressionMethod string
+	LossyCompressionRatio  float64
+
+	// Pixel padding (optional)
+	PixelPaddingValue      *int32
+	PixelPaddingRangeLimit *int32
+}
+
+// BytesAllocated returns the number of bytes allocated per pixel sample.
+func (info *Info) BytesAllocated() int {
+	return int((info.BitsAllocated-1)/8 + 1)
+}
+
+// UncompressedFrameSize calculates the uncompressed size of a single frame in bytes.
+func (info *Info) UncompressedFrameSize() int {
+	if info.BitsAllocated == 1 {
+		return (int(info.Width)*int(info.Height)-1)/8 + 1
+	}
+
+	// Handle special case for YBR_FULL_422 with uneven width
+	actualWidth := int(info.Width)
+	if actualWidth%2 != 0 &&
+		info.PhotometricInterpretation != nil &&
+		(info.PhotometricInterpretation.Value == pixel.YbrFull422.Value ||
+			info.PhotometricInterpretation.Value == pixel.YbrPartial422.Value ||
+			info.PhotometricInterpretation.Value == pixel.YbrPartial420.Value) {
+		actualWidth++
+	}
+
+	// Handle YBR_FULL_422 special case for uncompressed data
+	if info.PhotometricInterpretation != nil &&
+		(info.PhotometricInterpretation.Value == pixel.YbrFull422.Value ||
+			info.PhotometricInterpretation.Value == pixel.YbrPartial422.Value ||
+			info.PhotometricInterpretation.Value == pixel.YbrPartial420.Value) {
+		// For uncompressed transfer syntaxes, chrominance channels are downsampled
+		return info.BytesAllocated() * 2 * actualWidth * int(info.Height)
+	}
+
+	return info.BytesAllocated() * int(info.SamplesPerPixel) * actualWidth * int(info.Height)
+}
+
+// TotalUncompressedSize returns the total size of all frames uncompressed.
+func (info *Info) TotalUncompressedSize() int {
+	return info.UncompressedFrameSize() * info.NumberOfFrames
+}
+
+// Validate checks if the pixel data info is valid.
+func (info *Info) Validate() error {
+	if info == nil {
+		return fmt.Errorf("pixel data info must not be nil")
+	}
+	var photometric pixel.PhotometricInterpretation
+	if info.PhotometricInterpretation != nil {
+		photometric = *info.PhotometricInterpretation
+	}
+	frameInfo := codec.FrameInfo{
+		Width:                     info.Width,
+		Height:                    info.Height,
+		BitDepth:                  *pixel.NewBitDepth(info.BitsAllocated, info.BitsStored, info.HighBit, info.PixelRepresentation.IsSigned()),
+		SamplesPerPixel:           info.SamplesPerPixel,
+		PixelRepresentation:       info.PixelRepresentation,
+		PlanarConfiguration:       info.PlanarConfiguration,
+		PhotometricInterpretation: photometric,
+	}
+	if err := frameInfo.Validate(); err != nil {
+		return err
+	}
+	if info.NumberOfFrames < 1 {
+		return fmt.Errorf("number of frames must be at least 1")
+	}
+	if info.VRCode != "" && info.VRCode != "OB" && info.VRCode != "OW" {
+		return fmt.Errorf("pixel data VR must be OB or OW, got %q", info.VRCode)
+	}
+	if info.PixelPaddingRangeLimit != nil && info.PixelPaddingValue == nil {
+		return fmt.Errorf("pixel padding range limit requires pixel padding value")
+	}
+
+	return nil
+}
+
+// Data manages DICOM pixel data with support for multiple frames and codecs.
+type Data struct {
+	Info             *Info
+	frames           [][]byte // Per-frame data (uncompressed for native; compressed for encapsulated)
+	basicOffsetTable []uint32 // BOT for encapsulated data
+}
+
+var (
+	_ codec.FrameSource = (*Data)(nil)
+	_ codec.FrameSink   = (*Data)(nil)
+)
+
+// New creates a new Data instance.
+func New(info *Info) (*Data, error) {
+	if info == nil {
+		return nil, fmt.Errorf("pixel data info must not be nil")
+	}
+	if err := info.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid pixel data info: %w", err)
+	}
+
+	return &Data{
+		Info:             info,
+		frames:           make([][]byte, 0, info.NumberOfFrames),
+		basicOffsetTable: nil,
+	}, nil
+}
+
+// NewFromBytes creates Data from raw pixel bytes.
+// The data is assumed to contain all frames concatenated.
+func NewFromBytes(info *Info, data []byte) (*Data, error) {
+	info.Encapsulated = false
+	if info.VRCode == "" {
+		info.VRCode = nativePixelDataVR(info)
+	}
+	pd, err := New(info)
+	if err != nil {
+		return nil, err
+	}
+	if info.TransferSyntaxUID == transfer.ExplicitVRBigEndian.UID().UID() {
+		data = swapPixelDataBytes(data, info)
+	}
+
+	frameSize := info.UncompressedFrameSize()
+	expectedSize := frameSize * info.NumberOfFrames
+
+	if len(data) < expectedSize {
+		return nil, fmt.Errorf("insufficient data: got %d bytes, expected at least %d bytes",
+			len(data), expectedSize)
+	}
+
+	// Split data into frames
+	for i := 0; i < info.NumberOfFrames; i++ {
+		start := i * frameSize
+		end := start + frameSize
+		if end > len(data) {
+			end = len(data)
+		}
+		frameData := make([]byte, frameSize)
+		copy(frameData, data[start:end])
+		pd.frames = append(pd.frames, frameData)
+	}
+
+	return pd, nil
+}
+
+// Frame returns an independently owned copy of the specified frame (0-indexed).
+func (pd *Data) Frame(ctx context.Context, frameIndex int) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if frameIndex < 0 || frameIndex >= len(pd.frames) {
+		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(pd.frames))
+	}
+	frame := make([]byte, len(pd.frames[frameIndex]))
+	if err := copyWithContext(ctx, frame, pd.frames[frameIndex]); err != nil {
+		return nil, err
+	}
+	return frame, nil
+}
+
+// Sample returns one decoded native pixel sample. Coordinates and frame and
+// sample indexes are zero-based. Encapsulated data must be decoded first.
+func (pd *Data) Sample(frame, x, y, sample int) (int64, error) {
+	if pd == nil || pd.Info == nil {
+		return 0, fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return 0, fmt.Errorf("cannot read a scalar sample from encapsulated pixel data")
+	}
+	if frame < 0 || frame >= len(pd.frames) {
+		return 0, fmt.Errorf("frame index %d out of range [0, %d)", frame, len(pd.frames))
+	}
+	if x < 0 || x >= int(pd.Info.Width) {
+		return 0, fmt.Errorf("x coordinate %d out of range [0, %d)", x, pd.Info.Width)
+	}
+	if y < 0 || y >= int(pd.Info.Height) {
+		return 0, fmt.Errorf("y coordinate %d out of range [0, %d)", y, pd.Info.Height)
+	}
+	if sample < 0 || sample >= int(pd.Info.SamplesPerPixel) {
+		return 0, fmt.Errorf("sample index %d out of range [0, %d)", sample, pd.Info.SamplesPerPixel)
+	}
+
+	pixelIndex := y*int(pd.Info.Width) + x
+	sampleIndex := pixelIndex*int(pd.Info.SamplesPerPixel) + sample
+	if pd.Info.PlanarConfiguration == pixel.PlanarPlanar && pd.Info.SamplesPerPixel > 1 {
+		sampleIndex = sample*int(pd.Info.Width)*int(pd.Info.Height) + pixelIndex
+	}
+	offset := sampleIndex * pd.Info.BytesAllocated()
+	value, ok := decodePixelSampleLE(pd.frames[frame], offset, pd.Info)
+	if !ok {
+		return 0, fmt.Errorf("cannot decode sample at byte offset %d with BitsAllocated=%d", offset, pd.Info.BitsAllocated)
+	}
+	return value, nil
+}
+
+// IsPaddingSample reports whether value is inside the inclusive DICOM pixel
+// padding interval. A reversed Pixel Padding Range Limit is normalized.
+func (pd *Data) IsPaddingSample(value int64) bool {
+	if pd == nil || pd.Info == nil || pd.Info.PixelPaddingValue == nil {
+		return false
+	}
+	minimum := int64(*pd.Info.PixelPaddingValue)
+	maximum := minimum
+	if pd.Info.PixelPaddingRangeLimit != nil {
+		maximum = int64(*pd.Info.PixelPaddingRangeLimit)
+	}
+	if minimum > maximum {
+		minimum, maximum = maximum, minimum
+	}
+	return value >= minimum && value <= maximum
+}
+
+// CalculateOptimalWindow computes optimal window center/width from pixel data
+// by sampling pixel values and finding min/max range
+func (pd *Data) CalculateOptimalWindow() (center, width float64) {
+	if len(pd.frames) == 0 {
+		return 0, 256 // Default fallback
+	}
+
+	// Sample first frame for window calculation
+	pixelData := pd.frames[0]
+	bytesPerPixel := int(pd.Info.BitsAllocated) / 8
+	pixelCount := len(pixelData) / bytesPerPixel
+
+	if pixelCount == 0 {
+		return 0, 256
+	}
+
+	// Sample pixels (use every Nth pixel for speed, but at least 1000 samples)
+	step := pixelCount / 1000
+	if step < 1 {
+		step = 1
+	}
+
+	var minVal, maxVal float64
+	firstPixel := true
+
+	for i := 0; i < pixelCount; i += step {
+		pixelIndex := i * bytesPerPixel
+		if pixelIndex+bytesPerPixel > len(pixelData) {
+			break
+		}
+
+		val, ok := decodePixelSampleLE(pixelData, pixelIndex, pd.Info)
+		if !ok {
+			continue
+		}
+		pixelValue := float64(val)
+
+		if firstPixel {
+			minVal = pixelValue
+			maxVal = pixelValue
+			firstPixel = false
+		} else {
+			if pixelValue < minVal {
+				minVal = pixelValue
+			}
+			if pixelValue > maxVal {
+				maxVal = pixelValue
+			}
+		}
+	}
+
+	// Calculate window center and width from min/max
+	center = (minVal + maxVal) / 2
+	width = maxVal - minVal
+
+	// Ensure reasonable minimum width
+	if width < 1 {
+		width = 1
+	}
+
+	return center, width
+}
+
+// AddFrame appends a new frame to the pixel data.
+func (pd *Data) AddFrame(ctx context.Context, frameData []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// For encapsulated (compressed) data, frames can be any size
+	// For uncompressed data, validate the frame size
+	if !pd.Info.Encapsulated {
+		expectedSize := pd.Info.UncompressedFrameSize()
+		if len(frameData) < expectedSize {
+			return fmt.Errorf("frame data too small: got %d bytes, expected %d bytes",
+				len(frameData), expectedSize)
+		}
+
+		// Copy the frame data (trim to expected size)
+		frame := make([]byte, expectedSize)
+		if err := copyWithContext(ctx, frame, frameData[:expectedSize]); err != nil {
+			return err
+		}
+		pd.frames = append(pd.frames, frame)
+	} else {
+		// For encapsulated data, just copy the entire frame as-is
+		frame := make([]byte, len(frameData))
+		if err := copyWithContext(ctx, frame, frameData); err != nil {
+			return err
+		}
+		pd.frames = append(pd.frames, frame)
+	}
+
+	// Update frame count
+	pd.Info.NumberOfFrames = len(pd.frames)
+
+	return nil
+}
+
+// AllFrames returns all pixel data as a single byte slice.
+func (pd *Data) AllFrames() []byte {
+	totalSize := pd.Info.TotalUncompressedSize()
+	result := make([]byte, totalSize)
+
+	offset := 0
+	for _, frame := range pd.frames {
+		copy(result[offset:], frame)
+		offset += len(frame)
+	}
+
+	return result
+}
+
+// FrameCount returns the number of frames in the pixel data.
+func (pd *Data) FrameCount() int {
+	return len(pd.frames)
+}
+
+// Clone returns an independent copy of the pixel metadata, frames, and offset table.
+func (pd *Data) Clone() *Data {
+	if pd == nil {
+		return nil
+	}
+	clone := &Data{
+		frames:           make([][]byte, len(pd.frames)),
+		basicOffsetTable: append([]uint32(nil), pd.basicOffsetTable...),
+	}
+	if pd.Info != nil {
+		info := *pd.Info
+		if pd.Info.PhotometricInterpretation != nil {
+			photometric := *pd.Info.PhotometricInterpretation
+			info.PhotometricInterpretation = &photometric
+		}
+		if pd.Info.PixelPaddingValue != nil {
+			padding := *pd.Info.PixelPaddingValue
+			info.PixelPaddingValue = &padding
+		}
+		if pd.Info.PixelPaddingRangeLimit != nil {
+			limit := *pd.Info.PixelPaddingRangeLimit
+			info.PixelPaddingRangeLimit = &limit
+		}
+		clone.Info = &info
+	}
+	for index, frame := range pd.frames {
+		clone.frames[index] = append([]byte(nil), frame...)
+	}
+	return clone
+}
+
+// EnsureInterleaved converts planar configuration 1 to interleaved (0) for multi-sample pixels.
+// Only applies to uncompressed data; encapsulated data must be decoded first.
+func (pd *Data) EnsureInterleaved() error {
+	if pd.Info == nil {
+		return fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return fmt.Errorf("cannot convert planar configuration on encapsulated data")
+	}
+	if pd.Info.SamplesPerPixel <= 1 || pd.Info.PlanarConfiguration == 0 {
+		return nil
+	}
+
+	bytesPerSample := pd.Info.BytesAllocated()
+	convertedFrames := make([][]byte, len(pd.frames))
+	for idx, frame := range pd.frames {
+		converted, err := colorconv.PlanarToInterleaved(frame, int(pd.Info.SamplesPerPixel), bytesPerSample)
+		if err != nil {
+			return fmt.Errorf("frame %d planar->interleaved failed: %w", idx, err)
+		}
+		convertedFrames[idx] = converted
+	}
+	pd.frames = convertedFrames
+
+	pd.Info.PlanarConfiguration = pixel.InterleavedPlanar
+	return nil
+}
+
+// ConvertMonochrome1ToMonochrome2 inverts grayscale for MONOCHROME1 data.
+// Only applies to uncompressed single-sample images.
+func (pd *Data) ConvertMonochrome1ToMonochrome2() error {
+	if pd.Info == nil {
+		return fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return fmt.Errorf("cannot convert photometric on encapsulated data")
+	}
+	if pd.Info.PhotometricInterpretation == nil || pd.Info.PhotometricInterpretation.Value != pixel.Monochrome1.Value {
+		return nil
+	}
+	if pd.Info.SamplesPerPixel != 1 {
+		return fmt.Errorf("%s expected SamplesPerPixel=1, got %d", pixel.Monochrome1.Value, pd.Info.SamplesPerPixel)
+	}
+
+	bytesPerSample := pd.Info.BytesAllocated()
+	convertedFrames := make([][]byte, len(pd.frames))
+	for fi, frame := range pd.frames {
+		converted, err := colorconv.ConvertMono1ToMono2(frame, pd.Info.BitsStored, bytesPerSample, pd.Info.PixelRepresentation == pixel.SignedPixels)
+		if err != nil {
+			return fmt.Errorf("frame %d mono1->mono2 failed: %w", fi, err)
+		}
+		convertedFrames[fi] = converted
+	}
+	pd.frames = convertedFrames
+
+	pd.Info.PhotometricInterpretation = pixel.Monochrome2
+	return nil
+}
+
+// ConvertYBRToRGB converts uncompressed YBR data to interleaved RGB (Photometric=RGB).
+// Supports YBR_FULL and YBR_FULL_422 with 8-bit samples; other variants are not handled here.
+func (pd *Data) ConvertYBRToRGB() error {
+	if pd.Info == nil {
+		return fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return fmt.Errorf("cannot convert photometric on encapsulated data")
+	}
+	if pd.Info.PhotometricInterpretation == nil {
+		return fmt.Errorf("photometric interpretation missing")
+	}
+	if pd.Info.BitsAllocated != 8 && pd.Info.BitsAllocated != 16 {
+		return fmt.Errorf("YBR->RGB conversion only implemented for BitsAllocated=8 or 16")
+	}
+	switch pd.Info.PhotometricInterpretation.Value {
+	case pixel.YbrFull.Value:
+		if pd.Info.SamplesPerPixel != 3 {
+			return fmt.Errorf("YBR_FULL expected SamplesPerPixel=3, got %d", pd.Info.SamplesPerPixel)
+		}
+		for i, frame := range pd.frames {
+			converted, err := colorconv.ConvertYBRFullToRGB(frame)
+			if err != nil {
+				return fmt.Errorf("frame %d: %w", i, err)
+			}
+			pd.frames[i] = converted
+		}
+	case pixel.YbrFull422.Value:
+		if pd.Info.SamplesPerPixel != 3 {
+			return fmt.Errorf("YBR_FULL_422 expected SamplesPerPixel=3, got %d", pd.Info.SamplesPerPixel)
+		}
+		width := int(pd.Info.Width)
+		if width == 0 {
+			return fmt.Errorf("YBR_FULL_422 requires valid width")
+		}
+		for i, frame := range pd.frames {
+			converted, err := colorconv.ConvertYBRFull422ToRGB(frame, width)
+			if err != nil {
+				return fmt.Errorf("frame %d: %w", i, err)
+			}
+			pd.frames[i] = converted
+		}
+	case pixel.YbrPartial422.Value:
+		if pd.Info.SamplesPerPixel != 3 {
+			return fmt.Errorf("%s expected SamplesPerPixel=3, got %d", pixel.YbrPartial422.Value, pd.Info.SamplesPerPixel)
+		}
+		width := int(pd.Info.Width)
+		if width == 0 {
+			return fmt.Errorf("%s requires valid width", pixel.YbrPartial422.Value)
+		}
+		for i, frame := range pd.frames {
+			converted, err := colorconv.ConvertYBRPartial422ToRGB(frame, width)
+			if err != nil {
+				return fmt.Errorf("frame %d: %w", i, err)
+			}
+			pd.frames[i] = converted
+		}
+	case pixel.YbrIct.Value:
+		bytesPerSample := pd.Info.BytesAllocated()
+		for i, frame := range pd.frames {
+			converted, err := colorconv.ConvertYBRICTToRGB(frame, bytesPerSample*8)
+			if err != nil {
+				return fmt.Errorf("frame %d: %w", i, err)
+			}
+			pd.frames[i] = converted
+		}
+	case pixel.YbrRct.Value:
+		bytesPerSample := pd.Info.BytesAllocated()
+		for i, frame := range pd.frames {
+			converted, err := colorconv.ConvertYBRRCTToRGB(frame, bytesPerSample*8)
+			if err != nil {
+				return fmt.Errorf("frame %d: %w", i, err)
+			}
+			pd.frames[i] = converted
+		}
+	default:
+		return fmt.Errorf("photometric %s not supported for YBR->RGB conversion", pd.Info.PhotometricInterpretation.Value)
+	}
+
+	pd.Info.PhotometricInterpretation = pixel.RGBPhotometric
+	pd.Info.PlanarConfiguration = pixel.InterleavedPlanar
+	pd.Info.SamplesPerPixel = 3
+	return nil
+}
+
+// WindowTo8bit applies a VOI window (center/width) to pixel data and returns 8-bit frames.
+// Only supports uncompressed data with BitsAllocated 8 or 16. For multi-frame, returns one []byte per frame.
+// If ignorePadding is true and PixelPaddingValue/(RangeLimit) is set, padding samples are forced to 0.
+func (pd *Data) WindowTo8bit(center, width float64, ignorePadding bool) ([][]byte, error) {
+	return applyWindowTo8bit(pd, center, width, ignorePadding)
+}
+
+// MinMax returns the minimum和maximum sample values across all frames.
+// If ignorePadding is true and PixelPaddingValue/(RangeLimit) is set, padding samples are skipped.
+func (pd *Data) MinMax(ignorePadding bool) (minVal float64, maxVal float64, err error) {
+	return minMaxSamples(pd, ignorePadding)
+}
+
+// MaskPadding returns a copy of frames where padding samples are set to 0 and a mask per frame (true = padding).
+// Only applies to uncompressed data; encapsulated must be decoded first.
+func (pd *Data) MaskPadding() (frames [][]byte, masks [][]bool, err error) {
+	if pd.Info == nil {
+		return nil, nil, fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return nil, nil, fmt.Errorf("cannot mask padding on encapsulated data")
+	}
+	if pd.Info.PixelPaddingValue == nil {
+		return nil, nil, fmt.Errorf("no Pixel Padding Value present")
+	}
+
+	bytesPerSample := pd.Info.BytesAllocated()
+	if bytesPerSample != 1 && bytesPerSample != 2 {
+		return nil, nil, fmt.Errorf("unsupported BytesAllocated=%d for padding mask", bytesPerSample)
+	}
+
+	padMin := int64(*pd.Info.PixelPaddingValue)
+	padMax := padMin
+	if pd.Info.PixelPaddingRangeLimit != nil {
+		padMax = int64(*pd.Info.PixelPaddingRangeLimit)
+	}
+
+	for _, frame := range pd.frames {
+		out := make([]byte, len(frame))
+		copy(out, frame)
+		mask := make([]bool, len(frame)/bytesPerSample)
+
+		for idx, off := 0, 0; off+bytesPerSample <= len(frame); off, idx = off+bytesPerSample, idx+1 {
+			val, ok := decodePixelSampleLE(frame, off, pd.Info)
+			if !ok {
+				continue
+			}
+
+			if val >= padMin && val <= padMax {
+				mask[idx] = true
+				// zero out
+				for b := 0; b < bytesPerSample; b++ {
+					out[off+b] = 0
+				}
+			}
+		}
+
+		frames = append(frames, out)
+		masks = append(masks, mask)
+	}
+
+	return frames, masks, nil
+}
+
+// WindowOrLUTTo8bit applies VOI LUT if present, otherwise window.
+func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ignorePadding bool) ([][]byte, error) {
+	if ds != nil && ds.Contains(tag.VOILUTSequence) {
+		return applyVOILUT(pd, ds, center, width, ignorePadding)
+	}
+	return applyWindowTo8bit(pd, center, width, ignorePadding)
+}
+
+// ToElement builds a DICOM pixel data element (OB/OW or encapsulated fragment) from the current frames.
+// For encapsulated data, it emits an OB fragment sequence with Basic Offset Table.
+func (pd *Data) ToElement() (element.Element, error) {
+	if pd.Info == nil {
+		return nil, fmt.Errorf("pixel data info is nil")
+	}
+
+	// Encapsulated pixel data is always encoded as OB per DICOM Part 5.
+	if pd.Info.Encapsulated {
+		return buildFragmentSequence(pd.frames, pd.basicOffsetTable, pd.Info.BitsAllocated)
+	}
+
+	// Uncompressed: concatenate frames
+	all := pd.AllFrames()
+	if len(all) == 0 {
+		return nil, fmt.Errorf("pixel data is empty")
+	}
+
+	if nativePixelDataVR(pd.Info) == "OW" {
+		return element.NewOtherWord(tag.PixelData, all), nil
+	}
+	return element.NewOtherByte(tag.PixelData, all), nil
+}
+
+func nativePixelDataVR(info *Info) string {
+	if info.TransferSyntaxUID == transfer.ImplicitVRLittleEndian.UID().UID() || info.BitsAllocated > 8 || info.VRCode == "OW" {
+		return "OW"
+	}
+	return "OB"
+}
+
+// Encapsulated returns true if pixel data is encapsulated.
+func (pd *Data) Encapsulated() bool {
+	return pd.Info != nil && pd.Info.Encapsulated
+}
+
+// BasicOffsetTable returns the BOT for encapsulated data.
+func (pd *Data) BasicOffsetTable() []uint32 {
+	return append([]uint32(nil), pd.basicOffsetTable...)
+}
+
+// FrameInfo returns frame metadata for codec operations.
+func (pd *Data) FrameInfo() codec.FrameInfo {
+	if pd == nil || pd.Info == nil {
+		return codec.FrameInfo{}
+	}
+	var photometric pixel.PhotometricInterpretation
+	if pd.Info.PhotometricInterpretation != nil {
+		photometric = *pd.Info.PhotometricInterpretation
+	}
+
+	return codec.FrameInfo{
+		Width:                     pd.Info.Width,
+		Height:                    pd.Info.Height,
+		BitDepth:                  *pixel.NewBitDepth(pd.Info.BitsAllocated, pd.Info.BitsStored, pd.Info.HighBit, pd.Info.PixelRepresentation.IsSigned()),
+		SamplesPerPixel:           pd.Info.SamplesPerPixel,
+		PixelRepresentation:       pd.Info.PixelRepresentation,
+		PlanarConfiguration:       pd.Info.PlanarConfiguration,
+		PhotometricInterpretation: photometric,
+	}
+}
+
+// SetFrameInfo validates and applies codec output metadata.
+func (pd *Data) SetFrameInfo(info codec.FrameInfo) error {
+	if pd == nil || pd.Info == nil {
+		return fmt.Errorf("pixel data info is nil")
+	}
+	if err := info.Validate(); err != nil {
+		return fmt.Errorf("invalid frame info: %w", err)
+	}
+	photometric := info.PhotometricInterpretation
+	next := *pd.Info
+	next.Width = info.Width
+	next.Height = info.Height
+	next.BitsAllocated = info.BitDepth.BitsAllocated
+	next.BitsStored = info.BitDepth.BitsStored
+	next.HighBit = info.BitDepth.HighBit
+	next.SamplesPerPixel = info.SamplesPerPixel
+	next.PixelRepresentation = info.PixelRepresentation
+	next.PlanarConfiguration = info.PlanarConfiguration
+	next.PhotometricInterpretation = &photometric
+	if err := next.Validate(); err != nil {
+		return fmt.Errorf("invalid frame info: %w", err)
+	}
+	*pd.Info = next
+	return nil
+}
+
+// Encode encodes the pixel data using the specified codec and returns a new Data.
+func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Parameters) (*Data, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("codec must not be nil")
+	}
+
+	// Create new pixel data info for encoded data
+	newInfo := &Info{
+		Width:                     pd.Info.Width,
+		Height:                    pd.Info.Height,
+		NumberOfFrames:            pd.Info.NumberOfFrames,
+		BitsAllocated:             pd.Info.BitsAllocated,
+		BitsStored:                pd.Info.BitsStored,
+		HighBit:                   pd.Info.HighBit,
+		SamplesPerPixel:           pd.Info.SamplesPerPixel,
+		PixelRepresentation:       pd.Info.PixelRepresentation,
+		PlanarConfiguration:       pd.Info.PlanarConfiguration,
+		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
+		VRCode:                    "OB", // Encoded data typically uses OB
+		Encapsulated:              c.TransferSyntax().IsEncapsulated(),
+		TransferSyntaxUID:         c.TransferSyntax().UID().UID(),
+		IsLossy:                   pd.Info.IsLossy,
+		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
+		LossyCompressionRatio:     pd.Info.LossyCompressionRatio,
+		PixelPaddingValue:         pd.Info.PixelPaddingValue,
+		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
+	}
+
+	newPD, err := New(newInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new pixel data: %w", err)
+	}
+
+	ownedParams, err := codec.PrepareParameters(c, params)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Encode(ctx, pd, newPD, ownedParams); err != nil {
+		return nil, fmt.Errorf("failed to encode pixel data: %w", err)
+	}
+
+	return newPD, nil
+}
+
+// Decode decodes the pixel data using the specified codec and returns a new Data.
+func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Parameters) (*Data, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("codec must not be nil")
+	}
+
+	// Create new pixel data info for decoded data
+	newInfo := &Info{
+		Width:                     pd.Info.Width,
+		Height:                    pd.Info.Height,
+		NumberOfFrames:            pd.Info.NumberOfFrames,
+		BitsAllocated:             pd.Info.BitsAllocated,
+		BitsStored:                pd.Info.BitsStored,
+		HighBit:                   pd.Info.HighBit,
+		SamplesPerPixel:           pd.Info.SamplesPerPixel,
+		PixelRepresentation:       pd.Info.PixelRepresentation,
+		PlanarConfiguration:       pd.Info.PlanarConfiguration,
+		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
+		VRCode:                    "",
+		Encapsulated:              false, // Decoded data is not encapsulated
+		TransferSyntaxUID:         transfer.ExplicitVRLittleEndian.UID().UID(),
+		IsLossy:                   pd.Info.IsLossy,
+		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
+		LossyCompressionRatio:     pd.Info.LossyCompressionRatio,
+		PixelPaddingValue:         pd.Info.PixelPaddingValue,
+		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
+	}
+	newInfo.VRCode = nativePixelDataVR(newInfo)
+
+	newPD, err := New(newInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new pixel data: %w", err)
+	}
+
+	ownedParams, err := codec.PrepareParameters(c, params)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Decode(ctx, pd, newPD, ownedParams); err != nil {
+		return nil, fmt.Errorf("failed to decode pixel data: %w", err)
+	}
+
+	return newPD, nil
+}
+
+// FromDataset creates a new Data from a DICOM dataset.
+// This function extracts all necessary image information from the dataset
+// including pixel data, image dimensions, bit depth, and photometric interpretation.
+//
+// Example:
+//
+//	result, err := parser.ParseFile("image.dcm")
+//	if err != nil {
+//	    return err
+//	}
+//	pixelData, err := pixeldata.FromDataset(result.Dataset)
+//	if err != nil {
+//	    return err
+//	}
+//	image := imaging.NewDicomImage(pixelData)
+//
+//nolint:gocyclo // Complex function handling many DICOM variations
+func FromDataset(ds *dataset.Dataset) (*Data, error) {
+	// Extract required tags
+	rows, err := ds.GetUInt16(tag.Rows, 0)
+	if err != nil {
+		return nil, fmt.Errorf("missing or invalid Rows tag: %w", err)
+	}
+
+	cols, err := ds.GetUInt16(tag.Columns, 0)
+	if err != nil {
+		return nil, fmt.Errorf("missing or invalid Columns tag: %w", err)
+	}
+
+	// Get pixel data element
+	pixelDataElem, ok := ds.Get(tag.PixelData)
+	if !ok {
+		return nil, fmt.Errorf("missing Pixel Data tag")
+	}
+
+	// Get optional parameters with defaults
+	bitsAllocated := ds.TryGetUInt16(tag.BitsAllocated, 0)
+	if bitsAllocated == 0 {
+		bitsAllocated = 16
+	}
+
+	bitsStored := ds.TryGetUInt16(tag.BitsStored, 0)
+	if bitsStored == 0 {
+		bitsStored = bitsAllocated
+	}
+
+	highBit := ds.TryGetUInt16(tag.HighBit, 0)
+	if highBit == 0 {
+		highBit = bitsStored - 1
+	}
+
+	samplesPerPixel := ds.TryGetUInt16(tag.SamplesPerPixel, 0)
+	if samplesPerPixel == 0 {
+		samplesPerPixel = 1
+	}
+
+	pixelRepr := ds.TryGetUInt16(tag.PixelRepresentation, 0)
+
+	numberOfFrames := frameCountFromDataset(ds)
+
+	planarConfig := ds.TryGetUInt16(tag.PlanarConfiguration, 0)
+
+	// Get photometric interpretation
+	photoInterp, _ := ds.GetString(tag.PhotometricInterpretation)
+	if photoInterp == "" {
+		photoInterp = pixel.Monochrome2.Value
+	}
+
+	pi, err := pixel.ParsePhotometricInterpretation(photoInterp)
+	if err != nil {
+		return nil, fmt.Errorf("invalid photometric interpretation %q: %w", photoInterp, err)
+	}
+
+	// Get transfer syntax UID from dataset
+	// Priority: 1) InternalTransferSyntax 2) TransferSyntaxUID tag 3) Default
+	transferSyntaxUID := transfer.ExplicitVRLittleEndian.UID().UID()
+	if ts := ds.InternalTransferSyntax(); ts != nil {
+		transferSyntaxUID = ts.UID().UID()
+	} else if tsUID, ok := ds.GetString(tag.TransferSyntaxUID); ok {
+		transferSyntaxUID = tsUID
+	}
+
+	// Get lossy compression information if present
+	isLossy := false
+	if lossyComp, ok := ds.GetString(tag.LossyImageCompression); ok && lossyComp == "01" {
+		isLossy = true
+	}
+
+	lossyMethod := ""
+	if method, ok := ds.GetString(tag.LossyImageCompressionMethod); ok {
+		lossyMethod = method
+	}
+
+	lossyRatio := 0.0
+	if ratioStr, ok := ds.GetString(tag.LossyImageCompressionRatio); ok {
+		if ratio, err := strconv.ParseFloat(ratioStr, 64); err == nil {
+			lossyRatio = ratio
+		}
+	}
+
+	// Pixel padding (optional)
+	var paddingVal *int32
+	if pv, err := dicomlut.ShortValue(ds, tag.PixelPaddingValue); err == nil {
+		value := int32(pv)
+		paddingVal = &value
+	}
+	var paddingRange *int32
+	if pr, err := dicomlut.ShortValue(ds, tag.PixelPaddingRangeLimit); err == nil {
+		value := int32(pr)
+		paddingRange = &value
+	}
+
+	// Create pixel data info
+	info := &Info{
+		Width:                     cols,
+		Height:                    rows,
+		NumberOfFrames:            numberOfFrames,
+		BitsAllocated:             bitsAllocated,
+		BitsStored:                bitsStored,
+		HighBit:                   highBit,
+		SamplesPerPixel:           samplesPerPixel,
+		PixelRepresentation:       pixel.Representation(pixelRepr),
+		PlanarConfiguration:       pixel.PlanarConfiguration(planarConfig),
+		PhotometricInterpretation: pi,
+		TransferSyntaxUID:         transferSyntaxUID,
+		IsLossy:                   isLossy,
+		LossyCompressionMethod:    lossyMethod,
+		LossyCompressionRatio:     lossyRatio,
+		PixelPaddingValue:         paddingVal,
+		PixelPaddingRangeLimit:    paddingRange,
+	}
+
+	// Create DICOM pixel data from bytes
+	var pd *Data
+	switch elem := pixelDataElem.(type) {
+	case *element.OtherByte:
+		info.VRCode = "OB"
+		info.Encapsulated = false
+		data := elem.GetData()
+		if len(data) == 0 {
+			return nil, fmt.Errorf("pixel data is empty")
+		}
+		pd, err = NewFromBytes(info, data)
+		if err != nil {
+			return nil, err
+		}
+	case *element.OtherWord:
+		info.VRCode = "OW"
+		info.Encapsulated = false
+		data := elem.GetData()
+		if len(data) == 0 {
+			return nil, fmt.Errorf("pixel data is empty")
+		}
+		if ts := ds.InternalTransferSyntax(); ts != nil && ts.SwapPixelData() {
+			data = swapPixelDataBytes(data, info)
+		}
+		pd, err = NewFromBytes(info, data)
+		if err != nil {
+			return nil, err
+		}
+	case *element.OtherByteFragment:
+		info.VRCode = "OB"
+		info.Encapsulated = true
+		frames, ferr := framesFromFragments(elem.Fragments(), elem.OffsetTable(), numberOfFrames)
+		if ferr != nil {
+			return nil, ferr
+		}
+		pd, err = New(info)
+		if err != nil {
+			return nil, err
+		}
+		pd.frames = append(pd.frames, frames...)
+		pd.basicOffsetTable = append(pd.basicOffsetTable, elem.OffsetTable()...)
+		pd.Info.NumberOfFrames = len(pd.frames)
+	case *element.OtherWordFragment:
+		info.VRCode = "OW"
+		info.Encapsulated = true
+		frames, ferr := framesFromFragments(elem.Fragments(), elem.OffsetTable(), numberOfFrames)
+		if ferr != nil {
+			return nil, ferr
+		}
+		pd, err = New(info)
+		if err != nil {
+			return nil, err
+		}
+		pd.frames = append(pd.frames, frames...)
+		pd.basicOffsetTable = append(pd.basicOffsetTable, elem.OffsetTable()...)
+		pd.Info.NumberOfFrames = len(pd.frames)
+	default:
+		return nil, fmt.Errorf("unsupported pixel data element type: %T", pixelDataElem)
+	}
+
+	// Palette Color handling: convert to RGB if palette LUT present
+	if pi.Value == pixel.PaletteColor.Value && !pd.Info.Encapsulated {
+		if err := ConvertPaletteToRGB(ds, pd); err != nil {
+			return nil, fmt.Errorf("palette conversion failed: %w", err)
+		}
+	}
+
+	return pd, nil
+}
+
+type paletteLUT struct {
+	first    int32
+	entries  []colorconv.Color32
+	hasAlpha bool
+}
+
+// ConvertPaletteToRGB loads a Dataset palette and converts frames to RGB or RGBA.
+func ConvertPaletteToRGB(ds *dataset.Dataset, pd *Data) error {
+	lut, err := buildPaletteLUT(ds)
+	if err != nil {
+		return err
+	}
+
+	bytesPerSample := pd.Info.BytesAllocated()
+	if bytesPerSample != 1 && bytesPerSample != 2 {
+		return fmt.Errorf("unsupported BytesAllocated=%d for palette conversion", bytesPerSample)
+	}
+
+	for fi, frame := range pd.frames {
+		pixelCount := len(frame) / bytesPerSample
+		channels := 3
+		if lut.hasAlpha {
+			channels = 4
+		}
+		out := make([]byte, pixelCount*channels)
+
+		for idx, off := 0, 0; idx < pixelCount; idx, off = idx+1, off+bytesPerSample {
+			val, ok := decodePixelSampleLE(frame, off, pd.Info)
+			if !ok {
+				continue
+			}
+
+			idxLUT := int(val - int64(lut.first))
+			if idxLUT < 0 {
+				idxLUT = 0
+			}
+			if idxLUT >= len(lut.entries) {
+				idxLUT = len(lut.entries) - 1
+			}
+
+			color := lut.entries[idxLUT]
+			base := idx * channels
+			out[base] = color.R
+			out[base+1] = color.G
+			out[base+2] = color.B
+			if lut.hasAlpha {
+				out[base+3] = color.A
+			}
+		}
+
+		pd.frames[fi] = out
+	}
+
+	// Update metadata to RGB
+	pd.Info.PhotometricInterpretation = pixel.RGBPhotometric
+	pd.Info.SamplesPerPixel = uint16(3)
+	if lut.hasAlpha {
+		pd.Info.SamplesPerPixel = 4
+	}
+	pd.Info.PlanarConfiguration = pixel.InterleavedPlanar
+	pd.Info.BitsAllocated = 8
+	pd.Info.BitsStored = 8
+	pd.Info.HighBit = 7
+
+	return nil
+}
+
+func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
+	byteOrder := dicomlut.ByteOrder(ds)
+	signed := ds.TryGetUInt16(tag.PixelRepresentation, 0) == uint16(pixel.SignedPixels)
+	for _, sequenceTag := range []*tag.Tag{
+		tag.EnhancedPaletteColorLookupTableSequence,
+		tag.PaletteColorLookupTableSequence,
+	} {
+		lut, present, err := buildPaletteLUTFromSequence(ds, sequenceTag, byteOrder, signed)
+		if err != nil {
+			return nil, err
+		}
+		if present {
+			return lut, nil
+		}
+	}
+
+	// Fall back to top-level descriptors/data
+	return buildPaletteLUTFromDataset(ds, byteOrder, signed)
+}
+
+// PaletteColors returns the first mapped value and an owned copy of Dataset palette colors.
+func PaletteColors(ds *dataset.Dataset) (int32, []colorconv.Color32, error) {
+	palette, err := buildPaletteLUT(ds)
+	if err != nil {
+		return 0, nil, err
+	}
+	return palette.first, append([]colorconv.Color32(nil), palette.entries...), nil
+}
+
+func buildPaletteLUTFromSequence(
+	ds *dataset.Dataset,
+	sequenceTag *tag.Tag,
+	byteOrder binary.ByteOrder,
+	signed bool,
+) (*paletteLUT, bool, error) {
+	sequenceElement, present := ds.Get(sequenceTag)
+	if !present {
+		return nil, false, nil
+	}
+	sequence, ok := sequenceElement.(*dataset.Sequence)
+	if !ok {
+		return nil, true, fmt.Errorf("%s must use SQ VR", sequenceTag)
+	}
+	if sequence.Count() == 0 || sequence.GetItem(0) == nil {
+		return nil, true, fmt.Errorf("%s must contain a non-nil item", sequenceTag)
+	}
+	lut, err := buildPaletteLUTFromDataset(sequence.GetItem(0), byteOrder, signed)
+	if err != nil {
+		return nil, true, fmt.Errorf("read %s item 0: %w", sequenceTag, err)
+	}
+	return lut, true, nil
+}
+
+// buildPaletteLUTFromDataset builds palette LUT using descriptors/data in the provided dataset (no sequence recursion).
+//
+//nolint:gocyclo // Complex function handling palette LUT variations
+func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder, signed bool) (*paletteLUT, error) {
+	rDescriptor, err := dicomlut.ReadDescriptor(ds, tag.RedPaletteColorLookupTableDescriptor, signed)
+	if err != nil {
+		return nil, fmt.Errorf("missing Red Palette LUT Descriptor: %w", err)
+	}
+	gDescriptor, err := dicomlut.ReadDescriptor(ds, tag.GreenPaletteColorLookupTableDescriptor, signed)
+	if err != nil {
+		return nil, fmt.Errorf("missing Green Palette LUT Descriptor: %w", err)
+	}
+	bDescriptor, err := dicomlut.ReadDescriptor(ds, tag.BluePaletteColorLookupTableDescriptor, signed)
+	if err != nil {
+		return nil, fmt.Errorf("missing Blue Palette LUT Descriptor: %w", err)
+	}
+	if rDescriptor != gDescriptor || rDescriptor != bDescriptor {
+		return nil, fmt.Errorf("palette LUT descriptors do not match")
+	}
+	if rDescriptor.BitsPerEntry != 8 && rDescriptor.BitsPerEntry != 16 {
+		return nil, fmt.Errorf("palette LUT bits per entry must be 8 or 16, got %d", rDescriptor.BitsPerEntry)
+	}
+
+	// Prefer standard LUT data; if missing, try segmented LUT data
+	rLUT, err := dicomlut.ReadData(ds, tag.RedPaletteColorLookupTableData, rDescriptor, byteOrder)
+	if err != nil {
+		if seg, ok := ds.Get(tag.SegmentedRedPaletteColorLookupTableData); ok {
+			if ob, ok2 := seg.(*element.OtherByte); ok2 {
+				rLUT, err = expandSegmentedLUT(ob.GetData(), rDescriptor.EntryCount, byteOrder)
+			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
+				rLUT, err = expandSegmentedLUT(ow.GetData(), rDescriptor.EntryCount, dicomlut.NumericByteOrderOr(ow, byteOrder))
+			} else {
+				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	gLUT, err := dicomlut.ReadData(ds, tag.GreenPaletteColorLookupTableData, gDescriptor, byteOrder)
+	if err != nil {
+		if seg, ok := ds.Get(tag.SegmentedGreenPaletteColorLookupTableData); ok {
+			if ob, ok2 := seg.(*element.OtherByte); ok2 {
+				gLUT, err = expandSegmentedLUT(ob.GetData(), gDescriptor.EntryCount, byteOrder)
+			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
+				gLUT, err = expandSegmentedLUT(ow.GetData(), gDescriptor.EntryCount, dicomlut.NumericByteOrderOr(ow, byteOrder))
+			} else {
+				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	bLUT, err := dicomlut.ReadData(ds, tag.BluePaletteColorLookupTableData, bDescriptor, byteOrder)
+	if err != nil {
+		if seg, ok := ds.Get(tag.SegmentedBluePaletteColorLookupTableData); ok {
+			if ob, ok2 := seg.(*element.OtherByte); ok2 {
+				bLUT, err = expandSegmentedLUT(ob.GetData(), bDescriptor.EntryCount, byteOrder)
+			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
+				bLUT, err = expandSegmentedLUT(ow.GetData(), bDescriptor.EntryCount, dicomlut.NumericByteOrderOr(ow, byteOrder))
+			} else {
+				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	alphaDescriptorPresent := ds.Contains(tag.AlphaPaletteColorLookupTableDescriptor)
+	alphaDataPresent := ds.Contains(tag.AlphaPaletteColorLookupTableData) ||
+		ds.Contains(tag.SegmentedAlphaPaletteColorLookupTableData)
+	if alphaDescriptorPresent != alphaDataPresent {
+		return nil, fmt.Errorf("alpha palette descriptor and data must both be present")
+	}
+	var alphaLUT []uint16
+	if alphaDescriptorPresent {
+		descriptorElement, _ := ds.Get(tag.AlphaPaletteColorLookupTableDescriptor)
+		if _, ok := descriptorElement.(*element.UnsignedShort); !ok {
+			return nil, fmt.Errorf("alpha palette LUT descriptor must use US VR")
+		}
+		alphaDescriptor, err := dicomlut.ReadDescriptor(ds, tag.AlphaPaletteColorLookupTableDescriptor, false)
+		if err != nil {
+			return nil, fmt.Errorf("read Alpha Palette LUT Descriptor: %w", err)
+		}
+		if alphaDescriptor.EntryCount != rDescriptor.EntryCount ||
+			alphaDescriptor.FirstMappedValue != rDescriptor.FirstMappedValue {
+			return nil, fmt.Errorf("alpha palette descriptor must match RGB entry count and first mapped value")
+		}
+		if alphaDescriptor.BitsPerEntry != 8 {
+			return nil, fmt.Errorf("alpha palette LUT bits per entry must be 8, got %d", alphaDescriptor.BitsPerEntry)
+		}
+		alphaLUT, err = readPaletteLUTChannel(ds,
+			tag.AlphaPaletteColorLookupTableData,
+			tag.SegmentedAlphaPaletteColorLookupTableData,
+			alphaDescriptor,
+			byteOrder,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("read Alpha Palette LUT Data: %w", err)
+		}
+	}
+
+	return &paletteLUT{
+		first:    int32(rDescriptor.FirstMappedValue),
+		entries:  buildPaletteEntries(int(rDescriptor.BitsPerEntry), rLUT, gLUT, bLUT, alphaLUT),
+		hasAlpha: alphaDescriptorPresent,
+	}, nil
+}
+
+func readPaletteLUTChannel(
+	ds *dataset.Dataset,
+	directTag, segmentedTag *tag.Tag,
+	descriptor dicomlut.Descriptor,
+	byteOrder binary.ByteOrder,
+) ([]uint16, error) {
+	values, err := dicomlut.ReadData(ds, directTag, descriptor, byteOrder)
+	if err == nil {
+		return values, nil
+	}
+	segmented, ok := ds.Get(segmentedTag)
+	if !ok {
+		return nil, err
+	}
+	switch value := segmented.(type) {
+	case *element.OtherByte:
+		return expandSegmentedLUT(value.GetData(), descriptor.EntryCount, byteOrder)
+	case *element.OtherWord:
+		return expandSegmentedLUT(value.GetData(), descriptor.EntryCount, dicomlut.NumericByteOrderOr(value, byteOrder))
+	default:
+		return nil, fmt.Errorf("unsupported segmented palette element type %T", segmented)
+	}
+}
+
+func buildPaletteEntries(bits int, rLUT, gLUT, bLUT, alphaLUT []uint16) []colorconv.Color32 {
+	shift := 0
+	if bits > 8 {
+		shift = bits - 8
+	}
+
+	entries := make([]colorconv.Color32, len(rLUT))
+	for i := 0; i < len(rLUT); i++ {
+		alpha := uint8(255)
+		if alphaLUT != nil {
+			alpha = clampByte(int(alphaLUT[i]))
+		}
+		entries[i] = colorconv.Color32{
+			A: alpha,
+			R: clampByte(int(rLUT[i] >> shift)),
+			G: clampByte(int(gLUT[i] >> shift)),
+			B: clampByte(int(bLUT[i] >> shift)),
+		}
+	}
+	return entries
+}
+
+func expandSegmentedLUT(raw []byte, expectedSize int, byteOrder binary.ByteOrder) ([]uint16, error) {
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("segmented LUT data is empty")
+	}
+	if len(raw)%2 != 0 {
+		return nil, fmt.Errorf("segmented LUT data has odd byte length %d", len(raw))
+	}
+	if byteOrder.Uint16(raw) == 2 {
+		return nil, fmt.Errorf("segmented LUT first segment must not be indirect")
+	}
+	decoder := segmentedLUTDecoder{
+		raw:          raw,
+		byteOrder:    byteOrder,
+		expectedSize: expectedSize,
+		active:       make(map[int]bool),
+	}
+	position := 0
+	for position < len(raw) {
+		var err error
+		position, err = decoder.decodeSegment(position)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(decoder.output) != expectedSize {
+		return nil, fmt.Errorf("segmented LUT produced %d entries, want %d", len(decoder.output), expectedSize)
+	}
+	return decoder.output, nil
+}
+
+type segmentedLUTDecoder struct {
+	raw          []byte
+	byteOrder    binary.ByteOrder
+	expectedSize int
+	output       []uint16
+	active       map[int]bool
+}
+
+func (d *segmentedLUTDecoder) decodeSegment(position int) (int, error) {
+	if position < 0 || position%2 != 0 || position+4 > len(d.raw) {
+		return 0, fmt.Errorf("segmented LUT segment at byte offset %d is truncated or unaligned", position)
+	}
+	if d.active[position] {
+		return 0, fmt.Errorf("segmented LUT indirect segment cycle at byte offset %d", position)
+	}
+	d.active[position] = true
+	defer delete(d.active, position)
+
+	opcode := d.byteOrder.Uint16(d.raw[position:])
+	length := int(d.byteOrder.Uint16(d.raw[position+2:]))
+	if length == 0 {
+		return 0, fmt.Errorf("segmented LUT opcode %d has zero length", opcode)
+	}
+	payload := position + 4
+
+	switch opcode {
+	case 0:
+		end := payload + length*2
+		if end > len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT discrete segment at byte offset %d is truncated", position)
+		}
+		if err := d.reserve(length); err != nil {
+			return 0, err
+		}
+		for offset := payload; offset < end; offset += 2 {
+			d.output = append(d.output, d.byteOrder.Uint16(d.raw[offset:]))
+		}
+		return end, nil
+	case 1:
+		if len(d.output) == 0 {
+			return 0, fmt.Errorf("segmented LUT linear segment at byte offset %d has no prior value", position)
+		}
+		if payload+2 > len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT linear segment at byte offset %d is truncated", position)
+		}
+		if err := d.reserve(length); err != nil {
+			return 0, err
+		}
+		start := int(d.output[len(d.output)-1])
+		end := int(d.byteOrder.Uint16(d.raw[payload:]))
+		for step := 1; step <= length; step++ {
+			value := math.Round(float64(start) + float64(end-start)*float64(step)/float64(length))
+			d.output = append(d.output, uint16(value))
+		}
+		return payload + 2, nil
+	case 2:
+		if payload+4 > len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT indirect segment at byte offset %d is truncated", position)
+		}
+		lowWord := d.byteOrder.Uint16(d.raw[payload:])
+		highWord := d.byteOrder.Uint16(d.raw[payload+2:])
+		offset := int(uint32(lowWord) | uint32(highWord)<<16)
+		if offset < 0 || offset%2 != 0 || offset >= len(d.raw) {
+			return 0, fmt.Errorf("segmented LUT indirect byte offset %d is out of range", offset)
+		}
+		referencedPosition := offset
+		for segment := 0; segment < length; segment++ {
+			if referencedPosition+2 > len(d.raw) {
+				return 0, fmt.Errorf("segmented LUT indirect reference at byte offset %d is truncated", referencedPosition)
+			}
+			if d.byteOrder.Uint16(d.raw[referencedPosition:]) == 2 {
+				return 0, fmt.Errorf("segmented LUT indirect segment at byte offset %d references another indirect segment", position)
+			}
+			var err error
+			referencedPosition, err = d.decodeSegment(referencedPosition)
+			if err != nil {
+				return 0, err
+			}
+		}
+		return payload + 4, nil
+	default:
+		return 0, fmt.Errorf("unsupported segmented LUT opcode %d", opcode)
+	}
+}
+
+func (d *segmentedLUTDecoder) reserve(count int) error {
+	if d.expectedSize >= 0 && len(d.output)+count > d.expectedSize {
+		return fmt.Errorf("segmented LUT produces more than %d entries", d.expectedSize)
+	}
+	return nil
+}
+
+// framesFromFragments builds per-frame compressed data using fragments and an optional BOT.
+// If offsetTable is present, it slices the concatenated fragments using offsets.
+// Otherwise, it assumes one fragment per frame (best-effort fallback).
+func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, frameCount int) ([][]byte, error) {
+	if len(fragments) == 0 {
+		return nil, fmt.Errorf("no fragments available")
+	}
+
+	for i, frag := range fragments {
+		if len(frag.Data()) == 0 {
+			return nil, fmt.Errorf("fragment %d is empty", i)
+		}
+	}
+
+	if frameCount < 1 {
+		frameCount = len(offsetTable)
+	}
+	if frameCount < 1 {
+		frameCount = len(fragments)
+	}
+	if frameCount < 1 {
+		frameCount = 1
+	}
+
+	// BOT present: offsets point to encoded fragment item starts, not to
+	// concatenated payload bytes. Map each offset to a fragment index, then
+	// concatenate the fragments that belong to each frame.
+	if len(offsetTable) > 0 {
+		if frameCount != len(offsetTable) {
+			return nil, fmt.Errorf("offset table frames mismatch: expected %d, got %d", frameCount, len(offsetTable))
+		}
+
+		fragmentStartByOffset := make(map[uint32]int, len(fragments))
+		var runningOffset uint32
+		for i, frag := range fragments {
+			fragmentStartByOffset[runningOffset] = i
+			size := frag.Size()
+			if size%2 != 0 {
+				size++
+			}
+			if size > math.MaxUint32-8 || runningOffset > math.MaxUint32-8-size {
+				return nil, fmt.Errorf("fragment offset overflow at index %d", i)
+			}
+			runningOffset += 8 + size
+		}
+
+		frameStartIndexes := make([]int, frameCount)
+		for i := 0; i < frameCount; i++ {
+			fragmentIndex, ok := fragmentStartByOffset[offsetTable[i]]
+			if !ok {
+				return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[i], i)
+			}
+			frameStartIndexes[i] = fragmentIndex
+		}
+
+		var frames [][]byte
+		for i, start := range frameStartIndexes {
+			end := len(fragments)
+			if i+1 < len(frameStartIndexes) {
+				end = frameStartIndexes[i+1]
+			}
+			if start >= end {
+				return nil, fmt.Errorf("frame %d derived from BOT is empty", i)
+			}
+			var frame []byte
+			for _, frag := range fragments[start:end] {
+				frame = append(frame, frag.Data()...)
+			}
+			frames = append(frames, codec.StripTrailingPadding(frame))
+		}
+		return frames, nil
+	}
+
+	if frameCount == 1 {
+		var frame []byte
+		for _, frag := range fragments {
+			frame = append(frame, frag.Data()...)
+		}
+		return [][]byte{codec.StripTrailingPadding(frame)}, nil
+	}
+
+	// Fallback: require one fragment per frame.
+	if frameCount > len(fragments) {
+		return nil, fmt.Errorf("frame count %d exceeds available fragments %d without BOT", frameCount, len(fragments))
+	}
+	framesToUse := frameCount
+	var frames [][]byte
+	for i := 0; i < framesToUse; i++ {
+		data := append([]byte(nil), fragments[i].Data()...)
+		frames = append(frames, codec.StripTrailingPadding(data))
+	}
+	return frames, nil
+}
+
+// buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
+// populating the Basic Offset Table for multi-frame images.
+// If an existing BOT is provided and matches frames length, it is used; otherwise BOT is rebuilt.
+func buildFragmentSequence(frames [][]byte, _ []uint32, _ uint16) (element.Element, error) {
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("no frame data provided for fragment sequence")
+	}
+
+	// Rebuild BOT for the fragment layout emitted below: one fragment item per
+	// frame. Existing BOT values may refer to a different source fragment layout.
+	offsets := make([]uint32, 0, len(frames))
+	var runningOffset uint32
+	for i, frame := range frames {
+		offsets = append(offsets, runningOffset)
+		paddedSize := len(frame)
+		if paddedSize%2 != 0 {
+			paddedSize++
+		}
+		if paddedSize > int(math.MaxUint32-8) {
+			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
+		}
+		padded := uint32(paddedSize)
+		if runningOffset > math.MaxUint32-8-padded {
+			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
+		}
+		runningOffset += 8 + padded
+	}
+
+	// Encapsulated pixel data uses OB regardless of BitsAllocated.
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	for _, frame := range frames {
+		obf.AddFragment(buffer.NewMemory(frame))
+	}
+	obf.SetOffsetTable(offsets)
+	return obf, nil
+}
+
+func frameCountFromDataset(ds *dataset.Dataset) int {
+	if value, ok := ds.Get(tag.NumberOfFrames); ok {
+		if values, ok := value.(*element.IntegerString); ok {
+			if count, err := values.GetInt(0); err == nil && count > 0 {
+				return count
+			}
+		}
+	}
+	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
+		return int(nf)
+	}
+	if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 1
+}

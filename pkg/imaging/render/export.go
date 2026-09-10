@@ -11,19 +11,21 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"math"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 )
 
 // ImageExporter provides functionality to export DICOM images to standard formats
 type ImageExporter struct {
-	pipeline  Pipeline
-	converter *ColorSpaceConverter
+	pipeline Pipeline
 }
 
 // NewImageExporter creates a new ImageExporter
 func NewImageExporter(pipeline Pipeline) *ImageExporter {
 	return &ImageExporter{
-		pipeline:  pipeline,
-		converter: NewColorSpaceConverter(),
+		pipeline: pipeline,
 	}
 }
 
@@ -115,7 +117,7 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 		isMonochrome1 := photometric == "MONOCHROME1"
 		for index := 0; index < width*height; index++ {
 			pixelValue := float64((pixelData[index/8] >> uint(index%8)) & 1)
-			grayValue := clampUint8(pipelineLUT.Transform(pixelValue))
+			grayValue := clampRenderByte(pipelineLUT.Transform(pixelValue))
 			if isMonochrome1 {
 				grayValue = 255 - grayValue
 			}
@@ -156,7 +158,7 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 			outputValue := lut.Transform(pixelValue)
 
 			// Clamp to 8-bit range
-			grayValue := clampUint8(outputValue)
+			grayValue := clampRenderByte(outputValue)
 
 			// Invert for MONOCHROME1
 			if isMonochrome1 {
@@ -220,7 +222,13 @@ func (e *ImageExporter) RenderRGBImage(
 	}
 
 	// Convert to RGB if needed
-	rgbData, err := e.converter.ConvertToRGB(pixelData, width, height, photometric, planarConfig)
+	rgbData, err := colorconv.ConvertToRGB(
+		pixelData,
+		width,
+		height,
+		pixel.PhotometricInterpretation{Value: photometric},
+		pixel.PlanarConfiguration(planarConfig),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to RGB: %w", err)
 	}
@@ -232,33 +240,28 @@ func (e *ImageExporter) RenderRGBImage(
 	// Create RGBA image
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	// Copy pixel data
-	if planarConfig == 0 || photometric != "RGB" {
-		// Interleaved RGB or converted data
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				idx := (y*width + x) * 3
-				r := rgbData[idx]
-				g := rgbData[idx+1]
-				b := rgbData[idx+2]
-				img.SetRGBA(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
-			}
-		}
-	} else {
-		// Planar RGB: RRR... GGG... BBB...
-		pixelCount := width * height
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				i := y*width + x
-				r := rgbData[i]
-				g := rgbData[pixelCount+i]
-				b := rgbData[2*pixelCount+i]
-				img.SetRGBA(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
-			}
+	// colorconv.ConvertToRGB always returns interleaved RGB.
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			idx := (y*width + x) * 3
+			r := rgbData[idx]
+			g := rgbData[idx+1]
+			b := rgbData[idx+2]
+			img.SetRGBA(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
 		}
 	}
 
 	return img, nil
+}
+
+func clampRenderByte(value float64) uint8 {
+	if value < 0 {
+		return 0
+	}
+	if value > 255 {
+		return 255
+	}
+	return uint8(math.Round(value))
 }
 
 // RenderRGBAImage renders interleaved straight-alpha RGBA pixel data.
@@ -301,7 +304,7 @@ func (e *ImageExporter) ExportImage(writer io.Writer, img image.Image, options *
 	return e.encodeImage(writer, img, options)
 }
 
-// RenderFrame renders a single frame from DicomPixelData to an image
+// RenderFrame renders a single pixel-data frame to an image.
 // This is a high-level convenience function
 func (e *ImageExporter) RenderFrame(
 	writer io.Writer,

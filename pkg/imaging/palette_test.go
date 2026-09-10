@@ -8,11 +8,11 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 )
 
 func TestNewColor32(t *testing.T) {
-	color := imagetypes.NewColor32(255, 100, 150, 200)
+	color := colorconv.NewColor32(255, 100, 150, 200)
 
 	if color.A != 255 {
 		t.Errorf("Expected A=255, got %d", color.A)
@@ -200,12 +200,12 @@ func TestPaletteColorLUTAppliesFirstMappedValueAndClamps(t *testing.T) {
 
 	tests := []struct {
 		input uint16
-		want  imagetypes.Color32
+		want  colorconv.Color32
 	}{
-		{input: 9, want: imagetypes.NewColor32(255, 10, 30, 50)},
-		{input: 10, want: imagetypes.NewColor32(255, 10, 30, 50)},
-		{input: 11, want: imagetypes.NewColor32(255, 20, 40, 60)},
-		{input: 12, want: imagetypes.NewColor32(255, 20, 40, 60)},
+		{input: 9, want: colorconv.NewColor32(255, 10, 30, 50)},
+		{input: 10, want: colorconv.NewColor32(255, 10, 30, 50)},
+		{input: 11, want: colorconv.NewColor32(255, 20, 40, 60)},
+		{input: 12, want: colorconv.NewColor32(255, 20, 40, 60)},
 	}
 	for _, tt := range tests {
 		if got := lut.GetColor(tt.input); got != tt.want {
@@ -335,7 +335,7 @@ func TestPaletteColorLUTAcceptsEvenLengthPaddingForOddEightBitData(t *testing.T)
 	if err != nil {
 		t.Fatalf("NewPaletteColorLUT() error = %v", err)
 	}
-	if got := lut.GetColor(2); got != imagetypes.NewColor32(255, 30, 60, 90) {
+	if got := lut.GetColor(2); got != colorconv.NewColor32(255, 30, 60, 90) {
 		t.Fatalf("GetColor(2) = %#v, want final unpadded LUT entry", got)
 	}
 }

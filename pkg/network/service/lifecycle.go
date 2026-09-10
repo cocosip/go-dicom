@@ -79,9 +79,6 @@ func (s *Service) Start() error {
 	if s.IsClosed() {
 		return ErrServiceClosed
 	}
-	if err := s.validateHandlers(); err != nil {
-		return err
-	}
 
 	s.startMu.Lock()
 	if s.started {

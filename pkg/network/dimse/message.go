@@ -43,6 +43,9 @@ type Message interface {
 type Request interface {
 	Message
 
+	// SetMessageID assigns the request identifier used to correlate its response.
+	SetMessageID(id uint16) error
+
 	// Priority returns the priority of the request
 	Priority() uint16
 
@@ -131,7 +134,7 @@ func (m *BaseMessage) MessageID() uint16 {
 	return value
 }
 
-// SetMessageID sets the message ID. This is typically called by the Client/Association
+// SetMessageID sets the message ID. This is typically called by the Client/Service
 // layer before sending the message.
 func (m *BaseMessage) SetMessageID(id uint16) error {
 	if m.command == nil {

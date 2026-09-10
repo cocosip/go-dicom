@@ -4,10 +4,22 @@
 package codec
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
+	"sort"
 	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+)
+
+var (
+	// ErrNilCodec identifies an attempted nil codec registration.
+	ErrNilCodec = errors.New("codec must not be nil")
+	// ErrNilTransferSyntax identifies a codec without a transfer syntax or UID.
+	ErrNilTransferSyntax = errors.New("codec transfer syntax must not be nil")
+	// ErrCodecAlreadyRegistered identifies a duplicate Register call.
+	ErrCodecAlreadyRegistered = errors.New("codec already registered")
 )
 
 // Registry manages codecs for different transfer syntaxes.
@@ -16,58 +28,125 @@ type Registry struct {
 	codecs map[string]Codec // key: transfer syntax UID
 }
 
-// NewCodecRegistry creates a new codec registry.
-func NewCodecRegistry() *Registry {
+func newEmptyRegistry() *Registry {
 	return &Registry{
 		codecs: make(map[string]Codec),
 	}
 }
 
-// RegisterCodec registers a codec for a transfer syntax.
-func (r *Registry) RegisterCodec(ts *transfer.Syntax, codec Codec) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.codecs[ts.UID().UID()] = codec
+// NewRegistry creates an isolated registry containing the native codecs.
+func NewRegistry() *Registry {
+	registry := newEmptyRegistry()
+	registerBuiltinCodecs(registry)
+	return registry
 }
 
-// GetCodec retrieves a codec for a transfer syntax.
-// Returns the codec and true if found, nil and false otherwise.
-func (r *Registry) GetCodec(ts *transfer.Syntax) (Codec, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	codec, exists := r.codecs[ts.UID().UID()]
-	return codec, exists
-}
-
-// HasCodec checks if a codec is registered for a transfer syntax.
-func (r *Registry) HasCodec(ts *transfer.Syntax) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	_, exists := r.codecs[ts.UID().UID()]
-	return exists
-}
-
-// UnregisterCodec removes a codec from the registry.
-func (r *Registry) UnregisterCodec(ts *transfer.Syntax) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	delete(r.codecs, ts.UID().UID())
-}
-
-// ListCodecs returns a list of all registered transfer syntax UIDs.
-func (r *Registry) ListCodecs() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	uids := make([]string, 0, len(r.codecs))
-	for uid := range r.codecs {
-		uids = append(uids, uid)
+// Register adds a codec without replacing an implementation for the same UID.
+func (r *Registry) Register(c Codec) error {
+	uid, err := registryCodecUID(c)
+	if err != nil {
+		return err
 	}
-	return uids
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.codecs[uid]; exists {
+		return fmt.Errorf("%w: %s", ErrCodecAlreadyRegistered, uid)
+	}
+	r.codecs[uid] = c
+	return nil
+}
+
+// Replace inserts a codec and returns the previous implementation, if any.
+func (r *Registry) Replace(c Codec) (Codec, error) {
+	uid, err := registryCodecUID(c)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	previous := r.codecs[uid]
+	r.codecs[uid] = c
+	return previous, nil
+}
+
+// Unregister removes and returns the codec for syntax.
+func (r *Registry) Unregister(syntax *transfer.Syntax) (Codec, bool) {
+	uid, ok := registrySyntaxUID(syntax)
+	if !ok {
+		return nil, false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	previous, found := r.codecs[uid]
+	delete(r.codecs, uid)
+	return previous, found
+}
+
+// Lookup returns the codec registered for syntax.
+func (r *Registry) Lookup(syntax *transfer.Syntax) (Codec, bool) {
+	uid, ok := registrySyntaxUID(syntax)
+	if !ok {
+		return nil, false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	c, found := r.codecs[uid]
+	return c, found
+}
+
+// List returns a UID-sorted snapshot of registered codecs.
+func (r *Registry) List() []Codec {
+	r.mu.RLock()
+	entries := make([]struct {
+		uid   string
+		codec Codec
+	}, 0, len(r.codecs))
+	for uid, c := range r.codecs {
+		entries = append(entries, struct {
+			uid   string
+			codec Codec
+		}{uid: uid, codec: c})
+	}
+	r.mu.RUnlock()
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].uid < entries[j].uid })
+	result := make([]Codec, len(entries))
+	for index, entry := range entries {
+		result[index] = entry.codec
+	}
+	return result
+}
+
+func registryCodecUID(c Codec) (string, error) {
+	if codecIsNil(c) {
+		return "", ErrNilCodec
+	}
+	syntax := c.TransferSyntax()
+	uid, ok := registrySyntaxUID(syntax)
+	if !ok {
+		return "", ErrNilTransferSyntax
+	}
+	return uid, nil
+}
+
+func registrySyntaxUID(syntax *transfer.Syntax) (string, bool) {
+	if syntax == nil || syntax.UID() == nil || syntax.UID().UID() == "" {
+		return "", false
+	}
+	return syntax.UID().UID(), true
+}
+
+func codecIsNil(c Codec) bool {
+	if c == nil {
+		return true
+	}
+	value := reflect.ValueOf(c)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // Global codec registry
@@ -76,12 +155,10 @@ var (
 	globalRegistryOnce sync.Once
 )
 
-// GetGlobalRegistry returns the global codec registry singleton.
-func GetGlobalRegistry() *Registry {
+// GlobalRegistry returns the mutable, process-wide codec plugin registry.
+func GlobalRegistry() *Registry {
 	globalRegistryOnce.Do(func() {
-		globalRegistry = NewCodecRegistry()
-		// Register built-in codecs
-		registerBuiltinCodecs(globalRegistry)
+		globalRegistry = NewRegistry()
 	})
 	return globalRegistry
 }
@@ -92,76 +169,21 @@ func registerBuiltinCodecs(registry *Registry) {
 
 	// Explicit VR Little Endian
 	explicitLECodec := NewNativeCodec(transfer.ExplicitVRLittleEndian, false)
-	registry.RegisterCodec(transfer.ExplicitVRLittleEndian, explicitLECodec)
+	if err := registry.Register(explicitLECodec); err != nil {
+		panic(err)
+	}
 
 	// Implicit VR Little Endian
 	implicitLECodec := NewNativeCodec(transfer.ImplicitVRLittleEndian, false)
-	registry.RegisterCodec(transfer.ImplicitVRLittleEndian, implicitLECodec)
+	if err := registry.Register(implicitLECodec); err != nil {
+		panic(err)
+	}
 
 	// Explicit VR Big Endian
 	explicitBECodec := NewNativeCodec(transfer.ExplicitVRBigEndian, true)
-	registry.RegisterCodec(transfer.ExplicitVRBigEndian, explicitBECodec)
+	if err := registry.Register(explicitBECodec); err != nil {
+		panic(err)
+	}
 
 	// Compressed codecs are supplied by go-dicom-codecs.
-}
-
-// TranscoderManager provides high-level transcoding operations.
-type TranscoderManager struct {
-	registry *Registry
-}
-
-// NewTranscoderManager creates a new transcoder manager.
-func NewTranscoderManager(registry *Registry) *TranscoderManager {
-	if registry == nil {
-		registry = GetGlobalRegistry()
-	}
-
-	return &TranscoderManager{
-		registry: registry,
-	}
-}
-
-// CreateTranscoder creates a transcoder for converting between two transfer syntaxes.
-func (tm *TranscoderManager) CreateTranscoder(
-	inputTS, outputTS *transfer.Syntax,
-	opts ...TranscoderOption,
-) (*Transcoder, error) {
-	// Check if required codecs are available
-	if inputTS.IsEncapsulated() && !tm.registry.HasCodec(inputTS) {
-		return nil, fmt.Errorf("no codec available for input transfer syntax: %s", inputTS.UID().UID())
-	}
-
-	if outputTS.IsEncapsulated() && !tm.registry.HasCodec(outputTS) {
-		return nil, fmt.Errorf("no codec available for output transfer syntax: %s", outputTS.UID().UID())
-	}
-
-	// Add registry to options
-	opts = append(opts, WithCodecRegistry(tm.registry))
-
-	// Create transcoder
-	return NewTranscoder(inputTS, outputTS, opts...), nil
-}
-
-// CanTranscode checks if transcoding between two transfer syntaxes is supported.
-func (tm *TranscoderManager) CanTranscode(inputTS, outputTS *transfer.Syntax) bool {
-	// Uncompressed to uncompressed is always supported
-	if !inputTS.IsEncapsulated() && !outputTS.IsEncapsulated() {
-		return true
-	}
-
-	// Check if required codecs are available
-	if inputTS.IsEncapsulated() && !tm.registry.HasCodec(inputTS) {
-		return false
-	}
-
-	if outputTS.IsEncapsulated() && !tm.registry.HasCodec(outputTS) {
-		return false
-	}
-
-	return true
-}
-
-// GetDefaultManager returns a transcoder manager with the global registry.
-func GetDefaultManager() *TranscoderManager {
-	return NewTranscoderManager(GetGlobalRegistry())
 }

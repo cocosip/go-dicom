@@ -6,7 +6,6 @@ package tag_test
 import (
 	"testing"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/dictif"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
@@ -345,47 +344,7 @@ func TestHash(t *testing.T) {
 	}
 }
 
-func TestDictionaryEntry(t *testing.T) {
-	// Create a tag
-	testTag := tag.New(0x0010, 0x0010)
-
-	// Get dictionary entry
-	entry := testTag.DictionaryEntry()
-
-	// The entry might be nil if the dictionary is not fully initialized yet,
-	// but the method should not panic
-	if entry != nil {
-		// If we get an entry, verify it's the correct type
-		// (We can't import dict here due to circular dependency,
-		// so we just check it's not nil)
-		t.Logf("Got dictionary entry: %v", entry)
-	} else {
-		t.Log("Dictionary entry is nil (dictionary may not be initialized)")
-	}
-}
-
-func TestDictionaryEntryNotInitialized(t *testing.T) {
-	// Save the original lookup implementation
-	originalLookup := dictif.GlobalLookup()
-
-	// Set lookup to nil to simulate uninitialized dictionary
-	dictif.SetGlobalLookup(nil)
-
-	testTag := tag.New(0x0010, 0x0010)
-	entry := testTag.DictionaryEntry()
-
-	if entry != nil {
-		t.Error("DictionaryEntry() should return nil when lookup is not initialized")
-	}
-
-	// Restore the original lookup implementation
-	dictif.SetGlobalLookup(originalLookup)
-}
-
-func TestParsePrivateCreatorCaching(t *testing.T) {
-	// Note: This test verifies caching behavior when the dict package is imported.
-	// If dict package is not imported, private creators won't be cached (fallback behavior).
-
+func TestParsePrivateCreator(t *testing.T) {
 	// Parse the same private tag twice
 	tag1, err := tag.Parse("(0029,1001:TESTCREATOR)")
 	if err != nil {
@@ -415,7 +374,4 @@ func TestParsePrivateCreatorCaching(t *testing.T) {
 		t.Errorf("tag3 PrivateCreator().Creator() = %q, want \"OTHERCREATOR\"", tag3.PrivateCreator().Creator())
 	}
 
-	// Note: We don't test pointer equality here because the tag_test package
-	// doesn't import dict, so the globalPrivateCreatorLookup may not be set.
-	// The caching behavior is tested in dict/dictionary_test.go instead.
 }

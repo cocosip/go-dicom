@@ -27,7 +27,7 @@ const (
 // ValidationError reports a Dataset validation failure and retains its cause.
 type ValidationError struct {
 	Kind  ValidationKind
-	Path  []ValidationPathSegment
+	Path  Path
 	Cause error
 }
 
@@ -57,7 +57,7 @@ func (ds *Dataset) Validate() error {
 	return validateDataset(ds, nil)
 }
 
-func validateDataset(ds *Dataset, path []ValidationPathSegment) error {
+func validateDataset(ds *Dataset, path Path) error {
 	if ds == nil {
 		return validationError(ValidationStructural, path, fmt.Errorf("dataset is nil"))
 	}
@@ -86,7 +86,7 @@ func validateDataset(ds *Dataset, path []ValidationPathSegment) error {
 	return validationError(ValidationStructural, path, err)
 }
 
-func validateElement(elem element.Element, path []ValidationPathSegment) error {
+func validateElement(elem element.Element, path Path) error {
 	if isNilElement(elem) {
 		return validationError(ValidationStructural, path, fmt.Errorf("element is nil"))
 	}
@@ -113,7 +113,7 @@ func validateElementAtPath(elem element.Element, elementPath Path) error {
 	return nil
 }
 
-func validateSequence(sequence *Sequence, path []ValidationPathSegment) error {
+func validateSequence(sequence *Sequence, path Path) error {
 	if sequence == nil {
 		return validationError(ValidationStructural, path, fmt.Errorf("sequence is nil"))
 	}
@@ -147,7 +147,7 @@ func isVMExempt(valueRepresentation *vr.VR) bool {
 	}
 }
 
-func validationError(kind ValidationKind, path []ValidationPathSegment, cause error) error {
+func validationError(kind ValidationKind, path Path, cause error) error {
 	return &ValidationError{
 		Kind:  kind,
 		Path:  ClonePath(path),

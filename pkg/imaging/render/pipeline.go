@@ -6,14 +6,13 @@ package render
 import (
 	"sync"
 
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 )
 
 // Pipeline defines the interface for rendering pipelines
 type Pipeline interface {
 	// LUT returns the composite LUT of the pipeline
-	LUT() LUT
+	LUT() lut.LUT
 	// ClearCache removes all cached data and only keeps configuration data
 	ClearCache()
 }
@@ -28,11 +27,11 @@ type PipelineCloner interface {
 type GrayscalePipeline struct {
 	mu sync.RWMutex
 
-	modalityLUT      ModalityLUT
+	modalityLUT      lut.LUT
 	voiLUT           lut.VOILUT
-	voiSequenceLUT   LUT
-	invertLUT        LUT
-	compositeLUT     LUT
+	voiSequenceLUT   lut.LUT
+	invertLUT        lut.LUT
+	compositeLUT     lut.LUT
 	windowWidth      float64
 	windowCenter     float64
 	invert           bool
@@ -40,7 +39,7 @@ type GrayscalePipeline struct {
 	maxInputValue    float64
 	rescaleSlope     float64
 	rescaleIntercept float64
-	voiLUTFunction   imagetypes.VOILUTFunction
+	voiLUTFunction   lut.VOILUTFunction
 	useVOILUT        bool
 }
 
@@ -54,7 +53,7 @@ func NewGrayscalePipeline(rescaleSlope, rescaleIntercept, windowCenter, windowWi
 		maxInputValue:    maxInput,
 		rescaleSlope:     rescaleSlope,
 		rescaleIntercept: rescaleIntercept,
-		voiLUTFunction:   imagetypes.VOILUTFunctionLinear,
+		voiLUTFunction:   lut.VOILUTFunctionLinear,
 	}
 	p.buildPipeline()
 	return p
@@ -80,7 +79,7 @@ func (p *GrayscalePipeline) ClonePipeline() Pipeline {
 }
 
 // SetVOILUTFunction updates the DICOM VOI windowing function.
-func (p *GrayscalePipeline) SetVOILUTFunction(function imagetypes.VOILUTFunction) {
+func (p *GrayscalePipeline) SetVOILUTFunction(function lut.VOILUTFunction) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.voiLUTFunction != function {
@@ -90,7 +89,7 @@ func (p *GrayscalePipeline) SetVOILUTFunction(function imagetypes.VOILUTFunction
 }
 
 // SetModalityLUT replaces rescale slope/intercept with an explicit Modality LUT.
-func (p *GrayscalePipeline) SetModalityLUT(modalityLUT ModalityLUT) {
+func (p *GrayscalePipeline) SetModalityLUT(modalityLUT lut.LUT) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.modalityLUT = modalityLUT
@@ -98,7 +97,7 @@ func (p *GrayscalePipeline) SetModalityLUT(modalityLUT ModalityLUT) {
 }
 
 // SetVOILUT replaces windowing with an explicit VOI LUT Sequence pipeline.
-func (p *GrayscalePipeline) SetVOILUT(voiLUT LUT) {
+func (p *GrayscalePipeline) SetVOILUT(voiLUT lut.LUT) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.voiSequenceLUT = voiLUT
@@ -186,7 +185,7 @@ func (p *GrayscalePipeline) SetInvert(invert bool) {
 }
 
 // LUT returns the composite LUT for the pipeline
-func (p *GrayscalePipeline) LUT() LUT {
+func (p *GrayscalePipeline) LUT() lut.LUT {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -206,13 +205,13 @@ func (p *GrayscalePipeline) ClearCache() {
 
 func (p *GrayscalePipeline) buildPipeline() {
 	// Build the composite LUT chain
-	luts := make([]LUT, 0, 4)
+	luts := make([]lut.LUT, 0, 4)
 
 	// 1. Modality LUT (rescale)
 	if p.modalityLUT != nil {
 		luts = append(luts, p.modalityLUT)
 	} else if p.rescaleSlope != 1.0 || p.rescaleIntercept != 0.0 {
-		luts = append(luts, NewModalityRescaleLUT(p.rescaleSlope, p.rescaleIntercept, p.minInputValue, p.maxInputValue))
+		luts = append(luts, lut.NewModalityRescaleLUT(p.rescaleSlope, p.rescaleIntercept, p.minInputValue, p.maxInputValue))
 	}
 
 	// 2. VOI LUT (windowing)

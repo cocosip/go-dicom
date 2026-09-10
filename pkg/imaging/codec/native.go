@@ -4,12 +4,14 @@
 package codec
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
 )
+
+const contextCopyChunkSize = 64 * 1024
 
 // NativeCodec handles uncompressed pixel data with various transfer syntaxes.
 // This codec supports:
@@ -66,34 +68,44 @@ func (c *NativeCodec) TransferSyntax() *transfer.Syntax {
 	return c.transferSyntax
 }
 
-// GetDefaultParameters returns default parameters for this codec.
-func (c *NativeCodec) GetDefaultParameters() Parameters {
-	return NewBaseParameters()
+// DefaultParameters returns default parameters for this codec.
+func (c *NativeCodec) DefaultParameters() Parameters {
+	return NativeParameters{}
 }
 
 // Encode encodes pixel data from oldPixelData to newPixelData.
 // For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
-func (c *NativeCodec) Encode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error {
+func (c *NativeCodec) Encode(ctx context.Context, oldPixelData FrameSource, newPixelData FrameSink, parameters Parameters) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
+	params, err := nativeParameters(parameters)
+	if err != nil {
+		return err
+	}
 
-	frameInfo := oldPixelData.GetFrameInfo()
+	frameInfo := oldPixelData.FrameInfo()
 	frameCount := oldPixelData.FrameCount()
 
 	// Process each frame
 	for i := 0; i < frameCount; i++ {
-		srcFrame, err := oldPixelData.GetFrame(i)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		srcFrame, err := oldPixelData.Frame(ctx, i)
 		if err != nil {
 			return fmt.Errorf("failed to get frame %d: %w", i, err)
 		}
 
 		var dstFrame []byte
-		if err := c.encodeFrame(srcFrame, &dstFrame, frameInfo, parameters); err != nil {
+		if err := c.encodeFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
 			return fmt.Errorf("failed to encode frame %d: %w", i, err)
 		}
 
-		if err := newPixelData.AddFrame(dstFrame); err != nil {
+		if err := newPixelData.AddFrame(ctx, dstFrame); err != nil {
 			return fmt.Errorf("failed to add frame %d: %w", i, err)
 		}
 	}
@@ -103,27 +115,37 @@ func (c *NativeCodec) Encode(oldPixelData imagetypes.PixelData, newPixelData ima
 
 // Decode decodes pixel data from oldPixelData to newPixelData.
 // For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
-func (c *NativeCodec) Decode(oldPixelData imagetypes.PixelData, newPixelData imagetypes.PixelData, parameters Parameters) error {
+func (c *NativeCodec) Decode(ctx context.Context, oldPixelData FrameSource, newPixelData FrameSink, parameters Parameters) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if oldPixelData == nil || newPixelData == nil {
 		return fmt.Errorf("source and destination pixel data must not be nil")
 	}
+	params, err := nativeParameters(parameters)
+	if err != nil {
+		return err
+	}
 
-	frameInfo := oldPixelData.GetFrameInfo()
+	frameInfo := oldPixelData.FrameInfo()
 	frameCount := oldPixelData.FrameCount()
 
 	// Process each frame
 	for i := 0; i < frameCount; i++ {
-		srcFrame, err := oldPixelData.GetFrame(i)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		srcFrame, err := oldPixelData.Frame(ctx, i)
 		if err != nil {
 			return fmt.Errorf("failed to get frame %d: %w", i, err)
 		}
 
 		var dstFrame []byte
-		if err := c.decodeFrame(srcFrame, &dstFrame, frameInfo, parameters); err != nil {
+		if err := c.decodeFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
 			return fmt.Errorf("failed to decode frame %d: %w", i, err)
 		}
 
-		if err := newPixelData.AddFrame(dstFrame); err != nil {
+		if err := newPixelData.AddFrame(ctx, dstFrame); err != nil {
 			return fmt.Errorf("failed to add frame %d: %w", i, err)
 		}
 	}
@@ -132,89 +154,83 @@ func (c *NativeCodec) Decode(oldPixelData imagetypes.PixelData, newPixelData ima
 }
 
 // encodeFrame encodes a single frame (internal helper method).
-func (c *NativeCodec) encodeFrame(src []byte, dst *[]byte, info *imagetypes.FrameInfo, params Parameters) error {
+func (c *NativeCodec) encodeFrame(ctx context.Context, src []byte, dst *[]byte, info FrameInfo, params NativeParameters) error {
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}
-	if info == nil {
-		return fmt.Errorf("frame info must not be nil")
-	}
-
 	// Calculate bytes per sample from frame info
-	bytesPerSample := int((info.BitsAllocated-1)/8 + 1)
+	bytesPerSample := info.BitDepth.BytesAllocated()
 
 	// If single-byte samples, no swapping needed
 	if bytesPerSample == 1 {
-		*dst = make([]byte, len(src))
-		copy(*dst, src)
-		return nil
+		return copyFrame(ctx, src, dst)
 	}
 
 	// Multi-byte samples may need byte swapping
-	shouldSwap := false
-	if params != nil {
-		if swapParam := params.GetParameter("swap_bytes"); swapParam != nil {
-			if swap, ok := swapParam.(bool); ok {
-				shouldSwap = swap
-			}
-		}
-	}
+	shouldSwap := params.ByteSwap == ByteSwapEnabled
 
 	*dst = make([]byte, len(src))
 
 	if !shouldSwap {
 		// No swapping, just copy
-		copy(*dst, src)
-		return nil
+		return copyFrameInto(ctx, src, *dst)
 	}
 
 	// Swap bytes based on sample size
-	return c.swapBytes(src, *dst, bytesPerSample)
+	return c.swapBytes(ctx, src, *dst, bytesPerSample)
 }
 
 // decodeFrame decodes a single frame (internal helper method).
-func (c *NativeCodec) decodeFrame(src []byte, dst *[]byte, info *imagetypes.FrameInfo, params Parameters) error {
+func (c *NativeCodec) decodeFrame(ctx context.Context, src []byte, dst *[]byte, info FrameInfo, params NativeParameters) error {
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}
-	if info == nil {
-		return fmt.Errorf("frame info must not be nil")
-	}
-
 	// Calculate bytes per sample from frame info
-	bytesPerSample := int((info.BitsAllocated-1)/8 + 1)
+	bytesPerSample := info.BitDepth.BytesAllocated()
 
 	// If single-byte samples, no swapping needed
 	if bytesPerSample == 1 {
-		*dst = make([]byte, len(src))
-		copy(*dst, src)
-		return nil
+		return copyFrame(ctx, src, dst)
 	}
 
 	// Multi-byte samples may need byte swapping
 	shouldSwap := c.isBigEndian // Swap if source is big endian (convert to little endian)
-	if params != nil {
-		if swapParam := params.GetParameter("swap_bytes"); swapParam != nil {
-			if swap, ok := swapParam.(bool); ok {
-				shouldSwap = swap
-			}
-		}
+	switch params.ByteSwap {
+	case ByteSwapDisabled:
+		shouldSwap = false
+	case ByteSwapEnabled:
+		shouldSwap = true
 	}
 
 	*dst = make([]byte, len(src))
 
 	if !shouldSwap {
 		// No swapping, just copy
-		copy(*dst, src)
-		return nil
+		return copyFrameInto(ctx, src, *dst)
 	}
 
 	// Swap bytes based on sample size
-	return c.swapBytes(src, *dst, bytesPerSample)
+	return c.swapBytes(ctx, src, *dst, bytesPerSample)
+}
+
+func copyFrame(ctx context.Context, src []byte, dst *[]byte) error {
+	*dst = make([]byte, len(src))
+	return copyFrameInto(ctx, src, *dst)
+}
+
+func copyFrameInto(ctx context.Context, src, dst []byte) error {
+	for offset := 0; offset < len(src); offset += contextCopyChunkSize {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		end := min(offset+contextCopyChunkSize, len(src))
+		copy(dst[offset:end], src[offset:end])
+	}
+	return ctx.Err()
 }
 
 // swapBytes swaps the byte order of multi-byte samples.
-func (c *NativeCodec) swapBytes(src, dst []byte, bytesPerSample int) error {
+func (c *NativeCodec) swapBytes(ctx context.Context, src, dst []byte, bytesPerSample int) error {
 	if len(src) != len(dst) {
 		return fmt.Errorf("source and destination buffers must be same length")
 	}
@@ -226,19 +242,24 @@ func (c *NativeCodec) swapBytes(src, dst []byte, bytesPerSample int) error {
 
 	switch bytesPerSample {
 	case 2:
-		return c.swap16(src, dst)
+		return c.swap16(ctx, src, dst)
 	case 4:
-		return c.swap32(src, dst)
+		return c.swap32(ctx, src, dst)
 	case 8:
-		return c.swap64(src, dst)
+		return c.swap64(ctx, src, dst)
 	default:
 		return fmt.Errorf("unsupported bytes per sample: %d", bytesPerSample)
 	}
 }
 
 // swap16 swaps 16-bit values between little and big endian.
-func (c *NativeCodec) swap16(src, dst []byte) error {
+func (c *NativeCodec) swap16(ctx context.Context, src, dst []byte) error {
 	for i := 0; i < len(src); i += 2 {
+		if i%contextCopyChunkSize == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 		if i+1 >= len(src) {
 			return fmt.Errorf("incomplete 16-bit sample at offset %d", i)
 		}
@@ -249,8 +270,13 @@ func (c *NativeCodec) swap16(src, dst []byte) error {
 }
 
 // swap32 swaps 32-bit values between little and big endian.
-func (c *NativeCodec) swap32(src, dst []byte) error {
+func (c *NativeCodec) swap32(ctx context.Context, src, dst []byte) error {
 	for i := 0; i < len(src); i += 4 {
+		if i%contextCopyChunkSize == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 		if i+3 >= len(src) {
 			return fmt.Errorf("incomplete 32-bit sample at offset %d", i)
 		}
@@ -263,8 +289,13 @@ func (c *NativeCodec) swap32(src, dst []byte) error {
 }
 
 // swap64 swaps 64-bit values between little and big endian.
-func (c *NativeCodec) swap64(src, dst []byte) error {
+func (c *NativeCodec) swap64(ctx context.Context, src, dst []byte) error {
 	for i := 0; i < len(src); i += 8 {
+		if i%contextCopyChunkSize == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 		if i+7 >= len(src) {
 			return fmt.Errorf("incomplete 64-bit sample at offset %d", i)
 		}
@@ -278,18 +309,6 @@ func (c *NativeCodec) swap64(src, dst []byte) error {
 		dst[i+7] = src[i]
 	}
 	return nil
-}
-
-// ConvertEndianness converts pixel data between little and big endian.
-// This is a utility function for external use.
-func ConvertEndianness(data []byte, bytesPerSample int) ([]byte, error) {
-	result := make([]byte, len(data))
-	codec := NewNativeCodec(nil, false)
-	err := codec.swapBytes(data, result, bytesPerSample)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 // ReadUint16 reads a uint16 value from the buffer at the specified offset,

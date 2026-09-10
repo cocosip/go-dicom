@@ -4,6 +4,7 @@
 package imaging
 
 import (
+	"context"
 	"encoding/binary"
 	"image"
 	"image/color"
@@ -12,10 +13,11 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/imaging/imagetypes"
+	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
-func imageOverlays(ds *dataset.Dataset, pixelData *DicomPixelData) []*DicomOverlayData {
+func imageOverlays(ds *dataset.Dataset, pixelData *pixeldata.Data) []*DicomOverlayData {
 	var overlays []*DicomOverlayData
 	for _, group := range OverlayGroupNumbers() {
 		rows, err := ds.GetUInt16(tag.New(group, 0x0010), 0)
@@ -73,7 +75,7 @@ func imageOverlays(ds *dataset.Dataset, pixelData *DicomPixelData) []*DicomOverl
 	return overlays
 }
 
-func extractEmbeddedOverlay(pixelData *DicomPixelData, overlay *DicomOverlayData) []byte {
+func extractEmbeddedOverlay(pixelData *pixeldata.Data, overlay *DicomOverlayData) []byte {
 	bytesPerSample := pixelData.Info.BytesAllocated()
 	if bytesPerSample != 1 && bytesPerSample != 2 && bytesPerSample != 4 {
 		return nil
@@ -82,7 +84,7 @@ func extractEmbeddedOverlay(pixelData *DicomPixelData, overlay *DicomOverlayData
 	framePixels := overlay.Rows * overlay.Columns
 	for overlayFrame := 0; overlayFrame < overlay.NumberOfFrames; overlayFrame++ {
 		imageFrame := overlay.ImageFrameOrigin - 1 + overlayFrame
-		frame, err := pixelData.GetFrame(imageFrame)
+		frame, err := pixelData.Frame(context.Background(), imageFrame)
 		if err != nil {
 			return nil
 		}
@@ -167,14 +169,14 @@ func (img *DicomImage) SetShowOverlays(show bool) {
 }
 
 // OverlayColor returns the color used to render Dataset overlays.
-func (img *DicomImage) OverlayColor() imagetypes.Color32 {
+func (img *DicomImage) OverlayColor() colorconv.Color32 {
 	img.mu.RLock()
 	defer img.mu.RUnlock()
 	return img.overlayColor
 }
 
 // SetOverlayColor changes the color used to render Dataset overlays.
-func (img *DicomImage) SetOverlayColor(value imagetypes.Color32) {
+func (img *DicomImage) SetOverlayColor(value colorconv.Color32) {
 	img.mu.Lock()
 	defer img.mu.Unlock()
 	img.overlayColor = value

@@ -7,10 +7,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/endian"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 // Compile-time check to ensure AttributeTag implements Element interface
@@ -24,7 +24,7 @@ type AttributeTag struct {
 
 // NewAttributeTag creates a new AT element with the given tag values.
 func NewAttributeTag(t *tag.Tag, values []*tag.Tag) *AttributeTag {
-	return NewAttributeTagWithEndian(t, values, endian.LocalMachine)
+	return NewAttributeTagWithEndian(t, values, endian.Native())
 }
 
 // NewAttributeTagWithEndian creates a new AT element with specific byte order.

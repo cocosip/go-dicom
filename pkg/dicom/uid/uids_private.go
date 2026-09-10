@@ -185,68 +185,69 @@ var (
 	PrivateTomTecAnnotationStorage = New("1.2.276.0.48.5.1.4.1.1.7", "Private TomTec Annotation Storage", TypeSOPClass, false)
 )
 
-func init() {
-	// Register all private UIDs
-	Register(GEPrivateImplicitVRBigEndian)
-	Register(PrivateFujiCRImageStorage)
-	Register(PrivateGEDicomCTImageInfoObject)
-	Register(PrivateGEDicomDisplayImageInfoObject)
-	Register(PrivateGEDicomMRImageInfoObject)
-	Register(PrivatePhilipsCTSyntheticImageStorage)
-	Register(PrivatePhilipsCXImageStorage)
-	Register(PrivatePhilipsCXSyntheticImageStorage)
-	Register(PrivatePhilipsMRColorImageStorage)
-	Register(PrivatePhilipsMRSyntheticImageStorage)
-	Register(PrivatePhilipsPerfusionImageStorage)
-	Register(PrivatePixelMedFloatingPointImageStorage)
-	Register(PrivatePixelMedLegacyConvertedEnhancedCTImageStorage)
-	Register(PrivatePixelMedLegacyConvertedEnhancedMRImageStorage)
-	Register(PrivatePixelMedLegacyConvertedEnhancedPETImageStorage)
-	Register(PrivatePMODMultiFrameImageStorage)
-	Register(PrivateToshibaUSImageStorage)
-	Register(PrivateAgfaArrivalTransaction)
-	Register(PrivateAgfaBasicAttributePresentationState)
-	Register(PrivateAgfaDictationTransaction)
-	Register(PrivateAgfaReportApprovalTransaction)
-	Register(PrivateAgfaReportTranscriptionTransaction)
-	Register(PrivateERADPracticeBuilderReportDictationStorage)
-	Register(PrivateERADPracticeBuilderReportTextStorage)
-	Register(PrivateGE3DModelStorage)
-	Register(PrivateGECollageStorage)
-	Register(PrivateGEeNTEGRAProtocolorNMGenieStorage)
-	Register(PrivateGEPETRawDataStorage)
-	Register(PrivateGERTPlanStorage)
-	Register(PrivatePhilips3DObjectStorage)
-	Register(PrivatePhilips3DObjectStorageRetired)
-	Register(PrivatePhilips3DPresentationStateStorage)
-	Register(PrivatePhilipsCompositeObjectStorage)
-	Register(PrivatePhilipsHPLive3D01Storage)
-	Register(PrivatePhilipsHPLive3D02Storage)
-	Register(PrivatePhilipsLiveRunStorage)
-	Register(PrivatePhilipsMRCardioAnalysisStorage)
-	Register(PrivatePhilipsMRCardioAnalysisStorageRetired)
-	Register(PrivatePhilipsMRCardioProfileStorage)
-	Register(PrivatePhilipsMRCardioStorage)
-	Register(PrivatePhilipsMRCardioStorageRetired)
-	Register(PrivatePhilipsMRExamcardStorage)
-	Register(PrivatePhilipsMRSeriesDataStorage)
-	Register(PrivatePhilipsMRSpectrumStorage)
-	Register(PrivatePhilipsPerfusionStorage)
-	Register(PrivatePhilipsReconstructionStorage)
-	Register(PrivatePhilipsRunStorage)
-	Register(PrivatePhilipsSpecialisedXAStorage)
-	Register(PrivatePhilipsSurfaceStorage)
-	Register(PrivatePhilipsSurfaceStorageRetired)
-	Register(PrivatePhilipsVolumeSetStorage)
-	Register(PrivatePhilipsVolumeStorage)
-	Register(PrivatePhilipsVolumeStorageRetired)
-	Register(PrivatePhilipsVRMLStorage)
-	Register(PrivatePhilipsXRayMFStorage)
-	Register(PrivateSiemensAXFrameSetsStorage)
-	Register(PrivateSiemensCSANonImageStorage)
-	Register(PrivateSiemensCTMRVolumeStorage)
-	Register(PrivateTomTecAnnotationStorage)
+var privateUIDEntries = []*UID{
+	GEPrivateImplicitVRBigEndian,
+	PrivateFujiCRImageStorage,
+	PrivateGEDicomCTImageInfoObject,
+	PrivateGEDicomDisplayImageInfoObject,
+	PrivateGEDicomMRImageInfoObject,
+	PrivatePhilipsCTSyntheticImageStorage,
+	PrivatePhilipsCXImageStorage,
+	PrivatePhilipsCXSyntheticImageStorage,
+	PrivatePhilipsMRColorImageStorage,
+	PrivatePhilipsMRSyntheticImageStorage,
+	PrivatePhilipsPerfusionImageStorage,
+	PrivatePixelMedFloatingPointImageStorage,
+	PrivatePixelMedLegacyConvertedEnhancedCTImageStorage,
+	PrivatePixelMedLegacyConvertedEnhancedMRImageStorage,
+	PrivatePixelMedLegacyConvertedEnhancedPETImageStorage,
+	PrivatePMODMultiFrameImageStorage,
+	PrivateToshibaUSImageStorage,
+	PrivateAgfaArrivalTransaction,
+	PrivateAgfaBasicAttributePresentationState,
+	PrivateAgfaDictationTransaction,
+	PrivateAgfaReportApprovalTransaction,
+	PrivateAgfaReportTranscriptionTransaction,
+	PrivateERADPracticeBuilderReportDictationStorage,
+	PrivateERADPracticeBuilderReportTextStorage,
+	PrivateGE3DModelStorage,
+	PrivateGECollageStorage,
+	PrivateGEeNTEGRAProtocolorNMGenieStorage,
+	PrivateGEPETRawDataStorage,
+	PrivateGERTPlanStorage,
+	PrivatePhilips3DObjectStorage,
+	PrivatePhilips3DObjectStorageRetired,
+	PrivatePhilips3DPresentationStateStorage,
+	PrivatePhilipsCompositeObjectStorage,
+	PrivatePhilipsHPLive3D01Storage,
+	PrivatePhilipsHPLive3D02Storage,
+	PrivatePhilipsLiveRunStorage,
+	PrivatePhilipsMRCardioAnalysisStorage,
+	PrivatePhilipsMRCardioAnalysisStorageRetired,
+	PrivatePhilipsMRCardioProfileStorage,
+	PrivatePhilipsMRCardioStorage,
+	PrivatePhilipsMRCardioStorageRetired,
+	PrivatePhilipsMRExamcardStorage,
+	PrivatePhilipsMRSeriesDataStorage,
+	PrivatePhilipsMRSpectrumStorage,
+	PrivatePhilipsPerfusionStorage,
+	PrivatePhilipsReconstructionStorage,
+	PrivatePhilipsRunStorage,
+	PrivatePhilipsSpecialisedXAStorage,
+	PrivatePhilipsSurfaceStorage,
+	PrivatePhilipsSurfaceStorageRetired,
+	PrivatePhilipsVolumeSetStorage,
+	PrivatePhilipsVolumeStorage,
+	PrivatePhilipsVolumeStorageRetired,
+	PrivatePhilipsVRMLStorage,
+	PrivatePhilipsXRayMFStorage,
+	PrivateSiemensAXFrameSetsStorage,
+	PrivateSiemensCSANonImageStorage,
+	PrivateSiemensCTMRVolumeStorage,
+	PrivateTomTecAnnotationStorage,
 }
+
+var privateUIDIndex = buildUIDIndex(privateUIDEntries)
 
 // go-dicom implementation UIDs
 // These are used for identifying the go-dicom library implementation

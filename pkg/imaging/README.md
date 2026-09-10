@@ -12,18 +12,18 @@ files.
 
 ### Core Types
 
-- **ColorSpace** (`colorspace.go`): Defines color spaces and their components
+- **ColorSpace** (`pixel/colorspace.go`): Defines color spaces and their components
   - Grayscale, RGB, BGR, RGBA, YCbCr, etc.
   - Component-based representation with subsampling information
 
-- **PhotometricInterpretation** (`photometric.go`): Represents DICOM photometric interpretation
+- **PhotometricInterpretation** (`pixel/photometric.go`): Represents DICOM photometric interpretation
   - MONOCHROME1, MONOCHROME2 (grayscale)
   - PALETTE COLOR (indexed color)
   - RGB (true color)
   - YBR_FULL, YBR_FULL_422, YBR_PARTIAL_422, YBR_PARTIAL_420 (YCbCr variants)
   - YBR_ICT, YBR_RCT (JPEG 2000 color transforms)
 
-- **PixelConfiguration** (`pixel_config.go`): Pixel representation and planar configuration
+- **PixelConfiguration** (`pixel/config.go`): Pixel representation and planar configuration
   - PixelRepresentation: Unsigned vs Signed integers
   - PlanarConfiguration: Interleaved vs Planar color data
 
@@ -191,37 +191,41 @@ remain in the `reconstruction` package and are not implemented by IMG-002.
 
 ### Codec Framework
 
-The `codec` subpackage (`pkg/imaging/codec/`) provides codec interfaces and native pixel-data handling. Compressed codecs are supplied by `go-dicom-codecs`.
+The `codec` subpackage (`pkg/imaging/codec/`) provides the frame-level codec SPI and native transfer-syntax codecs. Compressed codecs are supplied by `go-dicom-codecs`.
 
-- **Codec Interface**: Generic interface for image codecs
-- **PixelData**: Lightweight pixel data structure for codec operations
-- **Parameters**: Codec-specific parameters interface
+- **FrameSource / FrameSink**: Directional frame ports with context cancellation and explicit ownership
+- **FrameInfo**: Codec metadata expressed with values from `imaging/pixel`
+- **Parameters**: Strongly typed codec-owned parameters with clone and validation contracts
 
-### DicomPixelData
+### Pixel Data
 
-**Implementation**: `pixeldata.go`
+**Implementation**: `pkg/imaging/pixeldata/`
 
-The `DicomPixelData` type provides a high-level interface for managing DICOM pixel data:
+The `pixeldata.Data` type provides the high-level DICOM pixel-data API:
 
-- **PixelDataInfo**: Metadata container for pixel data attributes
+- **pixeldata.Info**: Metadata container for pixel data attributes
   - Image dimensions (width, height)
   - Bit depth (bits allocated/stored, high bit)
   - Multi-frame support
   - Photometric interpretation
   - Validation and size calculation helpers
 
-- **DicomPixelData**: Main pixel data management class
+- **pixeldata.Data**: Pixel data storage and operations
   - Frame-based storage
-  - Add/Get individual frames
-  - Codec integration (Encode/Decode methods)
-  - Conversion to/from codec.PixelData
+  - Context-aware frame reads and appends with copied slice ownership
+  - Codec integration through `Encode` and `Decode`
+  - Dataset extraction and Pixel Data element write-back
 
 **Usage Example**:
 ```go
-import "github.com/cocosip/go-dicom/pkg/imaging"
+import (
+    "context"
+    "github.com/cocosip/go-dicom/pkg/imaging/pixel"
+    "github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
+)
 
 // Create pixel data info
-info := &imaging.PixelDataInfo{
+info := &pixeldata.Info{
     Width:                     512,
     Height:                    512,
     NumberOfFrames:            1,
@@ -229,18 +233,21 @@ info := &imaging.PixelDataInfo{
     BitsStored:                12,
     HighBit:                   11,
     SamplesPerPixel:           1,
-    PixelRepresentation:       imaging.UnsignedPixels,
-    PlanarConfiguration:       imaging.InterleavedPlanar,
-    PhotometricInterpretation: imaging.Monochrome2,
+    PixelRepresentation:       pixel.UnsignedPixels,
+    PlanarConfiguration:       pixel.InterleavedPlanar,
+    PhotometricInterpretation: pixel.Monochrome2,
 }
 
 // Create pixel data
-pixelData, err := imaging.NewDicomPixelData(info)
+pixels, err := pixeldata.New(info)
+if err != nil {
+    return err
+}
 
 // Add frames
 frameBytes := make([]byte, info.UncompressedFrameSize())
 // ... fill frameBytes ...
-err = pixelData.AddFrame(frameBytes)
+err = pixels.AddFrame(context.Background(), frameBytes)
 
 ```
 
@@ -271,7 +278,6 @@ The Native codec handles uncompressed pixel data with various byte orders:
 - ✅ Byte swapping for multi-byte samples (16-bit, 32-bit, 64-bit)
 - ✅ Direct copy for single-byte samples
 - ✅ Read/Write helpers for uint16/uint32 with endianness
-- ✅ Utility function for endianness conversion
 
 **Usage Example**:
 ```go
@@ -283,13 +289,16 @@ leCodec := codec.NewExplicitVRLittleEndianCodec()
 // Big Endian codec
 beCodec := codec.NewExplicitVRBigEndianCodec()
 
-// Convert between endianness
-swapped, err := codec.ConvertEndianness(pixelBytes, 2) // 2 bytes per sample
-
 // Byte swapping during encode/decode
-params := codec.NewBaseParameters()
-params.SetParameter("swap_bytes", true)
-err = leCodec.Encode(src, dst, params)
+params := codec.NativeParameters{ByteSwap: codec.ByteSwapEnabled}
+err := leCodec.Encode(context.Background(), src, dst, params)
+```
+
+General-purpose byte-order conversion is owned by `pkg/io/endian`, not by a
+codec:
+
+```go
+swapped, err := endian.ConvertEndianness(pixelBytes, bytesPerSample)
 ```
 
 ### Compressed Codec Registration
@@ -306,24 +315,41 @@ If no matching codec was registered, decode/transcode returns the registry
 lookup error; registering a codec does not imply that a peer accepted its
 transfer syntax during association negotiation.
 
+`codec.GlobalRegistry()` is the single process-wide plugin registry. It is
+thread-safe and remains mutable so a blank import or an application can add a
+new codec at runtime. Use `Register` for a new transfer syntax, `Replace` for an
+intentional replacement, and `Lookup`/`Unregister`/`List` for discovery and
+lifecycle management. `codec.NewRegistry()` creates an isolated registry with
+the same built-in native codecs.
+
+Dataset transcoding is owned by `pkg/dicom/transcode`. Create a
+`transcode.Manager` from a registry and pass it explicitly to internal
+consumers. `network/client` and `network/server` are composition roots and use
+the global registry by default; they accept `WithTranscodeManager` for an
+isolated configuration. Encapsulated reconstruction accepts
+`reconstruction.WithTranscodeManager`. `NewDirectoryIconGenerator` accepts a
+registry directly. `NewDicomImageFromDataset` defaults to the global registry
+and accepts `WithImageCodecRegistry` when isolation is required.
+
 ## Architecture Notes
 
 ### Package Design
 
 The imaging package is designed to avoid circular dependencies:
 
-1. **Core types** (`pkg/imaging/*`): Basic types with no heavy dependencies
-2. **Codec package** (`pkg/imaging/codec/`): Codec interfaces and implementations
-3. **Minimal dependencies**: Only depends on `pkg/dicom/transfer` for transfer syntax references
+1. **Pixel values** (`pkg/imaging/pixel/`): Bit depth, representation, planar configuration, and photometric values
+2. **Codec SPI** (`pkg/imaging/codec/`): Frame contracts, parameters, native codecs, and codec registration
+3. **Pixel data** (`pkg/imaging/pixeldata/`): Dataset extraction, frame storage, conversions, and codec invocation
+4. **Imaging root** (`pkg/imaging/`): High-level `DicomImage` orchestration
 
 ### PixelData Structure
 
-The codec `PixelData` type is intentionally simplified to avoid circular dependencies with the full `DicomDataset`. It contains only the essential information needed for encoding/decoding operations.
+`pixeldata.Data` implements both codec frame ports. A codec receives only the direction it needs: `FrameSource` for input and `FrameSink` for output.
 
 In a full implementation, you would:
-1. Extract pixel information from a `DicomDataset` into a `codec.PixelData`
+1. Extract pixel information from a `dataset.Dataset` with `pixeldata.FromDataset`
 2. Perform codec operations
-3. Update the dataset with the processed pixel data
+3. Convert the result back with `Data.ToElement`
 
 ## Testing
 
@@ -344,7 +370,7 @@ Current test coverage:
 - ✅ ColorSpace: 100%
 - ✅ PhotometricInterpretation: 100%
 - ✅ PixelConfiguration: 100%
-- ✅ PixelDataInfo/DicomPixelData: 100%
+- Pixel data metadata, frames, conversion, and codec contracts
 - ✅ Native Codec: 100%
 
 ## Future Work

@@ -163,7 +163,7 @@ func TestSendCFindPendingResponseResetsRequestTimeout(t *testing.T) {
 		request.resultCh <- nil
 	}()
 
-	responses, err := service.SendCFind(context.Background(), dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()))
+	events, err := service.SendCFind(context.Background(), dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()))
 	if err != nil {
 		t.Fatalf("SendCFind() error = %v", err)
 	}
@@ -172,27 +172,28 @@ func TestSendCFindPendingResponseResetsRequestTimeout(t *testing.T) {
 	if err := service.handleResponse(dimse.NewCFindResponseFromRequest(request, status.CFindPending, dataset.New())); err != nil {
 		t.Fatalf("pending handleResponse() error = %v", err)
 	}
-	if response := <-responses; !response.IsPending() {
-		t.Fatalf("first response = %#v, want pending C-FIND response", response)
+	if event := receiveResponseEvent(t, events); event.Response == nil || !event.Response.IsPending() {
+		t.Fatalf("first event = %#v, want pending C-FIND response", event)
 	}
 
 	time.Sleep(30 * time.Millisecond)
 	if err := service.handleResponse(dimse.NewCFindResponseFromRequest(request, status.Success, nil)); err != nil {
 		t.Fatalf("final handleResponse() error = %v", err)
 	}
-	response, ok := <-responses
+	event, ok := <-events
 	if !ok {
-		t.Fatal("C-FIND response channel closed before final response")
+		t.Fatal("C-FIND event channel closed before final response")
 	}
-	if response.IsPending() || response.StatusCode() != status.Success.Code {
-		t.Fatalf("final response = %#v, want C-FIND success", response)
+	assertResponseEvent(t, event)
+	if event.Response.IsPending() || event.Response.StatusCode() != status.Success.Code {
+		t.Fatalf("final event = %#v, want C-FIND success", event)
 	}
-	if _, ok := <-responses; ok {
-		t.Fatal("C-FIND response channel remained open after final response")
+	if _, ok := <-events; ok {
+		t.Fatal("C-FIND event channel remained open after final response")
 	}
 }
 
-func TestSendCFindWithErrorReportsRequestTimeout(t *testing.T) {
+func TestSendCFindReportsRequestTimeoutAsSingleTerminalEvent(t *testing.T) {
 	service := NewService(nil, createTestAssociation(), WithRequestTimeout(20*time.Millisecond))
 	defer func() { _ = service.Close() }()
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -200,35 +201,17 @@ func TestSendCFindWithErrorReportsRequestTimeout(t *testing.T) {
 	}
 
 	go drainSuccessfulSends(service)
-	responses, terminalErrors, err := service.SendCFindWithError(
+	events, err := service.SendCFind(
 		context.Background(), dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()),
 	)
 	if err != nil {
-		t.Fatalf("SendCFindWithError() error = %v", err)
+		t.Fatalf("SendCFind() error = %v", err)
 	}
 
-	select {
-	case _, ok := <-responses:
-		if ok {
-			t.Fatal("responses yielded a response without a peer reply")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("responses did not close after request timeout")
-	}
-	select {
-	case terminalErr, ok := <-terminalErrors:
-		if !ok {
-			t.Fatal("terminal errors closed without the request timeout")
-		}
-		if !errors.Is(terminalErr, ErrRequestTimeout) {
-			t.Fatalf("terminal error = %v, want ErrRequestTimeout", terminalErr)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("request timeout was not reported")
-	}
+	assertProgressRequestTimeout(t, events)
 }
 
-func TestSendCMoveWithErrorReportsRequestTimeout(t *testing.T) {
+func TestSendCMoveReportsRequestTimeoutAsSingleTerminalEvent(t *testing.T) {
 	service := NewService(nil, createTestAssociation(), WithRequestTimeout(20*time.Millisecond))
 	defer func() { _ = service.Close() }()
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -236,18 +219,18 @@ func TestSendCMoveWithErrorReportsRequestTimeout(t *testing.T) {
 	}
 
 	go drainSuccessfulSends(service)
-	responses, terminalErrors, err := service.SendCMoveWithError(
+	events, err := service.SendCMove(
 		context.Background(),
 		dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, testMoveDestinationAE, dataset.New()),
 	)
 	if err != nil {
-		t.Fatalf("SendCMoveWithError() error = %v", err)
+		t.Fatalf("SendCMove() error = %v", err)
 	}
 
-	assertProgressRequestTimeout(t, responses, terminalErrors)
+	assertProgressRequestTimeout(t, events)
 }
 
-func TestSendCGetWithErrorReportsRequestTimeout(t *testing.T) {
+func TestSendCGetReportsRequestTimeoutAsSingleTerminalEvent(t *testing.T) {
 	service := NewService(nil, createTestAssociation(), WithRequestTimeout(20*time.Millisecond))
 	defer func() { _ = service.Close() }()
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -255,37 +238,124 @@ func TestSendCGetWithErrorReportsRequestTimeout(t *testing.T) {
 	}
 
 	go drainSuccessfulSends(service)
-	responses, terminalErrors, err := service.SendCGetWithError(
+	events, err := service.SendCGet(
 		context.Background(),
 		dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, dataset.New()),
 	)
 	if err != nil {
-		t.Fatalf("SendCGetWithError() error = %v", err)
+		t.Fatalf("SendCGet() error = %v", err)
 	}
 
-	assertProgressRequestTimeout(t, responses, terminalErrors)
+	assertProgressRequestTimeout(t, events)
 }
 
-func assertProgressRequestTimeout[T any](t *testing.T, responses <-chan T, terminalErrors <-chan error) {
+func TestSendCFindContextCancellationEmitsOneTerminalEvent(t *testing.T) {
+	service := NewService(nil, createTestAssociation())
+	t.Cleanup(func() { _ = service.Close() })
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	drainSuccessfulSends(service)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	events, err := service.SendCFind(ctx, dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()))
+	if err != nil {
+		t.Fatalf("SendCFind() error = %v", err)
+	}
+	cancel()
+	assertSingleTerminalEvent(t, events, context.Canceled)
+}
+
+func TestSendCFindServiceCloseEmitsOneTerminalEvent(t *testing.T) {
+	service := NewService(nil, createTestAssociation())
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	drainSuccessfulSends(service)
+
+	events, err := service.SendCFind(context.Background(), dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()))
+	if err != nil {
+		t.Fatalf("SendCFind() error = %v", err)
+	}
+	if err := service.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	assertSingleTerminalEvent(t, events, ErrServiceClosed)
+}
+
+func TestSendCFindDoesNotSilentlyCloseWithoutFinalResponseOrError(t *testing.T) {
+	service := NewService(nil, createTestAssociation())
+	t.Cleanup(func() { _ = service.Close() })
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	drainSuccessfulSends(service)
+
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	events, err := service.SendCFind(context.Background(), request)
+	if err != nil {
+		t.Fatalf("SendCFind() error = %v", err)
+	}
+	service.pendingRequestsMu.RLock()
+	pending := service.pendingRequests[request.MessageID()]
+	service.pendingRequestsMu.RUnlock()
+	if pending == nil {
+		t.Fatal("pending request was not registered")
+	}
+	close(pending.responseCh)
+
+	event := receiveResponseEvent(t, events)
+	if event.Response != nil || event.Err == nil {
+		t.Fatalf("terminal event = %#v, want error-only event", event)
+	}
+	if _, ok := <-events; ok {
+		t.Fatal("event channel remained open after terminal error")
+	}
+}
+
+type testProgressResponse interface {
+	dimse.Response
+	*dimse.CFindResponse | *dimse.CMoveResponse | *dimse.CGetResponse
+}
+
+func assertProgressRequestTimeout[T testProgressResponse](t *testing.T, events <-chan ResponseEvent[T]) {
+	t.Helper()
+	assertSingleTerminalEvent(t, events, ErrRequestTimeout)
+}
+
+func assertSingleTerminalEvent[T testProgressResponse](t *testing.T, events <-chan ResponseEvent[T], want error) {
+	t.Helper()
+	event := receiveResponseEvent(t, events)
+	if event.Response != nil || !errors.Is(event.Err, want) {
+		t.Fatalf("terminal event = %#v, want error-only event matching %v", event, want)
+	}
+	if _, ok := <-events; ok {
+		t.Fatal("event channel yielded more than one terminal event")
+	}
+}
+
+func receiveResponseEvent[T testProgressResponse](t *testing.T, events <-chan ResponseEvent[T]) ResponseEvent[T] {
 	t.Helper()
 	select {
-	case _, ok := <-responses:
-		if ok {
-			t.Fatal("responses yielded a response without a peer reply")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("responses did not close after request timeout")
-	}
-	select {
-	case terminalErr, ok := <-terminalErrors:
+	case event, ok := <-events:
 		if !ok {
-			t.Fatal("terminal errors closed without the request timeout")
+			t.Fatal("event channel closed without a final response or terminal error")
 		}
-		if !errors.Is(terminalErr, ErrRequestTimeout) {
-			t.Fatalf("terminal error = %v, want ErrRequestTimeout", terminalErr)
+		if (event.Response == nil) == (event.Err == nil) {
+			t.Fatalf("event = %#v, want exactly one of Response or Err", event)
 		}
+		return event
 	case <-time.After(time.Second):
-		t.Fatal("request timeout was not reported")
+		t.Fatal("timed out waiting for response event")
+	}
+	var zero ResponseEvent[T]
+	return zero
+}
+
+func assertResponseEvent[T testProgressResponse](t *testing.T, event ResponseEvent[T]) {
+	t.Helper()
+	if event.Response == nil || event.Err != nil {
+		t.Fatalf("event = %#v, want response-only event", event)
 	}
 }
 

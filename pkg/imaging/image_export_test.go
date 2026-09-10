@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/imaging/render"
 )
 
@@ -32,20 +33,20 @@ func TestExportPaletteToJPEG(t *testing.T) {
 
 	// Create PixelData from dataset
 	t.Log("Extracting pixel data...")
-	pixelData, err := CreatePixelData(result.Dataset)
+	pixelData, err := pixeldata.FromDataset(result.Dataset)
 	if err != nil {
 		t.Fatalf("Failed to extract pixel data: %v", err)
 	}
 
 	// Log photometric interpretation
-	// Note: CreatePixelData automatically converts PALETTE COLOR to RGB
+	// Note: pixeldata.FromDataset automatically converts PALETTE COLOR to RGB
 	if pixelData.Info.PhotometricInterpretation == nil {
 		t.Fatal("PhotometricInterpretation is nil")
 	}
 
 	photometric := pixelData.Info.PhotometricInterpretation.Value
 	t.Logf("Photometric Interpretation: %s", photometric)
-	t.Logf("Note: Original PALETTE COLOR was automatically converted to RGB by CreatePixelData")
+	t.Logf("Note: Original PALETTE COLOR was automatically converted to RGB by pixeldata.FromDataset")
 
 	// Create DICOM image
 	t.Log("Creating DICOM image...")
@@ -156,7 +157,7 @@ func TestExportPaletteToPNG(t *testing.T) {
 	}
 
 	// Create PixelData from dataset
-	pixelData, err := CreatePixelData(result.Dataset)
+	pixelData, err := pixeldata.FromDataset(result.Dataset)
 	if err != nil {
 		t.Fatalf("Failed to extract pixel data: %v", err)
 	}
@@ -247,7 +248,7 @@ func TestExportMultiplePaletteFormats(t *testing.T) {
 		t.Fatalf("Failed to parse DICOM file: %v", err)
 	}
 
-	pixelData, err := CreatePixelData(result.Dataset)
+	pixelData, err := pixeldata.FromDataset(result.Dataset)
 	if err != nil {
 		t.Fatalf("Failed to extract pixel data: %v", err)
 	}
