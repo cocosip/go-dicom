@@ -74,11 +74,10 @@ func Emit(ctx context.Context, record Record) {
 		return
 	}
 
-	attrs := make([]slog.Attr, 0, len(record.Attrs)+2)
-	attrs = append(attrs,
+	attrs := []slog.Attr{
 		slog.String("component", record.Component),
 		slog.String("event", record.Event),
-	)
+	}
 	attrs = append(attrs, record.Attrs...)
 	current.logger.LogAttrs(ctx, record.Level, record.Message, attrs...)
 }
