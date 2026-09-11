@@ -64,6 +64,12 @@ func NewPersonNameFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Enc
 	return &PersonName{str: NewStringFromBuffer(t, vr.PN, buf, enc)}
 }
 
+// NewPersonNameFromBufferWithEncodings creates a PN element from a buffer
+// using the complete DICOM Specific Character Set encoding list.
+func NewPersonNameFromBufferWithEncodings(t *tag.Tag, buf buffer.ByteBuffer, encodings []encoding.Encoding) *PersonName {
+	return &PersonName{str: NewStringFromBufferWithEncodings(t, vr.PN, buf, encodings)}
+}
+
 // Tag returns the DICOM tag.
 func (p *PersonName) Tag() *tag.Tag {
 	return p.str.Tag()

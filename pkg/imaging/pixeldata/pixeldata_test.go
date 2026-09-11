@@ -24,6 +24,12 @@ import (
 	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
+func addLegacyTestElement(ds *dataset.Dataset, elem element.Element) error {
+	ds.SetAutoValidate(false)
+	defer ds.SetAutoValidate(true)
+	return ds.Add(elem)
+}
+
 func TestInfo_Validate(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -976,9 +982,9 @@ func TestFromDataset_PaletteToRGB(t *testing.T) {
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		// data: R=[0,255], G=[0,0], B=[0,0]
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
 		// pixel data: indices [0,1]
 		element.NewOtherByte(tag.PixelData, []byte{0, 1}),
 	})
@@ -1018,9 +1024,9 @@ func TestFromDatasetPaletteAppliesFirstMappedValue(t *testing.T) {
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
 		element.NewOtherByte(tag.PixelData, []byte{9, 10, 11, 12}),
 	})
 	if err != nil {
@@ -1085,10 +1091,10 @@ func TestPaletteColorsRejectsDirectAndSegmentedDataForSameChannel(t *testing.T) 
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
 		element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, words(binary.LittleEndian, 0, 2, 0, 255)),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
 	})
 	if err != nil {
 		t.Fatalf("NewWithElements() error = %v", err)
@@ -1129,9 +1135,9 @@ func TestFromDatasetPaletteAlphaToRGBA(t *testing.T) {
 				element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 				element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 				element.NewUnsignedShort(tag.AlphaPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
-				element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
-				element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
-				element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
+				element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
+				element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
+				element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
 				tt.alphaData,
 				element.NewOtherByte(tag.PixelData, []byte{0, 1}),
 			})
@@ -1159,9 +1165,9 @@ func TestBuildPaletteLUTValidatesAlpha(t *testing.T) {
 			element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 			element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 			element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
-			element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
-			element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
-			element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
+			element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
+			element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
+			element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
 		}
 	}
 	for _, tt := range []struct {
@@ -1170,7 +1176,7 @@ func TestBuildPaletteLUTValidatesAlpha(t *testing.T) {
 	}{
 		{
 			name:  "data without descriptor",
-			extra: []element.Element{element.NewOtherByte(tag.AlphaPaletteColorLookupTableData, []byte{70, 80})},
+			extra: []element.Element{element.NewOtherWord(tag.AlphaPaletteColorLookupTableData, []byte{70, 80})},
 		},
 		{
 			name:  "descriptor without data",
@@ -1180,7 +1186,7 @@ func TestBuildPaletteLUTValidatesAlpha(t *testing.T) {
 			name: "mismatched first mapped value",
 			extra: []element.Element{
 				element.NewUnsignedShort(tag.AlphaPaletteColorLookupTableDescriptor, []uint16{2, 1, 8}),
-				element.NewOtherByte(tag.AlphaPaletteColorLookupTableData, []byte{70, 80}),
+				element.NewOtherWord(tag.AlphaPaletteColorLookupTableData, []byte{70, 80}),
 			},
 		},
 		{
@@ -1406,9 +1412,9 @@ func TestBuildPaletteLUTDoesNotFallBackFromMalformedSequence(t *testing.T) {
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{1, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{1, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{1, 0, 8}),
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{10}),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{20}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{30}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{10}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{20}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{30}),
 	} {
 		_ = ds.Add(elem)
 	}
@@ -1597,10 +1603,10 @@ func TestData_VOILUTSequence(t *testing.T) {
 	// VOI LUT Sequence with one item
 	lutItem := dataset.New()
 	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
-	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{0, 100, 200}))
+	_ = addLegacyTestElement(lutItem, element.NewOtherByte(tag.LUTData, []byte{0, 100, 200}))
 	voiSeq := dataset.NewSequence(tag.VOILUTSequence)
 	voiSeq.AddItem(lutItem)
-	_ = ds.Add(voiSeq)
+	_ = addLegacyTestElement(ds, voiSeq)
 
 	// PixelData: 0,1,2
 	_ = ds.Add(element.NewOtherByte(tag.PixelData, []byte{0, 1, 2}))
@@ -1668,8 +1674,8 @@ func TestApplyVOILUTKeepsUnsignedFirstMappedValue(t *testing.T) {
 	ds := dataset.New()
 	item := dataset.New()
 	_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 40000, 8}))
-	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20}))
-	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+	_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{10, 20}))
+	_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
 	pd, err := NewFromBytes(&Info{
 		Width: 2, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 16, BitsStored: 16, HighBit: 15, SamplesPerPixel: 1,
@@ -1692,8 +1698,8 @@ func TestApplyVOILUTRejectsShortData(t *testing.T) {
 	ds := dataset.New()
 	item := dataset.New()
 	_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
-	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20}))
-	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+	_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{10, 20}))
+	_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
 	pd, err := NewFromBytes(&Info{
 		Width: 1, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
@@ -1712,8 +1718,8 @@ func TestWindowOrLUTTo8bitSurfacesMalformedVOILUT(t *testing.T) {
 	ds := dataset.New()
 	item := dataset.New()
 	_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 8}))
-	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10}))
-	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+	_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{10}))
+	_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
 	pd, err := NewFromBytes(&Info{
 		Width: 1, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 1,
@@ -2106,11 +2112,11 @@ func TestModalityLUTRequiresModalityLUTType(t *testing.T) {
 	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 8})); err != nil {
 		t.Fatalf("add LUTDescriptor: %v", err)
 	}
-	if err := item.Add(element.NewOtherByte(tag.LUTData, []byte{0, 255})); err != nil {
+	if err := addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{0, 255})); err != nil {
 		t.Fatalf("add LUTData: %v", err)
 	}
 	ds := dataset.New()
-	if err := ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item})); err != nil {
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item})); err != nil {
 		t.Fatalf("add ModalityLUTSequence: %v", err)
 	}
 
@@ -2129,10 +2135,10 @@ func TestFunctionalGroupModalityLUTOverridesTopLevelRescale(t *testing.T) {
 	if err := lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 8})); err != nil {
 		t.Fatalf("add LUT Descriptor: %v", err)
 	}
-	if err := lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20})); err != nil {
+	if err := addLegacyTestElement(lutItem, element.NewOtherByte(tag.LUTData, []byte{10, 20})); err != nil {
 		t.Fatalf("add LUT Data: %v", err)
 	}
-	if err := primary.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
+	if err := addLegacyTestElement(primary, dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
 		t.Fatalf("add Modality LUT Sequence: %v", err)
 	}
 

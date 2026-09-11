@@ -29,9 +29,9 @@ func main() {
 	ds := dataset.New()
 
 	// === Patient Information ===
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+	_ = ds.AddValue(tag.PatientName, "Doe^John")
 	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
-	_ = ds.Add(element.NewString(tag.PatientBirthDate, vr.DA, []string{"19800101"}))
+	_ = ds.AddValue(tag.PatientBirthDate, "19800101")
 	_ = ds.Add(element.NewString(tag.PatientSex, vr.CS, []string{"M"}))
 	_ = ds.Add(element.NewString(tag.PatientAge, vr.AS, []string{"045Y"}))
 
@@ -46,7 +46,7 @@ func main() {
 
 	// === Series Information ===
 	_ = ds.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.826.0.1.3680043.10.1142.1.1"}))
-	_ = ds.Add(element.NewUnsignedShort(tag.SeriesNumber, []uint16{1}))
+	_ = ds.AddValue(tag.SeriesNumber, uint16(1))
 	_ = ds.Add(element.NewString(tag.SeriesDescription, vr.LO, []string{"CT Chest"}))
 	_ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
 	_ = ds.Add(element.NewString(tag.SeriesDate, vr.DA, []string{"20250101"}))
@@ -66,8 +66,8 @@ func main() {
 	// Image dimensions - using a smaller size for demo (128x128)
 	rows := uint16(128)
 	columns := uint16(128)
-	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{rows}))
-	_ = ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{columns}))
+	_ = ds.AddValue(tag.Rows, rows)
+	_ = ds.AddValue(tag.Columns, columns)
 	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}))
 	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{16}))
 	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{15}))

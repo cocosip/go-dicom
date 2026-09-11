@@ -144,9 +144,9 @@ func TestToXML_NumericElements(t *testing.T) {
 	// Add US element
 	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 	// Add UL element
-	_ = ds.Add(element.NewUnsignedLong(tag.InstanceNumber, []uint32{1}))
+	_ = ds.Add(element.NewUnsignedLong(tag.CommandGroupLength, []uint32{1}))
 	// Add FL element
-	_ = ds.Add(element.NewFloat(tag.RecommendedDisplayFrameRate, []float32{30.0}))
+	_ = ds.Add(element.NewFloat(tag.RecommendedDisplayFrameRateInFloat, []float32{30.0}))
 
 	xml, err := ToXML(ds)
 	if err != nil {

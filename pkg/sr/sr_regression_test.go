@@ -45,6 +45,7 @@ func TestNewStructuredReportRejectsNilChild(t *testing.T) {
 
 func TestContentItemChildrenReturnsErrorForInvalidContentSequence(t *testing.T) {
 	ds := dataset.New()
+	ds.SetAutoValidate(false)
 	if err := ds.Add(element.NewString(tag.ContentSequence, vr.LO, []string{"not-a-sequence"})); err != nil {
 		t.Fatalf("failed to add invalid ContentSequence: %v", err)
 	}

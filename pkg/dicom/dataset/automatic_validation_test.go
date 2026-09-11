@@ -43,14 +43,17 @@ func TestDatasetAutomaticValidationDefaultsToEnabled(t *testing.T) {
 	}
 }
 
-func TestDatasetAutomaticValidationIgnoresLegacyGlobalSwitch(t *testing.T) {
+func TestDatasetAutomaticValidationHonorsGlobalSwitch(t *testing.T) {
 	oldValidation := vr.PerformValidation
 	t.Cleanup(func() { vr.PerformValidation = oldValidation })
-	vr.PerformValidation = false
+	dataset.SetAutoValidate(false)
 
 	ds := dataset.New()
-	if err := ds.Add(invalidUIDElement(tag.StudyInstanceUID)); err == nil {
-		t.Fatal("Add() should reject an invalid UID regardless of the legacy global switch")
+	if err := ds.Add(invalidUIDElement(tag.StudyInstanceUID)); err != nil {
+		t.Fatalf("Add() should accept an invalid UID when global validation is disabled: %v", err)
+	}
+	if err := ds.Validate(); err == nil {
+		t.Fatal("explicit Validate() should still reject the invalid UID")
 	}
 }
 

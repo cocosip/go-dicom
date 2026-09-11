@@ -698,15 +698,14 @@ func modalityTransformForDatasets(primary, fallback *dataset.Dataset, pd *Data) 
 		return nil, err
 	}
 	readDecimal := func(t *tag.Tag, name string) (float64, error) {
-		elem, exists := source.Get(t)
+		values, exists := source.GetStrings(t)
 		if !exists {
 			return 0, fmt.Errorf("read %s: value is missing", name)
 		}
-		decimal, ok := elem.(*element.DecimalString)
-		if !ok {
-			return 0, fmt.Errorf("read %s: element has VR %s, want DS", name, elem.ValueRepresentation())
+		if len(values) != 1 {
+			return 0, fmt.Errorf("read %s: want one DS value, got %d", name, len(values))
 		}
-		value, err := decimal.GetFloat(0)
+		value, err := strconv.ParseFloat(strings.TrimSpace(values[0]), 64)
 		if err != nil {
 			return 0, fmt.Errorf("read %s: %w", name, err)
 		}
@@ -1627,13 +1626,6 @@ func buildFragmentSequence(frames [][]byte, _ []uint32, _ uint16) (element.Eleme
 }
 
 func frameCountFromDataset(ds *dataset.Dataset) int {
-	if value, ok := ds.Get(tag.NumberOfFrames); ok {
-		if values, ok := value.(*element.IntegerString); ok {
-			if count, err := values.GetInt(0); err == nil && count > 0 {
-				return count
-			}
-		}
-	}
 	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
 		return int(nf)
 	}

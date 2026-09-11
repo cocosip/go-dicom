@@ -1423,53 +1423,11 @@ func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer
 		element.SetByteOrder(elem, p.byteOrder)
 		return elem
 	}
-
-	// Create appropriate element type based on VR code
-	vrCode := v.Code()
-	switch vrCode {
-	case vr.CodeAE, vr.CodeAS, vr.CodeCS, vr.CodeDA, vr.CodeDS, vr.CodeDT,
-		vr.CodeIS, vr.CodeLO, vr.CodeLT, vr.CodePN, vr.CodeSH, vr.CodeST,
-		vr.CodeTM, vr.CodeUC, vr.CodeUI, vr.CodeUR, vr.CodeUT:
-		return setOrder(element.NewStringFromBufferWithEncodings(t, v, buf, p.textEncodings)), nil
-
-	case vr.CodeUS:
-		return setOrder(element.NewUnsignedShortFromBuffer(t, buf)), nil
-	case vr.CodeUL:
-		return setOrder(element.NewUnsignedLongFromBuffer(t, buf)), nil
-	case vr.CodeSS:
-		return setOrder(element.NewSignedShortFromBuffer(t, buf)), nil
-	case vr.CodeSL:
-		return setOrder(element.NewSignedLongFromBuffer(t, buf)), nil
-	case vr.CodeFL:
-		return setOrder(element.NewFloatFromBuffer(t, buf)), nil
-	case vr.CodeFD:
-		return setOrder(element.NewDoubleFromBuffer(t, buf)), nil
-	case vr.CodeSV:
-		return setOrder(element.NewSignedVeryLongFromBuffer(t, buf)), nil
-	case vr.CodeUV:
-		return setOrder(element.NewUnsignedVeryLongFromBuffer(t, buf)), nil
-
-	case vr.CodeOB:
-		return setOrder(element.NewOtherByteFromBuffer(t, buf)), nil
-	case vr.CodeOW:
-		return setOrder(element.NewOtherWordFromBuffer(t, buf)), nil
-	case vr.CodeOD:
-		return setOrder(element.NewOtherDoubleFromBuffer(t, buf)), nil
-	case vr.CodeOF:
-		return setOrder(element.NewOtherFloatFromBuffer(t, buf)), nil
-	case vr.CodeOL:
-		return setOrder(element.NewOtherLongFromBuffer(t, buf)), nil
-	case vr.CodeOV:
-		return setOrder(element.NewOtherVeryLongFromBuffer(t, buf)), nil
-	case vr.CodeAT:
-		return setOrder(element.NewAttributeTagFromBuffer(t, buf)), nil
-	case vr.CodeUN:
-		return setOrder(element.NewUnknownFromBuffer(t, buf)), nil
-
-	default:
-		// Default to Unknown
-		return setOrder(element.NewUnknownFromBuffer(t, buf)), nil
+	elem, err := element.NewElementFromBuffer(t, v, buf, p.textEncodings)
+	if err != nil {
+		return nil, err
 	}
+	return setOrder(elem), nil
 }
 
 // createLazyBuffer creates a lazy-loading buffer for large elements.

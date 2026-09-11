@@ -34,6 +34,12 @@ import (
 
 const testVOILUTFunctionSigmoid = "SIGMOID"
 
+func addLegacyTestElement(ds *dataset.Dataset, elem element.Element) error {
+	ds.SetAutoValidate(false)
+	defer ds.SetAutoValidate(true)
+	return ds.Add(elem)
+}
+
 func TestOpenDicomImageRendersFile(t *testing.T) {
 	dicomImage, err := OpenDicomImage(filepath.Join("..", "..", "test-data", "TestPattern_RGB.dcm"))
 	if err != nil {
@@ -218,12 +224,12 @@ func TestPerFrameFunctionalGroupVOILUTSequenceIsUsed(t *testing.T) {
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{1}))
 	lutItem := dataset.New()
 	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
-	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{0, 100, 200}))
+	_ = addLegacyTestElement(lutItem, element.NewOtherByte(tag.LUTData, []byte{0, 100, 200}))
 	frameVOI := dataset.New()
-	_ = frameVOI.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
+	_ = addLegacyTestElement(frameVOI, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
 	frameItem := dataset.New()
-	_ = frameItem.Add(dataset.NewSequenceWithItems(tag.FrameVOILUTSequence, []*dataset.Dataset{frameVOI}))
-	if err := ds.Add(dataset.NewSequenceWithItems(tag.PerFrameFunctionalGroupsSequence, []*dataset.Dataset{frameItem})); err != nil {
+	_ = addLegacyTestElement(frameItem, dataset.NewSequenceWithItems(tag.FrameVOILUTSequence, []*dataset.Dataset{frameVOI}))
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.PerFrameFunctionalGroupsSequence, []*dataset.Dataset{frameItem})); err != nil {
 		t.Fatalf("add PerFrameFunctionalGroupsSequence: %v", err)
 	}
 
@@ -246,8 +252,8 @@ func TestDatasetImageStandardLUTModeRejectsOtherByteData(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 1, 1, []byte{0})
 	lutItem := dataset.New()
 	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8}))
-	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{255}))
-	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
+	_ = addLegacyTestElement(lutItem, element.NewOtherByte(tag.LUTData, []byte{255}))
+	_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
 
 	image, err := NewDicomImageFromDataset(ds, WithLUTVRMode(pixeldata.LUTStandard))
 	if err != nil {
@@ -472,7 +478,7 @@ func TestVOILUTDescriptorSignednessUsesRescaledDomain(t *testing.T) {
 	_ = ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"HU"}))
 	item := dataset.New()
 	_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0xff9c, 8}))
-	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{0, 255}))
+	_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{0, 255}))
 	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
 
 	image, err := NewDicomImageFromDataset(ds)
@@ -528,10 +534,10 @@ func TestWindowAndVOILUTAlternativeSelection(t *testing.T) {
 		for index, output := range []byte{0, 255} {
 			item := dataset.New()
 			_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8}))
-			_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{output}))
+			_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{output}))
 			items[index] = item
 		}
-		_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, items))
+		_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, items))
 
 		for _, tt := range []struct {
 			name    string
@@ -581,8 +587,8 @@ func TestAlternativeSelectionValidation(t *testing.T) {
 		ds := newNativeMonochromeDataset(t, 1, 1, []byte{0})
 		item := dataset.New()
 		_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8}))
-		_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{0}))
-		_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+		_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{0}))
+		_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
 		image, _ := NewDicomImageFromDataset(ds, WithVOILUTIndex(1))
 		if _, err := image.RenderFrameImage(0); err == nil {
 			t.Fatal("RenderFrameImage() accepted out-of-range VOI LUT index")
@@ -599,10 +605,10 @@ func TestFunctionalGroupModalityLUTOverridesTopLevelRescale(t *testing.T) {
 	if err := lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 8})); err != nil {
 		t.Fatalf("add LUT Descriptor: %v", err)
 	}
-	if err := lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20})); err != nil {
+	if err := addLegacyTestElement(lutItem, element.NewOtherByte(tag.LUTData, []byte{10, 20})); err != nil {
 		t.Fatalf("add LUT Data: %v", err)
 	}
-	if err := primary.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
+	if err := addLegacyTestElement(primary, dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
 		t.Fatalf("add Modality LUT Sequence: %v", err)
 	}
 
@@ -659,7 +665,7 @@ func TestModalityLUTRequiresExactlyOneItem(t *testing.T) {
 			for index := range items {
 				item := dataset.New()
 				_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8}))
-				_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{byte(index)}))
+				_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{byte(index)}))
 				items[index] = item
 			}
 			_ = ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, items))
@@ -709,8 +715,8 @@ func TestSignedShortModalityLUTDescriptorMapsSignedInputs(t *testing.T) {
 	item := dataset.New()
 	_ = item.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"}))
 	_ = item.Add(element.NewSignedShort(tag.LUTDescriptor, []int16{3, -1, 8}))
-	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
-	_ = ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item}))
+	_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
+	_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item}))
 
 	table, err := pixeldata.ModalityLUT(ds, true)
 	if err != nil {
@@ -727,8 +733,8 @@ func TestSignedShortVOILUTDescriptorMapsSignedInputs(t *testing.T) {
 	ds := dataset.New()
 	item := dataset.New()
 	_ = item.Add(element.NewSignedShort(tag.LUTDescriptor, []int16{3, -1, 8}))
-	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
-	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
+	_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
+	_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item}))
 
 	table, err := pixeldata.VOILUT(ds, true)
 	if err != nil {
@@ -769,8 +775,8 @@ func TestUnsignedShortLUTDescriptorUsesSignedPixelRepresentation(t *testing.T) {
 				_ = item.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"}))
 			}
 			_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0xffff, 8}))
-			_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
-			_ = ds.Add(dataset.NewSequenceWithItems(tt.tag, []*dataset.Dataset{item}))
+			_ = addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
+			_ = addLegacyTestElement(ds, dataset.NewSequenceWithItems(tt.tag, []*dataset.Dataset{item}))
 
 			table, err := tt.load(ds)
 			if err != nil {
@@ -791,10 +797,10 @@ func TestVOILUTSequencePrecedesWindow(t *testing.T) {
 	if err := lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8})); err != nil {
 		t.Fatalf("add LUTDescriptor: %v", err)
 	}
-	if err := lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{0, 100, 200})); err != nil {
+	if err := addLegacyTestElement(lutItem, element.NewOtherByte(tag.LUTData, []byte{0, 100, 200})); err != nil {
 		t.Fatalf("add LUTData: %v", err)
 	}
-	if err := ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem})); err != nil {
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem})); err != nil {
 		t.Fatalf("add VOILUTSequence: %v", err)
 	}
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{1})); err != nil {
@@ -875,10 +881,10 @@ func TestPresentationLUTSequenceIsAppliedAfterVOI(t *testing.T) {
 	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{256, 0, 8})); err != nil {
 		t.Fatalf("add LUTDescriptor: %v", err)
 	}
-	if err := item.Add(element.NewOtherByte(tag.LUTData, data)); err != nil {
+	if err := addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, data)); err != nil {
 		t.Fatalf("add LUTData: %v", err)
 	}
-	if err := ds.Add(dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item})); err != nil {
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item})); err != nil {
 		t.Fatalf("add PresentationLUTSequence: %v", err)
 	}
 
@@ -902,18 +908,18 @@ func TestPresentationLUTRejectsSequenceAndShapeTogether(t *testing.T) {
 	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8})); err != nil {
 		t.Fatal(err)
 	}
-	if err := item.Add(element.NewOtherByte(tag.LUTData, []byte{0})); err != nil {
+	if err := addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{0})); err != nil {
 		t.Fatal(err)
 	}
-	ds, err := dataset.NewWithElements([]element.Element{
-		dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item}),
-		element.NewString(tag.PresentationLUTShape, vr.CS, []string{"IDENTITY"}),
-	})
-	if err != nil {
+	ds := dataset.New()
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{"IDENTITY"})); err != nil {
 		t.Fatal(err)
 	}
 
-	_, _, err = pixeldata.PresentationLUT(ds)
+	_, _, err := pixeldata.PresentationLUT(ds)
 	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Fatalf("PresentationLUT() error = %v, want mutual-exclusion error", err)
 	}
@@ -1018,10 +1024,10 @@ func TestImageVOILUTReportsValidForStandardSequence(t *testing.T) {
 	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8})); err != nil {
 		t.Fatalf("add LUT Descriptor: %v", err)
 	}
-	if err := item.Add(element.NewOtherByte(tag.LUTData, []byte{0, 100, 200})); err != nil {
+	if err := addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{0, 100, 200})); err != nil {
 		t.Fatalf("add LUT Data: %v", err)
 	}
-	if err := ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item})); err != nil {
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{item})); err != nil {
 		t.Fatalf("add VOI LUT Sequence: %v", err)
 	}
 
@@ -1509,9 +1515,9 @@ func TestDatasetImageDecodesEncapsulatedPaletteBeforeRGBConversion(t *testing.T)
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
 	}
 	for _, elem := range elements {
 		if err := ds.Add(elem); err != nil {
@@ -1558,10 +1564,10 @@ func TestDatasetPaletteAlphaIsPreservedInRendering(t *testing.T) {
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
 		element.NewUnsignedShort(tag.AlphaPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
-		element.NewOtherByte(tag.AlphaPaletteColorLookupTableData, []byte{70, 80}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{10, 20}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{30, 40}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{50, 60}),
+		element.NewOtherWord(tag.AlphaPaletteColorLookupTableData, []byte{70, 80}),
 		element.NewOtherByte(tag.PixelData, []byte{0, 1}),
 	})
 	if err != nil {
@@ -1603,10 +1609,10 @@ func TestSupplementalPaletteRendering(t *testing.T) {
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
 		element.NewUnsignedShort(tag.AlphaPaletteColorLookupTableDescriptor, []uint16{2, 10, 8}),
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{100, 200}),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
-		element.NewOtherByte(tag.AlphaPaletteColorLookupTableData, []byte{128, 255}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{100, 200}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.AlphaPaletteColorLookupTableData, []byte{128, 255}),
 		element.NewOtherByte(tag.PixelData, []byte{5, 10, 11, 5, 10, 11}),
 	})
 	if err != nil {
@@ -1649,9 +1655,9 @@ func TestSupplementalPaletteRenderingSupportsSingleFrame(t *testing.T) {
 		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
 		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
 		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
-		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{100, 0}),
-		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{20, 0}),
-		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{30, 0}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{100, 0}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{20, 0}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{30, 0}),
 		element.NewOtherByte(tag.PixelData, []byte{10, 0}),
 	})
 	if err != nil {
@@ -1693,9 +1699,9 @@ func TestSupplementalPaletteRequiresEligibility(t *testing.T) {
 				element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
 				element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
 				element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
-				element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{100, 0}),
-				element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
-				element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+				element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{100, 0}),
+				element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+				element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
 				element.NewOtherByte(tag.PixelData, tt.pixelData),
 			}
 			if tt.pixelPresentation != "" {
@@ -1932,7 +1938,7 @@ func TestClonePreservesCallerPipelineOverrides(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 3, 1, []byte{0, 1, 2})
 	lutItem := dataset.New()
 	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 8}))
-	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{0, 100, 200}))
+	_ = addLegacyTestElement(lutItem, element.NewOtherByte(tag.LUTData, []byte{0, 100, 200}))
 	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{1}))
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{1}))

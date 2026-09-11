@@ -534,12 +534,17 @@ func main() {
     // Create new dataset
     ds := dataset.New()
 
+    // AddValue resolves the dictionary VR and keeps a slice as one VM element.
+    ds.AddValue(tag.PatientName, "Doe^John")
+    ds.AddValue(tag.WindowCenter, []float64{0, 500})
+    ds.AddOrUpdateValue(tag.WindowWidth, 500.0)
+
     // Add required elements
     ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
     ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4.5.6.7.8.9"}))
 
     // Add patient information
-    ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
+    // PatientName above was added through the type-safe value API.
     ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
     ds.Add(element.NewString(tag.PatientBirthDate, vr.DA, []string{"19800101"}))
     ds.Add(element.NewString(tag.PatientSex, vr.CS, []string{"M"}))

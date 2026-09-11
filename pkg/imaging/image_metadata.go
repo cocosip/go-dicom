@@ -106,26 +106,18 @@ func imageWindowPairAt(primary, fallback *dataset.Dataset, index int) (float64, 
 	if !centerOK || !widthOK {
 		return 0, 0, fmt.Errorf("window center and width must both be present")
 	}
-	centers, centerOK := centerElement.(*element.DecimalString)
-	widths, widthOK := widthElement.(*element.DecimalString)
+	centers, centerOK := decimalElementValues(centerElement)
+	widths, widthOK := decimalElementValues(widthElement)
 	if !centerOK || !widthOK {
 		return 0, 0, fmt.Errorf("window center and width must use Decimal String VR")
 	}
-	if centers.Count() != widths.Count() {
-		return 0, 0, fmt.Errorf("window center and width value counts differ: %d and %d", centers.Count(), widths.Count())
+	if len(centers) != len(widths) {
+		return 0, 0, fmt.Errorf("window center and width value counts differ: %d and %d", len(centers), len(widths))
 	}
-	if index < 0 || index >= centers.Count() {
-		return 0, 0, fmt.Errorf("window index %d is out of range [0, %d)", index, centers.Count())
+	if index < 0 || index >= len(centers) {
+		return 0, 0, fmt.Errorf("window index %d is out of range [0, %d)", index, len(centers))
 	}
-	center, err := centers.GetFloat(index)
-	if err != nil {
-		return 0, 0, err
-	}
-	width, err := widths.GetFloat(index)
-	if err != nil {
-		return 0, 0, err
-	}
-	return center, width, nil
+	return centers[index], widths[index], nil
 }
 
 func datasetWithCompletePair(primary, fallback *dataset.Dataset, first, second *tag.Tag) *dataset.Dataset {
@@ -237,15 +229,41 @@ func imageModalityTransformWithLUTMode(primary, fallback *dataset.Dataset, pixel
 }
 
 func imageSingleDecimal(ds *dataset.Dataset, t *tag.Tag) (float64, error) {
-	elem, ok := ds.Get(t)
+	values, ok := ds.GetStrings(t)
 	if !ok {
 		return 0, fmt.Errorf("element %s not found", t)
 	}
-	value, ok := elem.(*element.DecimalString)
-	if !ok || value.Count() != 1 {
+	if len(values) != 1 {
 		return 0, fmt.Errorf("element %s must contain exactly one Decimal String value", t)
 	}
-	return value.GetFloat(0)
+	value, err := strconv.ParseFloat(strings.TrimSpace(values[0]), 64)
+	if err != nil {
+		return 0, fmt.Errorf("element %s has invalid Decimal String value: %w", t, err)
+	}
+	return value, nil
+}
+
+func decimalElementValues(elem element.Element) ([]float64, bool) {
+	if elem == nil || elem.ValueRepresentation() != nil && elem.ValueRepresentation().Code() != "DS" {
+		return nil, false
+	}
+	if decimal, ok := elem.(*element.DecimalString); ok {
+		values, err := decimal.GetFloats()
+		return values, err == nil
+	}
+	values, err := element.CanonicalStrings(elem)
+	if err != nil {
+		return nil, false
+	}
+	result := make([]float64, len(values))
+	for index, value := range values {
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return nil, false
+		}
+		result[index] = parsed
+	}
+	return result, true
 }
 
 func imageStringFrom(primary, fallback *dataset.Dataset, t *tag.Tag) (string, bool) {

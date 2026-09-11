@@ -9,6 +9,8 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"strconv"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -44,11 +46,9 @@ func imageOverlays(ds *dataset.Dataset, pixelData *pixeldata.Data) []*DicomOverl
 				}
 			}
 		}
-		if frames, ok := ds.Get(tag.New(group, 0x0015)); ok {
-			if values, ok := frames.(*element.IntegerString); ok {
-				if count, err := values.GetInt(0); err == nil && count > 0 {
-					overlay.NumberOfFrames = count
-				}
+		if frames, ok := ds.GetString(tag.New(group, 0x0015)); ok {
+			if count, err := strconv.Atoi(strings.TrimSpace(frames)); err == nil && count > 0 {
+				overlay.NumberOfFrames = count
 			}
 		}
 		if origin, err := ds.GetUInt16(tag.New(group, 0x0051), 0); err == nil && origin > 0 {

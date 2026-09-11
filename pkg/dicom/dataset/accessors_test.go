@@ -134,9 +134,9 @@ func TestDatasetGetInt16(t *testing.T) {
 // TestDatasetGetFloat32 tests GetFloat32 accessor
 func TestDatasetGetFloat32(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5}))
+	_ = ds.Add(element.NewFloat(tag.RecommendedDisplayFrameRateInFloat, []float32{1.5}))
 
-	val, err := ds.GetFloat32(tag.ImagePositionPatient, 0)
+	val, err := ds.GetFloat32(tag.RecommendedDisplayFrameRateInFloat, 0)
 	if err != nil {
 		t.Fatalf("GetFloat32() error = %v", err)
 	}

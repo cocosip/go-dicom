@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
 // Dataset represents a DICOM dataset - a collection of data elements.
@@ -42,6 +43,19 @@ type Dataset struct {
 	// This is used to track the encoding format of pixel data and other elements.
 	// Following fo-dicom pattern, this is internal and can be set by transcoder/parser.
 	internalTransferSyntax *transfer.Syntax
+}
+
+// AutoValidate reports the process-wide default validation switch used by
+// Dataset mutations. It is backed by vr.PerformValidation for compatibility
+// with existing callers that already control that package-level setting.
+func AutoValidate() bool {
+	return vr.PerformValidation
+}
+
+// SetAutoValidate enables or disables automatic validation for Dataset
+// mutations process-wide. Explicit Dataset.Validate calls always validate.
+func SetAutoValidate(enabled bool) {
+	vr.PerformValidation = enabled
 }
 
 // New creates a new empty dataset.
@@ -85,6 +99,10 @@ func (ds *Dataset) AutoValidate() bool {
 	return ds != nil && !ds.skipValidation
 }
 
+func (ds *Dataset) validationEnabled() bool {
+	return ds != nil && ds.AutoValidate() && AutoValidate()
+}
+
 // SetAutoValidate controls validation performed by subsequent mutations.
 func (ds *Dataset) SetAutoValidate(enabled bool) {
 	if ds == nil {
@@ -111,7 +129,7 @@ func (ds *Dataset) Add(elem element.Element) error {
 	if _, exists := ds.items[tagValue]; exists {
 		return fmt.Errorf("element with tag %s already exists", elem.Tag())
 	}
-	if ds.AutoValidate() {
+	if ds.validationEnabled() {
 		if err := validateElement(elem, nil); err != nil {
 			return err
 		}
@@ -134,7 +152,7 @@ func (ds *Dataset) AddOrUpdate(elem element.Element) error {
 		return validationError(ValidationStructural, nil, fmt.Errorf("element tag is nil"))
 	}
 	ds.ensureItems()
-	if ds.AutoValidate() {
+	if ds.validationEnabled() {
 		if err := validateElement(elem, nil); err != nil {
 			return err
 		}
@@ -377,7 +395,7 @@ func (ds *Dataset) Merge(other *Dataset, overwrite bool) error {
 			candidates = append(candidates, elem)
 		}
 	}
-	if ds.AutoValidate() {
+	if ds.validationEnabled() {
 		for _, elem := range candidates {
 			if err := validateElement(elem, nil); err != nil {
 				return err
@@ -494,17 +512,15 @@ func (ds *Dataset) sortedTagValues() []uint32 {
 //	sopClass, err := ds.GetParseable(tag.SOPClassUID, parseable.ParserFor(func() *uid.UID { return &uid.UID{} }))
 func GetParseable[T parseable.Parseable](ds *Dataset, t *tag.Tag, parser parseable.Parser[T]) (T, error) {
 	var zero T
-	elem, exists := ds.Get(t)
+	_, exists := ds.Get(t)
 	if !exists {
 		return zero, fmt.Errorf("element %s not found", t)
 	}
 
-	strElem, ok := elem.(*element.String)
+	value, ok := ds.GetString(t)
 	if !ok {
 		return zero, fmt.Errorf("element %s is not a string type", t)
 	}
-
-	value := strElem.GetString()
 	if value == "" {
 		return zero, fmt.Errorf("element %s is empty", t)
 	}
@@ -532,7 +548,11 @@ func (ds *Dataset) GetDateRange(t *tag.Tag) (*daterange.DateRange, error) {
 
 	dateElem, ok := elem.(*element.Date)
 	if !ok {
-		return nil, fmt.Errorf("element %s is not a Date type", t)
+		values, err := element.CanonicalStrings(elem)
+		if err != nil || elem.ValueRepresentation() != vr.DA {
+			return nil, fmt.Errorf("element %s is not a Date type", t)
+		}
+		dateElem = element.NewDate(t, values)
 	}
 
 	return dateElem.GetDateRange()
@@ -547,7 +567,11 @@ func (ds *Dataset) GetTimeRange(t *tag.Tag) (*daterange.TimeRange, error) {
 
 	timeElem, ok := elem.(*element.Time)
 	if !ok {
-		return nil, fmt.Errorf("element %s is not a Time type", t)
+		values, err := element.CanonicalStrings(elem)
+		if err != nil || elem.ValueRepresentation() != vr.TM {
+			return nil, fmt.Errorf("element %s is not a Time type", t)
+		}
+		timeElem = element.NewTime(t, values)
 	}
 
 	return timeElem.GetTimeRange()
@@ -562,7 +586,11 @@ func (ds *Dataset) GetDateTimeRange(t *tag.Tag) (*daterange.DateTimeRange, error
 
 	dtElem, ok := elem.(*element.DateTime)
 	if !ok {
-		return nil, fmt.Errorf("element %s is not a DateTime type", t)
+		values, err := element.CanonicalStrings(elem)
+		if err != nil || elem.ValueRepresentation() != vr.DT {
+			return nil, fmt.Errorf("element %s is not a DateTime type", t)
+		}
+		dtElem = element.NewDateTime(t, values)
 	}
 
 	return dtElem.GetDateTimeRange()

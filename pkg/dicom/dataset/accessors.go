@@ -5,6 +5,7 @@ package dataset
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -18,12 +19,12 @@ func (ds *Dataset) GetString(t *tag.Tag) (string, bool) {
 		return "", false
 	}
 
-	str, ok := elem.(*element.String)
+	values, ok := stringValues(elem)
 	if !ok {
 		return "", false
 	}
 
-	return str.GetString(), true
+	return strings.Join(values, "\\"), true
 }
 
 // GetStrings retrieves all string values from the dataset.
@@ -33,12 +34,12 @@ func (ds *Dataset) GetStrings(t *tag.Tag) ([]string, bool) {
 		return nil, false
 	}
 
-	str, ok := elem.(*element.String)
+	values, ok := stringValues(elem)
 	if !ok {
 		return nil, false
 	}
 
-	return str.GetValues(), true
+	return values, true
 }
 
 // GetUInt16 retrieves a uint16 value from the dataset.
@@ -192,4 +193,12 @@ func (ds *Dataset) TryGetUInt16(t *tag.Tag, index int) uint16 {
 func (ds *Dataset) TryGetUInt32(t *tag.Tag, index int) uint32 {
 	val, _ := ds.GetUInt32(t, index)
 	return val
+}
+
+func stringValues(elem element.Element) ([]string, bool) {
+	values, err := element.CanonicalStrings(elem)
+	if err != nil {
+		return nil, false
+	}
+	return values, true
 }

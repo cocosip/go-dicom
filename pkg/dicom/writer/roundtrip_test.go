@@ -32,7 +32,7 @@ func TestWriteThenRead(t *testing.T) {
 	if err := ds.Add(element.NewUnsignedShort(tag.Columns, []uint16{512})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
-	if err := ds.Add(element.NewFloat(tag.ImagePositionPatient, []float32{1.5, 2.5, 3.5})); err != nil {
+	if err := ds.Add(element.NewFloat(tag.RecommendedDisplayFrameRateInFloat, []float32{1.5})); err != nil {
 		t.Fatalf("Add() error: %v", err)
 	}
 
@@ -93,12 +93,12 @@ func TestWriteThenRead(t *testing.T) {
 	}
 
 	// Verify float array
-	position, err := result.Dataset.GetFloat32(tag.ImagePositionPatient, 0)
+	position, err := result.Dataset.GetFloat32(tag.RecommendedDisplayFrameRateInFloat, 0)
 	if err != nil {
-		t.Fatalf("GetFloat32(ImagePositionPatient, 0) error = %v", err)
+		t.Fatalf("GetFloat32(RecommendedDisplayFrameRateInFloat, 0) error = %v", err)
 	}
 	if position != 1.5 {
-		t.Errorf("ImagePositionPatient[0] = %f, want 1.5", position)
+		t.Errorf("RecommendedDisplayFrameRateInFloat = %f, want 1.5", position)
 	}
 }
 

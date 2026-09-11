@@ -18,6 +18,19 @@
 //	ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"}))
 //	ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
 //
+// Value APIs resolve the dictionary VR and preserve a slice as one
+// multi-valued element:
+//
+//	ds.AddValue(tag.PatientName, "Doe^John")
+//	ds.AddValue(tag.WindowCenter, []float64{0, 100})
+//
+// Automatic validation is enabled by default. It can be disabled per Dataset
+// or process-wide when preserving non-conformant input; call Validate
+// explicitly when a strict check is required:
+//
+//	ds.SetAutoValidate(false)
+//	dataset.SetAutoValidate(false)
+//
 //	// Retrieve elements
 //	elem, exists := ds.Get(tag.PatientName)
 //	if exists {

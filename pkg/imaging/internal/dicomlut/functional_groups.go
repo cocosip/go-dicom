@@ -12,6 +12,10 @@ import (
 // functional-group macro. Per-frame values replace shared values.
 func FunctionalGroupValues(ds *dataset.Dataset, frame int) *dataset.Dataset {
 	values := dataset.New()
+	// Functional-group flattening is a read operation. Preserve elements from
+	// parsed or legacy datasets even when their nested VR is non-standard; the
+	// consumer's strict/compatible policy performs the semantic check later.
+	values.SetAutoValidate(false)
 	if ds == nil {
 		return values
 	}

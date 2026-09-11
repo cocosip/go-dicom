@@ -45,6 +45,12 @@ func NewDateFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding)
 	return &Date{str: NewStringFromBuffer(t, vr.DA, buf, enc)}
 }
 
+// NewDateFromBufferWithEncodings creates a DA element from a buffer using the
+// complete DICOM Specific Character Set encoding list.
+func NewDateFromBufferWithEncodings(t *tag.Tag, buf buffer.ByteBuffer, encodings []encoding.Encoding) *Date {
+	return &Date{str: NewStringFromBufferWithEncodings(t, vr.DA, buf, encodings)}
+}
+
 // NewDateFromRange creates a DA element from a DateRange.
 // This is used in DICOM query operations (C-FIND, C-GET, C-MOVE).
 func NewDateFromRange(t *tag.Tag, r *daterange.DateRange) *Date {
@@ -169,6 +175,12 @@ func NewTimeFromTime(t *tag.Tag, times []time.Time) *Time {
 // NewTimeFromBuffer creates a TM element from an existing buffer.
 func NewTimeFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *Time {
 	return &Time{str: NewStringFromBuffer(t, vr.TM, buf, enc)}
+}
+
+// NewTimeFromBufferWithEncodings creates a TM element from a buffer using the
+// complete DICOM Specific Character Set encoding list.
+func NewTimeFromBufferWithEncodings(t *tag.Tag, buf buffer.ByteBuffer, encodings []encoding.Encoding) *Time {
+	return &Time{str: NewStringFromBufferWithEncodings(t, vr.TM, buf, encodings)}
 }
 
 // Tag returns the DICOM tag.
@@ -310,6 +322,12 @@ func NewDateTimeFromTime(t *tag.Tag, times []time.Time) *DateTime {
 // NewDateTimeFromBuffer creates a DT element from an existing buffer.
 func NewDateTimeFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *DateTime {
 	return &DateTime{str: NewStringFromBuffer(t, vr.DT, buf, enc)}
+}
+
+// NewDateTimeFromBufferWithEncodings creates a DT element from a buffer using
+// the complete DICOM Specific Character Set encoding list.
+func NewDateTimeFromBufferWithEncodings(t *tag.Tag, buf buffer.ByteBuffer, encodings []encoding.Encoding) *DateTime {
+	return &DateTime{str: NewStringFromBufferWithEncodings(t, vr.DT, buf, encodings)}
 }
 
 // Tag returns the DICOM tag.

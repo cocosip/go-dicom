@@ -102,6 +102,7 @@ func TestReadLUTDataRejectsValuesOutsideDeclaredRange(t *testing.T) {
 
 func TestReadLUTDataRejectsSignedShortVR(t *testing.T) {
 	ds := dataset.New()
+	ds.SetAutoValidate(false)
 	if err := ds.Add(element.NewSignedShort(tag.LUTData, []int16{1})); err != nil {
 		t.Fatalf("add LUT Data: %v", err)
 	}
@@ -112,6 +113,7 @@ func TestReadLUTDataRejectsSignedShortVR(t *testing.T) {
 
 func TestReadLUTDataStrictRejectsOtherByteVR(t *testing.T) {
 	ds := dataset.New()
+	ds.SetAutoValidate(false)
 	if err := ds.Add(element.NewOtherByte(tag.LUTData, []byte{1})); err != nil {
 		t.Fatalf("add LUT Data: %v", err)
 	}

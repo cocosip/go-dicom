@@ -42,6 +42,12 @@ func NewDecimalStringFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.
 	return &DecimalString{str: NewStringFromBuffer(t, vr.DS, buf, enc)}
 }
 
+// NewDecimalStringFromBufferWithEncodings creates a DS element from a buffer
+// using the complete DICOM Specific Character Set encoding list.
+func NewDecimalStringFromBufferWithEncodings(t *tag.Tag, buf buffer.ByteBuffer, encodings []encoding.Encoding) *DecimalString {
+	return &DecimalString{str: NewStringFromBufferWithEncodings(t, vr.DS, buf, encodings)}
+}
+
 // Tag returns the DICOM tag.
 func (ds *DecimalString) Tag() *tag.Tag {
 	return ds.str.Tag()
@@ -178,6 +184,12 @@ func NewIntegerStringFromInt32(t *tag.Tag, values []int32) *IntegerString {
 // NewIntegerStringFromBuffer creates an IS element from an existing buffer.
 func NewIntegerStringFromBuffer(t *tag.Tag, buf buffer.ByteBuffer, enc encoding.Encoding) *IntegerString {
 	return &IntegerString{str: NewStringFromBuffer(t, vr.IS, buf, enc)}
+}
+
+// NewIntegerStringFromBufferWithEncodings creates an IS element from a buffer
+// using the complete DICOM Specific Character Set encoding list.
+func NewIntegerStringFromBufferWithEncodings(t *tag.Tag, buf buffer.ByteBuffer, encodings []encoding.Encoding) *IntegerString {
+	return &IntegerString{str: NewStringFromBufferWithEncodings(t, vr.IS, buf, encodings)}
 }
 
 // Tag returns the DICOM tag.

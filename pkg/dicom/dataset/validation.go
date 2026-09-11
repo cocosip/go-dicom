@@ -22,6 +22,8 @@ const (
 	ValidationValue ValidationKind = "value"
 	// ValidationVM identifies a dictionary value-multiplicity mismatch.
 	ValidationVM ValidationKind = "vm"
+	// ValidationVR identifies a tag and value-representation mismatch.
+	ValidationVR ValidationKind = "vr"
 )
 
 // ValidationError reports a Dataset validation failure and retains its cause.
@@ -104,6 +106,9 @@ func validateElementAtPath(elem element.Element, elementPath Path) error {
 	if valueRepresentation == nil {
 		return validationError(ValidationStructural, elementPath, fmt.Errorf("element VR is nil"))
 	}
+	if err := validateElementVR(elem); err != nil {
+		return validationError(ValidationVR, elementPath, err)
+	}
 	if err := element.ValidateValue(elem); err != nil {
 		return validationError(ValidationValue, elementPath, err)
 	}
@@ -111,6 +116,24 @@ func validateElementAtPath(elem element.Element, elementPath Path) error {
 		return validationError(ValidationVM, elementPath, err)
 	}
 	return nil
+}
+
+func validateElementVR(elem element.Element) error {
+	t := elem.Tag()
+	if t == nil || t.IsPrivate() {
+		return nil
+	}
+	entry := dict.Default().Lookup(t)
+	if entry == nil {
+		return nil
+	}
+	valueRepresentation := elem.ValueRepresentation()
+	for _, allowed := range entry.ValueRepresentations() {
+		if allowed.Code() == valueRepresentation.Code() {
+			return nil
+		}
+	}
+	return fmt.Errorf("tag %s does not allow VR %s (allowed %v)", t, valueRepresentation.Code(), entry.VRs())
 }
 
 func validateSequence(sequence *Sequence, path Path) error {
