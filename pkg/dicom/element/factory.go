@@ -109,7 +109,7 @@ func NewElementFromValueWithContext(t *tag.Tag, valueRepresentation *vr.VR, valu
 	if err != nil {
 		return nil, err
 	}
-	return ReplaceCanonicalStringsWithContext(t, valueRepresentation, values, context)
+	return replaceCanonicalStringsWithOwnedValues(t, valueRepresentation, values, context)
 }
 
 func isRawBinaryVR(valueRepresentation *vr.VR) bool {
@@ -153,6 +153,9 @@ func canonicalValueStrings(valueRepresentation *vr.VR, value any) ([]string, err
 	if value == nil {
 		return nil, nil
 	}
+	if values, ok, err := canonicalSliceValues(valueRepresentation, value); ok {
+		return values, err
+	}
 	items := valueItems(value)
 	values := make([]string, len(items))
 	for index, item := range items {
@@ -163,6 +166,49 @@ func canonicalValueStrings(valueRepresentation *vr.VR, value any) ([]string, err
 		}
 	}
 	return values, nil
+}
+
+func canonicalSliceValues(valueRepresentation *vr.VR, value any) ([]string, bool, error) {
+	rv := reflect.ValueOf(value)
+	for rv.IsValid() && (rv.Kind() == reflect.Interface || rv.Kind() == reflect.Pointer) {
+		if rv.IsNil() {
+			return nil, false, nil
+		}
+		rv = rv.Elem()
+	}
+	if !rv.IsValid() || (rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array) {
+		return nil, false, nil
+	}
+
+	values := make([]string, rv.Len())
+	for index := 0; index < rv.Len(); index++ {
+		var err error
+		values[index], err = canonicalReflectValue(valueRepresentation, rv.Index(index))
+		if err != nil {
+			return nil, true, fmt.Errorf("value[%d]: %w", index, err)
+		}
+	}
+	return values, true, nil
+}
+
+func canonicalReflectValue(valueRepresentation *vr.VR, rv reflect.Value) (string, error) {
+	switch rv.Kind() {
+	case reflect.String:
+		if isBinaryVR(valueRepresentation) {
+			return "", fmt.Errorf("string values are not valid for binary VR %s", valueRepresentation.Code())
+		}
+		return rv.String(), nil
+	case reflect.Bool:
+		return strconv.FormatBool(rv.Bool()), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(rv.Int(), 10), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(rv.Uint(), 10), nil
+	case reflect.Float32, reflect.Float64:
+		return strconv.FormatFloat(rv.Float(), 'f', -1, rv.Type().Bits()), nil
+	default:
+		return canonicalValue(valueRepresentation, rv.Interface())
+	}
 }
 
 func valueItems(value any) []any {

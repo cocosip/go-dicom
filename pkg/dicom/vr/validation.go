@@ -12,8 +12,13 @@ import (
 )
 
 var (
-	// Pre-compiled regular expressions for performance
-	datePattern = regexp.MustCompile(`^\d{8}$`)
+	ageStringPattern     = regexp.MustCompile(`^\d{3}[DWMY]$`)
+	codeStringPattern    = regexp.MustCompile(`^[A-Z0-9_ ]*$`)
+	datePattern          = regexp.MustCompile(`^\d{8}$`)
+	decimalStringPattern = regexp.MustCompile(`^[+-]?((\d+(\.\d*)?)|(\.\d+))([eE][-+]?\d+)?$`)
+	integerStringPattern = regexp.MustCompile(`^[+-]?\d+$`)
+	timePattern          = regexp.MustCompile(`^\d{2}(\d{2}(\d{2}(\.\d{1,6})?)?)?$`)
+	uidPattern           = regexp.MustCompile(`^\d+(\.\d+)*$`)
 )
 
 // ValidationError represents a VR validation error.
@@ -64,8 +69,7 @@ func ValidateAS(content string) error {
 	}
 
 	// Format: nnnD, nnnW, nnnM, nnnY (e.g., 025Y for 25 years)
-	matched, _ := regexp.MatchString(`^\d{3}[DWMY]$`, content)
-	if !matched {
+	if !ageStringPattern.MatchString(content) {
 		return newValidationError("AS", content, "value does not match pattern nnnD|nnnW|nnnM|nnnY")
 	}
 
@@ -80,8 +84,7 @@ func ValidateCS(content string) error {
 	}
 
 	// Uppercase characters, digits, space, and underscore only
-	matched, _ := regexp.MatchString(`^[A-Z0-9_ ]*$`, content)
-	if !matched {
+	if !codeStringPattern.MatchString(content) {
 		return newValidationError("CS", content, "value contains invalid character (only A-Z, 0-9, space, underscore allowed)")
 	}
 
@@ -136,8 +139,7 @@ func ValidateDS(content string) error {
 	}
 
 	// Match decimal number with optional exponent
-	matched, _ := regexp.MatchString(`^[+-]?((\d+(\.\d*)?)|(\.\d+))([eE][-+]?\d+)?$`, trimmed)
-	if !matched {
+	if !decimalStringPattern.MatchString(trimmed) {
 		return newValidationError("DS", content, "value is not a valid decimal string")
 	}
 
@@ -189,8 +191,7 @@ func ValidateIS(content string) error {
 	}
 
 	// Check format: optional +/- followed by digits
-	matched, _ := regexp.MatchString(`^[+-]?\d+$`, trimmed)
-	if !matched {
+	if !integerStringPattern.MatchString(trimmed) {
 		return newValidationError("IS", content, "value is not an integer string")
 	}
 
@@ -280,8 +281,7 @@ func ValidateTM(content string) error {
 	trimmed := strings.TrimRight(content, " ")
 
 	// Basic format check
-	matched, _ := regexp.MatchString(`^\d{2}(\d{2}(\d{2}(\.\d{1,6})?)?)?$`, trimmed)
-	if !matched {
+	if !timePattern.MatchString(trimmed) {
 		return newValidationError("TM", content, "value does not match pattern HH[MM[SS[.F{1-6}]]]")
 	}
 
@@ -336,8 +336,7 @@ func ValidateUI(content string) error {
 	}
 
 	// UID format: digits and dots only, no leading/trailing dots
-	matched, _ := regexp.MatchString(`^\d+(\.\d+)*$`, trimmed)
-	if !matched {
+	if !uidPattern.MatchString(trimmed) {
 		return newValidationError("UI", content, "value contains invalid characters (only digits and dots allowed)")
 	}
 

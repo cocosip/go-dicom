@@ -6,12 +6,24 @@ package dataset_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
+
+func TestDatasetAddValueAcceptsTimePointer(t *testing.T) {
+	ds := dataset.New()
+	value := time.Date(2026, time.September, 11, 0, 0, 0, 0, time.UTC)
+	if err := ds.AddValue(tag.StudyDate, &value); err != nil {
+		t.Fatalf("AddValue(StudyDate, *time.Time) error = %v", err)
+	}
+	if got, ok := ds.GetString(tag.StudyDate); !ok || got != "20260911" {
+		t.Fatalf("GetString(StudyDate) = %q, %v, want %q, true", got, ok, "20260911")
+	}
+}
 
 func TestDatasetAddValuePixelDataErrorPointsToHighLevelAPI(t *testing.T) {
 	ds := dataset.New()

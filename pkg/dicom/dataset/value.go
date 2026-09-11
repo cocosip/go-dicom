@@ -162,9 +162,26 @@ func valueMatchesVR(valueRepresentation *vr.VR, value any) bool {
 	if valueRepresentation == nil {
 		return false
 	}
-	if value == nil {
+	code := valueRepresentation.Code()
+	switch value.(type) {
+	case nil:
 		return true
+	case string:
+		return valueRepresentation.IsString()
+	case bool:
+		return valueRepresentation.IsString()
+	case int, int8, int16, int32, int64:
+		return signedKindMatchesVR(code)
+	case uint, uint8, uint16, uint32, uint64:
+		return unsignedKindMatchesVR(code)
+	case float32:
+		return float32MatchesVR(code)
+	case float64:
+		return float64MatchesVR(code)
+	case time.Time:
+		return code == vr.CodeDA || code == vr.CodeTM || code == vr.CodeDT
 	}
+
 	rv := reflect.ValueOf(value)
 	for rv.IsValid() && (rv.Kind() == reflect.Interface || rv.Kind() == reflect.Pointer) {
 		if rv.IsNil() {
@@ -175,6 +192,9 @@ func valueMatchesVR(valueRepresentation *vr.VR, value any) bool {
 	if !rv.IsValid() {
 		return true
 	}
+	if rv.Type() == reflect.TypeFor[time.Time]() {
+		return code == vr.CodeDA || code == vr.CodeTM || code == vr.CodeDT
+	}
 	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
 		if rv.Type().Elem().Kind() == reflect.Uint8 && isRawVR(valueRepresentation) {
 			return true
@@ -182,36 +202,53 @@ func valueMatchesVR(valueRepresentation *vr.VR, value any) bool {
 		if rv.Len() == 0 {
 			return true
 		}
+		elementType := rv.Type().Elem()
+		if elementType == reflect.TypeFor[time.Time]() {
+			return code == vr.CodeDA || code == vr.CodeTM || code == vr.CodeDT
+		}
+		if elementType.Kind() != reflect.Interface && elementType.Kind() != reflect.Pointer {
+			return valueKindMatchesVR(valueRepresentation, elementType.Kind())
+		}
 		return valueMatchesVR(valueRepresentation, rv.Index(0).Interface())
 	}
-	if _, ok := rv.Interface().(time.Time); ok {
-		return valueRepresentation.Code() == vr.CodeDA || valueRepresentation.Code() == vr.CodeTM || valueRepresentation.Code() == vr.CodeDT
-	}
-	if _, ok := rv.Interface().(*tag.Tag); ok {
-		return valueRepresentation.Code() == vr.CodeAT
-	}
 
-	return valueKindMatchesVR(valueRepresentation, rv)
+	return valueKindMatchesVR(valueRepresentation, rv.Kind())
 }
 
-func valueKindMatchesVR(valueRepresentation *vr.VR, rv reflect.Value) bool {
+func valueKindMatchesVR(valueRepresentation *vr.VR, kind reflect.Kind) bool {
 	code := valueRepresentation.Code()
-	switch rv.Kind() {
+	switch kind {
 	case reflect.String:
 		return valueRepresentation.IsString()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return code == vr.CodeDS || code == vr.CodeIS || code == vr.CodeSS || code == vr.CodeSL || code == vr.CodeSV
+		return signedKindMatchesVR(code)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return code == vr.CodeDS || code == vr.CodeIS || code == vr.CodeUS || code == vr.CodeUL || code == vr.CodeUV
+		return unsignedKindMatchesVR(code)
 	case reflect.Float32:
-		return code == vr.CodeDS || code == vr.CodeFL || code == vr.CodeFD
+		return float32MatchesVR(code)
 	case reflect.Float64:
-		return code == vr.CodeDS || code == vr.CodeFD || code == vr.CodeFL
+		return float64MatchesVR(code)
 	case reflect.Bool:
 		return valueRepresentation.IsString()
 	default:
 		return false
 	}
+}
+
+func signedKindMatchesVR(code string) bool {
+	return code == vr.CodeDS || code == vr.CodeIS || code == vr.CodeSS || code == vr.CodeSL || code == vr.CodeSV
+}
+
+func unsignedKindMatchesVR(code string) bool {
+	return code == vr.CodeDS || code == vr.CodeIS || code == vr.CodeUS || code == vr.CodeUL || code == vr.CodeUV
+}
+
+func float32MatchesVR(code string) bool {
+	return code == vr.CodeDS || code == vr.CodeFL || code == vr.CodeFD
+}
+
+func float64MatchesVR(code string) bool {
+	return code == vr.CodeDS || code == vr.CodeFD || code == vr.CodeFL
 }
 
 func isRawVR(valueRepresentation *vr.VR) bool {

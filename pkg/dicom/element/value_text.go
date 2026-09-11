@@ -137,7 +137,36 @@ func ReplaceCanonicalStringsWithContext(
 	return replaceCanonicalStrings(targetTag, targetVR, values, encodings, context.Endian)
 }
 
+func replaceCanonicalStringsWithOwnedValues(
+	targetTag *tag.Tag,
+	targetVR *vr.VR,
+	values []string,
+	context CanonicalValueContext,
+) (Element, error) {
+	encodings := append([]encoding.Encoding(nil), context.TextEncodings...)
+	if len(encodings) == 0 {
+		encodings = []encoding.Encoding{charset.Default}
+	}
+	return replaceOwnedCanonicalStrings(targetTag, targetVR, values, encodings, context.Endian)
+}
+
 func replaceCanonicalStrings(
+	targetTag *tag.Tag,
+	targetVR *vr.VR,
+	values []string,
+	encodings []encoding.Encoding,
+	byteOrder endian.Endian,
+) (Element, error) {
+	return replaceOwnedCanonicalStrings(
+		targetTag,
+		targetVR,
+		append([]string(nil), values...),
+		encodings,
+		byteOrder,
+	)
+}
+
+func replaceOwnedCanonicalStrings(
 	targetTag *tag.Tag,
 	targetVR *vr.VR,
 	values []string,
@@ -150,7 +179,6 @@ func replaceCanonicalStrings(
 	if targetVR == nil {
 		return nil, fmt.Errorf("canonical value target VR is nil")
 	}
-	values = append([]string(nil), values...)
 
 	var result Element
 	var err error
