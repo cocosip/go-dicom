@@ -352,12 +352,13 @@ func main() {
 package main
 
 import (
-    "fmt"
+	"context"
+	"fmt"
     "log"
     "os"
 
     "github.com/cocosip/go-dicom/pkg/dicom/parser"
-    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 func main() {
@@ -372,32 +373,130 @@ func main() {
         log.Fatal(err)
     }
 
-    // Get pixel data element
-    pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-    if !exists {
-        log.Fatal("No pixel data found")
+    // Use pixeldata.Data for both native and encapsulated Pixel Data.
+    pixels, err := pixeldata.FromDataset(result.Dataset)
+    if err != nil {
+        log.Fatal(err)
     }
 
-    fmt.Printf("Pixel data type: %T\n", pixelDataElem)
+    fmt.Printf("Pixel Data: %d frame(s), encapsulated=%v\n",
+        pixels.FrameCount(), pixels.Info.Encapsulated)
+    frame, err := pixels.Frame(context.Background(), 0)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("First frame size: %d bytes\n", len(frame))
+}
+```
 
-    // For uncompressed data (OtherWord/OtherByte)
-    if pd, ok := pixelDataElem.(interface{ GetData() []byte }); ok {
-        pixelData := pd.GetData()
-        fmt.Printf("Pixel data size: %d bytes\n", len(pixelData))
-        // Process raw pixel data...
+For a native, contiguous value where no frame abstraction is needed, use
+`Dataset.GetBytes(tag.PixelData)`. It returns the encoded value buffer and the
+returned bytes must not be modified. Encapsulated Pixel Data should be read
+through `pixeldata.Data` so frame and fragment boundaries remain correct.
+
+### Reading a Specific Frame and Pixel Sample
+
+`pixeldata.Data.Frame` uses a zero-based frame index and returns an independent
+byte slice. `Frame` works for native and encapsulated data; for encapsulated
+data the returned bytes are the encoded frame bytes. Native data can also be
+read as one scalar sample with `Sample(frame, x, y, sample)`:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/parser"
+    "github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
+)
+
+func main() {
+    result, err := parser.ParseFile("image.dcm")
+    if err != nil {
+        log.Fatal(err)
     }
 
-    // For compressed data (fragment sequences)
-    if pd, ok := pixelDataElem.(interface {
-        FragmentCount() int
-        Fragments() interface{}
-    }); ok {
-        fragmentCount := pd.FragmentCount()
-        fmt.Printf("Compressed data with %d fragments\n", fragmentCount)
-        // Access individual fragments...
+    pixels, err := pixeldata.FromDataset(result.Dataset)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    frameIndex := 2 // zero-based; use 0 for the first frame
+    if frameIndex >= pixels.FrameCount() {
+        log.Fatalf("frame %d is out of range (count=%d)", frameIndex, pixels.FrameCount())
+    }
+
+    frame, err := pixels.Frame(context.Background(), frameIndex)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("frame %d: %d bytes\n", frameIndex, len(frame))
+
+    if !pixels.Encapsulated() {
+        value, err := pixels.Sample(frameIndex, 100, 80, 0)
+        if err != nil {
+            log.Fatal(err)
+        }
+        fmt.Printf("sample at (x=100,y=80): %d\n", value)
     }
 }
 ```
+
+For native data, `AllFrames()` returns all frames concatenated in frame order.
+For display conversion, use `WindowTo8bit(center, width, ignorePadding)`; it
+returns one byte slice per frame. `Sample` and these native-pixel operations
+require decoded, uncompressed data.
+
+### Decoding Encapsulated Pixel Data
+
+Compressed transfer syntaxes require a matching codec registered in the codec
+registry. The companion `go-dicom-codecs` module provides those codecs. After
+the codec is registered, look it up using the parsed transfer syntax and decode
+to a new native `pixeldata.Data` value:
+
+```go
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/parser"
+    "github.com/cocosip/go-dicom/pkg/imaging/codec"
+    "github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
+)
+
+func readCompressed(path string) {
+    result, err := parser.ParseFile(path)
+    if err != nil {
+        log.Fatal(err)
+    }
+    encoded, err := pixeldata.FromDataset(result.Dataset)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    c, ok := codec.GlobalRegistry().Lookup(result.TransferSyntax)
+    if !ok {
+        log.Fatalf("no codec registered for transfer syntax %s", result.TransferSyntax.UID().UID())
+    }
+    decoded, err := encoded.Decode(context.Background(), c, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+    frame, err := decoded.Frame(context.Background(), 0)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("decoded first frame: %d bytes\n", len(frame))
+}
+```
+
+Register a compressed codec before calling `Lookup`; a blank import is the
+normal registration mechanism. Native Explicit/Implicit VR Little Endian
+codecs are included in `codec.GlobalRegistry()` automatically.
 
 ### Reading Multi-Frame Images
 
@@ -405,13 +504,13 @@ func main() {
 package main
 
 import (
+	"context"
     "fmt"
     "log"
     "os"
-    "strings"
 
     "github.com/cocosip/go-dicom/pkg/dicom/parser"
-    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 func main() {
@@ -426,44 +525,18 @@ func main() {
         log.Fatal(err)
     }
 
-    // Get number of frames
-    numFramesStr, exists := result.Dataset.GetString(tag.NumberOfFrames)
-    if !exists {
-        fmt.Println("Single frame image")
-        return
+    pixels, err := pixeldata.FromDataset(result.Dataset)
+    if err != nil {
+        log.Fatal(err)
     }
 
-    numFrames := strings.TrimSpace(numFramesStr)
-    fmt.Printf("Multi-frame image with %s frames\n", numFrames)
-
-    // Get frame dimensions
-    rows, _ := result.Dataset.GetUInt16(tag.Rows, 0)
-    cols, _ := result.Dataset.GetUInt16(tag.Columns, 0)
-    bitsAllocated, _ := result.Dataset.GetUInt16(tag.BitsAllocated, 0)
-
-    // Calculate frame size
-    bytesPerPixel := int(bitsAllocated) / 8
-    frameSize := int(rows) * int(cols) * bytesPerPixel
-    fmt.Printf("Each frame: %dx%d, %d bytes\n", cols, rows, frameSize)
-
-    // Get pixel data
-    pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-    if !exists {
-        log.Fatal("No pixel data found")
-    }
-
-    if pd, ok := pixelDataElem.(interface{ GetData() []byte }); ok {
-        allFramesData := pd.GetData()
-        totalFrames := len(allFramesData) / frameSize
-        fmt.Printf("Pixel data contains %d frames\n", totalFrames)
-
-        // Extract individual frames
-        for frame := 0; frame < totalFrames; frame++ {
-            frameOffset := frame * frameSize
-            frameData := allFramesData[frameOffset : frameOffset+frameSize]
-            fmt.Printf("Frame %d: %d bytes\n", frame, len(frameData))
-            // Process individual frame...
+    fmt.Printf("Pixel data contains %d frame(s)\n", pixels.FrameCount())
+    for frameIndex := 0; frameIndex < pixels.FrameCount(); frameIndex++ {
+        frame, err := pixels.Frame(context.Background(), frameIndex)
+        if err != nil {
+            log.Fatal(err)
         }
+        fmt.Printf("Frame %d: %d bytes\n", frameIndex, len(frame))
     }
 }
 ```
@@ -513,6 +586,96 @@ func main() {
 ```
 
 ## Writing DICOM Files
+
+### Creating an Image with Dataset and Pixel Data APIs
+
+Use `dataset.NewWithTransferSyntax` when constructing an image yourself. Then
+add metadata with `Dataset.AddValue`, create pixel storage with
+`pixeldata.NewForDataset`, append frames, and call `WriteToDataset`. This keeps
+Pixel Data VR, frame count, transfer syntax, and File Meta Information aligned:
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
+    "github.com/cocosip/go-dicom/pkg/dicom/transfer"
+    "github.com/cocosip/go-dicom/pkg/dicom/writer"
+    "github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
+)
+
+func addValue(ds *dataset.Dataset, t *tag.Tag, value any) {
+    if err := ds.AddValue(t, value); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func main() {
+    ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+    addValue(ds, tag.SOPClassUID, "1.2.840.10008.5.1.4.1.1.2") // CT Image Storage
+    addValue(ds, tag.SOPInstanceUID, "1.2.826.0.1.3680043.10.1142.1.1.1")
+    addValue(ds, tag.PatientName, "Doe^John")
+    addValue(ds, tag.PatientID, "12345")
+    addValue(ds, tag.Modality, "CT")
+    addValue(ds, tag.Rows, uint16(128))
+    addValue(ds, tag.Columns, uint16(128))
+    addValue(ds, tag.BitsAllocated, uint16(16))
+    addValue(ds, tag.BitsStored, uint16(16))
+    addValue(ds, tag.HighBit, uint16(15))
+    addValue(ds, tag.PixelRepresentation, uint16(0))
+    addValue(ds, tag.SamplesPerPixel, uint16(1))
+    addValue(ds, tag.PhotometricInterpretation, "MONOCHROME2")
+
+    pixels, err := pixeldata.NewForDataset(ds)
+    if err != nil {
+        log.Fatal(err)
+    }
+    frame := make([]byte, pixels.Info.UncompressedFrameSize())
+    pixelCount := int(pixels.Info.Width) * int(pixels.Info.Height)
+    for i := 0; i < pixelCount; i++ {
+        value := uint16(i % 4096)
+        frame[i*2] = byte(value)
+        frame[i*2+1] = byte(value >> 8)
+    }
+    if err := pixels.AddFrame(context.Background(), frame); err != nil {
+        log.Fatal(err)
+    }
+    if err := pixels.WriteToDataset(ds); err != nil {
+        log.Fatal(err)
+    }
+    if err := writer.WriteFile("generated.dcm", ds); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+`WriteToDataset` updates `(7FE0,0010) Pixel Data` and `(0028,0008)
+Number of Frames` together. For a multi-frame image, append each frame with
+`AddFrame`; do not manually concatenate Pixel Data or manually maintain
+`NumberOfFrames`:
+
+```go
+pixels, err := pixeldata.NewForDataset(ds)
+if err != nil {
+    return err
+}
+for frameIndex := 0; frameIndex < 10; frameIndex++ {
+    frame := makeFrame(frameIndex, pixels.Info.UncompressedFrameSize())
+    if err := pixels.AddFrame(ctx, frame); err != nil {
+        return err
+    }
+}
+return pixels.WriteToDataset(ds)
+```
+
+For a complete runnable generator using the same Dataset value API, see
+[`examples/write_dicom/main.go`](examples/write_dicom/main.go). The lower-level
+Element constructors shown below remain useful when the exact VR and element
+representation must be controlled manually.
 
 ### Creating a Simple DICOM File
 
@@ -766,6 +929,35 @@ func main() {
 
 ## Dataset Operations
 
+### Reading and Updating Dataset Values
+
+`Dataset` exposes value-oriented accessors so callers do not need to know the
+concrete `element` type for common fields:
+
+```go
+patientName, ok := ds.GetString(tag.PatientName)
+rows, err := ds.GetUInt16(tag.Rows, 0)
+windowCenters, ok := ds.GetStrings(tag.WindowCenter)
+rawPixelBytes, err := ds.GetBytes(tag.PixelData)
+
+// TryGet* is useful when a missing value should use a default.
+modality := ds.TryGetString(tag.Modality)
+
+// AddValue resolves the dictionary VR. A slice remains one multi-valued element.
+if err := ds.AddValue(tag.PatientName, "Doe^John"); err != nil {
+    log.Fatal(err)
+}
+if err := ds.AddOrUpdateValue(tag.StudyDescription, "Follow-up study"); err != nil {
+    log.Fatal(err)
+}
+```
+
+Use `AddValueWithVR` or `AddOrUpdateValueWithVR` for private tags, ambiguous
+dictionary entries, or raw binary values whose VR cannot be inferred from the
+Go value. Pixel Data is normally created with `pixeldata.NewForDataset` and
+written with `Data.WriteToDataset`, because its OB/OW/encapsulated VR depends
+on the Dataset transfer syntax.
+
 ### Iterating Through Elements
 
 ```go
@@ -776,6 +968,7 @@ import (
     "log"
     "os"
 
+    "github.com/cocosip/go-dicom/pkg/dicom/dict"
     "github.com/cocosip/go-dicom/pkg/dicom/parser"
 )
 
@@ -799,10 +992,10 @@ func main() {
 
     for _, elem := range elements {
         tag := elem.Tag()
-        vr := elem.VR()
+        vr := elem.ValueRepresentation()
 
         // Get tag dictionary entry for tag name
-        entry := tag.DictionaryEntry()
+        entry := dict.Default().Lookup(tag)
         tagName := "Unknown"
         if entry != nil {
             tagName = entry.Name
@@ -811,9 +1004,8 @@ func main() {
         fmt.Printf("(%04X,%04X) %s [%s]: ",
             tag.Group(), tag.Element(), tagName, vr.String())
 
-        // Try to get string value
-        if strElem, ok := elem.(interface{ GetString() string }); ok {
-            value := strElem.GetString()
+        // Try to get a decoded string value through Dataset accessors
+        if value, ok := result.Dataset.GetString(tag); ok {
             if len(value) > 50 {
                 value = value[:50] + "..."
             }
@@ -1118,13 +1310,13 @@ func main() {
 package main
 
 import (
+	"context"
     "fmt"
     "log"
     "os"
 
     "github.com/cocosip/go-dicom/pkg/dicom/parser"
-    "github.com/cocosip/go-dicom/pkg/dicom/tag"
-    "github.com/cocosip/go-dicom/pkg/io/buffer"
+    "github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 func main() {
@@ -1146,36 +1338,18 @@ func main() {
 
     }
 
-    // Get pixel data
-    pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
-    if !exists {
-        log.Fatal("No pixel data")
+    // Pixel Data is exposed through the pixeldata.Data frame API.
+    pixels, err := pixeldata.FromDataset(result.Dataset)
+    if err != nil {
+        log.Fatal(err)
     }
-
-    // For compressed data, pixel data is stored as fragment sequence
-    if fragSeq, ok := pixelDataElem.(interface {
-        FragmentCount() int
-        Fragments() []buffer.ByteBuffer
-    }); ok {
-        fragmentCount := fragSeq.FragmentCount()
-        fmt.Printf("Compressed data with %d fragments\n", fragmentCount)
-
-        fragments := fragSeq.Fragments()
-        totalSize := 0
-
-        for i, buf := range fragments {
-            data := buf.Data()
-            fragmentSize := len(data)
-            totalSize += fragmentSize
-
-            fmt.Printf("Fragment %d: %d bytes\n", i, fragmentSize)
+    fmt.Printf("Compressed Pixel Data: %d frame(s)\n", pixels.FrameCount())
+    for frameIndex := 0; frameIndex < pixels.FrameCount(); frameIndex++ {
+        frame, err := pixels.Frame(context.Background(), frameIndex)
+        if err != nil {
+            log.Fatal(err)
         }
-
-        fmt.Printf("Total compressed size: %d bytes\n", totalSize)
-
-        // To decode or transcode this data, add the selected go-dicom-codecs
-        // package as a blank import so it registers its codec, then create a
-        // transcode.Manager from codec.GlobalRegistry().
+        fmt.Printf("Frame %d: %d bytes\n", frameIndex, len(frame))
     }
 }
 ```

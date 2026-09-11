@@ -291,8 +291,8 @@ func main() {
     // 处理结果
     log.Printf("Found %d studies\n", len(results))
     for i, result := range results {
-        studyUID := result.GetString(tag.StudyInstanceUID, 0)
-        patientName := result.GetString(tag.PatientName, 0)
+        studyUID := result.TryGetString(tag.StudyInstanceUID)
+        patientName := result.TryGetString(tag.PatientName)
         log.Printf("Study %d: %s - %s\n", i+1, studyUID, patientName)
     }
 }
@@ -305,7 +305,7 @@ func main() {
 err := c.CFindWithCallback(ctx, dimse.QueryRetrieveLevelStudy, query,
     func(result *dataset.Dataset) bool {
         // 处理每个结果
-        studyUID := result.GetString(tag.StudyInstanceUID, 0)
+        studyUID := result.TryGetString(tag.StudyInstanceUID)
         log.Printf("Found study: %s\n", studyUID)
 
         // 返回 true 继续接收，返回 false 停止
@@ -380,7 +380,7 @@ func main() {
         ds := req.DataDataset()
 
         // 获取 SOP Instance UID
-        sopInstanceUID := ds.GetString(tag.SOPInstanceUID, 0)
+        sopInstanceUID := ds.TryGetString(tag.SOPInstanceUID)
         log.Printf("Receiving image: %s\n", sopInstanceUID)
 
         // 保存到文件

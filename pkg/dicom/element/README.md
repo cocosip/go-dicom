@@ -2,6 +2,11 @@
 
 `pkg/dicom/element` 包实现了DICOM数据元素的各种类型。
 
+> 注意：应用代码读取和更新 Dataset 中的常用值时，优先使用
+> `pkg/dicom/dataset` 的 `GetString`、`GetBytes`、`GetUInt16s`、
+> `AddValue` 和 `AddOrUpdateValue`。只有需要构造特定 Element、处理
+> 私有标签或明确指定 VR 时，才直接使用本包的具体类型和构造函数。
+
 ## 概述
 
 Element是DICOM数据集的基本构建块，每个Element包含：
@@ -203,7 +208,8 @@ tag, _ := elem.GetValue(0) // tag.PatientName
 
 **示例**:
 ```go
-// 存储像素数据
+// 直接构造二进制 Element（普通应用的 Pixel Data 建议使用
+// imaging/pixeldata.FromDataset 或 pixeldata.NewForDataset）
 data := []byte{0x00, 0xFF, 0x80, 0x7F}
 elem := element.NewOtherWord(tag.PixelData, data)
 pixelData := elem.GetData() // [0x00, 0xFF, 0x80, 0x7F]

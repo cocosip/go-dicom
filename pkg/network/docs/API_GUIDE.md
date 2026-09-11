@@ -198,15 +198,15 @@ if err != nil {
 }
 
 for _, result := range results {
-    studyUID := result.GetString(tag.StudyInstanceUID, 0)
-    desc := result.GetString(tag.StudyDescription, 0)
+    studyUID := result.TryGetString(tag.StudyInstanceUID)
+    desc := result.TryGetString(tag.StudyDescription)
     fmt.Printf("Study: %s - %s\n", studyUID, desc)
 }
 
 // 流式处理（节省内存）
 err = c.CFindWithCallback(ctx, dimse.QueryRetrieveLevelStudy, query,
     func(result *dataset.Dataset) bool {
-        studyUID := result.GetString(tag.StudyInstanceUID, 0)
+        studyUID := result.TryGetString(tag.StudyInstanceUID)
         fmt.Printf("Found: %s\n", studyUID)
 
         // 返回 true 继续，false 停止

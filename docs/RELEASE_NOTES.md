@@ -2,6 +2,20 @@
 
 ## Next
 
+- Dataset value access is now centered on `pkg/dicom/dataset`: use
+  `GetString`, `GetStrings`, `GetBytes`, typed numeric accessors,
+  `GetSequence`, `TryGet*`, `AddValue`, and `AddOrUpdateValue`. Use the
+  `WithVR` variants when the VR cannot be inferred, such as private tags or
+  raw binary values. Existing Element constructors remain available for
+  explicit element construction.
+- Pixel Data ownership is centered on `pkg/imaging/pixeldata.Data`. Read native
+  or encapsulated data with `pixeldata.FromDataset` and `Data.Frame`; create
+  Dataset-backed output with `pixeldata.NewForDataset` and
+  `Data.WriteToDataset`. Direct `Dataset.GetBytes(tag.PixelData)` is reserved
+  for contiguous encoded values and does not replace frame-aware access.
+- Dataset-level transcoding belongs to `pkg/dicom/transcode`; the codec SPI and
+  registry remain in `pkg/imaging/codec`, while pixel format value objects live
+  in `pkg/imaging/pixel`.
 - All packages now emit through one optional process-wide logger configured by
   `pkg/logging.Configure`. The logger is private to go-dicom and never uses
   `slog.Default()`; leaving logging unconfigured is fully supported and silent.

@@ -219,9 +219,10 @@ The `pixeldata.Data` type provides the high-level DICOM pixel-data API:
 **Usage Example**:
 ```go
 import (
-    "context"
-    "github.com/cocosip/go-dicom/pkg/imaging/pixel"
-    "github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
+	"context"
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 // Create pixel data info
@@ -250,6 +251,51 @@ frameBytes := make([]byte, info.UncompressedFrameSize())
 err = pixels.AddFrame(context.Background(), frameBytes)
 
 ```
+
+### Read and write Pixel Data from a Dataset
+
+For an existing file, `pixeldata.FromDataset` reads image metadata and native
+or encapsulated Pixel Data into `pixeldata.Data`. Use `Frame` for an owned copy
+of one frame; do not type-assert the Dataset element to an ad-hoc `GetData` or
+fragment interface:
+
+```go
+result, err := parser.ParseFile("image.dcm")
+if err != nil {
+    return err
+}
+pixels, err := pixeldata.FromDataset(result.Dataset)
+if err != nil {
+    return err
+}
+frame, err := pixels.Frame(context.Background(), 0)
+if err != nil {
+    return err
+}
+_ = frame
+```
+
+To create Pixel Data for a Dataset, use `pixeldata.NewForDataset`; it derives
+the OB/OW or encapsulated representation from the Dataset transfer syntax.
+After adding frames, call `WriteToDataset` to update Pixel Data and
+`NumberOfFrames` together:
+
+```go
+pixels, err := pixeldata.NewForDataset(ds)
+if err != nil {
+    return err
+}
+if err := pixels.AddFrame(ctx, frameBytes); err != nil {
+    return err
+}
+if err := pixels.WriteToDataset(ds); err != nil {
+    return err
+}
+```
+
+For a contiguous native value without frame handling, `ds.GetBytes(tag.PixelData)`
+returns the encoded value bytes. The returned slice follows buffer ownership
+semantics and must not be modified.
 
 ### Implemented Codecs
 
