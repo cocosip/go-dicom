@@ -70,6 +70,37 @@ func TestTranscodePassesContextToLogHandler(t *testing.T) {
 	}
 }
 
+func TestTranscodeCompatibleNativeOBWritesWarning(t *testing.T) {
+	var output bytes.Buffer
+	if err := logging.Configure(logging.Config{
+		Handler: slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn}),
+	}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
+
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	if err := ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{16})); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12})); err != nil {
+		t.Fatal(err)
+	}
+
+	transcoder := newTestTranscoder(t, transfer.ExplicitVRLittleEndian, transfer.ExplicitVRLittleEndian)
+	if _, err := transcoder.Transcode(context.Background(), ds); err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+
+	got := output.String()
+	if count := strings.Count(got, `"event":"nonstandard_native_pixel_data_vr"`); count != 1 {
+		t.Fatalf("native Pixel Data VR warnings = %d, want 1: %s", count, got)
+	}
+	if !strings.Contains(got, `"component":"imaging.codec"`) {
+		t.Fatalf("warning log missing component: %s", got)
+	}
+}
+
 type transcoderContextHandler struct {
 	contextValue any
 }

@@ -3,13 +3,25 @@
 
 package imaging
 
-import "github.com/cocosip/go-dicom/pkg/imaging/codec"
+import (
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+)
 
 type dicomImageConfig struct {
-	codecRegistry   *codec.Registry
-	codecParameters codec.Parameters
-	windowIndex     int
-	voiLUTIndex     int
+	codecRegistry     *codec.Registry
+	codecParameters   codec.Parameters
+	windowIndex       int
+	voiLUTIndex       int
+	presentationState *dataset.Dataset
+}
+
+// WithPresentationState supplies a Grayscale Softcopy Presentation State
+// Dataset used for Softcopy VOI and Presentation LUT selection.
+func WithPresentationState(ds *dataset.Dataset) DicomImageOption {
+	return func(config *dicomImageConfig) {
+		config.presentationState = ds
+	}
 }
 
 // WithWindowIndex selects one alternative Window Center/Width pair. The

@@ -84,6 +84,9 @@ func ModalityLUT(ds *dataset.Dataset, signed bool) (lut.LUT, error) {
 		return nil, fmt.Errorf("modality LUT Sequence must contain exactly one item, got %d", sequence.Count())
 	}
 	item := sequence.GetItem(0)
+	if _, err := dicomlut.RequiredLongString(item, tag.ModalityLUTType, "Modality LUT Type"); err != nil {
+		return nil, err
+	}
 	descriptor, err := dicomlut.ReadDescriptor(item, tag.LUTDescriptor, signed)
 	if err != nil {
 		return nil, fmt.Errorf("read Modality LUT descriptor: %w", err)

@@ -115,7 +115,7 @@ func (NoParameters) Clone() Parameters { return NoParameters{} }
 // Validate reports that NoParameters is always valid.
 func (NoParameters) Validate() error { return nil }
 
-// ByteSwapMode controls whether NativeCodec swaps multi-byte samples.
+// ByteSwapMode controls whether NativeCodec swaps bytes within native OW words.
 type ByteSwapMode uint8
 
 const (
@@ -123,7 +123,7 @@ const (
 	ByteSwapDefault ByteSwapMode = iota
 	// ByteSwapDisabled preserves the source byte order.
 	ByteSwapDisabled
-	// ByteSwapEnabled swaps every multi-byte sample.
+	// ByteSwapEnabled swaps bytes within every 16-bit OW word.
 	ByteSwapEnabled
 )
 

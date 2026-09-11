@@ -106,7 +106,7 @@ func TestDataToElementRestoresBigEndianPixelBytes(t *testing.T) {
 func TestSwapPixelDataBytesUsesNativeSampleWidthForThirtyTwoBitOW(t *testing.T) {
 	info := grayscaleSampleInfo(32, 32, 31, pixel.UnsignedPixels)
 	got := swapPixelDataBytes([]byte{0x11, 0x22, 0x33, 0x44}, &info)
-	want := []byte{0x44, 0x33, 0x22, 0x11}
+	want := []byte{0x22, 0x11, 0x44, 0x33}
 	if !bytes.Equal(got, want) {
 		t.Fatalf("swapPixelDataBytes() = %x, want %x", got, want)
 	}

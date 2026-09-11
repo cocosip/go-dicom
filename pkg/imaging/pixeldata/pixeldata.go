@@ -7,12 +7,14 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/encapsulated"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
@@ -21,6 +23,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
 // Info contains metadata about DICOM pixel data.
@@ -629,36 +632,73 @@ func (pd *Data) MaskPadding() (frames [][]byte, masks [][]bool, err error) {
 
 // WindowOrLUTTo8bit applies VOI LUT if present, otherwise window.
 func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ignorePadding bool) ([][]byte, error) {
-	modality, err := modalityTransformForDataset(ds, pd)
-	if err != nil {
-		return nil, err
+	result := make([][]byte, len(pd.frames))
+	for frameIndex, frame := range pd.frames {
+		functional := dicomlut.FunctionalGroupValues(ds, frameIndex)
+		modality, err := modalityTransformForDatasets(functional, ds, pd)
+		if err != nil {
+			return nil, fmt.Errorf("frame %d: %w", frameIndex, err)
+		}
+		frameData := &Data{Info: pd.Info, frames: [][]byte{frame}}
+		var converted [][]byte
+		if voiSource := datasetContaining(functional, ds, tag.VOILUTSequence); voiSource != nil {
+			converted, err = applyVOILUTWithModality(frameData, voiSource, center, width, ignorePadding, modality)
+		} else {
+			converted, err = applyWindowTo8bitWithModality(frameData, center, width, ignorePadding, modality)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("frame %d: %w", frameIndex, err)
+		}
+		result[frameIndex] = converted[0]
 	}
-	if ds != nil && ds.Contains(tag.VOILUTSequence) {
-		return applyVOILUTWithModality(pd, ds, center, width, ignorePadding, modality)
-	}
-	return applyWindowTo8bitWithModality(pd, center, width, ignorePadding, modality)
+	return result, nil
 }
 
-func modalityTransformForDataset(ds *dataset.Dataset, pd *Data) (lut.LUT, error) {
-	if ds == nil {
+func modalityTransformForDatasets(primary, fallback *dataset.Dataset, pd *Data) (lut.LUT, error) {
+	if primary == nil && fallback == nil {
 		return nil, nil
 	}
 	signed := pd != nil && pd.Info != nil && pd.Info.PixelRepresentation == pixel.SignedPixels
-	if ds.Contains(tag.ModalityLUTSequence) {
-		if ds.Contains(tag.RescaleSlope) || ds.Contains(tag.RescaleIntercept) {
+	// Select one precedence source for the complete modality transform. A
+	// Functional Group transform overrides top-level attributes instead of
+	// being combined with the other representation.
+	source := datasetContaining(
+		primary,
+		nil,
+		tag.ModalityLUTSequence,
+		tag.RescaleSlope,
+		tag.RescaleIntercept,
+	)
+	if source == nil {
+		source = datasetContaining(
+			fallback,
+			nil,
+			tag.ModalityLUTSequence,
+			tag.RescaleSlope,
+			tag.RescaleIntercept,
+		)
+	}
+	if source == nil {
+		return nil, nil
+	}
+	if source.Contains(tag.ModalityLUTSequence) {
+		if source.Contains(tag.RescaleSlope) || source.Contains(tag.RescaleIntercept) {
 			return nil, fmt.Errorf("modality LUT sequence cannot coexist with rescale slope/intercept")
 		}
-		return ModalityLUT(ds, signed)
+		return ModalityLUT(source, signed)
 	}
-	hasSlope, hasIntercept := ds.Contains(tag.RescaleSlope), ds.Contains(tag.RescaleIntercept)
+	hasSlope, hasIntercept := source.Contains(tag.RescaleSlope), source.Contains(tag.RescaleIntercept)
 	if !hasSlope && !hasIntercept {
 		return nil, nil
 	}
 	if !hasSlope || !hasIntercept {
 		return nil, fmt.Errorf("rescale slope and rescale intercept must be present together")
 	}
+	if _, err := dicomlut.RequiredLongString(source, tag.RescaleType, "Rescale Type"); err != nil {
+		return nil, err
+	}
 	readDecimal := func(t *tag.Tag, name string) (float64, error) {
-		elem, exists := ds.Get(t)
+		elem, exists := source.Get(t)
 		if !exists {
 			return 0, fmt.Errorf("read %s: value is missing", name)
 		}
@@ -684,6 +724,20 @@ func modalityTransformForDataset(ds *dataset.Dataset, pd *Data) (lut.LUT, error)
 		return nil, fmt.Errorf("rescale slope must not be zero")
 	}
 	return lut.NewModalityRescaleLUT(slope, intercept, math.NaN(), math.NaN()), nil
+}
+
+func datasetContaining(primary, fallback *dataset.Dataset, tags ...*tag.Tag) *dataset.Dataset {
+	for _, ds := range []*dataset.Dataset{primary, fallback} {
+		if ds == nil {
+			continue
+		}
+		for _, t := range tags {
+			if ds.Contains(t) {
+				return ds
+			}
+		}
+	}
+	return nil
 }
 
 // ToElement builds a DICOM pixel data element (OB/OW or encapsulated fragment) from the current frames.
@@ -892,6 +946,27 @@ func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Paramete
 //
 //nolint:gocyclo // Complex function handling many DICOM variations
 func FromDataset(ds *dataset.Dataset) (*Data, error) {
+	return FromDatasetWithOptions(ds)
+}
+
+// FromDatasetWithOptions creates pixel data from a DICOM dataset using the
+// requested VR compatibility policy.
+//
+//nolint:gocyclo // Complex function handling many DICOM variations
+func FromDatasetWithOptions(ds *dataset.Dataset, options ...ReadOption) (*Data, error) {
+	config := readConfig{vrMode: PixelDataCompatible}
+	for _, option := range options {
+		if option != nil {
+			option(&config)
+		}
+	}
+	if config.vrMode != PixelDataCompatible && config.vrMode != PixelDataStandard {
+		return nil, fmt.Errorf("unsupported Pixel Data VR mode: %d", config.vrMode)
+	}
+	if ds == nil {
+		return nil, fmt.Errorf("dataset cannot be nil")
+	}
+
 	// Extract required tags
 	rows, err := ds.GetUInt16(tag.Rows, 0)
 	if err != nil {
@@ -950,10 +1025,15 @@ func FromDataset(ds *dataset.Dataset) (*Data, error) {
 	// Get transfer syntax UID from dataset
 	// Priority: 1) InternalTransferSyntax 2) TransferSyntaxUID tag 3) Default
 	transferSyntaxUID := transfer.ExplicitVRLittleEndian.UID().UID()
+	transferSyntaxExplicitVR := true
 	if ts := ds.InternalTransferSyntax(); ts != nil {
 		transferSyntaxUID = ts.UID().UID()
+		transferSyntaxExplicitVR = ts.IsExplicitVR()
 	} else if tsUID, ok := ds.GetString(tag.TransferSyntaxUID); ok {
 		transferSyntaxUID = tsUID
+		if ts, parseErr := transfer.Parse(tsUID); parseErr == nil {
+			transferSyntaxExplicitVR = ts.IsExplicitVR()
+		}
 	}
 
 	// Get lossy compression information if present
@@ -1010,6 +1090,28 @@ func FromDataset(ds *dataset.Dataset) (*Data, error) {
 	var pd *Data
 	switch elem := pixelDataElem.(type) {
 	case *element.OtherByte:
+		var violation string
+		switch {
+		case !transferSyntaxExplicitVR:
+			violation = "implicit VR native Pixel Data uses OB; DICOM PS3.5 requires OW"
+		case bitsAllocated > 8:
+			violation = fmt.Sprintf("native Pixel Data uses OB with Bits Allocated=%d; DICOM PS3.5 requires OW", bitsAllocated)
+		}
+		if violation != "" {
+			if config.vrMode == PixelDataStandard {
+				return nil, fmt.Errorf("%s", violation)
+			}
+			logging.Emit(context.Background(), logging.Record{
+				Level:     slog.LevelWarn,
+				Component: "imaging.pixeldata",
+				Event:     "nonstandard_native_pixel_data_vr",
+				Message:   "accepting non-standard native OB Pixel Data in compatibility mode",
+				Attrs: []slog.Attr{
+					slog.String("transfer_syntax", transferSyntaxUID),
+					slog.Int("bits_allocated", int(bitsAllocated)),
+				},
+			})
+		}
 		info.VRCode = "OB"
 		info.Encapsulated = false
 		data := elem.GetData()
@@ -1034,10 +1136,15 @@ func FromDataset(ds *dataset.Dataset) (*Data, error) {
 	case *element.OtherByteFragment:
 		info.VRCode = "OB"
 		info.Encapsulated = true
-		frames, ferr := framesFromFragments(elem.Fragments(), elem.OffsetTable(), numberOfFrames)
+		encapsulatedData, ferr := encapsulated.OpenDataset(ds)
 		if ferr != nil {
 			return nil, ferr
 		}
+		frames, ferr := encapsulatedData.Frames(numberOfFrames)
+		if ferr != nil {
+			return nil, ferr
+		}
+		stripFramePadding(frames)
 		pd, err = New(info)
 		if err != nil {
 			return nil, err
@@ -1046,12 +1153,26 @@ func FromDataset(ds *dataset.Dataset) (*Data, error) {
 		pd.basicOffsetTable = append(pd.basicOffsetTable, elem.OffsetTable()...)
 		pd.Info.NumberOfFrames = len(pd.frames)
 	case *element.OtherWordFragment:
+		if config.vrMode == PixelDataStandard {
+			return nil, fmt.Errorf("encapsulated Pixel Data uses OW; DICOM PS3.5 Section 8.2 requires OB")
+		}
+		logging.Emit(context.Background(), logging.Record{
+			Level:     slog.LevelWarn,
+			Component: "imaging.pixeldata",
+			Event:     "nonstandard_encapsulated_pixel_data_vr",
+			Message:   "accepting non-standard encapsulated OW Pixel Data in compatibility mode",
+		})
 		info.VRCode = "OW"
 		info.Encapsulated = true
-		frames, ferr := framesFromFragments(elem.Fragments(), elem.OffsetTable(), numberOfFrames)
+		encapsulatedData, ferr := encapsulated.OpenDataset(ds)
 		if ferr != nil {
 			return nil, ferr
 		}
+		frames, ferr := encapsulatedData.Frames(numberOfFrames)
+		if ferr != nil {
+			return nil, ferr
+		}
+		stripFramePadding(frames)
 		pd, err = New(info)
 		if err != nil {
 			return nil, err
@@ -1216,51 +1337,32 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 		return nil, fmt.Errorf("palette LUT bits per entry must be 8 or 16, got %d", rDescriptor.BitsPerEntry)
 	}
 
-	// Prefer standard LUT data; if missing, try segmented LUT data
-	rLUT, err := dicomlut.ReadData(ds, tag.RedPaletteColorLookupTableData, rDescriptor, byteOrder)
+	rLUT, err := readPaletteLUTChannel(ds,
+		tag.RedPaletteColorLookupTableData,
+		tag.SegmentedRedPaletteColorLookupTableData,
+		rDescriptor,
+		byteOrder,
+	)
 	if err != nil {
-		if seg, ok := ds.Get(tag.SegmentedRedPaletteColorLookupTableData); ok {
-			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				rLUT, err = expandSegmentedLUT(ob.GetData(), rDescriptor.EntryCount, byteOrder)
-			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				rLUT, err = expandSegmentedLUT(ow.GetData(), rDescriptor.EntryCount, dicomlut.NumericByteOrderOr(ow, byteOrder))
-			} else {
-				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("read Red Palette LUT Data: %w", err)
 	}
-	gLUT, err := dicomlut.ReadData(ds, tag.GreenPaletteColorLookupTableData, gDescriptor, byteOrder)
+	gLUT, err := readPaletteLUTChannel(ds,
+		tag.GreenPaletteColorLookupTableData,
+		tag.SegmentedGreenPaletteColorLookupTableData,
+		gDescriptor,
+		byteOrder,
+	)
 	if err != nil {
-		if seg, ok := ds.Get(tag.SegmentedGreenPaletteColorLookupTableData); ok {
-			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				gLUT, err = expandSegmentedLUT(ob.GetData(), gDescriptor.EntryCount, byteOrder)
-			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				gLUT, err = expandSegmentedLUT(ow.GetData(), gDescriptor.EntryCount, dicomlut.NumericByteOrderOr(ow, byteOrder))
-			} else {
-				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("read Green Palette LUT Data: %w", err)
 	}
-	bLUT, err := dicomlut.ReadData(ds, tag.BluePaletteColorLookupTableData, bDescriptor, byteOrder)
+	bLUT, err := readPaletteLUTChannel(ds,
+		tag.BluePaletteColorLookupTableData,
+		tag.SegmentedBluePaletteColorLookupTableData,
+		bDescriptor,
+		byteOrder,
+	)
 	if err != nil {
-		if seg, ok := ds.Get(tag.SegmentedBluePaletteColorLookupTableData); ok {
-			if ob, ok2 := seg.(*element.OtherByte); ok2 {
-				bLUT, err = expandSegmentedLUT(ob.GetData(), bDescriptor.EntryCount, byteOrder)
-			} else if ow, ok2 := seg.(*element.OtherWord); ok2 {
-				bLUT, err = expandSegmentedLUT(ow.GetData(), bDescriptor.EntryCount, dicomlut.NumericByteOrderOr(ow, byteOrder))
-			} else {
-				err = fmt.Errorf("unsupported segmented palette element type %T", seg)
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("read Blue Palette LUT Data: %w", err)
 	}
 
 	alphaDescriptorPresent := ds.Contains(tag.AlphaPaletteColorLookupTableDescriptor)
@@ -1310,6 +1412,15 @@ func readPaletteLUTChannel(
 	descriptor dicomlut.Descriptor,
 	byteOrder binary.ByteOrder,
 ) ([]uint16, error) {
+	hasDirect := ds.Contains(directTag)
+	hasSegmented := ds.Contains(segmentedTag)
+	if hasDirect && hasSegmented {
+		return nil, fmt.Errorf(
+			"palette channel contains both direct and segmented Palette LUT data (%s and %s)",
+			directTag,
+			segmentedTag,
+		)
+	}
 	values, err := dicomlut.ReadData(ds, directTag, descriptor, byteOrder)
 	if err == nil {
 		return values, nil
@@ -1472,98 +1583,10 @@ func (d *segmentedLUTDecoder) reserve(count int) error {
 	return nil
 }
 
-// framesFromFragments builds per-frame compressed data using fragments and an optional BOT.
-// If offsetTable is present, it slices the concatenated fragments using offsets.
-// Otherwise, it assumes one fragment per frame (best-effort fallback).
-func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, frameCount int) ([][]byte, error) {
-	if len(fragments) == 0 {
-		return nil, fmt.Errorf("no fragments available")
+func stripFramePadding(frames [][]byte) {
+	for i := range frames {
+		frames[i] = codec.StripTrailingPadding(frames[i])
 	}
-
-	for i, frag := range fragments {
-		if len(frag.Data()) == 0 {
-			return nil, fmt.Errorf("fragment %d is empty", i)
-		}
-	}
-
-	if frameCount < 1 {
-		frameCount = len(offsetTable)
-	}
-	if frameCount < 1 {
-		frameCount = len(fragments)
-	}
-	if frameCount < 1 {
-		frameCount = 1
-	}
-
-	// BOT present: offsets point to encoded fragment item starts, not to
-	// concatenated payload bytes. Map each offset to a fragment index, then
-	// concatenate the fragments that belong to each frame.
-	if len(offsetTable) > 0 {
-		if frameCount != len(offsetTable) {
-			return nil, fmt.Errorf("offset table frames mismatch: expected %d, got %d", frameCount, len(offsetTable))
-		}
-
-		fragmentStartByOffset := make(map[uint32]int, len(fragments))
-		var runningOffset uint32
-		for i, frag := range fragments {
-			fragmentStartByOffset[runningOffset] = i
-			size := frag.Size()
-			if size%2 != 0 {
-				size++
-			}
-			if size > math.MaxUint32-8 || runningOffset > math.MaxUint32-8-size {
-				return nil, fmt.Errorf("fragment offset overflow at index %d", i)
-			}
-			runningOffset += 8 + size
-		}
-
-		frameStartIndexes := make([]int, frameCount)
-		for i := 0; i < frameCount; i++ {
-			fragmentIndex, ok := fragmentStartByOffset[offsetTable[i]]
-			if !ok {
-				return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[i], i)
-			}
-			frameStartIndexes[i] = fragmentIndex
-		}
-
-		var frames [][]byte
-		for i, start := range frameStartIndexes {
-			end := len(fragments)
-			if i+1 < len(frameStartIndexes) {
-				end = frameStartIndexes[i+1]
-			}
-			if start >= end {
-				return nil, fmt.Errorf("frame %d derived from BOT is empty", i)
-			}
-			var frame []byte
-			for _, frag := range fragments[start:end] {
-				frame = append(frame, frag.Data()...)
-			}
-			frames = append(frames, codec.StripTrailingPadding(frame))
-		}
-		return frames, nil
-	}
-
-	if frameCount == 1 {
-		var frame []byte
-		for _, frag := range fragments {
-			frame = append(frame, frag.Data()...)
-		}
-		return [][]byte{codec.StripTrailingPadding(frame)}, nil
-	}
-
-	// Fallback: require one fragment per frame.
-	if frameCount > len(fragments) {
-		return nil, fmt.Errorf("frame count %d exceeds available fragments %d without BOT", frameCount, len(fragments))
-	}
-	framesToUse := frameCount
-	var frames [][]byte
-	for i := 0; i < framesToUse; i++ {
-		data := append([]byte(nil), fragments[i].Data()...)
-		frames = append(frames, codec.StripTrailingPadding(data))
-	}
-	return frames, nil
 }
 
 // buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,

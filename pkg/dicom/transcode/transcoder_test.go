@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -19,6 +20,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -79,7 +81,7 @@ func TestBuildFragmentSequenceBOTUsesEncodedItemOffsets(t *testing.T) {
 		[]byte("AA"),
 		[]byte("BBB"),
 		[]byte("C"),
-	}, 16, true)
+	}, 16, pixeldata.PixelDataStandard)
 	if err != nil {
 		t.Fatalf("buildFragmentSequence() error = %v", err)
 	}
@@ -427,6 +429,205 @@ func TestTranscoderNativePixelDataByteOrderUsesVR(t *testing.T) {
 	}
 }
 
+func TestTranscoderNativeThirtyTwoBitOWSwapsSixteenBitWords(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{32}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{32}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{31}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherWord(tag.PixelData, []byte{0x11, 0x22, 0x33, 0x44}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+
+	gotDS, err := newTestTranscoder(
+		t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ExplicitVRBigEndian,
+	).Transcode(context.Background(), ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	gotElem, ok := gotDS.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("transcoded dataset has no Pixel Data")
+	}
+	word, ok := gotElem.(*element.OtherWord)
+	if !ok {
+		t.Fatalf("transcoded Pixel Data = %T, want OW", gotElem)
+	}
+	want := []byte{0x22, 0x11, 0x44, 0x33}
+	if got := word.GetData(); !bytes.Equal(got, want) {
+		t.Fatalf("Pixel Data = % x, want % x", got, want)
+	}
+}
+
+func TestTranscoderDefaultNormalizesNativeOBAboveEightBits(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	result, err := newTestTranscoder(
+		t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ExplicitVRLittleEndian,
+	).Transcode(context.Background(), ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	if got, _ := result.Get(tag.PixelData); got == nil {
+		t.Fatal("transcoded Dataset has no Pixel Data")
+	} else if _, ok := got.(*element.OtherWord); !ok {
+		t.Fatalf("transcoded Pixel Data = %T, want native OW", got)
+	}
+}
+
+func TestTranscoderStandardReadRejectsNativeOBAboveEightBits(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	_, err := newTestTranscoder(
+		t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ExplicitVRLittleEndian,
+		WithPixelDataReadMode(pixeldata.PixelDataStandard),
+	).Transcode(context.Background(), ds)
+	if err == nil || !strings.Contains(err.Error(), "native Pixel Data uses OB") {
+		t.Fatalf("Transcode() error = %v, want native OB rejection", err)
+	}
+}
+
+func TestTranscoderStandardReadRejectsImplicitNativeOB(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ImplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x7f, 0x00}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	transcoder := newTestTranscoder(
+		t,
+		transfer.ImplicitVRLittleEndian,
+		transfer.ExplicitVRLittleEndian,
+		WithPixelDataReadMode(pixeldata.PixelDataStandard),
+	)
+	if _, err := transcoder.Transcode(context.Background(), ds); err == nil {
+		t.Fatal("Transcode() error = nil, want implicit native OB rejection")
+	}
+}
+
+func TestTranscoderCompatibleNativeOBCrossEndianRecoversAsOW(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	gotDS, err := newTestTranscoder(
+		t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ExplicitVRBigEndian,
+	).Transcode(context.Background(), ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	gotElem, ok := gotDS.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("transcoded dataset has no Pixel Data")
+	}
+	word, ok := gotElem.(*element.OtherWord)
+	if !ok {
+		t.Fatalf("transcoded Pixel Data = %T, want native OW", gotElem)
+	}
+	if got := word.GetData(); !bytes.Equal(got, []byte{0x12, 0x34}) {
+		t.Fatalf("Pixel Data = % x, want big-endian OW bytes 12 34", got)
+	}
+}
+
+func TestTranscoderDecodeFrameStandardReadRejectsNativeOBAboveEightBits(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	transcoder := newTestTranscoder(
+		t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ExplicitVRLittleEndian,
+		WithPixelDataReadMode(pixeldata.PixelDataStandard),
+	)
+	if _, err := transcoder.DecodeFrame(context.Background(), ds, 0); err == nil {
+		t.Fatal("DecodeFrame() error = nil, want native OB rejection")
+	}
+}
+
 func TestTranscoder_DecodeFrame(t *testing.T) {
 	t.Run("UncompressedSingleFrame", func(t *testing.T) {
 		// Create dataset with uncompressed pixel data
@@ -521,6 +722,165 @@ func TestTranscoder_DecodeFrameUsesBOTFrameBoundaries(t *testing.T) {
 	}
 }
 
+func TestTranscoderDecodeFrameUsesExtendedOffsetTable(t *testing.T) {
+	ds := newCodecTestDataset(t, transfer.JPEG2000Lossless)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Columns, []uint16{4}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+	} {
+		if err := ds.AddOrUpdate(elem); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"})); err != nil {
+		t.Fatal(err)
+	}
+	offsets := make([]byte, 16)
+	lengths := make([]byte, 16)
+	binary.LittleEndian.PutUint64(offsets, 0)
+	binary.LittleEndian.PutUint64(offsets[8:], 20)
+	binary.LittleEndian.PutUint64(lengths, 20)
+	binary.LittleEndian.PutUint64(lengths[8:], 20)
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, offsets)); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, lengths)); err != nil {
+		t.Fatal(err)
+	}
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	for _, data := range [][]byte{[]byte("AA"), []byte("BB"), []byte("CC"), []byte("DD")} {
+		fragments.AddFragment(buffer.NewMemory(data))
+	}
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	transcoder := newTestTranscoder(
+		t,
+		transfer.JPEG2000Lossless,
+		transfer.ExplicitVRLittleEndian,
+		echoDecodeCodec{},
+	)
+	got, err := transcoder.DecodeFrame(context.Background(), ds, 1)
+	if err != nil {
+		t.Fatalf("DecodeFrame() error = %v", err)
+	}
+	if !bytes.Equal(got, []byte("CCDD")) {
+		t.Fatalf("DecodeFrame() = %q, want %q", got, []byte("CCDD"))
+	}
+}
+
+func TestTranscoderRemovesStaleExtendedOffsetTables(t *testing.T) {
+	addTables := func(t *testing.T, ds *dataset.Dataset, offsets, lengths []uint64) {
+		t.Helper()
+		encode := func(values []uint64) []byte {
+			data := make([]byte, len(values)*8)
+			for i, value := range values {
+				binary.LittleEndian.PutUint64(data[i*8:], value)
+			}
+			return data
+		}
+		if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, encode(offsets))); err != nil {
+			t.Fatal(err)
+		}
+		if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, encode(lengths))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertTablesRemoved := func(t *testing.T, ds *dataset.Dataset) {
+		t.Helper()
+		for _, tableTag := range []*tag.Tag{tag.ExtendedOffsetTable, tag.ExtendedOffsetTableLengths} {
+			if ds.Contains(tableTag) {
+				t.Fatalf("transcoded dataset retained %s", tableTag)
+			}
+		}
+	}
+
+	t.Run("native to native", func(t *testing.T) {
+		ds := newCodecTestDataset(t, transfer.ExplicitVRLittleEndian)
+		if err := ds.Add(element.NewOtherWord(tag.PixelData, []byte{0x34, 0x12})); err != nil {
+			t.Fatal(err)
+		}
+		addTables(t, ds, []uint64{0}, []uint64{10})
+
+		got, err := newTestTranscoder(
+			t,
+			transfer.ExplicitVRLittleEndian,
+			transfer.ExplicitVRLittleEndian,
+		).Transcode(context.Background(), ds)
+		if err != nil {
+			t.Fatalf("Transcode() error = %v", err)
+		}
+		assertTablesRemoved(t, got)
+	})
+
+	t.Run("native to encapsulated", func(t *testing.T) {
+		ds := newCodecTestDataset(t, transfer.ExplicitVRLittleEndian)
+		if err := ds.Add(element.NewOtherWord(tag.PixelData, []byte{0x34, 0x12})); err != nil {
+			t.Fatal(err)
+		}
+		addTables(t, ds, []uint64{0}, []uint64{10})
+
+		got, err := newTestTranscoder(
+			t,
+			transfer.ExplicitVRLittleEndian,
+			transfer.JPEG2000Lossless,
+			echoDecodeCodec{},
+		).Transcode(context.Background(), ds)
+		if err != nil {
+			t.Fatalf("Transcode() error = %v", err)
+		}
+		assertTablesRemoved(t, got)
+	})
+
+	t.Run("encapsulated to native", func(t *testing.T) {
+		ds := newCodecTestDataset(t, transfer.JPEG2000Lossless)
+		addTables(t, ds, []uint64{0}, []uint64{10})
+		fragments := element.NewOtherByteFragment(tag.PixelData)
+		fragments.AddFragment(buffer.NewMemory([]byte{0x34, 0x12}))
+		if err := ds.Add(fragments); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := newTestTranscoder(
+			t,
+			transfer.JPEG2000Lossless,
+			transfer.ExplicitVRLittleEndian,
+			echoDecodeCodec{},
+		).Transcode(context.Background(), ds)
+		if err != nil {
+			t.Fatalf("Transcode() error = %v", err)
+		}
+		assertTablesRemoved(t, got)
+	})
+}
+
+func TestTranscoderDecodeRejectsAmbiguousEmptyOffsetTable(t *testing.T) {
+	ds := newCodecTestDataset(t, transfer.JPEG2000Lossless)
+	if err := ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"})); err != nil {
+		t.Fatal(err)
+	}
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	for _, data := range [][]byte{[]byte("AA"), []byte("BB"), []byte("CC"), []byte("DD")} {
+		fragments.AddFragment(buffer.NewMemory(data))
+	}
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	transcoder := newTestTranscoder(
+		t,
+		transfer.JPEG2000Lossless,
+		transfer.ExplicitVRLittleEndian,
+		echoDecodeCodec{},
+	)
+	if _, err := transcoder.decode(context.Background(), ds, transfer.ExplicitVRLittleEndian); err == nil {
+		t.Fatal("decode() error = nil, want indeterminate frame-boundaries error")
+	}
+}
+
 func TestTranscoderDecodeParsesStringNumberOfFrames(t *testing.T) {
 	ds := dataset.New()
 	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{1}))
@@ -600,6 +960,26 @@ func TestTranscoderDecodeAcceptsEncapsulatedOWPixelData(t *testing.T) {
 	}
 	if got := word.GetData(); !bytes.Equal(got, []byte{0x34, 0x12}) {
 		t.Fatalf("decoded PixelData bytes = %x, want 3412", got)
+	}
+}
+
+func TestTranscoderStandardReadModeRejectsEncapsulatedOWPixelData(t *testing.T) {
+	ds := newCodecTestDataset(t, transfer.JPEG2000Lossless)
+	fragments := element.NewOtherWordFragment(tag.PixelData)
+	fragments.AddFragment(buffer.NewMemory([]byte{0x34, 0x12}))
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	transcoder := newTestTranscoder(
+		t,
+		transfer.JPEG2000Lossless,
+		transfer.ExplicitVRLittleEndian,
+		echoDecodeCodec{},
+		WithPixelDataReadMode(pixeldata.PixelDataStandard),
+	)
+	if _, err := transcoder.decode(context.Background(), ds, transfer.ExplicitVRLittleEndian); err == nil {
+		t.Fatal("decode() error = nil, want encapsulated OW rejection")
 	}
 }
 
@@ -716,43 +1096,6 @@ func (c *countingBuffer) GetByteRange(offset, count uint32, output []byte) error
 func (c *countingBuffer) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(c.data)
 	return int64(n), err
-}
-
-func TestFramesFromFragments_UsesBOTItemOffsets(t *testing.T) {
-	fragments := []buffer.ByteBuffer{
-		buffer.NewMemory([]byte("AA")),
-		buffer.NewMemory([]byte("BBB")),
-		buffer.NewMemory([]byte("CC")),
-	}
-
-	frames, err := framesFromFragments(fragments, []uint32{0, 22}, 2)
-	if err != nil {
-		t.Fatalf("framesFromFragments() error = %v", err)
-	}
-	if len(frames) != 2 {
-		t.Fatalf("len(frames) = %d, want 2", len(frames))
-	}
-	if !bytes.Equal(frames[0], []byte("AABBB")) {
-		t.Errorf("frames[0] = %q, want %q", frames[0], []byte("AABBB"))
-	}
-	if !bytes.Equal(frames[1], []byte("CC")) {
-		t.Errorf("frames[1] = %q, want %q", frames[1], []byte("CC"))
-	}
-}
-
-func TestFramesFromFragments_StripsTrailingPaddingWithBOT(t *testing.T) {
-	fragments := []buffer.ByteBuffer{
-		buffer.NewMemory([]byte{0xFF, 0xD9, 0x00}),
-		buffer.NewMemory([]byte("B")),
-	}
-
-	frames, err := framesFromFragments(fragments, []uint32{0, 12}, 2)
-	if err != nil {
-		t.Fatalf("framesFromFragments() error = %v", err)
-	}
-	if !bytes.Equal(frames[0], []byte{0xFF, 0xD9}) {
-		t.Fatalf("frames[0] = %v, want JPEG EOI without padding", frames[0])
-	}
 }
 
 func TestTranscoderManager(t *testing.T) {

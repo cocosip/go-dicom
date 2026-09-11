@@ -10,6 +10,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 func TestNewManagerRejectsNilRegistry(t *testing.T) {
@@ -142,7 +143,48 @@ func TestManagerNewTranscoderAppliesParametersAndStrictVR(t *testing.T) {
 	if transcoder.inputParams != inputParameters || transcoder.outputParams != outputParameters {
 		t.Fatal("NewTranscoder did not retain the supplied codec parameters")
 	}
-	if transcoder.strictDICOMVR {
+	if transcoder.pixelDataWriteMode != pixeldata.PixelDataCompatible {
 		t.Fatal("NewTranscoder ignored WithStrictDICOMVR(false)")
+	}
+}
+
+func TestManagerNewTranscoderAppliesPixelDataModes(t *testing.T) {
+	manager, err := NewManager(codec.NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	transcoder, err := manager.NewTranscoder(
+		transfer.ExplicitVRLittleEndian,
+		transfer.ImplicitVRLittleEndian,
+		WithPixelDataReadMode(pixeldata.PixelDataStandard),
+		WithPixelDataWriteMode(pixeldata.PixelDataCompatible),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if transcoder.pixelDataReadMode != pixeldata.PixelDataStandard {
+		t.Fatalf("read mode = %v, want standard", transcoder.pixelDataReadMode)
+	}
+	if transcoder.pixelDataWriteMode != pixeldata.PixelDataCompatible {
+		t.Fatal("compatible write mode did not disable strict DICOM VR output")
+	}
+}
+
+func TestManagerNewTranscoderRejectsInvalidPixelDataModes(t *testing.T) {
+	manager, err := NewManager(codec.NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, option := range []Option{
+		WithPixelDataReadMode(pixeldata.VRMode(99)),
+		WithPixelDataWriteMode(pixeldata.VRMode(99)),
+	} {
+		if _, err := manager.NewTranscoder(
+			transfer.ExplicitVRLittleEndian,
+			transfer.ImplicitVRLittleEndian,
+			option,
+		); err == nil {
+			t.Fatal("NewTranscoder() accepted an invalid Pixel Data VR mode")
+		}
 	}
 }

@@ -14,26 +14,32 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/encapsulated"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 	"github.com/cocosip/go-dicom/pkg/logging"
 )
+
+const transcodeLogComponent = "imaging.codec"
 
 // Transcoder handles transcoding of DICOM datasets between different transfer syntaxes.
 // It can compress, decompress, and convert pixel data formats.
 type Transcoder struct {
-	inputSyntax   *transfer.Syntax
-	outputSyntax  *transfer.Syntax
-	inputCodec    codec.Codec
-	outputCodec   codec.Codec
-	inputParams   codec.Parameters
-	outputParams  codec.Parameters
-	manager       *Manager
-	strictDICOMVR bool // Controls VR selection according to DICOM standard
+	inputSyntax        *transfer.Syntax
+	outputSyntax       *transfer.Syntax
+	inputCodec         codec.Codec
+	outputCodec        codec.Codec
+	inputParams        codec.Parameters
+	outputParams       codec.Parameters
+	manager            *Manager
+	pixelDataReadMode  pixeldata.VRMode
+	pixelDataWriteMode pixeldata.VRMode
 }
 
 // Option configures a Transcoder created by Manager.
@@ -63,8 +69,95 @@ func WithOutputParameters(params codec.Parameters) Option {
 // may use OB or OW at 8 Bits Allocated or below.
 func WithStrictDICOMVR(strict bool) Option {
 	return func(t *Transcoder) {
-		t.strictDICOMVR = strict
+		if strict {
+			t.pixelDataWriteMode = pixeldata.PixelDataStandard
+			return
+		}
+		t.pixelDataWriteMode = pixeldata.PixelDataCompatible
 	}
+}
+
+// WithPixelDataReadMode controls validation of Pixel Data VRs read by the transcoder.
+func WithPixelDataReadMode(mode pixeldata.VRMode) Option {
+	return func(t *Transcoder) {
+		t.pixelDataReadMode = mode
+	}
+}
+
+// WithPixelDataWriteMode controls Pixel Data VR selection for transcoder output.
+func WithPixelDataWriteMode(mode pixeldata.VRMode) Option {
+	return func(t *Transcoder) {
+		t.pixelDataWriteMode = mode
+	}
+}
+
+func validPixelDataVRMode(mode pixeldata.VRMode) bool {
+	return mode == pixeldata.PixelDataCompatible || mode == pixeldata.PixelDataStandard
+}
+
+func (t *Transcoder) validatePixelDataReadVR(
+	ctx context.Context,
+	ds *dataset.Dataset,
+	syntax *transfer.Syntax,
+) error {
+	if !validPixelDataVRMode(t.pixelDataReadMode) {
+		return fmt.Errorf("unsupported Pixel Data VR mode: %d", t.pixelDataReadMode)
+	}
+	if ds == nil || syntax == nil {
+		return fmt.Errorf("dataset and transfer syntax must not be nil")
+	}
+	elem, ok := ds.Get(tag.PixelData)
+	if !ok {
+		return nil
+	}
+
+	if syntax.IsEncapsulated() {
+		if _, nonstandard := elem.(*element.OtherWordFragment); !nonstandard {
+			return nil
+		}
+		if t.pixelDataReadMode == pixeldata.PixelDataStandard {
+			return fmt.Errorf("encapsulated Pixel Data uses OW; DICOM PS3.5 Section 8.2 requires OB")
+		}
+		logging.Emit(ctx, logging.Record{
+			Level:     slog.LevelWarn,
+			Component: transcodeLogComponent,
+			Event:     "nonstandard_encapsulated_pixel_data_vr",
+			Message:   "accepting non-standard encapsulated OW Pixel Data in compatibility mode",
+			Attrs: []slog.Attr{
+				slog.String("transfer_syntax", syntax.UID().UID()),
+			},
+		})
+		return nil
+	}
+
+	if _, nonstandard := elem.(*element.OtherByte); !nonstandard {
+		return nil
+	}
+	bitsAllocated := ds.TryGetUInt16(tag.BitsAllocated, 0)
+	var violation string
+	switch {
+	case !syntax.IsExplicitVR():
+		violation = "implicit VR native Pixel Data uses OB; DICOM PS3.5 requires OW"
+	case bitsAllocated > 8:
+		violation = fmt.Sprintf("native Pixel Data uses OB with Bits Allocated=%d; DICOM PS3.5 requires OW", bitsAllocated)
+	default:
+		return nil
+	}
+	if t.pixelDataReadMode == pixeldata.PixelDataStandard {
+		return fmt.Errorf("%s", violation)
+	}
+
+	logging.Emit(ctx, logging.Record{
+		Level:     slog.LevelWarn,
+		Component: transcodeLogComponent,
+		Event:     "nonstandard_native_pixel_data_vr",
+		Message:   "accepting non-standard native OB Pixel Data in compatibility mode",
+		Attrs: []slog.Attr{
+			slog.String("transfer_syntax", syntax.UID().UID()),
+			slog.Int("bits_allocated", int(bitsAllocated)),
+		},
+	})
+	return nil
 }
 
 // InputSyntax returns the input transfer syntax.
@@ -112,7 +205,7 @@ func (t *Transcoder) Transcode(ctx context.Context, ds *dataset.Dataset) (result
 				)
 			}
 			logging.Emit(ctx, logging.Record{
-				Level: level, Component: "imaging.codec", Event: event, Message: message, Attrs: attrs,
+				Level: level, Component: transcodeLogComponent, Event: event, Message: message, Attrs: attrs,
 			})
 		}()
 	}
@@ -131,7 +224,7 @@ func (t *Transcoder) Transcode(ctx context.Context, ds *dataset.Dataset) (result
 
 	if !inputEncapsulated && !outputEncapsulated {
 		// Uncompressed to uncompressed
-		return t.transcodeUncompressedToUncompressed(ds)
+		return t.transcodeUncompressedToUncompressed(ctx, ds)
 	}
 
 	if inputEncapsulated && outputEncapsulated {
@@ -221,15 +314,18 @@ func (t *Transcoder) DecodeFrame(ctx context.Context, ds *dataset.Dataset, frame
 				attrs = append(attrs, slog.Int("output_bytes", len(decoded)))
 			}
 			logging.Emit(ctx, logging.Record{
-				Level: level, Component: "imaging.codec", Event: event, Message: message, Attrs: attrs,
+				Level: level, Component: transcodeLogComponent, Event: event, Message: message, Attrs: attrs,
 			})
 		}()
 	}
 
 	// Check if pixel data exists
-	pixelDataElem, exists := ds.Get(tag.PixelData)
+	_, exists := ds.Get(tag.PixelData)
 	if !exists {
 		return nil, fmt.Errorf("dataset does not contain pixel data")
+	}
+	if err := t.validatePixelDataReadVR(ctx, ds, t.inputSyntax); err != nil {
+		return nil, err
 	}
 
 	// If already uncompressed, extract the frame directly
@@ -237,25 +333,16 @@ func (t *Transcoder) DecodeFrame(ctx context.Context, ds *dataset.Dataset, frame
 		return t.extractUncompressedFrame(ds, frameIndex)
 	}
 
-	// Get fragment sequence
-	var fragments []buffer.ByteBuffer
-	var offsetTable []uint32
-	switch pd := pixelDataElem.(type) {
-	case *element.OtherByteFragment:
-		fragments = pd.Fragments()
-		offsetTable = pd.OffsetTable()
-	case *element.OtherWordFragment:
-		fragments = pd.Fragments()
-		offsetTable = pd.OffsetTable()
-	default:
-		return nil, fmt.Errorf("expected fragment sequence for encapsulated transfer syntax")
-	}
-
 	frameCount := frameCountFromDataset(ds)
-	compressedFrame, err := frameFromFragments(fragments, offsetTable, frameCount, frameIndex)
+	encapsulatedData, err := encapsulated.OpenDataset(ds)
 	if err != nil {
 		return nil, err
 	}
+	compressedFrame, err := encapsulatedData.Frame(frameCount, frameIndex)
+	if err != nil {
+		return nil, err
+	}
+	compressedFrame = codec.StripTrailingPadding(compressedFrame)
 
 	// Decode using input codec
 	if t.inputCodec == nil {
@@ -297,105 +384,69 @@ func (t *Transcoder) DecodeFrame(ctx context.Context, ds *dataset.Dataset, frame
 
 // transcodeUncompressedToUncompressed handles conversion between uncompressed formats.
 // This includes byte order conversion, planar configuration changes, etc.
-func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*dataset.Dataset, error) {
-	// Check if we need any actual conversion
-	inputEndian := t.inputSyntax.Endian()
-	outputEndian := t.outputSyntax.Endian()
-
-	// If input and output are the same, just clone and update transfer syntax
-	if inputEndian == outputEndian {
-		newDS := ds.Clone()
-		newDS.SetInternalTransferSyntax(t.outputSyntax)
-		if err := normalizeImplicitPixelDataVR(newDS, t.outputSyntax); err != nil {
-			return nil, err
-		}
-		return newDS, nil
+func (t *Transcoder) transcodeUncompressedToUncompressed(ctx context.Context, ds *dataset.Dataset) (*dataset.Dataset, error) {
+	if err := t.validatePixelDataReadVR(ctx, ds, t.inputSyntax); err != nil {
+		return nil, err
 	}
 
-	// Need byte order conversion for pixel data
-	// Get pixel data element
 	pixelDataElem, exists := ds.Get(tag.PixelData)
 	if !exists {
-		// No pixel data, just clone
 		newDS := ds.Clone()
 		newDS.SetInternalTransferSyntax(t.outputSyntax)
 		return newDS, nil
 	}
 
-	// Extract pixel data
-	var pixelData []byte
+	bitsAllocated := ds.TryGetUInt16(tag.BitsAllocated, 0)
+	var (
+		pixelData      []byte
+		inputUsesWords bool
+	)
 	switch elem := pixelDataElem.(type) {
 	case *element.OtherByte:
-		// 8-bit data doesn't need byte order conversion
-		newDS := ds.Clone()
-		newDS.SetInternalTransferSyntax(t.outputSyntax)
-		if err := normalizeImplicitPixelDataVR(newDS, t.outputSyntax); err != nil {
-			return nil, err
-		}
-		return newDS, nil
+		pixelData = elem.GetData()
+		inputUsesWords = !t.inputSyntax.IsExplicitVR() || bitsAllocated > 8
 	case *element.OtherWord:
 		pixelData = elem.GetData()
+		inputUsesWords = true
 	default:
 		return nil, fmt.Errorf("unexpected pixel data element type for uncompressed data")
 	}
 
-	// OW byte order follows the native sample width. An 8-bit sample carried
-	// in OW still uses 16-bit words; 32-bit samples are swapped as one value.
-	bitsAllocated, _ := ds.GetUInt16(tag.BitsAllocated, 0)
-	bytesPerSample := 2
-	if bitsAllocated > 8 {
-		bytesPerSample = int((bitsAllocated-1)/8 + 1)
-	}
-	if bytesPerSample != 2 && bytesPerSample != 4 {
-		return nil, fmt.Errorf("unsupported OW Bits Allocated=%d", bitsAllocated)
-	}
-	if len(pixelData)%bytesPerSample != 0 {
-		return nil, fmt.Errorf("pixel data length is not aligned to %d-byte OW samples", bytesPerSample)
+	outputUsesWords := inputUsesWords || !t.outputSyntax.IsExplicitVR() || bitsAllocated > 8
+	inputWordsAreBigEndian := inputUsesWords && nativeWordsAreBigEndian(t.inputSyntax)
+	outputWordsAreBigEndian := outputUsesWords && nativeWordsAreBigEndian(t.outputSyntax)
+	if (inputWordsAreBigEndian != outputWordsAreBigEndian) && len(pixelData)%2 != 0 {
+		return nil, fmt.Errorf("pixel data length is not aligned to 16-bit OW words")
 	}
 
-	convertedData := make([]byte, len(pixelData))
-	for i := 0; i < len(pixelData); i += bytesPerSample {
-		// Swap bytes
-		for left, right := i, i+bytesPerSample-1; left < right; left, right = left+1, right-1 {
-			convertedData[left] = pixelData[right]
-			convertedData[right] = pixelData[left]
+	convertedData := append([]byte(nil), pixelData...)
+	if inputWordsAreBigEndian != outputWordsAreBigEndian {
+		for i := 0; i < len(pixelData); i += 2 {
+			convertedData[i] = pixelData[i+1]
+			convertedData[i+1] = pixelData[i]
 		}
 	}
 
-	// Create new dataset with converted pixel data
 	newDS := dataset.NewWithTransferSyntax(t.outputSyntax)
-
-	// Copy all elements except PixelData
 	for _, elem := range ds.Elements() {
-		if elem.Tag().ToUint32() != tag.PixelData.ToUint32() {
+		if !encapsulated.IsPixelDataMetadataTag(elem.Tag()) {
 			_ = newDS.Add(elem)
 		}
 	}
 
-	// Add converted pixel data
-	convertedPixelData := element.NewOtherWord(tag.PixelData, convertedData)
-	element.SetByteOrder(convertedPixelData, outputEndian.ByteOrder())
-	_ = newDS.Add(convertedPixelData)
+	if outputUsesWords {
+		convertedPixelData := element.NewOtherWord(tag.PixelData, convertedData)
+		element.SetByteOrder(convertedPixelData, t.outputSyntax.Endian().ByteOrder())
+		_ = newDS.Add(convertedPixelData)
+	} else {
+		_ = newDS.Add(element.NewOtherByte(tag.PixelData, convertedData))
+	}
 
 	return newDS, nil
 }
 
-func normalizeImplicitPixelDataVR(ds *dataset.Dataset, outputSyntax *transfer.Syntax) error {
-	if outputSyntax == nil || outputSyntax.UID().UID() != transfer.ImplicitVRLittleEndian.UID().UID() {
-		return nil
-	}
-	pixelData, ok := ds.Get(tag.PixelData)
-	if !ok {
-		return nil
-	}
-	otherByte, ok := pixelData.(*element.OtherByte)
-	if !ok {
-		return nil
-	}
-	if err := ds.AddOrUpdate(element.NewOtherWord(tag.PixelData, otherByte.GetData())); err != nil {
-		return fmt.Errorf("normalize implicit VR Pixel Data: %w", err)
-	}
-	return nil
+func nativeWordsAreBigEndian(syntax *transfer.Syntax) bool {
+	return syntax.Endian() == endian.Big || syntax.SwapPixelData()
 }
 
 // decode decompresses pixel data from a dataset using the high-level codec.Decode method.
@@ -414,35 +465,20 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 		return nil, err
 	}
 
-	// Extract compressed pixel data
-	pixelDataElem, _ := ds.Get(tag.PixelData)
-	var fragments []buffer.ByteBuffer
-	var offsetTable []uint32
-
-	switch pd := pixelDataElem.(type) {
-	case *element.OtherByteFragment:
-		fragments = pd.Fragments()
-		offsetTable = pd.OffsetTable()
-	case *element.OtherWordFragment:
-		fragments = pd.Fragments()
-		offsetTable = pd.OffsetTable()
-	default:
-		return nil, fmt.Errorf("unexpected pixel data element type for encapsulated transfer syntax")
+	if err := t.validatePixelDataReadVR(ctx, ds, t.inputSyntax); err != nil {
+		return nil, err
 	}
-
-	// Determine frame count
 	frameCount := frameCountFromDataset(ds)
-	if frameCount < 1 {
-		frameCount = len(fragments)
-	}
-	if frameCount < 1 {
-		frameCount = 1
-	}
-
-	// Build compressed frames from offset table or one-fragment-per-frame
-	compressedFrames, err := framesFromFragments(fragments, offsetTable, frameCount)
+	encapsulatedData, err := encapsulated.OpenDataset(ds)
 	if err != nil {
 		return nil, err
+	}
+	compressedFrames, err := encapsulatedData.Frames(frameCount)
+	if err != nil {
+		return nil, err
+	}
+	for i := range compressedFrames {
+		compressedFrames[i] = codec.StripTrailingPadding(compressedFrames[i])
 	}
 
 	oldPixelData, err := newFrameData(frameInfo, true)
@@ -486,7 +522,7 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 
 	// Copy all elements except PixelData
 	for _, elem := range ds.Elements() {
-		if elem.Tag().ToUint32() != tag.PixelData.ToUint32() {
+		if !encapsulated.IsPixelDataMetadataTag(elem.Tag()) {
 			_ = newDS.Add(elem)
 		}
 	}
@@ -526,7 +562,12 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 		sourceSyntax = t.inputSyntax
 	}
 	if sourceSyntax != nil && sourceSyntax.UID().UID() != transfer.ExplicitVRLittleEndian.UID().UID() {
-		nativeTranscoder, err := t.manager.NewTranscoder(sourceSyntax, transfer.ExplicitVRLittleEndian)
+		nativeTranscoder, err := t.manager.NewTranscoder(
+			sourceSyntax,
+			transfer.ExplicitVRLittleEndian,
+			WithPixelDataReadMode(t.pixelDataReadMode),
+			WithPixelDataWriteMode(pixeldata.PixelDataStandard),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -535,6 +576,8 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 			return nil, fmt.Errorf("failed to normalize pixel data for encoding: %w", err)
 		}
 		sourceDS = normalizedDS
+	} else if err := t.validatePixelDataReadVR(ctx, sourceDS, sourceSyntax); err != nil {
+		return nil, err
 	}
 
 	// Build frame info from dataset
@@ -605,7 +648,7 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 		frameFragments = append(frameFragments, frameData)
 	}
 
-	fragSeq, err := buildFragmentSequence(frameFragments, frameInfo.BitDepth.BitsAllocated, t.strictDICOMVR)
+	fragSeq, err := buildFragmentSequence(frameFragments, frameInfo.BitDepth.BitsAllocated, t.pixelDataWriteMode)
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +659,7 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 
 	// Copy all elements except PixelData
 	for _, elem := range sourceDS.Elements() {
-		if elem.Tag().ToUint32() != tag.PixelData.ToUint32() {
+		if !encapsulated.IsPixelDataMetadataTag(elem.Tag()) {
 			_ = newDS.Add(elem)
 		}
 	}
@@ -702,170 +745,6 @@ func pixelDataSize(ctx context.Context, pixelData codec.FrameSource) (int, error
 	return total, nil
 }
 
-// framesFromFragments builds per-frame compressed data using fragments and an optional BOT.
-// If offsetTable is present, it slices the concatenated fragments using offsets.
-// Otherwise, it assumes one fragment per frame (best-effort fallback).
-func framesFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, frameCount int) ([][]byte, error) {
-	if len(fragments) == 0 {
-		return nil, fmt.Errorf("no fragments available to decode")
-	}
-
-	for i, frag := range fragments {
-		if len(frag.Data()) == 0 {
-			return nil, fmt.Errorf("fragment %d is empty", i)
-		}
-	}
-
-	if frameCount < 1 {
-		frameCount = len(offsetTable)
-	}
-	if frameCount < 1 {
-		frameCount = len(fragments)
-	}
-	if frameCount < 1 {
-		frameCount = 1
-	}
-
-	// BOT present: slice concatenated stream by offsets.
-	if len(offsetTable) > 0 {
-		if frameCount != len(offsetTable) {
-			return nil, fmt.Errorf("offset table frames mismatch: expected %d, got %d entries", frameCount, len(offsetTable))
-		}
-
-		fragmentStartByOffset := make(map[uint32]int, len(fragments))
-		var runningOffset uint32
-		for i, frag := range fragments {
-			fragmentStartByOffset[runningOffset] = i
-			size := frag.Size()
-			if size%2 != 0 {
-				size++
-			}
-			if size > math.MaxUint32-8 || runningOffset > math.MaxUint32-8-size {
-				return nil, fmt.Errorf("fragment offset overflow at index %d", i)
-			}
-			runningOffset += 8 + size
-		}
-
-		frameStartIndexes := make([]int, frameCount)
-		for i := 0; i < frameCount; i++ {
-			fragmentIndex, ok := fragmentStartByOffset[offsetTable[i]]
-			if !ok {
-				return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[i], i)
-			}
-			frameStartIndexes[i] = fragmentIndex
-		}
-
-		var frames [][]byte
-		for i, start := range frameStartIndexes {
-			end := len(fragments)
-			if i+1 < len(frameStartIndexes) {
-				end = frameStartIndexes[i+1]
-			}
-			if start >= end {
-				return nil, fmt.Errorf("frame %d derived from BOT is empty", i)
-			}
-
-			var frame []byte
-			for _, frag := range fragments[start:end] {
-				frame = append(frame, frag.Data()...)
-			}
-			frames = append(frames, codec.StripTrailingPadding(frame))
-		}
-		return frames, nil
-	}
-
-	if frameCount == 1 {
-		var frame []byte
-		for _, frag := range fragments {
-			frame = append(frame, frag.Data()...)
-		}
-		return [][]byte{codec.StripTrailingPadding(frame)}, nil
-	}
-
-	// Fallback: one fragment per frame. Compressed frames are inherently
-	// variable-length, so no size-equality check is applied here.
-	if frameCount > len(fragments) {
-		return nil, fmt.Errorf("frame count %d exceeds available fragments %d without BOT", frameCount, len(fragments))
-	}
-	var frames [][]byte
-	for i := 0; i < frameCount; i++ {
-		frames = append(frames, codec.StripTrailingPadding(fragments[i].Data()))
-	}
-	return frames, nil
-}
-
-func frameFromFragments(fragments []buffer.ByteBuffer, offsetTable []uint32, frameCount, frameIndex int) ([]byte, error) {
-	if len(fragments) == 0 {
-		return nil, fmt.Errorf("no fragments available to decode")
-	}
-	if frameCount < 1 {
-		frameCount = len(offsetTable)
-	}
-	if frameCount < 1 {
-		frameCount = len(fragments)
-	}
-	if frameCount < 1 {
-		frameCount = 1
-	}
-	if frameIndex < 0 || frameIndex >= frameCount {
-		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, frameCount)
-	}
-
-	if len(offsetTable) > 0 {
-		if frameCount != len(offsetTable) {
-			return nil, fmt.Errorf("offset table frames mismatch: expected %d, got %d entries", frameCount, len(offsetTable))
-		}
-
-		fragmentStartByOffset := make(map[uint32]int, len(fragments))
-		var runningOffset uint32
-		for i, frag := range fragments {
-			fragmentStartByOffset[runningOffset] = i
-			size := frag.Size()
-			if size%2 != 0 {
-				size++
-			}
-			if size > math.MaxUint32-8 || runningOffset > math.MaxUint32-8-size {
-				return nil, fmt.Errorf("fragment offset overflow at index %d", i)
-			}
-			runningOffset += 8 + size
-		}
-
-		start, ok := fragmentStartByOffset[offsetTable[frameIndex]]
-		if !ok {
-			return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[frameIndex], frameIndex)
-		}
-		end := len(fragments)
-		if frameIndex+1 < len(offsetTable) {
-			nextEnd, ok := fragmentStartByOffset[offsetTable[frameIndex+1]]
-			if !ok {
-				return nil, fmt.Errorf("BOT offset %d for frame %d does not align with a fragment item", offsetTable[frameIndex+1], frameIndex+1)
-			}
-			end = nextEnd
-		}
-		if start >= end {
-			return nil, fmt.Errorf("frame %d derived from BOT is empty", frameIndex)
-		}
-
-		var frame []byte
-		for _, frag := range fragments[start:end] {
-			frame = append(frame, frag.Data()...)
-		}
-		if len(frame) == 0 {
-			return nil, fmt.Errorf("frame %d is empty", frameIndex)
-		}
-		return codec.StripTrailingPadding(frame), nil
-	}
-
-	if frameIndex >= len(fragments) {
-		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(fragments))
-	}
-	data := fragments[frameIndex].Data()
-	if len(data) == 0 {
-		return nil, fmt.Errorf("fragment %d is empty", frameIndex)
-	}
-	return codec.StripTrailingPadding(data), nil
-}
-
 func frameCountFromDataset(ds *dataset.Dataset) int {
 	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
 		return int(nf)
@@ -890,12 +769,15 @@ func frameCountFromDataset(ds *dataset.Dataset) int {
 // Parameters:
 //   - frames: Per-frame compressed data
 //   - bitsAllocated: Bits allocated per pixel
-//   - strictDICOM: Controls VR selection mode:
-//     true:  Use OB for encapsulated data (DICOM standard compliant, recommended)
-//     false: Select VR based on BitsAllocated even for encapsulated data (compatibility mode)
-func buildFragmentSequence(frames [][]byte, bitsAllocated uint16, strictDICOM bool) (element.Element, error) {
+//   - mode: Controls VR selection. Standard mode uses OB; compatibility mode
+//     uses OW for multi-byte compressed payloads to interoperate with
+//     non-standard writers. The payload remains an opaque byte stream.
+func buildFragmentSequence(frames [][]byte, bitsAllocated uint16, mode pixeldata.VRMode) (element.Element, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frame data provided for fragment sequence")
+	}
+	if !validPixelDataVRMode(mode) {
+		return nil, fmt.Errorf("unsupported Pixel Data write VR mode: %d", mode)
 	}
 
 	// Build Basic Offset Table
@@ -920,8 +802,7 @@ func buildFragmentSequence(frames [][]byte, bitsAllocated uint16, strictDICOM bo
 		runningOffset += 8 + padded
 	}
 
-	// Determine VR based on strictDICOM mode
-	if strictDICOM {
+	if mode == pixeldata.PixelDataStandard {
 		// According to DICOM Part 5 Section 8.2:
 		// "If sent in an Encapsulated Format (i.e., other than the Native Format)
 		//  the Value Representation OB is used."
@@ -934,9 +815,10 @@ func buildFragmentSequence(frames [][]byte, bitsAllocated uint16, strictDICOM bo
 		return obf, nil
 	}
 
-	// strictDICOM is false: select VR based on BitsAllocated (compatibility mode)
-	// This may be needed for compatibility with certain non-standard implementations
-	// that expect OW for 16-bit data even when encapsulated.
+	// Compatibility mode selects VR based on Bits Allocated. This may be needed
+	// to interoperate with non-standard writers such as fo-dicom versions that
+	// emit OW for multi-byte encapsulated data. The fragments remain opaque
+	// compressed bytes; their contents are never word-swapped.
 	if bitsAllocated <= 8 {
 		obf := element.NewOtherByteFragment(tag.PixelData)
 		for _, frame := range frames {

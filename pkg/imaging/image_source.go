@@ -31,6 +31,9 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 	}
 	image := NewDicomImage(pixelData)
 	image.dataset = ds.Clone()
+	if config.presentationState != nil {
+		image.presentationState = config.presentationState.Clone()
+	}
 	image.windowIndex = config.windowIndex
 	image.voiLUTIndex = config.voiLUTIndex
 	image.autoApplyLUTToAllFrames = true

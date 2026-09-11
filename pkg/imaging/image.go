@@ -52,8 +52,9 @@ type DicomImage struct {
 	mu sync.RWMutex
 
 	// Pixel data
-	pixelData *pixeldata.Data
-	dataset   *dataset.Dataset
+	pixelData         *pixeldata.Data
+	dataset           *dataset.Dataset
+	presentationState *dataset.Dataset
 
 	// Current frame index
 	currentFrame int
@@ -219,15 +220,29 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 	functional := (*dataset.Dataset)(nil)
 	if img.dataset != nil {
 		functional = imageFunctionalGroupValues(img.dataset, frame)
+	}
+	// Enhanced multi-frame functional groups override top-level image
+	// attributes for the selected frame. The top-level Dataset remains the
+	// fallback for legacy images and attributes omitted from the macro.
+	voiPrimary := functional
+	voiFallback := img.dataset
+	if img.dataset != nil {
 		var err error
 		modalityLUT, rescaleSlope, rescaleIntercept, voiDescriptorSigned, err = imageModalityTransform(
-			img.dataset, functional, pixelSigned, minInput, maxInput,
+			functional, img.dataset, pixelSigned, minInput, maxInput,
 		)
 		if err != nil {
 			return nil, err
 		}
-		if datasetWithAnyTag(img.dataset, functional, tag.WindowCenter, tag.WindowWidth) != nil {
-			center, width, err := imageWindowPairAt(img.dataset, functional, img.windowIndex)
+		softcopyVOI, err := imageSoftcopyVOI(img.presentationState, img.dataset, frame)
+		if err != nil {
+			return nil, err
+		}
+		if softcopyVOI != nil {
+			voiPrimary, voiFallback = softcopyVOI, nil
+		}
+		if datasetWithAnyTag(voiPrimary, voiFallback, tag.WindowCenter, tag.WindowWidth) != nil {
+			center, width, err := imageWindowPairAt(voiPrimary, voiFallback, img.windowIndex)
 			if err != nil {
 				return nil, err
 			}
@@ -261,20 +276,33 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 		if modalityLUT != nil {
 			pipeline.SetModalityLUT(modalityLUT)
 		}
-		if datasetWithAnyTag(img.dataset, functional, tag.VOILUTSequence) != nil {
-			voiLUT, err := pixeldata.VOILUTFrom(img.dataset, functional, voiDescriptorSigned, img.voiLUTIndex)
+		if datasetWithAnyTag(voiPrimary, voiFallback, tag.VOILUTSequence) != nil {
+			voiLUT, err := pixeldata.VOILUTFrom(voiPrimary, voiFallback, voiDescriptorSigned, img.voiLUTIndex)
 			if err != nil {
 				return nil, err
 			}
 			pipeline.SetVOILUT(voiLUT)
 		}
-		if function, ok := imageStringFrom(img.dataset, functional, tag.VOILUTFunction); ok {
+		if function, ok := imageStringFrom(voiPrimary, voiFallback, tag.VOILUTFunction); ok {
 			pipeline.SetVOILUTFunction(lut.VOILUTFunction(function))
+		}
+		presentationSource := datasetWithAnyTag(
+			img.presentationState,
+			img.dataset,
+			tag.PresentationLUTSequence,
+			tag.PresentationLUTShape,
+		)
+		presentationLUT, present, err := pixeldata.PresentationLUT(presentationSource)
+		if err != nil {
+			return nil, err
+		}
+		if present {
+			pipeline.SetPresentationLUT(presentationLUT)
 		}
 	}
 	function := lut.VOILUTFunctionLinear
 	if img.dataset != nil {
-		if value, ok := imageStringFrom(img.dataset, functional, tag.VOILUTFunction); ok {
+		if value, ok := imageStringFrom(voiPrimary, voiFallback, tag.VOILUTFunction); ok {
 			function = lut.VOILUTFunction(value)
 		}
 	}
@@ -574,7 +602,7 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 }
 
 func (img *DicomImage) supplementalPaletteEligible() bool {
-	if img.dataset == nil || img.pixelData.Info.NumberOfFrames <= 1 || img.pixelData.Info.SamplesPerPixel != 1 {
+	if img.dataset == nil || img.pixelData.Info.SamplesPerPixel != 1 {
 		return false
 	}
 	photometric := pixel.Monochrome2.Value
@@ -752,6 +780,9 @@ func (img *DicomImage) Clone() *DicomImage {
 	}
 	if img.dataset != nil {
 		cloned.dataset = img.dataset.Clone()
+	}
+	if img.presentationState != nil {
+		cloned.presentationState = img.presentationState.Clone()
 	}
 	for frame, colorMap := range img.grayscaleColorMaps {
 		cloned.grayscaleColorMaps[frame] = colorMap

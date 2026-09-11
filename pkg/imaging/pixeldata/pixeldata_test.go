@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -19,6 +21,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
 func TestInfo_Validate(t *testing.T) {
@@ -132,44 +135,193 @@ func TestInfo_Validate(t *testing.T) {
 	}
 }
 
-func TestFramesFromFragmentsUsesEncodedItemOffsets(t *testing.T) {
-	fragments := []buffer.ByteBuffer{
-		buffer.NewMemory([]byte{0xAA, 0xBB, 0xCC}),       // len=3 -> padded item payload 4
-		buffer.NewMemory([]byte{0x11, 0x22, 0x33, 0x44}), // len=4
-		buffer.NewMemory([]byte{0x55, 0x66, 0x77}),       // len=3
+func TestFromDatasetUsesExtendedOffsetTableForMultiFragmentFrames(t *testing.T) {
+	ds := newEncapsulatedPixelDataDataset(t, 2)
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, uint64Values(0, 20))); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, uint64Values(20, 20))); err != nil {
+		t.Fatal(err)
+	}
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	for _, data := range [][]byte{[]byte("AA"), []byte("BB"), []byte("CC"), []byte("DD")} {
+		fragments.AddFragment(buffer.NewMemory(data))
+	}
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
 	}
 
-	frames, err := framesFromFragments(fragments, []uint32{0, 24}, 2)
+	pd, err := FromDataset(ds)
 	if err != nil {
-		t.Fatalf("framesFromFragments() error = %v", err)
+		t.Fatalf("FromDataset() error = %v", err)
 	}
-	if len(frames) != 2 {
-		t.Fatalf("framesFromFragments() returned %d frames, want 2", len(frames))
-	}
-	if got, want := frames[0], []byte{0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x44}; !bytes.Equal(got, want) {
-		t.Fatalf("frame 0 = %v, want %v", got, want)
-	}
-	if got, want := frames[1], []byte{0x55, 0x66, 0x77}; !bytes.Equal(got, want) {
-		t.Fatalf("frame 1 = %v, want %v", got, want)
+	for i, want := range [][]byte{[]byte("AABB"), []byte("CCDD")} {
+		got, err := pd.Frame(context.Background(), i)
+		if err != nil {
+			t.Fatalf("Frame(%d) error = %v", i, err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("Frame(%d) = %q, want %q", i, got, want)
+		}
 	}
 }
 
-func TestFramesFromFragmentsConcatenatesSingleFrameWithoutBOT(t *testing.T) {
-	fragments := []buffer.ByteBuffer{
-		buffer.NewMemory([]byte{0xAA, 0xBB}),
-		buffer.NewMemory([]byte{0xCC, 0xDD}),
+func TestFromDatasetRejectsAmbiguousEmptyOffsetTable(t *testing.T) {
+	ds := newEncapsulatedPixelDataDataset(t, 2)
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	for _, data := range [][]byte{[]byte("AA"), []byte("BB"), []byte("CC"), []byte("DD")} {
+		fragments.AddFragment(buffer.NewMemory(data))
+	}
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
 	}
 
-	frames, err := framesFromFragments(fragments, nil, 1)
+	if _, err := FromDataset(ds); err == nil {
+		t.Fatal("FromDataset() error = nil, want indeterminate frame-boundaries error")
+	}
+}
+
+func TestFromDatasetStandardModeRejectsEncapsulatedOW(t *testing.T) {
+	ds := newEncapsulatedPixelDataDataset(t, 1)
+	fragments := element.NewOtherWordFragment(tag.PixelData)
+	fragments.AddFragment(buffer.NewMemory([]byte{0x34, 0x12}))
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := FromDatasetWithOptions(ds, WithPixelDataVRMode(PixelDataStandard))
+	if err == nil {
+		t.Fatal("FromDatasetWithOptions() error = nil, want encapsulated OW rejection")
+	}
+}
+
+func TestFromDatasetDefaultsToCompatibleEncapsulatedOW(t *testing.T) {
+	ds := newEncapsulatedPixelDataDataset(t, 1)
+	fragments := element.NewOtherWordFragment(tag.PixelData)
+	fragments.AddFragment(buffer.NewMemory([]byte{0x34, 0x12}))
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	pd, err := FromDataset(ds)
 	if err != nil {
-		t.Fatalf("framesFromFragments() error = %v", err)
+		t.Fatalf("FromDataset() error = %v", err)
 	}
-	if len(frames) != 1 {
-		t.Fatalf("framesFromFragments() returned %d frames, want 1", len(frames))
+	if pd.Info.VRCode != "OW" {
+		t.Fatalf("VRCode = %q, want preserved OW", pd.Info.VRCode)
 	}
-	if got, want := frames[0], []byte{0xAA, 0xBB, 0xCC, 0xDD}; !bytes.Equal(got, want) {
-		t.Fatalf("frame = %v, want %v", got, want)
+}
+
+func TestFromDatasetStandardModeRejectsNativeOBAboveEightBits(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
 	}
+
+	_, err := FromDatasetWithOptions(ds, WithPixelDataVRMode(PixelDataStandard))
+	if err == nil || !strings.Contains(err.Error(), "native Pixel Data uses OB") {
+		t.Fatalf("FromDatasetWithOptions() error = %v, want native OB rejection", err)
+	}
+}
+
+func TestFromDatasetStandardModeRejectsImplicitNativeOB(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ImplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x7f, 0x00}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	_, err := FromDatasetWithOptions(ds, WithPixelDataVRMode(PixelDataStandard))
+	if err == nil || !strings.Contains(err.Error(), "implicit VR native Pixel Data uses OB") {
+		t.Fatalf("FromDatasetWithOptions() error = %v, want implicit native OB rejection", err)
+	}
+}
+
+func TestFromDatasetCompatibleModeWarnsForNativeOBAboveEightBits(t *testing.T) {
+	var output bytes.Buffer
+	logging.Disable()
+	if err := logging.Configure(logging.Config{
+		Handler: slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn}),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(logging.Disable)
+
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	if _, err := FromDataset(ds); err != nil {
+		t.Fatalf("FromDataset() error = %v", err)
+	}
+	if got := output.String(); !strings.Contains(got, `"event":"nonstandard_native_pixel_data_vr"`) {
+		t.Fatalf("warning log missing native Pixel Data VR event: %s", got)
+	}
+}
+
+func newEncapsulatedPixelDataDataset(t *testing.T, frames int) *dataset.Dataset {
+	t.Helper()
+	ds := dataset.NewWithTransferSyntax(transfer.JPEG2000Lossless)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewString(tag.NumberOfFrames, vr.IS, []string{fmt.Sprint(frames)}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+	return ds
+}
+
+func uint64Values(values ...uint64) []byte {
+	data := make([]byte, len(values)*8)
+	for i, value := range values {
+		binary.LittleEndian.PutUint64(data[i*8:], value)
+	}
+	return data
 }
 
 func TestFromDatasetNormalizesBigEndianNativeOW(t *testing.T) {
@@ -925,6 +1077,26 @@ func TestFromDataset_PaletteSegmentedToRGB(t *testing.T) {
 	expected := []byte{0, 0, 0, 255, 0, 0}
 	if !bytes.Equal(data, expected) {
 		t.Fatalf("segmented palette -> RGB mismatch, got %v want %v", data, expected)
+	}
+}
+
+func TestPaletteColorsRejectsDirectAndSegmentedDataForSameChannel(t *testing.T) {
+	ds, err := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
+		element.NewOtherWord(tag.SegmentedRedPaletteColorLookupTableData, words(binary.LittleEndian, 0, 2, 0, 255)),
+		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
+
+	_, _, err = PaletteColors(ds)
+	if err == nil || !strings.Contains(err.Error(), "both direct and segmented") {
+		t.Fatalf("PaletteColors() error = %v, want direct/segmented conflict", err)
 	}
 }
 
@@ -1916,6 +2088,9 @@ func TestWindowOrLUTTo8bitAppliesRescaleBeforeWindow(t *testing.T) {
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0})); err != nil {
 		t.Fatalf("add RescaleIntercept: %v", err)
 	}
+	if err := ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"US"})); err != nil {
+		t.Fatalf("add RescaleType: %v", err)
+	}
 
 	frames, err := pd.WindowOrLUTTo8bit(ds, 100, 100, false)
 	if err != nil {
@@ -1923,6 +2098,141 @@ func TestWindowOrLUTTo8bitAppliesRescaleBeforeWindow(t *testing.T) {
 	}
 	if got := frames[0][0]; got < 127 || got > 129 {
 		t.Fatalf("rescaled sample mapped to %d, want approximately 128", got)
+	}
+}
+
+func TestModalityLUTRequiresModalityLUTType(t *testing.T) {
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 8})); err != nil {
+		t.Fatalf("add LUTDescriptor: %v", err)
+	}
+	if err := item.Add(element.NewOtherByte(tag.LUTData, []byte{0, 255})); err != nil {
+		t.Fatalf("add LUTData: %v", err)
+	}
+	ds := dataset.New()
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("add ModalityLUTSequence: %v", err)
+	}
+
+	_, err := ModalityLUT(ds, false)
+	if err == nil || !strings.Contains(err.Error(), "Modality LUT Type") {
+		t.Fatalf("ModalityLUT() error = %v, want missing Modality LUT Type", err)
+	}
+}
+
+func TestFunctionalGroupModalityLUTOverridesTopLevelRescale(t *testing.T) {
+	primary := dataset.New()
+	lutItem := dataset.New()
+	if err := lutItem.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"})); err != nil {
+		t.Fatalf("add Modality LUT Type: %v", err)
+	}
+	if err := lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 8})); err != nil {
+		t.Fatalf("add LUT Descriptor: %v", err)
+	}
+	if err := lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20})); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+	if err := primary.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
+		t.Fatalf("add Modality LUT Sequence: %v", err)
+	}
+
+	fallback := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{100}),
+		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0}),
+		element.NewString(tag.RescaleType, vr.LO, []string{"US"}),
+	} {
+		if err := fallback.Add(elem); err != nil {
+			t.Fatalf("add top-level rescale element: %v", err)
+		}
+	}
+
+	modality, err := modalityTransformForDatasets(primary, fallback, &Data{
+		Info: &Info{PixelRepresentation: pixel.UnsignedPixels},
+	})
+	if err != nil {
+		t.Fatalf("modalityTransformForDatasets() error = %v", err)
+	}
+	if modality == nil {
+		t.Fatal("modalityTransformForDatasets() returned no Functional Group LUT")
+	}
+	if got := modality.Transform(1); got != 20 {
+		t.Fatalf("Functional Group LUT Transform(1) = %v, want 20", got)
+	}
+}
+
+func TestWindowOrLUTTo8bitRequiresRescaleType(t *testing.T) {
+	info := &Info{
+		Width: 1, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 16, BitsStored: 16, HighBit: 15,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+	}
+	pd, err := NewFromBytes(info, []byte{50, 0})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	ds, err := dataset.NewWithElements([]element.Element{
+		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{2}),
+		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0}),
+	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
+
+	_, err = pd.WindowOrLUTTo8bit(ds, 100, 100, false)
+	if err == nil || !strings.Contains(err.Error(), "Rescale Type") {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v, want missing Rescale Type", err)
+	}
+}
+
+func TestWindowOrLUTTo8bitAppliesPerFrameFunctionalGroupRescale(t *testing.T) {
+	info := &Info{
+		Width: 1, Height: 1, NumberOfFrames: 2,
+		BitsAllocated: 16, BitsStored: 16, HighBit: 15,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+	}
+	pd, err := NewFromBytes(info, []byte{50, 0, 50, 0})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+
+	perFrameItems := make([]*dataset.Dataset, 2)
+	for frame, slope := range []float64{1, 2} {
+		transform := dataset.New()
+		if err := transform.Add(element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{slope})); err != nil {
+			t.Fatalf("frame %d add RescaleSlope: %v", frame, err)
+		}
+		if err := transform.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0})); err != nil {
+			t.Fatalf("frame %d add RescaleIntercept: %v", frame, err)
+		}
+		if err := transform.Add(element.NewString(tag.RescaleType, vr.LO, []string{"HU"})); err != nil {
+			t.Fatalf("frame %d add RescaleType: %v", frame, err)
+		}
+		frameItem := dataset.New()
+		if err := frameItem.Add(dataset.NewSequenceWithItems(
+			tag.PixelValueTransformationSequence,
+			[]*dataset.Dataset{transform},
+		)); err != nil {
+			t.Fatalf("frame %d add PixelValueTransformationSequence: %v", frame, err)
+		}
+		perFrameItems[frame] = frameItem
+	}
+	ds := dataset.New()
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.PerFrameFunctionalGroupsSequence, perFrameItems)); err != nil {
+		t.Fatalf("add PerFrameFunctionalGroupsSequence: %v", err)
+	}
+
+	frames, err := pd.WindowOrLUTTo8bit(ds, 100, 100, false)
+	if err != nil {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+	}
+	if got := frames[0][0]; got != 0 {
+		t.Fatalf("frame 0 = %d, want 0", got)
+	}
+	if got := frames[1][0]; got < 127 || got > 129 {
+		t.Fatalf("frame 1 = %d, want approximately 128", got)
 	}
 }
 

@@ -158,15 +158,15 @@ func (c *NativeCodec) encodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}
-	// Calculate bytes per sample from frame info
-	bytesPerSample := info.BitDepth.BytesAllocated()
+	// Bits Allocated selects whether native Pixel Data is byte- or word-based.
+	bytesAllocated := info.BitDepth.BytesAllocated()
 
 	// If single-byte samples, no swapping needed
-	if bytesPerSample == 1 {
+	if bytesAllocated == 1 {
 		return copyFrame(ctx, src, dst)
 	}
 
-	// Multi-byte samples may need byte swapping
+	// Multi-byte native Pixel Data uses OW and may need word byte swapping.
 	shouldSwap := params.ByteSwap == ByteSwapEnabled
 
 	*dst = make([]byte, len(src))
@@ -176,8 +176,7 @@ func (c *NativeCodec) encodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 		return copyFrameInto(ctx, src, *dst)
 	}
 
-	// Swap bytes based on sample size
-	return c.swapBytes(ctx, src, *dst, bytesPerSample)
+	return c.swapOWWords(ctx, src, *dst)
 }
 
 // decodeFrame decodes a single frame (internal helper method).
@@ -185,15 +184,15 @@ func (c *NativeCodec) decodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}
-	// Calculate bytes per sample from frame info
-	bytesPerSample := info.BitDepth.BytesAllocated()
+	// Bits Allocated selects whether native Pixel Data is byte- or word-based.
+	bytesAllocated := info.BitDepth.BytesAllocated()
 
 	// If single-byte samples, no swapping needed
-	if bytesPerSample == 1 {
+	if bytesAllocated == 1 {
 		return copyFrame(ctx, src, dst)
 	}
 
-	// Multi-byte samples may need byte swapping
+	// Multi-byte native Pixel Data uses OW and may need word byte swapping.
 	shouldSwap := c.isBigEndian // Swap if source is big endian (convert to little endian)
 	switch params.ByteSwap {
 	case ByteSwapDisabled:
@@ -209,8 +208,7 @@ func (c *NativeCodec) decodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 		return copyFrameInto(ctx, src, *dst)
 	}
 
-	// Swap bytes based on sample size
-	return c.swapBytes(ctx, src, *dst, bytesPerSample)
+	return c.swapOWWords(ctx, src, *dst)
 }
 
 func copyFrame(ctx context.Context, src []byte, dst *[]byte) error {
@@ -229,30 +227,20 @@ func copyFrameInto(ctx context.Context, src, dst []byte) error {
 	return ctx.Err()
 }
 
-// swapBytes swaps the byte order of multi-byte samples.
-func (c *NativeCodec) swapBytes(ctx context.Context, src, dst []byte, bytesPerSample int) error {
+// swapOWWords swaps the bytes within each 16-bit OW word. A pixel sample may
+// occupy multiple words; the order of those words is not reversed.
+func (c *NativeCodec) swapOWWords(ctx context.Context, src, dst []byte) error {
 	if len(src) != len(dst) {
 		return fmt.Errorf("source and destination buffers must be same length")
 	}
 
-	if len(src)%bytesPerSample != 0 {
-		return fmt.Errorf("data length %d not divisible by bytes per sample %d",
-			len(src), bytesPerSample)
+	if len(src)%2 != 0 {
+		return fmt.Errorf("data length %d is not aligned to 16-bit OW words", len(src))
 	}
-
-	switch bytesPerSample {
-	case 2:
-		return c.swap16(ctx, src, dst)
-	case 4:
-		return c.swap32(ctx, src, dst)
-	case 8:
-		return c.swap64(ctx, src, dst)
-	default:
-		return fmt.Errorf("unsupported bytes per sample: %d", bytesPerSample)
-	}
+	return c.swap16(ctx, src, dst)
 }
 
-// swap16 swaps 16-bit values between little and big endian.
+// swap16 swaps bytes within each 16-bit OW word.
 func (c *NativeCodec) swap16(ctx context.Context, src, dst []byte) error {
 	for i := 0; i < len(src); i += 2 {
 		if i%contextCopyChunkSize == 0 {
@@ -265,48 +253,6 @@ func (c *NativeCodec) swap16(ctx context.Context, src, dst []byte) error {
 		}
 		dst[i] = src[i+1]
 		dst[i+1] = src[i]
-	}
-	return nil
-}
-
-// swap32 swaps 32-bit values between little and big endian.
-func (c *NativeCodec) swap32(ctx context.Context, src, dst []byte) error {
-	for i := 0; i < len(src); i += 4 {
-		if i%contextCopyChunkSize == 0 {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-		}
-		if i+3 >= len(src) {
-			return fmt.Errorf("incomplete 32-bit sample at offset %d", i)
-		}
-		dst[i] = src[i+3]
-		dst[i+1] = src[i+2]
-		dst[i+2] = src[i+1]
-		dst[i+3] = src[i]
-	}
-	return nil
-}
-
-// swap64 swaps 64-bit values between little and big endian.
-func (c *NativeCodec) swap64(ctx context.Context, src, dst []byte) error {
-	for i := 0; i < len(src); i += 8 {
-		if i%contextCopyChunkSize == 0 {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-		}
-		if i+7 >= len(src) {
-			return fmt.Errorf("incomplete 64-bit sample at offset %d", i)
-		}
-		dst[i] = src[i+7]
-		dst[i+1] = src[i+6]
-		dst[i+2] = src[i+5]
-		dst[i+3] = src[i+4]
-		dst[i+4] = src[i+3]
-		dst[i+5] = src[i+2]
-		dst[i+6] = src[i+1]
-		dst[i+7] = src[i]
 	}
 	return nil
 }

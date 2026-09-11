@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"math"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -99,6 +100,7 @@ func TestDatasetRescaleAndWindowControlRendering(t *testing.T) {
 	for _, elem := range []element.Element{
 		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{2}),
 		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{-100}),
+		element.NewString(tag.RescaleType, vr.LO, []string{"HU"}),
 		element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{0}),
 		element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{200}),
 	} {
@@ -134,6 +136,7 @@ func TestFunctionalGroupsBuildFrameSpecificPipelines(t *testing.T) {
 	for _, elem := range []element.Element{
 		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{2}),
 		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0}),
+		element.NewString(tag.RescaleType, vr.LO, []string{"HU"}),
 	} {
 		if err := sharedTransform.Add(elem); err != nil {
 			t.Fatalf("add shared transform value: %v", err)
@@ -236,6 +239,65 @@ func TestPerFrameFunctionalGroupVOILUTSequenceIsUsed(t *testing.T) {
 		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != want {
 			t.Fatalf("pixel %d = %d, want %d", x, got, want)
 		}
+	}
+}
+
+func TestPerFrameFunctionalGroupWindowOverridesTopLevelWindow(t *testing.T) {
+	ds := newNativeMonochromeDataset(t, 1, 1, []byte{50})
+	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{50}))
+	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{100}))
+
+	frameVOI := dataset.New()
+	_ = frameVOI.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{100}))
+	_ = frameVOI.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{100}))
+	frameItem := dataset.New()
+	_ = frameItem.Add(dataset.NewSequenceWithItems(tag.FrameVOILUTSequence, []*dataset.Dataset{frameVOI}))
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.PerFrameFunctionalGroupsSequence, []*dataset.Dataset{frameItem})); err != nil {
+		t.Fatal(err)
+	}
+
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := color.GrayModel.Convert(rendered.At(0, 0)).(color.Gray).Y; got != 0 {
+		t.Fatalf("pixel = %d, want 0 from per-frame window", got)
+	}
+}
+
+func TestPerFrameFunctionalGroupRescaleOverridesTopLevelRescale(t *testing.T) {
+	ds := newNativeMonochromeDataset(t, 1, 1, []byte{50})
+	_ = ds.Add(element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{1}))
+	_ = ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0}))
+	_ = ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"US"}))
+	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{100}))
+	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{100}))
+
+	transform := dataset.New()
+	_ = transform.Add(element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{2}))
+	_ = transform.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0}))
+	_ = transform.Add(element.NewString(tag.RescaleType, vr.LO, []string{"US"}))
+	frameItem := dataset.New()
+	_ = frameItem.Add(dataset.NewSequenceWithItems(tag.PixelValueTransformationSequence, []*dataset.Dataset{transform}))
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.PerFrameFunctionalGroupsSequence, []*dataset.Dataset{frameItem})); err != nil {
+		t.Fatal(err)
+	}
+
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := color.GrayModel.Convert(rendered.At(0, 0)).(color.Gray).Y
+	if got < 127 || got > 129 {
+		t.Fatalf("pixel = %d, want approximately 128 from per-frame rescale", got)
 	}
 }
 
@@ -377,6 +439,7 @@ func TestRenderRejectsZeroRescaleSlope(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 1, 1, []byte{0})
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{0}))
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0}))
+	_ = ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"US"}))
 	image, err := NewDicomImageFromDataset(ds)
 	if err != nil {
 		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
@@ -390,6 +453,7 @@ func TestVOILUTDescriptorSignednessUsesRescaledDomain(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 2, 1, []byte{0, 1})
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{1}))
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{-100}))
+	_ = ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"HU"}))
 	item := dataset.New()
 	_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0xff9c, 8}))
 	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{0, 255}))
@@ -510,9 +574,52 @@ func TestAlternativeSelectionValidation(t *testing.T) {
 	})
 }
 
+func TestFunctionalGroupModalityLUTOverridesTopLevelRescale(t *testing.T) {
+	primary := dataset.New()
+	lutItem := dataset.New()
+	if err := lutItem.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"})); err != nil {
+		t.Fatalf("add Modality LUT Type: %v", err)
+	}
+	if err := lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 8})); err != nil {
+		t.Fatalf("add LUT Descriptor: %v", err)
+	}
+	if err := lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20})); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+	if err := primary.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{lutItem})); err != nil {
+		t.Fatalf("add Modality LUT Sequence: %v", err)
+	}
+
+	fallback := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{100}),
+		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0}),
+		element.NewString(tag.RescaleType, vr.LO, []string{"US"}),
+	} {
+		if err := fallback.Add(elem); err != nil {
+			t.Fatalf("add top-level rescale element: %v", err)
+		}
+	}
+
+	modality, slope, intercept, _, err := imageModalityTransform(primary, fallback, false, 0, 1)
+	if err != nil {
+		t.Fatalf("imageModalityTransform() error = %v", err)
+	}
+	if modality == nil {
+		t.Fatal("imageModalityTransform() returned no Functional Group LUT")
+	}
+	if slope != 1 || intercept != 0 {
+		t.Fatalf("rescale = (%v, %v), want identity when Functional Group LUT is selected", slope, intercept)
+	}
+	if got := modality.Transform(1); got != 20 {
+		t.Fatalf("Functional Group LUT Transform(1) = %v, want 20", got)
+	}
+}
+
 func TestModalityLUTRejectsNonStandardBitDepth(t *testing.T) {
 	ds := dataset.New()
 	item := dataset.New()
+	_ = item.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"}))
 	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 12})); err != nil {
 		t.Fatalf("add LUT Descriptor: %v", err)
 	}
@@ -552,6 +659,7 @@ func TestDatasetImageReadsBigEndianModalityLUTData(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 3, 1, []byte{0, 1, 2})
 	ds.SetInternalTransferSyntax(transfer.ExplicitVRBigEndian)
 	lutItem := dataset.New()
+	_ = lutItem.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"}))
 	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0, 16}))
 	lutBytes := make([]byte, 6)
 	for index, value := range []uint16{0, 100, 200} {
@@ -583,6 +691,7 @@ func TestDatasetImageReadsBigEndianModalityLUTData(t *testing.T) {
 func TestSignedShortModalityLUTDescriptorMapsSignedInputs(t *testing.T) {
 	ds := dataset.New()
 	item := dataset.New()
+	_ = item.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"}))
 	_ = item.Add(element.NewSignedShort(tag.LUTDescriptor, []int16{3, -1, 8}))
 	_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
 	_ = ds.Add(dataset.NewSequenceWithItems(tag.ModalityLUTSequence, []*dataset.Dataset{item}))
@@ -640,6 +749,9 @@ func TestUnsignedShortLUTDescriptorUsesSignedPixelRepresentation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ds := dataset.New()
 			item := dataset.New()
+			if tt.tag == tag.ModalityLUTSequence {
+				_ = item.Add(element.NewString(tag.ModalityLUTType, vr.LO, []string{"US"}))
+			}
 			_ = item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{3, 0xffff, 8}))
 			_ = item.Add(element.NewOtherByte(tag.LUTData, []byte{10, 20, 30}))
 			_ = ds.Add(dataset.NewSequenceWithItems(tt.tag, []*dataset.Dataset{item}))
@@ -701,6 +813,186 @@ func TestVOILUTSequencePrecedesWindow(t *testing.T) {
 		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != expected {
 			t.Fatalf("windowed pixel %d = %d, want %d", x, got, expected)
 		}
+	}
+}
+
+func TestPresentationLUTShapeInverseIsAppliedAfterVOI(t *testing.T) {
+	ds := newNativeMonochromeDataset(t, 2, 1, []byte{0, 255})
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{127.5})); err != nil {
+		t.Fatalf("add WindowCenter: %v", err)
+	}
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{256})); err != nil {
+		t.Fatalf("add WindowWidth: %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{"INVERSE"})); err != nil {
+		t.Fatalf("add PresentationLUTShape: %v", err)
+	}
+
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage(0) error = %v", err)
+	}
+	for x, want := range []uint8{255, 0} {
+		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != want {
+			t.Fatalf("pixel %d = %d, want %d", x, got, want)
+		}
+	}
+}
+
+func TestPresentationLUTSequenceIsAppliedAfterVOI(t *testing.T) {
+	ds := newNativeMonochromeDataset(t, 2, 1, []byte{0, 255})
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{127.5})); err != nil {
+		t.Fatalf("add WindowCenter: %v", err)
+	}
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{256})); err != nil {
+		t.Fatalf("add WindowWidth: %v", err)
+	}
+	data := make([]byte, 256)
+	for index := range data {
+		data[index] = byte(255 - index)
+	}
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{256, 0, 8})); err != nil {
+		t.Fatalf("add LUTDescriptor: %v", err)
+	}
+	if err := item.Add(element.NewOtherByte(tag.LUTData, data)); err != nil {
+		t.Fatalf("add LUTData: %v", err)
+	}
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("add PresentationLUTSequence: %v", err)
+	}
+
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage(0) error = %v", err)
+	}
+	for x, want := range []uint8{255, 0} {
+		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != want {
+			t.Fatalf("pixel %d = %d, want %d", x, got, want)
+		}
+	}
+}
+
+func TestPresentationLUTRejectsSequenceAndShapeTogether(t *testing.T) {
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8})); err != nil {
+		t.Fatal(err)
+	}
+	if err := item.Add(element.NewOtherByte(tag.LUTData, []byte{0})); err != nil {
+		t.Fatal(err)
+	}
+	ds, err := dataset.NewWithElements([]element.Element{
+		dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item}),
+		element.NewString(tag.PresentationLUTShape, vr.CS, []string{"IDENTITY"}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = pixeldata.PresentationLUT(ds)
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("PresentationLUT() error = %v, want mutual-exclusion error", err)
+	}
+}
+
+func TestSoftcopyVOILUTSequenceSelectsReferencedFrame(t *testing.T) {
+	const sopInstanceUID = "1.2.826.0.1.3680043.10.543.1"
+	ds := newNativeMonochromeDataset(t, 1, 1, []byte{50, 50})
+	if err := ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"})); err != nil {
+		t.Fatalf("add NumberOfFrames: %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID})); err != nil {
+		t.Fatalf("add SOPInstanceUID: %v", err)
+	}
+
+	defaultVOI := dataset.New()
+	_ = defaultVOI.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{50}))
+	_ = defaultVOI.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{100}))
+	specificVOI := dataset.New()
+	_ = specificVOI.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{100}))
+	_ = specificVOI.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{100}))
+	reference := dataset.New()
+	_ = reference.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+	_ = reference.Add(element.NewString(tag.ReferencedFrameNumber, vr.IS, []string{"2"}))
+	_ = specificVOI.Add(dataset.NewSequenceWithItems(tag.ReferencedImageSequence, []*dataset.Dataset{reference}))
+	presentationState := dataset.New()
+	if err := presentationState.Add(dataset.NewSequenceWithItems(
+		tag.SoftcopyVOILUTSequence,
+		[]*dataset.Dataset{defaultVOI, specificVOI},
+	)); err != nil {
+		t.Fatalf("add SoftcopyVOILUTSequence: %v", err)
+	}
+
+	dicomImage, err := NewDicomImageFromDataset(ds, WithPresentationState(presentationState))
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	frame0, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage(0) error = %v", err)
+	}
+	if got := color.GrayModel.Convert(frame0.At(0, 0)).(color.Gray).Y; got < 127 || got > 129 {
+		t.Fatalf("frame 0 = %d, want approximately 128 from default Softcopy VOI", got)
+	}
+	frame1, err := dicomImage.RenderFrameImage(1)
+	if err != nil {
+		t.Fatalf("RenderFrameImage(1) error = %v", err)
+	}
+	if got := color.GrayModel.Convert(frame1.At(0, 0)).(color.Gray).Y; got != 0 {
+		t.Fatalf("frame 1 = %d, want 0 from referenced-frame Softcopy VOI", got)
+	}
+}
+
+func TestSoftcopyVOILUTSequenceRejectsAmbiguousSelection(t *testing.T) {
+	const sopInstanceUID = "1.2.826.0.1.3680043.10.543.2"
+	imageDataset := dataset.New()
+	if err := imageDataset.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID})); err != nil {
+		t.Fatal(err)
+	}
+
+	referencedItem := func() *dataset.Dataset {
+		reference := dataset.New()
+		_ = reference.Add(element.NewString(tag.ReferencedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+		_ = reference.Add(element.NewString(tag.ReferencedFrameNumber, vr.IS, []string{"1"}))
+		item := dataset.New()
+		_ = item.Add(dataset.NewSequenceWithItems(tag.ReferencedImageSequence, []*dataset.Dataset{reference}))
+		return item
+	}
+
+	for _, test := range []struct {
+		name  string
+		items []*dataset.Dataset
+		want  string
+	}{
+		{
+			name:  "duplicate exact frame matches",
+			items: []*dataset.Dataset{referencedItem(), referencedItem()},
+			want:  "multiple Softcopy VOI LUT Sequence items reference frame 1",
+		},
+		{
+			name:  "multiple defaults",
+			items: []*dataset.Dataset{dataset.New(), dataset.New()},
+			want:  "multiple default items",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			presentationState := dataset.New()
+			if err := presentationState.Add(dataset.NewSequenceWithItems(tag.SoftcopyVOILUTSequence, test.items)); err != nil {
+				t.Fatal(err)
+			}
+			_, err := imageSoftcopyVOI(presentationState, imageDataset, 0)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("imageSoftcopyVOI() error = %v, want %q", err, test.want)
+			}
+		})
 	}
 }
 
@@ -885,6 +1177,9 @@ func TestDefaultWindowUsesModalityValueRange(t *testing.T) {
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0})); err != nil {
 		t.Fatalf("add RescaleIntercept: %v", err)
 	}
+	if err := ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"US"})); err != nil {
+		t.Fatalf("add RescaleType: %v", err)
+	}
 
 	dicomImage, err := NewDicomImageFromDataset(ds)
 	if err != nil {
@@ -915,6 +1210,9 @@ func TestDefaultWindowUsesImagePixelValueTagsBeforePixelRange(t *testing.T) {
 	}
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0})); err != nil {
 		t.Fatalf("add RescaleIntercept: %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"US"})); err != nil {
+		t.Fatalf("add RescaleType: %v", err)
 	}
 
 	dicomImage, err := NewDicomImageFromDataset(ds)
@@ -1082,7 +1380,10 @@ func TestDatasetImageRenders32BitGrayscalePixels(t *testing.T) {
 func TestDatasetImageRendersExplicitVRBigEndian32BitPixels(t *testing.T) {
 	pixels := make([]byte, 12)
 	for index, value := range []uint32{0, 1 << 31, ^uint32(0)} {
-		binary.BigEndian.PutUint32(pixels[index*4:], value)
+		// OW byte order is applied independently to each 16-bit word. The
+		// low word remains before the high word for a 32-bit native sample.
+		binary.BigEndian.PutUint16(pixels[index*4:], uint16(value))
+		binary.BigEndian.PutUint16(pixels[index*4+2:], uint16(value>>16))
 	}
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
 	elements := []element.Element{
@@ -1317,6 +1618,42 @@ func TestSupplementalPaletteRendering(t *testing.T) {
 	}
 }
 
+func TestSupplementalPaletteRenderingSupportsSingleFrame(t *testing.T) {
+	ds, err := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.NumberOfFrames, vr.IS, []string{"1"}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewString(tag.PixelPresentation, vr.CS, []string{"COLOR"}),
+		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
+		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
+		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{1, 10, 8}),
+		element.NewOtherByte(tag.RedPaletteColorLookupTableData, []byte{100, 0}),
+		element.NewOtherByte(tag.GreenPaletteColorLookupTableData, []byte{20, 0}),
+		element.NewOtherByte(tag.BluePaletteColorLookupTableData, []byte{30, 0}),
+		element.NewOtherByte(tag.PixelData, []byte{10, 0}),
+	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage() error = %v", err)
+	}
+	if got, want := color.NRGBAModel.Convert(rendered.At(0, 0)).(color.NRGBA), (color.NRGBA{R: 100, G: 20, B: 30, A: 255}); got != want {
+		t.Fatalf("pixel = %#v, want %#v", got, want)
+	}
+}
+
 func TestSupplementalPaletteRequiresEligibility(t *testing.T) {
 	for _, tt := range []struct {
 		name              string
@@ -1324,7 +1661,6 @@ func TestSupplementalPaletteRequiresEligibility(t *testing.T) {
 		pixelPresentation string
 		pixelData         []byte
 	}{
-		{name: "single frame", numberOfFrames: "1", pixelPresentation: "COLOR", pixelData: []byte{10}},
 		{name: "missing Pixel Presentation", numberOfFrames: "2", pixelData: []byte{10, 10}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1541,6 +1877,9 @@ func TestClonePreservesDatasetDrivenRendering(t *testing.T) {
 	}
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0})); err != nil {
 		t.Fatalf("add RescaleIntercept: %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.RescaleType, vr.LO, []string{"US"})); err != nil {
+		t.Fatalf("add RescaleType: %v", err)
 	}
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{50})); err != nil {
 		t.Fatalf("add WindowCenter: %v", err)

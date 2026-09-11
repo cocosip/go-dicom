@@ -73,7 +73,7 @@ params := codec.NativeParameters{
 
 - `ByteSwapDefault` follows the native codec's transfer-syntax behavior.
 - `ByteSwapDisabled` preserves source byte order.
-- `ByteSwapEnabled` swaps each multi-byte sample.
+- `ByteSwapEnabled` swaps bytes within each 16-bit native OW word.
 
 ## Pixel Data
 
@@ -129,7 +129,9 @@ The same transcoder also provides:
 
 - `TranscodeWithMetadata` for Dataset plus File Meta Information.
 - `DecodeFrame` for one encapsulated frame.
-- `WithStrictDICOMVR` for encapsulated OB versus compatibility OW output.
+- `WithPixelDataReadMode` for standard validation or compatibility recovery.
+- `WithPixelDataWriteMode` for standard or compatibility output VR selection.
+- `WithStrictDICOMVR` as the compatibility entry point for the write mode.
 
 All three operations accept `context.Context` as their first argument. There
 are no non-context wrappers and no constructor that bypasses `Manager`.
@@ -172,10 +174,20 @@ General byte-order conversion is owned by `io/endian`:
 swapped, err := endian.ConvertEndianness(pixelBytes, bytesPerSample)
 ```
 
+Native DICOM Pixel Data with VR OW is different: its endian unit is always one
+16-bit word, even when `BitsAllocated` is 32 or greater. The transcoder handles
+that conversion and callers should not reverse an entire multi-word sample.
+
 ## Pixel Data VR
 
-- Encapsulated Pixel Data uses OB in strict DICOM mode.
-- Compatibility mode may emit OW for 16-bit encapsulated data.
+- Reads default to compatibility mode; non-standard native OB and encapsulated
+  OW are accepted with a structured warning.
+- Encapsulated OW is treated as an opaque compressed byte stream in compatibility
+  mode; it is not endian-swapped. Standard output normalizes it to OB.
+- Writes default to standard mode; encapsulated Pixel Data uses OB.
+- Standard read mode rejects native OB where OW is required and rejects
+  encapsulated OW.
+- Compatibility write mode may emit OW for multi-byte encapsulated data.
 - Implicit VR Little Endian native Pixel Data uses OW.
 - Explicit VR native Pixel Data uses OW above 8 Bits Allocated and may use OB
   or OW at 8 Bits Allocated or below.

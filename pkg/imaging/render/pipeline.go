@@ -30,6 +30,7 @@ type GrayscalePipeline struct {
 	modalityLUT      lut.LUT
 	voiLUT           lut.VOILUT
 	voiSequenceLUT   lut.LUT
+	presentationLUT  lut.LUT
 	invertLUT        lut.LUT
 	compositeLUT     lut.LUT
 	windowWidth      float64
@@ -66,6 +67,7 @@ func (p *GrayscalePipeline) ClonePipeline() Pipeline {
 	return &GrayscalePipeline{
 		modalityLUT:      p.modalityLUT,
 		voiSequenceLUT:   p.voiSequenceLUT,
+		presentationLUT:  p.presentationLUT,
 		windowWidth:      p.windowWidth,
 		windowCenter:     p.windowCenter,
 		invert:           p.invert,
@@ -102,6 +104,14 @@ func (p *GrayscalePipeline) SetVOILUT(voiLUT lut.LUT) {
 	defer p.mu.Unlock()
 	p.voiSequenceLUT = voiLUT
 	p.useVOILUT = voiLUT != nil
+	p.compositeLUT = nil
+}
+
+// SetPresentationLUT replaces the presentation stage applied after VOI.
+func (p *GrayscalePipeline) SetPresentationLUT(presentationLUT lut.LUT) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.presentationLUT = presentationLUT
 	p.compositeLUT = nil
 }
 
@@ -222,9 +232,12 @@ func (p *GrayscalePipeline) buildPipeline() {
 		luts = append(luts, p.voiLUT)
 	}
 
-	// 3. Output LUT (8-bit normalization) is implicitly handled by VOI LUT
+	// 3. Presentation LUT
+	if p.presentationLUT != nil {
+		luts = append(luts, p.presentationLUT)
+	}
 
-	// 4. Invert LUT (if needed)
+	// 4. Explicit final inversion (if requested)
 	if p.invert {
 		p.invertLUT = lut.NewInvertLUT(0, 255)
 		luts = append(luts, p.invertLUT)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 var (
@@ -60,15 +61,22 @@ func (m *Manager) NewTranscoder(input, output *transfer.Syntax, options ...Optio
 		return nil, ErrTransferSyntaxRequired
 	}
 	transcoder := &Transcoder{
-		manager:       m,
-		inputSyntax:   input,
-		outputSyntax:  output,
-		strictDICOMVR: true,
+		manager:            m,
+		inputSyntax:        input,
+		outputSyntax:       output,
+		pixelDataReadMode:  pixeldata.PixelDataCompatible,
+		pixelDataWriteMode: pixeldata.PixelDataStandard,
 	}
 	for _, option := range options {
 		if option != nil {
 			option(transcoder)
 		}
+	}
+	if !validPixelDataVRMode(transcoder.pixelDataReadMode) {
+		return nil, fmt.Errorf("unsupported Pixel Data read VR mode: %d", transcoder.pixelDataReadMode)
+	}
+	if !validPixelDataVRMode(transcoder.pixelDataWriteMode) {
+		return nil, fmt.Errorf("unsupported Pixel Data write VR mode: %d", transcoder.pixelDataWriteMode)
 	}
 	if input.IsEncapsulated() {
 		registered, found := m.registry.Lookup(input)

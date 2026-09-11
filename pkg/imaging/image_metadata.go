@@ -6,14 +6,92 @@ package imaging
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/imaging/internal/dicomlut"
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
+
+func imageSoftcopyVOI(presentationState, imageDataset *dataset.Dataset, frame int) (*dataset.Dataset, error) {
+	if presentationState == nil || !presentationState.Contains(tag.SoftcopyVOILUTSequence) {
+		return nil, nil
+	}
+	sequence, err := presentationState.GetSequence(tag.SoftcopyVOILUTSequence)
+	if err != nil {
+		return nil, fmt.Errorf("read Softcopy VOI LUT Sequence: %w", err)
+	}
+	if sequence.Count() == 0 {
+		return nil, fmt.Errorf("softcopy VOI LUT Sequence is empty")
+	}
+	imageUID, _ := imageDataset.GetString(tag.SOPInstanceUID)
+	var defaultItem, matchedItem *dataset.Dataset
+	for itemIndex := 0; itemIndex < sequence.Count(); itemIndex++ {
+		item := sequence.GetItem(itemIndex)
+		if item == nil {
+			return nil, fmt.Errorf("softcopy VOI LUT Sequence item %d is nil", itemIndex)
+		}
+		if !item.Contains(tag.ReferencedImageSequence) {
+			if defaultItem != nil {
+				return nil, fmt.Errorf("softcopy VOI LUT Sequence contains multiple default items")
+			}
+			defaultItem = item
+			continue
+		}
+		matches, err := softcopyItemReferencesFrame(item, imageUID, frame)
+		if err != nil {
+			return nil, fmt.Errorf("softcopy VOI LUT Sequence item %d: %w", itemIndex, err)
+		}
+		if matches {
+			if matchedItem != nil {
+				return nil, fmt.Errorf("multiple Softcopy VOI LUT Sequence items reference frame %d", frame+1)
+			}
+			matchedItem = item
+		}
+	}
+	if matchedItem != nil {
+		return matchedItem, nil
+	}
+	return defaultItem, nil
+}
+
+func softcopyItemReferencesFrame(item *dataset.Dataset, imageUID string, frame int) (bool, error) {
+	references, err := item.GetSequence(tag.ReferencedImageSequence)
+	if err != nil || references.Count() == 0 {
+		return false, fmt.Errorf("referenced Image Sequence is missing or empty")
+	}
+	for index := 0; index < references.Count(); index++ {
+		reference := references.GetItem(index)
+		if reference == nil {
+			return false, fmt.Errorf("referenced Image Sequence item %d is nil", index)
+		}
+		referencedUID, ok := reference.GetString(tag.ReferencedSOPInstanceUID)
+		if !ok || strings.TrimSpace(referencedUID) == "" {
+			return false, fmt.Errorf("referenced SOP Instance UID is missing")
+		}
+		if imageUID == "" || strings.TrimSpace(referencedUID) != strings.TrimSpace(imageUID) {
+			continue
+		}
+		frameNumbers, hasFrames := reference.GetStrings(tag.ReferencedFrameNumber)
+		if !hasFrames || len(frameNumbers) == 0 {
+			return true, nil
+		}
+		for _, value := range frameNumbers {
+			referencedFrame, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || referencedFrame < 1 {
+				return false, fmt.Errorf("invalid Referenced Frame Number %q", value)
+			}
+			if referencedFrame == frame+1 {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
 
 func imageWindowPairAt(primary, fallback *dataset.Dataset, index int) (float64, float64, error) {
 	source := datasetWithCompletePair(primary, fallback, tag.WindowCenter, tag.WindowWidth)
@@ -81,8 +159,36 @@ func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool
 	err error,
 ) {
 	slope, intercept = 1, 0
-	modalitySource := datasetWithAnyTag(primary, fallback, tag.ModalityLUTSequence)
-	rescaleSource := datasetWithAnyTag(primary, fallback, tag.RescaleSlope, tag.RescaleIntercept)
+	// Modality attributes are selected as one precedence group. A Functional
+	// Group value must override top-level values, including the other legal
+	// representation of the modality transform.
+	source := datasetWithAnyTag(
+		primary,
+		nil,
+		tag.ModalityLUTSequence,
+		tag.RescaleSlope,
+		tag.RescaleIntercept,
+	)
+	if source == nil {
+		source = datasetWithAnyTag(
+			fallback,
+			nil,
+			tag.ModalityLUTSequence,
+			tag.RescaleSlope,
+			tag.RescaleIntercept,
+		)
+	}
+	if source == nil {
+		return nil, slope, intercept, pixelSigned, nil
+	}
+	modalitySource := source
+	rescaleSource := source
+	if !source.Contains(tag.ModalityLUTSequence) {
+		modalitySource = nil
+	}
+	if !source.Contains(tag.RescaleSlope) && !source.Contains(tag.RescaleIntercept) {
+		rescaleSource = nil
+	}
 	if modalitySource != nil && rescaleSource != nil {
 		return nil, 0, 0, false, fmt.Errorf("modality LUT sequence cannot coexist with rescale slope/intercept")
 	}
@@ -98,6 +204,9 @@ func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool
 	}
 	if !rescaleSource.Contains(tag.RescaleSlope) || !rescaleSource.Contains(tag.RescaleIntercept) {
 		return nil, 0, 0, false, fmt.Errorf("rescale slope and intercept must both be present")
+	}
+	if _, err := dicomlut.RequiredLongString(rescaleSource, tag.RescaleType, "Rescale Type"); err != nil {
+		return nil, 0, 0, false, err
 	}
 	slope, err = imageSingleDecimal(rescaleSource, tag.RescaleSlope)
 	if err != nil {
@@ -144,29 +253,5 @@ func imageStringFrom(primary, fallback *dataset.Dataset, t *tag.Tag) (string, bo
 // imageFunctionalGroupValues flattens the first item of each shared and
 // per-frame functional-group macro. Per-frame values replace shared values.
 func imageFunctionalGroupValues(ds *dataset.Dataset, frame int) *dataset.Dataset {
-	values := dataset.New()
-	values.SetInternalTransferSyntax(ds.InternalTransferSyntax())
-	mergeFunctionalGroupValues(values, ds, tag.SharedFunctionalGroupsSequence, 0)
-	mergeFunctionalGroupValues(values, ds, tag.PerFrameFunctionalGroupsSequence, frame)
-	return values
-}
-
-func mergeFunctionalGroupValues(values, ds *dataset.Dataset, sequenceTag *tag.Tag, itemIndex int) {
-	sequence, err := ds.GetSequence(sequenceTag)
-	if err != nil || itemIndex < 0 || itemIndex >= sequence.Count() {
-		return
-	}
-	item := sequence.GetItem(itemIndex)
-	if item == nil {
-		return
-	}
-	for _, elem := range item.Elements() {
-		nested, ok := elem.(*dataset.Sequence)
-		if !ok || nested.Count() == 0 || nested.GetItem(0) == nil {
-			continue
-		}
-		for _, value := range nested.GetItem(0).Elements() {
-			_ = values.AddOrUpdate(value)
-		}
-	}
+	return dicomlut.FunctionalGroupValues(ds, frame)
 }
