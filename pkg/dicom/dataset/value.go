@@ -50,7 +50,7 @@ func (ds *Dataset) AddValueWithVR(t *tag.Tag, valueRepresentation *vr.VR, value 
 			return err
 		}
 	}
-	elem, err := element.NewElementFromValue(t, valueRepresentation, value)
+	elem, err := element.NewElementFromValueWithContext(t, valueRepresentation, value, ds.valueContext())
 	if err != nil {
 		return fmt.Errorf("create element %s with VR %s: %w", t, valueRepresentation.Code(), err)
 	}
@@ -71,11 +71,21 @@ func (ds *Dataset) AddOrUpdateValueWithVR(t *tag.Tag, valueRepresentation *vr.VR
 			return err
 		}
 	}
-	elem, err := element.NewElementFromValue(t, valueRepresentation, value)
+	elem, err := element.NewElementFromValueWithContext(t, valueRepresentation, value, ds.valueContext())
 	if err != nil {
 		return fmt.Errorf("create element %s with VR %s: %w", t, valueRepresentation.Code(), err)
 	}
 	return ds.AddOrUpdate(elem)
+}
+
+func (ds *Dataset) valueContext() element.CanonicalValueContext {
+	context := element.CanonicalValueContext{
+		TextEncodings: ds.effectiveTextEncodings(),
+	}
+	if syntax := ds.InternalTransferSyntax(); syntax != nil {
+		context.Endian = syntax.Endian()
+	}
+	return context
 }
 
 // AddElements adds a collection of elements, preserving each element's
@@ -119,6 +129,12 @@ func resolveValueVR(t *tag.Tag, value any) (*vr.VR, error) {
 	}
 	if len(matching) == 0 {
 		return nil, fmt.Errorf("go value type %T is not valid for any VR of tag %s (%v); use AddValueWithVR", value, t, entry.VRs())
+	}
+	if t.ToUint32() == tag.PixelData.ToUint32() {
+		return nil, fmt.Errorf(
+			"pixel data VR cannot be inferred from Go value type %T; use pixeldata.NewForDataset or AddValueWithVR",
+			value,
+		)
 	}
 	return nil, fmt.Errorf("tag %s has ambiguous VR for Go value type %T (%v); use AddValueWithVR", t, value, entry.VRs())
 }

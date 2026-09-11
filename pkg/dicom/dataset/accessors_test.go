@@ -4,6 +4,7 @@
 package dataset_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -156,6 +157,65 @@ func TestDatasetGetFloat64(t *testing.T) {
 	}
 	if val != 1.234567 {
 		t.Errorf("GetFloat64() = %f, want 1.234567", val)
+	}
+}
+
+func TestDatasetGetNumericArrays(t *testing.T) {
+	int16Tag := tag.New(0x7777, 0x0010)
+	int32Tag := tag.New(0x7777, 0x0011)
+	int64Tag := tag.New(0x7777, 0x0012)
+	uint64Tag := tag.New(0x7777, 0x0013)
+	float32Tag := tag.New(0x7777, 0x0014)
+	float64Tag := tag.New(0x7777, 0x0015)
+
+	ds := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewSignedShort(int16Tag, []int16{-2, 4}),
+		element.NewSignedLong(int32Tag, []int32{-2000, 4000}),
+		element.NewSignedVeryLong(int64Tag, []int64{-1 << 40, 1 << 40}),
+		element.NewUnsignedVeryLong(uint64Tag, []uint64{1 << 40, 1 << 48}),
+		element.NewFloat(float32Tag, []float32{1.25, -2.5}),
+		element.NewDouble(float64Tag, []float64{1.25, -2.5}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Add(%T) error = %v", elem, err)
+		}
+	}
+
+	if got, err := ds.GetInt16s(int16Tag); err != nil || !reflect.DeepEqual(got, []int16{-2, 4}) {
+		t.Fatalf("GetInt16s() = %v, %v", got, err)
+	}
+	if got, err := ds.GetInt32s(int32Tag); err != nil || !reflect.DeepEqual(got, []int32{-2000, 4000}) {
+		t.Fatalf("GetInt32s() = %v, %v", got, err)
+	}
+	if got, err := ds.GetInt64(int64Tag, 1); err != nil || got != 1<<40 {
+		t.Fatalf("GetInt64(1) = %d, %v; want %d", got, err, int64(1<<40))
+	}
+	if got, err := ds.GetInt64s(int64Tag); err != nil || !reflect.DeepEqual(got, []int64{-1 << 40, 1 << 40}) {
+		t.Fatalf("GetInt64s() = %v, %v", got, err)
+	}
+	if got, err := ds.GetUInt64(uint64Tag, 1); err != nil || got != 1<<48 {
+		t.Fatalf("GetUInt64(1) = %d, %v; want %d", got, err, uint64(1<<48))
+	}
+	if got, err := ds.GetUInt64s(uint64Tag); err != nil || !reflect.DeepEqual(got, []uint64{1 << 40, 1 << 48}) {
+		t.Fatalf("GetUInt64s() = %v, %v", got, err)
+	}
+	if got, err := ds.GetFloat32s(float32Tag); err != nil || !reflect.DeepEqual(got, []float32{1.25, -2.5}) {
+		t.Fatalf("GetFloat32s() = %v, %v", got, err)
+	}
+	if got, err := ds.GetFloat64s(float64Tag); err != nil || !reflect.DeepEqual(got, []float64{1.25, -2.5}) {
+		t.Fatalf("GetFloat64s() = %v, %v", got, err)
+	}
+}
+
+func TestDatasetNumericArrayAccessorRejectsWrongVR(t *testing.T) {
+	ds := dataset.New()
+	privateTag := tag.New(0x7777, 0x0020)
+	if err := ds.Add(element.NewUnsignedShort(privateTag, []uint16{1, 2})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	if _, err := ds.GetInt16s(privateTag); err == nil {
+		t.Fatal("GetInt16s() error = nil, want VR type mismatch")
 	}
 }
 

@@ -42,6 +42,21 @@ func (ds *Dataset) GetStrings(t *tag.Tag) ([]string, bool) {
 	return values, true
 }
 
+// GetBytes retrieves the element's contiguous encoded value bytes. The
+// returned slice follows ByteBuffer.Data ownership semantics and must not be
+// modified by the caller.
+func (ds *Dataset) GetBytes(t *tag.Tag) ([]byte, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+	buf := elem.Buffer()
+	if buf == nil {
+		return nil, fmt.Errorf("element %s does not have a contiguous value buffer", t)
+	}
+	return buf.Data(), nil
+}
+
 // GetUInt16 retrieves a uint16 value from the dataset.
 func (ds *Dataset) GetUInt16(t *tag.Tag, index int) (uint16, error) {
 	elem, exists := ds.Get(t)
@@ -117,6 +132,21 @@ func (ds *Dataset) GetInt16(t *tag.Tag, index int) (int16, error) {
 	return ss.GetValue(index)
 }
 
+// GetInt16s retrieves all int16 values from the dataset.
+func (ds *Dataset) GetInt16s(t *tag.Tag) ([]int16, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	ss, ok := elem.(*element.SignedShort)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not SignedShort", t)
+	}
+
+	return ss.GetValues()
+}
+
 // GetInt32 retrieves an int32 value from the dataset.
 func (ds *Dataset) GetInt32(t *tag.Tag, index int) (int32, error) {
 	elem, exists := ds.Get(t)
@@ -130,6 +160,81 @@ func (ds *Dataset) GetInt32(t *tag.Tag, index int) (int32, error) {
 	}
 
 	return sl.GetValue(index)
+}
+
+// GetInt32s retrieves all int32 values from the dataset.
+func (ds *Dataset) GetInt32s(t *tag.Tag) ([]int32, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	sl, ok := elem.(*element.SignedLong)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not SignedLong", t)
+	}
+
+	return sl.GetValues()
+}
+
+// GetInt64 retrieves an int64 value from the dataset.
+func (ds *Dataset) GetInt64(t *tag.Tag, index int) (int64, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return 0, fmt.Errorf("element %s not found", t)
+	}
+
+	sv, ok := elem.(*element.SignedVeryLong)
+	if !ok {
+		return 0, fmt.Errorf("element %s is not SignedVeryLong", t)
+	}
+
+	return sv.GetValue(index)
+}
+
+// GetInt64s retrieves all int64 values from the dataset.
+func (ds *Dataset) GetInt64s(t *tag.Tag) ([]int64, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	sv, ok := elem.(*element.SignedVeryLong)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not SignedVeryLong", t)
+	}
+
+	return sv.GetValues()
+}
+
+// GetUInt64 retrieves a uint64 value from the dataset.
+func (ds *Dataset) GetUInt64(t *tag.Tag, index int) (uint64, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return 0, fmt.Errorf("element %s not found", t)
+	}
+
+	uv, ok := elem.(*element.UnsignedVeryLong)
+	if !ok {
+		return 0, fmt.Errorf("element %s is not UnsignedVeryLong", t)
+	}
+
+	return uv.GetValue(index)
+}
+
+// GetUInt64s retrieves all uint64 values from the dataset.
+func (ds *Dataset) GetUInt64s(t *tag.Tag) ([]uint64, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	uv, ok := elem.(*element.UnsignedVeryLong)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not UnsignedVeryLong", t)
+	}
+
+	return uv.GetValues()
 }
 
 // GetFloat32 retrieves a float32 value from the dataset.
@@ -147,6 +252,21 @@ func (ds *Dataset) GetFloat32(t *tag.Tag, index int) (float32, error) {
 	return fl.GetValue(index)
 }
 
+// GetFloat32s retrieves all float32 values from the dataset.
+func (ds *Dataset) GetFloat32s(t *tag.Tag) ([]float32, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	fl, ok := elem.(*element.Float)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not Float", t)
+	}
+
+	return fl.GetValues()
+}
+
 // GetFloat64 retrieves a float64 value from the dataset.
 func (ds *Dataset) GetFloat64(t *tag.Tag, index int) (float64, error) {
 	elem, exists := ds.Get(t)
@@ -160,6 +280,21 @@ func (ds *Dataset) GetFloat64(t *tag.Tag, index int) (float64, error) {
 	}
 
 	return fd.GetValue(index)
+}
+
+// GetFloat64s retrieves all float64 values from the dataset.
+func (ds *Dataset) GetFloat64s(t *tag.Tag) ([]float64, error) {
+	elem, exists := ds.Get(t)
+	if !exists {
+		return nil, fmt.Errorf("element %s not found", t)
+	}
+
+	fd, ok := elem.(*element.Double)
+	if !ok {
+		return nil, fmt.Errorf("element %s is not Double", t)
+	}
+
+	return fd.GetValues()
 }
 
 // GetSequence retrieves a sequence element from the dataset.

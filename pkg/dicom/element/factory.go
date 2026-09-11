@@ -91,6 +91,15 @@ func NewElementFromBuffer(t *tag.Tag, valueRepresentation *vr.VR, buf buffer.Byt
 // array Go value. The supplied VR is authoritative; values are never used to
 // guess or silently change the element's VR.
 func NewElementFromValue(t *tag.Tag, valueRepresentation *vr.VR, value any) (Element, error) {
+	return NewElementFromValueWithContext(t, valueRepresentation, value, CanonicalValueContext{
+		TextEncodings: []encoding.Encoding{charset.Default},
+		Endian:        endian.Native(),
+	})
+}
+
+// NewElementFromValueWithContext creates a concrete Element using the supplied
+// text encodings and byte order. The supplied VR remains authoritative.
+func NewElementFromValueWithContext(t *tag.Tag, valueRepresentation *vr.VR, value any, context CanonicalValueContext) (Element, error) {
 	if isRawBinaryVR(valueRepresentation) {
 		if data, ok := value.([]byte); ok {
 			return newRawBinaryElement(t, valueRepresentation, data)
@@ -100,10 +109,7 @@ func NewElementFromValue(t *tag.Tag, valueRepresentation *vr.VR, value any) (Ele
 	if err != nil {
 		return nil, err
 	}
-	return ReplaceCanonicalStringsWithContext(t, valueRepresentation, values, CanonicalValueContext{
-		TextEncodings: []encoding.Encoding{charset.Default},
-		Endian:        endian.Native(),
-	})
+	return ReplaceCanonicalStringsWithContext(t, valueRepresentation, values, context)
 }
 
 func isRawBinaryVR(valueRepresentation *vr.VR) bool {

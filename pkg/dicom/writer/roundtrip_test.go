@@ -7,12 +7,17 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/charset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/unicode"
 )
 
 // TestWriteThenRead tests writing a DICOM file and then reading it back
@@ -99,6 +104,128 @@ func TestWriteThenRead(t *testing.T) {
 	}
 	if position != 1.5 {
 		t.Errorf("RecommendedDisplayFrameRateInFloat = %f, want 1.5", position)
+	}
+}
+
+func TestWriteThenReadChineseTextWithDeclaredCharacterSet(t *testing.T) {
+	for _, characterSet := range []string{"ISO_IR 192", "GB18030"} {
+		t.Run(characterSet, func(t *testing.T) {
+			ds := dataset.New()
+			addTestSOPUIDs(t, ds)
+			if err := ds.SetSpecificCharacterSet(characterSet); err != nil {
+				t.Fatalf("SetSpecificCharacterSet() error = %v", err)
+			}
+			values := []struct {
+				tag   *tag.Tag
+				value string
+			}{
+				{tag.PatientName, "张三"},
+				{tag.StudyDescription, "头部增强检查"},
+				{tag.AdditionalPatientHistory, "患者头痛三天"},
+				{tag.UnformattedTextValue, "检查过程中患者配合良好"},
+			}
+			for _, value := range values {
+				if err := ds.AddValue(value.tag, value.value); err != nil {
+					t.Fatalf("AddValue(%s) error = %v", value.tag, err)
+				}
+			}
+
+			var encoded bytes.Buffer
+			if err := Write(&encoded, ds); err != nil {
+				t.Fatalf("Write() error = %v", err)
+			}
+			result, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if got := result.Dataset.SpecificCharacterSet(); len(got) != 1 || got[0] != characterSet {
+				t.Fatalf("SpecificCharacterSet() = %v, want [%s]", got, characterSet)
+			}
+			for _, value := range values {
+				got, ok := result.Dataset.GetString(value.tag)
+				if !ok || got != value.value {
+					t.Fatalf("GetString(%s) = %q, %v; want %q, true", value.tag, got, ok, value.value)
+				}
+			}
+		})
+	}
+}
+
+func TestParsedSequenceItemInheritsSpecificCharacterSetForNewValues(t *testing.T) {
+	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
+	if err := ds.SetSpecificCharacterSet("ISO_IR 192"); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() error = %v", err)
+	}
+	item := dataset.New()
+	if err := item.Add(element.NewStringWithEncoding(tag.PatientName, vr.PN, []string{"张三"}, unicode.UTF8)); err != nil {
+		t.Fatalf("Add(PatientName) error = %v", err)
+	}
+	if err := ds.Add(dataset.NewSequenceWithItems(tag.RequestAttributesSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("Add(RequestAttributesSequence) error = %v", err)
+	}
+
+	var encoded bytes.Buffer
+	if err := Write(&encoded, ds); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	result, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	sequence, err := result.Dataset.GetSequence(tag.RequestAttributesSequence)
+	if err != nil {
+		t.Fatalf("GetSequence() error = %v", err)
+	}
+	parsedItem := sequence.GetItem(0)
+	if err := parsedItem.AddValue(tag.StudyDescription, "中文描述"); err != nil {
+		t.Fatalf("sequence item AddValue() error = %v", err)
+	}
+	if got, ok := parsedItem.GetString(tag.StudyDescription); !ok || got != "中文描述" {
+		t.Fatalf("GetString(StudyDescription) = %q, %v; want 中文描述, true", got, ok)
+	}
+}
+
+func TestWriteThenReadPreservesTextBytesWhenDeclaredCharacterSetIsWrong(t *testing.T) {
+	raw, err := simplifiedchinese.GB18030.NewEncoder().Bytes([]byte("张三"))
+	if err != nil {
+		t.Fatalf("encode GB18030 fixture: %v", err)
+	}
+	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
+	if err := ds.SetSpecificCharacterSet("ISO_IR 192"); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() error = %v", err)
+	}
+	if err := ds.Add(element.NewStringFromBufferWithEncodings(
+		tag.PatientName,
+		vr.PN,
+		buffer.NewMemory(raw),
+		[]encoding.Encoding{unicode.UTF8},
+	)); err != nil {
+		t.Fatalf("Add(PatientName) error = %v", err)
+	}
+
+	var encoded bytes.Buffer
+	if err := Write(&encoded, ds); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	result, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	gotRaw, err := result.Dataset.GetBytes(tag.PatientName)
+	if err != nil {
+		t.Fatalf("GetBytes(PatientName) error = %v", err)
+	}
+	if !bytes.Equal(gotRaw, raw) {
+		t.Fatalf("round-tripped PatientName bytes = %x, want %x", gotRaw, raw)
+	}
+	decoded, err := charset.DecodeString(gotRaw, charset.GetEncodings([]string{"GB18030"}))
+	if err != nil {
+		t.Fatalf("DecodeString(GB18030) error = %v", err)
+	}
+	if decoded != "张三" {
+		t.Fatalf("DecodeString(GB18030) = %q, want 张三", decoded)
 	}
 }
 

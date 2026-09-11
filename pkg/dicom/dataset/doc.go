@@ -24,6 +24,15 @@
 //	ds.AddValue(tag.PatientName, "Doe^John")
 //	ds.AddValue(tag.WindowCenter, []float64{0, 100})
 //
+// Declare the Specific Character Set before adding non-ASCII text:
+//
+//	ds.SetSpecificCharacterSet("ISO_IR 192")
+//	ds.AddValue(tag.PatientName, "\u5f20\u4e09")
+//
+// GetString decodes using the element's declared encoding. GetBytes returns
+// the encoded value bytes when a non-conformant file must be decoded with a
+// caller-selected character set.
+//
 // Automatic validation is enabled by default. It can be disabled per Dataset
 // or process-wide when preserving non-conformant input; call Validate
 // explicitly when a strict check is required:

@@ -14,6 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"golang.org/x/text/encoding"
 )
 
 // Dataset represents a DICOM dataset - a collection of data elements.
@@ -43,6 +44,10 @@ type Dataset struct {
 	// This is used to track the encoding format of pixel data and other elements.
 	// Following fo-dicom pattern, this is internal and can be set by transcoder/parser.
 	internalTransferSyntax *transfer.Syntax
+
+	// internalTextEncodings is the inherited text encoding context used when
+	// this Dataset does not declare its own Specific Character Set.
+	internalTextEncodings []encoding.Encoding
 }
 
 // AutoValidate reports the process-wide default validation switch used by
@@ -136,6 +141,10 @@ func (ds *Dataset) Add(elem element.Element) error {
 	}
 
 	ds.items[tagValue] = elem
+	ds.inheritElementContext(elem)
+	if tagValue == tag.SpecificCharacterSet.ToUint32() {
+		ds.refreshChildTextEncodings()
+	}
 	ds.markDirty()
 	return nil
 }
@@ -158,7 +167,12 @@ func (ds *Dataset) AddOrUpdate(elem element.Element) error {
 		}
 	}
 
-	ds.items[elem.Tag().ToUint32()] = elem
+	tagValue := elem.Tag().ToUint32()
+	ds.items[tagValue] = elem
+	ds.inheritElementContext(elem)
+	if tagValue == tag.SpecificCharacterSet.ToUint32() {
+		ds.refreshChildTextEncodings()
+	}
 	ds.markDirty()
 	return nil
 }
@@ -200,6 +214,9 @@ func (ds *Dataset) Remove(t *tag.Tag) bool {
 	tagValue := t.ToUint32()
 	if _, exists := ds.items[tagValue]; exists {
 		delete(ds.items, tagValue)
+		if tagValue == tag.SpecificCharacterSet.ToUint32() {
+			ds.refreshChildTextEncodings()
+		}
 		ds.markDirty()
 		return true
 	}
@@ -288,6 +305,7 @@ func (ds *Dataset) Clone() *Dataset {
 	}
 	clone := New()
 	clone.internalTransferSyntax = ds.internalTransferSyntax // Preserve transfer syntax
+	clone.internalTextEncodings = append([]encoding.Encoding(nil), ds.internalTextEncodings...)
 	clone.skipValidation = ds.skipValidation
 	for tagValue, elem := range ds.items {
 		clone.items[tagValue] = elem
@@ -307,6 +325,7 @@ func (ds *Dataset) DeepClone() *Dataset {
 	}
 	clone := New()
 	clone.internalTransferSyntax = ds.internalTransferSyntax
+	clone.internalTextEncodings = append([]encoding.Encoding(nil), ds.internalTextEncodings...)
 	clone.skipValidation = ds.skipValidation
 	for tagValue, elem := range ds.items {
 		if sequence, ok := elem.(*Sequence); ok {
@@ -330,6 +349,7 @@ func (ds *Dataset) DeepCloneChecked() (*Dataset, error) {
 	}
 	clone := New()
 	clone.internalTransferSyntax = ds.internalTransferSyntax
+	clone.internalTextEncodings = append([]encoding.Encoding(nil), ds.internalTextEncodings...)
 	clone.skipValidation = ds.skipValidation
 	for tagValue, elem := range ds.items {
 		cloned, err := DeepCloneElementChecked(elem)
@@ -375,6 +395,7 @@ func (ds *Dataset) ReplaceFrom(source *Dataset) error {
 	ds.sortedTags = replacement.sortedTags
 	ds.cacheDirty = replacement.cacheDirty
 	ds.internalTransferSyntax = replacement.internalTransferSyntax
+	ds.internalTextEncodings = append([]encoding.Encoding(nil), replacement.internalTextEncodings...)
 	ds.skipValidation = skipValidation
 	return nil
 }
@@ -418,6 +439,7 @@ func (ds *Dataset) Filter(predicate func(element.Element) bool) *Dataset {
 	}
 	filtered := New()
 	filtered.internalTransferSyntax = ds.internalTransferSyntax
+	filtered.internalTextEncodings = append([]encoding.Encoding(nil), ds.internalTextEncodings...)
 	filtered.skipValidation = ds.skipValidation
 	for _, elem := range ds.items {
 		if predicate(elem) {
@@ -470,6 +492,34 @@ func (ds *Dataset) SetInternalTransferSyntax(ts *transfer.Syntax) {
 			}
 		}
 	}
+}
+
+// InternalTextEncodings returns a copy of the inherited text encoding context.
+// It is primarily used by parsers and Dataset value construction.
+func (ds *Dataset) InternalTextEncodings() []encoding.Encoding {
+	if ds == nil {
+		return nil
+	}
+	return append([]encoding.Encoding(nil), ds.internalTextEncodings...)
+}
+
+// SetInternalTextEncodings sets the inherited text encoding context and
+// propagates it to nested sequence items. A nested Dataset's own Specific
+// Character Set declaration takes precedence when values are created.
+func (ds *Dataset) SetInternalTextEncodings(encodings []encoding.Encoding) {
+	ds.setInternalTextEncodings(encodings, make(map[*Dataset]struct{}))
+}
+
+func (ds *Dataset) setInternalTextEncodings(encodings []encoding.Encoding, visited map[*Dataset]struct{}) {
+	if ds == nil {
+		return
+	}
+	if _, ok := visited[ds]; ok {
+		return
+	}
+	visited[ds] = struct{}{}
+	ds.internalTextEncodings = append([]encoding.Encoding(nil), encodings...)
+	ds.refreshChildTextEncodingsWithVisited(visited)
 }
 
 // ensureItems lazily initializes the items map if it is nil.

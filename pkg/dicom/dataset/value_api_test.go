@@ -4,6 +4,7 @@
 package dataset_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -11,6 +12,17 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
+
+func TestDatasetAddValuePixelDataErrorPointsToHighLevelAPI(t *testing.T) {
+	ds := dataset.New()
+	err := ds.AddValue(tag.PixelData, []byte{1, 2})
+	if err == nil {
+		t.Fatal("AddValue(PixelData) error = nil, want ambiguous VR error")
+	}
+	if !strings.Contains(err.Error(), "pixeldata.NewForDataset") || !strings.Contains(err.Error(), "AddValueWithVR") {
+		t.Fatalf("AddValue(PixelData) error = %q, want both high-level and explicit VR guidance", err)
+	}
+}
 
 func TestDatasetAddValueCreatesTypedElements(t *testing.T) {
 	ds := dataset.New()

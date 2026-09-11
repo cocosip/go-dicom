@@ -717,6 +717,7 @@ func (p *parseContext) applyTransferSyntax(ts *transfer.Syntax) error {
 // readDataset reads a dataset (collection of elements).
 func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 	ds := dataset.New()
+	ds.SetInternalTextEncodings(p.textEncodings)
 	ds.SetAutoValidate(false)
 	defer ds.SetAutoValidate(true)
 	privateCreators := make(privateCreatorScope)
@@ -1203,6 +1204,7 @@ func (p *parseContext) observeSequenceItem(sequenceTag *tag.Tag, item *dataset.D
 // readItemDataset reads a single item dataset within a sequence.
 func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) {
 	item := dataset.New()
+	item.SetInternalTextEncodings(p.textEncodings)
 	item.SetAutoValidate(false)
 	defer item.SetAutoValidate(true)
 	privateCreators := make(privateCreatorScope)
