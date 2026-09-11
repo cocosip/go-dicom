@@ -30,6 +30,7 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 		return nil, fmt.Errorf("create pixel data: %w", err)
 	}
 	image := NewDicomImage(pixelData)
+	image.lutVRMode = config.lutVRMode
 	image.dataset = ds.Clone()
 	if config.presentationState != nil {
 		image.presentationState = config.presentationState.Clone()

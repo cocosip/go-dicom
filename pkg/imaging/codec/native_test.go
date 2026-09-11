@@ -226,6 +226,35 @@ func TestNativeCodec_BigEndian(t *testing.T) {
 	}
 }
 
+func TestNativeCodec_BigEndianEncodeSwapsByDefault(t *testing.T) {
+	codec := NewExplicitVRBigEndianCodec()
+	frameInfo := FrameInfo{
+		Width:                     1,
+		Height:                    1,
+		BitDepth:                  *pixel.NewBitDepth(16, 16, 15, false),
+		SamplesPerPixel:           1,
+		PixelRepresentation:       pixel.UnsignedPixels,
+		PlanarConfiguration:       pixel.InterleavedPlanar,
+		PhotometricInterpretation: *pixel.Monochrome2,
+	}
+	source := newTestPixelData(frameInfo)
+	if err := source.AddFrame(context.Background(), []byte{0x34, 0x12}); err != nil {
+		t.Fatal(err)
+	}
+	sink := newTestPixelData(frameInfo)
+
+	if err := codec.Encode(context.Background(), source, sink, NativeParameters{}); err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	got, err := sink.Frame(context.Background(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []byte{0x12, 0x34}; !bytes.Equal(got, want) {
+		t.Fatalf("Encode() frame = %x, want %x", got, want)
+	}
+}
+
 func TestNativeCodec_BigEndianDecodeSwapsThirtyTwoBitOWByWord(t *testing.T) {
 	frameInfo := FrameInfo{
 		Width:                     1,

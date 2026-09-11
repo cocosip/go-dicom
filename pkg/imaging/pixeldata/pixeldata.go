@@ -180,7 +180,7 @@ func NewFromBytes(info *Info, data []byte) (*Data, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.TransferSyntaxUID == transfer.ExplicitVRBigEndian.UID().UID() {
+	if pixelDataNeedsByteSwap(info) {
 		data = swapPixelDataBytes(data, info)
 	}
 
@@ -761,7 +761,7 @@ func (pd *Data) ToElement() (element.Element, error) {
 	if nativePixelDataVR(pd.Info) == "OW" {
 		// Frames are normalized to little-endian internally. Restore the
 		// requested native transfer syntax when materializing the element.
-		if pd.Info.TransferSyntaxUID == transfer.ExplicitVRBigEndian.UID().UID() {
+		if pixelDataNeedsByteSwap(pd.Info) {
 			all = swapPixelDataBytes(all, pd.Info)
 		}
 		return element.NewOtherWord(tag.PixelData, all), nil

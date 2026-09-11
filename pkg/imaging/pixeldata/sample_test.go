@@ -82,6 +82,42 @@ func TestDataSampleNormalizesBigEndianInput(t *testing.T) {
 	}
 }
 
+func TestDataSampleNormalizesAllDeclaredBigEndianPixelSyntaxes(t *testing.T) {
+	for _, syntax := range []*transfer.Syntax{
+		transfer.ExplicitVRBigEndian,
+		transfer.ImplicitVRBigEndian,
+		transfer.GEPrivateImplicitVRBigEndian,
+	} {
+		t.Run(syntax.UID().UID(), func(t *testing.T) {
+			info := grayscaleSampleInfo(16, 16, 15, pixel.UnsignedPixels)
+			info.TransferSyntaxUID = syntax.UID().UID()
+			pixels, err := NewFromBytes(&info, []byte{0x12, 0x34})
+			if err != nil {
+				t.Fatalf("NewFromBytes() error = %v", err)
+			}
+			got, err := pixels.Sample(0, 0, 0, 0)
+			if err != nil {
+				t.Fatalf("Sample() error = %v", err)
+			}
+			if got != 0x1234 {
+				t.Fatalf("Sample() = %#x, want 0x1234", got)
+			}
+
+			elem, err := pixels.ToElement()
+			if err != nil {
+				t.Fatalf("ToElement() error = %v", err)
+			}
+			word, ok := elem.(*element.OtherWord)
+			if !ok {
+				t.Fatalf("ToElement() = %T, want *element.OtherWord", elem)
+			}
+			if got := word.GetData(); !bytes.Equal(got, []byte{0x12, 0x34}) {
+				t.Fatalf("ToElement() bytes = %x, want 1234", got)
+			}
+		})
+	}
+}
+
 func TestDataToElementRestoresBigEndianPixelBytes(t *testing.T) {
 	info := grayscaleSampleInfo(16, 16, 15, pixel.UnsignedPixels)
 	info.TransferSyntaxUID = transfer.ExplicitVRBigEndian.UID().UID()

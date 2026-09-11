@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/binary"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
 const contextCopyChunkSize = 64 * 1024
@@ -84,6 +86,24 @@ func swapPixelDataBytes(data []byte, info *Info) []byte {
 		out[offset], out[offset+1] = out[offset+1], out[offset]
 	}
 	return out
+}
+
+// pixelDataNeedsByteSwap reports whether native Pixel Data is encoded in a
+// byte order different from the library's internal little-endian form.
+// Some transfer syntaxes keep dataset encoding little-endian while declaring
+// big-endian pixel words (for example GE's private syntax), so Endian alone is
+// not sufficient here.
+func pixelDataNeedsByteSwap(info *Info) bool {
+	if info == nil || info.BytesAllocated() == 1 {
+		return false
+	}
+	syntax, err := transfer.Parse(info.TransferSyntaxUID)
+	if err == nil {
+		return syntax.Endian() == endian.Big || syntax.SwapPixelData()
+	}
+	return info.TransferSyntaxUID == transfer.ExplicitVRBigEndian.UID().UID() ||
+		info.TransferSyntaxUID == transfer.ImplicitVRBigEndian.UID().UID() ||
+		info.TransferSyntaxUID == transfer.GEPrivateImplicitVRBigEndian.UID().UID()
 }
 
 func clampByte(value int) byte {

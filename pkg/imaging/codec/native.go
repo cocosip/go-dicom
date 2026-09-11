@@ -167,7 +167,13 @@ func (c *NativeCodec) encodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 	}
 
 	// Multi-byte native Pixel Data uses OW and may need word byte swapping.
-	shouldSwap := params.ByteSwap == ByteSwapEnabled
+	shouldSwap := c.isBigEndian
+	switch params.ByteSwap {
+	case ByteSwapDisabled:
+		shouldSwap = false
+	case ByteSwapEnabled:
+		shouldSwap = true
+	}
 
 	*dst = make([]byte, len(src))
 

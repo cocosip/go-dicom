@@ -73,6 +73,7 @@ type DicomImage struct {
 	grayscaleColorMaps      map[int][256]colorconv.Color32
 	windowIndex             int
 	voiLUTIndex             int
+	lutVRMode               pixeldata.LUTVRMode
 }
 
 // NewDicomImage creates a new DicomImage from pixel data.
@@ -86,6 +87,7 @@ func NewDicomImage(pixelData *pixeldata.Data) *DicomImage {
 		overlayColor:            colorconv.Color32{A: 255, R: 255, B: 255},
 		autoApplyLUTToAllFrames: false,
 		grayscaleColorMaps:      make(map[int][256]colorconv.Color32),
+		lutVRMode:               pixeldata.LUTCompatible,
 	}
 }
 
@@ -228,8 +230,8 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 	voiFallback := img.dataset
 	if img.dataset != nil {
 		var err error
-		modalityLUT, rescaleSlope, rescaleIntercept, voiDescriptorSigned, err = imageModalityTransform(
-			functional, img.dataset, pixelSigned, minInput, maxInput,
+		modalityLUT, rescaleSlope, rescaleIntercept, voiDescriptorSigned, err = imageModalityTransformWithLUTMode(
+			functional, img.dataset, pixelSigned, minInput, maxInput, img.lutVRMode,
 		)
 		if err != nil {
 			return nil, err
@@ -277,7 +279,7 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 			pipeline.SetModalityLUT(modalityLUT)
 		}
 		if datasetWithAnyTag(voiPrimary, voiFallback, tag.VOILUTSequence) != nil {
-			voiLUT, err := pixeldata.VOILUTFrom(voiPrimary, voiFallback, voiDescriptorSigned, img.voiLUTIndex)
+			voiLUT, err := pixeldata.VOILUTFromWithVRMode(voiPrimary, voiFallback, voiDescriptorSigned, img.voiLUTIndex, img.lutVRMode)
 			if err != nil {
 				return nil, err
 			}
@@ -292,7 +294,7 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 			tag.PresentationLUTSequence,
 			tag.PresentationLUTShape,
 		)
-		presentationLUT, present, err := pixeldata.PresentationLUT(presentationSource)
+		presentationLUT, present, err := pixeldata.PresentationLUTWithVRMode(presentationSource, img.lutVRMode)
 		if err != nil {
 			return nil, err
 		}
@@ -777,6 +779,7 @@ func (img *DicomImage) Clone() *DicomImage {
 		grayscaleColorMaps:      make(map[int][256]colorconv.Color32, len(img.grayscaleColorMaps)),
 		windowIndex:             img.windowIndex,
 		voiLUTIndex:             img.voiLUTIndex,
+		lutVRMode:               img.lutVRMode,
 	}
 	if img.dataset != nil {
 		cloned.dataset = img.dataset.Clone()

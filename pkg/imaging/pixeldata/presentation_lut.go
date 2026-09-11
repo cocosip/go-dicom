@@ -18,6 +18,15 @@ import (
 // PresentationLUT reads the mutually exclusive Presentation LUT Sequence or
 // Presentation LUT Shape. The bool result reports whether either is present.
 func PresentationLUT(ds *dataset.Dataset) (lut.LUT, bool, error) {
+	return PresentationLUTWithVRMode(ds, LUTCompatible)
+}
+
+// PresentationLUTWithVRMode reads the presentation LUT using the requested
+// LUT Data VR policy.
+func PresentationLUTWithVRMode(ds *dataset.Dataset, mode LUTVRMode) (lut.LUT, bool, error) {
+	if mode != LUTCompatible && mode != LUTStandard {
+		return nil, false, fmt.Errorf("unsupported LUT VR mode: %d", mode)
+	}
 	if ds == nil {
 		return nil, false, nil
 	}
@@ -27,7 +36,7 @@ func PresentationLUT(ds *dataset.Dataset) (lut.LUT, bool, error) {
 		return nil, true, fmt.Errorf("presentation LUT Sequence and Presentation LUT Shape are mutually exclusive")
 	}
 	if hasSequence {
-		table, err := presentationSequenceLUT(ds)
+		table, err := presentationSequenceLUT(ds, mode)
 		return table, true, err
 	}
 	if !hasShape {
@@ -51,7 +60,7 @@ func PresentationLUT(ds *dataset.Dataset) (lut.LUT, bool, error) {
 	}
 }
 
-func presentationSequenceLUT(ds *dataset.Dataset) (lut.LUT, error) {
+func presentationSequenceLUT(ds *dataset.Dataset, mode LUTVRMode) (lut.LUT, error) {
 	sequence, err := ds.GetSequence(tag.PresentationLUTSequence)
 	if err != nil {
 		return nil, fmt.Errorf("read Presentation LUT Sequence: %w", err)
@@ -67,7 +76,12 @@ func presentationSequenceLUT(ds *dataset.Dataset) (lut.LUT, error) {
 	if descriptor.BitsPerEntry != 8 && descriptor.BitsPerEntry != 16 {
 		return nil, fmt.Errorf("read Presentation LUT descriptor: bits per entry must be 8 or 16, got %d", descriptor.BitsPerEntry)
 	}
-	values, err := dicomlut.ReadData(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds))
+	var values []uint16
+	if mode == LUTStandard {
+		values, err = dicomlut.ReadDataStrict(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds))
+	} else {
+		values, err = dicomlut.ReadData(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read Presentation LUT Data: %w", err)
 	}

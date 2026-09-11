@@ -242,6 +242,22 @@ func TestPerFrameFunctionalGroupVOILUTSequenceIsUsed(t *testing.T) {
 	}
 }
 
+func TestDatasetImageStandardLUTModeRejectsOtherByteData(t *testing.T) {
+	ds := newNativeMonochromeDataset(t, 1, 1, []byte{0})
+	lutItem := dataset.New()
+	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8}))
+	_ = lutItem.Add(element.NewOtherByte(tag.LUTData, []byte{255}))
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
+
+	image, err := NewDicomImageFromDataset(ds, WithLUTVRMode(pixeldata.LUTStandard))
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	if _, err := image.RenderFrameImage(0); err == nil {
+		t.Fatal("RenderFrameImage() accepted VOI LUT Data with non-standard OB VR")
+	}
+}
+
 func TestPerFrameFunctionalGroupWindowOverridesTopLevelWindow(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 1, 1, []byte{50})
 	_ = ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{50}))

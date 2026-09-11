@@ -17,6 +17,16 @@ type readConfig struct {
 	vrMode VRMode
 }
 
+// LUTVRMode controls validation of LUT Data value representations.
+type LUTVRMode uint8
+
+const (
+	// LUTCompatible accepts legacy OB LUT Data for interoperability.
+	LUTCompatible LUTVRMode = iota
+	// LUTStandard requires the DICOM LUT Data VR to be US or OW.
+	LUTStandard
+)
+
 // ReadOption configures Dataset Pixel Data extraction.
 type ReadOption func(*readConfig)
 

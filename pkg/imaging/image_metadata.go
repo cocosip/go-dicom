@@ -158,6 +158,16 @@ func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool
 	voiDescriptorSigned bool,
 	err error,
 ) {
+	return imageModalityTransformWithLUTMode(primary, fallback, pixelSigned, minInput, maxInput, pixeldata.LUTCompatible)
+}
+
+func imageModalityTransformWithLUTMode(primary, fallback *dataset.Dataset, pixelSigned bool, minInput, maxInput float64, lutVRMode pixeldata.LUTVRMode) (
+	modalityLUT lut.LUT,
+	slope float64,
+	intercept float64,
+	voiDescriptorSigned bool,
+	err error,
+) {
 	slope, intercept = 1, 0
 	// Modality attributes are selected as one precedence group. A Functional
 	// Group value must override top-level values, including the other legal
@@ -193,7 +203,7 @@ func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool
 		return nil, 0, 0, false, fmt.Errorf("modality LUT sequence cannot coexist with rescale slope/intercept")
 	}
 	if modalitySource != nil {
-		modalityLUT, err = pixeldata.ModalityLUT(modalitySource, pixelSigned)
+		modalityLUT, err = pixeldata.ModalityLUTWithVRMode(modalitySource, pixelSigned, lutVRMode)
 		if err != nil {
 			return nil, 0, 0, false, err
 		}

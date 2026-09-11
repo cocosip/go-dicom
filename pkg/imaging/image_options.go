@@ -6,6 +6,7 @@ package imaging
 import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 type dicomImageConfig struct {
@@ -13,6 +14,7 @@ type dicomImageConfig struct {
 	codecParameters   codec.Parameters
 	windowIndex       int
 	voiLUTIndex       int
+	lutVRMode         pixeldata.LUTVRMode
 	presentationState *dataset.Dataset
 }
 
@@ -37,6 +39,14 @@ func WithWindowIndex(index int) DicomImageOption {
 func WithVOILUTIndex(index int) DicomImageOption {
 	return func(config *dicomImageConfig) {
 		config.voiLUTIndex = index
+	}
+}
+
+// WithLUTVRMode selects compatibility or strict DICOM LUT Data VR handling
+// during image rendering. The default is LUTCompatible for interoperability.
+func WithLUTVRMode(mode pixeldata.LUTVRMode) DicomImageOption {
+	return func(config *dicomImageConfig) {
+		config.lutVRMode = mode
 	}
 }
 

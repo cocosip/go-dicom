@@ -4,6 +4,7 @@
 package pixeldata
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -31,11 +32,24 @@ func DatasetValueRange(ds *dataset.Dataset) (float64, float64, error) {
 
 // VOILUT reads the first VOI LUT Sequence item from ds.
 func VOILUT(ds *dataset.Dataset, signed bool) (lut.LUT, error) {
-	return VOILUTAt(ds, signed, 0)
+	return VOILUTWithVRMode(ds, signed, LUTCompatible)
+}
+
+// VOILUTWithVRMode reads the first VOI LUT item using the requested VR policy.
+func VOILUTWithVRMode(ds *dataset.Dataset, signed bool, mode LUTVRMode) (lut.LUT, error) {
+	return VOILUTAtWithVRMode(ds, signed, 0, mode)
 }
 
 // VOILUTAt reads one VOI LUT Sequence item from ds.
 func VOILUTAt(ds *dataset.Dataset, signed bool, index int) (lut.LUT, error) {
+	return VOILUTAtWithVRMode(ds, signed, index, LUTCompatible)
+}
+
+// VOILUTAtWithVRMode reads one VOI LUT item using the requested VR policy.
+func VOILUTAtWithVRMode(ds *dataset.Dataset, signed bool, index int, mode LUTVRMode) (lut.LUT, error) {
+	if mode != LUTCompatible && mode != LUTStandard {
+		return nil, fmt.Errorf("unsupported LUT VR mode: %d", mode)
+	}
 	sequence, err := ds.GetSequence(tag.VOILUTSequence)
 	if err != nil || sequence.Count() == 0 {
 		return nil, fmt.Errorf("VOI LUT Sequence is missing or empty")
@@ -54,7 +68,7 @@ func VOILUTAt(ds *dataset.Dataset, signed bool, index int) (lut.LUT, error) {
 	if err := validateImageVOILUTDescriptor(descriptor); err != nil {
 		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
 	}
-	values, err := dicomlut.ReadData(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds))
+	values, err := readLUTData(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds), mode)
 	if err != nil {
 		return nil, fmt.Errorf("read VOI LUT Data: %w", err)
 	}
@@ -65,17 +79,31 @@ func VOILUTAt(ds *dataset.Dataset, signed bool, index int) (lut.LUT, error) {
 
 // VOILUTFrom reads a VOI LUT from primary or falls back to fallback.
 func VOILUTFrom(primary, fallback *dataset.Dataset, signed bool, index int) (lut.LUT, error) {
+	return VOILUTFromWithVRMode(primary, fallback, signed, index, LUTCompatible)
+}
+
+// VOILUTFromWithVRMode reads a VOI LUT from primary or fallback using the
+// requested LUT Data VR policy.
+func VOILUTFromWithVRMode(primary, fallback *dataset.Dataset, signed bool, index int, mode LUTVRMode) (lut.LUT, error) {
 	if primary != nil && primary.Contains(tag.VOILUTSequence) {
-		return VOILUTAt(primary, signed, index)
+		return VOILUTAtWithVRMode(primary, signed, index, mode)
 	}
 	if fallback != nil && fallback.Contains(tag.VOILUTSequence) {
-		return VOILUTAt(fallback, signed, index)
+		return VOILUTAtWithVRMode(fallback, signed, index, mode)
 	}
 	return nil, fmt.Errorf("VOI LUT Sequence is missing")
 }
 
 // ModalityLUT reads the single Modality LUT Sequence item from ds.
 func ModalityLUT(ds *dataset.Dataset, signed bool) (lut.LUT, error) {
+	return ModalityLUTWithVRMode(ds, signed, LUTCompatible)
+}
+
+// ModalityLUTWithVRMode reads a Modality LUT using the requested VR policy.
+func ModalityLUTWithVRMode(ds *dataset.Dataset, signed bool, mode LUTVRMode) (lut.LUT, error) {
+	if mode != LUTCompatible && mode != LUTStandard {
+		return nil, fmt.Errorf("unsupported LUT VR mode: %d", mode)
+	}
 	sequence, err := ds.GetSequence(tag.ModalityLUTSequence)
 	if err != nil {
 		return nil, fmt.Errorf("modality LUT Sequence is missing: %w", err)
@@ -94,7 +122,7 @@ func ModalityLUT(ds *dataset.Dataset, signed bool) (lut.LUT, error) {
 	if descriptor.BitsPerEntry != 8 && descriptor.BitsPerEntry != 16 {
 		return nil, fmt.Errorf("read Modality LUT descriptor: bits per entry must be 8 or 16, got %d", descriptor.BitsPerEntry)
 	}
-	entries, err := dicomlut.ReadData(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds))
+	entries, err := readLUTData(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds), mode)
 	if err != nil {
 		return nil, fmt.Errorf("read Modality LUT Data: %w", err)
 	}
@@ -103,6 +131,13 @@ func ModalityLUT(ds *dataset.Dataset, signed bool) (lut.LUT, error) {
 		values[index] = float64(entry)
 	}
 	return lut.NewModalitySequenceLUT(values, descriptor.FirstMappedValue, signed), nil
+}
+
+func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor dicomlut.Descriptor, byteOrder binary.ByteOrder, mode LUTVRMode) ([]uint16, error) {
+	if mode == LUTStandard {
+		return dicomlut.ReadDataStrict(ds, dataTag, descriptor, byteOrder)
+	}
+	return dicomlut.ReadData(ds, dataTag, descriptor, byteOrder)
 }
 
 // applyVOILUT applies VOI LUT Sequence and maps its declared output range to 8-bit.
