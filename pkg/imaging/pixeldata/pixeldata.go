@@ -18,6 +18,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 	"github.com/cocosip/go-dicom/pkg/imaging/internal/dicomlut"
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
@@ -628,10 +629,61 @@ func (pd *Data) MaskPadding() (frames [][]byte, masks [][]bool, err error) {
 
 // WindowOrLUTTo8bit applies VOI LUT if present, otherwise window.
 func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ignorePadding bool) ([][]byte, error) {
-	if ds != nil && ds.Contains(tag.VOILUTSequence) {
-		return applyVOILUT(pd, ds, center, width, ignorePadding)
+	modality, err := modalityTransformForDataset(ds, pd)
+	if err != nil {
+		return nil, err
 	}
-	return applyWindowTo8bit(pd, center, width, ignorePadding)
+	if ds != nil && ds.Contains(tag.VOILUTSequence) {
+		return applyVOILUTWithModality(pd, ds, center, width, ignorePadding, modality)
+	}
+	return applyWindowTo8bitWithModality(pd, center, width, ignorePadding, modality)
+}
+
+func modalityTransformForDataset(ds *dataset.Dataset, pd *Data) (lut.LUT, error) {
+	if ds == nil {
+		return nil, nil
+	}
+	signed := pd != nil && pd.Info != nil && pd.Info.PixelRepresentation == pixel.SignedPixels
+	if ds.Contains(tag.ModalityLUTSequence) {
+		if ds.Contains(tag.RescaleSlope) || ds.Contains(tag.RescaleIntercept) {
+			return nil, fmt.Errorf("modality LUT sequence cannot coexist with rescale slope/intercept")
+		}
+		return ModalityLUT(ds, signed)
+	}
+	hasSlope, hasIntercept := ds.Contains(tag.RescaleSlope), ds.Contains(tag.RescaleIntercept)
+	if !hasSlope && !hasIntercept {
+		return nil, nil
+	}
+	if !hasSlope || !hasIntercept {
+		return nil, fmt.Errorf("rescale slope and rescale intercept must be present together")
+	}
+	readDecimal := func(t *tag.Tag, name string) (float64, error) {
+		elem, exists := ds.Get(t)
+		if !exists {
+			return 0, fmt.Errorf("read %s: value is missing", name)
+		}
+		decimal, ok := elem.(*element.DecimalString)
+		if !ok {
+			return 0, fmt.Errorf("read %s: element has VR %s, want DS", name, elem.ValueRepresentation())
+		}
+		value, err := decimal.GetFloat(0)
+		if err != nil {
+			return 0, fmt.Errorf("read %s: %w", name, err)
+		}
+		return value, nil
+	}
+	slope, err := readDecimal(tag.RescaleSlope, "Rescale Slope")
+	if err != nil {
+		return nil, err
+	}
+	intercept, err := readDecimal(tag.RescaleIntercept, "Rescale Intercept")
+	if err != nil {
+		return nil, err
+	}
+	if slope == 0 {
+		return nil, fmt.Errorf("rescale slope must not be zero")
+	}
+	return lut.NewModalityRescaleLUT(slope, intercept, math.NaN(), math.NaN()), nil
 }
 
 // ToElement builds a DICOM pixel data element (OB/OW or encapsulated fragment) from the current frames.
@@ -653,6 +705,11 @@ func (pd *Data) ToElement() (element.Element, error) {
 	}
 
 	if nativePixelDataVR(pd.Info) == "OW" {
+		// Frames are normalized to little-endian internally. Restore the
+		// requested native transfer syntax when materializing the element.
+		if pd.Info.TransferSyntaxUID == transfer.ExplicitVRBigEndian.UID().UID() {
+			all = swapPixelDataBytes(all, pd.Info)
+		}
 		return element.NewOtherWord(tag.PixelData, all), nil
 	}
 	return element.NewOtherByte(tag.PixelData, all), nil
@@ -969,9 +1026,6 @@ func FromDataset(ds *dataset.Dataset) (*Data, error) {
 		data := elem.GetData()
 		if len(data) == 0 {
 			return nil, fmt.Errorf("pixel data is empty")
-		}
-		if ts := ds.InternalTransferSyntax(); ts != nil && ts.SwapPixelData() {
-			data = swapPixelDataBytes(data, info)
 		}
 		pd, err = NewFromBytes(info, data)
 		if err != nil {

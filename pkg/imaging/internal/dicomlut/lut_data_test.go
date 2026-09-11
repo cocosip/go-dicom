@@ -99,3 +99,23 @@ func TestReadLUTDataRejectsValuesOutsideDeclaredRange(t *testing.T) {
 		})
 	}
 }
+
+func TestReadLUTDataRejectsSignedShortVR(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewSignedShort(tag.LUTData, []int16{1})); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+	if _, err := ReadData(ds, tag.LUTData, Descriptor{EntryCount: 1, BitsPerEntry: 16}, binary.LittleEndian); err == nil {
+		t.Fatal("ReadData() accepted LUT Data with non-standard SS VR")
+	}
+}
+
+func TestReadLUTDataStrictRejectsOtherByteVR(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewOtherByte(tag.LUTData, []byte{1})); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+	if _, err := ReadDataStrict(ds, tag.LUTData, Descriptor{EntryCount: 1, BitsPerEntry: 8}, binary.LittleEndian); err == nil {
+		t.Fatal("ReadDataStrict() accepted LUT Data with non-standard OB VR")
+	}
+}

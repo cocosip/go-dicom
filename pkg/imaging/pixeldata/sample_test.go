@@ -4,11 +4,13 @@
 package pixeldata
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"strings"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 )
@@ -77,6 +79,36 @@ func TestDataSampleNormalizesBigEndianInput(t *testing.T) {
 	}
 	if got != 0x1234 {
 		t.Fatalf("Sample() = %#x, want 0x1234", got)
+	}
+}
+
+func TestDataToElementRestoresBigEndianPixelBytes(t *testing.T) {
+	info := grayscaleSampleInfo(16, 16, 15, pixel.UnsignedPixels)
+	info.TransferSyntaxUID = transfer.ExplicitVRBigEndian.UID().UID()
+	pixels, err := NewFromBytes(&info, []byte{0x12, 0x34})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+
+	elem, err := pixels.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+	word, ok := elem.(*element.OtherWord)
+	if !ok {
+		t.Fatalf("ToElement() = %T, want *element.OtherWord", elem)
+	}
+	if got := word.GetData(); !bytes.Equal(got, []byte{0x12, 0x34}) {
+		t.Fatalf("ToElement() bytes = %x, want 1234", got)
+	}
+}
+
+func TestSwapPixelDataBytesUsesNativeSampleWidthForThirtyTwoBitOW(t *testing.T) {
+	info := grayscaleSampleInfo(32, 32, 31, pixel.UnsignedPixels)
+	got := swapPixelDataBytes([]byte{0x11, 0x22, 0x33, 0x44}, &info)
+	want := []byte{0x44, 0x33, 0x22, 0x11}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("swapPixelDataBytes() = %x, want %x", got, want)
 	}
 }
 

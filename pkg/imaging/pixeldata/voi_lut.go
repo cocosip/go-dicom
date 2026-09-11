@@ -103,13 +103,19 @@ func ModalityLUT(ds *dataset.Dataset, signed bool) (lut.LUT, error) {
 }
 
 // applyVOILUT applies VOI LUT Sequence and maps its declared output range to 8-bit.
+//
+//nolint:unparam // Keep the legacy helper signature used by package-level tests and callers.
 func applyVOILUT(pd *Data, ds *dataset.Dataset, _, _ float64, ignorePadding bool) ([][]byte, error) {
+	return applyVOILUTWithModality(pd, ds, 0, 0, ignorePadding, nil)
+}
+
+func applyVOILUTWithModality(pd *Data, ds *dataset.Dataset, _, _ float64, ignorePadding bool, modality lut.LUT) ([][]byte, error) {
 	signed := pd != nil && pd.Info != nil && pd.Info.PixelRepresentation == pixel.SignedPixels
 	table, err := VOILUT(ds, signed)
 	if err != nil {
 		return nil, err
 	}
-	return mapThroughLUT(pd, table, ignorePadding)
+	return mapThroughLUTWithModality(pd, table, ignorePadding, modality)
 }
 
 // voiTableLUT adapts VOI LUT Data to the shared LUT interface.
@@ -200,7 +206,7 @@ func scaledVOITable(table *voiTableLUT, minimum, maximum float64) lut.LUT {
 	return composite
 }
 
-func mapThroughLUT(pd *Data, table lut.LUT, ignorePadding bool) ([][]byte, error) {
+func mapThroughLUTWithModality(pd *Data, table lut.LUT, ignorePadding bool, modality lut.LUT) ([][]byte, error) {
 	if pd.Info == nil {
 		return nil, fmt.Errorf("pixel data info is nil")
 	}
@@ -240,7 +246,11 @@ func mapThroughLUT(pd *Data, table lut.LUT, ignorePadding bool) ([][]byte, error
 				continue
 			}
 
-			mapped := table.Transform(float64(val))
+			modalityValue := float64(val)
+			if modality != nil {
+				modalityValue = modality.Transform(modalityValue)
+			}
+			mapped := table.Transform(modalityValue)
 			out[idx] = clampByte(int(mapped + 0.5))
 		}
 

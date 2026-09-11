@@ -79,6 +79,9 @@ func swapPixelDataBytes(data []byte, info *Info) []byte {
 	}
 	out := make([]byte, len(data))
 	copy(out, data)
+	// OW values use the native sample width for byte ordering. A 32-bit
+	// sample is therefore reversed as one value, while 16-bit data swaps one
+	// word at a time.
 	for offset := 0; offset+bytesPerSample <= len(out); offset += bytesPerSample {
 		for left, right := offset, offset+bytesPerSample-1; left < right; left, right = left+1, right-1 {
 			out[left], out[right] = out[right], out[left]

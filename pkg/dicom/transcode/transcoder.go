@@ -339,17 +339,27 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ds *dataset.Dataset) (*
 		return nil, fmt.Errorf("unexpected pixel data element type for uncompressed data")
 	}
 
-	// OW is always a sequence of 16-bit words, including native Pixel Data
-	// whose Bits Allocated is 8 or less. OB is handled above and never swapped.
-	if len(pixelData)%2 != 0 {
-		return nil, fmt.Errorf("pixel data length is not even for OW data")
+	// OW byte order follows the native sample width. An 8-bit sample carried
+	// in OW still uses 16-bit words; 32-bit samples are swapped as one value.
+	bitsAllocated, _ := ds.GetUInt16(tag.BitsAllocated, 0)
+	bytesPerSample := 2
+	if bitsAllocated > 8 {
+		bytesPerSample = int((bitsAllocated-1)/8 + 1)
+	}
+	if bytesPerSample != 2 && bytesPerSample != 4 {
+		return nil, fmt.Errorf("unsupported OW Bits Allocated=%d", bitsAllocated)
+	}
+	if len(pixelData)%bytesPerSample != 0 {
+		return nil, fmt.Errorf("pixel data length is not aligned to %d-byte OW samples", bytesPerSample)
 	}
 
 	convertedData := make([]byte, len(pixelData))
-	for i := 0; i < len(pixelData); i += 2 {
+	for i := 0; i < len(pixelData); i += bytesPerSample {
 		// Swap bytes
-		convertedData[i] = pixelData[i+1]
-		convertedData[i+1] = pixelData[i]
+		for left, right := i, i+bytesPerSample-1; left < right; left, right = left+1, right-1 {
+			convertedData[left] = pixelData[right]
+			convertedData[right] = pixelData[left]
+		}
 	}
 
 	// Create new dataset with converted pixel data

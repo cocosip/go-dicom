@@ -5,6 +5,7 @@ package pixeldata
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
@@ -12,14 +13,18 @@ import (
 
 // applyWindowTo8bit maps pixel data to 8-bit frames using a VOI window.
 func applyWindowTo8bit(pd *Data, center, width float64, ignorePadding bool) ([][]byte, error) {
+	return applyWindowTo8bitWithModality(pd, center, width, ignorePadding, nil)
+}
+
+func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePadding bool, modality lut.LUT) ([][]byte, error) {
 	if pd.Info == nil {
 		return nil, fmt.Errorf("pixel data info is nil")
 	}
 	if pd.Info.Encapsulated {
 		return nil, fmt.Errorf("cannot apply window on encapsulated data; decode first")
 	}
-	if width < 1 {
-		width = 1
+	if width < 1 || math.IsNaN(width) || math.IsInf(width, 0) {
+		return nil, fmt.Errorf("window width must be finite and at least 1, got %v", width)
 	}
 
 	bytesPerSample := pd.Info.BytesAllocated()
@@ -73,7 +78,18 @@ func applyWindowTo8bit(pd *Data, center, width float64, ignorePadding bool) ([][
 				continue
 			}
 
-			mapped := precalc.Transform(float64(val))
+			modalityValue := float64(val)
+			if modality != nil {
+				modalityValue = modality.Transform(modalityValue)
+			}
+			mapped := float64(0)
+			if modality != nil {
+				// The precomputed table is indexed in stored-value space; a
+				// rescale can shift or reverse that domain, so transform directly.
+				mapped = voiLUT.Transform(modalityValue)
+			} else {
+				mapped = precalc.Transform(modalityValue)
+			}
 			out[idx] = clampByte(int(mapped + 0.5))
 		}
 

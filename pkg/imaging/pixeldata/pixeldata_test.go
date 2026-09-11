@@ -1898,6 +1898,112 @@ func TestDataToElementPreservesLegalNativeEightBitWordVR(t *testing.T) {
 	}
 }
 
+func TestWindowOrLUTTo8bitAppliesRescaleBeforeWindow(t *testing.T) {
+	info := &Info{
+		Width: 1, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 16, BitsStored: 16, HighBit: 15,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+	}
+	pd, err := NewFromBytes(info, []byte{50, 0})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	ds := dataset.New()
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{2})); err != nil {
+		t.Fatalf("add RescaleSlope: %v", err)
+	}
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{0})); err != nil {
+		t.Fatalf("add RescaleIntercept: %v", err)
+	}
+
+	frames, err := pd.WindowOrLUTTo8bit(ds, 100, 100, false)
+	if err != nil {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+	}
+	if got := frames[0][0]; got < 127 || got > 129 {
+		t.Fatalf("rescaled sample mapped to %d, want approximately 128", got)
+	}
+}
+
+func TestWindowOrLUTTo8bitRejectsNonPositiveWindowWidth(t *testing.T) {
+	info := &Info{
+		Width: 1, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+	}
+	pd, err := NewFromBytes(info, []byte{1})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	if _, err := pd.WindowOrLUTTo8bit(nil, 0, 0, false); err == nil {
+		t.Fatal("WindowOrLUTTo8bit() accepted a non-positive window width")
+	}
+}
+
+func TestFromDatasetNormalizesBigEndianPixelDataOnce(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherWord(tag.PixelData, []byte{0x12, 0x34}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	pd, err := FromDataset(ds)
+	if err != nil {
+		t.Fatalf("FromDataset() error = %v", err)
+	}
+	got, err := pd.Sample(0, 0, 0, 0)
+	if err != nil {
+		t.Fatalf("Sample() error = %v", err)
+	}
+	if got != 0x1234 {
+		t.Fatalf("Sample() = %#x, want 0x1234", got)
+	}
+}
+
+func TestFromDatasetToleratesNativeOBForSixteenBitPixelDataAndNormalizesOnWrite(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x34, 0x12}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	pd, err := FromDataset(ds)
+	if err != nil {
+		t.Fatalf("FromDataset() error = %v", err)
+	}
+	elem, err := pd.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+	if _, ok := elem.(*element.OtherWord); !ok {
+		t.Fatalf("ToElement() = %T, want *element.OtherWord", elem)
+	}
+}
+
 // TestData_ToElement_VRSelection tests that ToElement correctly chooses
 // OB vs OW based on BitsAllocated for both encapsulated and native formats.
 func TestData_ToElement_VRSelection(t *testing.T) {

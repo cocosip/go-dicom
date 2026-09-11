@@ -563,6 +563,46 @@ func TestTranscoderDecodeParsesStringNumberOfFrames(t *testing.T) {
 	}
 }
 
+func TestTranscoderDecodeAcceptsEncapsulatedOWPixelData(t *testing.T) {
+	ds := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+	owf := element.NewOtherWordFragment(tag.PixelData)
+	owf.AddFragment(buffer.NewMemory([]byte{0x34, 0x12}))
+	if err := ds.Add(owf); err != nil {
+		t.Fatalf("add PixelData: %v", err)
+	}
+
+	transcoder := newTestTranscoder(t, transfer.JPEG2000Lossless, transfer.ExplicitVRLittleEndian, echoDecodeCodec{})
+	decoded, err := transcoder.decode(context.Background(), ds, transfer.ExplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("decode() error = %v", err)
+	}
+	elem, ok := decoded.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("decoded PixelData not found")
+	}
+	word, ok := elem.(*element.OtherWord)
+	if !ok {
+		t.Fatalf("decoded PixelData = %T, want *element.OtherWord", elem)
+	}
+	if got := word.GetData(); !bytes.Equal(got, []byte{0x34, 0x12}) {
+		t.Fatalf("decoded PixelData bytes = %x, want 3412", got)
+	}
+}
+
 func TestTranscoderDecodeFrameLoadsOnlyRequestedBOTFragments(t *testing.T) {
 	ds := dataset.New()
 	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{1}))

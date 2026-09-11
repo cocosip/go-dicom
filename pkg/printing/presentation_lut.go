@@ -11,6 +11,8 @@ const (
 	PresentationLUTShapeIdentity PresentationLUTShape = "IDENTITY"
 	// PresentationLUTShapeLinOD - LIN OD (Linear Optical Density) shape
 	PresentationLUTShapeLinOD PresentationLUTShape = "LIN OD"
+	// PresentationLUTShapeInverse - INVERSE shape
+	PresentationLUTShapeInverse PresentationLUTShape = "INVERSE"
 )
 
 // PresentationLUT represents a Presentation LUT Information Object
@@ -36,7 +38,7 @@ type PresentationLUT struct {
 	LUTData []uint16
 
 	// PresentationLUTShape specifies the shape of the Presentation LUT
-	// Enumerated values: 'IDENTITY' or 'LIN OD'
+	// Enumerated values: 'IDENTITY', 'INVERSE' or 'LIN OD'
 	PresentationLUTShape PresentationLUTShape
 }
 
@@ -94,6 +96,7 @@ func (p *PresentationLUT) IsValid() bool {
 	hasLUT := len(p.LUTDescriptor) != 0 || len(p.LUTData) != 0
 	if hasShape {
 		return !hasLUT && (p.PresentationLUTShape == PresentationLUTShapeIdentity ||
+			p.PresentationLUTShape == PresentationLUTShapeInverse ||
 			p.PresentationLUTShape == PresentationLUTShapeLinOD)
 	}
 	if !hasLUT {
@@ -137,6 +140,9 @@ func (p *PresentationLUT) IsValid() bool {
 // TransformValue applies the LUT transformation to an input value
 func (p *PresentationLUT) TransformValue(inputValue uint16) uint16 {
 	if len(p.LUTData) == 0 || len(p.LUTDescriptor) != 3 {
+		if p.PresentationLUTShape == PresentationLUTShapeInverse {
+			return ^inputValue
+		}
 		return inputValue
 	}
 

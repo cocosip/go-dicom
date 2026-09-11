@@ -104,8 +104,19 @@ func ReadDescriptor(ds *dataset.Dataset, descriptorTag *tag.Tag, signedFirstMapp
 	}, nil
 }
 
-// ReadData reads LUT entries according to a normalized descriptor.
+// ReadData reads LUT entries using the legacy-compatible VR policy. OtherByte
+// is accepted for interoperability with older producers; standard callers can
+// use ReadDataStrict.
 func ReadData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor Descriptor, byteOrder binary.ByteOrder) ([]uint16, error) {
+	return readData(ds, dataTag, descriptor, byteOrder, true)
+}
+
+// ReadDataStrict reads LUT entries and enforces the DICOM LUT Data VR of US or OW.
+func ReadDataStrict(ds *dataset.Dataset, dataTag *tag.Tag, descriptor Descriptor, byteOrder binary.ByteOrder) ([]uint16, error) {
+	return readData(ds, dataTag, descriptor, byteOrder, false)
+}
+
+func readData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor Descriptor, byteOrder binary.ByteOrder, allowOtherByte bool) ([]uint16, error) {
 	elem, ok := ds.Get(dataTag)
 	if !ok {
 		return nil, fmt.Errorf("element %s not found", dataTag)
@@ -115,6 +126,9 @@ func ReadData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor Descriptor, byte
 
 	switch value := elem.(type) {
 	case *element.OtherByte:
+		if !allowOtherByte {
+			return nil, fmt.Errorf("element %s has non-standard LUT Data VR OB; expected US or OW", dataTag)
+		}
 		if descriptor.BitsPerEntry <= 8 {
 			entries, err := readCompactLUTBytes(value.GetData(), dataTag, descriptor)
 			return validateLUTDataRange(entries, dataTag, descriptor, err)
@@ -139,20 +153,7 @@ func ReadData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor Descriptor, byte
 			values = append(values, entry)
 		}
 	case *element.SignedShort:
-		entries, err := value.GetValues()
-		if err != nil {
-			return nil, err
-		}
-		if len(entries) != descriptor.EntryCount {
-			return nil, fmt.Errorf("element %s has %d entries, want %d", dataTag, len(entries), descriptor.EntryCount)
-		}
-		for _, entry := range entries[:descriptor.EntryCount] {
-			word := uint16(entry)
-			if descriptor.BitsPerEntry <= 8 {
-				word &= 0x00ff
-			}
-			values = append(values, word)
-		}
+		return nil, fmt.Errorf("element %s has non-standard LUT Data VR SS; expected US or OW", dataTag)
 	default:
 		return nil, fmt.Errorf("unsupported LUT Data element %T", elem)
 	}
