@@ -359,6 +359,86 @@ func TestRegisterAndQuery(t *testing.T) {
 	}
 }
 
+func TestRegisteredSyntaxRejectsParseAndPreservesIdentity(t *testing.T) {
+	const registeredUID = "1.2.3.4.5.62"
+	registry := transfer.NewRegistry()
+	syntax := transfer.NewBuilder(uid.New(registeredUID, "Registered", uid.TypeTransferSyntax, false)).
+		SetExplicitVR(true).
+		Build()
+	if err := registry.Register(syntax); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	if err := syntax.Parse(transfer.ImplicitVRLittleEndian.UID().UID()); err == nil {
+		t.Fatal("Parse() on a registered syntax succeeded")
+	}
+	lookupUID := uid.New(registeredUID, "Lookup", uid.TypeTransferSyntax, false)
+	if got := registry.Query(lookupUID); got != syntax {
+		t.Fatalf("Query() = %v, want registered pointer", got)
+	}
+}
+
+func TestRegisteredSyntaxDetachesUIDAliases(t *testing.T) {
+	const (
+		registeredUID = "1.2.3.4.5.63"
+		changedUID    = "1.2.3.4.5.64"
+	)
+	registry := transfer.NewRegistry()
+	sourceUID := uid.New(registeredUID, "Registered", uid.TypeTransferSyntax, false)
+	syntax := transfer.NewBuilder(sourceUID).SetExplicitVR(true).Build()
+	exposedUID := syntax.UID()
+	if err := registry.Register(syntax); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	if err := sourceUID.Parse(changedUID); err != nil {
+		t.Fatalf("Parse() on caller-owned source UID error = %v", err)
+	}
+	if err := exposedUID.Parse(changedUID); err != nil {
+		t.Fatalf("Parse() on pre-registration UID alias error = %v", err)
+	}
+	returnedUID := syntax.UID()
+	if err := returnedUID.Parse(changedUID); err != nil {
+		t.Fatalf("Parse() on returned UID snapshot error = %v", err)
+	}
+
+	lookupUID := uid.New(registeredUID, "Lookup", uid.TypeTransferSyntax, false)
+	if got := registry.Query(lookupUID); got != syntax {
+		t.Fatalf("Query(original) = %v, want registered pointer", got)
+	}
+	if syntax.UID().UID() != registeredUID {
+		t.Fatalf("registered syntax UID changed to %q", syntax.UID().UID())
+	}
+	if got := registry.Query(uid.New(changedUID, "Changed", uid.TypeTransferSyntax, false)); got != nil {
+		t.Fatalf("Query(changed) = %v, want nil", got)
+	}
+}
+
+func TestRegisteredSyntaxBuilderUsesCopyOnWrite(t *testing.T) {
+	const registeredUID = "1.2.3.4.5.65"
+	registry := transfer.NewRegistry()
+	builder := transfer.NewBuilder(uid.New(registeredUID, "Registered", uid.TypeTransferSyntax, false)).
+		SetExplicitVR(false)
+	registered := builder.Build()
+	if err := registry.Register(registered); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	modified := builder.SetExplicitVR(true).Build()
+	if modified == registered {
+		t.Fatal("Builder modified the registered syntax in place")
+	}
+	if registered.IsExplicitVR() {
+		t.Fatal("registered syntax changed through reused Builder")
+	}
+	if !modified.IsExplicitVR() {
+		t.Fatal("Builder did not apply the requested change to its new syntax")
+	}
+	if got := registry.Query(uid.New(registeredUID, "Lookup", uid.TypeTransferSyntax, false)); got != registered {
+		t.Fatalf("Query() = %v, want original registered pointer", got)
+	}
+}
+
 func TestList(t *testing.T) {
 	registry := transfer.NewRegistry()
 	entries := registry.List()

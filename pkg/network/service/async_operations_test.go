@@ -266,6 +266,115 @@ func TestSendCFindContextCancellationEmitsOneTerminalEvent(t *testing.T) {
 	assertSingleTerminalEvent(t, events, context.Canceled)
 }
 
+func TestSendCFindReleasesResourcesBeforeBlockedTerminalEvent(t *testing.T) {
+	service := newAsyncOperationsTestService(t, 1)
+	drainSuccessfulSends(service)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	events, err := service.SendCFind(ctx, request)
+	if err != nil {
+		t.Fatalf("SendCFind() error = %v", err)
+	}
+
+	for range cap(events) {
+		response := dimse.NewCFindResponseFromRequest(request, status.CFindPending, dataset.New())
+		if err := service.handleResponse(response); err != nil {
+			t.Fatalf("pending handleResponse() error = %v", err)
+		}
+	}
+	waitForResponseEventBuffer(t, events, cap(events))
+	cancel()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		service.pendingRequestsMu.RLock()
+		_, pending := service.pendingRequests[request.MessageID()]
+		service.pendingRequestsMu.RUnlock()
+		if !pending {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("cancelled request remained registered while terminal event delivery was blocked")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	slotCtx, cancelSlot := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	release, err := service.acquireAsyncOperation(slotCtx)
+	cancelSlot()
+	if err != nil {
+		t.Fatalf("acquireAsyncOperation() after cancellation error = %v", err)
+	}
+	release()
+
+	for range cap(events) {
+		event := receiveResponseEvent(t, events)
+		if event.Response == nil || !event.Response.IsPending() {
+			t.Fatalf("buffered event = %#v, want pending C-FIND response", event)
+		}
+	}
+	assertSingleTerminalEvent(t, events, context.Canceled)
+}
+
+func TestSendCFindReleasesResourcesBeforeBlockedFinalResponse(t *testing.T) {
+	service := newAsyncOperationsTestService(t, 1)
+	drainSuccessfulSends(service)
+
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	events, err := service.SendCFind(context.Background(), request)
+	if err != nil {
+		t.Fatalf("SendCFind() error = %v", err)
+	}
+
+	for range cap(events) {
+		response := dimse.NewCFindResponseFromRequest(request, status.CFindPending, dataset.New())
+		if err := service.handleResponse(response); err != nil {
+			t.Fatalf("pending handleResponse() error = %v", err)
+		}
+	}
+	waitForResponseEventBuffer(t, events, cap(events))
+	if err := service.handleResponse(dimse.NewCFindResponseFromRequest(request, status.Success, nil)); err != nil {
+		t.Fatalf("final handleResponse() error = %v", err)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		service.pendingRequestsMu.RLock()
+		_, pending := service.pendingRequests[request.MessageID()]
+		service.pendingRequestsMu.RUnlock()
+		if !pending {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("completed request remained registered while final response delivery was blocked")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	slotCtx, cancelSlot := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	release, err := service.acquireAsyncOperation(slotCtx)
+	cancelSlot()
+	if err != nil {
+		t.Fatalf("acquireAsyncOperation() after final response error = %v", err)
+	}
+	release()
+
+	for range cap(events) {
+		event := receiveResponseEvent(t, events)
+		if event.Response == nil || !event.Response.IsPending() {
+			t.Fatalf("buffered event = %#v, want pending C-FIND response", event)
+		}
+	}
+	final := receiveResponseEvent(t, events)
+	if final.Response == nil || final.Response.IsPending() || final.Response.StatusCode() != status.Success.Code {
+		t.Fatalf("final event = %#v, want successful final C-FIND response", final)
+	}
+	if _, ok := <-events; ok {
+		t.Fatal("C-FIND event channel remained open after final response")
+	}
+}
+
 func TestSendCFindServiceCloseEmitsOneTerminalEvent(t *testing.T) {
 	service := NewService(nil, createTestAssociation())
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -350,6 +459,17 @@ func receiveResponseEvent[T testProgressResponse](t *testing.T, events <-chan Re
 	}
 	var zero ResponseEvent[T]
 	return zero
+}
+
+func waitForResponseEventBuffer[T testProgressResponse](t *testing.T, events <-chan ResponseEvent[T], want int) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for len(events) != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("response event buffer length = %d, want %d", len(events), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func assertResponseEvent[T testProgressResponse](t *testing.T, event ResponseEvent[T]) {

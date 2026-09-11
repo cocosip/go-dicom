@@ -272,6 +272,46 @@ func TestRegistryOverlayMaskAndIsolation(t *testing.T) {
 	}
 }
 
+func TestRegistryPublishedUIDCannotChangeKey(t *testing.T) {
+	const (
+		registeredUID = "1.2.3.4.5.60"
+		changedUID    = "1.2.3.4.5.61"
+	)
+	registry := uid.NewRegistry()
+	custom := uid.New(registeredUID, "Registered", uid.TypeSOPClass, false)
+	if err := registry.Register(custom); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if got, found := registry.Resolve(registeredUID); !found || got != custom {
+		t.Fatalf("Resolve() = %v, %v, want registered pointer", got, found)
+	}
+
+	if err := custom.Parse(changedUID); err == nil {
+		t.Fatal("Parse() on a registered UID succeeded")
+	}
+	if custom.UID() != registeredUID {
+		t.Fatalf("registered UID changed to %q", custom.UID())
+	}
+	if got, found := registry.Resolve(registeredUID); !found || got != custom {
+		t.Fatalf("Resolve(original) = %v, %v, want registered pointer", got, found)
+	}
+	if got, found := registry.Resolve(changedUID); found || got != nil {
+		t.Fatalf("Resolve(changed) = %v, %v, want not found", got, found)
+	}
+
+	replacement := uid.New(registeredUID, "Replacement", uid.TypeSOPClass, false)
+	previous, err := registry.Replace(replacement)
+	if err != nil || previous != custom {
+		t.Fatalf("Replace() = %v, %v, want original pointer", previous, err)
+	}
+	if err := replacement.Parse(changedUID); err == nil {
+		t.Fatal("Parse() on a replacement UID succeeded")
+	}
+	if got, found := registry.Resolve(registeredUID); !found || got != replacement {
+		t.Fatalf("Resolve() after Replace = %v, %v, want replacement pointer", got, found)
+	}
+}
+
 func TestRegistryConcurrentAccess(t *testing.T) {
 	registry := uid.NewRegistry()
 	custom := uid.New("1.2.3.4.8", "Concurrent UID", uid.TypeSOPClass, false)

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/parseable"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
@@ -34,6 +35,7 @@ type Syntax struct {
 	isDeflate              bool
 	endian                 endian.Endian
 	swapPixelData          bool
+	published              atomic.Bool
 }
 
 // Registry holds a collection of transfer syntaxes keyed by UID string.
@@ -140,6 +142,12 @@ func New(u *uid.UID) *Syntax {
 
 // UID returns the unique identifier of the transfer syntax.
 func (ts *Syntax) UID() *uid.UID {
+	if ts == nil {
+		return nil
+	}
+	if ts.published.Load() && !isCanonicalUID(ts.uid) {
+		return cloneUID(ts.uid)
+	}
 	return ts.uid
 }
 
@@ -243,14 +251,28 @@ func lookupSyntax(u *uid.UID, query func(*uid.UID) *Syntax) (*Syntax, error) {
 
 // Parse implements parseable.Parseable interface.
 func (ts *Syntax) Parse(s string) error {
+	if ts == nil {
+		return fmt.Errorf("cannot parse transfer syntax into a nil receiver")
+	}
 	if ts != nil && ts.uid != nil && standardTransferSyntaxIndex[ts.uid.UID()] == ts {
 		return fmt.Errorf("cannot modify standard transfer syntax %s", ts.UID().UID())
+	}
+	if ts.published.Load() {
+		return fmt.Errorf("cannot modify registered transfer syntax %s", ts.UID().UID())
 	}
 	parsed, err := Parse(s)
 	if err != nil {
 		return err
 	}
-	*ts = *parsed
+	ts.uid = parsed.uid
+	ts.isRetired = parsed.isRetired
+	ts.isExplicitVR = parsed.isExplicitVR
+	ts.isEncapsulated = parsed.isEncapsulated
+	ts.isLossy = parsed.isLossy
+	ts.lossyCompressionMethod = parsed.lossyCompressionMethod
+	ts.isDeflate = parsed.isDeflate
+	ts.endian = parsed.endian
+	ts.swapPixelData = parsed.swapPixelData
 	return nil
 }
 
@@ -265,6 +287,7 @@ func (r *Registry) Register(ts *Syntax) error {
 	if r.queryLocked(key) != nil {
 		return fmt.Errorf("%w: %s", ErrSyntaxAlreadyRegistered, key)
 	}
+	ts.markPublished()
 	r.overlay[key] = ts
 	delete(r.masked, key)
 	return nil
@@ -279,6 +302,7 @@ func (r *Registry) Replace(ts *Syntax) (*Syntax, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	previous := r.queryLocked(key)
+	ts.markPublished()
 	r.overlay[key] = ts
 	delete(r.masked, key)
 	return previous, nil
@@ -371,9 +395,52 @@ func buildSyntaxIndex(values []*Syntax) map[string]*Syntax {
 	return index
 }
 
+func (ts *Syntax) markPublished() {
+	if ts.published.Load() {
+		return
+	}
+	ts.uid = cloneUID(ts.uid)
+	ts.published.Store(true)
+}
+
+func (ts *Syntax) mutableClone() *Syntax {
+	return &Syntax{
+		uid:                    cloneUID(ts.uid),
+		isRetired:              ts.isRetired,
+		isExplicitVR:           ts.isExplicitVR,
+		isEncapsulated:         ts.isEncapsulated,
+		isLossy:                ts.isLossy,
+		lossyCompressionMethod: ts.lossyCompressionMethod,
+		isDeflate:              ts.isDeflate,
+		endian:                 ts.endian,
+		swapPixelData:          ts.swapPixelData,
+	}
+}
+
+func cloneUID(value *uid.UID) *uid.UID {
+	if value == nil || isCanonicalUID(value) {
+		return value
+	}
+	return uid.New(value.UID(), value.Name(), value.Type(), value.IsRetired())
+}
+
+func isCanonicalUID(value *uid.UID) bool {
+	if value == nil {
+		return false
+	}
+	return uid.Parse(value.UID(), value.Name(), value.Type()) == value
+}
+
 // Builder is a helper for constructing TransferSyntax instances with custom properties.
 type Builder struct {
 	ts *Syntax
+}
+
+func (b *Builder) mutableSyntax() *Syntax {
+	if b.ts.published.Load() {
+		b.ts = b.ts.mutableClone()
+	}
+	return b.ts
 }
 
 // NewBuilder creates a new TransferSyntax builder.
@@ -385,44 +452,45 @@ func NewBuilder(u *uid.UID) *Builder {
 
 // SetRetired sets the retired flag.
 func (b *Builder) SetRetired(retired bool) *Builder {
-	b.ts.isRetired = retired
+	b.mutableSyntax().isRetired = retired
 	return b
 }
 
 // SetExplicitVR sets the explicit VR flag.
 func (b *Builder) SetExplicitVR(explicitVR bool) *Builder {
-	b.ts.isExplicitVR = explicitVR
+	b.mutableSyntax().isExplicitVR = explicitVR
 	return b
 }
 
 // SetEncapsulated sets the encapsulated flag.
 func (b *Builder) SetEncapsulated(encapsulated bool) *Builder {
-	b.ts.isEncapsulated = encapsulated
+	b.mutableSyntax().isEncapsulated = encapsulated
 	return b
 }
 
 // SetLossy sets the lossy flag and compression method.
 func (b *Builder) SetLossy(lossy bool, method string) *Builder {
-	b.ts.isLossy = lossy
-	b.ts.lossyCompressionMethod = method
+	ts := b.mutableSyntax()
+	ts.isLossy = lossy
+	ts.lossyCompressionMethod = method
 	return b
 }
 
 // SetDeflate sets the deflate flag.
 func (b *Builder) SetDeflate(deflate bool) *Builder {
-	b.ts.isDeflate = deflate
+	b.mutableSyntax().isDeflate = deflate
 	return b
 }
 
 // SetEndian sets the byte order.
 func (b *Builder) SetEndian(e endian.Endian) *Builder {
-	b.ts.endian = e
+	b.mutableSyntax().endian = e
 	return b
 }
 
 // SetSwapPixelData sets the pixel data swapping flag.
 func (b *Builder) SetSwapPixelData(swap bool) *Builder {
-	b.ts.swapPixelData = swap
+	b.mutableSyntax().swapPixelData = swap
 	return b
 }
 

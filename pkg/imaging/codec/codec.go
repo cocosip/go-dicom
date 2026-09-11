@@ -166,17 +166,19 @@ func nativeParameters(parameters Parameters) (NativeParameters, error) {
 // PrepareParameters returns an independently owned, validated parameter value
 // suitable for one codec invocation.
 func PrepareParameters(c Codec, parameters Parameters) (Parameters, error) {
-	if c == nil {
+	if interfaceIsNil(c) {
 		return nil, fmt.Errorf("%w: codec must not be nil", ErrInvalidParameters)
 	}
 	if parameters == nil {
 		parameters = c.DefaultParameters()
+	} else if interfaceIsNil(parameters) {
+		return nil, fmt.Errorf("%w: parameters must not be a typed nil", ErrInvalidParameters)
 	}
-	if parameters == nil {
+	if interfaceIsNil(parameters) {
 		return nil, fmt.Errorf("%w: %s returned nil default parameters", ErrInvalidParameters, c.Name())
 	}
 	owned := parameters.Clone()
-	if owned == nil {
+	if interfaceIsNil(owned) {
 		return nil, fmt.Errorf("%w: %T returned a nil clone", ErrInvalidParameters, parameters)
 	}
 	if err := owned.Validate(); err != nil {

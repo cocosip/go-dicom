@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/parseable"
 )
@@ -77,10 +78,11 @@ const (
 // A UID is a globally unique identifier that identifies various DICOM entities
 // such as transfer syntaxes, SOP classes, and instances.
 type UID struct {
-	uid     string
-	name    string
-	uidType Type
-	retired bool
+	uid       string
+	name      string
+	uidType   Type
+	retired   bool
+	published atomic.Bool
 }
 
 var (
@@ -212,16 +214,28 @@ func MustParse(s string) *UID {
 
 // Parse implements parseable.Parseable interface.
 func (u *UID) Parse(s string) error {
+	if u == nil {
+		return fmt.Errorf("cannot parse UID into a nil receiver")
+	}
 	if !IsValid(s) {
 		return fmt.Errorf("invalid UID: %s", s)
 	}
-	if u != nil {
-		if canonical, found := resolveStandard(u.uid); found && canonical == u {
-			return fmt.Errorf("cannot modify standard UID %s", u.UID())
-		}
+	if canonical, found := resolveStandard(u.uid); found && canonical == u {
+		return fmt.Errorf("cannot modify standard UID %s", u.UID())
 	}
-	*u = *Parse(s, "Unknown", TypeUnknown)
+	if u.published.Load() {
+		return fmt.Errorf("cannot modify registered UID %s", u.UID())
+	}
+	parsed := Parse(s, "Unknown", TypeUnknown)
+	u.uid = parsed.uid
+	u.name = parsed.name
+	u.uidType = parsed.uidType
+	u.retired = parsed.retired
 	return nil
+}
+
+func (u *UID) markPublished() {
+	u.published.Store(true)
 }
 
 // IsValid validates a UID string according to DICOM rules.

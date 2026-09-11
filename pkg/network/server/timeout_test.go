@@ -221,17 +221,18 @@ func (h acceptTimeoutHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h acceptTimeoutHandler) WithGroup(string) slog.Handler { return h }
 
 func TestServerAssociationTimeoutDoesNotCloseEstablishedIdleAssociation(t *testing.T) {
-	const associationTimeout = 30 * time.Millisecond
+	const associationTimeout = 500 * time.Millisecond
 	server, clientService, _, done := establishPipeAssociation(t,
 		WithAssociationTimeout(associationTimeout),
 		WithTransportReadTimeout(0),
 	)
 	defer stopPipeAssociation(t, server, clientService, done)
+	waitForActiveService(t, server)
 
 	select {
 	case <-done:
 		t.Fatal("established association closed at the association negotiation timeout")
-	case <-time.After(4 * associationTimeout):
+	case <-time.After(2 * associationTimeout):
 	}
 }
 
@@ -290,16 +291,15 @@ func TestServerAssociationTimeoutBoundsNegotiationWriteWhenTransportWriteDisable
 }
 
 func TestServerRequestTimeoutAppliesToOutgoingDIMSERequest(t *testing.T) {
-	const associationTimeout = 30 * time.Millisecond
+	const requestTimeout = 30 * time.Millisecond
 	server, clientService, clientConn, done := establishPipeAssociation(t,
-		WithAssociationTimeout(associationTimeout),
-		WithRequestTimeout(30*time.Millisecond),
+		WithAssociationTimeout(time.Second),
+		WithRequestTimeout(requestTimeout),
 		WithTransportReadTimeout(0),
 		WithTransportWriteTimeout(0),
 	)
 	defer stopPipeAssociation(t, server, clientService, done)
 	svc := waitForActiveService(t, server)
-	time.Sleep(2 * associationTimeout)
 
 	requestRead := make(chan error, 1)
 	go func() {

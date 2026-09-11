@@ -56,6 +56,7 @@ func (r *Registry) Register(value *UID) error {
 	if _, found := r.resolveLocked(key); found {
 		return fmt.Errorf("%w: %s", ErrUIDAlreadyRegistered, key)
 	}
+	value.markPublished()
 	r.overlay[key] = value
 	delete(r.masked, key)
 	return nil
@@ -70,6 +71,7 @@ func (r *Registry) Replace(value *UID) (*UID, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	previous, _ := r.resolveLocked(key)
+	value.markPublished()
 	r.overlay[key] = value
 	delete(r.masked, key)
 	return previous, nil

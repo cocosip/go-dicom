@@ -7,6 +7,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
@@ -391,10 +392,17 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	s.armPendingRequestTimeout(ctx, msgID, pending)
 
 	go func() {
+		var cleanupOnce sync.Once
+		cleanup := func() {
+			cleanupOnce.Do(func() {
+				s.unregisterPendingRequest(msgID)
+				release()
+			})
+		}
 		defer close(eventCh)
-		defer s.unregisterPendingRequest(msgID)
-		defer release()
+		defer cleanup()
 		sendError := func(err error) {
+			cleanup()
 			eventCh <- ResponseEvent[Resp]{Err: err}
 		}
 		for {
@@ -409,6 +417,10 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 					sendError(fmt.Errorf("unexpected response type: %T", respMsg))
 					return
 				}
+				final := !resp.IsPending()
+				if final {
+					cleanup()
+				}
 				select {
 				case eventCh <- ResponseEvent[Resp]{Response: resp}:
 				case <-ctx.Done():
@@ -421,7 +433,7 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 					sendError(closeErr)
 					return
 				}
-				if !resp.IsPending() {
+				if final {
 					return
 				}
 			case <-ctx.Done():

@@ -95,6 +95,35 @@ func (parameterContractCodec) Decode(context.Context, FrameSource, FrameSink, Pa
 	return nil
 }
 
+type typedNilCodec struct{}
+
+func (*typedNilCodec) Name() string { return "typed-nil" }
+
+func (*typedNilCodec) TransferSyntax() *transfer.Syntax { return transfer.JPEGBaseline8Bit }
+
+func (*typedNilCodec) DefaultParameters() Parameters { return NoParameters{} }
+
+func (*typedNilCodec) Encode(context.Context, FrameSource, FrameSink, Parameters) error { return nil }
+
+func (*typedNilCodec) Decode(context.Context, FrameSource, FrameSink, Parameters) error { return nil }
+
+type panicOnNilParameters struct{}
+
+func (p *panicOnNilParameters) Clone() Parameters {
+	if p == nil {
+		panic("Clone called on typed-nil parameters")
+	}
+	return &panicOnNilParameters{}
+}
+
+func (*panicOnNilParameters) Validate() error { return nil }
+
+type typedNilCloneParameters struct{}
+
+func (typedNilCloneParameters) Clone() Parameters { return (*panicOnNilParameters)(nil) }
+
+func (typedNilCloneParameters) Validate() error { return nil }
+
 func nativeContractFrameInfo() FrameInfo {
 	return FrameInfo{
 		Width:                     1,
@@ -221,5 +250,47 @@ func TestPrepareParametersWrapsValidationError(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "unsupported quality") {
 		t.Fatalf("PrepareParameters() error = %v, want validation context", err)
+	}
+}
+
+func TestPrepareParametersRejectsTypedNilValuesWithoutPanic(t *testing.T) {
+	tests := []struct {
+		name       string
+		codec      Codec
+		parameters Parameters
+	}{
+		{
+			name:       "codec",
+			codec:      (*typedNilCodec)(nil),
+			parameters: NoParameters{},
+		},
+		{
+			name:       "supplied parameters",
+			codec:      parameterContractCodec{},
+			parameters: (*panicOnNilParameters)(nil),
+		},
+		{
+			name:  "default parameters",
+			codec: parameterContractCodec{defaults: (*panicOnNilParameters)(nil)},
+		},
+		{
+			name:       "parameter clone",
+			codec:      parameterContractCodec{},
+			parameters: typedNilCloneParameters{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					t.Fatalf("PrepareParameters() panic = %v", recovered)
+				}
+			}()
+			_, err := PrepareParameters(tt.codec, tt.parameters)
+			if !errors.Is(err, ErrInvalidParameters) {
+				t.Fatalf("PrepareParameters() error = %v, want ErrInvalidParameters", err)
+			}
+		})
 	}
 }

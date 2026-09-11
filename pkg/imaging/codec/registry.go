@@ -118,7 +118,7 @@ func (r *Registry) List() []Codec {
 }
 
 func registryCodecUID(c Codec) (string, error) {
-	if codecIsNil(c) {
+	if interfaceIsNil(c) {
 		return "", ErrNilCodec
 	}
 	syntax := c.TransferSyntax()
@@ -136,14 +136,14 @@ func registrySyntaxUID(syntax *transfer.Syntax) (string, bool) {
 	return syntax.UID().UID(), true
 }
 
-func codecIsNil(c Codec) bool {
-	if c == nil {
+func interfaceIsNil(value any) bool {
+	if value == nil {
 		return true
 	}
-	value := reflect.ValueOf(c)
-	switch value.Kind() {
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
+		return reflected.IsNil()
 	default:
 		return false
 	}
