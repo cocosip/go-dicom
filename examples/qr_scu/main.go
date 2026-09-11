@@ -23,11 +23,9 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
-	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/client"
@@ -291,10 +289,8 @@ func performCMove(ctx context.Context, studyUID string) error {
 	}
 	defer func() { _ = c.Close() }()
 
-	identifier, err := dataset.NewWithElements([]element.Element{
-		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
-	})
-	if err != nil {
+	identifier := dataset.New()
+	if err := identifier.AddValue(tag.StudyInstanceUID, studyUID); err != nil {
 		return fmt.Errorf("build C-MOVE identifier: %w", err)
 	}
 
@@ -321,10 +317,8 @@ func performCGet(ctx context.Context, studyUID string) error {
 	}
 	defer func() { _ = c.Close() }()
 
-	identifier, err := dataset.NewWithElements([]element.Element{
-		element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}),
-	})
-	if err != nil {
+	identifier := dataset.New()
+	if err := identifier.AddValue(tag.StudyInstanceUID, studyUID); err != nil {
 		return fmt.Errorf("build C-GET identifier: %w", err)
 	}
 
@@ -408,18 +402,27 @@ func addPresentationContexts(c *client.Client) {
 }
 
 func buildQueryDataset(level dimse.QueryRetrieveLevel) (*dataset.Dataset, error) {
-	return dataset.NewWithElements([]element.Element{
-		element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}),
-		element.NewString(tag.PatientName, vr.PN, []string{strings.TrimSpace(*patientName)}),
-		element.NewString(tag.PatientID, vr.LO, []string{strings.TrimSpace(*patientID)}),
-		element.NewString(tag.StudyDate, vr.DA, []string{strings.TrimSpace(*studyDate)}),
-		element.NewString(tag.StudyInstanceUID, vr.UI, []string{strings.TrimSpace(*studyUID)}),
-		element.NewString(tag.AccessionNumber, vr.SH, []string{""}),
-		element.NewString(tag.Modality, vr.CS, []string{""}),
-		element.NewString(tag.SeriesInstanceUID, vr.UI, []string{""}),
-		element.NewString(tag.SOPInstanceUID, vr.UI, []string{""}),
-		element.NewString(tag.RetrieveAETitle, vr.AE, []string{""}),
-	})
+	ds := dataset.New()
+	for _, entry := range []struct {
+		elementTag *tag.Tag
+		value      string
+	}{
+		{tag.QueryRetrieveLevel, string(level)},
+		{tag.PatientName, strings.TrimSpace(*patientName)},
+		{tag.PatientID, strings.TrimSpace(*patientID)},
+		{tag.StudyDate, strings.TrimSpace(*studyDate)},
+		{tag.StudyInstanceUID, strings.TrimSpace(*studyUID)},
+		{tag.AccessionNumber, ""},
+		{tag.Modality, ""},
+		{tag.SeriesInstanceUID, ""},
+		{tag.SOPInstanceUID, ""},
+		{tag.RetrieveAETitle, ""},
+	} {
+		if err := ds.AddValue(entry.elementTag, entry.value); err != nil {
+			return nil, fmt.Errorf("add query value %s: %w", entry.elementTag, err)
+		}
+	}
+	return ds, nil
 }
 
 func printFindResults(level dimse.QueryRetrieveLevel, results []*dataset.Dataset) {

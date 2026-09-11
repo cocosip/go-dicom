@@ -17,11 +17,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
-	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/client"
 )
 
@@ -223,8 +221,7 @@ func sendDICOMFile(ctx context.Context, c *client.Client, filePath string) error
 		if result.FileMetaInformation != nil {
 			if sopClassUID, metaOk := result.FileMetaInformation.MediaStorageSOPClassUID(); metaOk {
 				// Add it to the dataset for C-STORE
-				elem := element.NewString(tag.SOPClassUID, vr.UI, []string{sopClassUID})
-				if err := result.Dataset.AddOrUpdate(elem); err != nil {
+				if err := result.Dataset.AddOrUpdateValue(tag.SOPClassUID, sopClassUID); err != nil {
 					return fmt.Errorf("failed to add SOPClassUID to dataset: %w", err)
 				}
 				ok = true
@@ -241,8 +238,7 @@ func sendDICOMFile(ctx context.Context, c *client.Client, filePath string) error
 		if result.FileMetaInformation != nil {
 			if sopInstanceUID, metaOk := result.FileMetaInformation.MediaStorageSOPInstanceUID(); metaOk {
 				// Add it to the dataset for C-STORE
-				elem := element.NewString(tag.SOPInstanceUID, vr.UI, []string{sopInstanceUID})
-				if err := result.Dataset.AddOrUpdate(elem); err != nil {
+				if err := result.Dataset.AddOrUpdateValue(tag.SOPInstanceUID, sopInstanceUID); err != nil {
 					return fmt.Errorf("failed to add SOPInstanceUID to dataset: %w", err)
 				}
 				ok = true

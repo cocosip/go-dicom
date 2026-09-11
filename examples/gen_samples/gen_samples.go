@@ -9,38 +9,39 @@ import (
 
 	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	dicomwriter "github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
 
-func mustAdd(ds *dataset.Dataset, elem element.Element) {
-	if err := ds.Add(elem); err != nil {
-		log.Fatalf("add element failed: %v", err)
+func mustAddValue(ds *dataset.Dataset, t *tag.Tag, value any) {
+	if err := ds.AddValue(t, value); err != nil {
+		log.Fatalf("add value failed: %v", err)
 	}
 }
 
 func buildDataset(instanceUID, seriesUID, studyUID string, rows, cols uint16, frames int, pixels []byte) *dataset.Dataset {
 	ds := dataset.New()
-	mustAdd(ds, element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.7"})) // Secondary Capture Image Storage
-	mustAdd(ds, element.NewString(tag.SOPInstanceUID, vr.UI, []string{instanceUID}))
-	mustAdd(ds, element.NewString(tag.StudyInstanceUID, vr.UI, []string{studyUID}))
-	mustAdd(ds, element.NewString(tag.SeriesInstanceUID, vr.UI, []string{seriesUID}))
-	mustAdd(ds, element.NewString(tag.Modality, vr.CS, []string{"OT"}))
-	mustAdd(ds, element.NewUnsignedShort(tag.Rows, []uint16{rows}))
-	mustAdd(ds, element.NewUnsignedShort(tag.Columns, []uint16{cols}))
-	mustAdd(ds, element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-	mustAdd(ds, element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
-	mustAdd(ds, element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}))
-	mustAdd(ds, element.NewUnsignedShort(tag.BitsStored, []uint16{8}))
-	mustAdd(ds, element.NewUnsignedShort(tag.HighBit, []uint16{7}))
-	mustAdd(ds, element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}))
+	mustAddValue(ds, tag.SOPClassUID, "1.2.840.10008.5.1.4.1.1.7") // Secondary Capture Image Storage
+	mustAddValue(ds, tag.SOPInstanceUID, instanceUID)
+	mustAddValue(ds, tag.StudyInstanceUID, studyUID)
+	mustAddValue(ds, tag.SeriesInstanceUID, seriesUID)
+	mustAddValue(ds, tag.Modality, "OT")
+	mustAddValue(ds, tag.Rows, rows)
+	mustAddValue(ds, tag.Columns, cols)
+	mustAddValue(ds, tag.SamplesPerPixel, uint16(1))
+	mustAddValue(ds, tag.PhotometricInterpretation, "MONOCHROME2")
+	mustAddValue(ds, tag.BitsAllocated, uint16(8))
+	mustAddValue(ds, tag.BitsStored, uint16(8))
+	mustAddValue(ds, tag.HighBit, uint16(7))
+	mustAddValue(ds, tag.PixelRepresentation, uint16(0))
 	if frames > 1 {
-		mustAdd(ds, element.NewString(tag.NumberOfFrames, vr.IS, []string{fmt.Sprintf("%d", frames)}))
+		mustAddValue(ds, tag.NumberOfFrames, fmt.Sprintf("%d", frames))
 	}
-	mustAdd(ds, element.NewOtherByte(tag.PixelData, pixels))
+	if err := ds.AddValueWithVR(tag.PixelData, vr.OB, pixels); err != nil {
+		log.Fatalf("add pixel data: %v", err)
+	}
 	return ds
 }
 

@@ -10,7 +10,6 @@ import (
 
 	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
@@ -30,50 +29,50 @@ func main() {
 
 	// === Patient Information ===
 	_ = ds.AddValue(tag.PatientName, "Doe^John")
-	_ = ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"12345"}))
+	_ = ds.AddValue(tag.PatientID, "12345")
 	_ = ds.AddValue(tag.PatientBirthDate, "19800101")
-	_ = ds.Add(element.NewString(tag.PatientSex, vr.CS, []string{"M"}))
-	_ = ds.Add(element.NewString(tag.PatientAge, vr.AS, []string{"045Y"}))
+	_ = ds.AddValue(tag.PatientSex, "M")
+	_ = ds.AddValue(tag.PatientAge, "045Y")
 
 	// === Study Information ===
-	_ = ds.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.826.0.1.3680043.10.1142.1"}))
-	_ = ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20250101"}))
-	_ = ds.Add(element.NewString(tag.StudyTime, vr.TM, []string{"120000"}))
-	_ = ds.Add(element.NewString(tag.StudyDescription, vr.LO, []string{"Sample Study"}))
-	_ = ds.Add(element.NewString(tag.StudyID, vr.SH, []string{"001"}))
-	_ = ds.Add(element.NewString(tag.AccessionNumber, vr.SH, []string{"ACC001"}))
-	_ = ds.Add(element.NewString(tag.ReferringPhysicianName, vr.PN, []string{"Smith^Jane"}))
+	_ = ds.AddValue(tag.StudyInstanceUID, "1.2.826.0.1.3680043.10.1142.1")
+	_ = ds.AddValue(tag.StudyDate, "20250101")
+	_ = ds.AddValue(tag.StudyTime, "120000")
+	_ = ds.AddValue(tag.StudyDescription, "Sample Study")
+	_ = ds.AddValue(tag.StudyID, "001")
+	_ = ds.AddValue(tag.AccessionNumber, "ACC001")
+	_ = ds.AddValue(tag.ReferringPhysicianName, "Smith^Jane")
 
 	// === Series Information ===
-	_ = ds.Add(element.NewString(tag.SeriesInstanceUID, vr.UI, []string{"1.2.826.0.1.3680043.10.1142.1.1"}))
+	_ = ds.AddValue(tag.SeriesInstanceUID, "1.2.826.0.1.3680043.10.1142.1.1")
 	_ = ds.AddValue(tag.SeriesNumber, uint16(1))
-	_ = ds.Add(element.NewString(tag.SeriesDescription, vr.LO, []string{"CT Chest"}))
-	_ = ds.Add(element.NewString(tag.Modality, vr.CS, []string{"CT"}))
-	_ = ds.Add(element.NewString(tag.SeriesDate, vr.DA, []string{"20250101"}))
-	_ = ds.Add(element.NewString(tag.SeriesTime, vr.TM, []string{"120000"}))
+	_ = ds.AddValue(tag.SeriesDescription, "CT Chest")
+	_ = ds.AddValue(tag.Modality, "CT")
+	_ = ds.AddValue(tag.SeriesDate, "20250101")
+	_ = ds.AddValue(tag.SeriesTime, "120000")
 
 	// === Instance Information ===
 	// CT Image Storage SOP Class UID
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.826.0.1.3680043.10.1142.1.1.1"}))
-	_ = ds.Add(element.NewUnsignedShort(tag.InstanceNumber, []uint16{1}))
-	_ = ds.Add(element.NewString(tag.ContentDate, vr.DA, []string{"20250101"}))
-	_ = ds.Add(element.NewString(tag.ContentTime, vr.TM, []string{"120000"}))
+	_ = ds.AddValue(tag.SOPClassUID, "1.2.840.10008.5.1.4.1.1.2")
+	_ = ds.AddValue(tag.SOPInstanceUID, "1.2.826.0.1.3680043.10.1142.1.1.1")
+	_ = ds.AddValue(tag.InstanceNumber, uint16(1))
+	_ = ds.AddValue(tag.ContentDate, "20250101")
+	_ = ds.AddValue(tag.ContentTime, "120000")
 
 	// === Image Information ===
-	_ = ds.Add(element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY", "AXIAL"}))
+	_ = ds.AddValue(tag.ImageType, []string{"ORIGINAL", "PRIMARY", "AXIAL"})
 
 	// Image dimensions - using a smaller size for demo (128x128)
 	rows := uint16(128)
 	columns := uint16(128)
 	_ = ds.AddValue(tag.Rows, rows)
 	_ = ds.AddValue(tag.Columns, columns)
-	_ = ds.Add(element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}))
-	_ = ds.Add(element.NewUnsignedShort(tag.BitsStored, []uint16{16}))
-	_ = ds.Add(element.NewUnsignedShort(tag.HighBit, []uint16{15}))
-	_ = ds.Add(element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0})) // 0 = unsigned
-	_ = ds.Add(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}))
-	_ = ds.Add(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}))
+	_ = ds.AddValue(tag.BitsAllocated, uint16(16))
+	_ = ds.AddValue(tag.BitsStored, uint16(16))
+	_ = ds.AddValue(tag.HighBit, uint16(15))
+	_ = ds.AddValue(tag.PixelRepresentation, uint16(0)) // 0 = unsigned
+	_ = ds.AddValue(tag.SamplesPerPixel, uint16(1))
+	_ = ds.AddValue(tag.PhotometricInterpretation, "MONOCHROME2")
 
 	// === Pixel Data ===
 	// Create sample pixel data (gradient pattern)
@@ -92,12 +91,12 @@ func main() {
 		pixelData[i*2+1] = byte((value >> 8) & 0xFF)
 	}
 
-	_ = ds.Add(element.NewOtherWord(tag.PixelData, pixelData))
+	_ = ds.AddValueWithVR(tag.PixelData, vr.OW, pixelData)
 
 	// === Equipment Information ===
-	_ = ds.Add(element.NewString(tag.Manufacturer, vr.LO, []string{"Sample Manufacturer"}))
-	_ = ds.Add(element.NewString(tag.ManufacturerModelName, vr.LO, []string{"Sample Model"}))
-	_ = ds.Add(element.NewString(tag.SoftwareVersions, vr.LO, []string{"1.0"}))
+	_ = ds.AddValue(tag.Manufacturer, "Sample Manufacturer")
+	_ = ds.AddValue(tag.ManufacturerModelName, "Sample Model")
+	_ = ds.AddValue(tag.SoftwareVersions, "1.0")
 
 	// Write to file with explicit VR little endian
 	err := writer.WriteFile(*outputPath, ds,

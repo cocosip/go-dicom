@@ -13,12 +13,11 @@ import (
 	"flag"
 	"log"
 	"path/filepath"
+	"strings"
 
 	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
 
@@ -84,13 +83,9 @@ func main() {
 
 func createSampleDataset(patientName, patientID string) *dataset.Dataset {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI,
-		[]string{"1.2.840.10008.5.1.4.1.1.2"})) // CT Image Storage
-	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI,
-		[]string{"1.2.3.4.5." + patientID}))
-	_ = ds.Add(element.NewString(tag.PatientName, vr.PN,
-		[]string{patientName}))
-	_ = ds.Add(element.NewString(tag.PatientID, vr.LO,
-		[]string{patientID}))
+	_ = ds.AddValue(tag.SOPClassUID, "1.2.840.10008.5.1.4.1.1.2") // CT Image Storage
+	_ = ds.AddValue(tag.SOPInstanceUID, "1.2.3.4.5."+strings.TrimLeft(strings.TrimPrefix(patientID, "P"), "0"))
+	_ = ds.AddValue(tag.PatientName, patientName)
+	_ = ds.AddValue(tag.PatientID, patientID)
 	return ds
 }

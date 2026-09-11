@@ -20,11 +20,9 @@ import (
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
-	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
-	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/client"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/server"
@@ -416,19 +414,19 @@ func dedupeKey(level dimse.QueryRetrieveLevel, rec qrRecord) string {
 
 func buildFindIdentifier(level dimse.QueryRetrieveLevel, rec qrRecord) *dataset.Dataset {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
+	_ = ds.AddValue(tag.QueryRetrieveLevel, string(level))
 
-	addString(ds, tag.PatientName, vr.PN, rec.PatientName)
-	addString(ds, tag.PatientID, vr.LO, rec.PatientID)
-	addString(ds, tag.StudyInstanceUID, vr.UI, rec.StudyInstanceUID)
-	addString(ds, tag.StudyDate, vr.DA, rec.StudyDate)
-	addString(ds, tag.AccessionNumber, vr.SH, rec.AccessionNumber)
-	addString(ds, tag.Modality, vr.CS, rec.Modality)
-	addString(ds, tag.ModalitiesInStudy, vr.CS, rec.Modality)
-	addString(ds, tag.SeriesInstanceUID, vr.UI, rec.SeriesInstanceUID)
-	addString(ds, tag.SOPInstanceUID, vr.UI, rec.SOPInstanceUID)
-	addString(ds, tag.SOPClassUID, vr.UI, rec.SOPClassUID)
-	addString(ds, tag.RetrieveAETitle, vr.AE, "QRSCP")
+	addString(ds, tag.PatientName, rec.PatientName)
+	addString(ds, tag.PatientID, rec.PatientID)
+	addString(ds, tag.StudyInstanceUID, rec.StudyInstanceUID)
+	addString(ds, tag.StudyDate, rec.StudyDate)
+	addString(ds, tag.AccessionNumber, rec.AccessionNumber)
+	addString(ds, tag.Modality, rec.Modality)
+	addString(ds, tag.ModalitiesInStudy, rec.Modality)
+	addString(ds, tag.SeriesInstanceUID, rec.SeriesInstanceUID)
+	addString(ds, tag.SOPInstanceUID, rec.SOPInstanceUID)
+	addString(ds, tag.SOPClassUID, rec.SOPClassUID)
+	addString(ds, tag.RetrieveAETitle, "QRSCP")
 
 	return ds
 }
@@ -605,12 +603,12 @@ func matchDate(pattern, date string) bool {
 	return matchString(pattern, date)
 }
 
-func addString(ds *dataset.Dataset, t *tag.Tag, valueVR *vr.VR, value string) {
+func addString(ds *dataset.Dataset, t *tag.Tag, value string) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return
 	}
-	_ = ds.AddOrUpdate(element.NewString(t, valueVR, []string{value}))
+	_ = ds.AddOrUpdateValue(t, value)
 }
 
 func safeUint16(n int) uint16 {
