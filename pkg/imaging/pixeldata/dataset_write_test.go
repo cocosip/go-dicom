@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
 
@@ -112,6 +113,27 @@ func TestWriteToDatasetRejectsTransferSyntaxMismatch(t *testing.T) {
 	}
 	if target.Contains(tag.PixelData) {
 		t.Fatal("WriteToDataset() modified target after Transfer Syntax mismatch")
+	}
+}
+
+func TestWriteToDatasetRejectsImageMetadataMismatch(t *testing.T) {
+	source := newWritablePixelDataset(t, transfer.ExplicitVRLittleEndian, 8)
+	pixels, err := NewForDataset(source)
+	if err != nil {
+		t.Fatalf("NewForDataset() error = %v", err)
+	}
+	if err := pixels.AddFrame(context.Background(), []byte{1, 2}); err != nil {
+		t.Fatalf("AddFrame() error = %v", err)
+	}
+	target := newWritablePixelDataset(t, transfer.ExplicitVRLittleEndian, 8)
+	if err := target.AddOrUpdateValueWithVR(tag.Columns, vr.US, uint16(3)); err != nil {
+		t.Fatalf("update Columns: %v", err)
+	}
+	if err := pixels.WriteToDataset(target); err == nil {
+		t.Fatal("WriteToDataset() error = nil, want image metadata mismatch error")
+	}
+	if target.Contains(tag.PixelData) {
+		t.Fatal("WriteToDataset() modified target after rejecting image metadata")
 	}
 }
 

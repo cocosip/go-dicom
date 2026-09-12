@@ -648,8 +648,76 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 		}
 		p.updateTextEncoding(elem)
 	}
-
 	return ds, nil
+}
+
+// normalizeImplicitVR resolves dictionary entries whose US/SS choice depends
+// on Pixel Representation. The value may appear before or after the
+// dependent element, so this runs after the dataset has been read.
+func (p *parseContext) normalizeImplicitVR(ds *dataset.Dataset) error {
+	if ds == nil || p.isExplicitVR {
+		return nil
+	}
+	representationElement, ok := ds.Get(tag.PixelRepresentation)
+	if !ok {
+		return nil
+	}
+	representation, ok := representationElement.(*element.UnsignedShort)
+	if !ok {
+		return nil
+	}
+	representationValue, err := representation.GetValue(0)
+	if err != nil || representationValue > 1 {
+		return nil
+	}
+	if representationValue == 0 {
+		return nil
+	}
+
+	dependentTags := map[uint32]bool{
+		tag.SmallestValidPixelValueRETIRED.ToUint32():        true,
+		tag.LargestValidPixelValueRETIRED.ToUint32():         true,
+		tag.SmallestImagePixelValue.ToUint32():               true,
+		tag.LargestImagePixelValue.ToUint32():                true,
+		tag.SmallestPixelValueInSeries.ToUint32():            true,
+		tag.LargestPixelValueInSeries.ToUint32():             true,
+		tag.SmallestImagePixelValueInPlaneRETIRED.ToUint32(): true,
+		tag.LargestImagePixelValueInPlaneRETIRED.ToUint32():  true,
+		tag.PixelPaddingValue.ToUint32():                     true,
+		tag.PixelPaddingRangeLimit.ToUint32():                true,
+	}
+	dictionary := p.dictionary
+	if dictionary == nil {
+		dictionary = dict.Default()
+	}
+	for _, elem := range ds.Elements() {
+		if elem == nil || !dependentTags[elem.Tag().ToUint32()] {
+			continue
+		}
+		entry := dictionary.Lookup(elem.Tag())
+		if entry == nil || len(entry.ValueRepresentations()) < 2 {
+			continue
+		}
+		var signedVR *vr.VR
+		for _, candidate := range entry.ValueRepresentations() {
+			if candidate.Code() == vr.CodeSS {
+				signedVR = candidate
+				break
+			}
+		}
+		if signedVR == nil || elem.ValueRepresentation().Code() == vr.CodeSS {
+			continue
+		}
+		replacement, err := element.NewElementFromBuffer(elem.Tag(), signedVR, elem.Buffer(), p.textEncodings)
+		if err != nil {
+			return fmt.Errorf("resolve implicit VR for %s: %w", elem.Tag(), err)
+		}
+		element.SetByteOrder(replacement, p.byteOrder)
+		if err := ds.AddOrUpdate(replacement); err != nil {
+			return fmt.Errorf("replace implicit VR for %s: %w", elem.Tag(), err)
+		}
+	}
+	return nil
 }
 
 // setTransferSyntax sets the transfer syntax from File Meta Information.
@@ -774,6 +842,9 @@ func (p *parseContext) readDataset() (*dataset.Dataset, error) {
 		}
 		p.updatePrivateCreator(elem, privateCreators)
 		p.updateTextEncoding(elem)
+	}
+	if err := p.normalizeImplicitVR(ds); err != nil {
+		return nil, err
 	}
 
 	return ds, nil

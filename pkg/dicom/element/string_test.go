@@ -138,6 +138,25 @@ func TestStringElement_WithSpaces(t *testing.T) {
 	}
 }
 
+func TestStringElement_DoesNotReturnUTF8AsLatin1Mojibake(t *testing.T) {
+	elem := element.NewString(tag.PatientName, vr.PN, []string{"张三"})
+	got := elem.GetString()
+	if strings.Contains(got, "å") {
+		t.Fatalf("GetString() = %q, contains UTF-8-as-Latin-1 mojibake", got)
+	}
+	explicit := element.NewStringWithEncoding(tag.PatientName, vr.PN, []string{"张三"}, charset.Default)
+	if _, err := explicit.GetStringWithError(); err == nil {
+		t.Fatal("GetStringWithError() error = nil, want an explicit encoding failure")
+	}
+}
+
+func TestStringElementRoundTripsDICOMISO2022Chinese(t *testing.T) {
+	elem := element.NewStringWithEncoding(tag.PatientName, vr.PN, []string{"张三"}, charset.GetEncoding("ISO 2022 IR 58"))
+	if got := elem.GetString(); got != "张三" {
+		t.Fatalf("GetString() = %q, want 张三", got)
+	}
+}
+
 // TestStringElement_Validation tests string validation
 func TestStringElement_Validation(t *testing.T) {
 	// Create a string that's too long for CS (Code String, max 16 chars)

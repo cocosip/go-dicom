@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/unicode"
 )
 
 // Compile-time check to ensure String implements Element interface
@@ -28,12 +29,19 @@ type String struct {
 	*base
 	encoding  encoding.Encoding
 	encodings []encoding.Encoding
+	encodeErr error
 }
 
 // NewString creates a new string element with the given tag, VR, and values.
 // Values are joined with backslash separators and encoded into a buffer.
 func NewString(t *tag.Tag, v *vr.VR, values []string) *String {
-	return NewStringWithEncoding(t, v, values, charset.Default)
+	result := NewStringWithEncoding(t, v, values, charset.Default)
+	if result.encodeErr != nil {
+		// This legacy constructor cannot return an error. Preserve the Go text
+		// losslessly as UTF-8 instead of exposing UTF-8 bytes as Latin-1.
+		return NewStringWithEncoding(t, v, values, unicode.UTF8)
+	}
+	return result
 }
 
 // NewStringWithEncoding creates a new string element with a specific encoding.
@@ -47,12 +55,12 @@ func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.E
 
 	// Encode to bytes
 	var data []byte
+	var encodeErr error
 	if enc != nil {
-		encoder := enc.NewEncoder()
-		encoded, err := encoder.Bytes([]byte(joined))
+		encoded, err := charset.EncodeString(joined, []encoding.Encoding{enc})
 		if err != nil {
-			// Fallback to raw bytes on encoding error
-			data = []byte(joined)
+			encodeErr = fmt.Errorf("encode string using %T: %w", enc, err)
+			data = nil
 		} else {
 			data = encoded
 		}
@@ -76,6 +84,7 @@ func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.E
 		base:      newBase(t, v, buf),
 		encoding:  enc,
 		encodings: []encoding.Encoding{enc},
+		encodeErr: encodeErr,
 	}
 }
 
@@ -122,16 +131,31 @@ func (s *String) Count() int {
 
 // GetString returns the complete string value (all values joined by backslash).
 func (s *String) GetString() string {
-	if s.buffer == nil || s.buffer.Size() == 0 {
+	decoded, err := s.GetStringWithError()
+	if err != nil {
 		return ""
+	}
+	return decoded
+}
+
+// GetStringWithError returns the decoded string and reports encoding errors
+// instead of exposing undecoded bytes as a different character set.
+func (s *String) GetStringWithError() (string, error) {
+	if s == nil {
+		return "", fmt.Errorf("string element is nil")
+	}
+	if s.encodeErr != nil {
+		return "", s.encodeErr
+	}
+	if s.buffer == nil || s.buffer.Size() == 0 {
+		return "", nil
 	}
 
 	data := s.buffer.Data()
 
 	decoded, err := charset.DecodeString(data, s.encodings)
 	if err != nil {
-		// Fallback to raw bytes on decoding error
-		decoded = string(data)
+		return "", err
 	}
 	strData := []byte(decoded)
 
@@ -139,7 +163,7 @@ func (s *String) GetString() string {
 	// UI VR uses null byte (0x00) for padding, other VRs may use space
 	strData = bytes.TrimRight(strData, "\x00 ")
 
-	return string(strData)
+	return string(strData), nil
 }
 
 // GetValue returns the value at the specified index.

@@ -152,6 +152,116 @@ func TestParseUsesSpecificCharacterSetCodeExtensions(t *testing.T) {
 	}
 }
 
+func TestParseDecodesDICOMChineseAndKoreanCodeExtensions(t *testing.T) {
+	tests := []struct {
+		name      string
+		character string
+		encoded   []byte
+		want      string
+	}{
+		{
+			name:      "Chinese IR 58",
+			character: "ISO 2022 IR 58",
+			encoded:   []byte{'A', 0x1b, '$', ')', 'A', 0xd5, 0xc5, 0xc8, 0xfd, 0x1b, '(', 'B', 'Z'},
+			want:      "A张三Z",
+		},
+		{
+			name:      "Korean IR 149",
+			character: "ISO 2022 IR 149",
+			encoded:   []byte{'A', 0x1b, '$', ')', 'C', 0xb1, 0xe8, 0xc8, 0xf1, 0xc1, 0xdf, 0x1b, '(', 'B', 'Z'},
+			want:      "A김희중Z",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var file bytes.Buffer
+			file.Write(make([]byte, 128))
+			file.WriteString("DICM")
+			writeExplicitStringElement(&file, tag.TransferSyntaxUID, "UI", []byte(testExplicitVRLittleLE+"\x00"))
+			writeExplicitStringElement(&file, tag.SpecificCharacterSet, "CS", []byte(tt.character))
+			writeExplicitStringElement(&file, tag.PatientName, "PN", tt.encoded)
+
+			result, err := Parse(bytes.NewReader(file.Bytes()))
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			got, ok := result.Dataset.GetString(tag.PatientName)
+			if !ok || got != tt.want {
+				t.Fatalf("PatientName = %q, %v; want %q", got, ok, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseImplicitVRResolvesSignedPixelValueFromPixelRepresentation(t *testing.T) {
+	var raw bytes.Buffer
+	writeImplicitElement(&raw, 0x0028, 0x0106, []byte{0xff, 0xff})
+	writeImplicitElement(&raw, 0x0028, 0x0103, []byte{1, 0}) // Pixel Representation = signed
+	result, err := Parse(bytes.NewReader(raw.Bytes()), WithAssumedTransferSyntax(transfer.ImplicitVRLittleEndian))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	elem, ok := result.Dataset.Get(tag.SmallestImagePixelValue)
+	if !ok {
+		t.Fatal("SmallestImagePixelValue not found")
+	}
+	signed, ok := elem.(*element.SignedShort)
+	if !ok {
+		t.Fatalf("SmallestImagePixelValue type = %T, want *element.SignedShort", elem)
+	}
+	value, err := signed.GetValue(0)
+	if err != nil {
+		t.Fatalf("GetValue() error = %v", err)
+	}
+	if value != -1 {
+		t.Fatalf("SmallestImagePixelValue = %d, want -1", value)
+	}
+}
+
+func TestParseCreatesTypedDecimalStringForDS(t *testing.T) {
+	var raw bytes.Buffer
+	writeImplicitElement(&raw, tag.RescaleSlope.Group(), tag.RescaleSlope.Element(), []byte("1.5 "))
+	result, err := Parse(bytes.NewReader(raw.Bytes()), WithAssumedTransferSyntax(transfer.ImplicitVRLittleEndian))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	elem, ok := result.Dataset.Get(tag.RescaleSlope)
+	if !ok {
+		t.Fatal("RescaleSlope not found")
+	}
+	decimal, ok := elem.(*element.DecimalString)
+	if !ok {
+		t.Fatalf("RescaleSlope type = %T, want *element.DecimalString", elem)
+	}
+	value, err := decimal.GetFloat(0)
+	if err != nil {
+		t.Fatalf("RescaleSlope.GetFloat() error = %v", err)
+	}
+	if value != 1.5 {
+		t.Fatalf("RescaleSlope = %v, want 1.5", value)
+	}
+}
+
+func TestParseExplicitVRRemainsAuthoritativeForPixelValue(t *testing.T) {
+	var file bytes.Buffer
+	file.Write(make([]byte, 128))
+	file.WriteString("DICM")
+	writeExplicitStringElement(&file, tag.TransferSyntaxUID, "UI", []byte(testExplicitVRLittleLE+"\x00"))
+	writeExplicitStringElement(&file, tag.PixelRepresentation, "US", []byte{1, 0})
+	writeExplicitStringElement(&file, tag.SmallestImagePixelValue, "US", []byte{0xff, 0xff})
+	result, err := Parse(bytes.NewReader(file.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	elem, ok := result.Dataset.Get(tag.SmallestImagePixelValue)
+	if !ok {
+		t.Fatal("SmallestImagePixelValue not found")
+	}
+	if _, ok := elem.(*element.UnsignedShort); !ok {
+		t.Fatalf("SmallestImagePixelValue type = %T, want *element.UnsignedShort", elem)
+	}
+}
+
 func writeExplicitStringElement(buf *bytes.Buffer, tg *tag.Tag, vrCode string, value []byte) {
 	_ = binary.Write(buf, binary.LittleEndian, tg.Group())
 	_ = binary.Write(buf, binary.LittleEndian, tg.Element())

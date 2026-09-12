@@ -52,22 +52,18 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 	precalc := lut.NewPrecalculatedLUT(voiLUT, minInput, maxInput)
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
-	var padMin, padMax int64
-	if hasPadding {
-		padMin = int64(*pd.Info.PixelPaddingValue)
-		if pd.Info.PixelPaddingRangeLimit != nil {
-			padMax = int64(*pd.Info.PixelPaddingRangeLimit)
-		} else {
-			padMax = padMin
-		}
-	}
+	padMin, padMax, _ := pixelPaddingRange(pd.Info)
 
 	result := make([][]byte, len(pd.frames))
 
 	for fi, frame := range pd.frames {
-		out := make([]byte, len(frame)/bytesPerSample)
+		out := make([]byte, frameSampleCount(frame, pd.Info))
 
-		for idx, off := 0, 0; off+bytesPerSample <= len(frame); off, idx = off+bytesPerSample, idx+1 {
+		for idx := 0; idx < len(out); idx++ {
+			off := sampleOffset(idx, pd.Info)
+			if pd.Info.BitsAllocated != 1 && off+bytesPerSample > len(frame) {
+				break
+			}
 			val, ok := decodePixelSampleLE(frame, off, pd.Info)
 			if !ok {
 				continue
@@ -114,15 +110,7 @@ func minMaxSamples(pd *Data, ignorePadding bool) (float64, float64, error) {
 	}
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
-	var padMin, padMax int64
-	if hasPadding {
-		padMin = int64(*pd.Info.PixelPaddingValue)
-		if pd.Info.PixelPaddingRangeLimit != nil {
-			padMax = int64(*pd.Info.PixelPaddingRangeLimit)
-		} else {
-			padMax = padMin
-		}
-	}
+	padMin, padMax, _ := pixelPaddingRange(pd.Info)
 
 	var (
 		found bool
@@ -131,7 +119,15 @@ func minMaxSamples(pd *Data, ignorePadding bool) (float64, float64, error) {
 	)
 
 	for _, frame := range pd.frames {
-		for off := 0; off+bytesPerSample <= len(frame); off += bytesPerSample {
+		sampleCount := len(frame) / bytesPerSample
+		if pd.Info.BitsAllocated == 1 {
+			sampleCount = int(pd.Info.Width) * int(pd.Info.Height) * int(pd.Info.SamplesPerPixel)
+		}
+		for sampleIndex := 0; sampleIndex < sampleCount; sampleIndex++ {
+			off := sampleIndex * bytesPerSample
+			if pd.Info.BitsAllocated == 1 {
+				off = sampleIndex
+			}
 			val, ok := decodePixelSampleLE(frame, off, pd.Info)
 			if !ok {
 				continue

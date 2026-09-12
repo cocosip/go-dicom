@@ -73,8 +73,8 @@ func presentationSequenceLUT(ds *dataset.Dataset, mode LUTVRMode) (lut.LUT, erro
 	if err != nil {
 		return nil, fmt.Errorf("read Presentation LUT descriptor: %w", err)
 	}
-	if descriptor.BitsPerEntry != 8 && descriptor.BitsPerEntry != 16 {
-		return nil, fmt.Errorf("read Presentation LUT descriptor: bits per entry must be 8 or 16, got %d", descriptor.BitsPerEntry)
+	if mode == LUTStandard && (descriptor.BitsPerEntry < 10 || descriptor.BitsPerEntry > 16) {
+		return nil, fmt.Errorf("read Presentation LUT descriptor: bits per entry must be 10 through 16, got %d", descriptor.BitsPerEntry)
 	}
 	var values []uint16
 	if mode == LUTStandard {

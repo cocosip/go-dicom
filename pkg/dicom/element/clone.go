@@ -253,6 +253,7 @@ func cloneString(source *String) *String {
 		base:      cloneBase(source.base),
 		encoding:  source.encoding,
 		encodings: append([]encoding.Encoding(nil), source.encodings...),
+		encodeErr: source.encodeErr,
 	}
 }
 
@@ -295,6 +296,7 @@ func cloneStringChecked(source *String) (*String, error) {
 		base:      base,
 		encoding:  source.encoding,
 		encodings: append([]encoding.Encoding(nil), source.encodings...),
+		encodeErr: source.encodeErr,
 	}, nil
 }
 

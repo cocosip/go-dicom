@@ -4,6 +4,7 @@
 package charset_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/charset"
@@ -11,6 +12,8 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
 )
+
+const testCharsetISO2022IR58 = "ISO 2022 IR 58"
 
 func TestGetEncoding(t *testing.T) {
 	tests := []struct {
@@ -139,6 +142,63 @@ func TestDecodeString(t *testing.T) {
 				t.Errorf("DecodeString() = %q, want %q", result, tt.want)
 			}
 		})
+	}
+}
+
+func TestDecodeStringHandlesDICOMISO2022ChineseAndKorean(t *testing.T) {
+	tests := []struct {
+		name    string
+		charset string
+		data    []byte
+		want    string
+	}{
+		{
+			name:    "GB2312 IR 58",
+			charset: testCharsetISO2022IR58,
+			data:    []byte{'A', 0x1b, '$', ')', 'A', 0xd5, 0xc5, 0xc8, 0xfd, 0x1b, '(', 'B', 'Z'},
+			want:    "A张三Z",
+		},
+		{
+			name:    "Korean IR 149",
+			charset: "ISO 2022 IR 149",
+			data:    []byte{'A', 0x1b, '$', ')', 'C', 0xb1, 0xe8, 0xc8, 0xf1, 0xc1, 0xdf, 0x1b, '(', 'B', 'Z'},
+			want:    "A김희중Z",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := charset.DecodeString(tt.data, charset.GetEncodings([]string{testCharsetLatin1, tt.charset}))
+			if err != nil {
+				t.Fatalf("DecodeString() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("DecodeString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEncodeStringRejectsUnrepresentableDefaultCharset(t *testing.T) {
+	data, err := charset.EncodeString("张三", []encoding.Encoding{charmap.ISO8859_1})
+	if err == nil {
+		t.Fatal("EncodeString() error = nil, want an encoding error")
+	}
+	if bytes.Equal(data, []byte("张三")) {
+		t.Fatal("EncodeString() returned raw UTF-8 bytes after encoding failure")
+	}
+}
+
+func TestEncodeStringAddsDICOMISO2022Designation(t *testing.T) {
+	data, err := charset.EncodeString("张三", charset.GetEncodings([]string{testCharsetISO2022IR58}))
+	if err != nil {
+		t.Fatalf("EncodeString() error = %v", err)
+	}
+	if len(data) < 4 || !bytes.Equal(data[:4], []byte{0x1b, '$', ')', 'A'}) {
+		t.Fatalf("EncodeString() prefix = %x, want DICOM IR 58 designation", data)
+	}
+	decoded, err := charset.DecodeString(data, charset.GetEncodings([]string{testCharsetISO2022IR58}))
+	if err != nil || decoded != "张三" {
+		t.Fatalf("DecodeString(EncodeString()) = %q, %v; want 张三", decoded, err)
 	}
 }
 

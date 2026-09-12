@@ -14,7 +14,8 @@ const (
 )
 
 type readConfig struct {
-	vrMode VRMode
+	vrMode    VRMode
+	lutVRMode LUTVRMode
 }
 
 // LUTVRMode controls validation of LUT Data value representations.
@@ -34,5 +35,13 @@ type ReadOption func(*readConfig)
 func WithPixelDataVRMode(mode VRMode) ReadOption {
 	return func(config *readConfig) {
 		config.vrMode = mode
+	}
+}
+
+// WithLUTVRMode selects standard or compatibility validation while reading
+// Palette LUT data during Pixel Data extraction.
+func WithLUTVRMode(mode LUTVRMode) ReadOption {
+	return func(config *readConfig) {
+		config.lutVRMode = mode
 	}
 }

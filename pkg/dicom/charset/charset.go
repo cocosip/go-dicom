@@ -26,6 +26,15 @@ type Info struct {
 	Encoding encoding.Encoding
 }
 
+// dicomISO2022Encoding retains the DICOM designation needed when encoding a
+// value. The underlying x/text encoding only handles the character bytes.
+type dicomISO2022Encoding struct {
+	encoding.Encoding
+	designation []byte
+}
+
+const iso2022ASCII = "ascii"
+
 // knownCharsets maps DICOM Specific Character Set values to Go encodings.
 var knownCharsets = map[string]*Info{
 	// ISO 8859 Latin character sets
@@ -66,8 +75,8 @@ var knownCharsets = map[string]*Info{
 	"ISO 2022 IR 148": {"Latin-5 Extended", charmap.ISO8859_9},
 	"ISO 2022 IR 13":  {"Japanese Extended", japanese.ShiftJIS},
 	"ISO 2022 IR 87":  {"Japanese (ISO-2022-JP)", japanese.ISO2022JP},
-	"ISO 2022 IR 149": {"Korean Extended", korean.EUCKR},
-	"ISO 2022 IR 58":  {"Chinese Simplified (GB2312)", simplifiedchinese.HZGB2312},
+	"ISO 2022 IR 149": {"Korean Extended", &dicomISO2022Encoding{Encoding: korean.EUCKR, designation: []byte{0x1b, '$', ')', 'C'}}},
+	"ISO 2022 IR 58":  {"Chinese Simplified (GB2312)", &dicomISO2022Encoding{Encoding: simplifiedchinese.GB18030, designation: []byte{0x1b, '$', ')', 'A'}}},
 	"ISO 2022 IR 166": {"Thai Extended", charmap.Windows874},
 }
 
@@ -145,40 +154,115 @@ func DecodeString(data []byte, encodings []encoding.Encoding) (string, error) {
 		encodings = []encoding.Encoding{Default}
 	}
 
-	candidates := append([]encoding.Encoding(nil), encodings...)
-	if len(candidates) > 1 && bytes.Contains(data, []byte{0x1b}) {
-		// ISO 2022 code extension values often declare ASCII first and the
-		// escaped multi-byte set afterward. Try the escaped sets first when
-		// escape bytes are present so they can consume the shift sequences.
-		candidates = append(append([]encoding.Encoding(nil), encodings[1:]...), encodings[0])
+	if bytes.Contains(data, []byte{0x1b}) {
+		return decodeDICOMISO2022(data, encodings)
 	}
 
-	var firstErr error
-	for _, enc := range candidates {
-		if enc == nil {
+	enc := encodings[0]
+	if enc == nil {
+		enc = Default
+	}
+	decoded, err := enc.NewDecoder().Bytes(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode string: %w", err)
+	}
+	return string(decoded), nil
+}
+
+func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, error) {
+	current := iso2022ASCII
+	var initial encoding.Encoding = Default
+	if len(encodings) > 0 && encodings[0] != nil {
+		initial = encodings[0]
+	}
+	if initial == Default && len(encodings) > 1 && encodings[1] != nil {
+		initial = encodings[1]
+	}
+	if initial == japanese.ShiftJIS {
+		current = "shiftjis"
+	}
+	var designation []byte
+	var segment []byte
+	var result bytes.Buffer
+	flush := func() error {
+		if len(segment) == 0 {
+			return nil
+		}
+		var input []byte
+		var enc encoding.Encoding
+		switch current {
+		case iso2022ASCII:
 			enc = Default
+			input = segment
+		case "shiftjis":
+			enc = japanese.ShiftJIS
+			input = segment
+		case "gb":
+			enc = simplifiedchinese.GB18030
+			input = segment
+		case "korean":
+			enc = korean.EUCKR
+			input = segment
+		case "japanese":
+			enc = japanese.ISO2022JP
+			input = append(append([]byte(nil), designation...), segment...)
+			input = append(input, 0x1b, '(', 'B')
+		default:
+			return fmt.Errorf("unsupported DICOM ISO-2022 state %q", current)
 		}
-
-		decoder := enc.NewDecoder()
-		decoded, err := decoder.Bytes(data)
+		decoded, err := enc.NewDecoder().Bytes(input)
 		if err != nil {
-			if firstErr == nil {
-				firstErr = err
+			return fmt.Errorf("failed to decode ISO-2022 %s segment: %w", current, err)
+		}
+		result.Write(decoded)
+		segment = segment[:0]
+		return nil
+	}
+
+	for index := 0; index < len(data); {
+		if data[index] != 0x1b {
+			segment = append(segment, data[index])
+			index++
+			continue
+		}
+		if err := flush(); err != nil {
+			return "", err
+		}
+		kind, seq, consumed, ok := parseISO2022Escape(data[index:])
+		if !ok {
+			return "", fmt.Errorf("unsupported or truncated DICOM ISO-2022 escape at byte %d", index)
+		}
+		current = kind
+		designation = seq
+		index += consumed
+	}
+	if err := flush(); err != nil {
+		return "", err
+	}
+	return result.String(), nil
+}
+
+func parseISO2022Escape(data []byte) (kind string, sequence []byte, consumed int, ok bool) {
+	if len(data) >= 3 && data[0] == 0x1b && data[1] == '(' {
+		switch data[2] {
+		case 'B', 'J', 'H':
+			return iso2022ASCII, nil, 3, true
+		}
+	}
+	if len(data) >= 3 && data[0] == 0x1b && data[1] == '$' {
+		if data[2] == 'B' {
+			return "japanese", append([]byte(nil), data[:3]...), 3, true
+		}
+		if len(data) >= 4 && data[2] == ')' {
+			switch data[3] {
+			case 'A':
+				return "gb", append([]byte(nil), data[:4]...), 4, true
+			case 'C':
+				return "korean", append([]byte(nil), data[:4]...), 4, true
 			}
-			continue
 		}
-		if bytes.Contains(data, []byte{0x1b}) && bytes.Contains(decoded, []byte{0x1b}) {
-			continue
-		}
-
-		return string(decoded), nil
 	}
-
-	if firstErr != nil {
-		return "", fmt.Errorf("failed to decode string: %w", firstErr)
-	}
-	// All candidates decoded without error but each still contained ISO 2022 escape sequences.
-	return "", fmt.Errorf("failed to decode string: no declared encoding could consume ISO 2022 escape sequences")
+	return "", nil, 0, false
 }
 
 // EncodeString encodes a string using the specified encodings.
@@ -189,25 +273,37 @@ func EncodeString(s string, encodings []encoding.Encoding) ([]byte, error) {
 	}
 
 	// Try the first encoding
-	encoder := encodings[0].NewEncoder()
-	encoded, err := encoder.String(s)
+	encoded, err := encodeWithEncoding(s, encodings[0])
 	if err == nil {
-		return []byte(encoded), nil
+		return encoded, nil
 	}
 
 	// If first encoding failed, try others
 	for _, enc := range encodings[1:] {
-		encoder := enc.NewEncoder()
-		encoded, err := encoder.String(s)
+		encoded, err := encodeWithEncoding(s, enc)
 		if err == nil {
-			return []byte(encoded), nil
+			return encoded, nil
 		}
 	}
 
-	// Fallback: use default encoding with replacement characters
-	encoder = Default.NewEncoder()
-	encoded, _ = encoder.String(s)
-	return []byte(encoded), fmt.Errorf("could not encode string with given encodings, used replacement characters")
+	return nil, fmt.Errorf("could not encode string with given encodings")
+}
+
+func encodeWithEncoding(s string, enc encoding.Encoding) ([]byte, error) {
+	if enc == nil {
+		enc = Default
+	}
+	encoded, err := enc.NewEncoder().String(s)
+	if err != nil {
+		return nil, err
+	}
+	if dicom, ok := enc.(*dicomISO2022Encoding); ok {
+		result := append([]byte(nil), dicom.designation...)
+		result = append(result, []byte(encoded)...)
+		result = append(result, 0x1b, '(', 'B')
+		return result, nil
+	}
+	return []byte(encoded), nil
 }
 
 // KnownCharsets returns a list of all known DICOM character sets.

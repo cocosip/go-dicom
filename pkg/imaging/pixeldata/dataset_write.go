@@ -122,6 +122,9 @@ func (pd *Data) WriteToDataset(ds *dataset.Dataset) error {
 			bitsAllocated,
 		)
 	}
+	if err := validateWriteMetadata(ds, pd.Info); err != nil {
+		return err
+	}
 
 	pd.Info.TransferSyntaxUID = syntax.UID().UID()
 	pd.Info.NumberOfFrames = len(pd.frames)
@@ -135,6 +138,39 @@ func (pd *Data) WriteToDataset(ds *dataset.Dataset) error {
 	}
 	if err := ds.AddOrUpdate(pixelElement); err != nil {
 		return fmt.Errorf("update Pixel Data: %w", err)
+	}
+	return nil
+}
+
+func validateWriteMetadata(ds *dataset.Dataset, info *Info) error {
+	rows, err := ds.GetUInt16(tag.Rows, 0)
+	if err != nil || rows != info.Height {
+		return fmt.Errorf("pixel data Height %d does not match Dataset Rows %d", info.Height, rows)
+	}
+	columns, err := ds.GetUInt16(tag.Columns, 0)
+	if err != nil || columns != info.Width {
+		return fmt.Errorf("pixel data Width %d does not match Dataset Columns %d", info.Width, columns)
+	}
+	compare := []struct {
+		name string
+		tag  *tag.Tag
+		want uint16
+	}{
+		{"Samples Per Pixel", tag.SamplesPerPixel, info.SamplesPerPixel},
+		{"Bits Stored", tag.BitsStored, info.BitsStored},
+		{"High Bit", tag.HighBit, info.HighBit},
+		{"Pixel Representation", tag.PixelRepresentation, uint16(info.PixelRepresentation)},
+		{"Planar Configuration", tag.PlanarConfiguration, uint16(info.PlanarConfiguration)},
+	}
+	for _, item := range compare {
+		got := ds.TryGetUInt16(item.tag, 0)
+		if got != item.want {
+			return fmt.Errorf("pixel data %s %d does not match Dataset %s %d", item.name, item.want, item.name, got)
+		}
+	}
+	photometric, ok := ds.GetString(tag.PhotometricInterpretation)
+	if !ok || info.PhotometricInterpretation == nil || photometric != info.PhotometricInterpretation.Value {
+		return fmt.Errorf("pixel data Photometric Interpretation %q does not match Dataset %q", photometric, info.PhotometricInterpretation)
 	}
 	return nil
 }

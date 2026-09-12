@@ -172,20 +172,24 @@ func New(info *Info) (*Data, error) {
 // NewFromBytes creates Data from raw pixel bytes.
 // The data is assumed to contain all frames concatenated.
 func NewFromBytes(info *Info, data []byte) (*Data, error) {
-	info.Encapsulated = false
-	if info.VRCode == "" {
-		info.VRCode = nativePixelDataVR(info)
+	if info == nil {
+		return nil, fmt.Errorf("pixel data info must not be nil")
 	}
-	pd, err := New(info)
+	ownedInfo := *info
+	ownedInfo.Encapsulated = false
+	if ownedInfo.VRCode == "" {
+		ownedInfo.VRCode = nativePixelDataVR(&ownedInfo)
+	}
+	pd, err := New(&ownedInfo)
 	if err != nil {
 		return nil, err
 	}
-	if pixelDataNeedsByteSwap(info) {
-		data = swapPixelDataBytes(data, info)
+	if pixelDataNeedsByteSwap(&ownedInfo) {
+		data = swapPixelDataBytes(data, &ownedInfo)
 	}
 
-	frameSize := info.UncompressedFrameSize()
-	expectedSize := frameSize * info.NumberOfFrames
+	frameSize := ownedInfo.UncompressedFrameSize()
+	expectedSize := frameSize * ownedInfo.NumberOfFrames
 
 	if len(data) < expectedSize {
 		return nil, fmt.Errorf("insufficient data: got %d bytes, expected at least %d bytes",
@@ -193,7 +197,7 @@ func NewFromBytes(info *Info, data []byte) (*Data, error) {
 	}
 
 	// Split data into frames
-	for i := 0; i < info.NumberOfFrames; i++ {
+	for i := 0; i < ownedInfo.NumberOfFrames; i++ {
 		start := i * frameSize
 		end := start + frameSize
 		if end > len(data) {
@@ -250,6 +254,9 @@ func (pd *Data) Sample(frame, x, y, sample int) (int64, error) {
 		sampleIndex = sample*int(pd.Info.Width)*int(pd.Info.Height) + pixelIndex
 	}
 	offset := sampleIndex * pd.Info.BytesAllocated()
+	if pd.Info.BitsAllocated == 1 {
+		offset = sampleIndex
+	}
 	value, ok := decodePixelSampleLE(pd.frames[frame], offset, pd.Info)
 	if !ok {
 		return 0, fmt.Errorf("cannot decode sample at byte offset %d with BitsAllocated=%d", offset, pd.Info.BitsAllocated)
@@ -260,16 +267,12 @@ func (pd *Data) Sample(frame, x, y, sample int) (int64, error) {
 // IsPaddingSample reports whether value is inside the inclusive DICOM pixel
 // padding interval. A reversed Pixel Padding Range Limit is normalized.
 func (pd *Data) IsPaddingSample(value int64) bool {
-	if pd == nil || pd.Info == nil || pd.Info.PixelPaddingValue == nil {
+	if pd == nil {
 		return false
 	}
-	minimum := int64(*pd.Info.PixelPaddingValue)
-	maximum := minimum
-	if pd.Info.PixelPaddingRangeLimit != nil {
-		maximum = int64(*pd.Info.PixelPaddingRangeLimit)
-	}
-	if minimum > maximum {
-		minimum, maximum = maximum, minimum
+	minimum, maximum, ok := pixelPaddingRange(pd.Info)
+	if !ok {
+		return false
 	}
 	return value >= minimum && value <= maximum
 }
@@ -283,8 +286,8 @@ func (pd *Data) CalculateOptimalWindow() (center, width float64) {
 
 	// Sample first frame for window calculation
 	pixelData := pd.frames[0]
-	bytesPerPixel := int(pd.Info.BitsAllocated) / 8
-	pixelCount := len(pixelData) / bytesPerPixel
+	bytesPerPixel := pd.Info.BytesAllocated()
+	pixelCount := frameSampleCount(pixelData, pd.Info)
 
 	if pixelCount == 0 {
 		return 0, 256
@@ -300,8 +303,8 @@ func (pd *Data) CalculateOptimalWindow() (center, width float64) {
 	firstPixel := true
 
 	for i := 0; i < pixelCount; i += step {
-		pixelIndex := i * bytesPerPixel
-		if pixelIndex+bytesPerPixel > len(pixelData) {
+		pixelIndex := sampleOffset(i, pd.Info)
+		if pd.Info.BitsAllocated != 1 && pixelIndex+bytesPerPixel > len(pixelData) {
 			break
 		}
 
@@ -374,7 +377,13 @@ func (pd *Data) AddFrame(ctx context.Context, frameData []byte) error {
 
 // AllFrames returns all pixel data as a single byte slice.
 func (pd *Data) AllFrames() []byte {
-	totalSize := pd.Info.TotalUncompressedSize()
+	if pd == nil {
+		return nil
+	}
+	totalSize := 0
+	for _, frame := range pd.frames {
+		totalSize += len(frame)
+	}
 	result := make([]byte, totalSize)
 
 	offset := 0
@@ -573,7 +582,7 @@ func (pd *Data) WindowTo8bit(center, width float64, ignorePadding bool) ([][]byt
 	return applyWindowTo8bit(pd, center, width, ignorePadding)
 }
 
-// MinMax returns the minimum和maximum sample values across all frames.
+// MinMax returns the minimum and maximum sample values across all frames.
 // If ignorePadding is true and PixelPaddingValue/(RangeLimit) is set, padding samples are skipped.
 func (pd *Data) MinMax(ignorePadding bool) (minVal float64, maxVal float64, err error) {
 	return minMaxSamples(pd, ignorePadding)
@@ -597,18 +606,18 @@ func (pd *Data) MaskPadding() (frames [][]byte, masks [][]bool, err error) {
 		return nil, nil, fmt.Errorf("unsupported BytesAllocated=%d for padding mask", bytesPerSample)
 	}
 
-	padMin := int64(*pd.Info.PixelPaddingValue)
-	padMax := padMin
-	if pd.Info.PixelPaddingRangeLimit != nil {
-		padMax = int64(*pd.Info.PixelPaddingRangeLimit)
-	}
+	padMin, padMax, _ := pixelPaddingRange(pd.Info)
 
 	for _, frame := range pd.frames {
 		out := make([]byte, len(frame))
 		copy(out, frame)
-		mask := make([]bool, len(frame)/bytesPerSample)
+		mask := make([]bool, frameSampleCount(frame, pd.Info))
 
-		for idx, off := 0, 0; off+bytesPerSample <= len(frame); off, idx = off+bytesPerSample, idx+1 {
+		for idx := 0; idx < len(mask); idx++ {
+			off := sampleOffset(idx, pd.Info)
+			if pd.Info.BitsAllocated != 1 && off+bytesPerSample > len(frame) {
+				break
+			}
 			val, ok := decodePixelSampleLE(frame, off, pd.Info)
 			if !ok {
 				continue
@@ -617,8 +626,12 @@ func (pd *Data) MaskPadding() (frames [][]byte, masks [][]bool, err error) {
 			if val >= padMin && val <= padMax {
 				mask[idx] = true
 				// zero out
-				for b := 0; b < bytesPerSample; b++ {
-					out[off+b] = 0
+				if pd.Info.BitsAllocated == 1 {
+					out[off/8] &^= 1 << uint(off%8)
+				} else {
+					for b := 0; b < bytesPerSample; b++ {
+						out[off+b] = 0
+					}
 				}
 			}
 		}
@@ -694,8 +707,10 @@ func modalityTransformForDatasets(primary, fallback *dataset.Dataset, pd *Data) 
 	if !hasSlope || !hasIntercept {
 		return nil, fmt.Errorf("rescale slope and rescale intercept must be present together")
 	}
-	if _, err := dicomlut.RequiredLongString(source, tag.RescaleType, "Rescale Type"); err != nil {
-		return nil, err
+	if source.Contains(tag.RescaleType) {
+		if _, err := dicomlut.RequiredLongString(source, tag.RescaleType, "Rescale Type"); err != nil {
+			return nil, err
+		}
 	}
 	readDecimal := func(t *tag.Tag, name string) (float64, error) {
 		values, exists := source.GetStrings(t)
@@ -834,6 +849,9 @@ func (pd *Data) SetFrameInfo(info codec.FrameInfo) error {
 
 // Encode encodes the pixel data using the specified codec and returns a new Data.
 func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Parameters) (*Data, error) {
+	if pd == nil || pd.Info == nil {
+		return nil, fmt.Errorf("pixel data info is nil")
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -881,6 +899,9 @@ func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Paramete
 
 // Decode decodes the pixel data using the specified codec and returns a new Data.
 func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Parameters) (*Data, error) {
+	if pd == nil || pd.Info == nil {
+		return nil, fmt.Errorf("pixel data info is nil")
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -961,6 +982,9 @@ func FromDatasetWithOptions(ds *dataset.Dataset, options ...ReadOption) (*Data, 
 	}
 	if config.vrMode != PixelDataCompatible && config.vrMode != PixelDataStandard {
 		return nil, fmt.Errorf("unsupported Pixel Data VR mode: %d", config.vrMode)
+	}
+	if config.lutVRMode != LUTCompatible && config.lutVRMode != LUTStandard {
+		return nil, fmt.Errorf("unsupported LUT VR mode: %d", config.lutVRMode)
 	}
 	if ds == nil {
 		return nil, fmt.Errorf("dataset cannot be nil")
@@ -1185,7 +1209,7 @@ func FromDatasetWithOptions(ds *dataset.Dataset, options ...ReadOption) (*Data, 
 
 	// Palette Color handling: convert to RGB if palette LUT present
 	if pi.Value == pixel.PaletteColor.Value && !pd.Info.Encapsulated {
-		if err := ConvertPaletteToRGB(ds, pd); err != nil {
+		if err := ConvertPaletteToRGBWithVRMode(ds, pd, config.lutVRMode); err != nil {
 			return nil, fmt.Errorf("palette conversion failed: %w", err)
 		}
 	}
@@ -1201,7 +1225,13 @@ type paletteLUT struct {
 
 // ConvertPaletteToRGB loads a Dataset palette and converts frames to RGB or RGBA.
 func ConvertPaletteToRGB(ds *dataset.Dataset, pd *Data) error {
-	lut, err := buildPaletteLUT(ds)
+	return ConvertPaletteToRGBWithVRMode(ds, pd, LUTCompatible)
+}
+
+// ConvertPaletteToRGBWithVRMode loads a Dataset palette and converts frames to
+// RGB or RGBA using the requested LUT Data VR policy.
+func ConvertPaletteToRGBWithVRMode(ds *dataset.Dataset, pd *Data, mode LUTVRMode) error {
+	lut, err := buildPaletteLUTWithVRMode(ds, mode)
 	if err != nil {
 		return err
 	}
@@ -1212,14 +1242,18 @@ func ConvertPaletteToRGB(ds *dataset.Dataset, pd *Data) error {
 	}
 
 	for fi, frame := range pd.frames {
-		pixelCount := len(frame) / bytesPerSample
+		pixelCount := frameSampleCount(frame, pd.Info)
 		channels := 3
 		if lut.hasAlpha {
 			channels = 4
 		}
 		out := make([]byte, pixelCount*channels)
 
-		for idx, off := 0, 0; idx < pixelCount; idx, off = idx+1, off+bytesPerSample {
+		for idx := 0; idx < pixelCount; idx++ {
+			off := sampleOffset(idx, pd.Info)
+			if pd.Info.BitsAllocated != 1 && off+bytesPerSample > len(frame) {
+				break
+			}
 			val, ok := decodePixelSampleLE(frame, off, pd.Info)
 			if !ok {
 				continue
@@ -1261,13 +1295,20 @@ func ConvertPaletteToRGB(ds *dataset.Dataset, pd *Data) error {
 }
 
 func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
+	return buildPaletteLUTWithVRMode(ds, LUTCompatible)
+}
+
+func buildPaletteLUTWithVRMode(ds *dataset.Dataset, mode LUTVRMode) (*paletteLUT, error) {
+	if mode != LUTCompatible && mode != LUTStandard {
+		return nil, fmt.Errorf("unsupported LUT VR mode: %d", mode)
+	}
 	byteOrder := dicomlut.ByteOrder(ds)
 	signed := ds.TryGetUInt16(tag.PixelRepresentation, 0) == uint16(pixel.SignedPixels)
 	for _, sequenceTag := range []*tag.Tag{
 		tag.EnhancedPaletteColorLookupTableSequence,
 		tag.PaletteColorLookupTableSequence,
 	} {
-		lut, present, err := buildPaletteLUTFromSequence(ds, sequenceTag, byteOrder, signed)
+		lut, present, err := buildPaletteLUTFromSequence(ds, sequenceTag, byteOrder, signed, mode)
 		if err != nil {
 			return nil, err
 		}
@@ -1277,7 +1318,7 @@ func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {
 	}
 
 	// Fall back to top-level descriptors/data
-	return buildPaletteLUTFromDataset(ds, byteOrder, signed)
+	return buildPaletteLUTFromDataset(ds, byteOrder, signed, mode)
 }
 
 // PaletteColors returns the first mapped value and an owned copy of Dataset palette colors.
@@ -1294,6 +1335,7 @@ func buildPaletteLUTFromSequence(
 	sequenceTag *tag.Tag,
 	byteOrder binary.ByteOrder,
 	signed bool,
+	mode LUTVRMode,
 ) (*paletteLUT, bool, error) {
 	sequenceElement, present := ds.Get(sequenceTag)
 	if !present {
@@ -1306,7 +1348,7 @@ func buildPaletteLUTFromSequence(
 	if sequence.Count() == 0 || sequence.GetItem(0) == nil {
 		return nil, true, fmt.Errorf("%s must contain a non-nil item", sequenceTag)
 	}
-	lut, err := buildPaletteLUTFromDataset(sequence.GetItem(0), byteOrder, signed)
+	lut, err := buildPaletteLUTFromDataset(sequence.GetItem(0), byteOrder, signed, mode)
 	if err != nil {
 		return nil, true, fmt.Errorf("read %s item 0: %w", sequenceTag, err)
 	}
@@ -1316,7 +1358,7 @@ func buildPaletteLUTFromSequence(
 // buildPaletteLUTFromDataset builds palette LUT using descriptors/data in the provided dataset (no sequence recursion).
 //
 //nolint:gocyclo // Complex function handling palette LUT variations
-func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder, signed bool) (*paletteLUT, error) {
+func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder, signed bool, mode LUTVRMode) (*paletteLUT, error) {
 	rDescriptor, err := dicomlut.ReadDescriptor(ds, tag.RedPaletteColorLookupTableDescriptor, signed)
 	if err != nil {
 		return nil, fmt.Errorf("missing Red Palette LUT Descriptor: %w", err)
@@ -1341,6 +1383,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 		tag.SegmentedRedPaletteColorLookupTableData,
 		rDescriptor,
 		byteOrder,
+		mode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("read Red Palette LUT Data: %w", err)
@@ -1350,6 +1393,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 		tag.SegmentedGreenPaletteColorLookupTableData,
 		gDescriptor,
 		byteOrder,
+		mode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("read Green Palette LUT Data: %w", err)
@@ -1359,6 +1403,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 		tag.SegmentedBluePaletteColorLookupTableData,
 		bDescriptor,
 		byteOrder,
+		mode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("read Blue Palette LUT Data: %w", err)
@@ -1392,6 +1437,7 @@ func buildPaletteLUTFromDataset(ds *dataset.Dataset, byteOrder binary.ByteOrder,
 			tag.SegmentedAlphaPaletteColorLookupTableData,
 			alphaDescriptor,
 			byteOrder,
+			mode,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("read Alpha Palette LUT Data: %w", err)
@@ -1410,6 +1456,7 @@ func readPaletteLUTChannel(
 	directTag, segmentedTag *tag.Tag,
 	descriptor dicomlut.Descriptor,
 	byteOrder binary.ByteOrder,
+	mode LUTVRMode,
 ) ([]uint16, error) {
 	hasDirect := ds.Contains(directTag)
 	hasSegmented := ds.Contains(segmentedTag)
@@ -1420,7 +1467,13 @@ func readPaletteLUTChannel(
 			segmentedTag,
 		)
 	}
-	values, err := dicomlut.ReadData(ds, directTag, descriptor, byteOrder)
+	var values []uint16
+	var err error
+	if mode == LUTStandard {
+		values, err = dicomlut.ReadDataStrict(ds, directTag, descriptor, byteOrder)
+	} else {
+		values, err = dicomlut.ReadData(ds, directTag, descriptor, byteOrder)
+	}
 	if err == nil {
 		return values, nil
 	}
@@ -1430,6 +1483,9 @@ func readPaletteLUTChannel(
 	}
 	switch value := segmented.(type) {
 	case *element.OtherByte:
+		if mode == LUTStandard {
+			return nil, fmt.Errorf("segmented palette LUT %s uses non-standard OB VR; expected OW", segmentedTag)
+		}
 		return expandSegmentedLUT(value.GetData(), descriptor.EntryCount, byteOrder)
 	case *element.OtherWord:
 		return expandSegmentedLUT(value.GetData(), descriptor.EntryCount, dicomlut.NumericByteOrderOr(value, byteOrder))

@@ -207,8 +207,10 @@ func imageModalityTransformWithLUTMode(primary, fallback *dataset.Dataset, pixel
 	if !rescaleSource.Contains(tag.RescaleSlope) || !rescaleSource.Contains(tag.RescaleIntercept) {
 		return nil, 0, 0, false, fmt.Errorf("rescale slope and intercept must both be present")
 	}
-	if _, err := dicomlut.RequiredLongString(rescaleSource, tag.RescaleType, "Rescale Type"); err != nil {
-		return nil, 0, 0, false, err
+	if rescaleSource.Contains(tag.RescaleType) {
+		if _, err := dicomlut.RequiredLongString(rescaleSource, tag.RescaleType, "Rescale Type"); err != nil {
+			return nil, 0, 0, false, err
+		}
 	}
 	slope, err = imageSingleDecimal(rescaleSource, tag.RescaleSlope)
 	if err != nil {

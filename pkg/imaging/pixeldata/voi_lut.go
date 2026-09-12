@@ -258,22 +258,18 @@ func mapThroughLUTWithModality(pd *Data, table lut.LUT, ignorePadding bool, moda
 	}
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
-	var padMin, padMax int64
-	if hasPadding {
-		padMin = int64(*pd.Info.PixelPaddingValue)
-		if pd.Info.PixelPaddingRangeLimit != nil {
-			padMax = int64(*pd.Info.PixelPaddingRangeLimit)
-		} else {
-			padMax = padMin
-		}
-	}
+	padMin, padMax, _ := pixelPaddingRange(pd.Info)
 
 	result := make([][]byte, len(pd.frames))
 
 	for fi, frame := range pd.frames {
-		out := make([]byte, len(frame)/bytesPerSample)
+		out := make([]byte, frameSampleCount(frame, pd.Info))
 
-		for idx, off := 0, 0; off+bytesPerSample <= len(frame); off, idx = off+bytesPerSample, idx+1 {
+		for idx := 0; idx < len(out); idx++ {
+			off := sampleOffset(idx, pd.Info)
+			if pd.Info.BitsAllocated != 1 && off+bytesPerSample > len(frame) {
+				break
+			}
 			val, ok := decodePixelSampleLE(frame, off, pd.Info)
 			if !ok {
 				continue

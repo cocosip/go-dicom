@@ -31,6 +31,18 @@ func decodePixelSampleLE(data []byte, offset int, info *Info) (int64, bool) {
 	if info == nil {
 		return 0, false
 	}
+	if info.BitsAllocated == 1 {
+		if offset < 0 || offset >= len(data)*8 {
+			return 0, false
+		}
+		if data[offset/8]&(1<<uint(offset%8)) == 0 {
+			return 0, true
+		}
+		if info.PixelRepresentation == pixel.SignedPixels {
+			return -1, true
+		}
+		return 1, true
+	}
 	bytesPerSample := info.BytesAllocated()
 	if offset < 0 || offset+bytesPerSample > len(data) {
 		return 0, false
@@ -69,6 +81,45 @@ func decodePixelSampleLE(data []byte, offset int, info *Info) (int64, bool) {
 		return int64(sample), true
 	}
 	return int64(sample) - int64(1<<bitsStored), true
+}
+
+func frameSampleCount(frame []byte, info *Info) int {
+	if info == nil {
+		return 0
+	}
+	if info.BitsAllocated == 1 {
+		return int(info.Width) * int(info.Height) * int(info.SamplesPerPixel)
+	}
+	bytesPerSample := info.BytesAllocated()
+	if bytesPerSample <= 0 {
+		return 0
+	}
+	return len(frame) / bytesPerSample
+}
+
+func pixelPaddingRange(info *Info) (minimum, maximum int64, ok bool) {
+	if info == nil || info.PixelPaddingValue == nil {
+		return 0, 0, false
+	}
+	minimum = int64(*info.PixelPaddingValue)
+	maximum = minimum
+	if info.PixelPaddingRangeLimit != nil {
+		maximum = int64(*info.PixelPaddingRangeLimit)
+	}
+	if minimum > maximum {
+		minimum, maximum = maximum, minimum
+	}
+	return minimum, maximum, true
+}
+
+func sampleOffset(index int, info *Info) int {
+	if info != nil && info.BitsAllocated == 1 {
+		return index
+	}
+	if info == nil {
+		return 0
+	}
+	return index * info.BytesAllocated()
 }
 
 func swapPixelDataBytes(data []byte, info *Info) []byte {

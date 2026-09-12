@@ -25,7 +25,7 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 			option(config)
 		}
 	}
-	pixelData, err := pixeldata.FromDataset(ds)
+	pixelData, err := pixeldata.FromDatasetWithOptions(ds, pixeldata.WithLUTVRMode(config.lutVRMode))
 	if err != nil {
 		return nil, fmt.Errorf("create pixel data: %w", err)
 	}
@@ -57,7 +57,7 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 		}
 		if image.pixelData.Info.PhotometricInterpretation != nil &&
 			image.pixelData.Info.PhotometricInterpretation.Value == pixel.PaletteColor.Value {
-			if err := pixeldata.ConvertPaletteToRGB(image.dataset, image.pixelData); err != nil {
+			if err := pixeldata.ConvertPaletteToRGBWithVRMode(image.dataset, image.pixelData, config.lutVRMode); err != nil {
 				return nil, fmt.Errorf("palette conversion failed: %w", err)
 			}
 		}

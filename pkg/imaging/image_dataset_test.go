@@ -132,6 +132,35 @@ func TestDatasetRescaleAndWindowControlRendering(t *testing.T) {
 	}
 }
 
+func TestDatasetRescaleRendersWithoutRescaleType(t *testing.T) {
+	ds := newNativeMonochromeDataset(t, 2, 1, []byte{0, 100})
+	for _, elem := range []element.Element{
+		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{2}),
+		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{-100}),
+		element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{0}),
+		element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{200}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage(0) error = %v", err)
+	}
+
+	for x, expected := range []uint8{0, 255} {
+		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != expected {
+			t.Fatalf("pixel %d = %d, want %d", x, got, expected)
+		}
+	}
+}
+
 func TestFunctionalGroupsBuildFrameSpecificPipelines(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 1, 1, []byte{50, 50})
 	if err := ds.Add(element.NewString(tag.NumberOfFrames, vr.IS, []string{"2"})); err != nil {
@@ -922,6 +951,40 @@ func TestPresentationLUTRejectsSequenceAndShapeTogether(t *testing.T) {
 	_, _, err := pixeldata.PresentationLUT(ds)
 	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Fatalf("PresentationLUT() error = %v, want mutual-exclusion error", err)
+	}
+}
+
+func TestPresentationLUTAcceptsTenBitDescriptor(t *testing.T) {
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 10})); err != nil {
+		t.Fatal(err)
+	}
+	if err := addLegacyTestElement(item, element.NewOtherWord(tag.LUTData, []byte{0xff, 0x03})); err != nil {
+		t.Fatal(err)
+	}
+	ds := dataset.New()
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatal(err)
+	}
+	if _, present, err := pixeldata.PresentationLUTWithVRMode(ds, pixeldata.LUTStandard); err != nil || !present {
+		t.Fatalf("PresentationLUTWithVRMode() = present %v, error %v; want a valid 10-bit LUT", present, err)
+	}
+}
+
+func TestPresentationLUTStandardRejectsEightBitDescriptor(t *testing.T) {
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{1, 0, 8})); err != nil {
+		t.Fatal(err)
+	}
+	if err := addLegacyTestElement(item, element.NewOtherByte(tag.LUTData, []byte{0})); err != nil {
+		t.Fatal(err)
+	}
+	ds := dataset.New()
+	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := pixeldata.PresentationLUTWithVRMode(ds, pixeldata.LUTStandard); err == nil {
+		t.Fatal("PresentationLUTWithVRMode() accepted an 8-bit descriptor in standard mode")
 	}
 }
 

@@ -208,6 +208,35 @@ func TestCharsetCompatibility(t *testing.T) {
 	}
 }
 
+func TestCharsetFixturesPreserveMultibytePatientNames(t *testing.T) {
+	testDataDir := filepath.Join("..", "..", "..", "test-data", "charset")
+	tests := []struct {
+		filename string
+		want     string
+	}{
+		{"chrGB2312.dcm", "Zhang^XiaoDong=张^小东="},
+		{"chrH32.dcm", "ﾔﾏﾀﾞ^ﾀﾛｳ=山田^太郎=やまだ^たろう"},
+		{"chrKoreanMulti.dcm", "김희중"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			file, err := os.Open(filepath.Join(testDataDir, tt.filename))
+			if err != nil {
+				t.Fatalf("open fixture: %v", err)
+			}
+			defer func() { _ = file.Close() }()
+			result, err := Parse(file)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			got, ok := result.Dataset.GetString(tag.PatientName)
+			if !ok || got != tt.want {
+				t.Fatalf("PatientName = %q, %v; want %q", got, ok, tt.want)
+			}
+		})
+	}
+}
+
 // TestCharsetParseBasicInfo tests that we can parse basic information from charset files
 func TestCharsetParseBasicInfo(t *testing.T) {
 	testDataDir := filepath.Join("..", "..", "..", "test-data", "charset")

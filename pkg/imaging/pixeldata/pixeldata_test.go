@@ -1841,6 +1841,66 @@ func TestApplyVOILUTRejectsInvalidBitsPerEntry(t *testing.T) {
 	}
 }
 
+func TestPaletteLUTStandardRejectsOBData(t *testing.T) {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	for _, descriptorTag := range []*tag.Tag{
+		tag.RedPaletteColorLookupTableDescriptor,
+		tag.GreenPaletteColorLookupTableDescriptor,
+		tag.BluePaletteColorLookupTableDescriptor,
+	} {
+		if err := ds.Add(element.NewUnsignedShort(descriptorTag, []uint16{1, 0, 8})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, dataTag := range []*tag.Tag{
+		tag.RedPaletteColorLookupTableData,
+		tag.GreenPaletteColorLookupTableData,
+		tag.BluePaletteColorLookupTableData,
+	} {
+		if err := ds.Add(element.NewOtherByte(dataTag, []byte{1})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := buildPaletteLUTWithVRMode(ds, LUTStandard); err == nil {
+		t.Fatal("buildPaletteLUTWithVRMode() accepted non-standard OB Palette LUT data")
+	}
+}
+
+func TestPaletteLUTStandardRequiresOWForSegmentedData(t *testing.T) {
+	ds := dataset.New()
+	for _, descriptorTag := range []*tag.Tag{
+		tag.RedPaletteColorLookupTableDescriptor,
+		tag.GreenPaletteColorLookupTableDescriptor,
+		tag.BluePaletteColorLookupTableDescriptor,
+	} {
+		if err := ds.Add(element.NewUnsignedShort(descriptorTag, []uint16{2, 0, 8})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	segment := words(binary.LittleEndian, 0, 2, 0, 255)
+	for _, dataTag := range []*tag.Tag{
+		tag.SegmentedRedPaletteColorLookupTableData,
+		tag.SegmentedGreenPaletteColorLookupTableData,
+		tag.SegmentedBluePaletteColorLookupTableData,
+	} {
+		if err := ds.Add(element.NewOtherWord(dataTag, segment)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := buildPaletteLUTWithVRMode(ds, LUTStandard); err != nil {
+		t.Fatalf("buildPaletteLUTWithVRMode() rejected standard OW segmented data: %v", err)
+	}
+
+	ds.SetAutoValidate(false)
+	if err := ds.AddOrUpdate(element.NewOtherByte(tag.SegmentedRedPaletteColorLookupTableData, segment)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buildPaletteLUTWithVRMode(ds, LUTStandard); err == nil {
+		t.Fatal("buildPaletteLUTWithVRMode() accepted non-standard OB segmented data")
+	}
+}
+
 func TestData_WindowTo8bit(t *testing.T) {
 	info := &Info{
 		Width:                     3,
@@ -1971,6 +2031,54 @@ func TestData_MaskPadding(t *testing.T) {
 	}
 }
 
+func TestDataNormalizesReversedPixelPaddingRange(t *testing.T) {
+	padding := int32(20)
+	rangeLimit := int32(10)
+	info := &Info{
+		Width: 4, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+		PixelPaddingValue:         &padding, PixelPaddingRangeLimit: &rangeLimit,
+	}
+	pd, err := NewFromBytes(info, []byte{5, 10, 15, 20})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	for _, value := range []int64{10, 15, 20} {
+		if !pd.IsPaddingSample(value) {
+			t.Errorf("IsPaddingSample(%d) = false, want true", value)
+		}
+	}
+	if pd.IsPaddingSample(5) {
+		t.Fatal("IsPaddingSample(5) = true, want false")
+	}
+	minValue, maxValue, err := pd.MinMax(true)
+	if err != nil {
+		t.Fatalf("MinMax(ignorePadding=true) error = %v", err)
+	}
+	if minValue != 5 || maxValue != 5 {
+		t.Fatalf("MinMax(ignorePadding=true) = (%v, %v), want (5, 5)", minValue, maxValue)
+	}
+	masked, masks, err := pd.MaskPadding()
+	if err != nil {
+		t.Fatalf("MaskPadding() error = %v", err)
+	}
+	if got, want := masked[0], []byte{5, 0, 0, 0}; !bytes.Equal(got, want) {
+		t.Fatalf("MaskPadding() data = %v, want %v", got, want)
+	}
+	if got, want := masks[0], []bool{false, true, true, true}; !slices.Equal(got, want) {
+		t.Fatalf("MaskPadding() mask = %v, want %v", got, want)
+	}
+	windowed, err := pd.WindowTo8bit(5, 10, true)
+	if err != nil {
+		t.Fatalf("WindowTo8bit() error = %v", err)
+	}
+	if got, want := windowed[0][1:], []byte{0, 0, 0}; !bytes.Equal(got, want) {
+		t.Fatalf("WindowTo8bit() padding = %v, want %v", got, want)
+	}
+}
+
 func TestNewFromBytes(t *testing.T) {
 	info := &Info{
 		Width:                     10,
@@ -2016,6 +2124,77 @@ func TestNewFromBytes(t *testing.T) {
 	}
 	if !bytes.Equal(data[100:200], frame1) {
 		t.Error("Frame 1 data mismatch")
+	}
+}
+
+func TestNewFromBytesRejectsNilInfo(t *testing.T) {
+	if _, err := NewFromBytes(nil, nil); err == nil {
+		t.Fatal("NewFromBytes(nil, nil) error = nil, want an error")
+	}
+}
+
+func TestEncodeAndDecodeRejectNilInfo(t *testing.T) {
+	var pd *Data
+	if _, err := pd.Encode(context.Background(), nil, nil); err == nil {
+		t.Fatal("Encode() error = nil, want an error")
+	}
+	if _, err := pd.Decode(context.Background(), nil, nil); err == nil {
+		t.Fatal("Decode() error = nil, want an error")
+	}
+}
+
+func TestOneBitSampleAndOptimalWindow(t *testing.T) {
+	info := &Info{
+		Width: 8, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 1, BitsStored: 1, HighBit: 0,
+		SamplesPerPixel: 1, PhotometricInterpretation: pixel.Monochrome2,
+	}
+	pd, err := NewFromBytes(info, []byte{0x81})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	for x, want := range []int64{1, 0, 0, 0, 0, 0, 0, 1} {
+		got, err := pd.Sample(0, x, 0, 0)
+		if err != nil {
+			t.Fatalf("Sample(%d) error = %v", x, err)
+		}
+		if got != want {
+			t.Errorf("Sample(%d) = %d, want %d", x, got, want)
+		}
+	}
+	center, width := pd.CalculateOptimalWindow()
+	if center != 0.5 || width != 1 {
+		t.Fatalf("CalculateOptimalWindow() = (%v, %v), want (0.5, 1)", center, width)
+	}
+	frames, err := pd.WindowTo8bit(0.5, 1, false)
+	if err != nil {
+		t.Fatalf("WindowTo8bit() error = %v", err)
+	}
+	if got, want := frames[0], []byte{255, 0, 0, 0, 0, 0, 0, 255}; !bytes.Equal(got, want) {
+		t.Fatalf("WindowTo8bit() = %v, want %v", got, want)
+	}
+	minValue, maxValue, err := pd.MinMax(false)
+	if err != nil || minValue != 0 || maxValue != 1 {
+		t.Fatalf("MinMax() = (%v, %v), %v; want (0, 1), nil", minValue, maxValue, err)
+	}
+}
+
+func TestEncapsulatedAllFramesUsesPayloadSize(t *testing.T) {
+	info := &Info{
+		Width: 1, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7,
+		SamplesPerPixel: 1, PhotometricInterpretation: pixel.Monochrome2,
+		Encapsulated: true, VRCode: "OB",
+	}
+	pd, err := New(info)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := pd.AddFrame(context.Background(), []byte{1, 2, 3}); err != nil {
+		t.Fatalf("AddFrame() error = %v", err)
+	}
+	if got, want := pd.AllFrames(), []byte{1, 2, 3}; !bytes.Equal(got, want) {
+		t.Fatalf("AllFrames() = %v, want %v", got, want)
 	}
 }
 
@@ -2167,7 +2346,7 @@ func TestFunctionalGroupModalityLUTOverridesTopLevelRescale(t *testing.T) {
 	}
 }
 
-func TestWindowOrLUTTo8bitRequiresRescaleType(t *testing.T) {
+func TestWindowOrLUTTo8bitAllowsMissingRescaleType(t *testing.T) {
 	info := &Info{
 		Width: 1, Height: 1, NumberOfFrames: 1,
 		BitsAllocated: 16, BitsStored: 16, HighBit: 15,
@@ -2186,10 +2365,21 @@ func TestWindowOrLUTTo8bitRequiresRescaleType(t *testing.T) {
 		t.Fatalf("NewWithElements() error = %v", err)
 	}
 
-	_, err = pd.WindowOrLUTTo8bit(ds, 100, 100, false)
-	if err == nil || !strings.Contains(err.Error(), "Rescale Type") {
-		t.Fatalf("WindowOrLUTTo8bit() error = %v, want missing Rescale Type", err)
+	frames, err := pd.WindowOrLUTTo8bit(ds, 100, 100, false)
+	if err != nil {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
 	}
+	if len(frames) != 1 || len(frames[0]) != 1 {
+		t.Fatalf("WindowOrLUTTo8bit() returned %d frames with lengths %v, want one 1-byte frame", len(frames), frameLengths(frames))
+	}
+}
+
+func frameLengths(frames [][]byte) []int {
+	lengths := make([]int, len(frames))
+	for index, frame := range frames {
+		lengths[index] = len(frame)
+	}
+	return lengths
 }
 
 func TestWindowOrLUTTo8bitAppliesPerFrameFunctionalGroupRescale(t *testing.T) {
