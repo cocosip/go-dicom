@@ -225,6 +225,16 @@ func (c *ManagedClient) signalLocked() {
 	}
 }
 
+// discardWakeLocked removes a coalesced notification that was generated for
+// a state transition already observed by the caller. It must be called while
+// c.mu is held, immediately before entering a new wait.
+func (c *ManagedClient) discardWakeLocked() {
+	select {
+	case <-c.wakeCh:
+	default:
+	}
+}
+
 // waitForJob waits for an Add notification until linger expires. It returns
 // true only when a queued job is available for a subsequent takeBatch call.
 func (c *ManagedClient) waitForJob(ctx context.Context) bool {
@@ -233,6 +243,9 @@ func (c *ManagedClient) waitForJob(ctx context.Context) bool {
 		available := len(c.jobs) != 0
 		closed := c.closed
 		linger := c.options.AssociationLingerTimeout
+		if !available && !closed && linger != 0 {
+			c.discardWakeLocked()
+		}
 		c.mu.Unlock()
 		if available {
 			return true
@@ -364,6 +377,9 @@ func (c *ManagedClient) waitForCompatibleJob(
 		queued := len(c.jobs) != 0
 		closed := c.closed
 		linger := c.options.AssociationLingerTimeout
+		if !queued && !closed && linger != 0 {
+			c.discardWakeLocked()
+		}
 		c.mu.Unlock()
 		if queued || closed || linger == 0 {
 			return managedJob{}, false
