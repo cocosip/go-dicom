@@ -681,11 +681,75 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 			transfer.ExplicitVRLittleEndian,
 		)
 
-		_, err := transcoder.DecodeFrame(context.Background(), ds, 5) // Frame 5 doesn't exist
-		if err == nil {
-			t.Error("DecodeFrame() should return error for invalid frame index")
+		for _, frameIndex := range []int{5, -1} {
+			_, err := transcoder.DecodeFrame(context.Background(), ds, frameIndex)
+			if err == nil {
+				t.Errorf("DecodeFrame(%d) should return error for invalid frame index", frameIndex)
+			}
 		}
 	})
+
+	t.Run("UncompressedOneBitFrame", func(t *testing.T) {
+		ds := dataset.New()
+		for _, elem := range []element.Element{
+			element.NewUnsignedShort(tag.Rows, []uint16{2}),
+			element.NewUnsignedShort(tag.Columns, []uint16{2}),
+			element.NewUnsignedShort(tag.BitsAllocated, []uint16{1}),
+			element.NewUnsignedShort(tag.BitsStored, []uint16{1}),
+			element.NewUnsignedShort(tag.HighBit, []uint16{0}),
+			element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+			element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+			element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+			element.NewOtherByte(tag.PixelData, []byte{0x0f}),
+		} {
+			if err := ds.Add(elem); err != nil {
+				t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+			}
+		}
+
+		transcoder := newTestTranscoder(t,
+			transfer.ExplicitVRLittleEndian,
+			transfer.ExplicitVRLittleEndian,
+		)
+		frame, err := transcoder.DecodeFrame(context.Background(), ds, 0)
+		if err != nil {
+			t.Fatalf("DecodeFrame() error = %v", err)
+		}
+		if !bytes.Equal(frame, []byte{0x0f}) {
+			t.Fatalf("DecodeFrame() = %x, want 0f", frame)
+		}
+	})
+}
+
+func TestTranscoderPropagatesMetadataCopyErrors(t *testing.T) {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0x01}),
+		// This is intentionally invalid for PatientName; source validation is disabled
+		// so the transcoder must surface the output Dataset.Add failure.
+		element.NewString(tag.PatientName, vr.UI, []string{"1.2.3"}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+
+	transcoder := newTestTranscoder(t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ImplicitVRLittleEndian,
+	)
+	if _, err := transcoder.Transcode(context.Background(), ds); err == nil {
+		t.Fatal("Transcode() succeeded after dropping invalid metadata element")
+	}
 }
 
 func TestTranscoder_DecodeFrameUsesBOTFrameBoundaries(t *testing.T) {

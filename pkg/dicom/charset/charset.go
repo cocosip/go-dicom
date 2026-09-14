@@ -205,6 +205,9 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 		var enc encoding.Encoding
 		switch current {
 		case iso2022ASCII:
+			if !isASCII(segment) {
+				return fmt.Errorf("DICOM default character set only permits 7-bit ASCII")
+			}
 			enc = Default
 			input = segment
 		case "shiftjis":

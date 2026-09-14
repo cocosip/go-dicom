@@ -239,6 +239,13 @@ func (s *String) NeedsCharacterSet() bool {
 	return s != nil && s.requiresCharacterSet
 }
 
+// NeedsCharacterSet reports whether a string-like element contains UTF-8
+// fallback bytes that require a Specific Character Set declaration.
+func NeedsCharacterSet(elem Element) bool {
+	str := underlyingString(elem)
+	return str != nil && str.NeedsCharacterSet()
+}
+
 // EncodingError reports a construction-time encoding error for string-like elements.
 func EncodingError(elem Element) error {
 	if elem == nil {

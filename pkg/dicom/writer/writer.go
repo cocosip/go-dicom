@@ -507,7 +507,7 @@ func validateDatasetCharacterSets(ds *dataset.Dataset, inherited bool, visited m
 	visited[ds] = struct{}{}
 	declared := inherited || len(ds.SpecificCharacterSet()) > 0
 	for _, elem := range ds.Elements() {
-		if str, ok := elem.(*element.String); ok && str.NeedsCharacterSet() && !declared {
+		if element.NeedsCharacterSet(elem) && !declared {
 			return fmt.Errorf("cannot write tag %s: value is encoded as UTF-8 but Specific Character Set is not declared", elem.Tag())
 		}
 		sequence, ok := elem.(*dataset.Sequence)

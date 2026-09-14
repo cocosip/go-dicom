@@ -899,6 +899,18 @@ func TestWriteRejectsUndeclaredUTF8Fallback(t *testing.T) {
 	}
 }
 
+func TestWriteRejectsUndeclaredUTF8FallbackForTypedString(t *testing.T) {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	if err := ds.Add(element.NewPersonName(tag.PatientName, []string{"张三"})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	var out bytes.Buffer
+	if err := Write(&out, ds, WithoutPreamble()); err == nil {
+		t.Fatal("Write() succeeded without Specific Character Set for typed PersonName")
+	}
+}
+
 func TestWriteAllowsUTF8FallbackWhenCharacterSetDeclared(t *testing.T) {
 	ds := dataset.New()
 	ds.SetAutoValidate(false)

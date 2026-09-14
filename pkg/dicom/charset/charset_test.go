@@ -194,6 +194,13 @@ func TestDefaultCharsetRejectsNonASCIIBytes(t *testing.T) {
 	}
 }
 
+func TestDefaultCharsetRejectsNonASCIIBytesInISO2022ASCIISegment(t *testing.T) {
+	data := []byte{'A', 0x1b, '(', 'B', 0x80}
+	if _, err := charset.DecodeString(data, []encoding.Encoding{charset.Default}); err == nil {
+		t.Fatal("DecodeString(Default) accepted non-ASCII byte in ISO-2022 ASCII segment")
+	}
+}
+
 func TestEncodeStringAddsDICOMISO2022Designation(t *testing.T) {
 	data, err := charset.EncodeString("张三", charset.GetEncodings([]string{testCharsetISO2022IR58}))
 	if err != nil {

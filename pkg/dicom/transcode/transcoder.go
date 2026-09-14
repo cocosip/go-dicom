@@ -428,18 +428,20 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ctx context.Context, ds
 	}
 
 	newDS := dataset.NewWithTransferSyntax(t.outputSyntax)
-	for _, elem := range ds.Elements() {
-		if !encapsulated.IsPixelDataMetadataTag(elem.Tag()) {
-			_ = newDS.Add(elem)
-		}
+	if err := copyDatasetElements(newDS, ds); err != nil {
+		return nil, err
 	}
 
 	if outputUsesWords {
 		convertedPixelData := element.NewOtherWord(tag.PixelData, convertedData)
 		element.SetByteOrder(convertedPixelData, t.outputSyntax.Endian().ByteOrder())
-		_ = newDS.Add(convertedPixelData)
+		if err := newDS.Add(convertedPixelData); err != nil {
+			return nil, fmt.Errorf("add converted pixel data: %w", err)
+		}
 	} else {
-		_ = newDS.Add(element.NewOtherByte(tag.PixelData, convertedData))
+		if err := newDS.Add(element.NewOtherByte(tag.PixelData, convertedData)); err != nil {
+			return nil, fmt.Errorf("add converted pixel data: %w", err)
+		}
 	}
 
 	return newDS, nil
@@ -521,17 +523,19 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 	newDS := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
 
 	// Copy all elements except PixelData
-	for _, elem := range ds.Elements() {
-		if !encapsulated.IsPixelDataMetadataTag(elem.Tag()) {
-			_ = newDS.Add(elem)
-		}
+	if err := copyDatasetElements(newDS, ds); err != nil {
+		return nil, err
 	}
 
 	// Add uncompressed pixel data
 	if frameInfo.BitDepth.BitsAllocated <= 8 {
-		_ = newDS.Add(element.NewOtherByte(tag.PixelData, uncompressedData))
+		if err := newDS.Add(element.NewOtherByte(tag.PixelData, uncompressedData)); err != nil {
+			return nil, fmt.Errorf("add decoded pixel data: %w", err)
+		}
 	} else {
-		_ = newDS.Add(element.NewOtherWord(tag.PixelData, uncompressedData))
+		if err := newDS.Add(element.NewOtherWord(tag.PixelData, uncompressedData)); err != nil {
+			return nil, fmt.Errorf("add decoded pixel data: %w", err)
+		}
 	}
 	if err := applyOutputFrameInfo(newDS, frameInfo, newPixelData.FrameInfo()); err != nil {
 		return nil, err
@@ -658,14 +662,14 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	newDS := dataset.NewWithTransferSyntax(outputTS)
 
 	// Copy all elements except PixelData
-	for _, elem := range sourceDS.Elements() {
-		if !encapsulated.IsPixelDataMetadataTag(elem.Tag()) {
-			_ = newDS.Add(elem)
-		}
+	if err := copyDatasetElements(newDS, sourceDS); err != nil {
+		return nil, err
 	}
 
 	// Add encoded pixel data
-	_ = newDS.Add(fragSeq)
+	if err := newDS.Add(fragSeq); err != nil {
+		return nil, fmt.Errorf("add encoded pixel data: %w", err)
+	}
 	if err := applyOutputFrameInfo(newDS, frameInfo, newPixelData.FrameInfo()); err != nil {
 		return nil, err
 	}
@@ -899,7 +903,7 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 	// Get frame count
 	frameCount := frameCountFromDataset(ds)
 
-	if frameIndex >= frameCount {
+	if frameIndex < 0 || frameIndex >= frameCount {
 		return nil, fmt.Errorf("frame index %d out of range (0-%d)",
 			frameIndex, frameCount-1)
 	}
@@ -917,8 +921,13 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 	}
 
 	// Calculate frame size
-	bytesAllocated := frameInfo.BitDepth.BytesAllocated()
-	frameSize := bytesAllocated * int(frameInfo.SamplesPerPixel) * int(frameInfo.Width) * int(frameInfo.Height)
+	frameSize := (&pixeldata.Info{
+		Width:                     frameInfo.Width,
+		Height:                    frameInfo.Height,
+		BitsAllocated:             frameInfo.BitDepth.BitsAllocated,
+		SamplesPerPixel:           frameInfo.SamplesPerPixel,
+		PhotometricInterpretation: &frameInfo.PhotometricInterpretation,
+	}).UncompressedFrameSize()
 	offset := frameIndex * frameSize
 
 	if offset+frameSize > len(pixelData) {
@@ -926,4 +935,16 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 	}
 
 	return pixelData[offset : offset+frameSize], nil
+}
+
+func copyDatasetElements(dst, src *dataset.Dataset) error {
+	for _, elem := range src.Elements() {
+		if encapsulated.IsPixelDataMetadataTag(elem.Tag()) {
+			continue
+		}
+		if err := dst.Add(elem); err != nil {
+			return fmt.Errorf("copy dataset element %s: %w", elem.Tag(), err)
+		}
+	}
+	return nil
 }
