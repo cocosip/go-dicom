@@ -11,6 +11,9 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/unicode"
 )
 
 const testPatientName = "Doe^John"
@@ -52,6 +55,23 @@ func TestDatasetGetStrings(t *testing.T) {
 	}
 	if strs[0] != "ORIGINAL" || strs[1] != "PRIMARY" || strs[2] != "AXIAL" {
 		t.Errorf("GetStrings() = %v, want [ORIGINAL PRIMARY AXIAL]", strs)
+	}
+}
+
+func TestDatasetStringAccessorsReturnDecodeErrors(t *testing.T) {
+	ds := dataset.New()
+	malformed := element.NewStringFromBufferWithEncodings(
+		tag.PatientName,
+		vr.PN,
+		buffer.NewMemory([]byte{0x1b, '$'}),
+		[]encoding.Encoding{unicode.UTF8},
+	)
+	ds.SetAutoValidate(false)
+	if err := ds.Add(malformed); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	if _, err := ds.GetStringsWithError(tag.PatientName); err == nil {
+		t.Fatal("GetStringsWithError() error = nil, want UTF-8 decode error")
 	}
 }
 

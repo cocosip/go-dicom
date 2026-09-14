@@ -77,6 +77,35 @@ func TestDatasetAddValueCreatesTypedElements(t *testing.T) {
 	}
 }
 
+func TestDatasetAddValueInfersAttributeTagFromPointer(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.AddValue(tag.DimensionIndexPointer, tag.Rows); err != nil {
+		t.Fatalf("AddValue(DimensionIndexPointer, *tag.Tag) error = %v", err)
+	}
+	elem, ok := ds.Get(tag.DimensionIndexPointer)
+	if !ok {
+		t.Fatal("DimensionIndexPointer was not added")
+	}
+	if _, ok := elem.(*element.AttributeTag); !ok {
+		t.Fatalf("DimensionIndexPointer type = %T, want *element.AttributeTag", elem)
+	}
+}
+
+func TestDatasetAddValueInfersAttributeTagsFromPointerSlice(t *testing.T) {
+	ds := dataset.New()
+	attributeIdentifierList := tag.New(0x0000, 0x1005)
+	if err := ds.AddValue(attributeIdentifierList, []*tag.Tag{tag.Rows, tag.Columns}); err != nil {
+		t.Fatalf("AddValue(AttributeIdentifierList, []*tag.Tag) error = %v", err)
+	}
+	values, err := ds.GetStringsWithError(attributeIdentifierList)
+	if err != nil {
+		t.Fatalf("GetStringsWithError() error = %v", err)
+	}
+	if len(values) != 2 || values[0] != "(0028,0010)" || values[1] != "(0028,0011)" {
+		t.Fatalf("AT values = %v, want [(0028,0010) (0028,0011)]", values)
+	}
+}
+
 func TestDatasetAddOrUpdateValueReplacesElement(t *testing.T) {
 	ds := dataset.New()
 	if err := ds.AddOrUpdateValue(tag.WindowWidth, 500.0); err != nil {

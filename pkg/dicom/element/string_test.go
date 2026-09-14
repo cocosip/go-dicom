@@ -150,6 +150,13 @@ func TestStringElement_DoesNotReturnUTF8AsLatin1Mojibake(t *testing.T) {
 	}
 }
 
+func TestStringElement_DefaultEncodingRequiresCharacterSetForWrite(t *testing.T) {
+	elem := element.NewString(tag.PatientName, vr.PN, []string{"张三"})
+	if !elem.NeedsCharacterSet() {
+		t.Fatal("NeedsCharacterSet() = false, want true")
+	}
+}
+
 func TestStringElementRoundTripsDICOMISO2022Chinese(t *testing.T) {
 	elem := element.NewStringWithEncoding(tag.PatientName, vr.PN, []string{"张三"}, charset.GetEncoding("ISO 2022 IR 58"))
 	if got := elem.GetString(); got != "张三" {

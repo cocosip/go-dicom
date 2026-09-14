@@ -55,7 +55,7 @@ func CanonicalStrings(elem Element) ([]string, error) {
 	}
 
 	if str := underlyingString(elem); str != nil {
-		return canonicalStringValues(str), nil
+		return canonicalStringValues(str)
 	}
 
 	switch value := elem.(type) {
@@ -113,6 +113,20 @@ func CanonicalStrings(elem Element) ([]string, error) {
 	default:
 		return nil, unsupportedValue(elem)
 	}
+}
+
+func canonicalStringValues(value *String) ([]string, error) {
+	complete, err := value.GetStringWithError()
+	if err != nil {
+		return nil, err
+	}
+	if complete == "" {
+		return nil, nil
+	}
+	if value.hasLiteralBackslash() {
+		return []string{complete}, nil
+	}
+	return strings.Split(complete, "\\"), nil
 }
 
 // ReplaceCanonicalStrings constructs a VR-correct element from individual
@@ -277,14 +291,6 @@ func underlyingString(elem Element) *String {
 	default:
 		return nil
 	}
-}
-
-func canonicalStringValues(value *String) []string {
-	complete := value.GetString()
-	if complete == "" {
-		return nil
-	}
-	return strings.Split(complete, "\\")
 }
 
 func newCanonicalString(targetTag *tag.Tag, targetVR *vr.VR, values []string, encodings []encoding.Encoding) (*String, error) {

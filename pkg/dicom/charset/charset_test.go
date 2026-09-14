@@ -188,6 +188,12 @@ func TestEncodeStringRejectsUnrepresentableDefaultCharset(t *testing.T) {
 	}
 }
 
+func TestDefaultCharsetRejectsNonASCIIBytes(t *testing.T) {
+	if _, err := charset.EncodeString("é", []encoding.Encoding{charset.Default}); err == nil {
+		t.Fatal("EncodeString(Default) accepted non-ASCII text")
+	}
+}
+
 func TestEncodeStringAddsDICOMISO2022Designation(t *testing.T) {
 	data, err := charset.EncodeString("张三", charset.GetEncodings([]string{testCharsetISO2022IR58}))
 	if err != nil {
@@ -327,9 +333,8 @@ func TestDefaultEncoding(t *testing.T) {
 		t.Fatal("Default encoding is nil")
 	}
 
-	// Default should be ISO-8859-1
-	if charset.Default != charmap.ISO8859_1 {
-		t.Error("Default encoding should be ISO-8859-1")
+	if _, ok := charset.Default.(interface{ NewEncoder() *encoding.Encoder }); !ok {
+		t.Error("Default encoding should implement encoding.Encoding")
 	}
 }
 

@@ -192,6 +192,10 @@ func canonicalSliceValues(valueRepresentation *vr.VR, value any) ([]string, bool
 }
 
 func canonicalReflectValue(valueRepresentation *vr.VR, rv reflect.Value) (string, error) {
+	if rv.IsValid() && rv.Type() == reflect.TypeFor[tag.Tag]() {
+		t := rv.Interface().(tag.Tag)
+		return canonicalValue(valueRepresentation, t)
+	}
 	switch rv.Kind() {
 	case reflect.String:
 		if isBinaryVR(valueRepresentation) {
@@ -256,6 +260,9 @@ func canonicalValue(valueRepresentation *vr.VR, value any) (string, error) {
 			return "", fmt.Errorf("tag value is nil")
 		}
 		return t.String(), nil
+	}
+	if t, ok := value.(tag.Tag); ok {
+		return (&t).String(), nil
 	}
 
 	rv := reflect.ValueOf(value)

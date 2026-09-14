@@ -250,10 +250,11 @@ func cloneString(source *String) *String {
 		return nil
 	}
 	return &String{
-		base:      cloneBase(source.base),
-		encoding:  source.encoding,
-		encodings: append([]encoding.Encoding(nil), source.encodings...),
-		encodeErr: source.encodeErr,
+		base:                 cloneBase(source.base),
+		encoding:             source.encoding,
+		encodings:            append([]encoding.Encoding(nil), source.encodings...),
+		encodeErr:            source.encodeErr,
+		requiresCharacterSet: source.requiresCharacterSet,
 	}
 }
 
@@ -293,10 +294,11 @@ func cloneStringChecked(source *String) (*String, error) {
 		return nil, err
 	}
 	return &String{
-		base:      base,
-		encoding:  source.encoding,
-		encodings: append([]encoding.Encoding(nil), source.encodings...),
-		encodeErr: source.encodeErr,
+		base:                 base,
+		encoding:             source.encoding,
+		encodings:            append([]encoding.Encoding(nil), source.encodings...),
+		encodeErr:            source.encodeErr,
+		requiresCharacterSet: source.requiresCharacterSet,
 	}, nil
 }
 

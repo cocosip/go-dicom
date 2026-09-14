@@ -30,6 +30,9 @@ type String struct {
 	encoding  encoding.Encoding
 	encodings []encoding.Encoding
 	encodeErr error
+	// requiresCharacterSet marks legacy NewString values that were encoded as
+	// UTF-8 after failing the DICOM default repertoire.
+	requiresCharacterSet bool
 }
 
 // NewString creates a new string element with the given tag, VR, and values.
@@ -39,7 +42,9 @@ func NewString(t *tag.Tag, v *vr.VR, values []string) *String {
 	if result.encodeErr != nil {
 		// This legacy constructor cannot return an error. Preserve the Go text
 		// losslessly as UTF-8 instead of exposing UTF-8 bytes as Latin-1.
-		return NewStringWithEncoding(t, v, values, unicode.UTF8)
+		fallback := NewStringWithEncoding(t, v, values, unicode.UTF8)
+		fallback.requiresCharacterSet = true
+		return fallback
 	}
 	return result
 }
@@ -187,12 +192,21 @@ func (s *String) GetValue(index int) string {
 
 // GetValues returns all values as a slice of strings.
 func (s *String) GetValues() []string {
-	str := s.GetString()
+	values, _ := s.GetValuesWithError()
+	return values
+}
+
+// GetValuesWithError returns all decoded values and any character set error.
+func (s *String) GetValuesWithError() ([]string, error) {
+	str, err := s.GetStringWithError()
+	if err != nil {
+		return nil, err
+	}
 	if str == "" {
-		return nil
+		return nil, nil
 	}
 	if s.hasLiteralBackslash() {
-		return []string{str}
+		return []string{str}, nil
 	}
 
 	values := strings.Split(str, "\\")
@@ -200,7 +214,7 @@ func (s *String) GetValues() []string {
 	for i, v := range values {
 		values[i] = strings.TrimSpace(v)
 	}
-	return values
+	return values, nil
 }
 
 func (s *String) hasLiteralBackslash() bool {
@@ -210,6 +224,34 @@ func (s *String) hasLiteralBackslash() bool {
 // Encoding returns the character set encoding used by this element.
 func (s *String) Encoding() encoding.Encoding {
 	return s.encoding
+}
+
+// EncodingError reports an error captured while constructing this element.
+func (s *String) EncodingError() error {
+	if s == nil {
+		return fmt.Errorf("string element is nil")
+	}
+	return s.encodeErr
+}
+
+// NeedsCharacterSet reports whether NewString had to use UTF-8 fallback bytes.
+func (s *String) NeedsCharacterSet() bool {
+	return s != nil && s.requiresCharacterSet
+}
+
+// EncodingError reports a construction-time encoding error for string-like elements.
+func EncodingError(elem Element) error {
+	if elem == nil {
+		return fmt.Errorf("element is nil")
+	}
+	str := underlyingString(elem)
+	if str == nil {
+		return nil
+	}
+	if err := str.EncodingError(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // String returns a string representation of the element.
@@ -231,6 +273,10 @@ func (s *String) Validate() error {
 }
 
 func (s *String) validateValue() error {
+	if _, err := s.GetStringWithError(); err != nil {
+		return fmt.Errorf("decode string for VR %s: %w", s.vr.Code(), err)
+	}
+
 	// Check the maximum length of each encoded value, excluding separators and
 	// the Value Field's trailing padding.
 	maxLen := s.vr.MaximumLength()
@@ -251,7 +297,10 @@ func (s *String) validateValue() error {
 	}
 
 	// Perform VR-specific validation on each value
-	values := s.GetValues()
+	values, err := s.GetValuesWithError()
+	if err != nil {
+		return fmt.Errorf("decode values for VR %s: %w", s.vr.Code(), err)
+	}
 	for i, value := range values {
 		if err := s.vr.ValidateStringValue(value); err != nil {
 			return fmt.Errorf("value[%d] validation failed for VR %s: %w", i, s.vr.Code(), err)

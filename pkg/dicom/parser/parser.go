@@ -241,6 +241,24 @@ func WithAssumedTransferSyntax(ts *transfer.Syntax) Option {
 	}
 }
 
+// WithFallbackEncodings sets encodings used for string values when the
+// dataset does not contain Specific Character Set. An explicit declaration
+// in the dataset always takes precedence.
+func WithFallbackEncodings(encodings ...encoding.Encoding) Option {
+	return func(ctx *parseContext) {
+		if len(encodings) == 0 {
+			ctx.textEncodings = []encoding.Encoding{charset.Default}
+			ctx.textEncoding = charset.Default
+			return
+		}
+		ctx.textEncodings = append([]encoding.Encoding(nil), encodings...)
+		if ctx.textEncodings[0] == nil {
+			ctx.textEncodings[0] = charset.Default
+		}
+		ctx.textEncoding = ctx.textEncodings[0]
+	}
+}
+
 // WithTransferSyntaxRegistry sets the isolated registry used to resolve the
 // Transfer Syntax UID from File Meta Information.
 func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
@@ -658,22 +676,6 @@ func (p *parseContext) normalizeImplicitVR(ds *dataset.Dataset) error {
 	if ds == nil || p.isExplicitVR {
 		return nil
 	}
-	representationElement, ok := ds.Get(tag.PixelRepresentation)
-	if !ok {
-		return nil
-	}
-	representation, ok := representationElement.(*element.UnsignedShort)
-	if !ok {
-		return nil
-	}
-	representationValue, err := representation.GetValue(0)
-	if err != nil || representationValue > 1 {
-		return nil
-	}
-	if representationValue == 0 {
-		return nil
-	}
-
 	dependentTags := map[uint32]bool{
 		tag.SmallestValidPixelValueRETIRED.ToUint32():        true,
 		tag.LargestValidPixelValueRETIRED.ToUint32():         true,
@@ -690,31 +692,60 @@ func (p *parseContext) normalizeImplicitVR(ds *dataset.Dataset) error {
 	if dictionary == nil {
 		dictionary = dict.Default()
 	}
-	for _, elem := range ds.Elements() {
-		if elem == nil || !dependentTags[elem.Tag().ToUint32()] {
-			continue
-		}
-		entry := dictionary.Lookup(elem.Tag())
-		if entry == nil || len(entry.ValueRepresentations()) < 2 {
-			continue
-		}
-		var signedVR *vr.VR
-		for _, candidate := range entry.ValueRepresentations() {
-			if candidate.Code() == vr.CodeSS {
-				signedVR = candidate
-				break
+	return p.normalizeImplicitVRDataset(ds, nil, dependentTags, dictionary)
+}
+
+func (p *parseContext) normalizeImplicitVRDataset(ds *dataset.Dataset, inherited *uint16, dependentTags map[uint32]bool, dictionary *dict.Dictionary) error {
+	if ds == nil {
+		return nil
+	}
+	current := inherited
+	if representationElement, ok := ds.Get(tag.PixelRepresentation); ok {
+		if representation, ok := representationElement.(*element.UnsignedShort); ok {
+			if value, err := representation.GetValue(0); err == nil && value <= 1 {
+				resolved := value
+				current = &resolved
 			}
 		}
-		if signedVR == nil || elem.ValueRepresentation().Code() == vr.CodeSS {
+	}
+	if current != nil && *current == 1 {
+		for _, elem := range ds.Elements() {
+			if elem == nil || !dependentTags[elem.Tag().ToUint32()] {
+				continue
+			}
+			entry := dictionary.Lookup(elem.Tag())
+			if entry == nil || len(entry.ValueRepresentations()) < 2 {
+				continue
+			}
+			var signedVR *vr.VR
+			for _, candidate := range entry.ValueRepresentations() {
+				if candidate.Code() == vr.CodeSS {
+					signedVR = candidate
+					break
+				}
+			}
+			if signedVR == nil || elem.ValueRepresentation().Code() == vr.CodeSS {
+				continue
+			}
+			replacement, err := element.NewElementFromBuffer(elem.Tag(), signedVR, elem.Buffer(), p.textEncodings)
+			if err != nil {
+				return fmt.Errorf("resolve implicit VR for %s: %w", elem.Tag(), err)
+			}
+			element.SetByteOrder(replacement, p.byteOrder)
+			if err := ds.AddOrUpdate(replacement); err != nil {
+				return fmt.Errorf("replace implicit VR for %s: %w", elem.Tag(), err)
+			}
+		}
+	}
+	for _, elem := range ds.Elements() {
+		sequence, ok := elem.(*dataset.Sequence)
+		if !ok {
 			continue
 		}
-		replacement, err := element.NewElementFromBuffer(elem.Tag(), signedVR, elem.Buffer(), p.textEncodings)
-		if err != nil {
-			return fmt.Errorf("resolve implicit VR for %s: %w", elem.Tag(), err)
-		}
-		element.SetByteOrder(replacement, p.byteOrder)
-		if err := ds.AddOrUpdate(replacement); err != nil {
-			return fmt.Errorf("replace implicit VR for %s: %w", elem.Tag(), err)
+		for index := 0; index < sequence.Count(); index++ {
+			if err := p.normalizeImplicitVRDataset(sequence.GetItem(index), current, dependentTags, dictionary); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

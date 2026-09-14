@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/text/encoding/charmap"
+
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
@@ -869,6 +871,57 @@ func BenchmarkWriteElement(b *testing.B) {
 		w := New(transfer.ExplicitVRLittleEndian)
 		w.writer = buf
 		_ = w.writeElement(elem)
+	}
+}
+
+func TestWriteRejectsStringEncodingError(t *testing.T) {
+	elem := element.NewStringWithEncoding(tag.PatientName, vr.PN, []string{"张三"}, charmap.ISO8859_1)
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	if err := ds.Add(elem); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	var out bytes.Buffer
+	if err := Write(&out, ds, WithoutPreamble()); err == nil {
+		t.Fatal("Write() succeeded with an unrepresentable string")
+	}
+}
+
+func TestWriteRejectsUndeclaredUTF8Fallback(t *testing.T) {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"张三"})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	var out bytes.Buffer
+	if err := Write(&out, ds, WithoutPreamble()); err == nil {
+		t.Fatal("Write() succeeded without Specific Character Set")
+	}
+}
+
+func TestWriteAllowsUTF8FallbackWhenCharacterSetDeclared(t *testing.T) {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	if err := ds.SetSpecificCharacterSet("ISO_IR 192"); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() error = %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"张三"})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	var out bytes.Buffer
+	if err := Write(&out, ds, WithoutPreamble()); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+}
+
+func TestWriteUsesDefaultCharacterSetWhenDeclarationIsAbsent(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.AddValue(tag.PatientName, "DOE^JOHN"); err != nil {
+		t.Fatalf("AddValue() error = %v", err)
+	}
+	var out bytes.Buffer
+	if err := Write(&out, ds, WithoutPreamble()); err != nil {
+		t.Fatalf("Write() error = %v; missing Specific Character Set should use DICOM default", err)
 	}
 }
 

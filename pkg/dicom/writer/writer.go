@@ -321,6 +321,8 @@ func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 }
 
 // WriteContext writes a DICOM dataset and associates logging with ctx.
+//
+//nolint:gocyclo // WriteContext coordinates transfer syntax, metadata, and validation options.
 func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ...WriteOption) (err error) {
 	logDebug := logging.Enabled(ctx, slog.LevelDebug)
 	logError := logging.Enabled(ctx, slog.LevelError)
@@ -362,6 +364,9 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 
 	if ds == nil {
 		return fmt.Errorf("dataset cannot be nil")
+	}
+	if err := validateDatasetCharacterSets(ds, false, make(map[*dataset.Dataset]struct{})); err != nil {
+		return err
 	}
 
 	// Apply options to configuration
@@ -489,6 +494,32 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 		return fmt.Errorf("failed to write dataset: %w", err)
 	}
 
+	return nil
+}
+
+func validateDatasetCharacterSets(ds *dataset.Dataset, inherited bool, visited map[*dataset.Dataset]struct{}) error {
+	if ds == nil {
+		return nil
+	}
+	if _, ok := visited[ds]; ok {
+		return nil
+	}
+	visited[ds] = struct{}{}
+	declared := inherited || len(ds.SpecificCharacterSet()) > 0
+	for _, elem := range ds.Elements() {
+		if str, ok := elem.(*element.String); ok && str.NeedsCharacterSet() && !declared {
+			return fmt.Errorf("cannot write tag %s: value is encoded as UTF-8 but Specific Character Set is not declared", elem.Tag())
+		}
+		sequence, ok := elem.(*dataset.Sequence)
+		if !ok {
+			continue
+		}
+		for index := 0; index < sequence.Count(); index++ {
+			if err := validateDatasetCharacterSets(sequence.GetItem(index), declared, visited); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -744,6 +775,9 @@ func (w *Writer) writeDataset(ds *dataset.Dataset) error {
 func (w *Writer) writeElement(elem element.Element) error {
 	if elem == nil {
 		return fmt.Errorf("cannot write nil element")
+	}
+	if err := element.EncodingError(elem); err != nil {
+		return fmt.Errorf("cannot write tag %s: string encoding failed: %w", elem.Tag(), err)
 	}
 	switch elem.(type) {
 	case *dataset.Sequence, *element.FragmentSequence, *element.OtherByteFragment, *element.OtherWordFragment:

@@ -163,23 +163,11 @@ func valueMatchesVR(valueRepresentation *vr.VR, value any) bool {
 		return false
 	}
 	code := valueRepresentation.Code()
-	switch value.(type) {
-	case nil:
-		return true
-	case string:
-		return valueRepresentation.IsString()
-	case bool:
-		return valueRepresentation.IsString()
-	case int, int8, int16, int32, int64:
-		return signedKindMatchesVR(code)
-	case uint, uint8, uint16, uint32, uint64:
-		return unsignedKindMatchesVR(code)
-	case float32:
-		return float32MatchesVR(code)
-	case float64:
-		return float64MatchesVR(code)
-	case time.Time:
-		return code == vr.CodeDA || code == vr.CodeTM || code == vr.CodeDT
+	if reflect.TypeOf(value) == reflect.TypeFor[*tag.Tag]() {
+		return code == vr.CodeAT
+	}
+	if matched, primitive := primitiveValueMatchesVR(valueRepresentation, value); primitive {
+		return matched
 	}
 
 	rv := reflect.ValueOf(value)
@@ -213,6 +201,28 @@ func valueMatchesVR(valueRepresentation *vr.VR, value any) bool {
 	}
 
 	return valueKindMatchesVR(valueRepresentation, rv.Kind())
+}
+
+func primitiveValueMatchesVR(valueRepresentation *vr.VR, value any) (bool, bool) {
+	code := valueRepresentation.Code()
+	switch value.(type) {
+	case nil:
+		return true, true
+	case string, bool:
+		return valueRepresentation.IsString(), true
+	case int, int8, int16, int32, int64:
+		return signedKindMatchesVR(code), true
+	case uint, uint8, uint16, uint32, uint64:
+		return unsignedKindMatchesVR(code), true
+	case float32:
+		return float32MatchesVR(code), true
+	case float64:
+		return float64MatchesVR(code), true
+	case time.Time:
+		return code == vr.CodeDA || code == vr.CodeTM || code == vr.CodeDT, true
+	default:
+		return false, false
+	}
 }
 
 func valueKindMatchesVR(valueRepresentation *vr.VR, kind reflect.Kind) bool {

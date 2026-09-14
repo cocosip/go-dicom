@@ -14,32 +14,37 @@ import (
 // GetString retrieves a string value from the dataset.
 // Returns the string value and true if found, empty string and false otherwise.
 func (ds *Dataset) GetString(t *tag.Tag) (string, bool) {
-	elem, exists := ds.Get(t)
-	if !exists {
-		return "", false
-	}
+	value, err := ds.GetStringWithError(t)
+	return value, err == nil
+}
 
-	values, ok := stringValues(elem)
-	if !ok {
-		return "", false
+// GetStringWithError retrieves a string value and reports decoding errors.
+func (ds *Dataset) GetStringWithError(t *tag.Tag) (string, error) {
+	values, err := ds.GetStringsWithError(t)
+	if err != nil {
+		return "", err
 	}
-
-	return strings.Join(values, "\\"), true
+	return strings.Join(values, "\\"), nil
 }
 
 // GetStrings retrieves all string values from the dataset.
 func (ds *Dataset) GetStrings(t *tag.Tag) ([]string, bool) {
+	values, err := ds.GetStringsWithError(t)
+	return values, err == nil
+}
+
+// GetStringsWithError retrieves all string values and reports decoding errors.
+func (ds *Dataset) GetStringsWithError(t *tag.Tag) ([]string, error) {
 	elem, exists := ds.Get(t)
 	if !exists {
-		return nil, false
+		return nil, fmt.Errorf("element %s not found", t)
 	}
 
-	values, ok := stringValues(elem)
-	if !ok {
-		return nil, false
+	values, err := element.CanonicalStrings(elem)
+	if err != nil {
+		return nil, err
 	}
-
-	return values, true
+	return values, nil
 }
 
 // GetBytes retrieves the element's contiguous encoded value bytes. The
@@ -328,12 +333,4 @@ func (ds *Dataset) TryGetUInt16(t *tag.Tag, index int) uint16 {
 func (ds *Dataset) TryGetUInt32(t *tag.Tag, index int) uint32 {
 	val, _ := ds.GetUInt32(t, index)
 	return val
-}
-
-func stringValues(elem element.Element) ([]string, bool) {
-	values, err := element.CanonicalStrings(elem)
-	if err != nil {
-		return nil, false
-	}
-	return values, true
 }

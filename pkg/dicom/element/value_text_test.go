@@ -88,6 +88,19 @@ func TestCanonicalStringsPreservesValueBoundaries(t *testing.T) {
 	}
 }
 
+func TestCanonicalStringsPreservesLiteralBackslashesForTextVR(t *testing.T) {
+	for _, valueRepresentation := range []*vr.VR{vr.LT, vr.ST, vr.UT, vr.UR} {
+		elem := NewString(tag.StudyDescription, valueRepresentation, []string{"left\\right"})
+		got, err := CanonicalStrings(elem)
+		if err != nil {
+			t.Fatalf("CanonicalStrings(%s) error = %v", valueRepresentation.Code(), err)
+		}
+		if !reflect.DeepEqual(got, []string{"left\\right"}) {
+			t.Fatalf("CanonicalStrings(%s) = %#v, want one literal value", valueRepresentation.Code(), got)
+		}
+	}
+}
+
 func TestCanonicalStringsRejectsUnsupportedValues(t *testing.T) {
 	tests := []Element{
 		NewOtherByte(tag.PixelData, []byte{1, 2}),

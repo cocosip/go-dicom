@@ -20,6 +20,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 const testCycleSOPInstanceUID = "1.2.3.4"
@@ -152,6 +153,25 @@ func TestParseUsesSpecificCharacterSetCodeExtensions(t *testing.T) {
 	}
 }
 
+func TestParseUsesFallbackEncodingWhenSpecificCharacterSetIsAbsent(t *testing.T) {
+	encoded, err := simplifiedchinese.GB18030.NewEncoder().Bytes([]byte("中文"))
+	if err != nil {
+		t.Fatalf("encode fixture: %v", err)
+	}
+	var raw bytes.Buffer
+	writeImplicitElement(&raw, tag.PatientName.Group(), tag.PatientName.Element(), encoded)
+	result, err := Parse(bytes.NewReader(raw.Bytes()),
+		WithAssumedTransferSyntax(transfer.ImplicitVRLittleEndian),
+		WithFallbackEncodings(simplifiedchinese.GB18030),
+	)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got, ok := result.Dataset.GetString(tag.PatientName); !ok || got != "中文" {
+		t.Fatalf("PatientName = %q, %v; want 中文, true", got, ok)
+	}
+}
+
 func TestParseDecodesDICOMChineseAndKoreanCodeExtensions(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -218,6 +238,39 @@ func TestParseImplicitVRResolvesSignedPixelValueFromPixelRepresentation(t *testi
 	}
 }
 
+func TestParseImplicitVRResolvesSignedPixelValueInNestedItem(t *testing.T) {
+	var raw bytes.Buffer
+	writeImplicitElement(&raw, tag.PixelRepresentation.Group(), tag.PixelRepresentation.Element(), []byte{1, 0})
+	var item bytes.Buffer
+	writeImplicitElement(&item, tag.SmallestImagePixelValue.Group(), tag.SmallestImagePixelValue.Element(), []byte{0xff, 0xff})
+	writeImplicitSequence(&raw, tag.RequestAttributesSequence, item.Bytes())
+
+	result, err := Parse(bytes.NewReader(raw.Bytes()), WithAssumedTransferSyntax(transfer.ImplicitVRLittleEndian))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	seq, ok := result.Dataset.Get(tag.RequestAttributesSequence)
+	if !ok {
+		t.Fatal("RequestAttributesSequence not found")
+	}
+	sequence, ok := seq.(*dataset.Sequence)
+	if !ok || sequence.Count() != 1 {
+		t.Fatalf("sequence = %T, count %d; want one item", seq, sequence.Count())
+	}
+	nested, ok := sequence.GetItem(0).Get(tag.SmallestImagePixelValue)
+	if !ok {
+		t.Fatal("nested SmallestImagePixelValue not found")
+	}
+	signed, ok := nested.(*element.SignedShort)
+	if !ok {
+		t.Fatalf("nested value type = %T, want *element.SignedShort", nested)
+	}
+	value, err := signed.GetValue(0)
+	if err != nil || value != -1 {
+		t.Fatalf("nested value = %d, error %v; want -1", value, err)
+	}
+}
+
 func TestParseCreatesTypedDecimalStringForDS(t *testing.T) {
 	var raw bytes.Buffer
 	writeImplicitElement(&raw, tag.RescaleSlope.Group(), tag.RescaleSlope.Element(), []byte("1.5 "))
@@ -277,6 +330,19 @@ func writeExplicitLongValueElement(buf *bytes.Buffer, tg *tag.Tag, vrCode string
 	_ = binary.Write(buf, binary.LittleEndian, uint16(0))
 	_ = binary.Write(buf, binary.LittleEndian, uint32(len(value)))
 	buf.Write(value)
+}
+
+func writeImplicitSequence(buf *bytes.Buffer, tg *tag.Tag, item []byte) {
+	_ = binary.Write(buf, binary.LittleEndian, tg.Group())
+	_ = binary.Write(buf, binary.LittleEndian, tg.Element())
+	_ = binary.Write(buf, binary.LittleEndian, uint32(0xFFFFFFFF))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFE))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0xE000))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(len(item)))
+	buf.Write(item)
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFE))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(0xE0DD))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(0))
 }
 
 type cancelAfterFirstReadSeeker struct {

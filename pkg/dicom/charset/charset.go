@@ -17,8 +17,15 @@ import (
 	"golang.org/x/text/encoding/unicode"
 )
 
-// Default is the default DICOM encoding (ASCII/ISO-8859-1).
-var Default = charmap.ISO8859_1
+type asciiEncoding struct{ encoding.Encoding }
+
+func (a *asciiEncoding) NewDecoder() *encoding.Decoder { return a.Encoding.NewDecoder() }
+func (a *asciiEncoding) NewEncoder() *encoding.Encoder { return a.Encoding.NewEncoder() }
+
+// Default is the DICOM default repertoire (ISO-IR 6 / 7-bit ASCII).
+// The underlying x/text map is used for ASCII-compatible decoding, while the
+// public encode/decode helpers enforce the 7-bit restriction.
+var Default encoding.Encoding = &asciiEncoding{Encoding: charmap.ISO8859_1}
 
 // Info holds information about a DICOM character set.
 type Info struct {
@@ -63,7 +70,7 @@ var knownCharsets = map[string]*Info{
 	"ISO_IR 192": {"Unicode (UTF-8)", unicode.UTF8},
 
 	// ISO 2022 Extended character sets (simplified handling)
-	"ISO 2022 IR 6":   {"ASCII", charmap.ISO8859_1},
+	"ISO 2022 IR 6":   {"ASCII", Default},
 	"ISO 2022 IR 100": {"Latin-1 Extended", charmap.ISO8859_1},
 	"ISO 2022 IR 101": {"Latin-2 Extended", charmap.ISO8859_2},
 	"ISO 2022 IR 109": {"Latin-3 Extended", charmap.ISO8859_3},
@@ -162,6 +169,12 @@ func DecodeString(data []byte, encodings []encoding.Encoding) (string, error) {
 	if enc == nil {
 		enc = Default
 	}
+	if _, strict := enc.(*asciiEncoding); strict {
+		if !isASCII(data) {
+			return "", fmt.Errorf("DICOM default character set only permits 7-bit ASCII")
+		}
+		return string(data), nil
+	}
 	decoded, err := enc.NewDecoder().Bytes(data)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode string: %w", err)
@@ -171,7 +184,7 @@ func DecodeString(data []byte, encodings []encoding.Encoding) (string, error) {
 
 func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, error) {
 	current := iso2022ASCII
-	var initial encoding.Encoding = Default
+	initial := Default
 	if len(encodings) > 0 && encodings[0] != nil {
 		initial = encodings[0]
 	}
@@ -293,6 +306,12 @@ func encodeWithEncoding(s string, enc encoding.Encoding) ([]byte, error) {
 	if enc == nil {
 		enc = Default
 	}
+	if _, strict := enc.(*asciiEncoding); strict {
+		if !isASCII([]byte(s)) {
+			return nil, fmt.Errorf("DICOM default character set only permits 7-bit ASCII")
+		}
+		return []byte(s), nil
+	}
 	encoded, err := enc.NewEncoder().String(s)
 	if err != nil {
 		return nil, err
@@ -304,6 +323,15 @@ func encodeWithEncoding(s string, enc encoding.Encoding) ([]byte, error) {
 		return result, nil
 	}
 	return []byte(encoded), nil
+}
+
+func isASCII(data []byte) bool {
+	for _, value := range data {
+		if value > 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // KnownCharsets returns a list of all known DICOM character sets.
