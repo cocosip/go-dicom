@@ -108,6 +108,41 @@ func TestTranscoderRejectsInvalidCodecOutputMetadata(t *testing.T) {
 	}
 }
 
+func TestTranscoderEncodeWritesAllCodecOutputMetadata(t *testing.T) {
+	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 0, 1)
+	if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{1})); err != nil {
+		t.Fatal(err)
+	}
+	outputInfo := codec.FrameInfo{
+		Width:                     2,
+		Height:                    2,
+		BitDepth:                  *pixel.NewBitDepth(16, 12, 11, true),
+		SamplesPerPixel:           1,
+		PixelRepresentation:       pixel.SignedPixels,
+		PlanarConfiguration:       pixel.InterleavedPlanar,
+		PhotometricInterpretation: *pixel.Monochrome2,
+	}
+	result, err := newTestTranscoder(t, transfer.ExplicitVRLittleEndian, transfer.JPEGBaseline8Bit,
+		metadataCodec{frames: [][]byte{{1}}, outputInfo: outputInfo}).Transcode(context.Background(), ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	checks := map[*tag.Tag]uint16{
+		tag.Rows:                2,
+		tag.Columns:             2,
+		tag.BitsAllocated:       16,
+		tag.BitsStored:          12,
+		tag.HighBit:             11,
+		tag.SamplesPerPixel:     1,
+		tag.PixelRepresentation: 1,
+	}
+	for tagValue, want := range checks {
+		if got := result.TryGetUInt16(tagValue, 0); got != want {
+			t.Errorf("%s = %d, want %d", tagValue, got, want)
+		}
+	}
+}
+
 func metadataTestDataset(t *testing.T, syntax *transfer.Syntax, photometric string, planar uint16, frames int) *dataset.Dataset {
 	t.Helper()
 	ds := dataset.NewWithTransferSyntax(syntax)
@@ -135,7 +170,8 @@ func metadataTestDataset(t *testing.T, syntax *transfer.Syntax, photometric stri
 }
 
 type metadataCodec struct {
-	frames [][]byte
+	frames     [][]byte
+	outputInfo codec.FrameInfo
 }
 
 type invalidMetadataCodec struct{}
@@ -184,14 +220,17 @@ func (c metadataCodec) Decode(ctx context.Context, _ codec.FrameSource, newPixel
 }
 
 func (c metadataCodec) writeFramesAndMetadata(ctx context.Context, newPixelData codec.FrameSink) error {
-	info := codec.FrameInfo{
-		Width:                     1,
-		Height:                    1,
-		BitDepth:                  *pixel.NewBitDepth(8, 8, 7, false),
-		SamplesPerPixel:           3,
-		PixelRepresentation:       pixel.UnsignedPixels,
-		PlanarConfiguration:       pixel.InterleavedPlanar,
-		PhotometricInterpretation: *pixel.RGBPhotometric,
+	info := c.outputInfo
+	if info.Width == 0 {
+		info = codec.FrameInfo{
+			Width:                     1,
+			Height:                    1,
+			BitDepth:                  *pixel.NewBitDepth(8, 8, 7, false),
+			SamplesPerPixel:           3,
+			PixelRepresentation:       pixel.UnsignedPixels,
+			PlanarConfiguration:       pixel.InterleavedPlanar,
+			PhotometricInterpretation: *pixel.RGBPhotometric,
+		}
 	}
 	if err := newPixelData.SetFrameInfo(info); err != nil {
 		return errors.New("output pixel data does not support frame metadata updates")

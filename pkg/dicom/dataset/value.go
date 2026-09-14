@@ -91,22 +91,30 @@ func (ds *Dataset) valueContext() element.CanonicalValueContext {
 // AddElements adds a collection of elements, preserving each element's
 // existing VR and rejecting the whole operation on the first error.
 func (ds *Dataset) AddElements(elements ...element.Element) error {
+	clone, err := ds.DeepCloneChecked()
+	if err != nil {
+		return err
+	}
 	for _, elem := range elements {
-		if err := ds.Add(elem); err != nil {
+		if err := clone.Add(elem); err != nil {
 			return err
 		}
 	}
-	return nil
+	return ds.ReplaceFrom(clone)
 }
 
 // AddOrUpdateElements adds or replaces a collection of elements.
 func (ds *Dataset) AddOrUpdateElements(elements ...element.Element) error {
+	clone, err := ds.DeepCloneChecked()
+	if err != nil {
+		return err
+	}
 	for _, elem := range elements {
-		if err := ds.AddOrUpdate(elem); err != nil {
+		if err := clone.AddOrUpdate(elem); err != nil {
 			return err
 		}
 	}
-	return nil
+	return ds.ReplaceFrom(clone)
 }
 
 func resolveValueVR(t *tag.Tag, value any) (*vr.VR, error) {

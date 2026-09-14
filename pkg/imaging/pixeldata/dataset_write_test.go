@@ -291,6 +291,78 @@ func TestWriteToDatasetRoundTripsMultipleFrames(t *testing.T) {
 	}
 }
 
+func TestWriteToDatasetRemovesStaleExtendedOffsetTables(t *testing.T) {
+	ds := newWritablePixelDataset(t, transfer.JPEG2000Lossless, 8)
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, make([]byte, 8))); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, make([]byte, 8))); err != nil {
+		t.Fatal(err)
+	}
+	pixels, err := NewForDataset(ds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pixels.AddFrame(context.Background(), []byte{1, 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := pixels.WriteToDataset(ds); err != nil {
+		t.Fatal(err)
+	}
+	if ds.Contains(tag.ExtendedOffsetTable) || ds.Contains(tag.ExtendedOffsetTableLengths) {
+		t.Fatal("WriteToDataset() retained stale Extended Offset Tables")
+	}
+}
+
+func TestWriteToDatasetFailureDoesNotMutateSourceOrTarget(t *testing.T) {
+	source := newWritablePixelDataset(t, transfer.ExplicitVRLittleEndian, 8)
+	pixels, err := NewForDataset(source)
+	if err != nil {
+		t.Fatalf("NewForDataset() error = %v", err)
+	}
+	if err := pixels.AddFrame(context.Background(), []byte{1, 2}); err != nil {
+		t.Fatalf("AddFrame() error = %v", err)
+	}
+
+	// Corrupt the private frame state so materialization fails after validation.
+	pixels.frames[0] = nil
+	target := newWritablePixelDataset(t, transfer.ExplicitVRLittleEndian, 8)
+	beforeInfo := *pixels.Info
+	if err := pixels.WriteToDataset(target); err == nil {
+		t.Fatal("WriteToDataset() error = nil, want materialization error")
+	}
+	if target.Contains(tag.PixelData) || target.Contains(tag.NumberOfFrames) {
+		t.Fatal("failed WriteToDataset() partially mutated target")
+	}
+	if pixels.Info.TransferSyntaxUID != beforeInfo.TransferSyntaxUID || pixels.Info.NumberOfFrames != beforeInfo.NumberOfFrames {
+		t.Fatalf("failed WriteToDataset() mutated source info: got syntax=%q frames=%d, want syntax=%q frames=%d",
+			pixels.Info.TransferSyntaxUID, pixels.Info.NumberOfFrames, beforeInfo.TransferSyntaxUID, beforeInfo.NumberOfFrames)
+	}
+}
+
+func TestWriteToDatasetRejectsRGBWithAlphaSamples(t *testing.T) {
+	ds := newWritablePixelDataset(t, transfer.ExplicitVRLittleEndian, 8)
+	if err := ds.AddOrUpdateValueWithVR(tag.SamplesPerPixel, vr.US, uint16(4)); err != nil {
+		t.Fatalf("update Samples Per Pixel: %v", err)
+	}
+	if err := ds.AddOrUpdateValueWithVR(tag.PhotometricInterpretation, vr.CS, "RGB"); err != nil {
+		t.Fatalf("update Photometric Interpretation: %v", err)
+	}
+	pixels, err := NewForDataset(ds)
+	if err != nil {
+		t.Fatalf("NewForDataset() error = %v", err)
+	}
+	if err := pixels.AddFrame(context.Background(), make([]byte, 8)); err != nil {
+		t.Fatalf("AddFrame() error = %v", err)
+	}
+	if err := pixels.WriteToDataset(ds); err == nil {
+		t.Fatal("WriteToDataset() accepted DICOM RGB with four samples per pixel")
+	}
+	if ds.Contains(tag.PixelData) || ds.Contains(tag.NumberOfFrames) {
+		t.Fatal("invalid RGBA write partially mutated target Dataset")
+	}
+}
+
 func newWritablePixelDataset(t *testing.T, syntax *transfer.Syntax, bitsAllocated uint16) *dataset.Dataset {
 	t.Helper()
 	ds := dataset.NewWithTransferSyntax(syntax)

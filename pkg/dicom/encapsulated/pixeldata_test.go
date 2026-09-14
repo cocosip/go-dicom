@@ -27,7 +27,7 @@ func TestPixelDataRejectsAmbiguousEmptyOffsetTable(t *testing.T) {
 }
 
 func TestPixelDataUsesExtendedOffsetTableBeforeBasicOffsetTable(t *testing.T) {
-	pixelData := openTestPixelData(t, []uint32{0, 10}, []uint64{0, 20}, []uint64{20, 20})
+	pixelData := openTestPixelData(t, []uint32{0, 10}, []uint64{0, 20}, []uint64{4, 4})
 
 	frames, err := pixelData.Frames(2)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestPixelDataUsesExtendedOffsetTableBeforeBasicOffsetTable(t *testing.T) {
 }
 
 func TestPixelDataReadsSelectedExtendedOffsetRange(t *testing.T) {
-	pixelData := openTestPixelData(t, nil, []uint64{0, 20}, []uint64{20, 20})
+	pixelData := openTestPixelData(t, nil, []uint64{0, 20}, []uint64{4, 4})
 
 	got, err := pixelData.Frame(2, 1)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestPixelDataConcatenatesSingleFrameWithoutOffsetTable(t *testing.T) {
 func TestOpenDatasetUsesElementByteOrderForExtendedTable(t *testing.T) {
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
 	offsets := element.NewOtherVeryLong(tag.ExtendedOffsetTable, encodeBigEndianUint64s(0))
-	lengths := element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, encodeBigEndianUint64s(10))
+	lengths := element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, encodeBigEndianUint64s(2))
 	element.SetByteOrder(offsets, binary.BigEndian)
 	element.SetByteOrder(lengths, binary.BigEndian)
 	if err := ds.Add(offsets); err != nil {

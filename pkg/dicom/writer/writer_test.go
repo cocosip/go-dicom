@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/unicode"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -92,6 +93,23 @@ func TestWriteUsesDatasetTransferSyntaxAndSyncsFileMeta(t *testing.T) {
 	}
 	if result.TransferSyntax != transfer.ExplicitVRBigEndian {
 		t.Fatalf("parsed transfer syntax = %v, want ExplicitVRBigEndian", result.TransferSyntax)
+	}
+}
+
+func TestWriteRejectsExplicitEncodingThatDoesNotMatchDatasetCharset(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	addTestSOPUIDs(t, ds)
+	if err := ds.SetSpecificCharacterSet("ISO_IR 100"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewStringWithEncoding(tag.PatientName, vr.PN, []string{"张三"}, unicode.UTF8)); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, ds); err == nil {
+		t.Fatal("Write() accepted UTF-8 bytes under ISO_IR 100 declaration")
+	} else if !strings.Contains(err.Error(), "encoding does not match") {
+		t.Fatalf("Write() error = %v, want charset mismatch", err)
 	}
 }
 

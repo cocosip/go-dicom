@@ -191,6 +191,16 @@ func TestManagedWaitForJobIsWokenByConcurrentAdd(t *testing.T) {
 	}
 }
 
+func TestManagedSendPreservesContextCancellationWhileWaiting(t *testing.T) {
+	managed := NewManaged(WithAssociationLingerTimeout(time.Second))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := managed.Send(ctx, "127.0.0.1", 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send() error = %v, want context.Canceled", err)
+	}
+}
+
 func TestNewCEchoJobDerivesVerificationContext(t *testing.T) {
 	job := NewCEchoJob(nil)
 	contexts, err := job.PresentationContexts()

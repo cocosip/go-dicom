@@ -83,6 +83,28 @@ func TestSetSpecificCharacterSetRejectsUnknownValue(t *testing.T) {
 	}
 }
 
+func TestSetSpecificCharacterSetAllowsEmptyDefaultBeforeExtension(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.SetSpecificCharacterSet("", "ISO 2022 IR 87"); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() error = %v", err)
+	}
+	if err := ds.SetSpecificCharacterSet("ISO 2022 IR 87", ""); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() rejected an empty value: %v", err)
+	}
+	if err := ds.SetSpecificCharacterSet("ISO_IR 192", ""); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() rejected an empty value after a single-value charset: %v", err)
+	}
+}
+
+func TestSetSpecificCharacterSetRejectsSingleValueCharsetCombinations(t *testing.T) {
+	for _, value := range []string{"ISO_IR 192", "GB18030", "GBK"} {
+		ds := dataset.New()
+		if err := ds.SetSpecificCharacterSet(value, "ISO 2022 IR 87"); err == nil {
+			t.Fatalf("SetSpecificCharacterSet(%q, extension) accepted invalid combination", value)
+		}
+	}
+}
+
 func TestGetBytesAllowsExplicitRecoveryFromIncorrectDeclaredCharacterSet(t *testing.T) {
 	raw, err := simplifiedchinese.GB18030.NewEncoder().Bytes([]byte("张三"))
 	if err != nil {

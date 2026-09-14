@@ -146,7 +146,7 @@ func TestFromDatasetUsesExtendedOffsetTableForMultiFragmentFrames(t *testing.T) 
 	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, uint64Values(0, 20))); err != nil {
 		t.Fatal(err)
 	}
-	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, uint64Values(20, 20))); err != nil {
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, uint64Values(4, 4))); err != nil {
 		t.Fatal(err)
 	}
 	fragments := element.NewOtherByteFragment(tag.PixelData)
@@ -524,6 +524,30 @@ func TestInfo_UncompressedFrameSize(t *testing.T) {
 				t.Errorf("UncompressedFrameSize() = %d, want %d", size, tt.expectedSize)
 			}
 		})
+	}
+}
+
+func TestNewFromBytesPacksOneBitFramesAcrossFrameBoundaries(t *testing.T) {
+	info := &Info{
+		Width: 1, Height: 1, NumberOfFrames: 2, BitsAllocated: 1, BitsStored: 1, HighBit: 0,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PlanarConfiguration: pixel.InterleavedPlanar, PhotometricInterpretation: pixel.Monochrome2,
+	}
+	pixels, err := NewFromBytes(info, []byte{0x01})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	first, _ := pixels.Frame(context.Background(), 0)
+	second, _ := pixels.Frame(context.Background(), 1)
+	if first[0]&1 != 1 || second[0]&1 != 0 {
+		t.Fatalf("frames = %08b, %08b; want first bit 1 and second bit 0", first[0], second[0])
+	}
+	elem, err := pixels.ToElement()
+	if err != nil {
+		t.Fatalf("ToElement() error = %v", err)
+	}
+	if got := elem.Buffer().Data(); len(got) != 1 || got[0] != 0x01 {
+		t.Fatalf("packed Pixel Data = %x, want 01", got)
 	}
 }
 

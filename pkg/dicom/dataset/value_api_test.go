@@ -158,3 +158,27 @@ func TestDatasetAutomaticValidationCanBeDisabledGlobally(t *testing.T) {
 		t.Fatal("explicit Validate() should still reject invalid Tag/VR combinations")
 	}
 }
+
+func TestDatasetAddElementsIsAtomicOnFailure(t *testing.T) {
+	ds := dataset.New()
+	first := element.NewString(tag.PatientID, vr.LO, []string{"first"})
+	duplicate := element.NewString(tag.PatientID, vr.LO, []string{"duplicate"})
+	if err := ds.AddElements(first, duplicate); err == nil {
+		t.Fatal("AddElements() error = nil, want duplicate-tag error")
+	}
+	if ds.Contains(tag.PatientID) {
+		t.Fatal("AddElements() partially modified Dataset after failure")
+	}
+}
+
+func TestDatasetAddValueWithVRAcceptsRawByteArrays(t *testing.T) {
+	ds := dataset.New()
+	rawTag := tag.New(0x7777, 0x0010)
+	if err := ds.AddValueWithVR(rawTag, vr.OB, [2]byte{1, 2}); err != nil {
+		t.Fatalf("AddValueWithVR() error = %v", err)
+	}
+	got, err := ds.GetBytes(rawTag)
+	if err != nil || len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("GetBytes() = %v, %v; want [1 2]", got, err)
+	}
+}

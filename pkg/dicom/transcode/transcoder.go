@@ -172,6 +172,9 @@ func (t *Transcoder) OutputSyntax() *transfer.Syntax {
 
 // Transcode converts a Dataset and associates logging and cancellation with ctx.
 func (t *Transcoder) Transcode(ctx context.Context, ds *dataset.Dataset) (result *dataset.Dataset, err error) {
+	if ds == nil {
+		return nil, fmt.Errorf("dataset must not be nil")
+	}
 	logDebug := logging.Enabled(ctx, slog.LevelDebug)
 	logError := logging.Enabled(ctx, slog.LevelError)
 	if logDebug || logError {
@@ -537,7 +540,7 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 			return nil, fmt.Errorf("add decoded pixel data: %w", err)
 		}
 	}
-	if err := applyOutputFrameInfo(newDS, frameInfo, newPixelData.FrameInfo()); err != nil {
+	if err := applyOutputFrameInfo(newDS, newPixelData.FrameInfo()); err != nil {
 		return nil, err
 	}
 
@@ -616,6 +619,9 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	}
 	for i := 0; i < frameCount; i++ {
 		start := i * frameSize
+		if start >= len(pixelData) {
+			return nil, fmt.Errorf("missing native pixel data for frame %d", i)
+		}
 		end := start + frameSize
 		if end > len(pixelData) {
 			end = len(pixelData)
@@ -626,6 +632,9 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 				return nil, fmt.Errorf("failed to add frame to oldPixelData: %w", err)
 			}
 		}
+	}
+	if oldPixelData.FrameCount() != frameCount {
+		return nil, fmt.Errorf("native pixel data frame count = %d, want %d", oldPixelData.FrameCount(), frameCount)
 	}
 
 	newPixelData, err := newFrameData(frameInfo, true)
@@ -640,6 +649,9 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	}
 	if err := t.outputCodec.Encode(ctx, oldPixelData, newPixelData, parameters); err != nil {
 		return nil, fmt.Errorf("failed to encode pixel data: %w", err)
+	}
+	if newPixelData.FrameCount() != frameCount {
+		return nil, fmt.Errorf("encoded pixel data frame count = %d, want %d", newPixelData.FrameCount(), frameCount)
 	}
 
 	// Collect encoded frames and build fragment sequence
@@ -670,7 +682,7 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	if err := newDS.Add(fragSeq); err != nil {
 		return nil, fmt.Errorf("add encoded pixel data: %w", err)
 	}
-	if err := applyOutputFrameInfo(newDS, frameInfo, newPixelData.FrameInfo()); err != nil {
+	if err := applyOutputFrameInfo(newDS, newPixelData.FrameInfo()); err != nil {
 		return nil, err
 	}
 	if err := applyLossyImageCompressionMetadata(ctx, newDS, outputTS, oldPixelData, newPixelData); err != nil {
@@ -680,21 +692,31 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	return newDS, nil
 }
 
-func applyOutputFrameInfo(ds *dataset.Dataset, input, output codec.FrameInfo) error {
-	if output.SamplesPerPixel != input.SamplesPerPixel {
-		if err := ds.AddOrUpdate(element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{output.SamplesPerPixel})); err != nil {
-			return fmt.Errorf("update samples per pixel: %w", err)
+func applyOutputFrameInfo(ds *dataset.Dataset, output codec.FrameInfo) error {
+	updates := []struct {
+		tag   *tag.Tag
+		value uint16
+		name  string
+	}{
+		{tag.Rows, output.Height, "rows"},
+		{tag.Columns, output.Width, "columns"},
+		{tag.BitsAllocated, output.BitDepth.BitsAllocated, "bits allocated"},
+		{tag.BitsStored, output.BitDepth.BitsStored, "bits stored"},
+		{tag.HighBit, output.BitDepth.HighBit, "high bit"},
+		{tag.SamplesPerPixel, output.SamplesPerPixel, "samples per pixel"},
+		{tag.PixelRepresentation, uint16(output.PixelRepresentation), "pixel representation"},
+		{tag.PlanarConfiguration, uint16(output.PlanarConfiguration), "planar configuration"},
+	}
+	for _, update := range updates {
+		if err := ds.AddOrUpdate(element.NewUnsignedShort(update.tag, []uint16{update.value})); err != nil {
+			return fmt.Errorf("update %s: %w", update.name, err)
 		}
 	}
-	if output.PhotometricInterpretation.Value != "" && output.PhotometricInterpretation.Value != input.PhotometricInterpretation.Value {
-		if err := ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{output.PhotometricInterpretation.Value})); err != nil {
-			return fmt.Errorf("update photometric interpretation: %w", err)
-		}
+	if output.PhotometricInterpretation.Value == "" {
+		return fmt.Errorf("codec output photometric interpretation is empty")
 	}
-	if output.PlanarConfiguration != input.PlanarConfiguration {
-		if err := ds.AddOrUpdate(element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{uint16(output.PlanarConfiguration)})); err != nil {
-			return fmt.Errorf("update planar configuration: %w", err)
-		}
+	if err := ds.AddOrUpdate(element.NewString(tag.PhotometricInterpretation, vr.CS, []string{output.PhotometricInterpretation.Value})); err != nil {
+		return fmt.Errorf("update photometric interpretation: %w", err)
 	}
 	return nil
 }

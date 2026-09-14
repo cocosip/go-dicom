@@ -89,7 +89,8 @@ func NewElementFromBuffer(t *tag.Tag, valueRepresentation *vr.VR, buf buffer.Byt
 
 // NewElementFromValue creates a concrete Element from a scalar, slice, or
 // array Go value. The supplied VR is authoritative; values are never used to
-// guess or silently change the element's VR.
+// guess or silently change the element's VR. Raw []byte values are transferred
+// to the resulting buffer and must not be modified by the caller afterward.
 func NewElementFromValue(t *tag.Tag, valueRepresentation *vr.VR, value any) (Element, error) {
 	return NewElementFromValueWithContext(t, valueRepresentation, value, CanonicalValueContext{
 		TextEncodings: []encoding.Encoding{charset.Default},
@@ -102,6 +103,14 @@ func NewElementFromValue(t *tag.Tag, valueRepresentation *vr.VR, value any) (Ele
 func NewElementFromValueWithContext(t *tag.Tag, valueRepresentation *vr.VR, value any, context CanonicalValueContext) (Element, error) {
 	if isRawBinaryVR(valueRepresentation) {
 		if data, ok := value.([]byte); ok {
+			return newRawBinaryElement(t, valueRepresentation, data)
+		}
+		rv := reflect.ValueOf(value)
+		if rv.IsValid() && rv.Kind() == reflect.Array && rv.Type().Elem().Kind() == reflect.Uint8 {
+			data := make([]byte, rv.Len())
+			for i := range data {
+				data[i] = byte(rv.Index(i).Uint())
+			}
 			return newRawBinaryElement(t, valueRepresentation, data)
 		}
 	}

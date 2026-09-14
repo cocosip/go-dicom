@@ -40,7 +40,11 @@ type dicomISO2022Encoding struct {
 	designation []byte
 }
 
+type dicomIR13Encoding struct{ encoding.Encoding }
+
 const iso2022ASCII = "ascii"
+const iso2022IR13 = "ir13"
+const iso2022Japanese = "japanese"
 
 // knownCharsets maps DICOM Specific Character Set values to Go encodings.
 var knownCharsets = map[string]*Info{
@@ -57,7 +61,7 @@ var knownCharsets = map[string]*Info{
 	"ISO_IR 166": {"Thai", charmap.Windows874},
 
 	// Japanese
-	"ISO_IR 13": {"Japanese (Shift-JIS)", japanese.ShiftJIS},
+	"ISO_IR 13": {"Japanese (JIS X 0201)", &dicomIR13Encoding{Encoding: japanese.ShiftJIS}},
 
 	// Korean
 	"ISO_IR 149": {"Korean (EUC-KR)", korean.EUCKR},
@@ -80,7 +84,7 @@ var knownCharsets = map[string]*Info{
 	"ISO 2022 IR 126": {"Greek Extended", charmap.ISO8859_7},
 	"ISO 2022 IR 138": {"Hebrew Extended", charmap.ISO8859_8},
 	"ISO 2022 IR 148": {"Latin-5 Extended", charmap.ISO8859_9},
-	"ISO 2022 IR 13":  {"Japanese Extended", japanese.ShiftJIS},
+	"ISO 2022 IR 13":  {"Japanese Extended", &dicomIR13Encoding{Encoding: japanese.ShiftJIS}},
 	"ISO 2022 IR 87":  {"Japanese (ISO-2022-JP)", japanese.ISO2022JP},
 	"ISO 2022 IR 149": {"Korean Extended", &dicomISO2022Encoding{Encoding: korean.EUCKR, designation: []byte{0x1b, '$', ')', 'C'}}},
 	"ISO 2022 IR 58":  {"Chinese Simplified (GB2312)", &dicomISO2022Encoding{Encoding: simplifiedchinese.GB18030, designation: []byte{0x1b, '$', ')', 'A'}}},
@@ -191,8 +195,8 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 	if initial == Default && len(encodings) > 1 && encodings[1] != nil {
 		initial = encodings[1]
 	}
-	if initial == japanese.ShiftJIS {
-		current = "shiftjis"
+	if _, ok := initial.(*dicomIR13Encoding); ok {
+		current = iso2022IR13
 	}
 	var designation []byte
 	var segment []byte
@@ -210,8 +214,11 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 			}
 			enc = Default
 			input = segment
-		case "shiftjis":
+		case "shiftjis", iso2022IR13:
 			enc = japanese.ShiftJIS
+			if current == "ir13" && !validIR13Bytes(segment) {
+				return fmt.Errorf("ISO_IR 13 contains bytes outside JIS X 0201")
+			}
 			input = segment
 		case "gb":
 			enc = simplifiedchinese.GB18030
@@ -219,7 +226,7 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 		case "korean":
 			enc = korean.EUCKR
 			input = segment
-		case "japanese":
+		case iso2022Japanese:
 			enc = japanese.ISO2022JP
 			input = append(append([]byte(nil), designation...), segment...)
 			input = append(input, 0x1b, '(', 'B')
@@ -236,6 +243,16 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 	}
 
 	for index := 0; index < len(data); {
+		if data[index] == '\\' && current == iso2022ASCII {
+			if err := flush(); err != nil {
+				return "", err
+			}
+			result.WriteByte(data[index])
+			current = iso2022ASCII
+			designation = nil
+			index++
+			continue
+		}
 		if data[index] != 0x1b {
 			segment = append(segment, data[index])
 			index++
@@ -248,6 +265,9 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 		if !ok {
 			return "", fmt.Errorf("unsupported or truncated DICOM ISO-2022 escape at byte %d", index)
 		}
+		if !iso2022EscapeDeclared(kind, seq, encodings) {
+			return "", fmt.Errorf("DICOM ISO-2022 escape %x is not declared", seq)
+		}
 		current = kind
 		designation = seq
 		index += consumed
@@ -256,6 +276,21 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 		return "", err
 	}
 	return result.String(), nil
+}
+
+func iso2022EscapeDeclared(kind string, sequence []byte, encodings []encoding.Encoding) bool {
+	if kind == iso2022ASCII {
+		return true
+	}
+	for _, enc := range encodings {
+		if enc == japanese.ISO2022JP && kind == iso2022Japanese {
+			return true
+		}
+		if dicom, ok := enc.(*dicomISO2022Encoding); ok && bytes.Equal(dicom.designation, sequence) {
+			return true
+		}
+	}
+	return false
 }
 
 func parseISO2022Escape(data []byte) (kind string, sequence []byte, consumed int, ok bool) {
@@ -319,6 +354,9 @@ func encodeWithEncoding(s string, enc encoding.Encoding) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, ok := enc.(*dicomIR13Encoding); ok && !validIR13Bytes([]byte(encoded)) {
+		return nil, fmt.Errorf("ISO_IR 13 cannot encode characters outside JIS X 0201")
+	}
 	if dicom, ok := enc.(*dicomISO2022Encoding); ok {
 		result := append([]byte(nil), dicom.designation...)
 		result = append(result, []byte(encoded)...)
@@ -326,6 +364,15 @@ func encodeWithEncoding(s string, enc encoding.Encoding) ([]byte, error) {
 		return result, nil
 	}
 	return []byte(encoded), nil
+}
+
+func validIR13Bytes(data []byte) bool {
+	for _, value := range data {
+		if (value >= 0x80 && value <= 0xa0) || value >= 0xe0 {
+			return false
+		}
+	}
+	return true
 }
 
 func isASCII(data []byte) bool {
@@ -350,5 +397,9 @@ func KnownCharsets() []string {
 func GetCharsetInfo(charset string) (*Info, bool) {
 	charset = strings.TrimSpace(charset)
 	info, ok := knownCharsets[charset]
-	return info, ok
+	if !ok {
+		return nil, false
+	}
+	infoCopy := *info
+	return &infoCopy, true
 }

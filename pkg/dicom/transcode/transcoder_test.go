@@ -721,6 +721,29 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 	})
 }
 
+func TestTranscoderRejectsNilDataset(t *testing.T) {
+	transcoder := newTestTranscoder(t, transfer.ExplicitVRLittleEndian, transfer.ExplicitVRLittleEndian)
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("Transcode(nil) panicked: %v", recovered)
+		}
+	}()
+	if _, err := transcoder.Transcode(context.Background(), nil); err == nil {
+		t.Fatal("Transcode(nil) error = nil")
+	}
+}
+
+func TestTranscoderEncodeRejectsMissingNativeFrame(t *testing.T) {
+	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 0, 2)
+	if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{1})); err != nil {
+		t.Fatal(err)
+	}
+	transcoder := newTestTranscoder(t, transfer.ExplicitVRLittleEndian, transfer.JPEGBaseline8Bit, metadataCodec{})
+	if _, err := transcoder.Transcode(context.Background(), ds); err == nil {
+		t.Fatal("Transcode() error = nil, want missing native frame error")
+	}
+}
+
 func TestTranscoderPropagatesMetadataCopyErrors(t *testing.T) {
 	ds := dataset.New()
 	ds.SetAutoValidate(false)
@@ -805,8 +828,8 @@ func TestTranscoderDecodeFrameUsesExtendedOffsetTable(t *testing.T) {
 	lengths := make([]byte, 16)
 	binary.LittleEndian.PutUint64(offsets, 0)
 	binary.LittleEndian.PutUint64(offsets[8:], 20)
-	binary.LittleEndian.PutUint64(lengths, 20)
-	binary.LittleEndian.PutUint64(lengths[8:], 20)
+	binary.LittleEndian.PutUint64(lengths, 4)
+	binary.LittleEndian.PutUint64(lengths[8:], 4)
 	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, offsets)); err != nil {
 		t.Fatal(err)
 	}
@@ -867,7 +890,7 @@ func TestTranscoderRemovesStaleExtendedOffsetTables(t *testing.T) {
 		if err := ds.Add(element.NewOtherWord(tag.PixelData, []byte{0x34, 0x12})); err != nil {
 			t.Fatal(err)
 		}
-		addTables(t, ds, []uint64{0}, []uint64{10})
+		addTables(t, ds, []uint64{0}, []uint64{2})
 
 		got, err := newTestTranscoder(
 			t,
@@ -901,7 +924,7 @@ func TestTranscoderRemovesStaleExtendedOffsetTables(t *testing.T) {
 
 	t.Run("encapsulated to native", func(t *testing.T) {
 		ds := newCodecTestDataset(t, transfer.JPEG2000Lossless)
-		addTables(t, ds, []uint64{0}, []uint64{10})
+		addTables(t, ds, []uint64{0}, []uint64{2})
 		fragments := element.NewOtherByteFragment(tag.PixelData)
 		fragments.AddFragment(buffer.NewMemory([]byte{0x34, 0x12}))
 		if err := ds.Add(fragments); err != nil {

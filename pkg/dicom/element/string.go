@@ -226,6 +226,23 @@ func (s *String) Encoding() encoding.Encoding {
 	return s.encoding
 }
 
+// Encodings returns the character encodings used to decode this element.
+func (s *String) Encodings() []encoding.Encoding {
+	if s == nil {
+		return nil
+	}
+	return append([]encoding.Encoding(nil), s.encodings...)
+}
+
+// CharacterSetEncoding returns the primary encoding used by a string-like element.
+func CharacterSetEncoding(elem Element) encoding.Encoding {
+	str := underlyingString(elem)
+	if str == nil {
+		return nil
+	}
+	return str.Encoding()
+}
+
 // EncodingError reports an error captured while constructing this element.
 func (s *String) EncodingError() error {
 	if s == nil {

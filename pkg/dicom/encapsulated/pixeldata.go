@@ -182,7 +182,18 @@ func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
 		}
 		if p.offsets.source == extendedOffsets {
 			length := p.offsets.lengths[frameIndex]
-			if startOffset > math.MaxUint64-length || startOffset+length != endOffset {
+			var payloadLength uint64
+			for fragmentIndex := start; fragmentIndex < end; fragmentIndex++ {
+				fragmentLength := uint64(fragments[fragmentIndex].Size())
+				if fragmentLength%2 != 0 {
+					fragmentLength++
+				}
+				if payloadLength > math.MaxUint64-fragmentLength {
+					return nil, fmt.Errorf("extended offset table length overflow for frame %d", frameIndex)
+				}
+				payloadLength += fragmentLength
+			}
+			if length != payloadLength {
 				return nil, fmt.Errorf("extended offset table length %d for frame %d does not match Fragment Items", length, frameIndex)
 			}
 		}

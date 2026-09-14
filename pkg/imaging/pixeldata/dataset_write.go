@@ -126,23 +126,44 @@ func (pd *Data) WriteToDataset(ds *dataset.Dataset) error {
 		return err
 	}
 
-	pd.Info.TransferSyntaxUID = syntax.UID().UID()
-	pd.Info.NumberOfFrames = len(pd.frames)
-	pixelElement, err := pd.ToElement()
+	// Materialize against a temporary view so neither the source metadata nor
+	// the target Dataset is changed until every operation has succeeded.
+	materializedInfo := *pd.Info
+	materializedInfo.TransferSyntaxUID = syntax.UID().UID()
+	materializedInfo.NumberOfFrames = len(pd.frames)
+	materialized := *pd
+	materialized.Info = &materializedInfo
+	pixelElement, err := materialized.ToElement()
 	if err != nil {
 		return err
 	}
+	working, err := ds.DeepCloneChecked()
+	if err != nil {
+		return fmt.Errorf("clone Dataset before writing Pixel Data: %w", err)
+	}
 	frameCountElement := element.NewIntegerString(tag.NumberOfFrames, []string{strconv.Itoa(len(pd.frames))})
-	if err := ds.AddOrUpdate(frameCountElement); err != nil {
+	if err := working.AddOrUpdate(frameCountElement); err != nil {
 		return fmt.Errorf("update Number of Frames: %w", err)
 	}
-	if err := ds.AddOrUpdate(pixelElement); err != nil {
+	working.Remove(tag.ExtendedOffsetTable)
+	working.Remove(tag.ExtendedOffsetTableLengths)
+	if err := working.AddOrUpdate(pixelElement); err != nil {
 		return fmt.Errorf("update Pixel Data: %w", err)
 	}
+	if err := ds.ReplaceFrom(working); err != nil {
+		return fmt.Errorf("commit Pixel Data Dataset update: %w", err)
+	}
+	pd.Info.TransferSyntaxUID = materializedInfo.TransferSyntaxUID
+	pd.Info.NumberOfFrames = materializedInfo.NumberOfFrames
 	return nil
 }
 
 func validateWriteMetadata(ds *dataset.Dataset, info *Info) error {
+	if info.PhotometricInterpretation != nil &&
+		info.PhotometricInterpretation.Value == pixel.RGBPhotometric.Value &&
+		info.SamplesPerPixel != 3 {
+		return fmt.Errorf("DICOM RGB requires Samples Per Pixel 3, got %d", info.SamplesPerPixel)
+	}
 	rows, err := ds.GetUInt16(tag.Rows, 0)
 	if err != nil || rows != info.Height {
 		return fmt.Errorf("pixel data Height %d does not match Dataset Rows %d", info.Height, rows)

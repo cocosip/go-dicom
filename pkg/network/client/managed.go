@@ -208,6 +208,9 @@ func (c *ManagedClient) Send(ctx context.Context, host string, port int) error {
 		jobs, contexts := c.takeBatch()
 		if len(jobs) == 0 {
 			if !c.waitForJob(ctx) {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				return nil
 			}
 			continue
@@ -336,6 +339,9 @@ func (c *ManagedClient) sendBatch(
 		if !ok {
 			if c.isClosed() {
 				return ErrManagedClientClosed
+			}
+			if err := ctx.Err(); err != nil {
+				return err
 			}
 			return nil
 		}

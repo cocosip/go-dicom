@@ -190,21 +190,33 @@ func NewFromBytes(info *Info, data []byte) (*Data, error) {
 
 	frameSize := ownedInfo.UncompressedFrameSize()
 	expectedSize := frameSize * ownedInfo.NumberOfFrames
+	if ownedInfo.BitsAllocated == 1 {
+		totalSamples := int(ownedInfo.Width) * int(ownedInfo.Height) * int(ownedInfo.SamplesPerPixel) * ownedInfo.NumberOfFrames
+		expectedSize = (totalSamples + 7) / 8
+	}
 
 	if len(data) < expectedSize {
 		return nil, fmt.Errorf("insufficient data: got %d bytes, expected at least %d bytes",
 			len(data), expectedSize)
 	}
 
-	// Split data into frames
+	// Split data into frames. Native 1-bit frames share one continuous bit stream
+	// in DICOM, so unpack their bits into independently addressable frame buffers.
 	for i := 0; i < ownedInfo.NumberOfFrames; i++ {
-		start := i * frameSize
-		end := start + frameSize
-		if end > len(data) {
-			end = len(data)
-		}
 		frameData := make([]byte, frameSize)
-		copy(frameData, data[start:end])
+		if ownedInfo.BitsAllocated == 1 {
+			samplesPerFrame := int(ownedInfo.Width) * int(ownedInfo.Height) * int(ownedInfo.SamplesPerPixel)
+			for sample := 0; sample < samplesPerFrame; sample++ {
+				bit := i*samplesPerFrame + sample
+				if data[bit/8]&(1<<uint(bit%8)) != 0 {
+					frameData[sample/8] |= 1 << uint(sample%8)
+				}
+			}
+		} else {
+			start := i * frameSize
+			end := start + frameSize
+			copy(frameData, data[start:end])
+		}
 		pd.frames = append(pd.frames, frameData)
 	}
 
@@ -361,6 +373,9 @@ func (pd *Data) AddFrame(ctx context.Context, frameData []byte) error {
 		}
 		pd.frames = append(pd.frames, frame)
 	} else {
+		if len(frameData) == 0 {
+			return fmt.Errorf("encapsulated frame data must not be empty")
+		}
 		// For encapsulated data, just copy the entire frame as-is
 		frame := make([]byte, len(frameData))
 		if err := copyWithContext(ctx, frame, frameData); err != nil {
@@ -766,8 +781,22 @@ func (pd *Data) ToElement() (element.Element, error) {
 		return buildFragmentSequence(pd.frames, pd.basicOffsetTable, pd.Info.BitsAllocated)
 	}
 
-	// Uncompressed: concatenate frames
+	// Uncompressed: concatenate frames, repacking 1-bit samples into the
+	// continuous DICOM bit stream required across frame boundaries.
 	all := pd.AllFrames()
+	if pd.Info.BitsAllocated == 1 {
+		samplesPerFrame := int(pd.Info.Width) * int(pd.Info.Height) * int(pd.Info.SamplesPerPixel)
+		totalSamples := samplesPerFrame * len(pd.frames)
+		all = make([]byte, (totalSamples+7)/8)
+		for frameIndex, frame := range pd.frames {
+			for sample := 0; sample < samplesPerFrame; sample++ {
+				if frame[sample/8]&(1<<uint(sample%8)) != 0 {
+					bit := frameIndex*samplesPerFrame + sample
+					all[bit/8] |= 1 << uint(bit%8)
+				}
+			}
+		}
+	}
 	if len(all) == 0 {
 		return nil, fmt.Errorf("pixel data is empty")
 	}

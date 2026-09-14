@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/charset"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -506,9 +507,29 @@ func validateDatasetCharacterSets(ds *dataset.Dataset, inherited bool, visited m
 	}
 	visited[ds] = struct{}{}
 	declared := inherited || len(ds.SpecificCharacterSet()) > 0
+	declaredEncodings := charset.GetEncodings(ds.SpecificCharacterSet())
 	for _, elem := range ds.Elements() {
-		if element.NeedsCharacterSet(elem) && !declared {
-			return fmt.Errorf("cannot write tag %s: value is encoded as UTF-8 but Specific Character Set is not declared", elem.Tag())
+		if err := element.EncodingError(elem); err != nil {
+			return fmt.Errorf("cannot write tag %s: %w", elem.Tag(), err)
+		}
+		if enc := element.CharacterSetEncoding(elem); enc != nil {
+			raw := elem.Buffer()
+			hasExtendedBytes := raw != nil && containsExtendedBytes(raw.Data())
+			if hasExtendedBytes && !declared {
+				return fmt.Errorf("cannot write tag %s: value uses an extended character set but Specific Character Set is not declared", elem.Tag())
+			}
+			if hasExtendedBytes && len(ds.SpecificCharacterSet()) > 0 {
+				matches := false
+				for _, candidate := range declaredEncodings {
+					if candidate == enc {
+						matches = true
+						break
+					}
+				}
+				if !matches {
+					return fmt.Errorf("cannot write tag %s: element encoding does not match Specific Character Set", elem.Tag())
+				}
+			}
 		}
 		sequence, ok := elem.(*dataset.Sequence)
 		if !ok {
@@ -521,6 +542,15 @@ func validateDatasetCharacterSets(ds *dataset.Dataset, inherited bool, visited m
 		}
 	}
 	return nil
+}
+
+func containsExtendedBytes(data []byte) bool {
+	for _, value := range data {
+		if value > 0x7f || value == 0x1b {
+			return true
+		}
+	}
+	return false
 }
 
 func validatePixelDataTransferSyntax(ds *dataset.Dataset, ts *transfer.Syntax) error {

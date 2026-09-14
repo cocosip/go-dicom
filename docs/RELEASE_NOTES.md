@@ -2,6 +2,17 @@
 
 ## Next
 
+- Character-set validation now accepts empty Specific Character Set values in
+  any VM position, while still rejecting unknown values and invalid combinations.
+- Dataset batch updates and Pixel Data materialization now commit atomically;
+  failed validation or buffer operations leave caller state unchanged.
+- Pixel Data frame handling validates encapsulated payloads and native
+  multi-frame bit streams, and transcoding verifies frame counts and output metadata.
+- DICOM Pixel Data writing rejects the internal RGBA representation when its
+  metadata would otherwise be serialized as RGB with four samples per pixel.
+- Raw binary value constructors document that supplied byte slices are owned by
+  the resulting buffer and must not be modified after construction.
+
 - Dataset value access is now centered on `pkg/dicom/dataset`: use
   `GetString`, `GetStrings`, `GetBytes`, typed numeric accessors,
   `GetSequence`, `TryGet*`, `AddValue`, and `AddOrUpdateValue`. Use the

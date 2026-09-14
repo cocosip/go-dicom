@@ -67,6 +67,19 @@ func TestGetEncodingMisspellings(t *testing.T) {
 	}
 }
 
+func TestGetCharsetInfoReturnsIndependentInfo(t *testing.T) {
+	info, ok := charset.GetCharsetInfo(testCharsetLatin1)
+	if !ok {
+		t.Fatal("GetCharsetInfo() did not find ISO_IR 100")
+	}
+	original := info.Name
+	info.Name = "mutated"
+	info2, ok := charset.GetCharsetInfo(testCharsetLatin1)
+	if !ok || info2.Name != original {
+		t.Fatalf("GetCharsetInfo() returned mutable global state: %+v", info2)
+	}
+}
+
 func TestGetEncodings(t *testing.T) {
 	// Test with empty slice
 	encs := charset.GetEncodings([]string{})
@@ -188,6 +201,12 @@ func TestEncodeStringRejectsUnrepresentableDefaultCharset(t *testing.T) {
 	}
 }
 
+func TestISOIR13RejectsShiftJISKanji(t *testing.T) {
+	if _, err := charset.EncodeString("山", charset.GetEncodings([]string{"ISO_IR 13"})); err == nil {
+		t.Fatal("EncodeString(ISO_IR 13) accepted a JIS X 0208 Kanji character")
+	}
+}
+
 func TestDefaultCharsetRejectsNonASCIIBytes(t *testing.T) {
 	if _, err := charset.EncodeString("é", []encoding.Encoding{charset.Default}); err == nil {
 		t.Fatal("EncodeString(Default) accepted non-ASCII text")
@@ -212,6 +231,30 @@ func TestEncodeStringAddsDICOMISO2022Designation(t *testing.T) {
 	decoded, err := charset.DecodeString(data, charset.GetEncodings([]string{testCharsetISO2022IR58}))
 	if err != nil || decoded != "张三" {
 		t.Fatalf("DecodeString(EncodeString()) = %q, %v; want 张三", decoded, err)
+	}
+}
+
+func TestDecodeStringRejectsUndeclaredISO2022Escape(t *testing.T) {
+	data := []byte{'A', 0x1b, '$', ')', 'A', 0xd5, 0xc5}
+	if _, err := charset.DecodeString(data, charset.GetEncodings([]string{testCharsetLatin1})); err == nil {
+		t.Fatal("DecodeString() accepted an ISO-2022 escape not present in the declaration")
+	}
+}
+
+func TestDecodeStringPreservesBackslashByteInsideISO2022MultibyteCharacter(t *testing.T) {
+	encoded, err := charset.EncodeString("ソ", charset.GetEncodings([]string{"ISO 2022 IR 87"}))
+	if err != nil {
+		t.Fatalf("EncodeString() error = %v", err)
+	}
+	// Add a DICOM value delimiter after the multibyte character. The 0x5c byte
+	// in ソ's JIS X 0208 representation must not be treated as that delimiter.
+	encoded = append(encoded, '\\', 'A')
+	decoded, err := charset.DecodeString(encoded, charset.GetEncodings([]string{"ISO 2022 IR 87"}))
+	if err != nil {
+		t.Fatalf("DecodeString() error = %v", err)
+	}
+	if decoded != "ソ\\A" {
+		t.Fatalf("DecodeString() = %q, want ソ\\A", decoded)
 	}
 }
 

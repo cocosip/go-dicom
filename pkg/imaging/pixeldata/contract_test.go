@@ -76,6 +76,19 @@ func TestFrameAndAddFramePreserveCancellation(t *testing.T) {
 	}
 }
 
+func TestAddFrameRejectsEmptyEncapsulatedPayload(t *testing.T) {
+	info := contractInfo()
+	info.Encapsulated = true
+	info.VRCode = "OB"
+	pixels, err := New(info)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := pixels.AddFrame(context.Background(), nil); err == nil {
+		t.Fatal("AddFrame() accepted empty encapsulated payload")
+	}
+}
+
 func TestSetFrameInfoRejectsInvalidMetadataWithoutMutation(t *testing.T) {
 	pixels, err := New(contractInfo())
 	if err != nil {

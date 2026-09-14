@@ -27,18 +27,37 @@ func (ds *Dataset) SetSpecificCharacterSet(values ...string) error {
 	}
 
 	normalized := make([]string, len(values))
+	nonEmpty := make([]string, 0, len(values))
 	for i, value := range values {
 		value = strings.TrimSpace(value)
 		if value == "" {
-			return fmt.Errorf("specific character set value[%d] is empty", i)
+			normalized[i] = value
+			continue
 		}
 		if _, ok := charset.GetCharsetInfo(value); !ok {
 			return fmt.Errorf("unsupported Specific Character Set %q", value)
 		}
 		normalized[i] = value
+		nonEmpty = append(nonEmpty, value)
+	}
+	if len(nonEmpty) > 1 {
+		for _, value := range nonEmpty {
+			if isSingleValueCharacterSet(value) {
+				return fmt.Errorf("specific character set %q cannot be combined with extensions", value)
+			}
+		}
 	}
 
 	return ds.AddOrUpdate(element.NewString(tag.SpecificCharacterSet, vr.CS, normalized))
+}
+
+func isSingleValueCharacterSet(value string) bool {
+	switch value {
+	case "ISO_IR 192", "GB18030", "GBK":
+		return true
+	default:
+		return false
+	}
 }
 
 // SpecificCharacterSet returns the declared DICOM Specific Character Set
