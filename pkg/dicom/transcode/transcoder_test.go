@@ -24,6 +24,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
+const invalidPatientAgeValue = "047?"
+
 func newTestTranscoder(
 	t *testing.T,
 	input, output *transfer.Syntax,
@@ -822,8 +824,8 @@ func TestTranscoderPreservesDisabledDatasetAutoValidation(t *testing.T) {
 			if result.AutoValidate() {
 				t.Fatal("transcoded Dataset AutoValidate() = true, want false")
 			}
-			if got := result.TryGetString(tag.PatientAge); got != "047?" {
-				t.Fatalf("PatientAge = %q, want %q", got, "047?")
+			if got := result.TryGetString(tag.PatientAge); got != invalidPatientAgeValue {
+				t.Fatalf("PatientAge = %q, want %q", got, invalidPatientAgeValue)
 			}
 			if err := result.Validate(); err == nil {
 				t.Fatal("Validate() error = nil, want invalid AS value error")
@@ -843,7 +845,7 @@ func TestTranscoderKeepsEnabledDatasetAutoValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("Transcode() error = nil, want invalid AS value error")
 	}
-	if !strings.Contains(err.Error(), "VR AS") || !strings.Contains(err.Error(), "047?") {
+	if !strings.Contains(err.Error(), "VR AS") || !strings.Contains(err.Error(), invalidPatientAgeValue) {
 		t.Fatalf("Transcode() error = %q, want invalid PatientAge AS context", err)
 	}
 }
@@ -865,8 +867,8 @@ func TestTranscoderKeepsDatasetPolicyIndependentFromGlobalValidation(t *testing.
 	if !result.AutoValidate() {
 		t.Fatal("transcoded Dataset AutoValidate() = false, want source instance policy true")
 	}
-	if got := result.TryGetString(tag.PatientAge); got != "047?" {
-		t.Fatalf("PatientAge = %q, want %q", got, "047?")
+	if got := result.TryGetString(tag.PatientAge); got != invalidPatientAgeValue {
+		t.Fatalf("PatientAge = %q, want %q", got, invalidPatientAgeValue)
 	}
 }
 
@@ -874,7 +876,7 @@ func newAutoValidationPolicyTestDataset(t *testing.T, syntax *transfer.Syntax) *
 	t.Helper()
 	ds := metadataTestDataset(t, syntax, pixel.Monochrome2.Value, 0, 1)
 	ds.SetAutoValidate(false)
-	if err := ds.Add(element.NewString(tag.PatientAge, vr.AS, []string{"047?"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PatientAge, vr.AS, []string{invalidPatientAgeValue})); err != nil {
 		t.Fatalf("add invalid PatientAge with automatic validation disabled: %v", err)
 	}
 	if syntax.IsEncapsulated() {
