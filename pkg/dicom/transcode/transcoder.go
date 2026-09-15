@@ -430,7 +430,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ctx context.Context, ds
 		}
 	}
 
-	newDS := dataset.NewWithTransferSyntax(t.outputSyntax)
+	newDS := newOutputDataset(ds, t.outputSyntax)
 	if err := copyDatasetElements(newDS, ds); err != nil {
 		return nil, err
 	}
@@ -523,7 +523,7 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 	// Codec output frames use the native little-endian pixel representation.
 	// Build that intermediate Dataset first, then convert it to the requested
 	// native syntax so 16-bit pixels are swapped when Big Endian was negotiated.
-	newDS := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	newDS := newOutputDataset(ds, transfer.ExplicitVRLittleEndian)
 
 	// Copy all elements except PixelData
 	if err := copyDatasetElements(newDS, ds); err != nil {
@@ -671,7 +671,7 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 
 	// Create new dataset with the output transfer syntax
 	// Clone preserves the original transfer syntax, so we need to create a new one
-	newDS := dataset.NewWithTransferSyntax(outputTS)
+	newDS := newOutputDataset(sourceDS, outputTS)
 
 	// Copy all elements except PixelData
 	if err := copyDatasetElements(newDS, sourceDS); err != nil {
@@ -969,4 +969,10 @@ func copyDatasetElements(dst, src *dataset.Dataset) error {
 		}
 	}
 	return nil
+}
+
+func newOutputDataset(source *dataset.Dataset, syntax *transfer.Syntax) *dataset.Dataset {
+	result := dataset.NewWithTransferSyntax(syntax)
+	result.SetAutoValidate(source.AutoValidate())
+	return result
 }

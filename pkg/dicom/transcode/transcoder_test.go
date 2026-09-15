@@ -163,7 +163,6 @@ func TestTranscoderEncodeNormalizesBigEndianPixelsForCodec(t *testing.T) {
 			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
 		}
 	}
-
 	transcoder := newTestTranscoder(t,
 		transfer.ExplicitVRBigEndian,
 		transfer.JPEG2000Lossless,
@@ -757,14 +756,15 @@ func TestTranscoderPropagatesMetadataCopyErrors(t *testing.T) {
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
 		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
 		element.NewOtherByte(tag.PixelData, []byte{0x01}),
-		// This is intentionally invalid for PatientName; source validation is disabled
-		// so the transcoder must surface the output Dataset.Add failure.
+		// This is intentionally invalid for PatientName. Disable validation while
+		// constructing the source, then restore it before transcoding.
 		element.NewString(tag.PatientName, vr.UI, []string{"1.2.3"}),
 	} {
 		if err := ds.Add(elem); err != nil {
 			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
 		}
 	}
+	ds.SetAutoValidate(true)
 
 	transcoder := newTestTranscoder(t,
 		transfer.ExplicitVRLittleEndian,
@@ -773,6 +773,120 @@ func TestTranscoderPropagatesMetadataCopyErrors(t *testing.T) {
 	if _, err := transcoder.Transcode(context.Background(), ds); err == nil {
 		t.Fatal("Transcode() succeeded after dropping invalid metadata element")
 	}
+}
+
+func TestTranscoderPreservesDisabledDatasetAutoValidation(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  *transfer.Syntax
+		output *transfer.Syntax
+		codec  codec.Codec
+	}{
+		{
+			name:   "uncompressed to uncompressed",
+			input:  transfer.ExplicitVRLittleEndian,
+			output: transfer.ImplicitVRLittleEndian,
+		},
+		{
+			name:   "uncompressed to compressed",
+			input:  transfer.ExplicitVRLittleEndian,
+			output: transfer.JPEG2000Lossless,
+			codec:  echoDecodeCodec{},
+		},
+		{
+			name:   "compressed to uncompressed",
+			input:  transfer.JPEG2000Lossless,
+			output: transfer.ExplicitVRLittleEndian,
+			codec:  echoDecodeCodec{},
+		},
+		{
+			name:   "compressed to compressed",
+			input:  transfer.JPEG2000Lossless,
+			output: transfer.JPEG2000Lossless,
+			codec:  echoDecodeCodec{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := newAutoValidationPolicyTestDataset(t, tt.input)
+			dependencies := []any{}
+			if tt.codec != nil {
+				dependencies = append(dependencies, tt.codec)
+			}
+
+			result, err := newTestTranscoder(t, tt.input, tt.output, dependencies...).Transcode(context.Background(), ds)
+			if err != nil {
+				t.Fatalf("Transcode() error = %v", err)
+			}
+			if result.AutoValidate() {
+				t.Fatal("transcoded Dataset AutoValidate() = true, want false")
+			}
+			if got := result.TryGetString(tag.PatientAge); got != "047?" {
+				t.Fatalf("PatientAge = %q, want %q", got, "047?")
+			}
+			if err := result.Validate(); err == nil {
+				t.Fatal("Validate() error = nil, want invalid AS value error")
+			}
+		})
+	}
+}
+
+func TestTranscoderKeepsEnabledDatasetAutoValidation(t *testing.T) {
+	ds := newAutoValidationPolicyTestDataset(t, transfer.ExplicitVRLittleEndian)
+	ds.SetAutoValidate(true)
+
+	_, err := newTestTranscoder(t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ImplicitVRLittleEndian,
+	).Transcode(context.Background(), ds)
+	if err == nil {
+		t.Fatal("Transcode() error = nil, want invalid AS value error")
+	}
+	if !strings.Contains(err.Error(), "VR AS") || !strings.Contains(err.Error(), "047?") {
+		t.Fatalf("Transcode() error = %q, want invalid PatientAge AS context", err)
+	}
+}
+
+func TestTranscoderKeepsDatasetPolicyIndependentFromGlobalValidation(t *testing.T) {
+	previous := dataset.AutoValidate()
+	t.Cleanup(func() { dataset.SetAutoValidate(previous) })
+	dataset.SetAutoValidate(false)
+
+	ds := newAutoValidationPolicyTestDataset(t, transfer.ExplicitVRLittleEndian)
+	ds.SetAutoValidate(true)
+	result, err := newTestTranscoder(t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ImplicitVRLittleEndian,
+	).Transcode(context.Background(), ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	if !result.AutoValidate() {
+		t.Fatal("transcoded Dataset AutoValidate() = false, want source instance policy true")
+	}
+	if got := result.TryGetString(tag.PatientAge); got != "047?" {
+		t.Fatalf("PatientAge = %q, want %q", got, "047?")
+	}
+}
+
+func newAutoValidationPolicyTestDataset(t *testing.T, syntax *transfer.Syntax) *dataset.Dataset {
+	t.Helper()
+	ds := metadataTestDataset(t, syntax, pixel.Monochrome2.Value, 0, 1)
+	ds.SetAutoValidate(false)
+	if err := ds.Add(element.NewString(tag.PatientAge, vr.AS, []string{"047?"})); err != nil {
+		t.Fatalf("add invalid PatientAge with automatic validation disabled: %v", err)
+	}
+	if syntax.IsEncapsulated() {
+		fragments := element.NewOtherByteFragment(tag.PixelData)
+		fragments.AddFragment(buffer.NewMemory([]byte{0x01}))
+		if err := ds.Add(fragments); err != nil {
+			t.Fatalf("add encapsulated PixelData: %v", err)
+		}
+	} else if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{0x01})); err != nil {
+		t.Fatalf("add native PixelData: %v", err)
+	}
+	return ds
 }
 
 func TestTranscoder_DecodeFrameUsesBOTFrameBoundaries(t *testing.T) {
