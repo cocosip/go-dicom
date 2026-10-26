@@ -2,12 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches: [ master, main ]
   pull_request:
-    branches: [ master, main, develop ]
+    branches: [ master, main ]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -17,7 +21,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        go: ['1.27']
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -25,7 +28,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: ${{ matrix.go }}
+          go-version: '1.27'
           cache: true
 
       - name: Download dependencies
@@ -34,17 +37,16 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
-      - name: Run tests (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./cmd/... ./examples/... ./pkg/... ./tools/...
-
-      - name: Run tests (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Run tests
         shell: bash
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./cmd/... ./examples/... ./pkg/... ./tools/...
+        run: go test -v -race ${{ matrix.os == 'ubuntu-latest' && '-coverprofile=coverage.txt -covermode=atomic' || '' }} ./cmd/... ./examples/... ./pkg/... ./tools/...
+
+      - name: Build
+        if: matrix.os == 'ubuntu-latest'
+        run: go build -v ./...
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27'
+        if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v7
         with:
           file: ./coverage.txt
@@ -69,22 +71,6 @@ jobs:
         with:
           version: v2.14.0
           args: --timeout=10m
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version: '1.27'
-          cache: true
-
-      - name: Build
-        run: go build -v ./...
 
   benchmark:
     name: Benchmark
