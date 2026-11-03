@@ -403,8 +403,10 @@ func (pc *PresentationContext) String() string {
 	switch {
 	case pc.IsAccepted():
 		state = "accepted"
+	case pc.Result == ResultAcceptance:
+		state = "accepted (no transfer syntax)"
 	case pc.Result != ResultNotNegotiated:
-		state = fmt.Sprintf("rejected(%d)", pc.Result)
+		state = "rejected (" + pdu.ResultString(pc.Result) + ")"
 	}
 	return fmt.Sprintf("PC[%d] %s -> [%s] [%s]",
 		pc.ID, pc.AbstractSyntax, strings.Join(proposed, ", "), state)

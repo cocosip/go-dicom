@@ -69,6 +69,17 @@ func TestFormatRespectsDepthAndElementLimits(t *testing.T) {
 	}
 }
 
+func TestFormatElementLimitCountsElementsNotItemLines(t *testing.T) {
+	ds := newFormatTestDataset(t)
+
+	// (0008,0005), the sequence, and the nested (0008,1150) are three element
+	// rows; the "Item #1:" marker must not consume the budget.
+	limited := ds.Format(dataset.FormatOptions{Layout: dataset.LayoutRows, MaxDepth: -1, MaxElements: 3})
+	if !strings.Contains(limited, "  (0008,1150) UI [1.2.3]") || !strings.HasSuffix(limited, "\n...") {
+		t.Errorf("element-limited Format() = %q, want nested element and truncation marker", limited)
+	}
+}
+
 func TestFormatHideValuesReturnsTagAndVR(t *testing.T) {
 	ds := newFormatTestDataset(t)
 

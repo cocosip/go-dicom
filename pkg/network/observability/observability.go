@@ -225,8 +225,8 @@ func (context PresentationContext) String() string {
 		context.ID, abstractSyntax, transferSyntaxes, presentationContextResultName(context.Result))
 }
 
-// NotNegotiatedResult marks a context that was proposed but never answered.
-const NotNegotiatedResult byte = 0xFF
+// notNegotiatedResult marks a context that was proposed but never answered.
+const notNegotiatedResult byte = 0xFF
 
 func presentationContextResultName(result byte) string {
 	switch result {
@@ -240,7 +240,7 @@ func presentationContextResultName(result byte) string {
 		return "abstract-syntax-not-supported"
 	case 4:
 		return "transfer-syntaxes-not-supported"
-	case NotNegotiatedResult:
+	case notNegotiatedResult:
 		return "not-negotiated"
 	default:
 		return fmt.Sprintf("unknown(%d)", result)

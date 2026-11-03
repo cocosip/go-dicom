@@ -114,7 +114,11 @@ func (a *AAssociateAC) String() string {
 
 // String returns a compact summary of the accepted presentation context.
 func (pc PresentationContextAC) String() string {
-	return fmt.Sprintf("PC[%d] -> %s [%s]", pc.ID, pc.TransferSyntax, ResultString(pc.Result))
+	transferSyntax := pc.TransferSyntax
+	if transferSyntax == "" {
+		transferSyntax = "<none>"
+	}
+	return fmt.Sprintf("PC[%d] -> %s [%s]", pc.ID, transferSyntax, ResultString(pc.Result))
 }
 
 // NewAAssociateAC creates a new A-ASSOCIATE-AC PDU with default values.

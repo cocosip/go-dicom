@@ -444,20 +444,33 @@ err := c.CFindWithCallback(ctx, level, query,
 - `operation_id`、`parent_operation_id`: 进程内辅助关联标识，仅适用于可确认的父子关系
 - `query_retrieve_level`: `PATIENT`、`STUDY`、`SERIES`、`IMAGE`
 - `sop_class_uid`、`transfer_syntax`、`presentation_context_id`: 协商和编码上下文
-- `status_code`、`status_hex`、`status_state`: DICOM 状态码及可读状态
+- `status`、`status_hex`、`status_state`: DICOM 状态码及可读状态
 - `remaining_suboperations`、`completed_suboperations`、
   `failed_suboperations`、`warning_suboperations`: C-MOVE/C-GET 进度
 
 Association 日志还包含 `local_addr`、`remote_addr`、Calling/Called AE、
-实现 UID/版本、最大 PDU、异步操作窗口以及 Presentation Context 接受数量，
-并通过 `presentation_contexts` 摘要保留每个 context 的 ID、Abstract Syntax、
-Transfer Syntax 和协商结果，用于判断协商是否符合预期。INFO 级别输出
+实现 UID/版本、最大 PDU、异步操作窗口以及 Presentation Context 接受数量。
+`presentation_contexts` 是结构化值：text handler 输出
+`1:1.2.840.10008.1.1 -> 1.2.840.10008.1.2 [acceptance]; 3:...`，JSON handler
+输出原生数组（不存在二次转义的 `\"`），其中包含每个 context 的 ID、Abstract
+Syntax、Transfer Syntax 和协商结果，用于判断协商是否符合预期。INFO 级别输出
 Association 和所有 DIMSE 消息摘要（包括 pending 进度）；超时、取消和传输
 细节按 WARN/DEBUG 输出。C-MOVE 目标 AE 通常使用另一条 Association，源端 C-MOVE
 与目标端 C-STORE 不能仅凭本地 `operation_id` 自动关联，需要由业务层提供
 外部 correlation ID。
 
-日志不会输出完整数据集、PDU 内容或患者标识。
+日志不会输出完整数据集、PDU 内容或患者标识。排查数据问题时需要显式格式化：
+
+```go
+// 单行，适合作为日志字段；注意会包含患者信息，只在受控场景使用。
+slog.String("dataset", ds.Format(dataset.FormatOptions{MaxElements: 100}))
+
+// 多行对齐输出，适合本地调试或 CLI。
+fmt.Println(ds.Format(dataset.FormatOptions{
+    Layout:   dataset.LayoutDump,
+    MaxDepth: -1,
+}))
+```
 
 ### 启用详细日志
 

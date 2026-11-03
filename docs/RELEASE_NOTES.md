@@ -14,6 +14,9 @@
   JSON handlers as a native array, removing the double-escaped
   `[{\"id\":...}]` output. The duplicated `status_code` and `status_name` log
   attributes were removed; `status`, `status_hex`, and `status_state` remain.
+  Because `observability.Association`, `Event`, and `Metric` now contain a
+  slice, they are no longer comparable with `==`; use field comparisons or
+  `reflect.DeepEqual` in tests.
 - Character-set validation now accepts empty Specific Character Set values in
   any VM position, while still rejecting unknown values and invalid combinations.
 - Dataset batch updates and Pixel Data materialization now commit atomically;

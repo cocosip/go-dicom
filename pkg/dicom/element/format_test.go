@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
@@ -58,5 +59,20 @@ func TestSummaryReturnsTagVRAndValue(t *testing.T) {
 	numeric := element.NewUnsignedShort(tag.Rows, []uint16{512})
 	if got := element.Summary(numeric); got != "(0028,0010) US 512" {
 		t.Errorf("Summary() = %q, want numeric value", got)
+	}
+
+	empty := element.NewString(tag.PatientName, vr.PN, nil)
+	if got := element.Summary(empty); got != "(0010,0010) PN (empty)" {
+		t.Errorf("Summary() = %q, want empty marker", got)
+	}
+}
+
+func TestFormatValueSummarizesSequenceItems(t *testing.T) {
+	sequence := dataset.NewSequenceWithItems(tag.ReferencedImageSequence, []*dataset.Dataset{dataset.New(), dataset.New()})
+	if got, want := element.FormatValue(sequence, 64), "(2 items)"; got != want {
+		t.Errorf("FormatValue(sequence) = %q, want %q", got, want)
+	}
+	if got, want := element.Summary(sequence), "(0008,1140) SQ (2 items)"; got != want {
+		t.Errorf("Summary(sequence) = %q, want %q", got, want)
 	}
 }

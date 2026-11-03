@@ -17,8 +17,8 @@ const DefaultValueLimit = 64
 const emptyValue = "(empty)"
 
 // Summary returns a bounded, single-line tag/VR/value representation of an
-// element. It is safe to use in logs, error messages, and %v formatting:
-// container and bulk binary values are summarized and never decoded.
+// element. It never emits newlines and never decodes container or bulk binary
+// values, so it is safe for logs and error messages. Values are not redacted.
 func Summary(elem Element) string {
 	if elem == nil {
 		return "<nil element>"
@@ -32,8 +32,10 @@ func Summary(elem Element) string {
 
 // FormatValue renders an element value as bounded, single-line text for
 // diagnostics and logs. Text values are bracketed, multi-values are separated
-// by backslashes, sequences return an empty string (rendered by the Dataset
-// formatter), and bulk binary values or fragments are summarized by size.
+// by backslashes, sequences and fragments are summarized, and bulk binary
+// values are reported by size. maxLen bounds text and numeric content;
+// brackets, truncation suffixes, and short container summaries may add a few
+// characters.
 func FormatValue(elem Element, maxLen int) string {
 	if elem == nil {
 		return "(nil element)"
@@ -59,13 +61,19 @@ func FormatValue(elem Element, maxLen int) string {
 		return fmt.Sprintf("(%d %s, %d %s)", fragmentCount, fragmentLabel, offsetCount, offsetLabel)
 	}
 
+	vrValue := elem.ValueRepresentation()
 	vrCode := ""
-	if value := elem.ValueRepresentation(); value != nil {
-		vrCode = value.Code()
+	if vrValue != nil {
+		vrCode = vrValue.Code()
 	}
 	switch vrCode {
 	case vr.CodeSQ:
-		return ""
+		itemCount := elem.Count()
+		itemLabel := "items"
+		if itemCount == 1 {
+			itemLabel = "item"
+		}
+		return fmt.Sprintf("(%d %s)", itemCount, itemLabel)
 	case vr.CodeOB, vr.CodeOW, vr.CodeOL, vr.CodeOD, vr.CodeOF, vr.CodeOV, vr.CodeUN:
 		if elem.Length() == 0 {
 			return emptyValue
@@ -85,7 +93,7 @@ func FormatValue(elem Element, maxLen int) string {
 	if text == "" {
 		return emptyValue
 	}
-	if isDisplayTextVR(vrCode) {
+	if vrValue != nil && vrValue.IsString() {
 		if truncated {
 			return "[" + text + "...]"
 		}
@@ -95,17 +103,6 @@ func FormatValue(elem Element, maxLen int) string {
 		return text + "..."
 	}
 	return text
-}
-
-// isDisplayTextVR reports whether values of the VR are rendered as DICOM text.
-func isDisplayTextVR(code string) bool {
-	switch code {
-	case "AE", "AS", "CS", "DA", "DS", "DT", "IS", "LO", "LT", "PN",
-		"SH", "ST", "TM", "UC", "UI", "UR", "UT":
-		return true
-	default:
-		return false
-	}
 }
 
 func joinBounded(values []string, maxLen int, separator byte) (string, bool) {

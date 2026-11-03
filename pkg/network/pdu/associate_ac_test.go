@@ -561,4 +561,10 @@ func TestAAssociateACString(t *testing.T) {
 	if got := ac.PresentationContexts[0].String(); got != want {
 		t.Errorf("PresentationContextAC.String() = %q, want %q", got, want)
 	}
+
+	rejected := PresentationContextAC{ID: 3, Result: ResultUserRejection}
+	want = "PC[3] -> <none> [User Rejection]"
+	if got := rejected.String(); got != want {
+		t.Errorf("PresentationContextAC.String() = %q, want %q", got, want)
+	}
 }

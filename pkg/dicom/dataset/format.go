@@ -37,8 +37,9 @@ type FormatOptions struct {
 	// MaxElements stops rendering after this many element rows. Zero means
 	// unlimited.
 	MaxElements int
-	// MaxValueLength limits the runes rendered for one element value. Zero uses
-	// element.DefaultValueLimit.
+	// MaxValueLength limits the runes rendered for one element value. Text and
+	// numeric values are truncated; binary and container values are summarized
+	// by size or item count. Zero uses element.DefaultValueLimit.
 	MaxValueLength int
 	// HideValues renders tags and VRs without element values.
 	HideValues bool
@@ -101,24 +102,27 @@ func formatSingleLine(ds *Dataset, opts FormatOptions) string {
 
 func formatLines(ds *Dataset, opts FormatOptions, align bool) []string {
 	var lines []string
+	elements := 0
 	truncated := false
 	err := Walk(ds, func(event WalkEvent) (WalkAction, error) {
 		switch event.Kind {
 		case WalkElement, WalkFragmentBegin:
-			if formatLimitReached(len(lines), opts.MaxElements) {
+			if formatLimitReached(elements, opts.MaxElements) {
 				truncated = true
 				return WalkStop, nil
 			}
+			elements++
 			lines = append(lines, formatElementLine(event.Element, formatDepth(event.Path), opts, align))
 		case WalkSequenceBegin:
 			sequence, ok := event.Element.(*Sequence)
 			if !ok || sequence == nil {
 				return WalkContinue, nil
 			}
-			if formatLimitReached(len(lines), opts.MaxElements) {
+			if formatLimitReached(elements, opts.MaxElements) {
 				truncated = true
 				return WalkStop, nil
 			}
+			elements++
 			depth := formatDepth(event.Path)
 			lines = append(lines, formatSequenceLine(sequence, depth, align))
 			if opts.MaxDepth >= 0 && depth >= opts.MaxDepth {
@@ -213,11 +217,11 @@ func formatKeyword(elem element.Element) string {
 	return entry.Keyword()
 }
 
-func elementLength(elem element.Element) int {
+func elementLength(elem element.Element) int64 {
 	if elem == nil {
 		return 0
 	}
-	return int(elem.Length())
+	return int64(elem.Length())
 }
 
 func formatDepth(path Path) int {
