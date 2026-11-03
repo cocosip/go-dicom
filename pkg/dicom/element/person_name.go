@@ -95,9 +95,9 @@ func (p *PersonName) Count() int {
 	return p.str.Count()
 }
 
-// String returns a string representation.
+// String returns a single-line tag/VR/value representation of the element.
 func (p *PersonName) String() string {
-	return p.str.String()
+	return Summary(p)
 }
 
 // Validate performs validation.

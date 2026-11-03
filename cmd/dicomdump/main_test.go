@@ -29,9 +29,9 @@ func TestDumpDatasetUsesWalkerOrderAndDepth(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantLines := []string{
-		"(0008,1140) SQ (Sequence with 1 item(s))",
+		"(0008,1140) SQ (1 item)",
 		"  Item #1:",
-		"  (0010,0010) PN Doe^Jane",
+		"  (0010,0010) PN [Doe^Jane]",
 	}
 	for _, line := range wantLines {
 		if !strings.Contains(full.String(), line+"\n") {

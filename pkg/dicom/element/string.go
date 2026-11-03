@@ -278,13 +278,9 @@ func EncodingError(elem Element) error {
 	return nil
 }
 
-// String returns a string representation of the element.
+// String returns a single-line tag/VR/value representation of the element.
 func (s *String) String() string {
-	value := s.GetString()
-	if len(value) > 64 {
-		value = value[:64] + "..."
-	}
-	return fmt.Sprintf("Tag: %s, VR: %s, Value: %q", s.tag.String(), s.vr.Code(), value)
+	return Summary(s)
 }
 
 // Validate performs DICOM validation on the string element.

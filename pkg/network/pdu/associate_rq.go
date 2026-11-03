@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 )
 
 const applicationContextUID = "1.2.840.10008.3.1.1.1"
@@ -769,4 +770,35 @@ func decodeUserIdentity(data []byte) (*UserIdentityNegotiation, error) {
 	}
 
 	return identity, nil
+}
+
+// String returns a compact summary of the association request.
+func (a *AAssociateRQ) String() string {
+	if a == nil {
+		return "<nil A-ASSOCIATE-RQ>"
+	}
+	maximumLength := uint32(0)
+	if a.UserInformation != nil {
+		maximumLength = a.UserInformation.MaximumLength
+	}
+	contextLabel := "contexts"
+	if len(a.PresentationContexts) == 1 {
+		contextLabel = "context"
+	}
+	return fmt.Sprintf("A-ASSOCIATE-RQ [%s -> %s, %d %s, MaxPDU=%d]",
+		a.CallingAETitle, a.CalledAETitle, len(a.PresentationContexts), contextLabel, maximumLength)
+}
+
+// String returns a compact summary of a proposed presentation context.
+func (pc PresentationContextRQ) String() string {
+	return fmt.Sprintf("PC[%d] %s -> [%s]", pc.ID, pc.AbstractSyntax, strings.Join(pc.TransferSyntaxes, ", "))
+}
+
+// String returns a compact summary of the user information item.
+func (u *UserInformation) String() string {
+	if u == nil {
+		return "<nil user information>"
+	}
+	return fmt.Sprintf("UserInformation[MaxPDU=%d, Implementation=%s, Version=%s]",
+		u.MaximumLength, u.ImplementationClassUID, u.ImplementationVersionName)
 }

@@ -181,7 +181,7 @@ func (m *BaseMessage) GetCommandUInt16(t *tag.Tag) (uint16, error) {
 func (m *BaseMessage) String() string {
 	cmdField := m.CommandField()
 	msgID := m.MessageID()
-	return fmt.Sprintf("DIMSE Message [Command=0x%04X, MessageID=%d]", cmdField, msgID)
+	return fmt.Sprintf("DIMSE Message [%s, MessageID=%d]", CommandField(cmdField), msgID)
 }
 
 // BaseRequest provides common functionality for DIMSE request messages.

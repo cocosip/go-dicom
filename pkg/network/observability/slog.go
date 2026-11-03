@@ -89,8 +89,8 @@ func appendAssociationAttrs(attrs []slog.Attr, association Association) []slog.A
 	if association.AcceptedPresentationContextCount != 0 {
 		attrs = append(attrs, slog.Uint64("accepted_presentation_context_count", uint64(association.AcceptedPresentationContextCount)))
 	}
-	if association.PresentationContextSummary != "" {
-		attrs = append(attrs, slog.String("presentation_contexts", association.PresentationContextSummary))
+	if len(association.PresentationContexts) > 0 {
+		attrs = append(attrs, slog.Any("presentation_contexts", association.PresentationContexts))
 	}
 	return attrs
 }
@@ -150,15 +150,11 @@ func appendStatusAttrs(attrs []slog.Attr, event Event) []slog.Attr {
 	if event.StatusState != "" || event.StatusCode != 0 {
 		attrs = append(attrs,
 			slog.Uint64("status", uint64(event.StatusCode)),
-			slog.Uint64("status_code", uint64(event.StatusCode)),
 			slog.String("status_hex", fmt.Sprintf("0x%04X", event.StatusCode)),
 		)
 	}
 	if event.StatusState != "" {
-		attrs = append(attrs,
-			slog.String("status_state", event.StatusState),
-			slog.String("status_name", event.StatusState),
-		)
+		attrs = append(attrs, slog.String("status_state", event.StatusState))
 	}
 	if event.Duration != 0 {
 		attrs = append(attrs, slog.Duration("duration", event.Duration))

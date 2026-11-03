@@ -8,6 +8,8 @@ package observability
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -180,9 +182,8 @@ type Association struct {
 	AsyncOpsPerformed                uint16
 	PresentationContextCount         uint16
 	AcceptedPresentationContextCount uint16
-	// PresentationContextSummary is a compact JSON array of context ID,
-	// abstract syntax, transfer syntaxes, and negotiation result.
-	PresentationContextSummary string
+	// PresentationContexts summarizes every negotiated presentation context.
+	PresentationContexts PresentationContexts
 }
 
 // PresentationContext is a safe summary of one negotiated presentation context.
@@ -191,6 +192,59 @@ type PresentationContext struct {
 	AbstractSyntax   string   `json:"abstract_syntax,omitempty"`
 	TransferSyntaxes []string `json:"transfer_syntaxes,omitempty"`
 	Result           byte     `json:"result"`
+}
+
+// PresentationContexts is a list of negotiated presentation contexts. It
+// renders as compact text for text log handlers and as a JSON array for JSON
+// log handlers.
+type PresentationContexts []PresentationContext
+
+// String returns a compact single-line summary of the negotiation.
+func (contexts PresentationContexts) String() string {
+	if len(contexts) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(contexts))
+	for _, context := range contexts {
+		parts = append(parts, context.String())
+	}
+	return strings.Join(parts, "; ")
+}
+
+// String returns a compact summary of one presentation context.
+func (context PresentationContext) String() string {
+	abstractSyntax := context.AbstractSyntax
+	if abstractSyntax == "" {
+		abstractSyntax = "<unknown>"
+	}
+	transferSyntaxes := "<none>"
+	if len(context.TransferSyntaxes) > 0 {
+		transferSyntaxes = strings.Join(context.TransferSyntaxes, "/")
+	}
+	return fmt.Sprintf("%d:%s -> %s [%s]",
+		context.ID, abstractSyntax, transferSyntaxes, presentationContextResultName(context.Result))
+}
+
+// NotNegotiatedResult marks a context that was proposed but never answered.
+const NotNegotiatedResult byte = 0xFF
+
+func presentationContextResultName(result byte) string {
+	switch result {
+	case 0:
+		return "acceptance"
+	case 1:
+		return "user-rejection"
+	case 2:
+		return "no-reason"
+	case 3:
+		return "abstract-syntax-not-supported"
+	case 4:
+		return "transfer-syntaxes-not-supported"
+	case NotNegotiatedResult:
+		return "not-negotiated"
+	default:
+		return fmt.Sprintf("unknown(%d)", result)
+	}
 }
 
 // Event describes one network lifecycle transition.

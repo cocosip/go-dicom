@@ -238,6 +238,36 @@ DIMSE message summaries, including pending responses, use INFO. Timeout,
 cancellation, and transport details use WARN/DEBUG as applicable. PDU byte
 counts remain metrics rather than log records.
 
+`presentation_contexts` is a structured value: text handlers render one compact
+string such as
+`1:1.2.840.10008.1.1 -> 1.2.840.10008.1.2 [acceptance]; 3:...`, while JSON
+handlers render a native array. It is never a JSON string embedded inside the
+record, so text logs contain no escaped quotes.
+
+### Diagnostic Formatting
+
+Detailed dataset rendering is explicit; the library never logs dataset contents
+on its own. Use `Dataset.Format` with the layout that matches the consumer:
+
+```go
+// One line, suitable for a log attribute.
+slog.String("dataset", ds.Format(dataset.FormatOptions{MaxElements: 100}))
+
+// Aligned multi-line dump for a debug view or CLI.
+fmt.Println(ds.Format(dataset.FormatOptions{
+    Layout:   dataset.LayoutDump,
+    MaxDepth: -1,
+}))
+```
+
+`LayoutSingleLine` keeps the whole dataset on one line, `LayoutRows` renders one
+element per line, and `LayoutDump` adds aligned byte lengths and dictionary
+keywords. Text values render as `[value]`, numbers without brackets, empty
+values as `(empty)`, and bulk binary values as `(N bytes)`; Pixel Data is never
+decoded. Element `String()` returns the same single-line `(tag) VR [value]`
+summary for every VR, including numeric, attribute-tag, sequence, and fragment
+elements.
+
 ## Quick Start
 
 ### Reading a DICOM File

@@ -4,8 +4,10 @@
 package observability
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +19,8 @@ const (
 	testSlogImplementationClassUID = "1.2.3"
 	testSlogImplementationVersion  = "TEST_1"
 	testSlogSuccessStatus          = "Success"
+	testSlogAbstractSyntax         = "1.2.3.4"
+	testSlogTransferSyntaxUID      = "1.2.840.10008.1.2.1"
 )
 
 func TestEmitSlogWritesSafeNetworkLifecycleRecord(t *testing.T) {
@@ -48,7 +52,9 @@ func TestEmitSlogWritesSafeNetworkLifecycleRecord(t *testing.T) {
 				AsyncOpsPerformed:                2,
 				PresentationContextCount:         3,
 				AcceptedPresentationContextCount: 2,
-				PresentationContextSummary:       `[{"id":3,"abstract_syntax":"1.2.3.4","transfer_syntaxes":["1.2.840.10008.1.2.1"],"result":0}]`,
+				PresentationContexts: PresentationContexts{
+					{ID: 3, AbstractSyntax: testSlogAbstractSyntax, TransferSyntaxes: []string{testSlogTransferSyntaxUID}, Result: 0},
+				},
 			},
 			Direction:             DirectionOutbound,
 			MessageID:             3,
@@ -57,7 +63,7 @@ func TestEmitSlogWritesSafeNetworkLifecycleRecord(t *testing.T) {
 			Operation:             "C-ECHO",
 			OperationID:           11,
 			SOPClassUID:           "1.2.840.10008.1.1",
-			TransferSyntax:        "1.2.840.10008.1.2.1",
+			TransferSyntax:        testSlogTransferSyntaxUID,
 			PresentationContextID: 3,
 			StatusCode:            0,
 			StatusState:           testSlogSuccessStatus,
@@ -75,9 +81,12 @@ func TestEmitSlogWritesSafeNetworkLifecycleRecord(t *testing.T) {
 		t.Fatalf("record = level=%s message=%q, want info/request_completed", record.Level, record.Message)
 	}
 	attrs := recordAttrs(record)
-	contexts, ok := attrs["presentation_contexts"].(string)
-	if !ok || contexts != `[{"id":3,"abstract_syntax":"1.2.3.4","transfer_syntaxes":["1.2.840.10008.1.2.1"],"result":0}]` {
+	contexts, ok := attrs["presentation_contexts"].(PresentationContexts)
+	if !ok || len(contexts) != 1 || contexts[0].AbstractSyntax != testSlogAbstractSyntax || contexts[0].Result != 0 {
 		t.Fatalf("presentation_contexts = %#v", attrs["presentation_contexts"])
+	}
+	if text := contexts.String(); text != "3:"+testSlogAbstractSyntax+" -> "+testSlogTransferSyntaxUID+" [acceptance]" {
+		t.Errorf("presentation_contexts text = %q", text)
 	}
 	for key, want := range map[string]any{
 		"component":                           "network.service",
@@ -107,8 +116,8 @@ func TestEmitSlogWritesSafeNetworkLifecycleRecord(t *testing.T) {
 		"transfer_syntax":                     "1.2.840.10008.1.2.1",
 		"presentation_context_id":             uint64(3),
 		"status":                              uint64(0),
+		"status_hex":                          "0x0000",
 		"status_state":                        testSlogSuccessStatus,
-		"status_name":                         testSlogSuccessStatus,
 		"outcome":                             "success",
 	} {
 		if got, ok := attrs[key]; !ok || got != want {
@@ -164,6 +173,49 @@ func TestEmitSlogWritesAssociationNegotiationSummary(t *testing.T) {
 		if got, ok := attrs[key]; !ok || got != want {
 			t.Errorf("association attribute %q = %#v, want %#v", key, got, want)
 		}
+	}
+}
+
+func TestEmitSlogRendersPresentationContextsWithoutDoubleEscaping(t *testing.T) {
+	record := LogRecord{
+		Level:   LevelInfo,
+		Message: string(EventAssociationReleased),
+		Event: Event{
+			Kind: EventAssociationReleased,
+			Association: Association{
+				PresentationContexts: PresentationContexts{
+					{ID: 3, AbstractSyntax: testSlogAbstractSyntax, TransferSyntaxes: []string{testSlogTransferSyntaxUID}},
+				},
+			},
+		},
+	}
+
+	var textOutput bytes.Buffer
+	if err := logging.Configure(logging.Config{
+		Handler: slog.NewTextHandler(&textOutput, &slog.HandlerOptions{Level: slog.LevelInfo}),
+	}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(logging.Disable)
+	EmitSlog(context.Background(), "network.service", record)
+	text := textOutput.String()
+	if strings.Contains(text, `\"`) {
+		t.Fatalf("text output double-escapes presentation contexts: %s", text)
+	}
+	if !strings.Contains(text, `presentation_contexts="3:`+testSlogAbstractSyntax+" -> "+testSlogTransferSyntaxUID+` [acceptance]"`) {
+		t.Fatalf("text output = %s", text)
+	}
+
+	var jsonOutput bytes.Buffer
+	if err := logging.Configure(logging.Config{
+		Handler: slog.NewJSONHandler(&jsonOutput, &slog.HandlerOptions{Level: slog.LevelInfo}),
+	}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	EmitSlog(context.Background(), "network.service", record)
+	wantJSON := `"presentation_contexts":[{"id":3,"abstract_syntax":"` + testSlogAbstractSyntax + `","transfer_syntaxes":["` + testSlogTransferSyntaxUID + `"],"result":0}]`
+	if !strings.Contains(jsonOutput.String(), wantJSON) {
+		t.Fatalf("json output = %s", jsonOutput.String())
 	}
 }
 

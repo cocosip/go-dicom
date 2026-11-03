@@ -82,9 +82,9 @@ func (d *Date) Count() int {
 	return d.str.Count()
 }
 
-// String returns a string representation.
+// String returns a single-line tag/VR/value representation of the element.
 func (d *Date) String() string {
-	return d.str.String()
+	return Summary(d)
 }
 
 // Validate performs validation.
@@ -208,9 +208,9 @@ func (tm *Time) Count() int {
 	return tm.str.Count()
 }
 
-// String returns a string representation.
+// String returns a single-line tag/VR/value representation of the element.
 func (tm *Time) String() string {
-	return tm.str.String()
+	return Summary(tm)
 }
 
 // Validate performs validation.
@@ -355,9 +355,9 @@ func (dt *DateTime) Count() int {
 	return dt.str.Count()
 }
 
-// String returns a string representation.
+// String returns a single-line tag/VR/value representation of the element.
 func (dt *DateTime) String() string {
-	return dt.str.String()
+	return Summary(dt)
 }
 
 // Validate performs validation.

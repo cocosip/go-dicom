@@ -760,3 +760,26 @@ func captureStdout(t *testing.T, run func()) string {
 	}
 	return string(data)
 }
+
+func TestAAssociateRQString(t *testing.T) {
+	rq := &AAssociateRQ{
+		CallingAETitle: "SCU",
+		CalledAETitle:  "SCP",
+		PresentationContexts: []PresentationContextRQ{
+			{ID: 1, AbstractSyntax: "1.2.3", TransferSyntaxes: []string{"1.2.4", "1.2.5"}},
+		},
+		UserInformation: &UserInformation{MaximumLength: 16384},
+	}
+	want := "A-ASSOCIATE-RQ [SCU -> SCP, 1 context, MaxPDU=16384]"
+	if got := rq.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+	want = "PC[1] 1.2.3 -> [1.2.4, 1.2.5]"
+	if got := rq.PresentationContexts[0].String(); got != want {
+		t.Errorf("PresentationContextRQ.String() = %q, want %q", got, want)
+	}
+	want = "UserInformation[MaxPDU=16384, Implementation=, Version=]"
+	if got := rq.UserInformation.String(); got != want {
+		t.Errorf("UserInformation.String() = %q, want %q", got, want)
+	}
+}

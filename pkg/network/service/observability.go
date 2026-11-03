@@ -5,7 +5,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net"
 	"strconv"
@@ -551,7 +550,7 @@ func (s *Service) observationAssociation() observability.Association {
 			info.AsyncOpsPerformed = assoc.AsynchronousOperations.MaxPerformedOperations
 		}
 		info.PresentationContextCount = uint16(len(assoc.PresentationContexts))
-		info.PresentationContextSummary = snapshotPresentationContexts(assoc)
+		info.PresentationContexts = snapshotPresentationContexts(assoc)
 		for _, pc := range assoc.PresentationContexts {
 			if pc != nil && pc.IsAccepted() {
 				info.AcceptedPresentationContextCount++
@@ -588,7 +587,7 @@ func (s *Service) associationObservationForRQ(rq *pdu.AAssociateRQ) observabilit
 	info.CallingAE = rq.CallingAETitle
 	info.CalledAE = rq.CalledAETitle
 	info.PresentationContextCount = uint16(len(rq.PresentationContexts))
-	contexts := make([]observability.PresentationContext, 0, len(rq.PresentationContexts))
+	contexts := make(observability.PresentationContexts, 0, len(rq.PresentationContexts))
 	for _, pc := range rq.PresentationContexts {
 		contexts = append(contexts, observability.PresentationContext{
 			ID:               pc.ID,
@@ -596,7 +595,7 @@ func (s *Service) associationObservationForRQ(rq *pdu.AAssociateRQ) observabilit
 			TransferSyntaxes: append([]string(nil), pc.TransferSyntaxes...),
 		})
 	}
-	info.PresentationContextSummary = marshalPresentationContexts(contexts)
+	info.PresentationContexts = contexts
 	applyUserInformation(&info, rq.UserInformation)
 	return info
 }
@@ -612,7 +611,7 @@ func (s *Service) associationObservationForAC(ac *pdu.AAssociateAC) observabilit
 	if ac.CalledAETitle != "" {
 		info.CalledAE = ac.CalledAETitle
 	}
-	contexts := make([]observability.PresentationContext, 0, len(ac.PresentationContexts))
+	contexts := make(observability.PresentationContexts, 0, len(ac.PresentationContexts))
 	for _, pc := range ac.PresentationContexts {
 		contexts = append(contexts, observability.PresentationContext{
 			ID:               pc.ID,
@@ -624,40 +623,35 @@ func (s *Service) associationObservationForAC(ac *pdu.AAssociateAC) observabilit
 		}
 	}
 	info.PresentationContextCount = uint16(len(ac.PresentationContexts))
-	info.PresentationContextSummary = mergeAcceptedPresentationContexts(info.PresentationContextSummary, contexts)
+	info.PresentationContexts = mergeAcceptedPresentationContexts(info.PresentationContexts, contexts)
 	applyUserInformation(&info, ac.UserInformation)
 	return info
 }
 
-func mergeAcceptedPresentationContexts(base string, accepted []observability.PresentationContext) string {
-	if base == "" {
-		return marshalPresentationContexts(accepted)
-	}
-	var contexts []observability.PresentationContext
-	if err := json.Unmarshal([]byte(base), &contexts); err != nil {
-		return marshalPresentationContexts(accepted)
-	}
-	byID := make(map[byte]*observability.PresentationContext, len(contexts))
-	for i := range contexts {
-		byID[contexts[i].ID] = &contexts[i]
+func mergeAcceptedPresentationContexts(base, accepted observability.PresentationContexts) observability.PresentationContexts {
+	contexts := append(observability.PresentationContexts(nil), base...)
+	byID := make(map[byte]int, len(contexts))
+	for index := range contexts {
+		byID[contexts[index].ID] = index
 	}
 	for _, item := range accepted {
-		current := byID[item.ID]
-		if current == nil {
+		index, found := byID[item.ID]
+		if !found {
+			byID[item.ID] = len(contexts)
 			contexts = append(contexts, item)
 			continue
 		}
-		current.Result = item.Result
-		current.TransferSyntaxes = append([]string(nil), item.TransferSyntaxes...)
+		contexts[index].Result = item.Result
+		contexts[index].TransferSyntaxes = append([]string(nil), item.TransferSyntaxes...)
 	}
-	return marshalPresentationContexts(contexts)
+	return contexts
 }
 
-func snapshotPresentationContexts(assoc *association.Association) string {
+func snapshotPresentationContexts(assoc *association.Association) observability.PresentationContexts {
 	if assoc == nil || len(assoc.PresentationContexts) == 0 {
-		return ""
+		return nil
 	}
-	contexts := make([]observability.PresentationContext, 0, len(assoc.PresentationContexts))
+	contexts := make(observability.PresentationContexts, 0, len(assoc.PresentationContexts))
 	for _, pc := range assoc.PresentationContexts {
 		if pc == nil {
 			continue
@@ -677,18 +671,7 @@ func snapshotPresentationContexts(assoc *association.Association) string {
 		}
 		contexts = append(contexts, item)
 	}
-	return marshalPresentationContexts(contexts)
-}
-
-func marshalPresentationContexts(contexts []observability.PresentationContext) string {
-	if len(contexts) == 0 {
-		return ""
-	}
-	data, err := json.Marshal(contexts)
-	if err != nil {
-		return ""
-	}
-	return string(data)
+	return contexts
 }
 
 func nonEmptyStrings(value string) []string {

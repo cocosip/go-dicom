@@ -115,9 +115,9 @@ func (e *base) Length() uint32 {
 	return e.buffer.Size()
 }
 
-// String returns a string representation of the element.
+// String returns a single-line tag/VR/value representation of the element.
 func (e *base) String() string {
-	return fmt.Sprintf("Tag: %s, VR: %s, Length: %d", e.tag.String(), e.vr.Code(), e.Length())
+	return Summary(e)
 }
 
 // Validate performs basic validation.

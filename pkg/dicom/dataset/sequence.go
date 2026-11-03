@@ -72,9 +72,17 @@ func (s *Sequence) Count() int {
 	return len(s.items)
 }
 
-// String returns a string representation of the sequence.
+// String returns a single-line tag/VR/value representation of the sequence.
 func (s *Sequence) String() string {
-	return fmt.Sprintf("Sequence{Tag: %s, Items: %d}", s.tag.String(), len(s.items))
+	if s == nil {
+		return "<nil sequence>"
+	}
+	itemCount := len(s.items)
+	label := "items"
+	if itemCount == 1 {
+		label = "item"
+	}
+	return fmt.Sprintf("%s %s (%d %s)", s.tag, vr.CodeSQ, itemCount, label)
 }
 
 // Validate recursively validates the sequence item Datasets in item order.

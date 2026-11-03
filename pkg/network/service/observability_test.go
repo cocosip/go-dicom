@@ -112,6 +112,7 @@ func TestObservationAssociationCapturesNetworkAndNegotiationMetadata(t *testing.
 	t.Cleanup(func() { _ = svc.Close() })
 
 	info := svc.observationAssociation()
+	contexts := info.PresentationContexts.String()
 	if info.LocalAddr != "local" || info.RemoteAddr != "remote" ||
 		info.RemoteHost != "pacs.example" || info.RemotePort != 104 ||
 		info.ImplementationClassUID != "1.2.3" ||
@@ -119,8 +120,9 @@ func TestObservationAssociationCapturesNetworkAndNegotiationMetadata(t *testing.
 		info.MaxPDULength != 32768 || info.AsyncOpsInvoked != 4 ||
 		info.AsyncOpsPerformed != 2 || info.PresentationContextCount != 2 ||
 		info.AcceptedPresentationContextCount != 2 ||
-		!strings.Contains(info.PresentationContextSummary, testCTImageStorageUID) ||
-		!strings.Contains(info.PresentationContextSummary, "1.2.840.10008.1.2.1") {
+		len(info.PresentationContexts) != 2 ||
+		!strings.Contains(contexts, testCTImageStorageUID) ||
+		!strings.Contains(contexts, "1.2.840.10008.1.2.1") {
 		t.Fatalf("association observation = %#v", info)
 	}
 }
@@ -132,10 +134,11 @@ func TestAssociationAcceptedSummaryRetainsAbstractSyntaxFromRequest(t *testing.T
 
 	ac := association.ToAAssociateAC(assoc)
 	info := svc.associationObservationForAC(ac)
-	if !strings.Contains(info.PresentationContextSummary, testCTImageStorageUID) ||
-		!strings.Contains(info.PresentationContextSummary, "\"result\":0") ||
-		!strings.Contains(info.PresentationContextSummary, "1.2.840.10008.1.2.1") {
-		t.Fatalf("accepted association summary = %s", info.PresentationContextSummary)
+	contexts := info.PresentationContexts.String()
+	if !strings.Contains(contexts, testCTImageStorageUID) ||
+		!strings.Contains(contexts, "[acceptance]") ||
+		!strings.Contains(contexts, "1.2.840.10008.1.2.1") {
+		t.Fatalf("accepted association summary = %s", contexts)
 	}
 }
 

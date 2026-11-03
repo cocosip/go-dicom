@@ -5,6 +5,7 @@ package observability
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -106,7 +107,7 @@ func TestFunctionAdaptersDeliverRecords(t *testing.T) {
 	var metricCalls atomic.Int32
 	metrics := MetricsObserverFunc(func(_ context.Context, got Metric) {
 		metricCalls.Add(1)
-		if got != metric {
+		if !reflect.DeepEqual(got, metric) {
 			t.Errorf("metric = %#v, want %#v", got, metric)
 		}
 	})

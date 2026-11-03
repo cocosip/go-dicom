@@ -115,10 +115,9 @@ func (f *FragmentSequence) Count() int {
 	return len(f.fragments)
 }
 
-// String returns a string representation of the fragment sequence.
+// String returns a single-line tag/VR/value representation of the fragment sequence.
 func (f *FragmentSequence) String() string {
-	return fmt.Sprintf("FragmentSequence[%s, %d fragments, offset table: %d entries]",
-		f.tag, len(f.fragments), len(f.offsetTable))
+	return Summary(f)
 }
 
 // OtherByteFragment represents a fragment sequence with VR = OB.

@@ -298,9 +298,12 @@ func (fmi *FileMetaInformation) Validate() error {
 	return nil
 }
 
-// String returns a string representation of the FileMetaInformation.
+// String returns a short description of the file meta information.
 func (fmi *FileMetaInformation) String() string {
-	return "DICOM File Meta Information"
+	if fmi == nil || fmi.Dataset() == nil {
+		return "DICOM File Meta Information"
+	}
+	return fmt.Sprintf("DICOM File Meta Information [%d items]", fmi.Dataset().Count())
 }
 
 // CreateDefaultSourceAET creates a default Source Application Entity Title from the hostname.

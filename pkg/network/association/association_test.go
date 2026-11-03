@@ -385,3 +385,19 @@ func TestAssociation_GetTransferSyntaxForAbstractSyntax(t *testing.T) {
 		t.Error("Expected nil for non-existing context")
 	}
 }
+
+func TestPresentationContextString(t *testing.T) {
+	pc := NewPresentationContext(1, "1.2.840.10008.1.1",
+		transfer.ExplicitVRLittleEndian, transfer.ImplicitVRLittleEndian)
+
+	want := "PC[1] 1.2.840.10008.1.1 -> [Explicit VR Little Endian, Implicit VR Little Endian: Default Transfer Syntax for DICOM] [not-negotiated]"
+	if got := pc.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+
+	pc.Accept(transfer.ExplicitVRLittleEndian)
+	want = "PC[1] 1.2.840.10008.1.1 -> [Explicit VR Little Endian, Implicit VR Little Endian: Default Transfer Syntax for DICOM] [accepted]"
+	if got := pc.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+}

@@ -8,6 +8,7 @@ package association
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
@@ -385,6 +386,28 @@ func (pc *PresentationContext) HasTransferSyntax(ts *transfer.Syntax) bool {
 // IsAccepted returns true if this presentation context is accepted.
 func (pc *PresentationContext) IsAccepted() bool {
 	return pc.Result == ResultAcceptance && pc.AcceptedTransferSyntax != nil
+}
+
+// String returns a compact summary of the presentation context negotiation.
+func (pc *PresentationContext) String() string {
+	if pc == nil {
+		return "<nil presentation context>"
+	}
+	proposed := make([]string, 0, len(pc.ProposedTransferSyntaxes))
+	for _, syntax := range pc.ProposedTransferSyntaxes {
+		if syntax != nil {
+			proposed = append(proposed, syntax.String())
+		}
+	}
+	state := "not-negotiated"
+	switch {
+	case pc.IsAccepted():
+		state = "accepted"
+	case pc.Result != ResultNotNegotiated:
+		state = fmt.Sprintf("rejected(%d)", pc.Result)
+	}
+	return fmt.Sprintf("PC[%d] %s -> [%s] [%s]",
+		pc.ID, pc.AbstractSyntax, strings.Join(proposed, ", "), state)
 }
 
 // ExtendedNegotiation represents SOP Class Extended Negotiation.

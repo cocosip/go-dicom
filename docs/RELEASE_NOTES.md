@@ -2,6 +2,18 @@
 
 ## Next
 
+- Diagnostic rendering is now consistent across datasets and elements:
+  `Dataset.Format` renders single-line log values, one-element-per-line rows, or
+  an aligned dump with byte lengths and dictionary keywords. Every
+  `element.Element` `String()` returns `(tag) VR [value]`, so numeric,
+  attribute-tag, sequence, and fragment elements no longer print tag/VR only.
+  `cmd/dicomdump` uses the same renderer and gains keyword output.
+- `observability.Association.PresentationContextSummary` (a JSON string) is
+  replaced by `PresentationContexts`, a structured slice. Text log handlers now
+  render it as `1:1.2.840.10008.1.1 -> 1.2.840.10008.1.2 [acceptance]; ...` and
+  JSON handlers as a native array, removing the double-escaped
+  `[{\"id\":...}]` output. The duplicated `status_code` and `status_name` log
+  attributes were removed; `status`, `status_hex`, and `status_state` remain.
 - Character-set validation now accepts empty Specific Character Set values in
   any VM position, while still rejecting unknown values and invalid combinations.
 - Dataset batch updates and Pixel Data materialization now commit atomically;

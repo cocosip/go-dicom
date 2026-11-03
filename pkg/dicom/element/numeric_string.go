@@ -73,9 +73,9 @@ func (ds *DecimalString) Count() int {
 	return ds.str.Count()
 }
 
-// String returns a string representation.
+// String returns a single-line tag/VR/value representation of the element.
 func (ds *DecimalString) String() string {
-	return ds.str.String()
+	return Summary(ds)
 }
 
 // Validate performs validation.
@@ -217,9 +217,9 @@ func (is *IntegerString) Count() int {
 	return is.str.Count()
 }
 
-// String returns a string representation.
+// String returns a single-line tag/VR/value representation of the element.
 func (is *IntegerString) String() string {
-	return is.str.String()
+	return Summary(is)
 }
 
 // Validate performs validation.

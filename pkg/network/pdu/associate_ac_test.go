@@ -543,3 +543,22 @@ func TestAAssociateAC_AllRejectionReasons(t *testing.T) {
 		}
 	}
 }
+
+func TestAAssociateACString(t *testing.T) {
+	ac := &AAssociateAC{
+		CallingAETitle: "SCU",
+		CalledAETitle:  "SCP",
+		PresentationContexts: []PresentationContextAC{
+			{ID: 1, Result: ResultAcceptance, TransferSyntax: "1.2.4"},
+		},
+		UserInformation: &UserInformation{MaximumLength: 16384},
+	}
+	want := "A-ASSOCIATE-AC [SCU -> SCP, 1/1 context accepted, MaxPDU=16384]"
+	if got := ac.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+	want = "PC[1] -> 1.2.4 [Acceptance]"
+	if got := ac.PresentationContexts[0].String(); got != want {
+		t.Errorf("PresentationContextAC.String() = %q, want %q", got, want)
+	}
+}

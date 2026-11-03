@@ -89,6 +89,34 @@ func ResultString(result byte) string {
 	}
 }
 
+// String returns a compact summary of the association acceptance.
+func (a *AAssociateAC) String() string {
+	if a == nil {
+		return "<nil A-ASSOCIATE-AC>"
+	}
+	accepted := 0
+	for _, context := range a.PresentationContexts {
+		if context.Result == ResultAcceptance {
+			accepted++
+		}
+	}
+	maximumLength := uint32(0)
+	if a.UserInformation != nil {
+		maximumLength = a.UserInformation.MaximumLength
+	}
+	contextLabel := "contexts"
+	if len(a.PresentationContexts) == 1 {
+		contextLabel = "context"
+	}
+	return fmt.Sprintf("A-ASSOCIATE-AC [%s -> %s, %d/%d %s accepted, MaxPDU=%d]",
+		a.CallingAETitle, a.CalledAETitle, accepted, len(a.PresentationContexts), contextLabel, maximumLength)
+}
+
+// String returns a compact summary of the accepted presentation context.
+func (pc PresentationContextAC) String() string {
+	return fmt.Sprintf("PC[%d] -> %s [%s]", pc.ID, pc.TransferSyntax, ResultString(pc.Result))
+}
+
 // NewAAssociateAC creates a new A-ASSOCIATE-AC PDU with default values.
 func NewAAssociateAC() *AAssociateAC {
 	return &AAssociateAC{
