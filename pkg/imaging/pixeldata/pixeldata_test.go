@@ -515,6 +515,17 @@ func TestInfo_UncompressedFrameSize(t *testing.T) {
 			},
 			expectedSize: (100*100-1)/8 + 1, // 1,250 bytes
 		},
+		{
+			name: "1-bit three-sample image 10x10",
+			info: &Info{
+				Width:                     10,
+				Height:                    10,
+				BitsAllocated:             1,
+				SamplesPerPixel:           3,
+				PhotometricInterpretation: pixel.RGBPhotometric,
+			},
+			expectedSize: (10*10*3-1)/8 + 1, // 38 bytes
+		},
 	}
 
 	for _, tt := range tests {

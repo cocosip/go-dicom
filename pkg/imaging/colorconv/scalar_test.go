@@ -266,6 +266,34 @@ func TestConvertToRGBInterleavesPlanarRGB(t *testing.T) {
 	}
 }
 
+func TestConvertToRGBWithBytesPerSampleSixteenBit(t *testing.T) {
+	t.Run("interleaved", func(t *testing.T) {
+		data := []byte{0xFF, 0xFF, 0x00, 0x80, 0x00, 0x00}
+		got, err := ConvertToRGBWithBytesPerSample(data, 1, 1, *pixel.RGBPhotometric, pixel.InterleavedPlanar, 2)
+		if err != nil {
+			t.Fatalf("ConvertToRGBWithBytesPerSample() error = %v", err)
+		}
+		if want := []byte{0xFF, 0x80, 0x00}; !bytes.Equal(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("planar", func(t *testing.T) {
+		planar := []byte{
+			0xFF, 0xFF, 0x34, 0x12, // R plane
+			0x00, 0x80, 0xFF, 0x00, // G plane
+			0x00, 0x00, 0x00, 0x01, // B plane
+		}
+		got, err := ConvertToRGBWithBytesPerSample(planar, 2, 1, *pixel.RGBPhotometric, pixel.PlanarPlanar, 2)
+		if err != nil {
+			t.Fatalf("ConvertToRGBWithBytesPerSample() error = %v", err)
+		}
+		if want := []byte{0xFF, 0x80, 0x00, 0x12, 0x00, 0x01}; !bytes.Equal(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+}
+
 func TestClampUint8(t *testing.T) {
 	testCases := []struct {
 		input    float64

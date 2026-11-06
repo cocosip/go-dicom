@@ -14,6 +14,7 @@ const (
 	monochrome2              = "MONOCHROME2"
 	photometricPaletteColor  = "PALETTE COLOR"
 	photometricRGB           = "RGB"
+	photometricARGB          = "ARGB"
 	photometricYBRFull       = "YBR_FULL"
 	ybrFull422               = "YBR_FULL_422"
 	photometricYBRPartial422 = "YBR_PARTIAL_422"
@@ -61,6 +62,8 @@ func ParsePhotometricInterpretation(value string) (*PhotometricInterpretation, e
 		return PaletteColor, nil
 	case photometricRGB:
 		return RGBPhotometric, nil
+	case photometricARGB:
+		return ARGBPhotometric, nil
 	case photometricYBRFull:
 		return YbrFull, nil
 	case ybrFull422:
@@ -136,6 +139,18 @@ var RGBPhotometric = &PhotometricInterpretation{
 	IsPalette:   false,
 	IsYBR:       false,
 	ColorSpace:  RGB,
+}
+
+// ARGBPhotometric represents a color image with an alpha (opacity) plane followed
+// by red, green, and blue planes, stored in that sample order.
+// This value may be used only when Samples per Pixel (0028,0002) has a value of 4.
+var ARGBPhotometric = &PhotometricInterpretation{
+	Value:       photometricARGB,
+	Description: photometricARGB,
+	IsColor:     true,
+	IsPalette:   false,
+	IsYBR:       false,
+	ColorSpace:  ARGB,
 }
 
 // YbrFull represents a color image described by one luminance (Y) and two chrominance

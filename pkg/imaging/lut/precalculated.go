@@ -3,6 +3,8 @@
 
 package lut
 
+import "math"
+
 // PrecalculatedLUT is a performance optimization that pre-computes
 // all LUT values for a given input range.
 //
@@ -111,7 +113,7 @@ func (p *PrecalculatedLUT) Recalculate() {
 	// Pre-calculate all values in range
 	for i := p.minValue; i <= p.maxValue; i++ {
 		tableIndex := i + p.offset
-		p.table[tableIndex] = int(p.sourceLUT.Transform(float64(i)))
+		p.table[tableIndex] = int(math.Round(p.sourceLUT.Transform(float64(i))))
 	}
 	p.initialized = true
 }

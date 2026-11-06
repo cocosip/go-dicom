@@ -166,29 +166,49 @@ func YBRRCTToRGB(y, cb, cr int16) (r, g, b uint8) {
 	return
 }
 
-// ConvertToRGB converts pixel data from various color spaces to RGB
+// ConvertToRGB converts 8-bit pixel data from various color spaces to RGB.
 // photometric specifies the source color space
 // planarConfig indicates if color channels are interleaved (0) or planar (1)
 func ConvertToRGB(data []byte, width, height int, photometric pixel.PhotometricInterpretation, planarConfig pixel.PlanarConfiguration) ([]byte, error) {
+	return ConvertToRGBWithBytesPerSample(data, width, height, photometric, planarConfig, 1)
+}
+
+// ConvertToRGBWithBytesPerSample converts pixel data with 1- or 2-byte samples
+// into 8-bit interleaved RGB. The result is always width*height*3 bytes.
+//
+// Two-byte samples are treated as the full 16-bit range and reduced to 8-bit by
+// keeping the high byte (the low byte is dropped, which is equivalent to v>>8).
+// Supported 8-bit YBR conversions reject 16-bit input.
+func ConvertToRGBWithBytesPerSample(data []byte, width, height int, photometric pixel.PhotometricInterpretation, planarConfig pixel.PlanarConfiguration, bytesPerSample int) ([]byte, error) {
 	if width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("image dimensions must be positive, got %dx%d", width, height)
 	}
+	if bytesPerSample != 1 && bytesPerSample != 2 {
+		return nil, fmt.Errorf("unsupported BytesAllocated=%d for RGB conversion", bytesPerSample)
+	}
+	expectedLength := width * height * 3 * bytesPerSample
 
 	switch photometric.Value {
 	case "RGB":
-		expectedLength := width * height * 3
 		if len(data) < expectedLength {
 			return nil, fmt.Errorf("RGB: data length %d, need at least %d for %dx%d", len(data), expectedLength, width, height)
 		}
+		data = data[:expectedLength]
 		if planarConfig == pixel.PlanarPlanar {
-			return PlanarToInterleaved(data[:expectedLength], 3, 1)
-		}
-		if planarConfig != pixel.InterleavedPlanar {
+			interleaved, err := PlanarToInterleaved(data, 3, bytesPerSample)
+			if err != nil {
+				return nil, err
+			}
+			data = interleaved
+		} else if planarConfig != pixel.InterleavedPlanar {
 			return nil, fmt.Errorf("RGB has invalid planar configuration %d", planarConfig)
 		}
-		return data, nil
+		return toRGB8(data, bytesPerSample), nil
 
 	case "YBR_FULL":
+		if bytesPerSample != 1 {
+			return nil, fmt.Errorf("YBR_FULL conversion supports 8-bit samples only")
+		}
 		expectedLength := width * height * 3
 		if len(data) != expectedLength {
 			return nil, fmt.Errorf("YBR_FULL: data length %d, want %d for %dx%d", len(data), expectedLength, width, height)
@@ -231,6 +251,19 @@ func ConvertToRGB(data []byte, width, height int, photometric pixel.PhotometricI
 	default:
 		return data, nil
 	}
+}
+
+// toRGB8 reduces interleaved RGB samples of the given byte width to 8-bit.
+func toRGB8(data []byte, bytesPerSample int) []byte {
+	if bytesPerSample == 1 {
+		return data
+	}
+	result := make([]byte, len(data)/2)
+	for i, j := 0, 0; i+1 < len(data); i, j = i+2, j+1 {
+		// Little-endian 16-bit sample: the high byte is the 8-bit approximation.
+		result[j] = data[i+1]
+	}
+	return result
 }
 
 // clampUint8 clamps a float64 value to the uint8 range [0, 255]

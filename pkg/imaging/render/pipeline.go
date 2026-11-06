@@ -27,21 +27,24 @@ type PipelineCloner interface {
 type GrayscalePipeline struct {
 	mu sync.RWMutex
 
-	modalityLUT      lut.LUT
-	voiLUT           lut.VOILUT
-	voiSequenceLUT   lut.LUT
-	presentationLUT  lut.LUT
-	invertLUT        lut.LUT
-	compositeLUT     lut.LUT
-	windowWidth      float64
-	windowCenter     float64
-	invert           bool
-	minInputValue    float64
-	maxInputValue    float64
-	rescaleSlope     float64
-	rescaleIntercept float64
-	voiLUTFunction   lut.VOILUTFunction
-	useVOILUT        bool
+	modalityLUT     lut.LUT
+	voiLUT          lut.VOILUT
+	voiSequenceLUT  lut.LUT
+	presentationLUT lut.LUT
+	invertLUT       lut.LUT
+	compositeLUT    lut.LUT
+	windowWidth     float64
+	windowCenter    float64
+	invert          bool
+	// presentationInverse records that the presentation stage is a
+	// Presentation LUT Shape of INVERSE, which encodes display polarity.
+	presentationInverse bool
+	minInputValue       float64
+	maxInputValue       float64
+	rescaleSlope        float64
+	rescaleIntercept    float64
+	voiLUTFunction      lut.VOILUTFunction
+	useVOILUT           bool
 }
 
 // NewGrayscalePipeline creates a new grayscale rendering pipeline
@@ -65,18 +68,20 @@ func (p *GrayscalePipeline) ClonePipeline() Pipeline {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return &GrayscalePipeline{
-		modalityLUT:      p.modalityLUT,
-		voiSequenceLUT:   p.voiSequenceLUT,
-		presentationLUT:  p.presentationLUT,
-		windowWidth:      p.windowWidth,
-		windowCenter:     p.windowCenter,
-		invert:           p.invert,
-		minInputValue:    p.minInputValue,
-		maxInputValue:    p.maxInputValue,
-		rescaleSlope:     p.rescaleSlope,
-		rescaleIntercept: p.rescaleIntercept,
-		voiLUTFunction:   p.voiLUTFunction,
-		useVOILUT:        p.useVOILUT,
+		modalityLUT:     p.modalityLUT,
+		voiSequenceLUT:  p.voiSequenceLUT,
+		presentationLUT: p.presentationLUT,
+		windowWidth:     p.windowWidth,
+		windowCenter:    p.windowCenter,
+		invert:          p.invert,
+
+		presentationInverse: p.presentationInverse,
+		minInputValue:       p.minInputValue,
+		maxInputValue:       p.maxInputValue,
+		rescaleSlope:        p.rescaleSlope,
+		rescaleIntercept:    p.rescaleIntercept,
+		voiLUTFunction:      p.voiLUTFunction,
+		useVOILUT:           p.useVOILUT,
 	}
 }
 
@@ -112,7 +117,19 @@ func (p *GrayscalePipeline) SetPresentationLUT(presentationLUT lut.LUT) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.presentationLUT = presentationLUT
+	// A Presentation LUT Shape of INVERSE is represented as an InvertLUT. It
+	// carries the same display polarity as MONOCHROME1, so renderers must not
+	// apply that polarity a second time.
+	_, p.presentationInverse = presentationLUT.(*lut.InvertLUT)
 	p.compositeLUT = nil
+}
+
+// Inverts reports whether the pipeline output is already inverted, either by an
+// explicit SetInvert(true) or by a Presentation LUT Shape of INVERSE.
+func (p *GrayscalePipeline) Inverts() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.invert || p.presentationInverse
 }
 
 // UseVOILUT reports whether the VOI LUT Sequence is selected over windowing.

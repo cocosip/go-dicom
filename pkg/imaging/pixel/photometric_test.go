@@ -42,6 +42,11 @@ func TestParsePhotometricInterpretation(t *testing.T) {
 			expected: RGBPhotometric,
 		},
 		{
+			name:     photometricARGB,
+			input:    photometricARGB,
+			expected: ARGBPhotometric,
+		},
+		{
 			name:     "YBR_FULL",
 			input:    "YBR_FULL",
 			expected: YbrFull,

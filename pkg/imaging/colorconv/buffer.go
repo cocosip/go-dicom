@@ -79,21 +79,29 @@ func ConvertMono1ToMono2(data []byte, bitsStored uint16, bytesPerSample int, sig
 	maxVal := uint32((1 << bitsStored) - 1)
 	out := make([]byte, len(data))
 	for off := 0; off+bytesPerSample <= len(data); off += bytesPerSample {
-		var val uint32
+		var raw uint32
 		if bytesPerSample == 1 {
-			if signed {
-				val = uint32(int8(data[off]))
-			} else {
-				val = uint32(data[off])
-			}
+			raw = uint32(data[off])
 		} else {
-			if signed {
-				val = uint32(int16(binary.LittleEndian.Uint16(data[off:])))
-			} else {
-				val = uint32(binary.LittleEndian.Uint16(data[off:]))
-			}
+			raw = uint32(binary.LittleEndian.Uint16(data[off:]))
 		}
-		inv := (maxVal - val) & maxVal
+		// Only BitsStored bits carry the sample value; discard any padding bits.
+		raw &= maxVal
+
+		var inv uint32
+		if signed {
+			// Interpret the masked sample as a signed value, invert in the
+			// signed domain (new = -1 - value), then express it in raw stored
+			// bits so the result keeps the original bit layout.
+			value := int64(raw)
+			if raw&(uint32(1)<<(bitsStored-1)) != 0 {
+				value -= int64(uint32(1) << bitsStored)
+			}
+			inv = uint32(-1-value) & maxVal
+		} else {
+			inv = (maxVal - raw) & maxVal
+		}
+
 		if bytesPerSample == 1 {
 			out[off] = byte(inv)
 		} else {

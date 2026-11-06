@@ -88,6 +88,15 @@ var RGBA = NewColorSpace(
 	NewComponent("Alpha", 1, 1),
 )
 
+// ARGB represents an ARGB color space: alpha channel first, then red, green, blue.
+var ARGB = NewColorSpace(
+	"ARGB",
+	NewComponent("Alpha", 1, 1),
+	NewComponent(componentRedName, 1, 1),
+	NewComponent("Green", 1, 1),
+	NewComponent("Blue", 1, 1),
+)
+
 // YCbCrJPEG represents a YCbCr 4:4:4 color space used in JPEG.
 var YCbCrJPEG = NewColorSpace(
 	"Y'CbCr 4:4:4 (JPEG)",

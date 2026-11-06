@@ -77,7 +77,10 @@ func (info *Info) BytesAllocated() int {
 // UncompressedFrameSize calculates the uncompressed size of a single frame in bytes.
 func (info *Info) UncompressedFrameSize() int {
 	if info.BitsAllocated == 1 {
-		return (int(info.Width)*int(info.Height)-1)/8 + 1
+		// Bit-packed samples: all samples of every pixel share one continuous
+		// bit stream, so multi-sample pixels consume SamplesPerPixel bits each.
+		samples := int(info.Width) * int(info.Height) * int(info.SamplesPerPixel)
+		return (samples-1)/8 + 1
 	}
 
 	// Handle special case for YBR_FULL_422 with uneven width

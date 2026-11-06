@@ -5,6 +5,7 @@ package colorconv
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
 
@@ -136,6 +137,38 @@ func TestConvertMono1ToMono2RejectsInvalidStoredBitLayout(t *testing.T) {
 				t.Fatal("ConvertMono1ToMono2() accepted an invalid stored-bit layout")
 			}
 		})
+	}
+}
+
+func TestConvertMono1ToMono2Signed(t *testing.T) {
+	// 12 stored bits inside 16-bit words: signed values -2048..2047.
+	// Inversion in the signed domain maps v -> -1-v.
+	rawValues := []uint16{0x0000, 0x07FF, 0x0800, 0x0FFE}  // 0, 2047, -2048, -2
+	wantValues := []uint16{0x0FFF, 0x0800, 0x07FF, 0x0001} // 4095, 2048, 2047, 1
+	data := make([]byte, len(rawValues)*2)
+	for i, value := range rawValues {
+		binary.LittleEndian.PutUint16(data[i*2:], value)
+	}
+	got, err := ConvertMono1ToMono2(data, 12, 2, true)
+	if err != nil {
+		t.Fatalf("ConvertMono1ToMono2() error = %v", err)
+	}
+	for i, want := range wantValues {
+		if value := binary.LittleEndian.Uint16(got[i*2:]); value != want {
+			t.Fatalf("sample %d = 0x%03X, want 0x%03X", i, value, want)
+		}
+	}
+}
+
+func TestConvertMono1ToMono2SignedEightBit(t *testing.T) {
+	data := []byte{0x00, 0x7F, 0x80, 0xFF} // 0, 127, -128, -1
+	want := []byte{0xFF, 0x80, 0x7F, 0x00}
+	got, err := ConvertMono1ToMono2(data, 8, 1, true)
+	if err != nil {
+		t.Fatalf("ConvertMono1ToMono2() error = %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("ConvertMono1ToMono2() = %v, want %v", got, want)
 	}
 }
 

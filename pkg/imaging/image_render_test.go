@@ -6,6 +6,7 @@ package imaging
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"image/png"
 	"testing"
 
@@ -76,6 +77,67 @@ func TestRenderFrameImageMatchesExistingPNGExport(t *testing.T) {
 			}
 			assertImagesEqual(t, got, want)
 		})
+	}
+}
+
+func TestRenderFrameImageARGB(t *testing.T) {
+	pixelData, err := pixeldata.NewFromBytes(&pixeldata.Info{
+		Width: 2, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7, SamplesPerPixel: 4,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.ARGBPhotometric,
+		PlanarConfiguration: pixel.InterleavedPlanar,
+	}, []byte{40, 10, 20, 30, 255, 100, 110, 120})
+	if err != nil {
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
+	}
+	rendered, err := NewDicomImage(pixelData).RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage() error = %v", err)
+	}
+	img, ok := rendered.(*image.NRGBA)
+	if !ok {
+		t.Fatalf("RenderFrameImage() = %T, want *image.NRGBA", rendered)
+	}
+	want := []color.NRGBA{
+		{R: 10, G: 20, B: 30, A: 40},
+		{R: 100, G: 110, B: 120, A: 255},
+	}
+	for x, expected := range want {
+		if got := color.NRGBAModel.Convert(img.At(x, 0)).(color.NRGBA); got != expected {
+			t.Fatalf("pixel %d = %#v, want %#v", x, got, expected)
+		}
+	}
+}
+
+func TestRenderFrameImageRGBSixteenBit(t *testing.T) {
+	pixelData, err := pixeldata.NewFromBytes(&pixeldata.Info{
+		Width: 2, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 16, BitsStored: 16, HighBit: 15, SamplesPerPixel: 3,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.RGBPhotometric,
+		PlanarConfiguration: pixel.InterleavedPlanar,
+	}, []byte{
+		0xFF, 0xFF, 0x00, 0x80, 0x00, 0x00,
+		0x34, 0x12, 0xFF, 0x00, 0x00, 0x01,
+	})
+	if err != nil {
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
+	}
+	rendered, err := NewDicomImage(pixelData).RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage() error = %v", err)
+	}
+	img, ok := rendered.(*image.RGBA)
+	if !ok {
+		t.Fatalf("RenderFrameImage() = %T, want *image.RGBA", rendered)
+	}
+	want := []color.RGBA{
+		{R: 0xFF, G: 0x80, B: 0x00, A: 0xFF},
+		{R: 0x12, G: 0x00, B: 0x01, A: 0xFF},
+	}
+	for x, expected := range want {
+		if got := color.RGBAModel.Convert(img.At(x, 0)).(color.RGBA); got != expected {
+			t.Fatalf("pixel %d = %#v, want %#v", x, got, expected)
+		}
 	}
 }
 

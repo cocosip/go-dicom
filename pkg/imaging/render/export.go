@@ -14,6 +14,7 @@ import (
 	"math"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 )
 
@@ -58,14 +59,14 @@ func DefaultExportOptions() *ExportOptions {
 // ExportGrayscale exports grayscale pixel data to an image format
 // pixelData: raw pixel data
 // width, height: image dimensions
-// bitsAllocated, bitsStored: bit depth information
+// bitsAllocated, bitsStored, highBit: bit depth/location information
 // isSigned: whether pixels are signed
 // photometric: photometric interpretation (e.g., "MONOCHROME1", "MONOCHROME2")
 func (e *ImageExporter) ExportGrayscale(
 	writer io.Writer,
 	pixelData []byte,
 	width, height int,
-	bitsAllocated, _ int,
+	bitsAllocated, bitsStored, highBit int,
 	isSigned bool,
 	photometric string,
 	options *ExportOptions,
@@ -73,7 +74,9 @@ func (e *ImageExporter) ExportGrayscale(
 	if options == nil {
 		options = DefaultExportOptions()
 	}
-	img, err := e.RenderGrayscaleImage(pixelData, width, height, bitsAllocated, isSigned, photometric)
+	img, err := e.RenderGrayscaleImageWithBitDepth(
+		pixelData, width, height, bitsAllocated, bitsStored, highBit, isSigned, photometric,
+	)
 	if err != nil {
 		return err
 	}
@@ -114,11 +117,11 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 		}
 		img := image.NewGray(image.Rect(0, 0, width, height))
 		pipelineLUT := e.pipeline.LUT()
-		isMonochrome1 := photometric == "MONOCHROME1"
+		invertOutput := photometric == "MONOCHROME1" && !pipelineInverts(e.pipeline)
 		for index := 0; index < width*height; index++ {
 			pixelValue := float64((pixelData[index/8] >> uint(index%8)) & 1)
 			grayValue := clampRenderByte(pipelineLUT.Transform(pixelValue))
-			if isMonochrome1 {
+			if invertOutput {
 				grayValue = 255 - grayValue
 			}
 			img.SetGray(index%width, index/width, color.Gray{Y: grayValue})
@@ -133,13 +136,22 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 
 	img := image.NewGray(image.Rect(0, 0, width, height))
 
-	// Apply pipeline LUT if available
-	lut := e.pipeline.LUT()
-
-	// Process pixels
-	isMonochrome1 := photometric == "MONOCHROME1"
+	// Apply pipeline LUT if available. Precalculate it over the stored value
+	// domain so each pixel becomes a direct table lookup instead of a per-pixel
+	// interface call; very wide samples fall back to the source LUT.
+	pipelineLUT := e.pipeline.LUT()
+	// MONOCHROME1 displays minimum sample values as white. A Presentation LUT
+	// Shape of INVERSE (or an explicit SetInvert) encodes that same display
+	// polarity, so the photometric inversion must not be applied on top of it.
+	invertOutput := photometric == "MONOCHROME1" && !pipelineInverts(e.pipeline)
+	effectiveStored := bitsStored
+	if effectiveStored <= 0 || effectiveStored > bitsAllocated {
+		effectiveStored = bitsAllocated
+	}
+	precalc := newPrecalculatedLUT(pipelineLUT, effectiveStored, isSigned)
 
 	for y := 0; y < height; y++ {
+		row := y * img.Stride
 		for x := 0; x < width; x++ {
 			pixelIndex := (y*width + x) * bytesPerPixel
 
@@ -154,22 +166,45 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 			}
 			pixelValue := storedPixelValue(raw, bitsAllocated, bitsStored, highBit, isSigned)
 
-			// Apply LUT transformation
-			outputValue := lut.Transform(pixelValue)
-
-			// Clamp to 8-bit range
-			grayValue := clampRenderByte(outputValue)
+			var grayValue uint8
+			if precalc != nil {
+				grayValue = clampRenderByte(precalc.Transform(pixelValue))
+			} else {
+				grayValue = clampRenderByte(pipelineLUT.Transform(pixelValue))
+			}
 
 			// Invert for MONOCHROME1
-			if isMonochrome1 {
+			if invertOutput {
 				grayValue = 255 - grayValue
 			}
 
-			img.SetGray(x, y, color.Gray{Y: grayValue})
+			img.Pix[row+x] = grayValue
 		}
 	}
 
 	return img, nil
+}
+
+// pipelineInverts reports whether the pipeline output is already inverted.
+func pipelineInverts(p Pipeline) bool {
+	if inverting, ok := p.(interface{ Inverts() bool }); ok {
+		return inverting.Inverts()
+	}
+	return false
+}
+
+// newPrecalculatedLUT builds a table-backed LUT over the stored value domain.
+// It returns nil for very wide samples, where the table would be too large, so
+// the caller falls back to per-pixel transforms.
+func newPrecalculatedLUT(source lut.LUT, bitsStored int, isSigned bool) *lut.PrecalculatedLUT {
+	if source == nil || bitsStored <= 0 || bitsStored > 16 {
+		return nil
+	}
+	if isSigned {
+		half := 1 << uint(bitsStored-1)
+		return lut.NewPrecalculatedLUT(source, -half, half-1)
+	}
+	return lut.NewPrecalculatedLUT(source, 0, (1<<uint(bitsStored))-1)
 }
 
 func storedPixelValue(raw uint64, bitsAllocated, bitsStored, highBit int, signed bool) float64 {
@@ -210,24 +245,38 @@ func (e *ImageExporter) ExportRGB(
 	return e.encodeImage(writer, img, options)
 }
 
-// RenderRGBImage converts supported color pixels into an RGBA image without encoding it.
+// RenderRGBImage converts supported 8-bit color pixels into an RGBA image without encoding it.
 func (e *ImageExporter) RenderRGBImage(
 	pixelData []byte,
 	width, height int,
 	photometric string,
 	planarConfig int,
 ) (*image.RGBA, error) {
+	return e.RenderRGBImageWithBytesPerSample(pixelData, width, height, photometric, planarConfig, 1)
+}
+
+// RenderRGBImageWithBytesPerSample converts supported color pixels with 1- or
+// 2-byte samples into an RGBA image without encoding it. Two-byte samples are
+// reduced to 8-bit (see colorconv.ConvertToRGBWithBytesPerSample).
+func (e *ImageExporter) RenderRGBImageWithBytesPerSample(
+	pixelData []byte,
+	width, height int,
+	photometric string,
+	planarConfig int,
+	bytesPerSample int,
+) (*image.RGBA, error) {
 	if width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("image dimensions must be positive")
 	}
 
-	// Convert to RGB if needed
-	rgbData, err := colorconv.ConvertToRGB(
+	// Convert to 8-bit RGB if needed
+	rgbData, err := colorconv.ConvertToRGBWithBytesPerSample(
 		pixelData,
 		width,
 		height,
 		pixel.PhotometricInterpretation{Value: photometric},
 		pixel.PlanarConfiguration(planarConfig),
+		bytesPerSample,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to RGB: %w", err)
@@ -237,18 +286,15 @@ func (e *ImageExporter) RenderRGBImage(
 		return nil, fmt.Errorf("RGB pixel data too short: got %d bytes, need %d", len(rgbData), required)
 	}
 
-	// Create RGBA image
+	// colorconv.ConvertToRGBWithBytesPerSample always returns interleaved 8-bit RGB.
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	// colorconv.ConvertToRGB always returns interleaved RGB.
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			idx := (y*width + x) * 3
-			r := rgbData[idx]
-			g := rgbData[idx+1]
-			b := rgbData[idx+2]
-			img.SetRGBA(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
-		}
+	for index := 0; index < width*height; index++ {
+		src := index * 3
+		dst := index * 4
+		img.Pix[dst] = rgbData[src]
+		img.Pix[dst+1] = rgbData[src+1]
+		img.Pix[dst+2] = rgbData[src+2]
+		img.Pix[dst+3] = 255
 	}
 
 	return img, nil
@@ -266,6 +312,19 @@ func clampRenderByte(value float64) uint8 {
 
 // RenderRGBAImage renders interleaved straight-alpha RGBA pixel data.
 func (e *ImageExporter) RenderRGBAImage(pixelData []byte, width, height int) (*image.NRGBA, error) {
+	return e.RenderRGBAImageWithConfig(pixelData, width, height, "RGBA", int(pixel.InterleavedPlanar))
+}
+
+// RenderRGBAImageWithConfig renders 8-bit four-sample pixel data, honoring the
+// sample order from photometric ("ARGB" is A,R,G,B; anything else is treated as
+// straight-alpha R,G,B,A) and planar configuration. The result is NRGBA
+// (straight alpha, R,G,B,A order).
+func (e *ImageExporter) RenderRGBAImageWithConfig(
+	pixelData []byte,
+	width, height int,
+	photometric string,
+	planarConfig int,
+) (*image.NRGBA, error) {
 	if width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("image dimensions must be positive")
 	}
@@ -273,8 +332,32 @@ func (e *ImageExporter) RenderRGBAImage(pixelData []byte, width, height int) (*i
 	if len(pixelData) < required {
 		return nil, fmt.Errorf("RGBA pixel data too short: got %d bytes, need %d", len(pixelData), required)
 	}
+
+	interleaved := pixelData[:required]
+	if planarConfig == int(pixel.PlanarPlanar) {
+		converted, err := colorconv.PlanarToInterleaved(interleaved, 4, 1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to interleave planar RGBA: %w", err)
+		}
+		interleaved = converted
+	} else if planarConfig != int(pixel.InterleavedPlanar) {
+		return nil, fmt.Errorf("invalid planar configuration %d", planarConfig)
+	}
+
 	result := image.NewNRGBA(image.Rect(0, 0, width, height))
-	copy(result.Pix, pixelData[:required])
+	if photometric == pixel.ARGBPhotometric.Value {
+		// Store as A,R,G,B; reorder to R,G,B,A for NRGBA.
+		for index := 0; index < width*height; index++ {
+			src := index * 4
+			dst := index * 4
+			result.Pix[dst] = interleaved[src+1]
+			result.Pix[dst+1] = interleaved[src+2]
+			result.Pix[dst+2] = interleaved[src+3]
+			result.Pix[dst+3] = interleaved[src]
+		}
+		return result, nil
+	}
+	copy(result.Pix, interleaved)
 	return result, nil
 }
 
@@ -310,7 +393,7 @@ func (e *ImageExporter) RenderFrame(
 	writer io.Writer,
 	frameData []byte,
 	width, height int,
-	bitsAllocated, bitsStored int,
+	bitsAllocated, bitsStored, highBit int,
 	samplesPerPixel int,
 	isSigned bool,
 	photometric string,
@@ -320,12 +403,18 @@ func (e *ImageExporter) RenderFrame(
 	switch samplesPerPixel {
 	case 1:
 		// Grayscale
-		return e.ExportGrayscale(writer, frameData, width, height, bitsAllocated, bitsStored, isSigned, photometric, options)
+		return e.ExportGrayscale(writer, frameData, width, height, bitsAllocated, bitsStored, highBit, isSigned, photometric, options)
 	case 3:
 		// RGB/YBR
-		return e.ExportRGB(writer, frameData, width, height, photometric, planarConfig, options)
+		img, err := e.RenderRGBImageWithBytesPerSample(
+			frameData, width, height, photometric, planarConfig, (bitsAllocated+7)/8,
+		)
+		if err != nil {
+			return err
+		}
+		return e.ExportImage(writer, img, options)
 	case 4:
-		img, err := e.RenderRGBAImage(frameData, width, height)
+		img, err := e.RenderRGBAImageWithConfig(frameData, width, height, photometric, planarConfig)
 		if err != nil {
 			return err
 		}

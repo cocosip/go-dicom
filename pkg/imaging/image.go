@@ -84,7 +84,7 @@ func NewDicomImage(pixelData *pixeldata.Data) *DicomImage {
 		pipelines:               make(map[int]render.Pipeline),
 		scale:                   1.0,
 		showOverlays:            true,
-		overlayColor:            colorconv.Color32{A: 255, R: 255, B: 255},
+		overlayColor:            colorconv.Color32{A: 255, R: 255, G: 255, B: 255},
 		autoApplyLUTToAllFrames: false,
 		grayscaleColorMaps:      make(map[int][256]colorconv.Color32),
 		lutVRMode:               pixeldata.LUTCompatible,
@@ -580,15 +580,32 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 		if img.pixelData.Info.PhotometricInterpretation != nil {
 			photometric = img.pixelData.Info.PhotometricInterpretation.Value
 		}
-		rendered, err = exporter.RenderRGBImage(
+		rendered, err = exporter.RenderRGBImageWithBytesPerSample(
+			frameData,
+			int(img.Width()),
+			int(img.Height()),
+			photometric,
+			int(img.pixelData.Info.PlanarConfiguration),
+			int(img.pixelData.Info.BitsAllocated)/8,
+		)
+	case 4:
+		photometric := pixel.ARGBPhotometric.Value
+		if img.pixelData.Info.PhotometricInterpretation != nil {
+			photometric = img.pixelData.Info.PhotometricInterpretation.Value
+		}
+		// ARGB/RGBA with 4 samples are defined with 8-bit samples; rendering a
+		// wider allocation as 8-bit would emit silently wrong pixels.
+		if img.pixelData.Info.BitsAllocated != 8 {
+			return nil, fmt.Errorf("unsupported BitsAllocated %d for %s: only 8-bit samples are supported",
+				img.pixelData.Info.BitsAllocated, photometric)
+		}
+		rendered, err = exporter.RenderRGBAImageWithConfig(
 			frameData,
 			int(img.Width()),
 			int(img.Height()),
 			photometric,
 			int(img.pixelData.Info.PlanarConfiguration),
 		)
-	case 4:
-		rendered, err = exporter.RenderRGBAImage(frameData, int(img.Width()), int(img.Height()))
 	default:
 		return nil, fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Info.SamplesPerPixel)
 	}

@@ -190,7 +190,7 @@ func TestDicomOverlayData_GetFrame(t *testing.T) {
 		255, 0,
 	}
 
-    _ = overlay.PackData(unpacked)
+	_ = overlay.PackData(unpacked)
 
 	// Get frame 0
 	frame0, err := overlay.GetFrame(0)
@@ -237,7 +237,7 @@ func TestDicomOverlayData_ApplyToImage_Grayscale(t *testing.T) {
 		255, 0, 255, 0,
 		0, 255, 0, 255,
 	}
-    _ = overlay.PackData(unpacked)
+	_ = overlay.PackData(unpacked)
 
 	// Create grayscale image (all 128)
 	imageData := make([]byte, 16)
@@ -271,7 +271,7 @@ func TestDicomOverlayData_ApplyToImage_RGB(t *testing.T) {
 
 	// Simple overlay (top-left pixel only)
 	unpacked := []byte{255, 0, 0, 0}
-    _ = overlay.PackData(unpacked)
+	_ = overlay.PackData(unpacked)
 
 	// Create RGB image (all black)
 	imageData := make([]byte, 2*2*3)
