@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package main
 
@@ -15,7 +15,7 @@ import (
 func generateUIDs(dictionary *dicomxml.Dictionary) ([]byte, error) {
 	var output bytes.Buffer
 	fmt.Fprintf(&output, `// Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Code generated from DICOM Dictionary.xml (version %s). DO NOT EDIT.
 

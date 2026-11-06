@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package main demonstrates how to create and write a DICOM file.
 package main

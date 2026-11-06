@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package media
 
@@ -14,7 +14,7 @@ import (
 
 // The fixture is copied from fo-dicom Tests/FO-DICOM.Tests/Test Data/DICOMDIR
 // at SHA-256 7628497A488A8AFC14FEEE30888F914380AC7A23CA3E07E0341058F6D898D287.
-// fo-dicom and this repository are both distributed under the MS-PL.
+// fo-dicom is distributed under the MS-PL; this repository is licensed under the MIT License.
 func TestFoDicomFixtureOpensStrictly(t *testing.T) {
 	dir, err := Open(foDicomFixturePath(), WithOffsetPolicy(StrictOffsets))
 	if err != nil {

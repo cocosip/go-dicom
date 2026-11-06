@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package reconstruction provides validated CT/MR volume reconstruction and
 // multi-planar reformation in DICOM patient coordinates.

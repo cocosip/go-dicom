@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom authors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package imaging provides image processing functionality for DICOM images
 package imaging

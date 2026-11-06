@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package client
 
@@ -592,7 +592,10 @@ type CGetCallback func(remaining, completed, failed, warning uint16) bool
 // The callback is called for each pending response with sub-operation counts.
 //
 // C-GET retrieves instances directly to the requesting client over the same association.
-// The client must have a C-STORE handler configured to receive the instances.
+// The client must have a C-STORE handler configured to receive the instances, and
+// every Storage SOP Class that may be returned must have been proposed with the SCP
+// role via AddStoragePresentationContexts before connecting. CGet returns an error
+// when that setup is missing instead of silently receiving no instances.
 //
 // Note: C-GET combines the query and retrieval in a single operation. The server will
 // send C-STORE sub-operations for each matching instance.
@@ -619,6 +622,10 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 		return fmt.Errorf("identifier is nil")
 	}
 
+	if err := c.validateCGetStorage(); err != nil {
+		return err
+	}
+
 	// Create C-GET request
 	req := dimse.NewCGetRequest(level, identifier)
 
@@ -631,6 +638,27 @@ func (c *Client) CGet(ctx context.Context, level dimse.QueryRetrieveLevel,
 	return consumeCGetEvents(ctx, eventCh, callback, func() error {
 		return sendAutomaticCancel(ctx, svc, req)
 	})
+}
+
+// validateCGetStorage verifies that the client can receive C-STORE
+// sub-operations over the negotiated association. Without a CStoreHandler, or
+// without a Storage SOP Class negotiated with the SCP role, the peer cannot
+// push instances back and C-GET would only end in per-instance 0xB000
+// failures; reject it up front with an actionable error instead.
+func (c *Client) validateCGetStorage() error {
+	if c.config.CStoreHandler == nil {
+		return fmt.Errorf("C-GET requires WithCStoreHandler to receive C-STORE sub-operations")
+	}
+	assoc := c.GetAssociation()
+	if assoc == nil {
+		return ErrClientNotConnected
+	}
+	for _, pc := range assoc.GetAcceptedPresentationContexts() {
+		if pc.AcceptedRole != nil && pc.AcceptedRole.SCPRole == 1 {
+			return nil
+		}
+	}
+	return fmt.Errorf("C-GET requires at least one Storage SOP Class negotiated with the SCP role; add it with AddStoragePresentationContexts before connecting")
 }
 
 func consumeCGetEvents(

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package client
 
@@ -35,14 +35,6 @@ type managedConfig struct {
 	ManagedClientOptions
 	baseClientOptions []Option
 	err               error
-}
-
-// PresentationContextSpec describes one requested presentation context.
-type PresentationContextSpec struct {
-	AbstractSyntax   string
-	TransferSyntaxes []string
-	SCURole          bool
-	SCPRole          bool
 }
 
 // Job is an operation queued for ManagedClient delivery.
@@ -351,21 +343,8 @@ func (c *ManagedClient) sendBatch(
 
 func newManagedLowLevelClient(options []Option, contexts []PresentationContextSpec) (*Client, error) {
 	lowLevel := New(options...)
-	for _, presentationContext := range contexts {
-		var err error
-		if presentationContext.SCURole || presentationContext.SCPRole {
-			err = lowLevel.AddPresentationContextWithRoles(
-				presentationContext.AbstractSyntax,
-				presentationContext.SCURole,
-				presentationContext.SCPRole,
-				presentationContext.TransferSyntaxes...,
-			)
-		} else {
-			err = lowLevel.AddPresentationContext(presentationContext.AbstractSyntax, presentationContext.TransferSyntaxes...)
-		}
-		if err != nil {
-			return nil, err
-		}
+	if err := lowLevel.AddPresentationContexts(contexts); err != nil {
+		return nil, err
 	}
 	return lowLevel, nil
 }

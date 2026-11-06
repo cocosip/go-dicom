@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package client provides a DICOM SCU (Service Class User) client implementation.
 // It supports association negotiation, DIMSE operations, and graceful release.
@@ -16,6 +16,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
@@ -445,6 +446,31 @@ func (c *Client) AddPresentationContextWithRoles(
 	selection := association.NewRoleSelection(abstractSyntax, boolByte(scuRole), boolByte(scpRole))
 	c.config.RoleSelections = upsertRoleSelection(c.config.RoleSelections, selection)
 	return nil
+}
+
+// AddStoragePresentationContexts proposes Storage SOP Classes for receiving
+// C-STORE sub-operations, requesting the SCP role for each one. This is the
+// setup required before a C-GET (or a C-MOVE whose destination is this AE):
+// the peer may only push instances back over the same association when the
+// requestor has negotiated the Storage SOP Class with the SCP role.
+//
+// The supplied transfer syntaxes must be decodable by the CStoreHandler
+// configured with WithCStoreHandler.
+func (c *Client) AddStoragePresentationContexts(sopClassUIDs []string, transferSyntaxes ...string) error {
+	return c.AddPresentationContexts(StoragePresentationContextSpecsFor(sopClassUIDs, transferSyntaxes...))
+}
+
+// AddStoragePresentationContextsByCategory proposes every active standard
+// Storage SOP Class in category with the SCP role. It is the direct equivalent
+// of fo-dicom's DicomPresentationContext.GetScpRolePresentationContextsFromStorageUids,
+// so a C-GET setup stays a one-liner:
+//
+//	c.AddStoragePresentationContextsByCategory(uid.StorageCategoryImage, ts...)
+//
+// Beware that all matching contexts count towards the 128 presentation context
+// limit of a single association.
+func (c *Client) AddStoragePresentationContextsByCategory(category uid.StorageCategory, transferSyntaxes ...string) error {
+	return c.AddPresentationContexts(StoragePresentationContextSpecs(category, transferSyntaxes...))
 }
 
 // GetConfig returns the client configuration.

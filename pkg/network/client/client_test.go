@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package client
 
@@ -14,6 +14,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
@@ -580,5 +581,102 @@ func TestHandleServiceClosedOnlyClearsCurrentSession(t *testing.T) {
 	}
 	if association := client.GetAssociation(); association != nil {
 		t.Fatalf("association = %#v after service closure, want nil", association)
+	}
+}
+
+func TestAddStoragePresentationContextsRequestsSCPRole(t *testing.T) {
+	client := New()
+	if err := client.AddStoragePresentationContexts(
+		[]string{testCTImageStorageUID, "1.2.840.10008.5.1.4.1.1.4"},
+		testExplicitVRLittleEndianUID,
+	); err != nil {
+		t.Fatalf("AddStoragePresentationContexts() error = %v", err)
+	}
+
+	rq := client.buildAssociateRQ()
+	if got := len(rq.PresentationContexts); got != 2 {
+		t.Fatalf("presentation context count = %d, want 2", got)
+	}
+	roles := rq.UserInformation.SCPSCURoleSelections
+	if len(roles) != 2 {
+		t.Fatalf("role selection count = %d, want 2", len(roles))
+	}
+	for _, role := range roles {
+		if role.SCURole != 0 || role.SCPRole != 1 {
+			t.Fatalf("role selection = %#v, want SCP role only", role)
+		}
+	}
+}
+
+func TestAddStoragePresentationContextsByCategoryRequestsSCPRole(t *testing.T) {
+	client := New()
+	if err := client.AddStoragePresentationContextsByCategory(uid.StorageCategoryImage, testExplicitVRLittleEndianUID); err != nil {
+		t.Fatalf("AddStoragePresentationContextsByCategory() error = %v", err)
+	}
+
+	rq := client.buildAssociateRQ()
+	if len(rq.PresentationContexts) == 0 {
+		t.Fatal("no presentation contexts negotiated for image storage category")
+	}
+	roles := rq.UserInformation.SCPSCURoleSelections
+	if len(roles) != len(rq.PresentationContexts) {
+		t.Fatalf("role selection count = %d, want %d", len(roles), len(rq.PresentationContexts))
+	}
+	for _, role := range roles {
+		if role.SCURole != 0 || role.SCPRole != 1 {
+			t.Fatalf("role selection = %#v, want SCP role only", role)
+		}
+	}
+
+	found := false
+	for _, pc := range rq.PresentationContexts {
+		if pc.AbstractSyntax == testCTImageStorageUID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("CT Image Storage missing from image storage presentation contexts")
+	}
+}
+
+func TestAddPresentationContextsFromSpecs(t *testing.T) {
+	client := New()
+	specs := []PresentationContextSpec{
+		NewPresentationContextSpec(verificationSOPClassUID, false, false, testExplicitVRLittleEndianUID),
+		NewPresentationContextSpec(testCTImageStorageUID, false, true, testExplicitVRLittleEndianUID),
+	}
+	if err := client.AddPresentationContexts(specs); err != nil {
+		t.Fatalf("AddPresentationContexts() error = %v", err)
+	}
+
+	rq := client.buildAssociateRQ()
+	if got := len(rq.PresentationContexts); got != 2 {
+		t.Fatalf("presentation context count = %d, want 2", got)
+	}
+	roles := rq.UserInformation.SCPSCURoleSelections
+	if len(roles) != 1 || roles[0].SOPClassUID != testCTImageStorageUID ||
+		roles[0].SCURole != 0 || roles[0].SCPRole != 1 {
+		t.Fatalf("role selections = %#v, want one SCP-role CT entry", roles)
+	}
+}
+
+func TestStoragePresentationContextSpecs(t *testing.T) {
+	specs := StoragePresentationContextSpecs(uid.StorageCategoryImage, testExplicitVRLittleEndianUID)
+	if len(specs) == 0 {
+		t.Fatal("StoragePresentationContextSpecs(StorageCategoryImage) returned no specs")
+	}
+	for _, spec := range specs {
+		if !spec.SCPRole || spec.SCURole {
+			t.Fatalf("spec %q roles = SCU:%v SCP:%v, want SCP only", spec.AbstractSyntax, spec.SCURole, spec.SCPRole)
+		}
+		if spec.AbstractSyntax == "" || len(spec.TransferSyntaxes) != 1 {
+			t.Fatalf("spec = %#v, want abstract syntax and one transfer syntax", spec)
+		}
+	}
+
+	explicit := StoragePresentationContextSpecsFor([]string{testCTImageStorageUID}, testImplicitVRLittleEndianUID)
+	if len(explicit) != 1 || explicit[0].AbstractSyntax != testCTImageStorageUID || !explicit[0].SCPRole {
+		t.Fatalf("StoragePresentationContextSpecsFor() = %#v", explicit)
 	}
 }

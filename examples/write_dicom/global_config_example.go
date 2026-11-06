@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // This file demonstrates using global configuration for Implementation information.
 // This is the recommended approach - set it once at app startup.

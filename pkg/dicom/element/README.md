@@ -1,26 +1,27 @@
 # DICOM Element Package
 
-`pkg/dicom/element` 包实现了DICOM数据元素的各种类型。
+The `pkg/dicom/element` package implements the various element types for DICOM data elements.
 
-> 注意：应用代码读取和更新 Dataset 中的常用值时，优先使用
-> `pkg/dicom/dataset` 的 `GetString`、`GetBytes`、`GetUInt16s`、
-> `AddValue` 和 `AddOrUpdateValue`。只有需要构造特定 Element、处理
-> 私有标签或明确指定 VR 时，才直接使用本包的具体类型和构造函数。
+> Note: when application code reads and updates common values in a Dataset, prefer
+> `pkg/dicom/dataset`'s `GetString`, `GetBytes`, `GetUInt16s`,
+> `AddValue`, and `AddOrUpdateValue`. Use this package's concrete types and
+> constructors directly only when you need to build a specific Element, handle
+> private tags, or explicitly specify the VR.
 
-## 概述
+## Overview
 
-Element是DICOM数据集的基本构建块，每个Element包含：
-- **Tag**: 唯一标识符 (group, element)
-- **VR (Value Representation)**: 值表示类型
-- **Data**: 二进制数据，存储在ByteBuffer中
+An Element is the basic building block of a DICOM dataset. Each Element contains:
+- **Tag**: unique identifier (group, element)
+- **VR (Value Representation)**: value representation type
+- **Data**: binary data, stored in a ByteBuffer
 
-## 已实现的Element类型
+## Implemented Element types
 
-### 1. 字符串类型 (String)
+### 1. String types (String)
 
-**文件**: `string.go`
+**File**: `string.go`
 
-支持所有字符串VR：
+Supports all string VRs:
 - AE (Application Entity)
 - AS (Age String)
 - CS (Code String)
@@ -39,36 +40,36 @@ Element是DICOM数据集的基本构建块，每个Element包含：
 - UR (URI/URL)
 - UT (Unlimited Text)
 
-**特点**:
-- 支持多值（用反斜杠分隔）
-- 支持字符集编码
-- 自动去除尾随空格
+**Features**:
+- Supports multiple values (separated by backslash)
+- Supports character set encoding
+- Automatically strips trailing spaces
 
-**示例**:
+**Example**:
 ```go
-// 单值字符串
+// single-value string
 elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
 name := elem.GetString() // "Doe^John"
 
-// 多值字符串
+// multi-value string
 elem := element.NewString(tag.ImageType, vr.CS, []string{"ORIGINAL", "PRIMARY", "AXIAL"})
 values := elem.GetValues() // ["ORIGINAL", "PRIMARY", "AXIAL"]
 ```
 
-### 2. 特殊字符串类型
+### 2. Special string types
 
-#### 2.1 人名类型 (PersonName)
+#### 2.1 Person Name type (PersonName)
 
-**文件**: `person_name.go`
+**File**: `person_name.go`
 
-PN (Person Name) 的特殊实现，支持人名组件解析：
-- FamilyName (姓)
-- GivenName (名)
-- MiddleName (中间名)
-- NamePrefix (前缀，如 Dr., Prof.)
-- NameSuffix (后缀，如 Jr., III)
+A special implementation of PN (Person Name) that supports parsing person name components:
+- FamilyName
+- GivenName
+- MiddleName
+- NamePrefix (prefix, e.g. Dr., Prof.)
+- NameSuffix (suffix, e.g. Jr., III)
 
-**示例**:
+**Example**:
 ```go
 elem := element.NewPersonName(tag.PatientName, []string{"Doe^John^A^Dr.^Jr."})
 components, _ := elem.GetComponents(0)
@@ -81,145 +82,145 @@ components, _ := elem.GetComponents(0)
 formatted, _ := elem.GetFormattedName(0) // "Dr. John A Doe, Jr."
 ```
 
-#### 2.2 日期时间类型
+#### 2.2 Date and time types
 
-**文件**: `date.go`
+**File**: `date.go`
 
-包含三种日期时间类型：
+Contains three date and time types:
 
-**Date (DA)** - 日期格式 YYYYMMDD
+**Date (DA)** - date format YYYYMMDD
 ```go
 elem := element.NewDate(tag.StudyDate, []string{"20250106"})
 date, _ := elem.GetDate(0) // time.Time
 
-// 从 time.Time 创建
+// create from time.Time
 testTime := time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
 elem := element.NewDateFromTime(tag.StudyDate, []time.Time{testTime})
 ```
 
-**Time (TM)** - 时间格式 HHMMSS.FFFFFF
+**Time (TM)** - time format HHMMSS.FFFFFF
 ```go
 elem := element.NewTime(tag.StudyTime, []string{"123456.789"})
 tm, _ := elem.GetTime(0) // time.Time
 
-// 支持多种格式: HH, HHMM, HHMMSS, HHMMSS.FFF, HHMMSS.FFFFFF
-elem := element.NewTime(tag.StudyTime, []string{"1234"}) // HHMM格式
+// supports multiple formats: HH, HHMM, HHMMSS, HHMMSS.FFF, HHMMSS.FFFFFF
+elem := element.NewTime(tag.StudyTime, []string{"1234"}) // HHMM format
 ```
 
-**DateTime (DT)** - 日期时间格式 YYYYMMDDHHMMSS.FFFFFF&ZZXX
+**DateTime (DT)** - date-time format YYYYMMDDHHMMSS.FFFFFF&ZZXX
 ```go
 elem := element.NewDateTime(tag.AcquisitionDateTime, []string{"20250106123456"})
 dt, _ := elem.GetDateTime(0) // time.Time
 
-// 支持时区
+// supports time zones
 elem := element.NewDateTimeFromTime(tag.AcquisitionDateTime, times)
 ```
 
-#### 2.3 数字字符串类型
+#### 2.3 Numeric string types
 
-**文件**: `numeric_string.go`
+**File**: `numeric_string.go`
 
-**DecimalString (DS)** - 十进制字符串转浮点数
+**DecimalString (DS)** - decimal string to floating point
 ```go
 elem := element.NewDecimalString(tag.SliceThickness, []string{"1.5", "2.0"})
 f, _ := elem.GetFloat(0) // 1.5
 
-// 从 float 创建
+// create from float
 elem := element.NewDecimalStringFromFloat(tag.SliceThickness, []float64{1.5, 2.0})
 floats, _ := elem.GetFloats() // []float64{1.5, 2.0}
 
-// 支持 float32
+// supports float32
 f32, _ := elem.GetFloat32(0)
 ```
 
-**IntegerString (IS)** - 整数字符串转整数
+**IntegerString (IS)** - integer string to integer
 ```go
 elem := element.NewIntegerString(tag.NumberOfFrames, []string{"100"})
 i, _ := elem.GetInt(0) // 100
 
-// 从 int 创建
+// create from int
 elem := element.NewIntegerStringFromInt(tag.NumberOfFrames, []int{100})
 ints, _ := elem.GetInts() // []int{100}
 
-// 支持 int32, int64
+// supports int32, int64
 i32, _ := elem.GetInt32(0)
 i64, _ := elem.GetInt64(0)
 ```
 
-### 3. 数值类型 (Numeric)
+### 3. Numeric types (Numeric)
 
-**文件**: `numeric.go`
+**File**: `numeric.go`
 
-| 类型 | VR | Go类型 | 大小 | 范围 |
+| Type | VR | Go type | Size | Range |
 |------|----|----|------|------|
 | UnsignedShort | US | uint16 | 2 bytes | 0 ~ 65,535 |
 | UnsignedLong | UL | uint32 | 4 bytes | 0 ~ 4,294,967,295 |
 | SignedShort | SS | int16 | 2 bytes | -32,768 ~ 32,767 |
 | SignedLong | SL | int32 | 4 bytes | -2,147,483,648 ~ 2,147,483,647 |
-| Float | FL | float32 | 4 bytes | IEEE 754 单精度 |
-| Double | FD | float64 | 8 bytes | IEEE 754 双精度 |
+| Float | FL | float32 | 4 bytes | IEEE 754 single precision |
+| Double | FD | float64 | 8 bytes | IEEE 754 double precision |
 | SignedVeryLong | SV | int64 | 8 bytes | -2^63 ~ 2^63-1 |
 | UnsignedVeryLong | UV | uint64 | 8 bytes | 0 ~ 2^64-1 |
 
-**示例**:
+**Example**:
 ```go
-// 创建 US 元素
+// create a US element
 elem := element.NewUnsignedShort(tag.Rows, []uint16{512, 512})
 rows, _ := elem.GetValue(0) // 512
 
-// 创建 FD 元素
+// create an FD element
 elem := element.NewDouble(tag.RealWorldValueSlope, []float64{1.234567890123})
 slope, _ := elem.GetValue(0) // 1.234567890123
 ```
 
-### 4. 属性标签类型 (AttributeTag)
+### 4. Attribute Tag type (AttributeTag)
 
-**文件**: `attribute_tag.go`
+**File**: `attribute_tag.go`
 
 **VR**: AT
 
-存储DICOM标签引用，每个值是一个32位标签(group + element)。
+Stores DICOM tag references; each value is a 32-bit tag (group + element).
 
-**示例**:
+**Example**:
 ```go
 tags := []*tag.Tag{tag.PatientName, tag.StudyDate}
 elem := element.NewAttributeTag(tag.OffendingElement, tags)
 tag, _ := elem.GetValue(0) // tag.PatientName
 ```
 
-### 5. 二进制类型 (Binary)
+### 5. Binary types (Binary)
 
-**文件**: `binary.go`
+**File**: `binary.go`
 
-| 类型 | VR | 描述 |
+| Type | VR | Description |
 |------|----|----|
-| OtherByte | OB | 字节序列 |
-| OtherWord | OW | 16位字序列 |
-| Unknown | UN | 未知数据 |
-| OtherDouble | OD | 64位浮点序列 |
-| OtherFloat | OF | 32位浮点序列 |
-| OtherLong | OL | 32位整数序列 |
-| OtherVeryLong | OV | 64位整数序列 |
+| OtherByte | OB | byte sequence |
+| OtherWord | OW | 16-bit word sequence |
+| Unknown | UN | unknown data |
+| OtherDouble | OD | 64-bit floating point sequence |
+| OtherFloat | OF | 32-bit floating point sequence |
+| OtherLong | OL | 32-bit integer sequence |
+| OtherVeryLong | OV | 64-bit integer sequence |
 
-**特点**:
-- 用于存储像素数据、波形数据等
-- Count() 对空数据返回 0，非空数据整体作为单个值返回 1
-- GetData() 返回原始字节数组
+**Features**:
+- Used to store pixel data, waveform data, etc.
+- Count() returns 0 for empty data; non-empty data is returned as a single value, i.e. 1
+- GetData() returns the raw byte array
 
-**示例**:
+**Example**:
 ```go
-// 直接构造二进制 Element（普通应用的 Pixel Data 建议使用
-// imaging/pixeldata.FromDataset 或 pixeldata.NewForDataset）
+// construct a binary Element directly (for Pixel Data in ordinary applications,
+// prefer imaging/pixeldata.FromDataset or pixeldata.NewForDataset)
 data := []byte{0x00, 0xFF, 0x80, 0x7F}
 elem := element.NewOtherWord(tag.PixelData, data)
 pixelData := elem.GetData() // [0x00, 0xFF, 0x80, 0x7F]
 ```
 
-## 接口设计
+## Interface design
 
-### Element 接口
+### Element interface
 
-所有Element类型都实现此接口：
+All Element types implement this interface:
 
 ```go
 type Element interface {
@@ -233,11 +234,11 @@ type Element interface {
 }
 ```
 
-### 继承结构
+### Inheritance structure
 
 ```
 Element (interface)
-  └─ base (struct) - 所有类型的公共基础
+  └─ base (struct) - common base for all types
       ├─ String
       │   └─ PersonName
       ├─ UnsignedShort
@@ -258,105 +259,104 @@ Element (interface)
       └─ Unknown
 ```
 
-## 文件清单
+## File list
 
-| 文件 | 说明 | 行数 |
+| File | Description | Lines |
 |------|------|------|
-| `doc.go` | 包文档 | ~50 |
-| `element.go` | Element接口和base实现 | ~95 |
-| `string.go` | 通用字符串类型 | ~165 |
-| `person_name.go` | 人名类型 (PN) | ~135 |
-| `date.go` | 日期时间类型 (DA/TM/DT) | ~230 |
-| `numeric_string.go` | 数字字符串类型 (DS/IS) | ~235 |
-| `numeric.go` | 数值类型 (US/UL/SS/SL/FL/FD/SV/UV) | ~605 |
-| `attribute_tag.go` | 属性标签类型 (AT) | ~95 |
-| `binary.go` | 二进制类型 (OB/OW/OD/OF/OL/OV/UN) | ~275 |
-| `element_test.go` | 接口测试 | ~55 |
-| `string_test.go` | 字符串测试 | ~110 |
-| `date_test.go` | 日期时间测试 | ~125 |
-| `numeric_string_test.go` | 数字字符串测试 | ~150 |
-| `numeric_test.go` | 数值测试 | ~370 |
-| `PLAN.md` | 实现计划 | ~140 |
-| `README.md` | 文档 | ~280 |
-| **总计** |  | **~2,740行** |
+| `doc.go` | package documentation | ~50 |
+| `element.go` | Element interface and base implementation | ~95 |
+| `string.go` | generic string type | ~165 |
+| `person_name.go` | person name type (PN) | ~135 |
+| `date.go` | date and time types (DA/TM/DT) | ~230 |
+| `numeric_string.go` | numeric string types (DS/IS) | ~235 |
+| `numeric.go` | numeric types (US/UL/SS/SL/FL/FD/SV/UV) | ~605 |
+| `attribute_tag.go` | attribute tag type (AT) | ~95 |
+| `binary.go` | binary types (OB/OW/OD/OF/OL/OV/UN) | ~275 |
+| `element_test.go` | interface tests | ~55 |
+| `string_test.go` | string tests | ~110 |
+| `date_test.go` | date and time tests | ~125 |
+| `numeric_string_test.go` | numeric string tests | ~150 |
+| `numeric_test.go` | numeric tests | ~370 |
+| `README.md` | documentation | ~280 |
+| **Total** |  | **~2,740 lines** |
 
-## 测试覆盖
+## Test coverage
 
-- **测试文件**: 5个
-- **测试函数**: 21个
-- **测试用例**: 70+个子测试
-- **测试覆盖率**: 主要功能全覆盖
-- **测试通过率**: 100% ✅
+- **Test files**: 5
+- **Test functions**: 21
+- **Test cases**: 70+ subtests
+- **Test coverage**: full coverage of main functionality
+- **Test pass rate**: 100% ✅
 
 ```bash
-# 运行所有测试
+# run all tests
 cd pkg/dicom/element
 go test -v
 
-# 运行特定测试
+# run a specific test
 go test -v -run TestString
 go test -v -run TestNumeric
 ```
 
-## 使用示例
+## Usage examples
 
-### 创建Element
+### Creating an Element
 
 ```go
-// 字符串
+// string
 elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
 
-// 数值
+// numeric
 elem := element.NewUnsignedShort(tag.Rows, []uint16{512})
 
-// 二进制
+// binary
 data := []byte{0x01, 0x02, 0x03, 0x04}
 elem := element.NewOtherByte(tag.PixelData, data)
 ```
 
-### 从Buffer创建
+### Creating from a Buffer
 
 ```go
 buf := buffer.NewMemory([]byte("Patient Name"))
 elem := element.NewStringFromBuffer(tag.PatientName, vr.PN, buf, nil)
 ```
 
-### 访问值
+### Accessing values
 
 ```go
-// 字符串
+// string
 name := elem.GetString()
 values := elem.GetValues()
 
-// 数值
+// numeric
 value, err := elem.GetValue(0)
 values, err := elem.GetValues()
 
-// 二进制
+// binary
 data := elem.GetData()
 ```
 
-## 跨包实现
+## Cross-package implementations
 
-- [x] Sequence (SQ) - 位于 `pkg/dicom/dataset`，并实现 `element.Element`
+- [x] Sequence (SQ) - located in `pkg/dicom/dataset` and implements `element.Element`
 
-## 未来工作
+## Future work
 
-### 待增强功能
+### Features to enhance
 
-- [ ] VR特定的验证规则
-- [ ] 更完善的错误处理
-- [ ] 性能优化
-- [ ] 更多测试用例
+- [ ] VR-specific validation rules
+- [ ] more complete error handling
+- [ ] performance optimization
+- [ ] more test cases
 
-## 相关包
+## Related packages
 
-- `pkg/dicom/tag` - DICOM标签
-- `pkg/dicom/vr` - 值表示
-- `pkg/io/buffer` - 缓冲区接口
-- `pkg/dicom/charset` - 字符集编码
+- `pkg/dicom/tag` - DICOM tags
+- `pkg/dicom/vr` - value representations
+- `pkg/io/buffer` - buffer interface
+- `pkg/dicom/charset` - character set encoding
 
-## 参考
+## References
 
-- DICOM标准 PS3.5: Data Structures and Encoding
-- fo-dicom库: https://github.com/fo-dicom/fo-dicom
+- DICOM standard PS3.5: Data Structures and Encoding
+- fo-dicom library: https://github.com/fo-dicom/fo-dicom

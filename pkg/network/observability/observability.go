@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package observability defines vendor-neutral hooks for DICOM network logs,
 // lifecycle events, and metrics. Records contain protocol metadata only; they

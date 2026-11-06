@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 //revive:disable:var-naming // package name must match public import path (pkg/dicom/dict)
 package dict_test

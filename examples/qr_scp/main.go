@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package main demonstrates a minimal Query/Retrieve SCP.
 // It supports C-ECHO, C-FIND, C-MOVE, and C-GET with an in-memory index.

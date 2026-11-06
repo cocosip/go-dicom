@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom authors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package lut provides Lookup Table implementations for DICOM imaging.
 // Lookup Tables (LUTs) are used to map input pixel values to output values

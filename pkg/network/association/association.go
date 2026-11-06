@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package association provides DICOM association negotiation and management.
 // It handles the initial association request, response, and context negotiation.

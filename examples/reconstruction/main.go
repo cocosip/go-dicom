@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Command reconstruction generates a classic CT/MR MPR series from one
 // Enhanced dataset or a list of classic source instances.

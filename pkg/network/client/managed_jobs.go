@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package client
 
@@ -185,20 +185,32 @@ type managedCGetJob struct {
 }
 
 // NewCGetJob creates a managed C-GET operation from an independent deep clone
-// of identifier.
+// of identifier. The optional storageSOPClassUIDs are proposed with the SCP
+// role so the peer can push C-STORE sub-operations back over the association;
+// supply every Storage SOP Class that may be returned (see
+// Client.AddStoragePresentationContexts). A managed C-GET also needs a
+// CStoreHandler supplied through WithBaseClientOptions.
 func NewCGetJob(
 	level dimse.QueryRetrieveLevel,
 	identifier *dataset.Dataset,
 	callback CGetCallback,
 	complete func(error),
+	storageSOPClassUIDs ...string,
 ) (Job, error) {
 	cloned, err := cloneManagedDataset(identifier, "C-GET identifier")
 	if err != nil {
 		return nil, err
 	}
 	req := dimse.NewCGetRequest(level, cloned)
+	contexts := managedContexts(req.AffectedSOPClassUID())
+	for _, sopClassUID := range storageSOPClassUIDs {
+		if sopClassUID == "" {
+			return nil, fmt.Errorf("C-GET storage SOP Class UID is empty")
+		}
+		contexts = append(contexts, managedStorageContext(sopClassUID))
+	}
 	return &managedCGetJob{
-		level: level, identifier: cloned, callback: callback, contexts: managedContexts(req.AffectedSOPClassUID()), complete: complete,
+		level: level, identifier: cloned, callback: callback, contexts: contexts, complete: complete,
 	}, nil
 }
 
@@ -503,6 +515,16 @@ func managedContexts(abstractSyntax string) []PresentationContextSpec {
 		AbstractSyntax:   abstractSyntax,
 		TransferSyntaxes: []string{managedExplicitVRLittleEndianUID, managedImplicitVRLittleEndianUID},
 	}}
+}
+
+// managedStorageContext requests the SCP role for a Storage SOP Class so a
+// managed C-GET can receive the peer's C-STORE sub-operations.
+func managedStorageContext(abstractSyntax string) PresentationContextSpec {
+	return PresentationContextSpec{
+		AbstractSyntax:   abstractSyntax,
+		TransferSyntaxes: []string{managedExplicitVRLittleEndianUID, managedImplicitVRLittleEndianUID},
+		SCPRole:          true,
+	}
 }
 
 func cloneManagedDataset(source *dataset.Dataset, name string) (*dataset.Dataset, error) {

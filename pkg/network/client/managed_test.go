@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package client
 
@@ -406,5 +406,32 @@ func TestNewNServiceJobsDeriveManagedSOPContextAndCloneInputs(t *testing.T) {
 	}
 	if got := getJob.(*managedNGetJob).attributeIdentifierList[0]; got == tag.PatientName || *got != *tag.PatientName {
 		t.Fatalf("queued N-GET attribute tag = %p %#v, want independent equivalent copy", got, got)
+	}
+}
+
+func TestNewCGetJobIncludesStorageSCPRoleContexts(t *testing.T) {
+	job, err := NewCGetJob(dimse.QueryRetrieveLevelStudy, dataset.New(), nil, nil, testCTImageStorageUID)
+	if err != nil {
+		t.Fatalf("NewCGetJob() error = %v", err)
+	}
+	contexts, err := job.PresentationContexts()
+	if err != nil {
+		t.Fatalf("PresentationContexts() error = %v", err)
+	}
+	if len(contexts) != 2 {
+		t.Fatalf("context count = %d, want 2", len(contexts))
+	}
+	if got := contexts[0].AbstractSyntax; got != "1.2.840.10008.5.1.4.1.2.2.3" {
+		t.Fatalf("C-GET abstract syntax = %q", got)
+	}
+	storage := contexts[1]
+	if storage.AbstractSyntax != testCTImageStorageUID || !storage.SCPRole || storage.SCURole {
+		t.Fatalf("storage context = %#v, want CT with SCP role only", storage)
+	}
+}
+
+func TestNewCGetJobRejectsEmptyStorageUID(t *testing.T) {
+	if _, err := NewCGetJob(dimse.QueryRetrieveLevelStudy, dataset.New(), nil, nil, ""); err == nil {
+		t.Fatal("NewCGetJob() error = nil, want empty storage UID error")
 	}
 }

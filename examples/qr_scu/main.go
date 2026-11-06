@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package main demonstrates a complete Query/Retrieve SCU workflow.
 // It performs:
@@ -386,7 +386,9 @@ func addPresentationContexts(c *client.Client) {
 		}
 	}
 
-	// Storage (for receiving C-STORE during C-GET)
+	// Storage (for receiving C-STORE during C-GET). These must be negotiated
+	// with the SCP role; otherwise the QR SCP cannot push instances back.
+	// Include every Storage SOP Class the SCP may return.
 	storageClasses := []string{
 		uid.CTImageStorage.UID(),
 		uid.MRImageStorage.UID(),
@@ -394,10 +396,8 @@ func addPresentationContexts(c *client.Client) {
 		uid.XRayAngiographicImageStorage.UID(),
 		uid.UltrasoundImageStorage.UID(),
 	}
-	for _, sopClass := range storageClasses {
-		if err := c.AddPresentationContext(sopClass, transferSyntaxes...); err != nil {
-			panic(err)
-		}
+	if err := c.AddStoragePresentationContexts(storageClasses, transferSyntaxes...); err != nil {
+		panic(err)
 	}
 }
 

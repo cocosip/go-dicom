@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package daterange provides DICOM date range types for query/retrieve operations.
 // DICOM date ranges are used in C-FIND, C-GET, and C-MOVE queries to specify

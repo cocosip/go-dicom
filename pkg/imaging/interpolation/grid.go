@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package interpolation provides scalar nearest-neighbor and bilinear image
 // sampling shared by rendering and volume reconstruction.

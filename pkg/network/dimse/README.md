@@ -1,61 +1,61 @@
 # DIMSE Package
 
-DIMSE (DICOM Message Service Element) 是 DICOM 网络通信的核心消息层。
+DIMSE (DICOM Message Service Element) is the core message layer of DICOM network communication.
 
-## 功能特性
+## Features
 
-- ✅ C-ECHO: 验证连接
-- ✅ C-STORE: 存储 DICOM 实例
-- ✅ C-FIND: 查询 DICOM 档案
-- ✅ 自动 MessageID 管理
-- ✅ 优先级支持
-- ✅ 状态码处理
+- ✅ C-ECHO: verify connectivity
+- ✅ C-STORE: store DICOM instances
+- ✅ C-FIND: query the DICOM archive
+- ✅ Automatic MessageID management
+- ✅ Priority support
+- ✅ Status code handling
 
-## MessageID 自动管理
+## Automatic MessageID Management
 
-### 问题
-在 DICOM 网络通信中，每个请求需要一个唯一的 MessageID。手动管理 MessageID 容易出错：
+### Problem
+In DICOM network communication, every request needs a unique MessageID. Managing MessageID manually is error-prone:
 
 ```go
-// ❌ 不推荐：手动管理 MessageID
+// ❌ Not recommended: manual MessageID management
 msgID := 1
 req1 := dimse.NewCEchoRequest(msgID)
 msgID++
 req2 := dimse.NewCStoreRequest(msgID, dataset)
 msgID++
-// ... 容易忘记递增或重复
+// ... easy to forget to increment or to duplicate
 ```
 
-### 解决方案：MessageIDGenerator
+### Solution: MessageIDGenerator
 
-使用 `MessageIDGenerator` 自动管理 MessageID：
+Use `MessageIDGenerator` to manage MessageIDs automatically:
 
 ```go
-// ✅ 推荐：使用 MessageIDGenerator
+// ✅ Recommended: use MessageIDGenerator
 idGen := dimse.NewMessageIDGenerator()
 
-// 创建请求时传入 0（表示未分配）
+// Pass 0 when creating a request (means unassigned)
 req1 := dimse.NewCEchoRequest(0)
 req2 := dimse.NewCStoreRequest(0, dataset)
 req3 := dimse.NewCFindRequestPatientRoot(0, level, query)
 
-// 发送前自动分配 MessageID
+// Assign a MessageID automatically before sending
 idGen.AssignMessageID(req1)  // MessageID = 1
 idGen.AssignMessageID(req2)  // MessageID = 2
 idGen.AssignMessageID(req3)  // MessageID = 3
 ```
 
-### 特性
+### Features
 
-1. **线程安全**：可以并发调用
-2. **自动递增**：从 1 开始，范围 1-65535
-3. **自动跳过 0**：MessageID=0 表示未分配
-4. **保持已有值**：如果已有 MessageID，不会覆盖
-5. **支持重置**：新连接时可以重置计数器
+1. **Thread-safe**: can be called concurrently
+2. **Auto-increment**: starts at 1, range 1-65535
+3. **Skips 0 automatically**: MessageID=0 means unassigned
+4. **Keeps existing values**: does not overwrite an existing MessageID
+5. **Supports reset**: the counter can be reset on a new connection
 
-## 基本用法
+## Basic Usage
 
-### C-ECHO（验证连接）
+### C-ECHO (verify connectivity)
 
 ```go
 package main
@@ -65,24 +65,24 @@ import (
 )
 
 func main() {
-    // 创建 MessageID 生成器
+    // Create a MessageID generator
     idGen := dimse.NewMessageIDGenerator()
 
-    // 创建 C-ECHO 请求（MessageID=0 表示未分配）
+    // Create a C-ECHO request (MessageID=0 means unassigned)
     req := dimse.NewCEchoRequest(0)
 
-    // 分配 MessageID
+    // Assign a MessageID
     msgID, err := idGen.AssignMessageID(req)
     if err != nil {
         panic(err)
     }
 
-    // 现在可以发送 req，它的 MessageID 已经被设置为 1
-    println("MessageID:", msgID)  // 输出: MessageID: 1
+    // Now req can be sent; its MessageID has been set to 1
+    println("MessageID:", msgID)  // Output: MessageID: 1
 }
 ```
 
-### C-STORE（存储 DICOM 实例）
+### C-STORE (store DICOM instances)
 
 ```go
 package main
@@ -98,7 +98,7 @@ import (
 func main() {
     idGen := dimse.NewMessageIDGenerator()
 
-    // 创建 DICOM 数据集
+    // Create a DICOM dataset
     ds := dataset.New()
     ds.Add(element.NewString(tag.SOPClassUID, vr.UI,
         []string{"1.2.840.10008.5.1.4.1.1.2"}))  // CT Image Storage
@@ -107,22 +107,22 @@ func main() {
     ds.Add(element.NewString(tag.PatientName, vr.PN,
         []string{"Doe^John"}))
 
-    // 创建 C-STORE 请求
+    // Create a C-STORE request
     req, err := dimse.NewCStoreRequest(0, ds)
     if err != nil {
         panic(err)
     }
 
-    // 设置优先级（可选）
+    // Set priority (optional)
     req.SetPriority(uint16(dimse.PriorityHigh))
 
-    // 分配 MessageID
+    // Assign a MessageID
     msgID, _ := idGen.AssignMessageID(req)
     println("MessageID:", msgID)
 }
 ```
 
-### C-FIND（查询 DICOM 档案）
+### C-FIND (query the DICOM archive)
 
 ```go
 package main
@@ -138,32 +138,32 @@ import (
 func main() {
     idGen := dimse.NewMessageIDGenerator()
 
-    // 创建查询数据集
+    // Create a query dataset
     query := dataset.New()
     query.Add(element.NewString(tag.PatientName, vr.PN, []string{"Doe^*"}))
     query.Add(element.NewString(tag.PatientID, vr.LO, []string{""}))
 
-    // 创建 C-FIND 请求（Patient Root Query）
+    // Create a C-FIND request (Patient Root Query)
     req := dimse.NewCFindRequestPatientRoot(
         0,
         dimse.QueryRetrieveLevelPatient,
         query,
     )
 
-    // 分配 MessageID
+    // Assign a MessageID
     msgID, _ := idGen.AssignMessageID(req)
     println("MessageID:", msgID)
 }
 ```
 
-## 在 Client/Association 中集成
+## Integration in Client/Association
 
-在实际应用中，MessageIDGenerator 应该由 Client 或 Association 管理：
+In real applications, MessageIDGenerator should be managed by the Client or Association:
 
 ```go
 type Client struct {
     messageIDGen *dimse.MessageIDGenerator
-    // ... 其他字段
+    // ... other fields
 }
 
 func NewClient() *Client {
@@ -173,42 +173,42 @@ func NewClient() *Client {
 }
 
 func (c *Client) Send(msg dimse.Message) error {
-    // 自动分配 MessageID
+    // Assign the MessageID automatically
     _, err := c.messageIDGen.AssignMessageID(msg)
     if err != nil {
         return err
     }
 
-    // 发送消息
+    // Send the message
     // ...
     return nil
 }
 
-// 用户代码
+// User code
 func main() {
     client := NewClient()
 
-    // 不需要关心 MessageID！
+    // No need to worry about MessageID!
     req := dimse.NewCEchoRequest(0)
     client.Send(req)
 }
 ```
 
-## 响应处理
+## Response Handling
 
-### C-ECHO 响应
+### C-ECHO response
 
 ```go
-// 创建成功响应
+// Create a success response
 resp := dimse.NewCEchoResponseSuccess(requestMessageID)
 
-// 检查状态
+// Check status
 if resp.IsSuccess() {
     println("Echo successful")
 }
 ```
 
-### C-STORE 响应
+### C-STORE response
 
 ```go
 resp := dimse.NewCStoreResponseSuccess(
@@ -222,10 +222,10 @@ if resp.IsSuccess() {
 }
 ```
 
-### C-FIND 响应
+### C-FIND response
 
 ```go
-// Pending 响应（包含查询结果）
+// Pending response (contains query results)
 resp := dimse.NewCFindResponsePending(
     requestMessageID,
     sopClassUID,
@@ -233,78 +233,78 @@ resp := dimse.NewCFindResponsePending(
 )
 
 if resp.IsPending() {
-    // 处理查询结果
+    // Handle the query results
     if resp.HasIdentifier() {
         data := resp.DataDataset()
-        // ... 处理数据
+        // ... process the data
     }
 }
 
-// 最终响应（查询完成）
+// Final response (query complete)
 finalResp := dimse.NewCFindResponseSuccess(requestMessageID, sopClassUID)
 if finalResp.IsSuccess() {
     println("Query completed")
 }
 ```
 
-## 高级功能
+## Advanced Features
 
-### 优先级
+### Priority
 
 ```go
 req := dimse.NewCStoreRequest(0, dataset)
-req.SetPriority(uint16(dimse.PriorityHigh))    // 高优先级
-req.SetPriority(uint16(dimse.PriorityMedium))  // 中优先级（默认）
-req.SetPriority(uint16(dimse.PriorityLow))     // 低优先级
+req.SetPriority(uint16(dimse.PriorityHigh))    // High priority
+req.SetPriority(uint16(dimse.PriorityMedium))  // Medium priority (default)
+req.SetPriority(uint16(dimse.PriorityLow))     // Low priority
 ```
 
-### Move Originator（C-MOVE 子操作）
+### Move Originator (C-MOVE sub-operations)
 
 ```go
 req, _ := dimse.NewCStoreRequest(0, dataset)
 req.SetMoveOriginator("MOVE_SCU", 999)
 ```
 
-### 重置 MessageID 计数器
+### Reset the MessageID counter
 
 ```go
 idGen := dimse.NewMessageIDGenerator()
 
-// 使用一段时间后...
+// After using it for a while...
 idGen.Next()  // 1
 idGen.Next()  // 2
 
-// 新连接开始，重置计数器
+// A new connection starts; reset the counter
 idGen.Reset()
-idGen.Next()  // 1（重新开始）
+idGen.Next()  // 1 (starts over)
 ```
 
-## 后续开发
+## Future Development
 
-在 Phase 9.7 (Client API) 中，我们将提供更高层的 API：
+In Phase 9.7 (Client API), we will provide a higher-level API:
 
 ```go
-// 未来的 API（即将实现）
+// Future API (coming soon)
 client := dicom.NewClient("MY_SCU")
 client.Connect("localhost", 11112, "REMOTE_SCP")
 
-// 完全不需要创建 Request 对象！
+// No need to create Request objects at all!
 err := client.Echo()
 err := client.Store(dataset)
 results := client.Find(query)
 ```
 
-## 测试
+## Testing
 
-运行测试：
+Run the tests:
 
 ```bash
 go test ./pkg/network/dimse
 go test -v ./pkg/network/dimse -run TestMessageIDGenerator
 ```
 
-## 参考
+## References
 
-- DICOM 标准: https://www.dicomstandard.org/
+- DICOM Standard: https://www.dicomstandard.org/
 - DICOM Part 7: Message Exchange
 - DICOM Part 8: Network Communication Support

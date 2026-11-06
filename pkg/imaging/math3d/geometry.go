@@ -1,5 +1,5 @@
 // Copyright (c) 2026 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package math3d provides the geometry primitives shared by DICOM frame
 // geometry, spatial transforms, and volume reconstruction.

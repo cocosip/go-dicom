@@ -1,15 +1,28 @@
 # go-dicom
 
-A pure Go implementation of the DICOM (Digital Imaging and Communications in Medicine) standard, ported from the [fo-dicom](https://github.com/fo-dicom/fo-dicom) C# library.
+A pure Go implementation of the DICOM (Digital Imaging and Communications in Medicine) standard, inspired by the [fo-dicom](https://github.com/fo-dicom/fo-dicom) C# library.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/cocosip/go-dicom.svg)](https://pkg.go.dev/github.com/cocosip/go-dicom)
-[![Go Report Card](https://goreportcard.com/badge/github.com/cocosip/go-dicom)](https://goreportcard.com/report/github.com/cocosip/go-dicom)
-[![License](https://img.shields.io/badge/license-MS--PL-blue.svg)](LICENSE)
+[![CI](https://github.com/cocosip/go-dicom/actions/workflows/ci.yml/badge.svg)](https://github.com/cocosip/go-dicom/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Release Status
 
 `go-dicom` is a released DICOM library.
 This README describes the supported library surface rather than a development roadmap.
+
+## Documentation
+
+Documentation is maintained in English under [`docs/`](docs/). Start at the
+[documentation index](docs/README.md).
+
+- [Architecture](docs/ARCHITECTURE.md) — layering, package responsibilities, key data flows, and extension points
+- [Networking guide](docs/network/README.md) — SCU/SCP usage, presentation-context and SCU/SCP role negotiation, C-GET storage contexts and factories, DIMSE messages, configuration, and status codes
+- [Networking troubleshooting](docs/network/TROUBLESHOOTING.md)
+- [Changelog](docs/CHANGELOG.md)
+- [Benchmarks](docs/BENCHMARKS.md)
+
+Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/README.md), [imaging](pkg/imaging/README.md), [I/O](pkg/io/README.md), [media](pkg/media/README.md), [structured reporting](pkg/sr/README.md).
 
 ## Features
 
@@ -192,7 +205,7 @@ This README describes the supported library surface rather than a development ro
 
 ## Performance
 
-go-dicom includes benchmarks for dataset operations, parsing, writing, I/O, and image conversion. See [BENCHMARKS.md](BENCHMARKS.md) for the benchmark scope, historical snapshots, and result provenance. Pull requests publish their full benchmark output as a `benchmark-results` workflow artifact.
+go-dicom includes benchmarks for dataset operations, parsing, writing, I/O, and image conversion. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for the benchmark scope, historical snapshots, and result provenance. Pull requests publish their full benchmark output as a `benchmark-results` workflow artifact.
 
 Benchmark numbers vary by commit, Go version, CPU, operating system, and DICOM workload. Use the command below to collect a result for the environment being evaluated.
 
@@ -2046,6 +2059,7 @@ go test -cover ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 ```
 go-dicom/
+├── docs/                   # Architecture, networking guide, changelog, benchmarks
 ├── pkg/
 │   ├── dicom/              # Core DICOM types
 │   │   ├── tag/            # DICOM tags (5347 standard tags)
@@ -2101,8 +2115,7 @@ go-dicom/
 ├── tools/                  # Code generation tools
 │   ├── data/2026b/         # Pinned fo-dicom dictionary XML inputs
 │   └── generate_dicom/     # Generate tags, UIDs, and dictionaries
-├── BENCHMARKS.md           # Performance benchmarks
-└── CLAUDE.md               # Development guide for AI assistants
+└── AGENTS.md               # Repository guidelines for contributors and AI assistants
 ```
 
 ## Development
@@ -2161,14 +2174,14 @@ go vet ./...
 
 ## Relationship to fo-dicom (C#)
 
-This project is a Go port inspired by the fo-dicom library:
+This project is a Go implementation inspired by the fo-dicom library:
 
 1. ✅ Core data types (Tag, VR, Dictionary)
 2. ✅ Data structures (Element, Dataset)
 3. ✅ I/O capabilities (Reader, Writer)
 4. ✅ Advanced features (Networking, Codecs)
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+See the [documentation index](docs/README.md) and [repository guidelines](AGENTS.md) for details.
 
 ## DICOM Resources
 
@@ -2178,13 +2191,13 @@ See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 
 ## License
 
-This project is licensed under the Microsoft Public License (MS-PL), the same license as fo-dicom.
+This project is licensed under the MIT License.
 
 See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-This project is heavily inspired by and based on [fo-dicom](https://github.com/fo-dicom/fo-dicom), an excellent DICOM library for .NET.
+This project is heavily inspired by [fo-dicom](https://github.com/fo-dicom/fo-dicom), an excellent DICOM library for .NET.
 
 Special thanks to the fo-dicom contributors for their comprehensive implementation of the DICOM standard.
 

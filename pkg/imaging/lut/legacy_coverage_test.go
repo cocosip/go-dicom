@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom authors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 package lut_test
 

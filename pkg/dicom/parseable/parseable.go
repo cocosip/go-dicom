@@ -1,5 +1,5 @@
 // Copyright (c) 2025 go-dicom contributors.
-// Licensed under the Microsoft Public License (MS-PL).
+// Licensed under the MIT License.
 
 // Package parseable provides the Parseable interface for types that can be parsed from strings.
 // This is used in DICOM element value retrieval to support parsing string values into
