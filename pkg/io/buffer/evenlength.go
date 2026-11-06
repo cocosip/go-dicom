@@ -6,6 +6,7 @@ package buffer
 import (
 	"fmt"
 	"io"
+	"math"
 )
 
 // EvenLengthBuffer is a ByteBuffer wrapper that ensures even length.
@@ -43,7 +44,13 @@ func (e *EvenLengthBuffer) IsMemory() bool {
 
 // Size returns the size of the buffer plus 1 (to make it even).
 func (e *EvenLengthBuffer) Size() uint32 {
-	return e.internal.Size() + 1
+	size := e.internal.Size()
+	if size == math.MaxUint32 {
+		// Adding the padding byte would overflow uint32; saturate at the
+		// maximum representable size instead of wrapping to zero.
+		return math.MaxUint32
+	}
+	return size + 1
 }
 
 // Data returns the internal data with a padding byte added at the end.

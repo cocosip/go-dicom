@@ -87,6 +87,11 @@ func (e *EndianByteBuffer) Data() []byte {
 
 // GetByteRange gets a range of bytes with endian conversion applied.
 func (e *EndianByteBuffer) GetByteRange(offset, count uint32, output []byte) error {
+	// Swapping is anchored at byte 0 of the buffer. An unaligned start would
+	// swap across unit boundaries and corrupt values, so reject it.
+	if e.unitSize > 1 && offset%uint32(e.unitSize) != 0 {
+		return fmt.Errorf("offset %d is not a multiple of unit size %d", offset, e.unitSize)
+	}
 	if err := e.internal.GetByteRange(offset, count, output); err != nil {
 		return err
 	}
@@ -108,13 +113,20 @@ func (e *EndianByteBuffer) WriteTo(w io.Writer) (int64, error) {
 	var totalWritten int64
 	offset := uint32(0)
 
+	// Allocate the chunk buffer once and reuse it across iterations.
+	bufSize := e.Size()
+	if bufSize > bufferSize {
+		bufSize = bufferSize
+	}
+	chunk := make([]byte, bufSize)
+
 	for remaining > 0 {
 		chunkSize := remaining
 		if chunkSize > bufferSize {
 			chunkSize = bufferSize
 		}
 
-		chunk := make([]byte, chunkSize)
+		chunk = chunk[:chunkSize]
 		if err := e.GetByteRange(offset, chunkSize, chunk); err != nil {
 			return totalWritten, err
 		}

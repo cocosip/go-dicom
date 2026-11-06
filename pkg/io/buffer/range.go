@@ -72,8 +72,9 @@ func (r *RangeByteBuffer) Data() []byte {
 
 	// Read from internal buffer at offset
 	if err := r.internal.GetByteRange(r.offset, r.length, data); err != nil {
-		// Return empty data on error (best effort)
-		return make([]byte, r.length)
+		// Return nil so callers can detect the failure, matching the
+		// Memory/File/Stream buffer implementations.
+		return nil
 	}
 
 	return data
@@ -109,13 +110,20 @@ func (r *RangeByteBuffer) WriteTo(w io.Writer) (int64, error) {
 	offset := uint32(0)
 	var totalWritten int64
 
+	// Allocate the chunk buffer once and reuse it across iterations.
+	bufSize := r.length
+	if bufSize > bufferSize {
+		bufSize = bufferSize
+	}
+	chunk := make([]byte, bufSize)
+
 	for remaining > 0 {
 		chunkSize := remaining
 		if chunkSize > bufferSize {
 			chunkSize = bufferSize
 		}
 
-		chunk := make([]byte, chunkSize)
+		chunk = chunk[:chunkSize]
 		if err := r.GetByteRange(offset, chunkSize, chunk); err != nil {
 			return totalWritten, err
 		}

@@ -99,6 +99,12 @@ func (s *SwapByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("output buffer with %d bytes cannot fit %d bytes of data", len(output), count)
 	}
 
+	// Swapping is anchored at byte 0 of the buffer. An unaligned start would
+	// swap across unit boundaries and corrupt values, so reject it.
+	if s.unitSize > 1 && offset%uint32(s.unitSize) != 0 {
+		return fmt.Errorf("offset %d is not a multiple of unit size %d", offset, s.unitSize)
+	}
+
 	// Get the bytes from the internal buffer
 	err := s.internal.GetByteRange(offset, count, output)
 	if err != nil {

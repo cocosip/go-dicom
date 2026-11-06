@@ -22,8 +22,6 @@ func Clone(source ByteBuffer) (ByteBuffer, error) {
 	switch value := source.(type) {
 	case *MemoryByteBuffer:
 		return NewMemory(append([]byte(nil), value.Data()...)), nil
-	case *PooledBuffer:
-		return NewMemory(append([]byte(nil), value.Data()...)), nil
 	case *BulkDataURIByteBuffer:
 		if value.data == nil {
 			return NewBulkDataURI(value.bulkDataURI), nil
