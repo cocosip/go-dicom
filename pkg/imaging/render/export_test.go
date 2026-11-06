@@ -13,7 +13,7 @@ import (
 func TestImageExporterRenderFrameSupportsRGBA(t *testing.T) {
 	exporter := NewImageExporter(nil)
 	var output bytes.Buffer
-	if err := exporter.RenderFrame(
+	if err := exporter.RenderFrameWithHighBit(
 		&output,
 		[]byte{10, 20, 30, 40},
 		1, 1,
@@ -24,7 +24,7 @@ func TestImageExporterRenderFrameSupportsRGBA(t *testing.T) {
 		0,
 		&ExportOptions{Format: FormatPNG},
 	); err != nil {
-		t.Fatalf("RenderFrame() error = %v", err)
+		t.Fatalf("RenderFrameWithHighBit() error = %v", err)
 	}
 
 	decoded, err := png.Decode(bytes.NewReader(output.Bytes()))

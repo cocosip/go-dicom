@@ -59,10 +59,28 @@ func DefaultExportOptions() *ExportOptions {
 // ExportGrayscale exports grayscale pixel data to an image format
 // pixelData: raw pixel data
 // width, height: image dimensions
-// bitsAllocated, bitsStored, highBit: bit depth/location information
+// bitsAllocated, bitsStored: bit depth information
 // isSigned: whether pixels are signed
 // photometric: photometric interpretation (e.g., "MONOCHROME1", "MONOCHROME2")
+//
+// Conformant stored values are right-justified, so the high bit is bitsStored-1.
+// Use ExportGrayscaleWithHighBit for files that declare a different High Bit.
 func (e *ImageExporter) ExportGrayscale(
+	writer io.Writer,
+	pixelData []byte,
+	width, height int,
+	bitsAllocated, bitsStored int,
+	isSigned bool,
+	photometric string,
+	options *ExportOptions,
+) error {
+	return e.ExportGrayscaleWithHighBit(writer, pixelData, width, height,
+		bitsAllocated, bitsStored, bitsStored-1, isSigned, photometric, options)
+}
+
+// ExportGrayscaleWithHighBit exports grayscale pixel data, honoring an explicit
+// High Bit (0028,0102) position.
+func (e *ImageExporter) ExportGrayscaleWithHighBit(
 	writer io.Writer,
 	pixelData []byte,
 	width, height int,
@@ -149,6 +167,11 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 		effectiveStored = bitsAllocated
 	}
 	precalc := newPrecalculatedLUT(pipelineLUT, effectiveStored, isSigned)
+	// Building the table costs one transform per stored value; it only pays off
+	// once the frame has at least that many pixels.
+	if precalc != nil && width*height < 1<<uint(effectiveStored) {
+		precalc = nil
+	}
 
 	for y := 0; y < height; y++ {
 		row := y * img.Stride
@@ -388,8 +411,28 @@ func (e *ImageExporter) ExportImage(writer io.Writer, img image.Image, options *
 }
 
 // RenderFrame renders a single pixel-data frame to an image.
-// This is a high-level convenience function
+// This is a high-level convenience function.
+//
+// Conformant stored values are right-justified, so the high bit is bitsStored-1.
+// Use RenderFrameWithHighBit for files that declare a different High Bit.
 func (e *ImageExporter) RenderFrame(
+	writer io.Writer,
+	frameData []byte,
+	width, height int,
+	bitsAllocated, bitsStored int,
+	samplesPerPixel int,
+	isSigned bool,
+	photometric string,
+	planarConfig int,
+	options *ExportOptions,
+) error {
+	return e.RenderFrameWithHighBit(writer, frameData, width, height,
+		bitsAllocated, bitsStored, bitsStored-1, samplesPerPixel, isSigned, photometric, planarConfig, options)
+}
+
+// RenderFrameWithHighBit renders a single pixel-data frame, honoring an explicit
+// High Bit (0028,0102) position.
+func (e *ImageExporter) RenderFrameWithHighBit(
 	writer io.Writer,
 	frameData []byte,
 	width, height int,
@@ -403,7 +446,7 @@ func (e *ImageExporter) RenderFrame(
 	switch samplesPerPixel {
 	case 1:
 		// Grayscale
-		return e.ExportGrayscale(writer, frameData, width, height, bitsAllocated, bitsStored, highBit, isSigned, photometric, options)
+		return e.ExportGrayscaleWithHighBit(writer, frameData, width, height, bitsAllocated, bitsStored, highBit, isSigned, photometric, options)
 	case 3:
 		// RGB/YBR
 		img, err := e.RenderRGBImageWithBytesPerSample(
