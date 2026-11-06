@@ -5,6 +5,7 @@ package transport
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -13,6 +14,9 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
+
+// ErrPDULengthExceeded indicates that a peer sent a PDU larger than the active limit.
+var ErrPDULengthExceeded = errors.New("PDU length exceeds maximum")
 
 // ReadPDU reads a complete PDU from the connection with an optional timeout.
 //
@@ -36,6 +40,12 @@ import (
 //	    // Handle P-DATA-TF
 //	}
 func ReadPDU(conn net.Conn, timeout time.Duration) (*pdu.RawPDU, error) {
+	return ReadPDUMaxLength(conn, timeout, pdu.MaxPDUDataLength)
+}
+
+// ReadPDUMaxLength reads a PDU while applying the caller's negotiated payload limit.
+// A zero maxLength keeps the transport safety cap but does not add a negotiated limit.
+func ReadPDUMaxLength(conn net.Conn, timeout time.Duration, maxLength uint32) (*pdu.RawPDU, error) {
 	// Set read deadline if timeout is specified
 	if timeout > 0 {
 		deadline := time.Now().Add(timeout)
@@ -64,8 +74,12 @@ func ReadPDU(conn net.Conn, timeout time.Duration) (*pdu.RawPDU, error) {
 	}
 
 	// Validate length before allocating the PDU data buffer.
-	if length > pdu.MaxPDUDataLength {
-		return nil, fmt.Errorf("PDU length %d exceeds maximum allowed %d", length, pdu.MaxPDUDataLength)
+	limit := pdu.MaxPDUDataLength
+	if maxLength > 0 && maxLength < limit {
+		limit = maxLength
+	}
+	if length > limit {
+		return nil, fmt.Errorf("%w: %d exceeds maximum allowed %d", ErrPDULengthExceeded, length, limit)
 	}
 
 	// Read PDU data

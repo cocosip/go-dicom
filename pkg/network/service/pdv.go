@@ -131,8 +131,14 @@ func CreatePDataTFPDU(pdvs []*PDV) (*pdu.RawPDU, error) {
 
 // ParsePDataTFPDU parses PDVs from a P-DATA-TF PDU.
 func ParsePDataTFPDU(p *pdu.RawPDU) ([]*PDV, error) {
+	if p == nil {
+		return nil, fmt.Errorf("P-DATA-TF PDU is nil")
+	}
 	if p.Type != pdu.TypePDataTF {
 		return nil, fmt.Errorf("not a P-DATA-TF PDU: type=%d", p.Type)
+	}
+	if len(p.Data) == 0 {
+		return nil, fmt.Errorf("P-DATA-TF PDU contains no PDV")
 	}
 
 	var pdvs []*PDV

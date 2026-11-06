@@ -44,6 +44,13 @@ func TestNewAAssociateAC(t *testing.T) {
 	}
 }
 
+func TestAAssociateACValidateStructureRequiresPresentationContext(t *testing.T) {
+	ac := NewAAssociateAC()
+	if err := ac.ValidateStructure(); err == nil {
+		t.Fatal("ValidateStructure() error = nil, want missing presentation context error")
+	}
+}
+
 func TestAAssociateAC_EncodeDecodeBasic(t *testing.T) {
 	// Create a basic A-ASSOCIATE-AC
 	ac := NewAAssociateAC()

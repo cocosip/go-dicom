@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
@@ -54,13 +55,12 @@ func (s *Service) recvLoop(ctx context.Context) error {
 
 		default:
 			// Read PDU from connection
-			rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
+			rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), s.config.maxPDULength)
 			if err != nil {
+				if errors.Is(err, transport.ErrPDULengthExceeded) {
+					_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+				}
 				return fmt.Errorf("failed to read PDU: %w", err)
-			}
-			if err := s.validateInboundPDULength(rawPDU); err != nil {
-				_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
-				return err
 			}
 			s.emitPDUBytes(ctx, observability.DirectionInbound, rawPDU)
 
@@ -124,16 +124,6 @@ type dimseMessageFragments struct {
 	dataset         []byte
 	commandComplete bool
 	expectsDataset  bool
-}
-
-func (s *Service) validateInboundPDULength(rawPDU *pdu.RawPDU) error {
-	if rawPDU == nil || s.config.maxPDULength == 0 {
-		return nil
-	}
-	if rawPDU.Length > s.config.maxPDULength {
-		return fmt.Errorf("received PDU length %d exceeds negotiated maximum %d", rawPDU.Length, s.config.maxPDULength)
-	}
-	return nil
 }
 
 // getTransferSyntaxForContext gets the transfer syntax for a presentation context ID.

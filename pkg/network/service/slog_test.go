@@ -95,7 +95,7 @@ func TestErrorOnlyGlobalLoggerReceivesTerminalDIMSEFailure(t *testing.T) {
 	}
 }
 
-func TestPendingDIMSELogUsesInfoLevel(t *testing.T) {
+func TestDIMSEProgressLogsUseDebugLevel(t *testing.T) {
 	handler := &serviceSlogHandler{}
 	if err := logging.Configure(logging.Config{Handler: handler}); err != nil {
 		t.Fatalf("Configure() error = %v", err)
@@ -123,11 +123,11 @@ func TestPendingDIMSELogUsesInfoLevel(t *testing.T) {
 			completed = &records[i]
 		}
 	}
-	if pending == nil || pending.Level != slog.LevelInfo {
-		t.Fatalf("pending record = %#v, want INFO", pending)
+	if pending == nil || pending.Level != slog.LevelDebug {
+		t.Fatalf("pending record = %#v, want DEBUG", pending)
 	}
-	if completed == nil || completed.Level != slog.LevelInfo {
-		t.Fatalf("completed record = %#v, want INFO", completed)
+	if completed == nil || completed.Level != slog.LevelDebug {
+		t.Fatalf("completed record = %#v, want DEBUG", completed)
 	}
 }
 

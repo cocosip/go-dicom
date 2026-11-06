@@ -24,6 +24,11 @@ type serviceResponder struct {
 func (r *serviceResponder) SendAccept(ctx context.Context, assoc *association.Association) error {
 	// Convert Association to A-ASSOCIATE-AC PDU
 	ac := association.ToAAssociateAC(assoc)
+	// The AC advertises the acceptor's receive limit. Keep assoc.MaxPDULength
+	// as the requestor's receive limit so outgoing PDUs still honor the peer.
+	if ac.UserInformation != nil {
+		ac.UserInformation.MaximumLength = r.service.config.maxPDULength
+	}
 	// Keep the negotiated request-side contexts available while the AC log is emitted.
 	r.service.SetAssociation(assoc)
 
@@ -325,7 +330,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		return nil, fmt.Errorf("cannot receive association response in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
+	rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), s.config.maxPDULength)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
@@ -392,7 +397,7 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		return nil, fmt.Errorf("cannot receive association request in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
+	rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), s.config.maxPDULength)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}

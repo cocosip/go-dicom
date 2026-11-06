@@ -748,6 +748,11 @@ func eventLogLevel(event observability.Event) observability.Level {
 		return observability.LevelError
 	}
 	switch event.Kind {
+	case observability.EventRequestSent,
+		observability.EventRequestReceived,
+		observability.EventRequestPending,
+		observability.EventRequestCompleted:
+		return observability.LevelDebug
 	case observability.EventAssociationRejected,
 		observability.EventAssociationAborted,
 		observability.EventRequestTimedOut,

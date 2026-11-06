@@ -396,6 +396,12 @@ func (a *AAssociateAC) ValidateStructure() error {
 	if a.ApplicationContext == "" {
 		return fmt.Errorf("A-ASSOCIATE-AC is missing application context")
 	}
+	if a.ApplicationContext != applicationContextUID {
+		return fmt.Errorf("A-ASSOCIATE-AC has unsupported application context %q", a.ApplicationContext)
+	}
+	if len(a.PresentationContexts) == 0 {
+		return fmt.Errorf("A-ASSOCIATE-AC must contain at least one presentation context")
+	}
 	if a.userInformationCount != 0 && a.userInformationCount != 1 {
 		return fmt.Errorf("A-ASSOCIATE-AC must contain exactly one user information item, got %d", a.userInformationCount)
 	}

@@ -423,6 +423,9 @@ func (a *AAssociateRQ) ValidateStructure() error {
 	if a.ApplicationContext == "" {
 		return fmt.Errorf("A-ASSOCIATE-RQ is missing application context")
 	}
+	if a.ApplicationContext != applicationContextUID {
+		return fmt.Errorf("A-ASSOCIATE-RQ has unsupported application context %q", a.ApplicationContext)
+	}
 	if len(a.PresentationContexts) == 0 {
 		return fmt.Errorf("A-ASSOCIATE-RQ must contain at least one presentation context")
 	}

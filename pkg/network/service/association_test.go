@@ -362,6 +362,7 @@ func TestReceiveAssociationResponse_Accept(t *testing.T) {
 	ac := pdu.NewAAssociateAC()
 	ac.CalledAETitle = testCalledAE
 	ac.CallingAETitle = testCallingAE
+	ac.PresentationContexts = []pdu.PresentationContextAC{{ID: 1, Result: pdu.ResultAbstractSyntaxNotSupported}}
 
 	rawPDU, err := ac.Encode()
 	if err != nil {
@@ -401,6 +402,25 @@ func TestReceiveAssociationResponse_Accept(t *testing.T) {
 	// Verify AC content
 	if receivedAC.CalledAETitle != ac.CalledAETitle {
 		t.Errorf("Expected CalledAETitle %s, got %s", ac.CalledAETitle, receivedAC.CalledAETitle)
+	}
+}
+
+func TestReceiveAssociationResponseRejectsMissingPresentationContexts(t *testing.T) {
+	ac := pdu.NewAAssociateAC()
+	ac.CalledAETitle = testCalledAE
+	ac.CallingAETitle = testCallingAE
+	rawPDU, err := ac.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	service := NewService(&mockConn{readData: serializeRawPDUForTest(rawPDU)}, nil)
+	defer func() { _ = service.Close() }()
+	if err := service.setState(StateAssociationRequested); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	if _, err := service.ReceiveAssociationResponse(context.Background()); err == nil {
+		t.Fatal("ReceiveAssociationResponse() error = nil, want missing presentation context error")
 	}
 }
 
@@ -489,6 +509,73 @@ func TestReceiveAssociationRequest(t *testing.T) {
 	}
 	if receivedRQ.CallingAETitle != rq.CallingAETitle {
 		t.Errorf("Expected CallingAETitle %s, got %s", rq.CallingAETitle, receivedRQ.CallingAETitle)
+	}
+}
+
+func TestReceiveAssociationRequestUsesLocalMaximumPDULength(t *testing.T) {
+	rq := pdu.NewAAssociateRQ()
+	rq.CalledAETitle = testCalledAE
+	rq.CallingAETitle = testCallingAE
+	rq.UserInformation.MaximumLength = 32768
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID: 1, AbstractSyntax: verificationSOPClassUID, TransferSyntaxes: []string{implicitVRLittleEndianUID},
+	}}
+	rawPDU, err := rq.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+
+	conn := &mockConn{readData: serializeRawPDUForTest(rawPDU)}
+	var negotiated *association.Association
+	service := NewService(conn, nil,
+		WithMaxPDULength(4096),
+		WithAssociationNegotiator(FuncAssociationNegotiator(func(ctx context.Context, assoc *association.Association, responder AssociationResponder) error {
+			negotiated = assoc
+			assoc.PresentationContexts[0].AcceptTransferSyntaxes(false, assoc.PresentationContexts[0].ProposedTransferSyntaxes...)
+			return responder.SendAccept(ctx, assoc)
+		})),
+	)
+	defer func() { _ = service.Close() }()
+
+	if _, err := service.ReceiveAssociationRequest(context.Background()); err != nil {
+		t.Fatalf("ReceiveAssociationRequest() error = %v", err)
+	}
+	if negotiated == nil || negotiated.MaxPDULength != 32768 {
+		t.Fatalf("negotiated remote MaxPDULength = %v, want 32768", negotiated)
+	}
+	if len(conn.writeData) == 0 {
+		t.Fatal("association accept was not written")
+	}
+	acceptedRaw, err := pdu.ReadPDU(bytes.NewReader(conn.writeData))
+	if err != nil {
+		t.Fatalf("ReadPDU(A-ASSOCIATE-AC) error = %v", err)
+	}
+	accepted := &pdu.AAssociateAC{}
+	if err := accepted.Decode(acceptedRaw); err != nil {
+		t.Fatalf("Decode(A-ASSOCIATE-AC) error = %v", err)
+	}
+	if accepted.UserInformation == nil || accepted.UserInformation.MaximumLength != 4096 {
+		t.Fatalf("A-ASSOCIATE-AC maximum length = %v, want 4096", accepted.UserInformation)
+	}
+}
+
+func TestReceiveAssociationRequestRejectsUnsupportedApplicationContext(t *testing.T) {
+	rq := pdu.NewAAssociateRQ()
+	rq.CalledAETitle = testCalledAE
+	rq.CallingAETitle = testCallingAE
+	rq.ApplicationContext = "1.2.3.4"
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID: 1, AbstractSyntax: verificationSOPClassUID, TransferSyntaxes: []string{implicitVRLittleEndianUID},
+	}}
+	rawPDU, err := rq.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	service := NewService(&mockConn{readData: serializeRawPDUForTest(rawPDU)}, nil)
+	defer func() { _ = service.Close() }()
+
+	if _, err := service.ReceiveAssociationRequest(context.Background()); err == nil {
+		t.Fatal("ReceiveAssociationRequest() error = nil, want unsupported application context error")
 	}
 }
 

@@ -547,6 +547,60 @@ func TestCFindHandlerCancelBeforeFirstPendingSendsSingleCancelFinal(t *testing.T
 	}
 }
 
+func TestCFindHandlerCancelWhileWaitingForPerformedSlot(t *testing.T) {
+	service, ctx, cancel, sent := setupCapturingTestService(t)
+	defer func() { _ = service.Close() }()
+	defer cancel()
+
+	service.asyncPerformedSlots <- struct{}{}
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err := request.SetMessageID(96); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	handlerStarted := make(chan struct{})
+	service.SetHandlers(&Handlers{CFindHandler: func(context.Context, CFindOperation) error {
+		close(handlerStarted)
+		return nil
+	}})
+	if err := service.handleRequest(ctx, request); err != nil {
+		t.Fatalf("handleRequest() error = %v", err)
+	}
+
+	deadline := time.After(time.Second)
+	for {
+		service.activeOperationsMu.RLock()
+		_, registered := service.activeOperations[request.MessageID()]
+		service.activeOperationsMu.RUnlock()
+		if registered {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("request was not registered as cancellable")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if err := service.handleCCancelRequest(dimse.NewCCancelRequest(request.MessageID())); err != nil {
+		t.Fatalf("handleCCancelRequest() error = %v", err)
+	}
+
+	select {
+	case message := <-sent:
+		response, ok := message.(*dimse.CFindResponse)
+		if !ok || response.StatusCode() != status.Cancel.Code {
+			t.Fatalf("response = %T %#v, want C-FIND Cancel final", message, message)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("queued C-FIND did not produce a cancel response")
+	}
+	select {
+	case <-handlerStarted:
+		t.Fatal("queued C-FIND handler started after cancellation")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 func TestCFindHandlerCancelUnblocksPendingSendWhenQueueIsFull(t *testing.T) {
 	service := NewService(nil, nil, WithSendQueueSize(0))
 	defer func() { _ = service.Close() }()

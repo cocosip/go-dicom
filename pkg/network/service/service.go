@@ -116,6 +116,7 @@ type pendingRequest struct {
 // activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.
 type activeOperation struct {
 	token     *struct{}
+	ctx       context.Context
 	cancel    context.CancelFunc
 	lifecycle *requestLifecycle
 }

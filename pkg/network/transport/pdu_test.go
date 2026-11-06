@@ -238,6 +238,20 @@ func TestReadPDU_ExcessiveLength(t *testing.T) {
 	}
 }
 
+func TestReadPDUMaxLengthRejectsBeforeReadingPayload(t *testing.T) {
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
+
+	go func() {
+		_, _ = client.Write([]byte{pdu.TypePDataTF, 0, 0, 0, 0, 32})
+	}()
+
+	if _, err := ReadPDUMaxLength(server, time.Second, 16); err == nil {
+		t.Fatal("ReadPDUMaxLength() error = nil, want negotiated maximum error")
+	}
+}
+
 func TestWritePDU_RetriesShortWrites(t *testing.T) {
 	testPDU := &pdu.RawPDU{
 		Type: pdu.TypePDataTF,

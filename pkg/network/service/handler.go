@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
@@ -63,12 +64,25 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 }
 
 func (s *Service) registerActiveOperation(parent context.Context, messageID uint16) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(parent)
 	token := &struct{}{}
 
 	s.activeOperationsMu.Lock()
+	if existing := s.activeOperations[messageID]; existing != nil {
+		existingToken := existing.token
+		existingCtx := existing.ctx
+		s.activeOperationsMu.Unlock()
+		return existingCtx, func() {
+			s.activeOperationsMu.Lock()
+			if op := s.activeOperations[messageID]; op != nil && op.token == existingToken {
+				delete(s.activeOperations, messageID)
+			}
+			s.activeOperationsMu.Unlock()
+		}
+	}
+	ctx, cancel := context.WithCancel(parent)
 	s.activeOperations[messageID] = &activeOperation{
 		token:     token,
+		ctx:       ctx,
 		cancel:    cancel,
 		lifecycle: s.inboundRequest(messageID),
 	}
@@ -92,9 +106,8 @@ func (s *Service) registerActiveOperation(parent context.Context, messageID uint
 func (s *Service) cancelActiveOperation(messageID uint16) bool {
 	s.activeOperationsMu.Lock()
 	op, exists := s.activeOperations[messageID]
-	if exists {
-		delete(s.activeOperations, messageID)
-	}
+	// Keep the entry until the handler's unregister callback runs. This closes
+	// the race where a queued operation is cancelled as it starts dispatching.
 	s.activeOperationsMu.Unlock()
 
 	if exists {
@@ -135,13 +148,25 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 		lifecycle = s.registerInboundRequest(req)
 	}
 	lifecycle.received(ctx)
+	operationCtx := ctx
+	var unregisterOperation context.CancelFunc
+	if isCancellableRequest(req) {
+		operationCtx, unregisterOperation = s.registerActiveOperation(ctx, req.MessageID())
+	}
 
 	s.requestWg.Add(1)
 	go func() {
 		defer s.requestWg.Done()
+		if unregisterOperation != nil {
+			defer unregisterOperation()
+		}
 		if !isCancel {
-			releasePerformed, err := s.acquirePerformedOperation(ctx)
+			releasePerformed, err := s.acquirePerformedOperation(operationCtx)
 			if err != nil {
+				if errors.Is(operationCtx.Err(), context.Canceled) && !s.IsClosed() && isCancellableRequest(req) {
+					_ = s.sendCancelledResponse(req)
+					return
+				}
 				lifecycle.finishError(ctx, err)
 				s.unregisterInboundRequest(req.MessageID(), lifecycle)
 				_ = s.abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, err, false)
@@ -162,6 +187,30 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 		}
 	}()
 	return nil
+}
+
+func isCancellableRequest(req dimse.Request) bool {
+	switch req.(type) {
+	case *dimse.CFindRequest, *dimse.CMoveRequest, *dimse.CGetRequest:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Service) sendCancelledResponse(req dimse.Request) error {
+	var response dimse.Response
+	switch request := req.(type) {
+	case *dimse.CFindRequest:
+		response = dimse.NewCFindResponseFromRequest(request, status.Cancel, nil)
+	case *dimse.CMoveRequest:
+		response = dimse.NewCMoveResponseFromRequest(request, status.Cancel)
+	case *dimse.CGetRequest:
+		response = dimse.NewCGetResponseFromRequest(request, status.Cancel)
+	default:
+		return nil
+	}
+	return s.Send(context.Background(), response)
 }
 
 // dispatchRequest routes a request to the appropriate handler by command field.

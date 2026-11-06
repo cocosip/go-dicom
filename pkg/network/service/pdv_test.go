@@ -249,6 +249,12 @@ func TestParsePDataTFPDU(t *testing.T) {
 	}
 }
 
+func TestParsePDataTFPDURejectsEmptyPDU(t *testing.T) {
+	if _, err := ParsePDataTFPDU(pdu.NewRawPDU(pdu.TypePDataTF, nil)); err == nil {
+		t.Fatal("ParsePDataTFPDU() error = nil, want missing PDV error")
+	}
+}
+
 func TestFragmentData(t *testing.T) {
 	tests := []struct {
 		name          string
