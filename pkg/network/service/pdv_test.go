@@ -5,10 +5,25 @@ package service
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
+
+// TestParsePDataTFRejectsOversizedPDVLength verifies a crafted PDV length that
+// exceeds the PDU payload is rejected instead of causing a slice panic (32-bit
+// int conversion) or a huge allocation.
+func TestParsePDataTFRejectsOversizedPDVLength(t *testing.T) {
+	data := make([]byte, 6)
+	binary.BigEndian.PutUint32(data[0:4], 0xFFFFFFF0)
+	data[4] = 0x01 // presentation context ID
+	data[5] = 0x03 // control header
+
+	if _, err := ParsePDataTFPDU(pdu.NewRawPDU(pdu.TypePDataTF, data)); err == nil {
+		t.Fatal("ParsePDataTFPDU() accepted an oversized PDV length")
+	}
+}
 
 func TestPDVEncode(t *testing.T) {
 	pdv := &PDV{
@@ -263,7 +278,7 @@ func TestFragmentData(t *testing.T) {
 		wantFragments int
 	}{
 		{"Small data", []byte("small"), 16384, 1},
-		{"Empty data", []byte{}, 16384, 1},
+		{"Empty data", []byte{}, 16384, 0},            // no empty PDVs (PS3.8 E.1)
 		{"Large data", make([]byte, 50000), 16384, 4}, // Should split into multiple fragments
 		{"Exact fit", make([]byte, 16384-12), 16384, 1},
 	}

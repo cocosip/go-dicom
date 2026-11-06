@@ -104,6 +104,11 @@ type Config struct {
 	// Default: 16384 bytes
 	MaxPDULength uint32
 
+	// MaxMessageSize bounds the total reassembled size of a single inbound
+	// DIMSE message. Zero disables the bound.
+	// Default: 512 MiB
+	MaxMessageSize uint32
+
 	// ConnectTimeout is the timeout for TCP connection
 	// Default: 10 seconds
 	ConnectTimeout time.Duration
@@ -228,6 +233,14 @@ func WithCalledAE(ae string) Option {
 func WithMaxPDULength(length uint32) Option {
 	return func(o *Config) {
 		o.MaxPDULength = length
+	}
+}
+
+// WithMaxMessageSize bounds the reassembled size of a single inbound DIMSE
+// message. Zero disables the bound.
+func WithMaxMessageSize(size uint32) Option {
+	return func(o *Config) {
+		o.MaxMessageSize = size
 	}
 }
 
@@ -357,6 +370,7 @@ func defaultClientConfig() *Config {
 		CallingAE:                                "GO_DICOM_SCU",
 		CalledAE:                                 "ANY_SCP",
 		MaxPDULength:                             16384,
+		MaxMessageSize:                           512 << 20,
 		ConnectTimeout:                           10 * time.Second,
 		RequestTimeout:                           30 * time.Second,
 		TransportWriteTimeout:                    30 * time.Second,
@@ -917,6 +931,7 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 		service.WithEventObserver(c.config.EventObserver),
 		service.WithMetricsObserver(c.config.MetricsObserver),
 		service.WithMaxPDULength(c.config.MaxPDULength),
+		service.WithMaxMessageSize(c.config.MaxMessageSize),
 		service.WithRequestTimeout(c.config.RequestTimeout),
 		service.WithReadTimeout(c.config.TransportReadTimeout),
 		service.WithWriteTimeout(c.config.TransportWriteTimeout),

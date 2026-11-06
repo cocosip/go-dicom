@@ -259,7 +259,7 @@ func TestToAAssociateACIncludesOnlyExplicitlyAcceptedNegotiation(t *testing.T) {
 
 	assoc := FromAAssociateRQ(rq, transfer.NewRegistry())
 	assoc.PresentationContexts[0].Accept(assoc.PresentationContexts[0].ProposedTransferSyntaxes[0])
-	withoutAcceptance := ToAAssociateAC(assoc)
+	withoutAcceptance := ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
 	if got := withoutAcceptance.UserInformation.ExtendedNegotiations; len(got) != 0 {
 		t.Fatalf("unaccepted extended negotiation was echoed: %#v", got)
 	}
@@ -270,7 +270,7 @@ func TestToAAssociateACIncludesOnlyExplicitlyAcceptedNegotiation(t *testing.T) {
 	extended := assoc.FindExtendedNegotiation(testStorageSOPClassUID)
 	extended.AcceptApplicationInfo([]byte{1, 0, 1})
 	assoc.UserIdentity.ServerResponse = []byte{}
-	accepted := ToAAssociateAC(assoc)
+	accepted := ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
 	if got := accepted.UserInformation.ExtendedNegotiations; len(got) != 1 ||
 		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
 		t.Fatalf("accepted extended negotiation = %#v", got)
@@ -293,7 +293,7 @@ func TestToAAssociateACBindsAcceptedRoleToPresentationContext(t *testing.T) {
 	assoc.RequestedRoleSelections = []*RoleSelection{NewRoleSelection(storageSOPClassUID, 1, 1)}
 	assoc.RoleSelections = []*RoleSelection{NewRoleSelection(storageSOPClassUID, 1, 1)}
 
-	ac := ToAAssociateAC(assoc)
+	ac := ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
 	if len(ac.UserInformation.SCPSCURoleSelections) != 1 {
 		t.Fatalf("role selections = %#v, want one accepted role", ac.UserInformation.SCPSCURoleSelections)
 	}

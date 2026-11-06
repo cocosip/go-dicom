@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -92,6 +93,14 @@ type Service struct {
 
 	// Tracks in-flight request handler goroutines so Close() can wait for them.
 	requestWg sync.WaitGroup
+	// requestWgAddMu serializes requestWg.Add with the shutdown flag so that no
+	// handler is registered after requestWg.Wait starts (WaitGroup misuse panic).
+	requestWgAddMu sync.Mutex
+	requestsClosed bool
+
+	// concurrentRequests counts running inbound request handlers. It bounds the
+	// number of goroutines a peer can create (see maxConcurrentRequests).
+	concurrentRequests atomic.Int64
 
 	connectionClosedOnce sync.Once
 	shutdownOnce         sync.Once
@@ -116,6 +125,10 @@ type pendingRequest struct {
 	lifecycle      *requestLifecycle
 	timeoutTimer   *time.Timer
 	timeoutVersion uint64
+	// finalDelivered is set once a non-pending response has been handed to the
+	// caller, so a duplicate/late final response is dropped instead of blocking
+	// the receive loop on a full response channel.
+	finalDelivered atomic.Bool
 }
 
 // activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.
@@ -492,6 +505,13 @@ func (s *Service) initiateClose(targetState State, recordErr error) error {
 
 	var err error
 	s.closeOnce.Do(func() {
+		// Stop registering new request handlers before anything else: no Add
+		// may happen after Wait starts, and no handler may register while the
+		// lifecycle drain below is running.
+		s.requestWgAddMu.Lock()
+		s.requestsClosed = true
+		s.requestWgAddMu.Unlock()
+
 		s.cancel()
 		close(s.closeCh)
 

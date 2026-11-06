@@ -79,19 +79,22 @@ var (
 	Cancel = NewStatus(0xFE00, StateCancel, "Cancel")
 )
 
-// Warning statuses (0x0001-0x00FF)
+// Warning statuses (0x0001 or 0xBxxx or 0x0107 or 0x0116)
 var (
-	AttributeListError       = NewStatus(0x0107, StateWarning, "Attribute list error")
-	AttributeValueOutOfRange = NewStatus(0x0116, StateWarning, "Attribute value out of range")
+	// WarningRequestedOptionalAttributesNotSupported is the 0x0001 Warning
+	// status. Note that 0x0001 is a Warning per PS3.7 Annex C, not a Failure.
+	WarningRequestedOptionalAttributesNotSupported = NewStatus(0x0001, StateWarning, "Requested optional Attributes are not supported")
+	AttributeListError                             = NewStatus(0x0107, StateWarning, "Attribute list error")
+	AttributeValueOutOfRange                       = NewStatus(0x0116, StateWarning, "Attribute value out of range")
 )
 
 // Failure statuses (0x0100-0xFEFF)
 
 // General failure statuses
 var (
-	RefusedOutOfResources            = NewStatus(0x0110, StateFailure, "Refused: Out of resources")
 	RefusedMoveDestinationUnknown    = NewStatus(0xA801, StateFailure, "Refused: Move destination unknown")
-	ErrorCannotUnderstand            = NewStatus(0x0122, StateFailure, "Cannot understand")
+	RefusedSOPClassNotSupported      = NewStatus(0x0122, StateFailure, "Refused: SOP class not supported")
+	RefusedNotAuthorized             = NewStatus(0x0124, StateFailure, "Refused: Not authorized")
 	ErrorDataSetDoesNotMatchSOPClass = NewStatus(0xA900, StateFailure, "Dataset does not match SOP class")
 	ErrorDuplicateInvocation         = NewStatus(0x0210, StateFailure, "Duplicate invocation")
 	ErrorDuplicateSOPInstance        = NewStatus(0x0111, StateFailure, "Duplicate SOP instance")
@@ -109,7 +112,6 @@ var (
 	ErrorProcessingFailure           = NewStatus(0x0110, StateFailure, "Processing failure")
 	ErrorResourceLimitation          = NewStatus(0x0213, StateFailure, "Resource limitation")
 	ErrorUnrecognizedOperation       = NewStatus(0x0211, StateFailure, "Unrecognized operation")
-	ErrorUnexpectedRequest           = NewStatus(0x0001, StateFailure, "Unexpected request")
 )
 
 // C-STORE specific statuses
@@ -186,7 +188,7 @@ var (
 	NSetFailureProcessingFailure        = NewStatus(0x0110, StateFailure, "Processing failure")
 	NSetFailureNoSuchObjectInstance     = NewStatus(0x0112, StateFailure, "No such object instance")
 	NSetFailureInvalidAttributeValue    = NewStatus(0x0106, StateFailure, "Invalid attribute value")
-	NSetFailureMissingAttributeValue    = NewStatus(0x0120, StateFailure, "Missing attribute value")
+	NSetFailureMissingAttribute         = NewStatus(0x0120, StateFailure, "Missing attribute")
 	NSetWarningAttributeListError       = NewStatus(0x0107, StateWarning, "Attribute list error")
 	NSetWarningAttributeValueOutOfRange = NewStatus(0x0116, StateWarning, "Attribute value out of range")
 )
@@ -220,36 +222,71 @@ var (
 	NDeleteFailureNoSuchObjectInstance = NewStatus(0x0112, StateFailure, "No such object instance")
 )
 
+// statusByCode is the canonical Status for every code with a named status in
+// this package. It is built once at initialization with constant keys, so a
+// duplicated code is a compile-time error rather than an ambiguous lookup.
+var statusByCode = map[uint16]*Status{
+	0x0000: Success,
+	0x0001: WarningRequestedOptionalAttributesNotSupported,
+	0x0105: ErrorNoSuchAttribute,
+	0x0106: ErrorInvalidAttributeValue,
+	0x0107: AttributeListError,
+	0x0110: ErrorProcessingFailure,
+	0x0111: ErrorDuplicateSOPInstance,
+	0x0112: ErrorNoSuchObjectInstance,
+	0x0113: ErrorNoSuchEventType,
+	0x0114: ErrorNoSuchArgument,
+	0x0115: ErrorInvalidArgumentValue,
+	0x0116: AttributeValueOutOfRange,
+	0x0117: ErrorInvalidObjectInstance,
+	0x0118: ErrorNoSuchSOPClass,
+	0x0120: ErrorMissingAttribute,
+	0x0121: ErrorMissingAttributeValue,
+	0x0122: RefusedSOPClassNotSupported,
+	0x0123: NActionFailureNoSuchActionType,
+	0x0124: RefusedNotAuthorized,
+	0x0210: ErrorDuplicateInvocation,
+	0x0211: ErrorUnrecognizedOperation,
+	0x0212: ErrorMistypedArgument,
+	0x0213: ErrorResourceLimitation,
+	// Service-specific Axxx codes share a Status: the class is the same and
+	// the exact text differs per service class.
+	0xA700: CStoreRefusedOutOfResources,
+	0xA701: CGetRefusedOutOfResources,
+	0xA702: CGetRefusedOutOfResourcesSubOps,
+	0xA801: RefusedMoveDestinationUnknown,
+	0xA900: ErrorDataSetDoesNotMatchSOPClass,
+	// 0xB000 is "Coercion of data elements" for C-STORE and "Sub-operations
+	// complete (failures/warnings)" for C-GET/C-MOVE; the class is Warning.
+	0xB000: CStoreWarningCoercionOfDataElements,
+	0xB006: CStoreWarningElementsDiscarded,
+	0xB007: CStoreWarningDataSetDoesNotMatchSOPClass,
+	0xC000: CStoreErrorCannotUnderstand,
+	0xFE00: Cancel,
+	0xFF00: Pending,
+	0xFF01: PendingWarning,
+}
+
 // LookupStatus looks up a status by its code.
-// Returns a generic status if the specific code is not found.
+// Named statuses are returned as the package-level Status values; other codes
+// are classified into a Status Class per PS3.7 Annex C.
 func LookupStatus(code uint16) *Status {
-	// Check exact matches in common statuses
-	statuses := []*Status{
-		Success,
-		Pending, PendingWarning,
-		Cancel,
-		AttributeListError, AttributeValueOutOfRange,
-		// Add more as needed
+	if s, ok := statusByCode[code]; ok {
+		return s
 	}
 
-	for _, s := range statuses {
-		if s.Code == code {
-			return s
-		}
-	}
-
-	// Return a generic status based on code range
-	if code == 0x0000 {
+	// Return a generic status based on code range (PS3.7 Annex C).
+	switch {
+	case code == 0x0000:
 		return NewStatus(code, StateSuccess, "Success")
-	} else if code == 0xFF00 || code == 0xFF01 {
+	case code == 0xFF00 || code == 0xFF01:
 		return NewStatus(code, StatePending, "Pending")
-	} else if code == 0xFE00 {
+	case code == 0xFE00:
 		return NewStatus(code, StateCancel, "Cancel")
-	} else if code >= 0x0001 && code <= 0x00FF {
+	case code >= 0x0001 && code <= 0x00FF:
 		return NewStatus(code, StateWarning, "Warning")
-	} else if code >= 0xB000 && code <= 0xBFFF {
+	case code >= 0xB000 && code <= 0xBFFF:
 		return NewStatus(code, StateWarning, "Warning")
 	}
 	return NewStatus(code, StateFailure, "Failure")
-
 }

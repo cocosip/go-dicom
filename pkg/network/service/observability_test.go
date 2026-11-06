@@ -132,7 +132,7 @@ func TestAssociationAcceptedSummaryRetainsAbstractSyntaxFromRequest(t *testing.T
 	svc := NewService(&recordingConn{}, assoc)
 	t.Cleanup(func() { _ = svc.Close() })
 
-	ac := association.ToAAssociateAC(assoc)
+	ac := association.ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
 	info := svc.associationObservationForAC(ac)
 	contexts := info.PresentationContexts.String()
 	if !strings.Contains(contexts, testCTImageStorageUID) ||
@@ -152,12 +152,7 @@ func TestObservabilityAssociationRequestAndBytes(t *testing.T) {
 	)
 	defer func() { _ = service.Close() }()
 
-	rq := &pdu.AAssociateRQ{
-		ProtocolVersion:    1,
-		CalledAETitle:      testCalledAE,
-		CallingAETitle:     testCallingAE,
-		ApplicationContext: testApplicationContext,
-	}
+	rq := newTestRQ()
 	if err := service.SendAssociationRequest(context.Background(), rq); err != nil {
 		t.Fatalf("SendAssociationRequest() error = %v", err)
 	}

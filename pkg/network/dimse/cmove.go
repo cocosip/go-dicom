@@ -60,15 +60,18 @@ func newCMoveRequestWithSOPClassUID(level QueryRetrieveLevel, moveDestination st
 	// Move Destination AE Title
 	_ = command.Add(element.NewString(tag.MoveDestination, vr.AE, []string{moveDestination}))
 
-	// CommandDataSetType - dataset is present (identifier)
-	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
-
-	// Add QueryRetrieveLevel to the identifier dataset if not already present
+	// CommandDataSetType - dataset is present only when an identifier is attached
 	if identifier != nil {
-		_, exists := identifier.Get(tag.QueryRetrieveLevel)
-		if !exists {
-			_ = identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
-		}
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+	} else {
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
+	}
+
+	// QueryRetrieveLevel is added or replaced so that the level argument always
+	// wins over a stale value already present in the identifier dataset. Note
+	// that this mutates the caller's dataset.
+	if identifier != nil {
+		_ = identifier.AddOrUpdate(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
 	}
 
 	return &CMoveRequest{
@@ -134,7 +137,7 @@ type CMoveResponse struct {
 	affectedSOPClassUID       string
 	messageIDBeingRespondedTo uint16
 
-	// Sub-operation counters (optional, present in pending responses)
+	// Sub-operation counters (always present; zero when not reported)
 	numberOfRemainingSubOperations uint16
 	numberOfCompletedSubOperations uint16
 	numberOfFailedSubOperations    uint16
@@ -142,6 +145,9 @@ type CMoveResponse struct {
 }
 
 // NewCMoveResponse creates a new C-MOVE-RSP message.
+//
+// The four sub-operation count elements are always added (zero by default);
+// use SetSubOperationCounts to report progress.
 //
 // Status codes:
 //   - status.CMovePending (0xFF00): Pending (sub-operations are continuing)
@@ -170,6 +176,9 @@ func NewCMoveResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopCla
 	// CommandDataSetType - no dataset
 	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
+	// Sub-operation counts are always present (PS3.4 C.4.2.2.1).
+	addSubOperationCounts(command, 0, 0, 0, 0)
+
 	return &CMoveResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
 		statusCode:                s.Code,
@@ -178,23 +187,22 @@ func NewCMoveResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopCla
 	}
 }
 
+// SetSubOperationCounts sets the four sub-operation count elements and the
+// cached values. It can be used on any C-MOVE-RSP, pending or final.
+func (r *CMoveResponse) SetSubOperationCounts(remaining, completed, failed, warning uint16) {
+	addSubOperationCounts(r.command, remaining, completed, failed, warning)
+	r.numberOfRemainingSubOperations = remaining
+	r.numberOfCompletedSubOperations = completed
+	r.numberOfFailedSubOperations = failed
+	r.numberOfWarningSubOperations = warning
+}
+
 // NewCMoveResponsePending creates a pending C-MOVE-RSP message with sub-operation counts.
 func NewCMoveResponsePending(messageIDBeingRespondedTo uint16, sopClassUID string,
 	remaining, completed, failed, warning uint16) *CMoveResponse {
 
 	resp := NewCMoveResponse(messageIDBeingRespondedTo, status.CMovePending, sopClassUID)
-
-	// Add sub-operation counters
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfRemainingSuboperations, []uint16{remaining}))
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfCompletedSuboperations, []uint16{completed}))
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfFailedSuboperations, []uint16{failed}))
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfWarningSuboperations, []uint16{warning}))
-
-	resp.numberOfRemainingSubOperations = remaining
-	resp.numberOfCompletedSubOperations = completed
-	resp.numberOfFailedSubOperations = failed
-	resp.numberOfWarningSubOperations = warning
-
+	resp.SetSubOperationCounts(remaining, completed, failed, warning)
 	return resp
 }
 
@@ -245,10 +253,10 @@ func (r *CMoveResponse) NumberOfWarningSubOperations() uint16 {
 	return r.numberOfWarningSubOperations
 }
 
-// HasSubOperationCounts returns true if this response includes sub-operation counts.
+// HasSubOperationCounts reports whether the four sub-operation count elements
+// are present in the command set. Constructors always add them.
 func (r *CMoveResponse) HasSubOperationCounts() bool {
-	// Sub-operation counts are typically present in pending responses
-	return r.statusCode == status.CMovePending.Code
+	return hasSubOperationCounts(r.command)
 }
 
 // String returns a human-readable representation.

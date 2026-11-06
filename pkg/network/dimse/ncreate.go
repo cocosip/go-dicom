@@ -109,7 +109,8 @@ type NCreateResponse struct {
 //   - s: Status (use status.NCreateSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID of the created object
-//   - attributeList: Optional dataset containing attribute values of the created instance
+//   - attributeList: Optional dataset containing attribute values of the
+//     created instance; it is attached only when the status is Success
 func NewNCreateResponse(
 	messageIDBeingRespondedTo uint16,
 	s *status.Status,
@@ -132,15 +133,16 @@ func NewNCreateResponse(
 	// Status
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
-	// CommandDataSetType
-	if attributeList != nil && s.IsSuccess() {
+	// CommandDataSetType - attribute list only on Success
+	data := nResponseData(s, attributeList)
+	if data != nil {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &NCreateResponse{
-		BaseResponse:              NewBaseResponse(command, attributeList),
+		BaseResponse:              NewBaseResponse(command, data),
 		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,

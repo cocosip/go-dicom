@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 )
 
@@ -208,25 +209,45 @@ type ConnectionLifecycleHandler interface {
 	OnConnectionClosed(ctx context.Context, err error)
 }
 
-// DefaultAssociationNegotiator is a simple implementation that accepts all presentation contexts.
-// It accepts each proposed presentation context with the first proposed transfer syntax.
-type DefaultAssociationNegotiator struct{}
+// DefaultAssociationNegotiator is a simple implementation that accepts all
+// presentation contexts with a transfer syntax it knows about.
+type DefaultAssociationNegotiator struct {
+	// Registry resolves proposed Transfer Syntax UIDs. When set, a context is
+	// accepted only with a proposed syntax known to the registry; otherwise it
+	// is rejected with result=4 (transfer-syntaxes-not-supported, PS3.8
+	// 9.3.3.2). When nil, the first proposed syntax is accepted.
+	Registry *transfer.Registry
+}
 
-// OnAssociationRequest accepts all association requests and accepts all presentation contexts
-// with their first proposed transfer syntax.
+// OnAssociationRequest accepts all association requests and accepts each
+// presentation context with the first proposed transfer syntax it supports.
 func (n *DefaultAssociationNegotiator) OnAssociationRequest(ctx context.Context, assoc *association.Association, responder AssociationResponder) error {
-	// Accept all presentation contexts with first transfer syntax
 	for _, pc := range assoc.PresentationContexts {
-		if len(pc.ProposedTransferSyntaxes) > 0 {
-			pc.Accept(pc.ProposedTransferSyntaxes[0])
-		} else {
-			// No transfer syntaxes proposed, reject
+		accepted := false
+		for _, ts := range pc.ProposedTransferSyntaxes {
+			if n.supportsTransferSyntax(ts) {
+				pc.Accept(ts)
+				accepted = true
+				break
+			}
+		}
+		if !accepted {
 			pc.Reject(association.ResultTransferSyntaxesNotSupported)
 		}
 	}
 
 	// Send association accept
 	return responder.SendAccept(ctx, assoc)
+}
+
+func (n *DefaultAssociationNegotiator) supportsTransferSyntax(ts *transfer.Syntax) bool {
+	if n.Registry == nil {
+		return true
+	}
+	if ts == nil || ts.UID() == nil {
+		return false
+	}
+	return n.Registry.Query(ts.UID()) != nil
 }
 
 // DefaultAssociationReleaseHandler is a simple implementation that accepts all release requests.

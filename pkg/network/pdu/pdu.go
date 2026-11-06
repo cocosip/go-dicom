@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 )
 
 // PDU type constants as defined in DICOM standard PS3.8
@@ -45,6 +46,12 @@ const (
 	// MaxPDUDataLength is the hard safety cap for inbound PDU payloads.
 	MaxPDUDataLength uint32 = 100 * 1024 * 1024
 )
+
+// pduDataChunkSize is the allocation/read granularity used for large PDU
+// payloads. Payloads up to this size are read in a single allocation; larger
+// payloads grow in chunks so a peer that declares a huge PDU length but sends
+// little or no data cannot force a large up-front allocation.
+const pduDataChunkSize = 1 << 20 // 1 MiB
 
 // TypeString returns the string representation of a PDU type.
 func TypeString(pduType byte) string {
@@ -85,7 +92,7 @@ type RawPDU struct {
 
 // NewRawPDU creates a new RawPDU with the given type and data.
 func NewRawPDU(pduType byte, data []byte) *RawPDU {
-	if len(data) > int(math.MaxUint32) {
+	if uint64(len(data)) > math.MaxUint32 {
 		// Infeasible in practice, but guard to satisfy static analysis
 		panic(fmt.Sprintf("raw PDU data too large: %d", len(data)))
 	}
@@ -104,10 +111,12 @@ func (p *RawPDU) String() string {
 
 // Read reads a RawPDU from an io.Reader.
 // It reads the 6-byte header first, then reads the PDU data based on the length field.
+// The payload buffer grows incrementally, so a peer that declares a large PDU
+// but sends little or no data cannot force a large up-front allocation.
 func (p *RawPDU) Read(r io.Reader) error {
 	// Read 6-byte header
-	header := make([]byte, 6)
-	if _, err := io.ReadFull(r, header); err != nil {
+	var header [6]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
 		return fmt.Errorf("reading PDU header: %w", err)
 	}
 
@@ -124,23 +133,54 @@ func (p *RawPDU) Read(r io.Reader) error {
 	}
 
 	// Read PDU data
-	if p.Length > 0 {
-		p.Data = make([]byte, p.Length)
-		if _, err := io.ReadFull(r, p.Data); err != nil {
-			return fmt.Errorf("reading PDU data (length=%d): %w", p.Length, err)
-		}
-	} else {
-		p.Data = nil
+	data, err := ReadPDUData(r, p.Length)
+	if err != nil {
+		return fmt.Errorf("reading PDU data (length=%d): %w", p.Length, err)
 	}
+	p.Data = data
 
 	return nil
+}
+
+// ReadPDUData reads exactly length payload bytes from r.
+//
+// Payloads up to 1 MiB are read into a single allocation. Larger payloads are
+// read in 1 MiB chunks and only appended once a chunk has been received, so an
+// announced length that is never delivered holds at most about one chunk of
+// memory instead of the full announced size.
+func ReadPDUData(r io.Reader, length uint32) ([]byte, error) {
+	if length == 0 {
+		return nil, nil
+	}
+	if length <= pduDataChunkSize {
+		data := make([]byte, length)
+		if _, err := io.ReadFull(r, data); err != nil {
+			return nil, err
+		}
+		return data, nil
+	}
+
+	chunk := make([]byte, pduDataChunkSize)
+	data := make([]byte, 0, pduDataChunkSize)
+	for remaining := length; remaining > 0; {
+		size := remaining
+		if size > pduDataChunkSize {
+			size = pduDataChunkSize
+		}
+		if _, err := io.ReadFull(r, chunk[:size]); err != nil {
+			return nil, err
+		}
+		data = append(data, chunk[:size]...)
+		remaining -= size
+	}
+	return data, nil
 }
 
 // Write writes the RawPDU to an io.Writer.
 // It writes the 6-byte header followed by the PDU data.
 func (p *RawPDU) Write(w io.Writer) error {
 	// Update length from data
-	if len(p.Data) > int(math.MaxUint32) {
+	if uint64(len(p.Data)) > math.MaxUint32 {
 		return fmt.Errorf("raw PDU data too large: %d", len(p.Data))
 	}
 	p.Length = uint32(len(p.Data)) // #nosec G115 -- bounded by check above
@@ -150,6 +190,21 @@ func (p *RawPDU) Write(w io.Writer) error {
 	header[0] = p.Type     // #nosec G602 -- fixed-size header array [6]byte
 	header[1] = p.Reserved // #nosec G602 -- fixed-size header array [6]byte
 	binary.BigEndian.PutUint32(header[2:6], p.Length)
+
+	// Fast path: a single writev call on a TCP connection avoids two syscalls
+	// per PDU. Only *net.TCPConn is used: it never short-writes without an
+	// error, unlike an arbitrary io.Writer.
+	if conn, ok := w.(*net.TCPConn); ok && len(p.Data) > 0 {
+		buffers := net.Buffers{header[:], p.Data}
+		n, err := buffers.WriteTo(conn)
+		if err != nil {
+			return fmt.Errorf("writing PDU: %w", err)
+		}
+		if n != int64(len(header)+len(p.Data)) {
+			return fmt.Errorf("writing PDU: wrote %d of %d bytes", n, len(header)+len(p.Data))
+		}
+		return nil
+	}
 
 	// Write header
 	if err := writeFull(w, header[:]); err != nil {

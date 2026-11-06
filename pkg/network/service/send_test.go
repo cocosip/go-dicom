@@ -27,6 +27,17 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
+// acceptedService returns a Service in the established state for tests that
+// exercise encoding/transmission without running the association handshake.
+func acceptedService(t *testing.T, conn net.Conn, assoc *association.Association, opts ...Option) *Service {
+	t.Helper()
+	svc := NewService(conn, assoc, opts...)
+	if err := svc.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	return svc
+}
+
 func newServiceTranscodeManager(t *testing.T, codecs ...codec.Codec) *transcode.Manager {
 	t.Helper()
 	registry := codec.NewRegistry()
@@ -131,7 +142,7 @@ func TestSendMessage(t *testing.T) {
 	assoc := createTestAssociation()
 
 	// Create service with association
-	service := NewService(client, assoc, WithAssociationRequestor(true))
+	service := acceptedService(t, client, assoc, WithAssociationRequestor(true))
 	defer func() { _ = service.Close() }()
 
 	// Create a send request
@@ -191,7 +202,7 @@ func TestSendMessageUsesNegotiatedRemoteMaxPDULength(t *testing.T) {
 	assoc.MaxPDULength = 256
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true), WithMaxPDULength(4096))
+	service := acceptedService(t, conn, assoc, WithAssociationRequestor(true), WithMaxPDULength(4096))
 
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
 	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}))
@@ -237,7 +248,7 @@ func TestSendMessagePrefersCStoreSourceTransferSyntax(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := acceptedService(t, conn, assoc, WithAssociationRequestor(true))
 	if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("sendMessage() error = %v", err)
 	}
@@ -273,7 +284,7 @@ func TestSendMessageTranscodesCStoreToAcceptedTransferSyntax(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc,
+	service := acceptedService(t, conn, assoc,
 		WithAssociationRequestor(true),
 		WithTranscodeManager(newServiceTranscodeManager(t)),
 	)
@@ -312,7 +323,7 @@ func TestSendMessageRejectsCStoreTranscodingWithoutManager(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := NewService(&recordingConn{}, assoc, WithAssociationRequestor(true))
+	service := acceptedService(t, &recordingConn{}, assoc, WithAssociationRequestor(true))
 	err = service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)})
 	if !errors.Is(err, ErrTranscodeManagerUnavailable) {
 		t.Fatalf("sendMessage() error = %v, want ErrTranscodeManagerUnavailable", err)
@@ -335,7 +346,7 @@ func TestSendMessageRejectsCStoreWithoutUsableTransferSyntax(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc,
+	service := acceptedService(t, conn, assoc,
 		WithAssociationRequestor(true),
 		WithTranscodeManager(newServiceTranscodeManager(t)),
 	)
@@ -376,7 +387,7 @@ func TestSendMessageUsesRegisteredCodecForCStoreTranscoding(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc,
+	service := acceptedService(t, conn, assoc,
 		WithAssociationRequestor(true),
 		WithTranscodeManager(newServiceTranscodeManager(t,
 			passthroughCodec{syntax: transfer.JPEG2000Lossless},
@@ -418,7 +429,7 @@ func TestSendMessageConvertsDecodedCStorePixelsToAcceptedBigEndian(t *testing.T)
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc,
+	service := acceptedService(t, conn, assoc,
 		WithAssociationRequestor(true),
 		WithTranscodeManager(newServiceTranscodeManager(t,
 			passthroughCodec{syntax: transfer.JPEG2000Lossless},
@@ -501,7 +512,7 @@ func TestSendMessageRejectsCStorePixelDataWithoutSourceTransferSyntax(t *testing
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := acceptedService(t, conn, assoc, WithAssociationRequestor(true))
 	err = service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)})
 	if err == nil {
 		t.Fatal("sendMessage() error = nil, want missing source transfer syntax error")
@@ -527,7 +538,7 @@ func TestSendMessageDoesNotRequireCodecWithoutPixelData(t *testing.T) {
 	}
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := acceptedService(t, conn, assoc, WithAssociationRequestor(true))
 	if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("sendMessage() error = %v, want direct encoding without a pixel codec", err)
 	}
@@ -580,7 +591,7 @@ func TestSendMessageValidatesExplicitCStoreContextWithoutPixelData(t *testing.T)
 			msg.SetPresentationContextID(3)
 
 			conn := &recordingConn{}
-			service := NewService(conn, assoc, WithAssociationRequestor(true))
+			service := acceptedService(t, conn, assoc, WithAssociationRequestor(true))
 			err = service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)})
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("sendMessage() error = %v, want error containing %q", err, tt.wantErr)
@@ -617,7 +628,7 @@ func TestDecodedCStoreDatasetCanBeForwarded(t *testing.T) {
 	assoc := association.NewAssociation("FORWARD-SCU", "DESTINATION-SCP")
 	addAcceptedPresentationContext(t, assoc, 3, transfer.ExplicitVRLittleEndian)
 	conn := &recordingConn{}
-	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	service := acceptedService(t, conn, assoc, WithAssociationRequestor(true))
 	if err := service.sendMessage(&sendRequest{message: forwardMessage, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("forward sendMessage() error = %v", err)
 	}
@@ -639,7 +650,7 @@ func TestSendMessageHonorsExplicitCStorePresentationContext(t *testing.T) {
 	msg.SetPresentationContextID(3)
 
 	conn := &recordingConn{}
-	service := NewService(conn, assoc,
+	service := acceptedService(t, conn, assoc,
 		WithAssociationRequestor(true),
 		WithTranscodeManager(newServiceTranscodeManager(t)),
 	)
@@ -737,7 +748,7 @@ func TestSendMessageReturnsErrorWhenMaxPDUTooSmall(t *testing.T) {
 	assoc := createTestAssociation()
 	assoc.MaxPDULength = 11
 
-	service := NewService(&recordingConn{}, assoc, WithAssociationRequestor(true))
+	service := acceptedService(t, &recordingConn{}, assoc, WithAssociationRequestor(true))
 
 	req := dimse.NewCEchoRequest()
 	if err := req.SetMessageID(1); err != nil {

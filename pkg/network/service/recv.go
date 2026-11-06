@@ -10,7 +10,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 	"github.com/cocosip/go-dicom/pkg/network/transport"
@@ -57,7 +60,11 @@ func (s *Service) recvLoop(ctx context.Context) error {
 			// Read PDU from connection
 			rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), s.config.maxPDULength)
 			if err != nil {
-				if errors.Is(err, transport.ErrPDULengthExceeded) {
+				switch {
+				case errors.Is(err, transport.ErrUnrecognizedPDUType):
+					// PS3.8 9.3.8: unrecognized PDU -> A-ABORT(unrecognized-PDU).
+					_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnrecognizedPDU)
+				case errors.Is(err, transport.ErrPDULengthExceeded):
 					_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
 				}
 				return fmt.Errorf("failed to read PDU: %w", err)
@@ -69,6 +76,9 @@ func (s *Service) recvLoop(ctx context.Context) error {
 			case pdu.TypePDataTF:
 				// Handle P-DATA-TF: Parse PDVs and process DIMSE messages
 				if err := s.handlePDataTF(rawPDU, fragments); err != nil {
+					if !s.GetState().IsTerminal() {
+						_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
+					}
 					return fmt.Errorf("failed to handle P-DATA-TF: %w", err)
 				}
 
@@ -126,6 +136,23 @@ type dimseMessageFragments struct {
 	expectsDataset  bool
 }
 
+// validateCommandDataset enforces the PS3.7 rule that the command set only
+// contains group 0000 elements and that the mandatory Command Field is present.
+func validateCommandDataset(ds *dataset.Dataset) error {
+	if ds == nil {
+		return fmt.Errorf("command dataset is nil")
+	}
+	if _, ok := ds.GetString(tag.CommandField); !ok {
+		return fmt.Errorf("missing Command Field (0000,0001)")
+	}
+	for _, elem := range ds.Elements() {
+		if elem.Tag().Group() != 0x0000 {
+			return fmt.Errorf("element %s is not a command element (group 0000)", elem.Tag())
+		}
+	}
+	return nil
+}
+
 // messageSizeLimit returns the maximum reassembled DIMSE message size.
 // Zero means unlimited.
 func (s *Service) messageSizeLimit() uint32 {
@@ -166,11 +193,19 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 	if err != nil {
 		return fmt.Errorf("failed to decode DIMSE message: %w", err)
 	}
+	if err := validateCommandDataset(commandDS); err != nil {
+		return fmt.Errorf("invalid command dataset: %w", err)
+	}
 
 	// Create DIMSE message object from datasets
 	msg, err := createMessageFromDatasets(commandDS, dataDS)
 	if err != nil {
 		return fmt.Errorf("failed to create message from datasets: %w", err)
+	}
+	// Preserve optional diagnostic command elements (Error Comment/ID,
+	// Offending Element) that the rebuilt response command set would drop.
+	if resp, ok := msg.(dimse.Response); ok {
+		copyOptionalCommandElements(commandDS, resp.CommandDataset())
 	}
 
 	// Store the presentation context ID so responses can be sent on the same context.
@@ -181,8 +216,11 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 	// Dispatch to handler
 	if err := s.handleReceivedMessage(s.ctx, msg); err != nil {
 		// If handling failed (e.g., couldn't send response due to missing presentation context),
-		// send A-ABORT to notify the peer instead of silently failing
-		_ = s.Abort(s.ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+		// send A-ABORT to notify the peer instead of silently failing. Do not
+		// send a second abort when the handler already terminated the association.
+		if !s.GetState().IsTerminal() {
+			_ = s.Abort(s.ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+		}
 		return fmt.Errorf("failed to handle received message: %w", err)
 	}
 
@@ -334,11 +372,17 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 	}
 
 	// Send A-RELEASE-RP
+	if s.config.keepConnectionOnPeerRelease {
+		// Compatibility mode: reply with A-RELEASE-RP but leave the association
+		// usable (state stays AssociationAccepted on the live socket).
+		if err := s.writeReleaseResponse(ctx); err != nil {
+			return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
+		}
+		s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
+		return nil
+	}
 	if err := s.SendReleaseResponse(ctx); err != nil {
 		return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
-	}
-	if s.config.keepConnectionOnPeerRelease {
-		return nil
 	}
 
 	return s.initiateClose(StateClosed, nil)

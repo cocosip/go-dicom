@@ -66,12 +66,42 @@ func (r *CStoreRequest) SetPriority(priority uint16) {
 }
 
 // SetMoveOriginator sets the move originator AET and message ID (for C-MOVE sub-operations).
-func (r *CStoreRequest) SetMoveOriginator(aet string, messageID uint16) {
+// It updates the command elements in place and returns an error if they cannot be written.
+func (r *CStoreRequest) SetMoveOriginator(aet string, messageID uint16) error {
+	if err := r.command.AddOrUpdate(element.NewString(tag.MoveOriginatorApplicationEntityTitle, vr.AE, []string{aet})); err != nil {
+		return fmt.Errorf("failed to set move originator AE title: %w", err)
+	}
+	if err := r.command.AddOrUpdate(element.NewUnsignedShort(tag.MoveOriginatorMessageID, []uint16{messageID})); err != nil {
+		return fmt.Errorf("failed to set move originator message ID: %w", err)
+	}
 	r.moveOriginatorAET = aet
 	r.moveOriginatorMessageID = messageID
+	return nil
+}
 
-	_ = r.command.Add(element.NewString(tag.MoveOriginatorApplicationEntityTitle, vr.AE, []string{aet}))
-	_ = r.command.Add(element.NewUnsignedShort(tag.MoveOriginatorMessageID, []uint16{messageID}))
+// MoveOriginator returns the Move Originator AE Title and Message ID from the
+// command set. ok is false when either element is absent.
+func (r *CStoreRequest) MoveOriginator() (aet string, messageID uint16, ok bool) {
+	aet, hasAET := r.command.GetString(tag.MoveOriginatorApplicationEntityTitle)
+	id, err := r.command.GetUInt16(tag.MoveOriginatorMessageID, 0)
+	if !hasAET || err != nil {
+		return "", 0, false
+	}
+	return aet, id, true
+}
+
+// SetAffectedSOPClassUID updates the affected SOP Class UID in the cached
+// field and in the command set.
+func (r *CStoreRequest) SetAffectedSOPClassUID(uid string) {
+	r.affectedSOPClassUID = uid
+	_ = r.command.AddOrUpdate(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{uid}))
+}
+
+// SetAffectedSOPInstanceUID updates the affected SOP Instance UID in the cached
+// field and in the command set.
+func (r *CStoreRequest) SetAffectedSOPInstanceUID(uid string) {
+	r.affectedSOPInstanceUID = uid
+	_ = r.command.AddOrUpdate(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{uid}))
 }
 
 // AffectedSOPClassUID returns the affected SOP Class UID.

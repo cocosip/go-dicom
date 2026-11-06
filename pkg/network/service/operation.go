@@ -116,20 +116,68 @@ type SubOperationResponder interface {
 
 // subOperationBase holds the shared state and implements SubOperationResponder.
 // It is embedded by CMoveOperation and CGetOperation.
+//
+// Exactly one final response may be sent. The last reported sub-operation counts
+// are carried on the final response, as required by PS3.4 C.4.2.2.1 / C.4.3.2.1.
 type subOperationBase struct {
 	sendPending func(remaining, completed, failed, warning uint16) error
-	sendFinal   func(s *status.Status) error
+	sendFinal   func(s *status.Status, remaining, completed, failed, warning uint16) error
+
+	mu     sync.Mutex
+	final  bool
+	counts [4]uint16 // remaining, completed, failed, warning
 }
 
 func (b *subOperationBase) SendPending(remaining, completed, failed, warning uint16) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.final {
+		return ErrSubOperationCompleted
+	}
+	b.counts = [4]uint16{remaining, completed, failed, warning}
 	return b.sendPending(remaining, completed, failed, warning)
 }
 
-func (b *subOperationBase) SendSuccess() error { return b.sendFinal(status.Success) }
-func (b *subOperationBase) SendWarning() error {
-	return b.sendFinal(status.CMoveWarningSubOperationsComplete)
+func (b *subOperationBase) SendSuccess() error {
+	return b.finish(status.Success)
 }
-func (b *subOperationBase) SendFailure(s *status.Status) error { return b.sendFinal(s) }
+
+func (b *subOperationBase) SendWarning() error {
+	return b.finish(status.CMoveWarningSubOperationsComplete)
+}
+
+func (b *subOperationBase) SendFailure(s *status.Status) error {
+	return b.finish(s)
+}
+
+func (b *subOperationBase) finish(s *status.Status) error {
+	if s == nil {
+		return fmt.Errorf("final status is nil")
+	}
+	if s.IsPending() {
+		return fmt.Errorf("final status must not be pending, got %s", s)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.final {
+		return ErrSubOperationCompleted
+	}
+	b.final = true
+	remaining := b.counts[0]
+	if s.IsSuccess() || s.IsWarning() {
+		// A successful/warning final response reports that no sub-operations
+		// are outstanding (PS3.4 C.4.2.2.1): keep the completed/failed/warning
+		// totals but clear the remaining count.
+		remaining = 0
+	}
+	return b.sendFinal(s, remaining, b.counts[1], b.counts[2], b.counts[3])
+}
+
+func (b *subOperationBase) finalized() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.final
+}
 
 // ── C-MOVE ────────────────────────────────────────────────────────────────────
 
@@ -163,7 +211,7 @@ func (op *cMoveOperation) QueryLevel() dimse.QueryRetrieveLevel { return op.req.
 func (op *cMoveOperation) MoveDestination() string              { return op.req.MoveDestination() }
 func (op *cMoveOperation) Identifier() *dataset.Dataset         { return op.req.DataDataset() }
 
-func newCMoveOperation(req *dimse.CMoveRequest, send func(*dimse.CMoveResponse) error) CMoveOperation {
+func newCMoveOperation(req *dimse.CMoveRequest, send func(*dimse.CMoveResponse) error) *cMoveOperation {
 	return &cMoveOperation{
 		subOperationBase: subOperationBase{
 			sendPending: func(remaining, completed, failed, warning uint16) error {
@@ -172,8 +220,10 @@ func newCMoveOperation(req *dimse.CMoveRequest, send func(*dimse.CMoveResponse) 
 					remaining, completed, failed, warning,
 				))
 			},
-			sendFinal: func(s *status.Status) error {
-				return send(dimse.NewCMoveResponse(req.MessageID(), s, req.AffectedSOPClassUID()))
+			sendFinal: func(s *status.Status, remaining, completed, failed, warning uint16) error {
+				resp := dimse.NewCMoveResponse(req.MessageID(), s, req.AffectedSOPClassUID())
+				resp.SetSubOperationCounts(remaining, completed, failed, warning)
+				return send(resp)
 			},
 		},
 		req: req,
@@ -229,7 +279,7 @@ func newCGetOperation(
 	req *dimse.CGetRequest,
 	sendCStore func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error),
 	sendResp func(*dimse.CGetResponse) error,
-) CGetOperation {
+) *cGetOperation {
 	return &cGetOperation{
 		subOperationBase: subOperationBase{
 			sendPending: func(remaining, completed, failed, warning uint16) error {
@@ -238,8 +288,10 @@ func newCGetOperation(
 					remaining, completed, failed, warning,
 				))
 			},
-			sendFinal: func(s *status.Status) error {
-				return sendResp(dimse.NewCGetResponse(req.MessageID(), s, req.AffectedSOPClassUID()))
+			sendFinal: func(s *status.Status, remaining, completed, failed, warning uint16) error {
+				resp := dimse.NewCGetResponse(req.MessageID(), s, req.AffectedSOPClassUID())
+				resp.SetSubOperationCounts(remaining, completed, failed, warning)
+				return sendResp(resp)
 			},
 		},
 		req:        req,

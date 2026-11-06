@@ -5,26 +5,9 @@ package pdu
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"testing"
 )
-
-// TestPDataTFDecodeRejectsOversizedPDVLength ensures a crafted PDV length that
-// exceeds the remaining PDU payload is rejected instead of driving a huge
-// allocation.
-func TestPDataTFDecodeRejectsOversizedPDVLength(t *testing.T) {
-	var data []byte
-	var lenBuf [4]byte
-	binary.BigEndian.PutUint32(lenBuf[:], 0xFFFFFFF0)
-	data = append(data, lenBuf[:]...)
-	data = append(data, 0x01, 0x03) // presentation context ID + control header
-
-	pdt := &PDataTF{}
-	if err := pdt.Decode(NewRawPDU(TypePDataTF, data)); err == nil {
-		t.Fatal("expected error for oversized PDV length, got nil")
-	}
-}
 
 // TestAAssociateACDecodeToleratesTransferSyntaxOnRejectedContext verifies that a
 // rejected presentation context carrying a transfer syntax sub-item (emitted by

@@ -18,6 +18,11 @@ import (
 // ErrPDULengthExceeded indicates that a peer sent a PDU larger than the active limit.
 var ErrPDULengthExceeded = errors.New("PDU length exceeds maximum")
 
+// ErrUnrecognizedPDUType indicates that a peer sent a PDU whose type byte is
+// not one of the seven DICOM Upper Layer PDU types. Callers can use errors.Is
+// to react by sending an A-ABORT with reason unrecognized-PDU (PS3.8 Table 9-26).
+var ErrUnrecognizedPDUType = errors.New("unrecognized PDU type")
+
 // ReadPDU reads a complete PDU from the connection with an optional timeout.
 //
 // This function:
@@ -58,8 +63,8 @@ func ReadPDUMaxLength(conn net.Conn, timeout time.Duration, maxLength uint32) (*
 
 	// Read PDU header (6 bytes)
 	// Format: [type:1][reserved:1][length:4]
-	header := make([]byte, 6)
-	if _, err := io.ReadFull(conn, header); err != nil {
+	var header [6]byte
+	if _, err := io.ReadFull(conn, header[:]); err != nil {
 		return nil, fmt.Errorf("failed to read PDU header: %w", err)
 	}
 
@@ -70,10 +75,10 @@ func ReadPDUMaxLength(conn net.Conn, timeout time.Duration, maxLength uint32) (*
 
 	// Validate PDU type before proceeding
 	if !isValidPDUType(pduType) {
-		return nil, fmt.Errorf("invalid PDU type: 0x%02X", pduType)
+		return nil, fmt.Errorf("%w: 0x%02X", ErrUnrecognizedPDUType, pduType)
 	}
 
-	// Validate length before allocating the PDU data buffer.
+	// Validate length before reading the PDU data.
 	limit := pdu.MaxPDUDataLength
 	if maxLength > 0 && maxLength < limit {
 		limit = maxLength
@@ -82,12 +87,11 @@ func ReadPDUMaxLength(conn net.Conn, timeout time.Duration, maxLength uint32) (*
 		return nil, fmt.Errorf("%w: %d exceeds maximum allowed %d", ErrPDULengthExceeded, length, limit)
 	}
 
-	// Read PDU data
-	data := make([]byte, length)
-	if length > 0 {
-		if _, err := io.ReadFull(conn, data); err != nil {
-			return nil, fmt.Errorf("failed to read PDU data: %w", err)
-		}
+	// Read PDU data. The buffer grows incrementally, so a peer that declares a
+	// huge PDU but sends little or no data cannot force a large allocation.
+	data, err := pdu.ReadPDUData(conn, length)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDU data: %w", err)
 	}
 
 	return &pdu.RawPDU{
@@ -127,7 +131,7 @@ func WritePDU(conn net.Conn, timeout time.Duration, p *pdu.RawPDU) error {
 	// Format: [type:1][reserved:1][length:4]
 	// Validate data length before converting to uint32
 	dataLen := len(p.Data)
-	if dataLen < 0 || dataLen > int(math.MaxUint32) {
+	if uint64(dataLen) > math.MaxUint32 {
 		return fmt.Errorf("PDU data length %d exceeds uint32 range", dataLen)
 	}
 	length := uint32(dataLen)

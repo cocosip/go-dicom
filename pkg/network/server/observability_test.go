@@ -123,7 +123,10 @@ func TestObservabilityHooksReachAcceptedService(t *testing.T) {
 			AbstractSyntax:   testVerificationSOPClassUID,
 			TransferSyntaxes: []string{"1.2.840.10008.1.2.1"},
 		}},
-		UserInformation: &pdu.UserInformation{MaximumLength: 16384},
+		UserInformation: &pdu.UserInformation{
+			MaximumLength:          16384,
+			ImplementationClassUID: "1.2.826.0.1.3680043.10.854",
+		},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

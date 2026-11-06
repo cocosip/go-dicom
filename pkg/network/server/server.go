@@ -128,6 +128,12 @@ type Config struct {
 	// Default: 16384 bytes
 	MaxPDULength uint32
 
+	// MaxMessageSize bounds the total reassembled size of a single inbound
+	// DIMSE message. A peer streaming unlimited fragments for one message
+	// cannot exceed this bound. Zero disables the bound.
+	// Default: 512 MiB
+	MaxMessageSize uint32
+
 	// AsynchronousOperations is the local SCP operation window.
 	// A value of zero means unlimited operations in that direction.
 	AsynchronousOperations *association.AsynchronousOperationsWindow
@@ -214,6 +220,14 @@ func WithMaxPDULength(length uint32) Option {
 	}
 }
 
+// WithMaxMessageSize bounds the reassembled size of a single inbound DIMSE
+// message. Zero disables the bound.
+func WithMaxMessageSize(size uint32) Option {
+	return func(o *Config) {
+		o.MaxMessageSize = size
+	}
+}
+
 // WithAsynchronousOperations sets the local SCP asynchronous operation window.
 // A value of zero means unlimited operations in that direction.
 func WithAsynchronousOperations(maxInvoked, maxPerformed uint16) Option {
@@ -297,6 +311,7 @@ func defaultServerConfig() *Config {
 	return &Config{
 		Port:                      104,
 		MaxPDULength:              16384,
+		MaxMessageSize:            512 << 20,
 		AsynchronousOperations:    association.NewAsynchronousOperationsWindow(1, 1),
 		AcceptTimeout:             0, // No timeout
 		AssociationTimeout:        10 * time.Second,
@@ -622,7 +637,18 @@ func (s *Server) acceptContext(ctx context.Context) (context.Context, context.Ca
 	return context.WithTimeout(ctx, s.config.AcceptTimeout)
 }
 
+func (s *Server) associationContext() (context.Context, context.CancelFunc) {
+	if s.config.AssociationTimeout <= 0 {
+		return s.ctx, func() {}
+	}
+	return context.WithTimeout(s.ctx, s.config.AssociationTimeout)
+}
+
 // Shutdown gracefully shuts down the server.
+//
+// It stops accepting new connections and waits for established associations to
+// finish on their own; it does not send A-RELEASE or abort active associations.
+// When the context expires, call Close to terminate them.
 func (s *Server) Shutdown(ctx context.Context) error {
 	if err := s.waitForStartup(ctx); err != nil {
 		return err
@@ -746,12 +772,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// - Set the association on the service if accepted
 	// If no negotiator is set, the service uses DefaultAssociationNegotiator which accepts
 	// all presentation contexts with their first proposed transfer syntax.
-	assocCtx, cancel := context.WithTimeout(s.ctx, s.config.AssociationTimeout)
-	defer cancel()
+	// The association phase is limited by AssociationTimeout; 0 means no limit.
+	assocCtx, assocCancel := s.associationContext()
+	defer assocCancel()
 
 	_, err := svc.ReceiveAssociationRequest(assocCtx)
 	if err != nil {
-		// Association was rejected or failed
+		// Association was rejected or failed. Rejections already sent an
+		// A-ASSOCIATE-RJ; anything else (including a failed TLS handshake,
+		// which now happens on the first read) is reported as a server error
+		// instead of silently closing the connection.
+		if !errors.Is(err, service.ErrAssociationRejected) {
+			s.emitServerError(s.ctx, "association_failed", err)
+		}
 		return
 	}
 
@@ -797,6 +830,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 }
 
 func (s *Server) serviceOptionsForConnection(connectionID observability.ConnectionID) []service.Option {
+	userInfo := s.buildUserInformation()
 	return []service.Option{
 		service.WithConnectionID(connectionID),
 		service.WithTranscodeManager(s.config.TranscodeManager),
@@ -804,6 +838,9 @@ func (s *Server) serviceOptionsForConnection(connectionID observability.Connecti
 		service.WithEventObserver(s.config.EventObserver),
 		service.WithMetricsObserver(s.config.MetricsObserver),
 		service.WithMaxPDULength(s.config.MaxPDULength),
+		service.WithMaxMessageSize(s.config.MaxMessageSize),
+		service.WithImplementationClassUID(userInfo.ImplementationClassUID),
+		service.WithImplementationVersionName(userInfo.ImplementationVersionName),
 		service.WithAsynchronousOperations(
 			s.config.AsynchronousOperations.MaxInvokedOperations,
 			s.config.AsynchronousOperations.MaxPerformedOperations,

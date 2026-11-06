@@ -11,6 +11,13 @@ import (
 	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
+// LoggingEnabled reports whether a network lifecycle record at the given level
+// would actually be emitted. Callers use it to skip building association
+// snapshots when nobody is listening.
+func LoggingEnabled(ctx context.Context, level Level) bool {
+	return logging.Enabled(ctx, slogLevel(level))
+}
+
 // EmitSlog writes a network lifecycle record through go-dicom's configured
 // slog logger. It emits protocol metadata only and never serializes a DIMSE
 // dataset or PDU payload.

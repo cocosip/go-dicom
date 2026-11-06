@@ -22,7 +22,19 @@ const (
 	testCalledAEField      = "called"
 	testCallingAEField     = "calling"
 	testInvalidAETitle     = "ABCDEFGHIJKLMNOPQ"
+	// testUnsupportedAppContext is intentionally not the DICOM Application Context.
+	testUnsupportedAppContext = "1.2.3"
 )
+
+// testAcceptedContexts returns one minimal valid accepted presentation context
+// so user-information-focused tests satisfy the mandatory-item encode checks.
+func testAcceptedContexts() []PresentationContextAC {
+	return []PresentationContextAC{{
+		ID:             1,
+		Result:         ResultAcceptance,
+		TransferSyntax: testExplicitVRLittleLE,
+	}}
+}
 
 func TestNewAAssociateAC(t *testing.T) {
 	ac := NewAAssociateAC()
@@ -48,6 +60,43 @@ func TestAAssociateACValidateStructureRequiresPresentationContext(t *testing.T) 
 	ac := NewAAssociateAC()
 	if err := ac.ValidateStructure(); err == nil {
 		t.Fatal("ValidateStructure() error = nil, want missing presentation context error")
+	}
+}
+
+// TestAAssociateACEncodeRejectsMissingMandatoryFields verifies the encode-side
+// checks required by PS3.8 Table 9-17 (mandatory items and AE titles).
+func TestAAssociateACEncodeRejectsMissingMandatoryFields(t *testing.T) {
+	validContexts := []PresentationContextAC{{
+		ID:             1,
+		Result:         ResultAcceptance,
+		TransferSyntax: testExplicitVRLittleLE,
+	}}
+
+	tests := []struct {
+		name   string
+		mutate func(*AAssociateAC)
+	}{
+		{"empty called AE title", func(ac *AAssociateAC) { ac.CalledAETitle = "" }},
+		{"all-space calling AE title", func(ac *AAssociateAC) { ac.CallingAETitle = "   " }},
+		{"empty application context", func(ac *AAssociateAC) { ac.ApplicationContext = "" }},
+		{"unsupported application context", func(ac *AAssociateAC) { ac.ApplicationContext = testUnsupportedAppContext }},
+		{"nil user information", func(ac *AAssociateAC) { ac.UserInformation = nil }},
+		{"empty implementation class UID", func(ac *AAssociateAC) { ac.UserInformation.ImplementationClassUID = "" }},
+		{"no presentation contexts", func(ac *AAssociateAC) { ac.PresentationContexts = nil }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ac := NewAAssociateAC()
+			ac.CalledAETitle = testCalledAETitle
+			ac.CallingAETitle = testCallingAETitle
+			ac.PresentationContexts = validContexts
+			tt.mutate(ac)
+
+			if _, err := ac.Encode(); err == nil {
+				t.Fatal("Encode() error = nil, want validation error")
+			}
+		})
 	}
 }
 
@@ -200,6 +249,7 @@ func TestAAssociateAC_ResultString(t *testing.T) {
 
 func TestAAssociateAC_EncodeDecodeWithImplementationVersion(t *testing.T) {
 	ac := NewAAssociateAC()
+	ac.PresentationContexts = testAcceptedContexts()
 	ac.CalledAETitle = testServerAETitle
 	ac.CallingAETitle = testClientAETitle
 	ac.UserInformation.ImplementationVersionName = testImplVersionName
@@ -223,6 +273,7 @@ func TestAAssociateAC_EncodeDecodeWithImplementationVersion(t *testing.T) {
 
 func TestAAssociateAC_EncodeDecodeWithUserIdentityResponse(t *testing.T) {
 	ac := NewAAssociateAC()
+	ac.PresentationContexts = testAcceptedContexts()
 	ac.CalledAETitle = testServerAETitle
 	ac.CallingAETitle = testClientAETitle
 
@@ -260,6 +311,7 @@ func TestAAssociateAC_EncodeDecodeWithUserIdentityResponse(t *testing.T) {
 
 func TestAAssociateAC_PreservesPresentEmptyUserIdentityResponse(t *testing.T) {
 	ac := NewAAssociateAC()
+	ac.PresentationContexts = testAcceptedContexts()
 	ac.CalledAETitle = testCalledAETitle
 	ac.CallingAETitle = testCallingAETitle
 	ac.UserInformation.UserIdentityResponse = &UserIdentityNegotiationResponse{
@@ -287,6 +339,7 @@ func TestAAssociateAC_PreservesPresentEmptyUserIdentityResponse(t *testing.T) {
 
 func TestAAssociateAC_EncodeDecodeAdvancedNegotiation(t *testing.T) {
 	ac := NewAAssociateAC()
+	ac.PresentationContexts = testAcceptedContexts()
 	ac.CalledAETitle = testCalledAETitle
 	ac.CallingAETitle = testCallingAETitle
 	ac.UserInformation.AsynchronousOperations = &AsynchronousOperationsWindow{
@@ -336,6 +389,7 @@ func TestAAssociateAC_IgnoresCommonExtendedNegotiation(t *testing.T) {
 	ac := NewAAssociateAC()
 	ac.CalledAETitle = testCalledAETitle
 	ac.CallingAETitle = testCallingAETitle
+	ac.PresentationContexts = testAcceptedContexts()
 	ac.UserInformation.CommonExtendedNegotiations = []CommonExtendedNegotiation{common}
 	raw, err := ac.Encode()
 	if err != nil {
@@ -460,6 +514,7 @@ func TestAAssociateAC_RoundtripWithRQ(t *testing.T) {
 
 func TestAAssociateAC_AETitleSpacePadding(t *testing.T) {
 	ac := NewAAssociateAC()
+	ac.PresentationContexts = testAcceptedContexts()
 	ac.CalledAETitle = testShortAETitle    // Only 5 chars
 	ac.CallingAETitle = testAnotherAETitle // 7 chars
 

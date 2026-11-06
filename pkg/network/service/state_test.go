@@ -13,7 +13,6 @@ func TestStateString(t *testing.T) {
 		{StateIdle, "Idle"},
 		{StateAssociationRequested, "AssociationRequested"},
 		{StateAssociationAccepted, "AssociationAccepted"},
-		{StateTransferring, "Transferring"},
 		{StateReleaseRequested, "ReleaseRequested"},
 		{StateClosed, "Closed"},
 		{StateAborted, "Aborted"},
@@ -43,7 +42,6 @@ func TestIsValidTransition(t *testing.T) {
 		{StateIdle, StateAborted, true},
 
 		// Invalid transitions from Idle
-		{StateIdle, StateTransferring, false},
 		{StateIdle, StateReleaseRequested, false},
 
 		// Valid transitions from AssociationRequested
@@ -53,11 +51,9 @@ func TestIsValidTransition(t *testing.T) {
 		{StateAssociationRequested, StateIdle, true},
 
 		// Invalid transitions from AssociationRequested
-		{StateAssociationRequested, StateTransferring, false},
 		{StateAssociationRequested, StateReleaseRequested, false},
 
 		// Valid transitions from AssociationAccepted
-		{StateAssociationAccepted, StateTransferring, true},
 		{StateAssociationAccepted, StateReleaseRequested, true},
 		{StateAssociationAccepted, StateClosed, true},
 		{StateAssociationAccepted, StateAborted, true},
@@ -65,16 +61,6 @@ func TestIsValidTransition(t *testing.T) {
 		// Invalid transitions from AssociationAccepted
 		{StateAssociationAccepted, StateIdle, false},
 		{StateAssociationAccepted, StateAssociationRequested, false},
-
-		// Valid transitions from Transferring
-		{StateTransferring, StateAssociationAccepted, true},
-		{StateTransferring, StateReleaseRequested, true},
-		{StateTransferring, StateAborted, true},
-
-		// Invalid transitions from Transferring
-		{StateTransferring, StateIdle, false},
-		{StateTransferring, StateAssociationRequested, false},
-		{StateTransferring, StateClosed, false},
 
 		// Valid transitions from ReleaseRequested
 		{StateReleaseRequested, StateClosed, true},
@@ -84,7 +70,6 @@ func TestIsValidTransition(t *testing.T) {
 		{StateReleaseRequested, StateIdle, false},
 		{StateReleaseRequested, StateAssociationRequested, false},
 		{StateReleaseRequested, StateAssociationAccepted, false},
-		{StateReleaseRequested, StateTransferring, false},
 
 		// Terminal states
 		{StateClosed, StateClosed, true},
@@ -116,13 +101,11 @@ func TestGetTransitionEvent(t *testing.T) {
 	}{
 		{StateIdle, StateAssociationRequested, true},
 		{StateAssociationRequested, StateAssociationAccepted, true},
-		{StateAssociationAccepted, StateTransferring, true},
-		{StateTransferring, StateAssociationAccepted, true},
 		{StateAssociationAccepted, StateReleaseRequested, true},
 		{StateReleaseRequested, StateClosed, true},
 
 		// Invalid transitions should have no event
-		{StateIdle, StateTransferring, false},
+		{StateIdle, StateReleaseRequested, false},
 		{StateClosed, StateIdle, false},
 	}
 
@@ -151,7 +134,6 @@ func TestStateCanSendDIMSE(t *testing.T) {
 		{StateIdle, false},
 		{StateAssociationRequested, false},
 		{StateAssociationAccepted, true},
-		{StateTransferring, true},
 		{StateReleaseRequested, false},
 		{StateClosed, false},
 		{StateAborted, false},
@@ -176,7 +158,6 @@ func TestStateCanReceiveDIMSE(t *testing.T) {
 		{StateIdle, false},
 		{StateAssociationRequested, false},
 		{StateAssociationAccepted, true},
-		{StateTransferring, true},
 		{StateReleaseRequested, false},
 		{StateClosed, false},
 		{StateAborted, false},
@@ -201,7 +182,6 @@ func TestStateIsTerminal(t *testing.T) {
 		{StateIdle, false},
 		{StateAssociationRequested, false},
 		{StateAssociationAccepted, false},
-		{StateTransferring, false},
 		{StateReleaseRequested, false},
 		{StateClosed, true},
 		{StateAborted, true},
@@ -226,7 +206,6 @@ func TestStateIsActive(t *testing.T) {
 		{StateIdle, false},
 		{StateAssociationRequested, false},
 		{StateAssociationAccepted, true},
-		{StateTransferring, true},
 		{StateReleaseRequested, false},
 		{StateClosed, false},
 		{StateAborted, false},
@@ -244,15 +223,13 @@ func TestStateIsActive(t *testing.T) {
 }
 
 func TestStateTransitionScenario_NormalFlow(t *testing.T) {
-	// Test a normal association flow: Idle -> Request -> Accept -> Transfer -> Release -> Close
+	// Test a normal association flow: Idle -> Request -> Accept -> Release -> Close
 	transitions := []struct {
 		from State
 		to   State
 	}{
 		{StateIdle, StateAssociationRequested},
 		{StateAssociationRequested, StateAssociationAccepted},
-		{StateAssociationAccepted, StateTransferring},
-		{StateTransferring, StateAssociationAccepted},
 		{StateAssociationAccepted, StateReleaseRequested},
 		{StateReleaseRequested, StateClosed},
 	}
@@ -271,7 +248,6 @@ func TestStateTransitionScenario_AbortFlow(t *testing.T) {
 		StateIdle,
 		StateAssociationRequested,
 		StateAssociationAccepted,
-		StateTransferring,
 		StateReleaseRequested,
 	}
 

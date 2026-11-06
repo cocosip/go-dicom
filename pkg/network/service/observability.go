@@ -709,6 +709,12 @@ func (s *Service) ensureAssociationIdentity(callingAE, calledAE string) {
 }
 
 func (s *Service) emitEvent(ctx context.Context, event observability.Event) {
+	level := eventLogLevel(event)
+	// Fast path: no observer and logging disabled. This avoids building the
+	// association snapshot (addresses, presentation-context copies) per event.
+	if s.eventObserver == nil && !observability.LoggingEnabled(ctx, level) {
+		return
+	}
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
@@ -717,7 +723,7 @@ func (s *Service) emitEvent(ctx context.Context, event observability.Event) {
 	}
 	observability.EmitEvent(ctx, s.eventObserver, event)
 	record := observability.LogRecord{
-		Level:   eventLogLevel(event),
+		Level:   level,
 		Message: string(event.Kind),
 		Event:   event,
 	}
@@ -765,6 +771,11 @@ func eventLogLevel(event observability.Event) observability.Level {
 }
 
 func (s *Service) emitMetric(ctx context.Context, metric observability.Metric) {
+	// Fast path: metrics go nowhere without an observer, so do not build the
+	// association snapshot. This is the per-PDU hot path.
+	if s.metricsObserver == nil {
+		return
+	}
 	if metric.Timestamp.IsZero() {
 		metric.Timestamp = time.Now()
 	}

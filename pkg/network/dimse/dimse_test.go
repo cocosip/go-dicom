@@ -180,7 +180,9 @@ func TestCStoreRequest_SetMoveOriginator(t *testing.T) {
 	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 
 	req, _ := NewCStoreRequest(ds)
-	req.SetMoveOriginator("MOVE_SCU", 999)
+	if err := req.SetMoveOriginator("MOVE_SCU", 999); err != nil {
+		t.Fatalf("SetMoveOriginator() error = %v", err)
+	}
 
 	// Verify move originator fields are in command dataset
 	moveAET, ok := req.CommandDataset().GetString(tag.MoveOriginatorApplicationEntityTitle)

@@ -6,7 +6,6 @@ package service
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
@@ -18,9 +17,9 @@ import (
 // PDV structure:
 //   - Length (4 bytes): Length of PDV data (including presentation context ID and header)
 //   - Presentation Context ID (1 byte)
-//   - Message Control Header (1 byte):
-//   - Bit 0: 0=More fragments follow, 1=Last fragment
-//   - Bit 1: 0=Data set, 1=Command
+//   - Message Control Header (1 byte), per PS3.8 E.2:
+//   - Bit 0: 1=Command, 0=Data set
+//   - Bit 1: 1=Last fragment, 0=More fragments follow
 //   - PDV Data (variable length)
 type PDV struct {
 	PresentationContextID byte
@@ -35,13 +34,10 @@ func (p *PDV) encodedSize() int { return 6 + len(p.Data) }
 // encodeInto writes the PDV into dst and returns the number of bytes written.
 // dst must be at least encodedSize() bytes long.
 func (p *PDV) encodeInto(dst []byte) int {
-	// PDV length covers context ID + control header + data.
+	// PDV length covers context ID + control header + data. The fragment size is
+	// bounded by the negotiated maximum PDU length, so it always fits in uint32.
 	total := 1 + 1 + len(p.Data)
-	if total > int(math.MaxUint32) {
-		// defensive: extremely unlikely in tests/typical usage
-		total = int(math.MaxUint32)
-	}
-	binary.BigEndian.PutUint32(dst[0:4], uint32(total)) // #nosec G115 -- bounded above
+	binary.BigEndian.PutUint32(dst[0:4], uint32(total)) // #nosec G115 -- bounded by the negotiated PDU length
 
 	dst[4] = p.PresentationContextID
 
@@ -65,7 +61,8 @@ func (p *PDV) Encode() []byte {
 	return buf
 }
 
-// DecodePDV decodes a PDV from bytes.
+// DecodePDV decodes a PDV from bytes. The returned Data aliases data; callers
+// must not retain it after data is released.
 func DecodePDV(data []byte) (*PDV, error) {
 	if len(data) < 6 {
 		return nil, fmt.Errorf("PDV data too short: %d bytes", len(data))
@@ -89,9 +86,9 @@ func DecodePDV(data []byte) (*PDV, error) {
 	isLastFragment := (header & 0x02) != 0
 	isCommand := (header & 0x01) != 0
 
-	// Read PDV data
-	pdvData := make([]byte, length-2)
-	copy(pdvData, data[6:6+length-2])
+	// Read PDV data (no copy: the caller consumes it before the PDU buffer is
+	// released).
+	pdvData := data[6 : 6+length-2]
 
 	return &PDV{
 		PresentationContextID: contextID,
@@ -152,20 +149,21 @@ func ParsePDataTFPDU(p *pdu.RawPDU) ([]*PDV, error) {
 
 		// Read PDV length
 		pdvLength := binary.BigEndian.Uint32(data[offset : offset+4])
-		if offset+4+int(pdvLength) > len(data) {
+		pdvEnd := uint64(offset) + 4 + uint64(pdvLength)
+		if pdvEnd > uint64(len(data)) {
 			return nil, fmt.Errorf("PDV extends beyond buffer: offset=%d, length=%d, total=%d",
 				offset, pdvLength, len(data))
 		}
 
 		// Decode PDV
-		pdvData := data[offset : offset+4+int(pdvLength)]
+		pdvData := data[offset:pdvEnd]
 		pdv, err := DecodePDV(pdvData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode PDV at offset %d: %w", offset, err)
 		}
 
 		pdvs = append(pdvs, pdv)
-		offset += 4 + int(pdvLength)
+		offset = int(pdvEnd)
 	}
 
 	return pdvs, nil
@@ -175,15 +173,9 @@ func ParsePDataTFPDU(p *pdu.RawPDU) ([]*PDV, error) {
 // Each PDV will be at most maxPDVSize bytes (accounting for PDV header overhead).
 func FragmentData(data []byte, contextID byte, isCommand bool, maxPDULength uint32) []*PDV {
 	if len(data) == 0 {
-		// Return single empty PDV
-		return []*PDV{
-			{
-				PresentationContextID: contextID,
-				IsCommand:             isCommand,
-				IsLastFragment:        true,
-				Data:                  []byte{},
-			},
-		}
+		// PS3.8 E.1 forbids empty PDVs; the caller must not send a dataset PDV
+		// at all in this case.
+		return nil
 	}
 
 	// Calculate max PDV data size
@@ -194,6 +186,9 @@ func FragmentData(data []byte, contextID byte, isCommand bool, maxPDULength uint
 	const pdvHeaderSize = 6
 
 	maxPDVDataSize := int(maxPDULength) - pduHeaderSize - pdvHeaderSize
+
+	// PS3.8 E.1: every fragment shall consist of an even number of bytes.
+	maxPDVDataSize &^= 1
 
 	if maxPDVDataSize <= 0 {
 		if maxPDULength == 0 {

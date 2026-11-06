@@ -45,6 +45,9 @@ func sopClassUIDForLevel(level QueryRetrieveLevel, uids [2]string) string {
 
 // createQueryRetrieveRequest is a helper to create C-FIND/C-GET/C-MOVE request command datasets.
 // This eliminates code duplication across NewCFindRequest, NewCGetRequest, and NewCMoveRequest.
+//
+// The identifier dataset is mutated: QueryRetrieveLevel is added or replaced so
+// that the level argument always wins over a stale value already present in data.
 func createQueryRetrieveRequest(
 	commandType uint16,
 	sopClassUID string,
@@ -54,11 +57,11 @@ func createQueryRetrieveRequest(
 	command := CreateCommandDataset(commandType, 0)
 	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
 	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
-	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	if data != nil {
-		if _, exists := data.Get(tag.QueryRetrieveLevel); !exists {
-			_ = data.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
-		}
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
+		_ = data.AddOrUpdate(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(level)}))
+	} else {
+		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 	return command
 }
@@ -135,6 +138,11 @@ type CFindResponse struct {
 }
 
 // NewCFindResponse creates a new C-FIND-RSP message.
+//
+// The identifier is attached only for Pending responses: PS3.7 9.1.2.1.5
+// permits the Identifier ("shall be sent only when Status ... is Pending").
+// For any other status the identifier argument is dropped so that the command
+// data set type and the attached data set remain consistent.
 func NewCFindResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string, identifier *dataset.Dataset) *CFindResponse {
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCFindRSP), 0)
@@ -148,17 +156,19 @@ func NewCFindResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopCla
 	// Status
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
-	// CommandDataSetType
+	// Identifier is only valid on Pending responses.
+	var data *dataset.Dataset
 	if identifier != nil && s.IsPending() {
-		// Pending response with identifier
+		data = identifier
+	}
+	if data != nil {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
-		// Final response or no identifier
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 	}
 
 	return &CFindResponse{
-		BaseResponse:              NewBaseResponse(command, identifier),
+		BaseResponse:              NewBaseResponse(command, data),
 		statusCode:                s.Code,
 		affectedSOPClassUID:       sopClassUID,
 		messageIDBeingRespondedTo: messageIDBeingRespondedTo,

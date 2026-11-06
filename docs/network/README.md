@@ -235,6 +235,7 @@ c := client.New(
 | `WithCallingAE(ae)` | string | "GO_DICOM_SCU" | Local AE Title |
 | `WithCalledAE(ae)` | string | "ANY_SCP" | Remote AE Title |
 | `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length |
+| `WithMaxMessageSize(size)` | uint32 | 512 MiB | Bound for a reassembled inbound DIMSE message (0=unlimited) |
 | `WithConnectTimeout(timeout)` | time.Duration | 10s | TCP connection timeout |
 | `WithRequestTimeout(timeout)` | time.Duration | 30s | DIMSE request timeout |
 | `WithTransportReadTimeout(timeout)` | time.Duration | 0 | Single PDU read timeout; 0 allows an established association to stay idle |
@@ -686,6 +687,7 @@ srv := server.New(
 | `WithAETitle(ae)` | string | "GO_DICOM_SCP" | Local AE Title |
 | `WithPort(port)` | int | 104 | Listening port |
 | `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length |
+| `WithMaxMessageSize(size)` | uint32 | 512 MiB | Bound for a reassembled inbound DIMSE message (0=unlimited) |
 | `WithMaxConnections(max)` | int | 0 | Maximum concurrent connections (0=unlimited) |
 | `WithAcceptTimeout(timeout)` | time.Duration | 0 | Single Accept timeout (0=obey only the Server context) |
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association negotiation timeout |
@@ -1235,7 +1237,7 @@ req.SetPriority(uint16(dimse.PriorityLow))     // Low priority
 ```go
 // Move Originator (C-MOVE sub-operations)
 req, _ := dimse.NewCStoreRequest(0, dataset)
-req.SetMoveOriginator("MOVE_SCU", 999)
+_ = req.SetMoveOriginator("MOVE_SCU", 999)
 ```
 
 ```go
@@ -1493,10 +1495,11 @@ status.AttributeListError         // 0x0107
 status.AttributeValueOutOfRange   // 0x0116
 
 // Failure
-status.RefusedOutOfResources      // 0xA700
-status.DataSetDoesNotMatchSOPClass // 0xA900
-status.CannotUnderstand           // 0xC000
-status.UnrecognizedOperation      // 0xC001
+status.ErrorProcessingFailure           // 0x0110
+status.ErrorUnrecognizedOperation     // 0x0211
+status.CStoreRefusedOutOfResources     // 0xA700
+status.ErrorDataSetDoesNotMatchSOPClass // 0xA900
+status.CStoreErrorCannotUnderstand     // 0xC000
 ```
 
 Check status:

@@ -97,11 +97,40 @@ type CGetResponse struct {
 	affectedSOPClassUID       string
 	messageIDBeingRespondedTo uint16
 
-	// Sub-operation counters (optional, present in pending responses)
+	// Sub-operation counters (always present; zero when not reported)
 	numberOfRemainingSubOperations uint16
 	numberOfCompletedSubOperations uint16
 	numberOfFailedSubOperations    uint16
 	numberOfWarningSubOperations   uint16
+}
+
+// subOperationCountTags are the four C-GET/C-MOVE-RSP sub-operation count
+// command elements (PS3.4 C.4.2.2.1). Every response constructor adds them so
+// that the counts are always present on the wire.
+var subOperationCountTags = [...]*tag.Tag{
+	tag.NumberOfRemainingSuboperations,
+	tag.NumberOfCompletedSuboperations,
+	tag.NumberOfFailedSuboperations,
+	tag.NumberOfWarningSuboperations,
+}
+
+func addSubOperationCounts(command *dataset.Dataset, remaining, completed, failed, warning uint16) {
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfRemainingSuboperations, []uint16{remaining}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfCompletedSuboperations, []uint16{completed}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfFailedSuboperations, []uint16{failed}))
+	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfWarningSuboperations, []uint16{warning}))
+}
+
+func hasSubOperationCounts(command *dataset.Dataset) bool {
+	if command == nil {
+		return false
+	}
+	for _, countTag := range subOperationCountTags {
+		if _, ok := command.Get(countTag); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // NewCGetResponse creates a new C-GET-RSP message.
@@ -114,6 +143,9 @@ type CGetResponse struct {
 //   - status.CGetRefusedOutOfResourcesSubOps (0xA702): Out of resources - unable to perform sub-operations
 //   - status.CGetFailedIdentifierDoesNotMatchSOPClass (0xA900): Identifier does not match SOP Class
 //   - status.CGetFailedUnableToProcess (0xC000): Unable to process
+//
+// The four sub-operation count elements are always added (zero by default);
+// use SetSubOperationCounts to report progress.
 func NewCGetResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string) *CGetResponse {
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCGetRSP), 0)
@@ -132,6 +164,9 @@ func NewCGetResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClas
 	// CommandDataSetType - no dataset
 	_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))
 
+	// Sub-operation counts are always present (PS3.4 C.4.2.2.1).
+	addSubOperationCounts(command, 0, 0, 0, 0)
+
 	return &CGetResponse{
 		BaseResponse:              NewBaseResponse(command, nil),
 		statusCode:                s.Code,
@@ -140,23 +175,22 @@ func NewCGetResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClas
 	}
 }
 
+// SetSubOperationCounts sets the four sub-operation count elements and the
+// cached values. It can be used on any C-GET-RSP, pending or final.
+func (r *CGetResponse) SetSubOperationCounts(remaining, completed, failed, warning uint16) {
+	addSubOperationCounts(r.command, remaining, completed, failed, warning)
+	r.numberOfRemainingSubOperations = remaining
+	r.numberOfCompletedSubOperations = completed
+	r.numberOfFailedSubOperations = failed
+	r.numberOfWarningSubOperations = warning
+}
+
 // NewCGetResponsePending creates a pending C-GET-RSP message with sub-operation counts.
 func NewCGetResponsePending(messageIDBeingRespondedTo uint16, sopClassUID string,
 	remaining, completed, failed, warning uint16) *CGetResponse {
 
 	resp := NewCGetResponse(messageIDBeingRespondedTo, status.CGetPending, sopClassUID)
-
-	// Add sub-operation counters
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfRemainingSuboperations, []uint16{remaining}))
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfCompletedSuboperations, []uint16{completed}))
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfFailedSuboperations, []uint16{failed}))
-	_ = resp.command.AddOrUpdate(element.NewUnsignedShort(tag.NumberOfWarningSuboperations, []uint16{warning}))
-
-	resp.numberOfRemainingSubOperations = remaining
-	resp.numberOfCompletedSubOperations = completed
-	resp.numberOfFailedSubOperations = failed
-	resp.numberOfWarningSubOperations = warning
-
+	resp.SetSubOperationCounts(remaining, completed, failed, warning)
 	return resp
 }
 
@@ -207,10 +241,10 @@ func (r *CGetResponse) NumberOfWarningSubOperations() uint16 {
 	return r.numberOfWarningSubOperations
 }
 
-// HasSubOperationCounts returns true if this response includes sub-operation counts.
+// HasSubOperationCounts reports whether the four sub-operation count elements
+// are present in the command set. Constructors always add them.
 func (r *CGetResponse) HasSubOperationCounts() bool {
-	// Sub-operation counts are typically present in pending responses
-	return r.statusCode == status.CGetPending.Code
+	return hasSubOperationCounts(r.command)
 }
 
 // String returns a human-readable representation.

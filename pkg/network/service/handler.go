@@ -48,6 +48,18 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 		// duplicate responses should not abort the whole association.
 		return nil
 	}
+
+	isPending := false
+	if progress, ok := resp.(interface{ IsPending() bool }); ok {
+		isPending = progress.IsPending()
+	}
+	if !isPending && !pending.finalDelivered.CompareAndSwap(false, true) {
+		// A second final response for the same Message ID is a protocol
+		// violation. Drop it instead of blocking the receive loop on a full
+		// response channel.
+		return nil
+	}
+
 	pending.lifecycle.response(s.ctx, resp)
 
 	// Send response to the waiting goroutine
@@ -154,8 +166,30 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 		operationCtx, unregisterOperation = s.registerActiveOperation(ctx, req.MessageID())
 	}
 
-	s.requestWg.Add(1)
+	if !s.acquireRequestSlot() {
+		if unregisterOperation != nil {
+			unregisterOperation()
+		}
+		if !isCancel {
+			s.unregisterInboundRequest(req.MessageID(), lifecycle)
+		}
+		lifecycle.finishError(ctx, ErrTooManyRequests)
+		_ = s.abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, ErrTooManyRequests, false)
+		return ErrTooManyRequests
+	}
+	if !s.beginRequest() {
+		s.releaseRequestSlot()
+		if unregisterOperation != nil {
+			unregisterOperation()
+		}
+		if !isCancel {
+			s.unregisterInboundRequest(req.MessageID(), lifecycle)
+		}
+		lifecycle.finishError(ctx, ErrServiceClosed)
+		return ErrServiceClosed
+	}
 	go func() {
+		defer s.releaseRequestSlot()
 		defer s.requestWg.Done()
 		if unregisterOperation != nil {
 			defer unregisterOperation()
@@ -187,6 +221,34 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 		}
 	}()
 	return nil
+}
+
+// acquireRequestSlot bounds the number of concurrent inbound request handlers.
+// It returns false when the configured limit is reached.
+func (s *Service) acquireRequestSlot() bool {
+	limit := s.config.maxConcurrentRequests
+	current := s.concurrentRequests.Add(1)
+	if limit > 0 && current > int64(limit) {
+		s.concurrentRequests.Add(-1)
+		return false
+	}
+	return true
+}
+
+func (s *Service) releaseRequestSlot() {
+	s.concurrentRequests.Add(-1)
+}
+
+// beginRequest registers a handler goroutine. It returns false once shutdown has
+// started so requestWg.Add can never race requestWg.Wait.
+func (s *Service) beginRequest() bool {
+	s.requestWgAddMu.Lock()
+	defer s.requestWgAddMu.Unlock()
+	if s.requestsClosed {
+		return false
+	}
+	s.requestWg.Add(1)
+	return true
 }
 
 func isCancellableRequest(req dimse.Request) bool {
@@ -309,7 +371,7 @@ func (s *Service) handleCEchoRequest(ctx context.Context, req *dimse.CEchoReques
 		resp, err = handlers.CEchoHandler(ctx, req)
 		if err != nil {
 			// Handler returned error - send failure response
-			resp = dimse.NewCEchoResponseFromRequest(req, status.RefusedOutOfResources)
+			resp = dimse.NewCEchoResponseFromRequest(req, status.ErrorProcessingFailure)
 		}
 	} else {
 		// Default handler - always return success
@@ -372,7 +434,9 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 		if !op.finalized() {
 			return op.SendFinal(status.CFindFailedUnableToProcess)
 		}
-		return handlerErr
+		// The handler already sent its final response; returning the error here
+		// would abort a healthy association, so report success to the caller.
+		return nil
 	}
 	if handlerCtx.Err() != nil && !op.finalized() {
 		return op.SendFinal(status.Cancel)
@@ -388,16 +452,36 @@ func (s *Service) handleCMoveRequest(ctx context.Context, req *dimse.CMoveReques
 	handlerCtx, unregister := s.registerActiveOperation(ctx, req.MessageID())
 	defer unregister()
 
-	if handlers != nil && handlers.CMoveHandler != nil {
-		op := newCMoveOperation(req, func(resp *dimse.CMoveResponse) error {
-			return s.Send(ctx, resp)
-		})
-		if err := handlers.CMoveHandler(handlerCtx, op); err != nil {
-			return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.CMoveFailedUnableToProcess))
+	if handlers == nil || handlers.CMoveHandler == nil {
+		return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.CMoveFailedUnableToProcess))
+	}
+
+	op := newCMoveOperation(req, func(resp *dimse.CMoveResponse) error {
+		return s.Send(ctx, resp)
+	})
+	handlerErr := handlers.CMoveHandler(handlerCtx, op)
+
+	if handlerErr != nil {
+		if handlerCtx.Err() != nil {
+			if !op.finalized() {
+				return op.SendFailure(status.Cancel)
+			}
+			return nil
 		}
+		if !op.finalized() {
+			return op.SendFailure(status.CMoveFailedUnableToProcess)
+		}
+		// The handler already sent its final response; returning the error here
+		// would abort a healthy association, so report success to the caller.
 		return nil
 	}
-	return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.CMoveFailedUnableToProcess))
+	if handlerCtx.Err() != nil && !op.finalized() {
+		return op.SendFailure(status.Cancel)
+	}
+	if !op.finalized() {
+		return op.SendSuccess()
+	}
+	return nil
 }
 
 // handleCGetRequest handles a C-GET request.
@@ -405,22 +489,42 @@ func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest,
 	handlerCtx, unregister := s.registerActiveOperation(ctx, req.MessageID())
 	defer unregister()
 
-	if handlers != nil && handlers.CGetHandler != nil {
-		op := newCGetOperation(
-			req,
-			func(storeCtx context.Context, storeReq *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
-				return s.SendCStore(storeCtx, storeReq)
-			},
-			func(resp *dimse.CGetResponse) error {
-				return s.Send(ctx, resp)
-			},
-		)
-		if err := handlers.CGetHandler(handlerCtx, op); err != nil {
-			return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.CGetFailedUnableToProcess))
+	if handlers == nil || handlers.CGetHandler == nil {
+		return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.CGetFailedUnableToProcess))
+	}
+
+	op := newCGetOperation(
+		req,
+		func(storeCtx context.Context, storeReq *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+			return s.SendCStore(storeCtx, storeReq)
+		},
+		func(resp *dimse.CGetResponse) error {
+			return s.Send(ctx, resp)
+		},
+	)
+	handlerErr := handlers.CGetHandler(handlerCtx, op)
+
+	if handlerErr != nil {
+		if handlerCtx.Err() != nil {
+			if !op.finalized() {
+				return op.SendFailure(status.Cancel)
+			}
+			return nil
 		}
+		if !op.finalized() {
+			return op.SendFailure(status.CGetFailedUnableToProcess)
+		}
+		// The handler already sent its final response; returning the error here
+		// would abort a healthy association, so report success to the caller.
 		return nil
 	}
-	return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.CGetFailedUnableToProcess))
+	if handlerCtx.Err() != nil && !op.finalized() {
+		return op.SendFailure(status.Cancel)
+	}
+	if !op.finalized() {
+		return op.SendSuccess()
+	}
+	return nil
 }
 
 // handleNEventReportRequest handles an N-EVENT-REPORT request.
@@ -618,21 +722,16 @@ func (s *Service) GetConnectionLifecycleHandler() ConnectionLifecycleHandler {
 
 // handleCCancelRequest handles a C-CANCEL-RQ request.
 // Per DICOM PS3.7 §9.3.5, no response is sent for a cancel request.
-// The method finds the pending request being cancelled and closes its
-// cancel channel to signal the waiting goroutine.
+// MessageIDBeingRespondedTo refers to an *inbound* request (the peer's
+// operation), so only the local active-operation registry is touched. The
+// outbound pendingRequests map uses the opposite Message ID space and must not
+// be modified here.
 func (s *Service) handleCCancelRequest(req *dimse.CCancelRequest) error {
 	messageID := req.MessageIDBeingRespondedTo()
 	if messageID == 0 {
 		return fmt.Errorf("C-CANCEL-RQ has no MessageIDBeingRespondedTo")
 	}
 
-	s.pendingRequestsMu.Lock()
-	pending, exists := s.pendingRequests[messageID]
-	if exists {
-		close(pending.cancelCh)
-		delete(s.pendingRequests, messageID)
-	}
-	s.pendingRequestsMu.Unlock()
 	s.cancelActiveOperation(messageID)
 
 	// Unknown message IDs may already be complete or locally cancelled; that is

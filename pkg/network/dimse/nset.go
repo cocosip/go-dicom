@@ -95,7 +95,8 @@ type NSetResponse struct {
 //   - s: Status (use status.NSetSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID
-//   - attributeList: Optional dataset containing attribute values after modification
+//   - attributeList: Optional dataset containing attribute values after
+//     modification; it is attached only when the status is Success
 func NewNSetResponse(
 	messageIDBeingRespondedTo uint16,
 	s *status.Status,
@@ -106,7 +107,7 @@ func NewNSetResponse(
 	command := createNResponseCommand(uint16(CommandNSetRSP), messageIDBeingRespondedTo,
 		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
 	return &NSetResponse{
-		BaseResponse:              NewBaseResponse(command, attributeList),
+		BaseResponse:              NewBaseResponse(command, nResponseData(s, attributeList)),
 		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,

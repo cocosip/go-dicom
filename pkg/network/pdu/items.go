@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
@@ -133,7 +134,7 @@ func readItem(r io.Reader) (itemType byte, data []byte, err error) {
 
 // writeItem writes an item header and data to the writer.
 func writeItem(w io.Writer, itemType byte, data []byte) error {
-	header := make([]byte, 4)
+	var header [4]byte
 	header[0] = itemType
 	header[1] = 0x00 // reserved
 	if len(data) > int(math.MaxUint16) {
@@ -141,12 +142,12 @@ func writeItem(w io.Writer, itemType byte, data []byte) error {
 	}
 	binary.BigEndian.PutUint16(header[2:4], uint16(len(data))) // #nosec G115 -- bounded by check above
 
-	if _, err := w.Write(header); err != nil {
+	if err := writeFull(w, header[:]); err != nil {
 		return fmt.Errorf("writing item header (type=0x%02X): %w", itemType, err)
 	}
 
 	if len(data) > 0 {
-		if _, err := w.Write(data); err != nil {
+		if err := writeFull(w, data); err != nil {
 			return fmt.Errorf("writing item data (type=0x%02X): %w", itemType, err)
 		}
 	}
@@ -168,14 +169,32 @@ func writeString(s string) []byte {
 	return result
 }
 
+// validateAETitles validates the Called and Calling AE Titles before encoding.
+// PS3.8 Table 9-11 requires 16 characters with leading/trailing spaces
+// non-significant and explicitly forbids the all-space value ("no Application
+// Name specified").
 func validateAETitles(called, calling string) error {
-	if err := vr.ValidateAE(called); err != nil {
-		return fmt.Errorf("invalid called AE Title: %w", err)
+	if err := validateAETitle("called", called); err != nil {
+		return err
 	}
-	if err := vr.ValidateAE(calling); err != nil {
-		return fmt.Errorf("invalid calling AE Title: %w", err)
+	return validateAETitle("calling", calling)
+}
+
+func validateAETitle(field, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("invalid %s AE Title: value must not be empty or consist only of spaces", field)
+	}
+	if err := vr.ValidateAE(value); err != nil {
+		return fmt.Errorf("invalid %s AE Title: %w", field, err)
 	}
 	return nil
+}
+
+// ValidateAETitle validates a single AE Title (PS3.8 Table 9-11). The service
+// uses it to turn an invalid peer AE Title into an A-ASSOCIATE-RJ instead of
+// failing while encoding the A-ASSOCIATE-AC.
+func ValidateAETitle(field, value string) error {
+	return validateAETitle(field, value)
 }
 
 // trimTrailingSpaces removes trailing spaces from a string.

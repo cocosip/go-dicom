@@ -32,6 +32,9 @@ import (
 //	    log.Fatalf("Failed to send C-ECHO: %v", err)
 //	}
 func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
+	if msg == nil {
+		return fmt.Errorf("cannot send a nil DIMSE message")
+	}
 	// Check if service is running
 	if s.IsClosed() {
 		return ErrServiceClosed
@@ -40,6 +43,16 @@ func (s *Service) Send(ctx context.Context, msg dimse.Message) error {
 	// Check state allows sending
 	if !s.GetState().CanSendDIMSE() {
 		return fmt.Errorf("cannot send DIMSE message in state %s", s.GetState())
+	}
+
+	// Requests must carry a Message ID (PS3.7 9.3.1). Assign one when the caller
+	// did not; C-CANCEL uses MessageIDBeingRespondedTo instead.
+	if request, ok := msg.(dimse.Request); ok {
+		if _, isCancel := request.(*dimse.CCancelRequest); !isCancel {
+			if _, err := s.messageIDGenerator.AssignMessageID(request); err != nil {
+				return fmt.Errorf("failed to assign Message ID: %w", err)
+			}
+		}
 	}
 
 	// Create result channel

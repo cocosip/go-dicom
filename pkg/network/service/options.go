@@ -36,9 +36,21 @@ type serviceConfig struct {
 	maxPDULength uint32
 
 	// maxMessageSize bounds the total reassembled size of a single inbound DIMSE
-	// message spread across many PDVs. Zero (the default) means unlimited, which
-	// matches the previous behavior and allows very large C-STORE instances.
+	// message spread across many PDVs. A peer that keeps sending fragments for
+	// one message cannot grow memory beyond this bound.
+	// Default: 512 MiB (0 means unlimited).
 	maxMessageSize uint32
+
+	// implementationClassUID / implementationVersionName identify the local AE
+	// in the A-ASSOCIATE-RQ and A-ASSOCIATE-AC (PS3.7 D.3.3.2). They never take
+	// the remote AE's values.
+	implementationClassUID    string
+	implementationVersionName string
+
+	// maxConcurrentRequests bounds the number of inbound request handler
+	// goroutines. Exceeding it aborts the association instead of letting a peer
+	// spawn unbounded goroutines. Zero means unlimited.
+	maxConcurrentRequests int
 
 	// asynchronousOperations is the local AE's negotiated operation window.
 	asynchronousOperations *association.AsynchronousOperationsWindow
@@ -127,13 +139,43 @@ func WithConnectionID(id observability.ConnectionID) Option {
 // defaultServiceConfig returns the default service configuration.
 func defaultServiceConfig() *serviceConfig {
 	return &serviceConfig{
-		maxPDULength:           16384, // 16 KB
-		asynchronousOperations: association.NewAsynchronousOperationsWindow(1, 1),
-		transferSyntaxRegistry: transfer.NewRegistry(),
-		readTimeout:            0,
-		writeTimeout:           30 * time.Second,
-		handlerShutdownTimeout: 60 * time.Second,
-		sendQueueSize:          100,
+		maxPDULength:              16384, // 16 KB
+		maxMessageSize:            512 << 20,
+		maxConcurrentRequests:     1024,
+		implementationClassUID:    association.DefaultImplementationClassUID,
+		implementationVersionName: association.DefaultImplementationVersionName,
+		asynchronousOperations:    association.NewAsynchronousOperationsWindow(1, 1),
+		transferSyntaxRegistry:    transfer.NewRegistry(),
+		readTimeout:               0,
+		writeTimeout:              30 * time.Second,
+		handlerShutdownTimeout:    60 * time.Second,
+		sendQueueSize:             100,
+	}
+}
+
+// WithImplementationClassUID sets the Implementation Class UID the local AE
+// advertises in the User Information item (PS3.7 D.3.3.2).
+func WithImplementationClassUID(uid string) Option {
+	return func(c *serviceConfig) {
+		c.implementationClassUID = uid
+	}
+}
+
+// WithImplementationVersionName sets the Implementation Version Name the local
+// AE advertises in the User Information item.
+func WithImplementationVersionName(name string) Option {
+	return func(c *serviceConfig) {
+		c.implementationVersionName = name
+	}
+}
+
+// WithMaxConcurrentRequests bounds the number of concurrently running inbound
+// request handlers. When the limit is exceeded the association is aborted with
+// A-ABORT instead of spawning more goroutines. Zero disables the limit.
+// Default: 1024.
+func WithMaxConcurrentRequests(limit int) Option {
+	return func(c *serviceConfig) {
+		c.maxConcurrentRequests = limit
 	}
 }
 
@@ -146,9 +188,8 @@ func WithMaxPDULength(length uint32) Option {
 }
 
 // WithMaxMessageSize bounds the total reassembled size of a single inbound DIMSE
-// message spread across many PDVs. Zero (the default) is unlimited, so large
-// instances are unaffected. Set it when accepting associations from peers that
-// are not trusted to respect memory limits.
+// message spread across many PDVs. The default is 512 MiB. Zero disables the
+// bound, which is only safe when every peer is trusted.
 func WithMaxMessageSize(size uint32) Option {
 	return func(c *serviceConfig) {
 		c.maxMessageSize = size
@@ -156,7 +197,7 @@ func WithMaxMessageSize(size uint32) Option {
 }
 
 // WithReadTimeout sets the read timeout for PDU operations.
-// Default: 30 seconds. Set to 0 to disable timeout.
+// Default: disabled (no socket deadline). Set to 0 to disable the timeout.
 func WithReadTimeout(timeout time.Duration) Option {
 	return func(c *serviceConfig) {
 		c.readTimeout = timeout

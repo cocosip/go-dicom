@@ -87,6 +87,9 @@ func TestRecvLoopPeerReleaseClosesNormally(t *testing.T) {
 func TestHandleReleaseRequestKeepsConnectionWhenConfigured(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil, WithKeepConnectionOnPeerRelease(true))
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
 
 	if err := service.handleReleaseRequest(context.Background()); err != nil {
 		t.Fatalf("handleReleaseRequest() error = %v", err)

@@ -28,8 +28,7 @@ func NewCEchoRequest() *CEchoRequest {
 	// Set affected SOP Class UID to Verification SOP Class
 	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUIDVerification}))
 
-	// Priority (optional, default to medium)
-	_ = command.Add(element.NewUnsignedShort(tag.Priority, []uint16{uint16(PriorityMedium)}))
+	// The C-ECHO-RQ command set does not define a Priority element.
 
 	// CommandDataSetType is already set to 0x0101 (no dataset)
 

@@ -131,8 +131,36 @@ func TestNewCGetResponseSuccess(t *testing.T) {
 		t.Errorf("Expected status code 0x0000, got 0x%04X", resp.StatusCode())
 	}
 
-	if resp.HasSubOperationCounts() {
-		t.Error("Success response should not have sub-operation counts")
+	// PS3.4 C.4.2.2.1: sub-operation counts are always present, zero when final.
+	if !resp.HasSubOperationCounts() {
+		t.Error("Success response must carry the four sub-operation count elements")
+	}
+	if resp.NumberOfRemainingSubOperations() != 0 || resp.NumberOfCompletedSubOperations() != 0 ||
+		resp.NumberOfFailedSubOperations() != 0 || resp.NumberOfWarningSubOperations() != 0 {
+		t.Error("Success response counts should default to zero")
+	}
+}
+
+func TestCGetResponse_SetSubOperationCounts(t *testing.T) {
+	resp := NewCGetResponseSuccess(123, sopClassUIDStudyRootGet)
+	resp.SetSubOperationCounts(3, 7, 1, 2)
+
+	if resp.NumberOfRemainingSubOperations() != 3 || resp.NumberOfCompletedSubOperations() != 7 ||
+		resp.NumberOfFailedSubOperations() != 1 || resp.NumberOfWarningSubOperations() != 2 {
+		t.Error("SetSubOperationCounts did not update the cached counts")
+	}
+
+	cmd := resp.CommandDataset()
+	for tg, want := range map[*tag.Tag]uint16{
+		tag.NumberOfRemainingSuboperations: 3,
+		tag.NumberOfCompletedSuboperations: 7,
+		tag.NumberOfFailedSuboperations:    1,
+		tag.NumberOfWarningSuboperations:   2,
+	} {
+		got, err := cmd.GetUInt16(tg, 0)
+		if err != nil || got != want {
+			t.Errorf("command element %s = %d (err %v), want %d", tg, got, err, want)
+		}
 	}
 }
 
@@ -154,6 +182,12 @@ func TestNewCGetResponseFromRequest(t *testing.T) {
 
 	if resp.PresentationContextID() != req.PresentationContextID() {
 		t.Errorf("Expected presentation context ID %d, got %d", req.PresentationContextID(), resp.PresentationContextID())
+	}
+
+	if !resp.HasSubOperationCounts() ||
+		resp.NumberOfRemainingSubOperations() != 0 || resp.NumberOfCompletedSubOperations() != 0 ||
+		resp.NumberOfFailedSubOperations() != 0 || resp.NumberOfWarningSubOperations() != 0 {
+		t.Error("FromRequest response must carry the four counts, all zero")
 	}
 }
 

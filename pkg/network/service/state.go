@@ -21,10 +21,6 @@ const (
 	// In this state, DIMSE messages can be exchanged.
 	StateAssociationAccepted
 
-	// StateTransferring represents active DIMSE message transfer.
-	// This is a sub-state of AssociationAccepted.
-	StateTransferring
-
 	// StateReleaseRequested represents the state after an A-RELEASE-RQ
 	// has been sent and the service is waiting for an A-RELEASE-RP.
 	StateReleaseRequested
@@ -47,8 +43,6 @@ func (s State) String() string {
 		return "AssociationRequested"
 	case StateAssociationAccepted:
 		return "AssociationAccepted"
-	case StateTransferring:
-		return "Transferring"
 	case StateReleaseRequested:
 		return "ReleaseRequested"
 	case StateClosed:
@@ -84,15 +78,9 @@ var validTransitions = []StateTransition{
 	{StateAssociationRequested, StateIdle, "Connection timeout"},
 
 	// From AssociationAccepted
-	{StateAssociationAccepted, StateTransferring, "Send/Receive DIMSE message"},
 	{StateAssociationAccepted, StateReleaseRequested, "Send A-RELEASE-RQ"},
 	{StateAssociationAccepted, StateClosed, "Receive A-RELEASE-RQ and send A-RELEASE-RP"},
 	{StateAssociationAccepted, StateAborted, stateEventSendReceiveAbort},
-
-	// From Transferring
-	{StateTransferring, StateAssociationAccepted, "DIMSE message complete"},
-	{StateTransferring, StateReleaseRequested, "Send A-RELEASE-RQ"},
-	{StateTransferring, StateAborted, stateEventSendReceiveAbort},
 
 	// From ReleaseRequested
 	{StateReleaseRequested, StateClosed, "Receive A-RELEASE-RP"},
@@ -134,12 +122,12 @@ func GetTransitionEvent(from, to State) string {
 
 // CanSendDIMSE returns true if DIMSE messages can be sent in this state.
 func (s State) CanSendDIMSE() bool {
-	return s == StateAssociationAccepted || s == StateTransferring
+	return s == StateAssociationAccepted
 }
 
 // CanReceiveDIMSE returns true if DIMSE messages can be received in this state.
 func (s State) CanReceiveDIMSE() bool {
-	return s == StateAssociationAccepted || s == StateTransferring
+	return s == StateAssociationAccepted
 }
 
 // IsTerminal returns true if this is a terminal state (no further operations possible).
@@ -149,5 +137,5 @@ func (s State) IsTerminal() bool {
 
 // IsActive returns true if the association is active (can exchange messages).
 func (s State) IsActive() bool {
-	return s == StateAssociationAccepted || s == StateTransferring
+	return s == StateAssociationAccepted
 }

@@ -5,6 +5,8 @@ package transport
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -356,4 +358,59 @@ func (a dummyAddr) Network() string {
 
 func (a dummyAddr) String() string {
 	return string(a)
+}
+
+// headerOnlyConn serves one PDU header and then EOF, recording the largest
+// buffer size the caller requested from Read.
+type headerOnlyConn struct {
+	header  []byte
+	served  bool
+	maxRead int
+}
+
+func (c *headerOnlyConn) Read(p []byte) (int, error) {
+	if len(p) > c.maxRead {
+		c.maxRead = len(p)
+	}
+	if c.served {
+		return 0, io.EOF
+	}
+	c.served = true
+	return copy(p, c.header), nil
+}
+
+func (c *headerOnlyConn) Write(p []byte) (int, error)      { return len(p), nil }
+func (c *headerOnlyConn) Close() error                     { return nil }
+func (c *headerOnlyConn) LocalAddr() net.Addr              { return dummyAddr("local") }
+func (c *headerOnlyConn) RemoteAddr() net.Addr             { return dummyAddr("remote") }
+func (c *headerOnlyConn) SetDeadline(time.Time) error      { return nil }
+func (c *headerOnlyConn) SetReadDeadline(time.Time) error  { return nil }
+func (c *headerOnlyConn) SetWriteDeadline(time.Time) error { return nil }
+
+// TestReadPDUMaxLengthDoesNotPreallocateLargePayload verifies that a declared
+// 100 MiB PDU that never delivers its payload cannot make the reader request
+// (and therefore allocate) the full announced size.
+func TestReadPDUMaxLengthDoesNotPreallocateLargePayload(t *testing.T) {
+	const declared = 100 * 1024 * 1024
+	var header [6]byte
+	header[0] = pdu.TypePDataTF
+	binary.BigEndian.PutUint32(header[2:6], declared)
+
+	conn := &headerOnlyConn{header: header[:]}
+	if _, err := ReadPDUMaxLength(conn, 0, pdu.MaxPDUDataLength); err == nil {
+		t.Fatal("ReadPDUMaxLength() error = nil, want truncated payload error")
+	}
+	if conn.maxRead > 1<<20 {
+		t.Fatalf("largest read buffer = %d bytes, want <= 1 MiB", conn.maxRead)
+	}
+}
+
+// TestReadPDUMaxLengthUnrecognizedPDUType verifies that callers can detect an
+// unknown PDU type with errors.Is, so an A-ABORT (unrecognized-PDU) can be sent.
+func TestReadPDUMaxLengthUnrecognizedPDUType(t *testing.T) {
+	conn := &headerOnlyConn{header: []byte{0x08, 0x00, 0x00, 0x00, 0x00, 0x00}}
+	_, err := ReadPDUMaxLength(conn, 0, pdu.MaxPDUDataLength)
+	if !errors.Is(err, ErrUnrecognizedPDUType) {
+		t.Fatalf("ReadPDUMaxLength() error = %v, want ErrUnrecognizedPDUType", err)
+	}
 }

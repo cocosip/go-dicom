@@ -818,7 +818,7 @@ func buildFragmentSequence(frames [][]byte, bitsAllocated uint16, mode pixeldata
 		if paddedSize%2 != 0 {
 			paddedSize++
 		}
-		if paddedSize > int(math.MaxUint32-8) {
+		if uint64(paddedSize) > uint64(math.MaxUint32-8) {
 			return nil, fmt.Errorf("fragment too large to represent in BOT at frame %d", i)
 		}
 		padded := uint32(paddedSize)

@@ -54,6 +54,14 @@ var (
 	// send another response after its final response.
 	ErrCFindOperationCompleted = errors.New("C-FIND operation already completed")
 
+	// ErrSubOperationCompleted indicates that a C-MOVE/C-GET handler attempted
+	// to send another response after its final response.
+	ErrSubOperationCompleted = errors.New("sub-operation already completed")
+
+	// ErrTooManyRequests indicates that the configured limit of concurrent
+	// inbound request handlers was reached.
+	ErrTooManyRequests = errors.New("too many concurrent requests")
+
 	// ErrHandlerShutdownTimeout indicates that Service.Close stopped waiting
 	// because an inbound request handler did not exit before the configured
 	// handler shutdown timeout.

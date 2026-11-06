@@ -162,8 +162,8 @@ func TestServiceSetState(t *testing.T) {
 		t.Errorf("State not updated correctly, got %s", service.GetState())
 	}
 
-	// Invalid transition: AssociationRequested -> Transferring
-	err = service.setState(StateTransferring)
+	// Invalid transition: AssociationRequested -> ReleaseRequested
+	err = service.setState(StateReleaseRequested)
 	if err == nil {
 		t.Error("Invalid transition should return error")
 	}

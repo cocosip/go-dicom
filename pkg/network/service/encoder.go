@@ -19,10 +19,37 @@ import (
 // EncodeDIMSEMessage encodes a DIMSE message into command and data datasets.
 // The command dataset is always encoded in Implicit VR Little Endian. The data
 // dataset is encoded using the negotiated transfer syntax.
+//
+// CommandDataSetType (0000,0800) is derived from the bytes actually produced:
+// it is 0x0101 when no data dataset is sent and 0x0001 otherwise. This keeps the
+// command set and the P-DATA stream consistent (PS3.7 6.3, PS3.8 Annex E) even
+// when a constructor set a flag that does not match its dataset.
 func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (commandData, datasetData []byte, err error) {
 	commandDS := msg.CommandDataset()
 	if commandDS == nil {
 		return nil, nil, fmt.Errorf("message has no command dataset")
+	}
+
+	dataDS := msg.DataDataset()
+	if dataDS != nil {
+		if transferSyntax == nil {
+			transferSyntax = transfer.ExplicitVRLittleEndian
+		}
+		dataBuf := &bytes.Buffer{}
+		if err := writer.Write(dataBuf, dataDS,
+			writer.WithTransferSyntax(transferSyntax),
+			writer.WithoutPreamble()); err != nil {
+			return nil, nil, fmt.Errorf("failed to encode data dataset: %w", err)
+		}
+		datasetData = dataBuf.Bytes()
+	}
+
+	dataSetType := uint16(0x0101)
+	if len(datasetData) > 0 {
+		dataSetType = 0x0001
+	}
+	if err := commandDS.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{dataSetType})); err != nil {
+		return nil, nil, fmt.Errorf("failed to update CommandDataSetType: %w", err)
 	}
 
 	// Encode once to calculate the bytes following CommandGroupLength, then
@@ -46,22 +73,7 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 		writer.WithKeepGroupLengths()); err != nil {
 		return nil, nil, fmt.Errorf("failed to encode command dataset: %w", err)
 	}
-	commandData = commandBuf.Bytes()
-
-	dataDS := msg.DataDataset()
-	if dataDS == nil {
-		return commandData, nil, nil
-	}
-	if transferSyntax == nil {
-		transferSyntax = transfer.ExplicitVRLittleEndian
-	}
-	dataBuf := &bytes.Buffer{}
-	if err := writer.Write(dataBuf, dataDS,
-		writer.WithTransferSyntax(transferSyntax),
-		writer.WithoutPreamble()); err != nil {
-		return nil, nil, fmt.Errorf("failed to encode data dataset: %w", err)
-	}
-	return commandData, dataBuf.Bytes(), nil
+	return commandBuf.Bytes(), datasetData, nil
 }
 
 // DecodeDIMSEMessage decodes raw command and data Dataset bytes. Command bytes

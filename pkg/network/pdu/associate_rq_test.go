@@ -12,6 +12,16 @@ import (
 	"testing"
 )
 
+// testProposedContexts returns one minimal valid proposed presentation context
+// so user-information-focused tests satisfy the mandatory-item encode checks.
+func testProposedContexts() []PresentationContextRQ {
+	return []PresentationContextRQ{{
+		ID:               1,
+		AbstractSyntax:   testCTImageStorageUID,
+		TransferSyntaxes: []string{testExplicitVRLittleLE},
+	}}
+}
+
 func TestAAssociateRQEncodeRejectsInvalidPresentationContexts(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -83,6 +93,43 @@ func TestAAssociateRQEncodeRejectsMoreThan128PresentationContexts(t *testing.T) 
 	_, err := rq.Encode()
 	if !errors.Is(err, ErrTooManyPresentationContexts) {
 		t.Fatalf("Encode() error = %v, want ErrTooManyPresentationContexts", err)
+	}
+}
+
+// TestAAssociateRQEncodeRejectsMissingMandatoryFields verifies the encode-side
+// checks required by PS3.8 Table 9-11 (mandatory items and AE titles).
+func TestAAssociateRQEncodeRejectsMissingMandatoryFields(t *testing.T) {
+	validContexts := []PresentationContextRQ{{
+		ID:               1,
+		AbstractSyntax:   testCTImageStorageUID,
+		TransferSyntaxes: []string{testExplicitVRLittleLE},
+	}}
+
+	tests := []struct {
+		name   string
+		mutate func(*AAssociateRQ)
+	}{
+		{"empty called AE title", func(rq *AAssociateRQ) { rq.CalledAETitle = "" }},
+		{"all-space calling AE title", func(rq *AAssociateRQ) { rq.CallingAETitle = "   " }},
+		{"empty application context", func(rq *AAssociateRQ) { rq.ApplicationContext = "" }},
+		{"unsupported application context", func(rq *AAssociateRQ) { rq.ApplicationContext = testUnsupportedAppContext }},
+		{"nil user information", func(rq *AAssociateRQ) { rq.UserInformation = nil }},
+		{"empty implementation class UID", func(rq *AAssociateRQ) { rq.UserInformation.ImplementationClassUID = "" }},
+		{"no presentation contexts", func(rq *AAssociateRQ) { rq.PresentationContexts = nil }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := NewAAssociateRQ()
+			rq.CalledAETitle = testCalledAETitle
+			rq.CallingAETitle = testCallingAETitle
+			rq.PresentationContexts = validContexts
+			tt.mutate(rq)
+
+			if _, err := rq.Encode(); err == nil {
+				t.Fatal("Encode() error = nil, want validation error")
+			}
+		})
 	}
 }
 
@@ -282,6 +329,7 @@ func TestAAssociateRQ_EncodeDecodeMultiplePresentationContexts(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithUserIdentity(t *testing.T) {
 	rq := NewAAssociateRQ()
+	rq.PresentationContexts = testProposedContexts()
 	rq.CalledAETitle = testServerAETitle
 	rq.CallingAETitle = testClientAETitle
 
@@ -325,6 +373,7 @@ func TestAAssociateRQ_EncodeDecodeWithUserIdentity(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithUsernamePassword(t *testing.T) {
 	rq := NewAAssociateRQ()
+	rq.PresentationContexts = testProposedContexts()
 	rq.CalledAETitle = testServerAETitle
 	rq.CallingAETitle = testClientAETitle
 
@@ -368,6 +417,7 @@ func TestAAssociateRQ_EncodeDecodeWithUsernamePassword(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithExtendedNegotiation(t *testing.T) {
 	rq := NewAAssociateRQ()
+	rq.PresentationContexts = testProposedContexts()
 	rq.CalledAETitle = testServerAETitle
 	rq.CallingAETitle = testClientAETitle
 
@@ -461,6 +511,9 @@ func TestCommonExtendedNegotiation_AllowsEmptyRelatedUIDList(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithCombinedExtendedNegotiation(t *testing.T) {
 	rq := NewAAssociateRQ()
+	rq.PresentationContexts = testProposedContexts()
+	rq.CalledAETitle = testCalledAETitle
+	rq.CallingAETitle = testCallingAETitle
 	rq.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{{
 		SOPClassUID:         testExtendedSOPClassUID,
 		ServiceClassAppInfo: []byte{1, 0, 1},
@@ -560,6 +613,7 @@ func TestReadItemRejectsTruncatedHeader(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithRoleSelection(t *testing.T) {
 	rq := NewAAssociateRQ()
+	rq.PresentationContexts = testProposedContexts()
 	rq.CalledAETitle = testServerAETitle
 	rq.CallingAETitle = testClientAETitle
 
@@ -604,6 +658,7 @@ func TestAAssociateRQ_EncodeDecodeWithRoleSelection(t *testing.T) {
 
 func TestAAssociateRQ_EncodeDecodeWithImplementationVersion(t *testing.T) {
 	rq := NewAAssociateRQ()
+	rq.PresentationContexts = testProposedContexts()
 	rq.CalledAETitle = testServerAETitle
 	rq.CallingAETitle = testClientAETitle
 	rq.UserInformation.ImplementationVersionName = "GO_DICOM_1_0"
@@ -637,6 +692,7 @@ func TestAAssociateRQ_DecodeInvalidPDUType(t *testing.T) {
 
 func TestAETitleSpacePadding(t *testing.T) {
 	rq := NewAAssociateRQ()
+	rq.PresentationContexts = testProposedContexts()
 	rq.CalledAETitle = "SHORT"    // Only 5 chars
 	rq.CallingAETitle = "ANOTHER" // 7 chars
 

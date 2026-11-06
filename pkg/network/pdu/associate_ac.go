@@ -137,12 +137,34 @@ func NewAAssociateAC() *AAssociateAC {
 	}
 }
 
+// validateForEncode checks the mandatory A-ASSOCIATE-AC structure before
+// encoding (PS3.8 Table 9-17, PS3.7 Annex D.3.3.2), so the encoder never emits
+// a PDU that a conformant peer is entitled to reject.
+func (a *AAssociateAC) validateForEncode() error {
+	if a == nil {
+		return fmt.Errorf("A-ASSOCIATE-AC is nil")
+	}
+	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
+		return err
+	}
+	if err := validateApplicationContext(a.ApplicationContext); err != nil {
+		return fmt.Errorf("A-ASSOCIATE-AC: %w", err)
+	}
+	if a.UserInformation == nil {
+		return fmt.Errorf("A-ASSOCIATE-AC is missing user information")
+	}
+	if a.UserInformation.ImplementationClassUID == "" {
+		return fmt.Errorf("A-ASSOCIATE-AC is missing implementation class UID")
+	}
+	if len(a.PresentationContexts) == 0 {
+		return fmt.Errorf("A-ASSOCIATE-AC must contain at least one presentation context")
+	}
+	return validatePresentationContextsAC(a.PresentationContexts)
+}
+
 // Encode encodes the A-ASSOCIATE-AC to a RawPDU.
 func (a *AAssociateAC) Encode() (*RawPDU, error) {
-	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
-		return nil, err
-	}
-	if err := validatePresentationContextsAC(a.PresentationContexts); err != nil {
+	if err := a.validateForEncode(); err != nil {
 		return nil, err
 	}
 	// The encoder always writes a Maximum Length sub-item, so mark it present
@@ -408,11 +430,8 @@ func (a *AAssociateAC) ValidateStructure() error {
 	if a.applicationContextCount != 0 && a.applicationContextCount != 1 {
 		return fmt.Errorf("A-ASSOCIATE-AC must contain exactly one application context item, got %d", a.applicationContextCount)
 	}
-	if a.ApplicationContext == "" {
-		return fmt.Errorf("A-ASSOCIATE-AC is missing application context")
-	}
-	if a.ApplicationContext != applicationContextUID {
-		return fmt.Errorf("A-ASSOCIATE-AC has unsupported application context %q", a.ApplicationContext)
+	if err := validateApplicationContext(a.ApplicationContext); err != nil {
+		return fmt.Errorf("A-ASSOCIATE-AC: %w", err)
 	}
 	if len(a.PresentationContexts) == 0 {
 		return fmt.Errorf("A-ASSOCIATE-AC must contain at least one presentation context")

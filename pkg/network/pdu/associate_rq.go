@@ -137,12 +137,45 @@ func NewAAssociateRQ() *AAssociateRQ {
 	}
 }
 
+// validateApplicationContext checks the mandatory Application Context Item value.
+func validateApplicationContext(applicationContext string) error {
+	if applicationContext == "" {
+		return fmt.Errorf("missing application context")
+	}
+	if applicationContext != applicationContextUID {
+		return fmt.Errorf("unsupported application context %q", applicationContext)
+	}
+	return nil
+}
+
+// validateForEncode checks the mandatory A-ASSOCIATE-RQ structure before
+// encoding (PS3.8 Table 9-11, PS3.7 Annex D.3.3.2), so the encoder never emits
+// a PDU that a conformant peer is entitled to reject.
+func (a *AAssociateRQ) validateForEncode() error {
+	if a == nil {
+		return fmt.Errorf("A-ASSOCIATE-RQ is nil")
+	}
+	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
+		return err
+	}
+	if err := validateApplicationContext(a.ApplicationContext); err != nil {
+		return fmt.Errorf("A-ASSOCIATE-RQ: %w", err)
+	}
+	if a.UserInformation == nil {
+		return fmt.Errorf("A-ASSOCIATE-RQ is missing user information")
+	}
+	if a.UserInformation.ImplementationClassUID == "" {
+		return fmt.Errorf("A-ASSOCIATE-RQ is missing implementation class UID")
+	}
+	if len(a.PresentationContexts) == 0 {
+		return fmt.Errorf("A-ASSOCIATE-RQ must contain at least one presentation context")
+	}
+	return validatePresentationContexts(a.PresentationContexts)
+}
+
 // Encode encodes the A-ASSOCIATE-RQ into a RawPDU.
 func (a *AAssociateRQ) Encode() (*RawPDU, error) {
-	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
-		return nil, err
-	}
-	if err := validatePresentationContexts(a.PresentationContexts); err != nil {
+	if err := a.validateForEncode(); err != nil {
 		return nil, err
 	}
 	// The encoder always writes a Maximum Length sub-item, so mark it present
@@ -432,11 +465,8 @@ func (a *AAssociateRQ) ValidateStructure() error {
 	if a.applicationContextCount != 0 && a.applicationContextCount != 1 {
 		return fmt.Errorf("A-ASSOCIATE-RQ must contain exactly one application context item, got %d", a.applicationContextCount)
 	}
-	if a.ApplicationContext == "" {
-		return fmt.Errorf("A-ASSOCIATE-RQ is missing application context")
-	}
-	if a.ApplicationContext != applicationContextUID {
-		return fmt.Errorf("A-ASSOCIATE-RQ has unsupported application context %q", a.ApplicationContext)
+	if err := validateApplicationContext(a.ApplicationContext); err != nil {
+		return fmt.Errorf("A-ASSOCIATE-RQ: %w", err)
 	}
 	if len(a.PresentationContexts) == 0 {
 		return fmt.Errorf("A-ASSOCIATE-RQ must contain at least one presentation context")

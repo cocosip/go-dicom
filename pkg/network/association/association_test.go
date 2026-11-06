@@ -167,7 +167,7 @@ func TestAssociation_AddExtendedNegotiationRetainsInsertedObject(t *testing.T) {
 	assoc.AddExtendedNegotiation(negotiation)
 
 	negotiation.AcceptApplicationInfo([]byte{1, 0})
-	ac := ToAAssociateAC(assoc)
+	ac := ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
 	if got := ac.UserInformation.ExtendedNegotiations; len(got) != 1 ||
 		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0}) {
 		t.Fatalf("accepted extended negotiations = %#v", got)

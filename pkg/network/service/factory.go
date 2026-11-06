@@ -123,6 +123,32 @@ func optionalUInt16(commandDS *dataset.Dataset, fieldTag *tag.Tag) (uint16, erro
 	return commandDS.GetUInt16(fieldTag, 0)
 }
 
+// copyOptionalCommandElements preserves the optional diagnostic command
+// elements that a rebuilt response would otherwise drop (PS3.7 Annex C).
+func copyOptionalCommandElements(src, dst *dataset.Dataset) {
+	if src == nil || dst == nil {
+		return
+	}
+	for _, t := range []*tag.Tag{tag.ErrorComment, tag.ErrorID, tag.OffendingElement} {
+		if elem, ok := src.Get(t); ok {
+			_ = dst.AddOrUpdate(elem)
+		}
+	}
+}
+
+// moveOriginatorFromCommand returns the C-MOVE originator fields of a C-STORE-RQ.
+func moveOriginatorFromCommand(commandDS *dataset.Dataset) (string, uint16, bool) {
+	aet, ok := commandDS.GetString(tag.MoveOriginatorApplicationEntityTitle)
+	if !ok || aet == "" {
+		return "", 0, false
+	}
+	messageID, err := commandDS.GetUInt16(tag.MoveOriginatorMessageID, 0)
+	if err != nil {
+		return "", 0, false
+	}
+	return aet, messageID, true
+}
+
 // createCEchoRequest creates a C-ECHO-RQ from datasets.
 func createCEchoRequest(commandDS *dataset.Dataset) (*dimse.CEchoRequest, error) {
 	// Get MessageID
@@ -176,6 +202,24 @@ func createCStoreRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CStoreReque
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
+	// The command set is authoritative for the identifiers (PS3.7 9.1.1.1);
+	// the dataset is only the payload.
+	if uid, ok := commandDS.GetString(tag.AffectedSOPClassUID); ok && uid != "" {
+		req.SetAffectedSOPClassUID(uid)
+	}
+	if uid, ok := commandDS.GetString(tag.AffectedSOPInstanceUID); ok && uid != "" {
+		req.SetAffectedSOPInstanceUID(uid)
+	}
+	if aet, originatorID, ok := moveOriginatorFromCommand(commandDS); ok {
+		if err := req.SetMoveOriginator(aet, originatorID); err != nil {
+			return nil, fmt.Errorf("failed to set Move Originator: %w", err)
+		}
+	}
+	priority, err := optionalUInt16(commandDS, tag.Priority)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Priority: %w", err)
+	}
+	req.SetPriority(priority)
 	return req, nil
 }
 
@@ -244,6 +288,11 @@ func createCFindRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRequest
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
+	priority, err := optionalUInt16(commandDS, tag.Priority)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Priority: %w", err)
+	}
+	req.SetPriority(priority)
 	return req, nil
 }
 
@@ -279,6 +328,11 @@ func createCGetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CGetRequest, 
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
+	priority, err := optionalUInt16(commandDS, tag.Priority)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Priority: %w", err)
+	}
+	req.SetPriority(priority)
 	return req, nil
 }
 
@@ -296,26 +350,29 @@ func createCGetResponse(commandDS *dataset.Dataset) (*dimse.CGetResponse, error)
 
 	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
+	remaining, err := optionalUInt16(commandDS, tag.NumberOfRemainingSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfRemainingSuboperations: %w", err)
+	}
+	completed, err := optionalUInt16(commandDS, tag.NumberOfCompletedSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfCompletedSuboperations: %w", err)
+	}
+	failed, err := optionalUInt16(commandDS, tag.NumberOfFailedSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfFailedSuboperations: %w", err)
+	}
+	warning, err := optionalUInt16(commandDS, tag.NumberOfWarningSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfWarningSuboperations: %w", err)
+	}
+
 	if statusCode == status.CGetPending.Code {
-		remaining, err := requiredUInt16(commandDS, "NumberOfRemainingSuboperations", tag.NumberOfRemainingSuboperations)
-		if err != nil {
-			return nil, err
-		}
-		completed, err := requiredUInt16(commandDS, "NumberOfCompletedSuboperations", tag.NumberOfCompletedSuboperations)
-		if err != nil {
-			return nil, err
-		}
-		failed, err := requiredUInt16(commandDS, "NumberOfFailedSuboperations", tag.NumberOfFailedSuboperations)
-		if err != nil {
-			return nil, err
-		}
-		warning, err := requiredUInt16(commandDS, "NumberOfWarningSuboperations", tag.NumberOfWarningSuboperations)
-		if err != nil {
-			return nil, err
-		}
 		return dimse.NewCGetResponsePending(messageID, sopClassUID, remaining, completed, failed, warning), nil
 	}
-	return dimse.NewCGetResponse(messageID, status.LookupStatus(statusCode), sopClassUID), nil
+	resp := dimse.NewCGetResponse(messageID, status.LookupStatus(statusCode), sopClassUID)
+	resp.SetSubOperationCounts(remaining, completed, failed, warning)
+	return resp, nil
 }
 
 // createCMoveRequest creates a C-MOVE-RQ from datasets.
@@ -355,6 +412,11 @@ func createCMoveRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CMoveRequest
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
+	priority, err := optionalUInt16(commandDS, tag.Priority)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Priority: %w", err)
+	}
+	req.SetPriority(priority)
 	return req, nil
 }
 
@@ -372,26 +434,29 @@ func createCMoveResponse(commandDS *dataset.Dataset) (*dimse.CMoveResponse, erro
 
 	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
+	remaining, err := optionalUInt16(commandDS, tag.NumberOfRemainingSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfRemainingSuboperations: %w", err)
+	}
+	completed, err := optionalUInt16(commandDS, tag.NumberOfCompletedSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfCompletedSuboperations: %w", err)
+	}
+	failed, err := optionalUInt16(commandDS, tag.NumberOfFailedSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfFailedSuboperations: %w", err)
+	}
+	warning, err := optionalUInt16(commandDS, tag.NumberOfWarningSuboperations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NumberOfWarningSuboperations: %w", err)
+	}
+
 	if statusCode == status.CMovePending.Code {
-		remaining, err := requiredUInt16(commandDS, "NumberOfRemainingSuboperations", tag.NumberOfRemainingSuboperations)
-		if err != nil {
-			return nil, err
-		}
-		completed, err := requiredUInt16(commandDS, "NumberOfCompletedSuboperations", tag.NumberOfCompletedSuboperations)
-		if err != nil {
-			return nil, err
-		}
-		failed, err := requiredUInt16(commandDS, "NumberOfFailedSuboperations", tag.NumberOfFailedSuboperations)
-		if err != nil {
-			return nil, err
-		}
-		warning, err := requiredUInt16(commandDS, "NumberOfWarningSuboperations", tag.NumberOfWarningSuboperations)
-		if err != nil {
-			return nil, err
-		}
 		return dimse.NewCMoveResponsePending(messageID, sopClassUID, remaining, completed, failed, warning), nil
 	}
-	return dimse.NewCMoveResponse(messageID, status.LookupStatus(statusCode), sopClassUID), nil
+	resp := dimse.NewCMoveResponse(messageID, status.LookupStatus(statusCode), sopClassUID)
+	resp.SetSubOperationCounts(remaining, completed, failed, warning)
+	return resp, nil
 }
 
 // createCFindResponse creates a C-FIND-RSP from datasets.

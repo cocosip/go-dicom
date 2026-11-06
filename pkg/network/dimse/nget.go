@@ -99,7 +99,8 @@ type NGetResponse struct {
 //   - s: Status (use status.NGetSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID
-//   - attributeList: Dataset containing the requested attribute values
+//   - attributeList: Dataset containing the requested attribute values; it is
+//     attached only when the status is Success (PS3.7 9.3.2.2)
 func NewNGetResponse(
 	messageIDBeingRespondedTo uint16,
 	s *status.Status,
@@ -110,7 +111,7 @@ func NewNGetResponse(
 	command := createNResponseCommand(uint16(CommandNGetRSP), messageIDBeingRespondedTo,
 		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
 	return &NGetResponse{
-		BaseResponse:              NewBaseResponse(command, attributeList),
+		BaseResponse:              NewBaseResponse(command, nResponseData(s, attributeList)),
 		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
@@ -160,7 +161,17 @@ func (r *NGetResponse) String() string {
 		r.MessageIDBeingRespondedTo(), st.State, r.statusCode, hasData)
 }
 
-// createNResponse is a helper function to create N-GET-RSP or N-SET-RSP command datasets.
+// nResponseData returns the attribute list that may be attached to an
+// N-GET-RSP, N-SET-RSP or N-CREATE-RSP: a data set is only present on Success.
+// This keeps the attached data consistent with the CommandDataSetType element.
+func nResponseData(s *status.Status, attributeList *dataset.Dataset) *dataset.Dataset {
+	if attributeList != nil && s.IsSuccess() {
+		return attributeList
+	}
+	return nil
+}
+
+// createNResponseCommand is a helper function to create N-GET-RSP or N-SET-RSP command datasets.
 // This eliminates code duplication between NewNGetResponse and NewNSetResponse.
 func createNResponseCommand(
 	commandType uint16,
@@ -175,7 +186,7 @@ func createNResponseCommand(
 	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
-	if attributeList != nil && s.IsSuccess() {
+	if nResponseData(s, attributeList) != nil {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))

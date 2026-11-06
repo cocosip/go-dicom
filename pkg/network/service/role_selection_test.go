@@ -76,7 +76,7 @@ func TestDefaultRolesAllowOnlyRequestorToInvokeAndAcceptorToPerform(t *testing.T
 	request := dimse.NewCEchoRequest()
 	request.SetPresentationContextID(1)
 
-	requestor := NewService(&recordingConn{}, createTestAssociation(), WithAssociationRequestor(true))
+	requestor := acceptedService(t, &recordingConn{}, createTestAssociation(), WithAssociationRequestor(true))
 	if err := requestor.sendMessage(&sendRequest{message: request, resultCh: make(chan error, 1)}); err != nil {
 		t.Fatalf("requestor sendMessage failed with default roles: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestDefaultRolesAllowOnlyRequestorToInvokeAndAcceptorToPerform(t *testing.T
 		t.Fatalf("requestor handleRequest error = %v, want default SCP role rejection", err)
 	}
 
-	acceptor := NewService(&recordingConn{}, createTestAssociation())
+	acceptor := acceptedService(t, &recordingConn{}, createTestAssociation())
 	if err := acceptor.sendMessage(&sendRequest{message: request, resultCh: make(chan error, 1)}); err == nil || !strings.Contains(err.Error(), "SCU role") {
 		t.Fatalf("acceptor sendMessage error = %v, want default SCU role rejection", err)
 	}

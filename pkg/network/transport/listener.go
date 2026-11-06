@@ -78,10 +78,13 @@ func Listen(network, address string, opts ...ListenOption) (*Listener, error) {
 }
 
 // Accept waits for and returns the next connection to the listener.
-// If the listener was created with TLS support, the connection will be
-// upgraded to TLS before being returned.
+// If the listener was created with TLS support, the returned connection is a
+// *tls.Conn. The TLS handshake is performed lazily by crypto/tls on the first
+// Read or Write, i.e. in the per-connection goroutine under that goroutine's
+// read/write deadline, so a stalled handshake can never block the accept loop.
 //
-// The provided Context can be used to cancel the accept operation.
+// The provided Context can be used to cancel the accept operation. It does not
+// cover the (deferred) TLS handshake.
 //
 // Example:
 //
@@ -104,16 +107,7 @@ func (l *Listener) Accept(ctx context.Context) (net.Conn, error) {
 		return conn, nil
 	}
 
-	tlsConn := tls.Server(conn, l.tlsConfig)
-	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		_ = tlsConn.Close()
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("TLS handshake cancelled: %w", err)
-		}
-		return nil, fmt.Errorf("TLS handshake failed: %w", err)
-	}
-
-	return tlsConn, nil
+	return tls.Server(conn, l.tlsConfig), nil
 }
 
 func (l *Listener) acceptWithContext(ctx context.Context) (net.Conn, error) {

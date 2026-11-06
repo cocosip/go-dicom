@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -153,10 +154,12 @@ func TestListenTLS_Success(t *testing.T) {
 		if err != nil {
 			return
 		}
-		_ = conn.Close()
+		defer func() { _ = conn.Close() }()
+		_, _ = conn.Write([]byte("ping"))
 	}()
 
-	// Accept the TLS connection
+	// Accept the TLS connection. The handshake is lazy, so Accept must return
+	// without waiting for the client.
 	conn, err := listener.Accept(context.Background())
 	if err != nil {
 		t.Fatalf("Accept TLS failed: %v", err)
@@ -164,8 +167,24 @@ func TestListenTLS_Success(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 
 	// Verify it's a TLS connection
-	if _, ok := conn.(*tls.Conn); !ok {
-		t.Fatal("Expected *tls.Conn type")
+	tlsConn, ok := conn.(*tls.Conn)
+	if !ok {
+		t.Fatalf("Expected *tls.Conn type, got %T", conn)
+	}
+
+	// Trigger the deferred handshake with the caller's read deadline.
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline failed: %v", err)
+	}
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("TLS read failed: %v", err)
+	}
+	if string(buf) != "ping" {
+		t.Fatalf("read %q, want %q", buf, "ping")
+	}
+	if !tlsConn.ConnectionState().HandshakeComplete {
+		t.Fatal("TLS handshake was not completed by the first read")
 	}
 }
 
@@ -190,7 +209,7 @@ func TestListenTLS_HandshakeFailure(t *testing.T) {
 
 	addr := listener.Addr().String()
 
-	// Connect with a plain TCP client (no TLS)
+	// Connect with a plain TCP client that sends non-TLS bytes.
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		conn, err := net.Dial("tcp", addr)
@@ -198,20 +217,24 @@ func TestListenTLS_HandshakeFailure(t *testing.T) {
 			return
 		}
 		defer func() { _ = conn.Close() }()
-		// Just hold the connection for a bit
+		_, _ = conn.Write([]byte("this is not a TLS record\r\n"))
+		// Hold the connection open long enough for the server to read.
 		time.Sleep(200 * time.Millisecond)
 	}()
 
-	// Try to accept (should fail TLS handshake)
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancel()
-
-	_, err = listener.Accept(ctx)
-	if err == nil {
-		t.Fatal("Expected TLS handshake failure, got nil")
+	// Accept succeeds immediately: the handshake is deferred.
+	conn, err := listener.Accept(context.Background())
+	if err != nil {
+		t.Fatalf("Accept failed before handshake: %v", err)
 	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected deadline exceeded during TLS handshake, got %v", err)
+	defer func() { _ = conn.Close() }()
+
+	// The handshake failure is reported by the first read, not by Accept.
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline failed: %v", err)
+	}
+	if _, err := conn.Read(make([]byte, 1)); err == nil {
+		t.Fatal("Expected TLS handshake failure on first read, got nil")
 	}
 }
 

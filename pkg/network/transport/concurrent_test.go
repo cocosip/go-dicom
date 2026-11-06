@@ -175,13 +175,16 @@ func TestDialTLS_Concurrent(t *testing.T) {
 
 	addr := listener.Addr().String()
 
-	// Accept TLS connections in background
+	// Accept TLS connections in background. The TLS handshake is lazy, so the
+	// server must perform I/O on the connection to complete it before closing.
 	go func() {
 		for {
 			conn, err := listener.Accept(context.Background())
 			if err != nil {
 				return
 			}
+			_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+			_, _ = conn.Read(make([]byte, 1))
 			_ = conn.Close()
 		}
 	}()

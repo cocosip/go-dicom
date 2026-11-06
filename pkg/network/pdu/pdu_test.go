@@ -5,6 +5,7 @@ package pdu
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"strings"
 	"testing"
@@ -280,5 +281,90 @@ func TestIsValidPDUType(t *testing.T) {
 		if isValidPDUType(pduType) {
 			t.Errorf("Expected 0x%02X to be invalid", pduType)
 		}
+	}
+}
+
+// maxRequestReader serves one PDU header and then EOF, recording the largest
+// buffer size the caller requested from Read.
+type maxRequestReader struct {
+	header  []byte
+	served  bool
+	maxRead int
+}
+
+func (r *maxRequestReader) Read(p []byte) (int, error) {
+	if len(p) > r.maxRead {
+		r.maxRead = len(p)
+	}
+	if r.served {
+		return 0, io.EOF
+	}
+	r.served = true
+	return copy(p, r.header), nil
+}
+
+// TestRawPDUReadDoesNotPreallocateLargePayload verifies that a declared 100 MiB
+// PDU that never delivers its payload cannot make RawPDU.Read request (and
+// therefore allocate) the full announced size.
+func TestRawPDUReadDoesNotPreallocateLargePayload(t *testing.T) {
+	const declared = 100 * 1024 * 1024
+	header := make([]byte, 6)
+	header[0] = TypePDataTF
+	binary.BigEndian.PutUint32(header[2:6], declared)
+
+	r := &maxRequestReader{header: header}
+	p := &RawPDU{}
+	if err := p.Read(r); err == nil {
+		t.Fatal("Read() error = nil, want truncated payload error")
+	}
+	if uint32(r.maxRead) > pduDataChunkSize {
+		t.Fatalf("largest read buffer = %d bytes, want <= %d", r.maxRead, pduDataChunkSize)
+	}
+}
+
+// TestReadPDUDataChunksLargePayload verifies that the chunked reader returns
+// the complete, unmodified payload.
+func TestReadPDUDataChunksLargePayload(t *testing.T) {
+	data := bytes.Repeat([]byte{0xAB}, 2*pduDataChunkSize+123)
+	got, err := ReadPDUData(bytes.NewReader(data), uint32(len(data)))
+	if err != nil {
+		t.Fatalf("ReadPDUData() error = %v", err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatalf("ReadPDUData() returned %d bytes, want %d identical bytes", len(got), len(data))
+	}
+}
+
+func TestReadPDUDataZeroLength(t *testing.T) {
+	got, err := ReadPDUData(bytes.NewReader(nil), 0)
+	if err != nil {
+		t.Fatalf("ReadPDUData() error = %v", err)
+	}
+	if got != nil {
+		t.Fatalf("ReadPDUData() = %v, want nil", got)
+	}
+}
+
+// TestWriteItemHandlesShortWrites verifies that writeItem loops on short writes
+// instead of truncating the item.
+func TestWriteItemHandlesShortWrites(t *testing.T) {
+	w := &shortWriter{max: 2}
+	payload := []byte(applicationContextUID)
+	if err := writeItem(w, ItemTypeApplicationContext, payload); err != nil {
+		t.Fatalf("writeItem() error = %v", err)
+	}
+
+	encoded := w.Bytes()
+	if len(encoded) != 4+len(payload) {
+		t.Fatalf("written length = %d, want %d", len(encoded), 4+len(payload))
+	}
+	if encoded[0] != ItemTypeApplicationContext || encoded[1] != 0x00 {
+		t.Fatalf("unexpected item header: %v", encoded[:4])
+	}
+	if got := int(binary.BigEndian.Uint16(encoded[2:4])); got != len(payload) {
+		t.Fatalf("item length = %d, want %d", got, len(payload))
+	}
+	if !bytes.Equal(encoded[4:], payload) {
+		t.Fatalf("item payload = %q, want %q", encoded[4:], payload)
 	}
 }

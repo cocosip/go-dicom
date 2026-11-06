@@ -118,8 +118,11 @@ func createNOperationResponseCommand(
 	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{statusCode}))
-	if typeIDValue != 0 && typeIDTag != nil {
-		_ = command.Add(element.NewUnsignedShort(typeIDTag, []uint16{typeIDValue}))
+	// Action Type ID / Event Type ID is a required message field for
+	// N-ACTION-RSP / N-EVENT-REPORT-RSP. Presence must not be inferred from
+	// the value: 0 is a valid application-specific Type ID.
+	if typeIDTag != nil {
+		_ = command.AddOrUpdate(element.NewUnsignedShort(typeIDTag, []uint16{typeIDValue}))
 	}
 	if dataPresent {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))

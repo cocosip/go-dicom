@@ -414,7 +414,8 @@ func verificationAssociationRequest() *pdu.AAssociateRQ {
 			TransferSyntaxes: []string{"1.2.840.10008.1.2.1"},
 		}},
 		UserInformation: &pdu.UserInformation{
-			MaximumLength: 16384,
+			MaximumLength:          16384,
+			ImplementationClassUID: "1.2.826.0.1.3680043.10.854",
 			SCPSCURoleSelections: []pdu.SCPSCURoleSelection{{
 				SOPClassUID: testVerificationSOPClassUID,
 				SCURole:     1,

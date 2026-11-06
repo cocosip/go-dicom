@@ -20,7 +20,40 @@ const (
 	testCallingAE             = "CALLING_AE"
 	implicitVRLittleEndianUID = "1.2.840.10008.1.2"
 	verificationSOPClassUID   = "1.2.840.10008.1.1"
+	testImplementationUID     = "1.2.826.0.1.3680043.10.854"
 )
+
+// newTestRQ returns an A-ASSOCIATE-RQ that satisfies the PS3.8 mandatory items.
+func newTestRQ() *pdu.AAssociateRQ {
+	return &pdu.AAssociateRQ{
+		ProtocolVersion:    1,
+		CalledAETitle:      testCalledAE,
+		CallingAETitle:     testCallingAE,
+		ApplicationContext: testApplicationContext,
+		PresentationContexts: []pdu.PresentationContextRQ{{
+			ID:               1,
+			AbstractSyntax:   verificationSOPClassUID,
+			TransferSyntaxes: []string{implicitVRLittleEndianUID},
+		}},
+		UserInformation: &pdu.UserInformation{
+			MaximumLength:          16384,
+			ImplementationClassUID: testImplementationUID,
+		},
+	}
+}
+
+// newTestAC returns an A-ASSOCIATE-AC that satisfies the PS3.8 mandatory items.
+func newTestAC() *pdu.AAssociateAC {
+	ac := pdu.NewAAssociateAC()
+	ac.CalledAETitle = testCalledAE
+	ac.CallingAETitle = testCallingAE
+	ac.PresentationContexts = []pdu.PresentationContextAC{{
+		ID:             1,
+		Result:         pdu.ResultAcceptance,
+		TransferSyntax: implicitVRLittleEndianUID,
+	}}
+	return ac
+}
 
 // mockConn is a mock net.Conn for testing
 type mockConn struct {
@@ -92,12 +125,7 @@ func TestSendAssociationRequest(t *testing.T) {
 	}
 
 	// Create A-ASSOCIATE-RQ
-	rq := &pdu.AAssociateRQ{
-		ProtocolVersion:    1,
-		CalledAETitle:      testCalledAE,
-		CallingAETitle:     testCallingAE,
-		ApplicationContext: testApplicationContext,
-	}
+	rq := newTestRQ()
 
 	ctx := context.Background()
 	err := service.SendAssociationRequest(ctx, rq)
@@ -126,12 +154,7 @@ func TestSendAssociationRequestCompletesShortWrites(t *testing.T) {
 	service := NewService(conn, nil)
 	defer func() { _ = service.Close() }()
 
-	rq := &pdu.AAssociateRQ{
-		ProtocolVersion:    1,
-		CalledAETitle:      testCalledAE,
-		CallingAETitle:     testCallingAE,
-		ApplicationContext: testApplicationContext,
-	}
+	rq := newTestRQ()
 	rawPDU, err := rq.Encode()
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
@@ -202,9 +225,7 @@ func TestSendAssociationAccept(t *testing.T) {
 	defer func() { _ = service.Close() }()
 
 	// Create A-ASSOCIATE-AC with minimal required fields
-	ac := pdu.NewAAssociateAC()
-	ac.CalledAETitle = testCalledAE
-	ac.CallingAETitle = testCallingAE
+	ac := newTestAC()
 
 	ctx := context.Background()
 	err := service.SendAssociationAccept(ctx, ac)
@@ -307,6 +328,9 @@ func TestSendReleaseResponse(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil)
 	defer func() { _ = service.Close() }()
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
 
 	ctx := context.Background()
 	err := service.SendReleaseResponse(ctx)
@@ -406,21 +430,13 @@ func TestReceiveAssociationResponse_Accept(t *testing.T) {
 }
 
 func TestReceiveAssociationResponseRejectsMissingPresentationContexts(t *testing.T) {
+	// The AC encoder rejects an AC without presentation contexts, so exercise
+	// the shared structure validation directly (it is what the decoder runs).
 	ac := pdu.NewAAssociateAC()
 	ac.CalledAETitle = testCalledAE
 	ac.CallingAETitle = testCallingAE
-	rawPDU, err := ac.Encode()
-	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
-	}
-	service := NewService(&mockConn{readData: serializeRawPDUForTest(rawPDU)}, nil)
-	defer func() { _ = service.Close() }()
-	if err := service.setState(StateAssociationRequested); err != nil {
-		t.Fatalf("setState() error = %v", err)
-	}
-
-	if _, err := service.ReceiveAssociationResponse(context.Background()); err == nil {
-		t.Fatal("ReceiveAssociationResponse() error = nil, want missing presentation context error")
+	if err := ac.ValidateStructure(); err == nil {
+		t.Fatal("ValidateStructure() error = nil, want missing presentation context error")
 	}
 }
 
@@ -560,6 +576,8 @@ func TestReceiveAssociationRequestUsesLocalMaximumPDULength(t *testing.T) {
 }
 
 func TestReceiveAssociationRequestRejectsUnsupportedApplicationContext(t *testing.T) {
+	// The RQ encoder rejects an unsupported application context, so exercise
+	// the shared structure validation directly (it is what the decoder runs).
 	rq := pdu.NewAAssociateRQ()
 	rq.CalledAETitle = testCalledAE
 	rq.CallingAETitle = testCallingAE
@@ -567,15 +585,12 @@ func TestReceiveAssociationRequestRejectsUnsupportedApplicationContext(t *testin
 	rq.PresentationContexts = []pdu.PresentationContextRQ{{
 		ID: 1, AbstractSyntax: verificationSOPClassUID, TransferSyntaxes: []string{implicitVRLittleEndianUID},
 	}}
-	rawPDU, err := rq.Encode()
-	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
+	rq.UserInformation = &pdu.UserInformation{
+		MaximumLength:          16384,
+		ImplementationClassUID: testImplementationUID,
 	}
-	service := NewService(&mockConn{readData: serializeRawPDUForTest(rawPDU)}, nil)
-	defer func() { _ = service.Close() }()
-
-	if _, err := service.ReceiveAssociationRequest(context.Background()); err == nil {
-		t.Fatal("ReceiveAssociationRequest() error = nil, want unsupported application context error")
+	if err := rq.ValidateStructure(); err == nil {
+		t.Fatal("ValidateStructure() error = nil, want unsupported application context error")
 	}
 }
 
@@ -601,8 +616,8 @@ func TestReceiveAssociationRequestRejectsUnsupportedProtocolVersion(t *testing.T
 	)))
 	defer func() { _ = service.Close() }()
 
-	if _, err := service.ReceiveAssociationRequest(context.Background()); err != nil {
-		t.Fatalf("ReceiveAssociationRequest() error = %v", err)
+	if _, err := service.ReceiveAssociationRequest(context.Background()); err == nil {
+		t.Fatal("ReceiveAssociationRequest() error = nil, want rejection error")
 	}
 	if negotiatorCalled {
 		t.Fatal("association negotiator was called for an unsupported protocol version")

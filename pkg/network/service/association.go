@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -20,8 +21,18 @@ type serviceResponder struct {
 	service *Service
 }
 
+// maxAssociationPDULength bounds an A-ASSOCIATE-RQ/AC received before any
+// Maximum Length has been negotiated. It prevents a peer from making the
+// process allocate a huge buffer from a 6-byte header (PS3.8 9.3.2 limits the
+// User Information item to 65533 bytes, so 4 MiB is already generous).
+const maxAssociationPDULength = 4 << 20
+
 // SendAccept sends an A-ASSOCIATE-AC (Association Accept) PDU.
 func (r *serviceResponder) SendAccept(ctx context.Context, assoc *association.Association) error {
+	// The AC identifies the acceptor, never the requestor (PS3.7 D.3.3.2.2).
+	assoc.LocalImplementationClassUID = r.service.config.implementationClassUID
+	assoc.LocalImplementationVersionName = r.service.config.implementationVersionName
+
 	// Convert Association to A-ASSOCIATE-AC PDU. The AC advertises the
 	// acceptor's own receive limit; assoc.MaxPDULength is the requestor's limit
 	// and is retained for outgoing PDU fragmentation.
@@ -56,6 +67,12 @@ func (s *Service) writePDU(ctx context.Context, raw *pdu.RawPDU) error {
 	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
+	// P-DATA-TF is only valid in the established state (PS3.8 Sta6). Checking
+	// under writeMu guarantees that an A-RELEASE-RQ cannot slip in front of a
+	// DIMSE message that was already being encoded.
+	if raw.Type == pdu.TypePDataTF && s.GetState() != StateAssociationAccepted {
+		return fmt.Errorf("cannot send P-DATA-TF in state %s", s.GetState())
+	}
 	if deadline := deadlineFromContext(ctx, s.config.writeTimeout); !deadline.IsZero() {
 		if err := s.conn.SetWriteDeadline(deadline); err != nil {
 			return fmt.Errorf("failed to set write deadline: %w", err)
@@ -186,9 +203,9 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 		return ErrServiceClosed
 	}
 
-	// Validate state - must be in active association
+	// Validate state - must be in an active association
 	currentState := s.GetState()
-	if currentState != StateAssociationAccepted && currentState != StateTransferring {
+	if currentState != StateAssociationAccepted {
 		return fmt.Errorf("cannot send A-RELEASE-RQ in state %s", currentState)
 	}
 
@@ -234,6 +251,31 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 		return ErrServiceClosed
 	}
 
+	// A-RELEASE-RP is only valid while an association is established or while
+	// the peer's release request is being answered (PS3.8 Sta7/Sta8).
+	switch currentState := s.GetState(); currentState {
+	case StateAssociationAccepted, StateReleaseRequested:
+	default:
+		return fmt.Errorf("cannot send A-RELEASE-RP in state %s", currentState)
+	}
+
+	if err := s.writeReleaseResponse(ctx); err != nil {
+		return err
+	}
+
+	// Transition to Closed state
+	if err := s.setState(StateClosed); err != nil {
+		return fmt.Errorf("failed to transition state: %w", err)
+	}
+	s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
+
+	return nil
+}
+
+// writeReleaseResponse encodes and writes an A-RELEASE-RP without changing the
+// service state. It is used by SendReleaseResponse and by the compatibility
+// path that keeps the connection open after a peer release.
+func (s *Service) writeReleaseResponse(ctx context.Context) error {
 	// Create A-RELEASE-RP PDU
 	releaseRP := &pdu.AReleaseRP{}
 
@@ -248,13 +290,6 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 		return fmt.Errorf("failed to write A-RELEASE-RP: %w", err)
 	}
 	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
-
-	// Transition to Closed state
-	if err := s.setState(StateClosed); err != nil {
-		return fmt.Errorf("failed to transition state: %w", err)
-	}
-	s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
-
 	return nil
 }
 
@@ -317,8 +352,11 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		return nil, fmt.Errorf("cannot receive association response in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
+	rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), maxAssociationPDULength)
 	if err != nil {
+		if errors.Is(err, transport.ErrUnrecognizedPDUType) {
+			_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnrecognizedPDU)
+		}
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
 	s.emitPDUBytes(ctx, observability.DirectionInbound, rawPDU)
@@ -330,9 +368,11 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		// Decode A-ASSOCIATE-AC
 		ac := &pdu.AAssociateAC{}
 		if err := ac.Decode(rawPDU); err != nil {
+			_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 			return nil, fmt.Errorf("failed to decode A-ASSOCIATE-AC: %w", err)
 		}
 		if err := ac.ValidateStructure(); err != nil {
+			_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 			return nil, fmt.Errorf("invalid A-ASSOCIATE-AC structure: %w", err)
 		}
 
@@ -348,6 +388,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		// Decode A-ASSOCIATE-RJ
 		rj := &pdu.AAssociateRJ{}
 		if err := rj.Decode(rawPDU); err != nil {
+			_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 			return nil, fmt.Errorf("failed to decode A-ASSOCIATE-RJ: %w", err)
 		}
 
@@ -355,10 +396,11 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		_ = s.setState(StateClosed)
 		s.emitAssociationObservation(ctx, observability.EventAssociationRejected, observability.DirectionInbound, observability.OutcomeRejected, nil)
 
-		return nil, fmt.Errorf("association rejected: result=%d, source=%d, reason=%d",
-			rj.Result, rj.Source, rj.Reason)
+		return nil, fmt.Errorf("%w: result=%d, source=%d, reason=%d",
+			ErrAssociationRejected, rj.Result, rj.Source, rj.Reason)
 
 	default:
+		_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnexpectedPDU)
 		return nil, fmt.Errorf("unexpected PDU type: expected A-ASSOCIATE-AC or RJ, got 0x%02X", pduType)
 	}
 }
@@ -384,8 +426,13 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		return nil, fmt.Errorf("cannot receive association request in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
+	rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), maxAssociationPDULength)
 	if err != nil {
+		// An unrecognized PDU type must be reported with A-ABORT (PS3.8 9.3.8);
+		// plain I/O errors just close the connection.
+		if errors.Is(err, transport.ErrUnrecognizedPDUType) {
+			_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnrecognizedPDU)
+		}
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
 	s.emitPDUBytes(ctx, observability.DirectionInbound, rawPDU)
@@ -393,6 +440,7 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 
 	// Validate PDU type
 	if pduType != pdu.TypeAAssociateRQ {
+		_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnexpectedPDU)
 		return nil, fmt.Errorf("unexpected PDU type: expected A-ASSOCIATE-RQ (0x01), got 0x%02X", pduType)
 	}
 
@@ -402,10 +450,22 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 	if err := rq.DecodeWithWarnings(rawPDU, func(warning pdu.DecodeWarning) {
 		warnings = append(warnings, warning)
 	}); err != nil {
+		_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 		return nil, fmt.Errorf("failed to decode A-ASSOCIATE-RQ: %w", err)
 	}
 	if err := rq.ValidateStructure(); err != nil {
+		_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 		return nil, fmt.Errorf("invalid A-ASSOCIATE-RQ structure: %w", err)
+	}
+	// Reject an invalid peer AE Title with A-ASSOCIATE-RJ (PS3.8 Table 9-11)
+	// instead of failing later while encoding the A-ASSOCIATE-AC.
+	if err := pdu.ValidateAETitle("called", rq.CalledAETitle); err != nil {
+		_ = s.SendAssociationReject(ctx, pdu.ResultRejectedPermanent, pdu.SourceServiceUser, pdu.ReasonServiceUserCalledAETitleNotRecognized)
+		return nil, fmt.Errorf("%w: %v", ErrAssociationRejected, err)
+	}
+	if err := pdu.ValidateAETitle("calling", rq.CallingAETitle); err != nil {
+		_ = s.SendAssociationReject(ctx, pdu.ResultRejectedPermanent, pdu.SourceServiceUser, pdu.ReasonServiceUserCallingAETitleNotRecognized)
+		return nil, fmt.Errorf("%w: %v", ErrAssociationRejected, err)
 	}
 	s.ensureAssociationIdentity(rq.CallingAETitle, rq.CalledAETitle)
 	associationInfo := s.associationObservationForRQ(rq)
@@ -434,16 +494,27 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		); err != nil {
 			return nil, fmt.Errorf("failed to reject unsupported protocol version 0x%04X: %w", rq.ProtocolVersion, err)
 		}
-		return rq, nil
+		return nil, fmt.Errorf("%w: unsupported protocol version 0x%04X", ErrAssociationRejected, rq.ProtocolVersion)
 	}
 
 	// Build Association from A-ASSOCIATE-RQ
 	assoc := association.FromAAssociateRQ(rq, s.config.transferSyntaxRegistry)
-	if configured := s.config.asynchronousOperations; configured != nil {
+
+	// PS3.7 D.3.3.3: the response shall only contain the Asynchronous Operations
+	// Window when the request contained it, and the accepted values shall be
+	// equal to or less than the proposed values (0 means unlimited).
+	if requested := assoc.RequestedAsynchronousOperations; requested != nil {
+		var configuredInvoked, configuredPerformed uint16
+		if configured := s.config.asynchronousOperations; configured != nil {
+			configuredInvoked = configured.MaxInvokedOperations
+			configuredPerformed = configured.MaxPerformedOperations
+		}
 		assoc.AsynchronousOperations = association.NewAsynchronousOperationsWindow(
-			configured.MaxInvokedOperations,
-			configured.MaxPerformedOperations,
+			clampAsyncOperations(configuredInvoked, requested.MaxInvokedOperations),
+			clampAsyncOperations(configuredPerformed, requested.MaxPerformedOperations),
 		)
+	} else {
+		assoc.AsynchronousOperations = nil
 	}
 
 	// Create responder for the negotiator
@@ -463,12 +534,36 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 			return nil, fmt.Errorf("association negotiation failed: %w", err)
 		}
 	} else {
-		// No negotiator - use default behavior: accept all contexts with first transfer syntax
-		defaultNegotiator := &DefaultAssociationNegotiator{}
+		// No negotiator - use default behavior: accept all contexts with the
+		// first proposed transfer syntax that the registry knows about.
+		defaultNegotiator := &DefaultAssociationNegotiator{Registry: s.config.transferSyntaxRegistry}
 		if err := defaultNegotiator.OnAssociationRequest(ctx, assoc, responder); err != nil {
 			return nil, fmt.Errorf("default association negotiation failed: %w", err)
 		}
 	}
 
-	return rq, nil
+	// The negotiator must have sent exactly one response. Returning nil from a
+	// rejection path previously left callers unable to tell success from
+	// failure, so report the outcome explicitly.
+	switch s.GetState() {
+	case StateAssociationAccepted:
+		return rq, nil
+	case StateClosed, StateAborted:
+		return nil, ErrAssociationRejected
+	default:
+		return nil, fmt.Errorf("association negotiator returned without sending A-ASSOCIATE-AC or RJ")
+	}
+}
+
+// clampAsyncOperations returns the accepted value for one Asynchronous
+// Operations Window field. Zero means "unlimited" in PS3.7 D.3.3.3; the
+// response value must be equal to or less than the offered value.
+func clampAsyncOperations(configured, offered uint16) uint16 {
+	if offered == 0 {
+		return configured
+	}
+	if configured == 0 || configured > offered {
+		return offered
+	}
+	return configured
 }

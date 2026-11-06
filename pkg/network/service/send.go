@@ -43,8 +43,12 @@ func (s *Service) sendLoop(ctx context.Context) error {
 			return nil
 
 		case req := <-s.sendQueue:
-			// Process send request
-			err := s.sendMessage(req)
+			// Process send request. Re-check the state here because a message
+			// may have been queued before A-RELEASE started (PS3.8 Sta7).
+			err := s.checkSendState()
+			if err == nil {
+				err = s.sendMessage(req)
+			}
 			s.observeSentMessage(req.message, req.lifecycle, err)
 			if err != nil {
 				// Send error back to caller
@@ -67,6 +71,14 @@ func (s *Service) sendLoop(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// checkSendState rejects DIMSE writes outside the established state.
+func (s *Service) checkSendState() error {
+	if state := s.GetState(); state != StateAssociationAccepted {
+		return fmt.Errorf("cannot send DIMSE in state %s", state)
+	}
+	return nil
 }
 
 // sendMessage sends a single DIMSE message over the network.

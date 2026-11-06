@@ -16,6 +16,14 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
+// Default implementation identification values used when the local AE does not
+// configure its own. They identify the go-dicom implementation in the
+// A-ASSOCIATE-RQ / A-ASSOCIATE-AC User Information item (PS3.7 D.3.3.2).
+const (
+	DefaultImplementationClassUID    = "1.2.826.0.1.3680043.8.498.1"
+	DefaultImplementationVersionName = "go-dicom-1.0"
+)
+
 // Association represents a DICOM association between two Application Entities.
 // This is a pure data structure that describes the negotiated parameters of an association.
 // It does not contain any network I/O logic.
@@ -32,9 +40,17 @@ type Association struct {
 	ProtocolVersion uint16 // Usually 0x0001
 	MaxPDULength    uint32 // Maximum PDU length (default 16384)
 
-	// Implementation identification
+	// Implementation identification of the remote AE (as received in the
+	// A-ASSOCIATE-RQ or A-ASSOCIATE-AC).
 	ImplementationClassUID    string // Implementation Class UID
 	ImplementationVersionName string // Implementation Version Name (optional)
+
+	// Local implementation identification. These values are written into the
+	// A-ASSOCIATE-AC so that the acceptor identifies itself, never the
+	// requestor (PS3.7 D.3.3.2.2). Empty values fall back to the go-dicom
+	// defaults.
+	LocalImplementationClassUID    string
+	LocalImplementationVersionName string
 
 	// Presentation Contexts
 	PresentationContexts []*PresentationContext
@@ -68,9 +84,9 @@ func NewAssociation(callingAE, calledAE string) *Association {
 		CallingAE:                 callingAE,
 		CalledAE:                  calledAE,
 		ProtocolVersion:           0x0001,
-		MaxPDULength:              16384,                         // 16KB default
-		ImplementationClassUID:    "1.2.826.0.1.3680043.8.498.1", // go-dicom implementation UID
-		ImplementationVersionName: "go-dicom-1.0",
+		MaxPDULength:              16384, // 16KB default
+		ImplementationClassUID:    DefaultImplementationClassUID,
+		ImplementationVersionName: DefaultImplementationVersionName,
 		PresentationContexts:      make([]*PresentationContext, 0),
 		ExtendedNegotiations:      make([]*ExtendedNegotiation, 0),
 		RoleSelections:            make([]*RoleSelection, 0),
@@ -1087,28 +1103,35 @@ func lookupTransferSyntax(registry *transfer.Registry, value *uid.UID) (*transfe
 	return registry.Lookup(value)
 }
 
-// ToAAssociateAC converts an Association to an A-ASSOCIATE-AC PDU.
-// This is typically used by an SCP (server) to send the association acceptance response.
-// The Association should have been negotiated (presentation contexts accepted/rejected).
-func ToAAssociateAC(assoc *Association) *pdu.AAssociateAC {
-	return ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
-}
-
 // ToAAssociateACWithMaxPDULength builds an A-ASSOCIATE-AC whose Maximum Length
 // user information advertises the acceptor's own receive limit (PS3.8 D.1).
 // assoc.MaxPDULength holds the requestor's limit, so a server must pass its own
 // configured limit here instead of relying on the association value.
+//
+// The Implementation Class UID and Implementation Version Name in the AC come
+// from assoc.LocalImplementationClassUID / LocalImplementationVersionName and
+// therefore identify the acceptor, never the requestor (PS3.7 D.3.3.2.2).
+// Empty values fall back to the go-dicom defaults.
 func ToAAssociateACWithMaxPDULength(assoc *Association, maxPDULength uint32) *pdu.AAssociateAC {
 	ac := pdu.NewAAssociateAC()
 	ac.CallingAETitle = assoc.CallingAE
 	ac.CalledAETitle = assoc.CalledAE
 	ac.ProtocolVersion = assoc.ProtocolVersion
 
+	implementationClassUID := assoc.LocalImplementationClassUID
+	if implementationClassUID == "" {
+		implementationClassUID = DefaultImplementationClassUID
+	}
+	implementationVersionName := assoc.LocalImplementationVersionName
+	if implementationVersionName == "" {
+		implementationVersionName = DefaultImplementationVersionName
+	}
+
 	// Set user information
 	ac.UserInformation = &pdu.UserInformation{
 		MaximumLength:             maxPDULength,
-		ImplementationClassUID:    assoc.ImplementationClassUID,
-		ImplementationVersionName: assoc.ImplementationVersionName,
+		ImplementationClassUID:    implementationClassUID,
+		ImplementationVersionName: implementationVersionName,
 	}
 
 	// Asynchronous operations
