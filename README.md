@@ -1,6 +1,6 @@
 # go-dicom
 
-A pure Go implementation of the DICOM (Digital Imaging and Communications in Medicine) standard, inspired by the [fo-dicom](https://github.com/fo-dicom/fo-dicom) C# library.
+A pure Go implementation of the DICOM (Digital Imaging and Communications in Medicine) standard. The project is developed independently, with [fo-dicom](https://github.com/fo-dicom/fo-dicom) serving as one reference for interoperability and implementation research.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/cocosip/go-dicom.svg)](https://pkg.go.dev/github.com/cocosip/go-dicom)
 [![CI](https://github.com/cocosip/go-dicom/actions/workflows/ci.yml/badge.svg)](https://github.com/cocosip/go-dicom/actions/workflows/ci.yml)
@@ -2174,7 +2174,7 @@ go vet ./...
 
 ## Relationship to fo-dicom (C#)
 
-This project is a Go implementation inspired by the fo-dicom library:
+`go-dicom` is an independent Go implementation of DICOM. It shares DICOM concepts with fo-dicom and supports interoperability with it, while its APIs, internal design, and behavior can differ because it targets a different language and runtime:
 
 1. ✅ Core data types (Tag, VR, Dictionary)
 2. ✅ Data structures (Element, Dataset)
@@ -2197,9 +2197,7 @@ See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-This project is heavily inspired by [fo-dicom](https://github.com/fo-dicom/fo-dicom), an excellent DICOM library for .NET.
-
-Special thanks to the fo-dicom contributors for their comprehensive implementation of the DICOM standard.
+Thanks to the [fo-dicom](https://github.com/fo-dicom/fo-dicom) contributors for providing a useful DICOM reference implementation and interoperability counterpart.
 
 ## Contributing
 
