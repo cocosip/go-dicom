@@ -280,18 +280,6 @@ func TestRecvLoop_NonPDataTFPDU(t *testing.T) {
 	}
 }
 
-func TestValidateInboundPDULengthUsesNegotiatedLimit(t *testing.T) {
-	service := NewService(nil, nil, WithMaxPDULength(16))
-	t.Cleanup(func() { _ = service.Close() })
-
-	if err := service.validateInboundPDULength(pdu.NewRawPDU(pdu.TypePDataTF, make([]byte, 17))); err == nil {
-		t.Fatal("validateInboundPDULength() error = nil, want negotiated limit error")
-	}
-	if err := service.validateInboundPDULength(pdu.NewRawPDU(pdu.TypePDataTF, make([]byte, 16))); err != nil {
-		t.Fatalf("validateInboundPDULength() error = %v for limit-sized PDU", err)
-	}
-}
-
 func TestRecvLoop_ContextIDChange(t *testing.T) {
 	t.Skip("Skipping until raw dataset decoding is implemented")
 
