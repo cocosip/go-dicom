@@ -14,6 +14,45 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
+// numericBytes returns an element's entire raw value bytes. In-memory buffers
+// are returned without copying; other buffers are read once into a new slice so
+// callers can decode all values in a single pass.
+func numericBytes(buf buffer.ByteBuffer) ([]byte, error) {
+	if buf == nil {
+		return nil, nil
+	}
+	size := buf.Size()
+	if size == 0 {
+		return nil, nil
+	}
+	if buf.IsMemory() {
+		if data := buf.Data(); len(data) == int(size) {
+			return data, nil
+		}
+	}
+	data := make([]byte, size)
+	if err := buf.GetByteRange(0, size, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// numericValue returns the raw bytes of a single value. In-memory buffers are
+// sliced without copying; other buffers are read into a small new slice.
+func numericValue(buf buffer.ByteBuffer, offset uint32, size int) ([]byte, error) {
+	if buf.IsMemory() {
+		if data := buf.Data(); len(data) >= int(offset)+size {
+			start := int(offset)
+			return data[start : start+size], nil
+		}
+	}
+	data := make([]byte, size)
+	if err := buf.GetByteRange(offset, uint32(size), data); err != nil { //nolint:gosec // size is a small constant
+		return nil, err
+	}
+	return data, nil
+}
+
 // Compile-time checks to ensure all numeric types implement Element interface
 var _ Element = (*UnsignedShort)(nil)
 var _ Element = (*UnsignedLong)(nil)
@@ -70,9 +109,9 @@ func (u *UnsignedShort) GetValue(index int) (uint16, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, u.Count())
 	}
 
-	data := make([]byte, 2)
 	offset := uint32(index * 2) // #nosec G115 -- index is range-checked above
-	if err := u.buffer.GetByteRange(offset, 2, data); err != nil {
+	data, err := numericValue(u.buffer, offset, 2)
+	if err != nil {
 		return 0, err
 	}
 
@@ -86,13 +125,14 @@ func (u *UnsignedShort) GetValues() ([]uint16, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(u.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := u.getByteOrder()
 	values := make([]uint16, count)
-	for i := 0; i < count; i++ {
-		v, err := u.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = order.Uint16(data[i*2:])
 	}
 	return values, nil
 }
@@ -143,9 +183,9 @@ func (u *UnsignedLong) GetValue(index int) (uint32, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, u.Count())
 	}
 
-	data := make([]byte, 4)
 	offset := uint32(index * 4) // #nosec G115 -- index is range-checked above
-	if err := u.buffer.GetByteRange(offset, 4, data); err != nil {
+	data, err := numericValue(u.buffer, offset, 4)
+	if err != nil {
 		return 0, err
 	}
 
@@ -159,13 +199,14 @@ func (u *UnsignedLong) GetValues() ([]uint32, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(u.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := u.getByteOrder()
 	values := make([]uint32, count)
-	for i := 0; i < count; i++ {
-		v, err := u.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = order.Uint32(data[i*4:])
 	}
 	return values, nil
 }
@@ -216,9 +257,9 @@ func (s *SignedShort) GetValue(index int) (int16, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, s.Count())
 	}
 
-	data := make([]byte, 2)
 	offset := uint32(index * 2) // #nosec G115 -- index is range-checked above
-	if err := s.buffer.GetByteRange(offset, 2, data); err != nil {
+	data, err := numericValue(s.buffer, offset, 2)
+	if err != nil {
 		return 0, err
 	}
 
@@ -232,13 +273,14 @@ func (s *SignedShort) GetValues() ([]int16, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(s.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := s.getByteOrder()
 	values := make([]int16, count)
-	for i := 0; i < count; i++ {
-		v, err := s.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = int16(order.Uint16(data[i*2:])) // #nosec G115 -- safe bit pattern conversion
 	}
 	return values, nil
 }
@@ -289,9 +331,9 @@ func (s *SignedLong) GetValue(index int) (int32, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, s.Count())
 	}
 
-	data := make([]byte, 4)
 	offset := uint32(index * 4) // #nosec G115 -- index is range-checked above
-	if err := s.buffer.GetByteRange(offset, 4, data); err != nil {
+	data, err := numericValue(s.buffer, offset, 4)
+	if err != nil {
 		return 0, err
 	}
 
@@ -305,13 +347,14 @@ func (s *SignedLong) GetValues() ([]int32, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(s.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := s.getByteOrder()
 	values := make([]int32, count)
-	for i := 0; i < count; i++ {
-		v, err := s.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = int32(order.Uint32(data[i*4:])) // #nosec G115 -- safe bit pattern conversion
 	}
 	return values, nil
 }
@@ -363,9 +406,9 @@ func (f *Float) GetValue(index int) (float32, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, f.Count())
 	}
 
-	data := make([]byte, 4)
 	offset := uint32(index * 4) // #nosec G115 -- index is range-checked above
-	if err := f.buffer.GetByteRange(offset, 4, data); err != nil {
+	data, err := numericValue(f.buffer, offset, 4)
+	if err != nil {
 		return 0, err
 	}
 
@@ -380,13 +423,14 @@ func (f *Float) GetValues() ([]float32, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(f.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := f.getByteOrder()
 	values := make([]float32, count)
-	for i := 0; i < count; i++ {
-		v, err := f.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = math.Float32frombits(order.Uint32(data[i*4:]))
 	}
 	return values, nil
 }
@@ -438,9 +482,9 @@ func (d *Double) GetValue(index int) (float64, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, d.Count())
 	}
 
-	data := make([]byte, 8)
 	offset := uint32(index * 8) // #nosec G115 -- index is range-checked above
-	if err := d.buffer.GetByteRange(offset, 8, data); err != nil {
+	data, err := numericValue(d.buffer, offset, 8)
+	if err != nil {
 		return 0, err
 	}
 
@@ -455,13 +499,14 @@ func (d *Double) GetValues() ([]float64, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(d.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := d.getByteOrder()
 	values := make([]float64, count)
-	for i := 0; i < count; i++ {
-		v, err := d.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = math.Float64frombits(order.Uint64(data[i*8:]))
 	}
 	return values, nil
 }
@@ -512,9 +557,9 @@ func (s *SignedVeryLong) GetValue(index int) (int64, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, s.Count())
 	}
 
-	data := make([]byte, 8)
 	offset := uint32(index * 8) // #nosec G115 -- index is range-checked above
-	if err := s.buffer.GetByteRange(offset, 8, data); err != nil {
+	data, err := numericValue(s.buffer, offset, 8)
+	if err != nil {
 		return 0, err
 	}
 
@@ -528,13 +573,14 @@ func (s *SignedVeryLong) GetValues() ([]int64, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(s.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := s.getByteOrder()
 	values := make([]int64, count)
-	for i := 0; i < count; i++ {
-		v, err := s.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = int64(order.Uint64(data[i*8:])) // #nosec G115 -- safe bit pattern conversion
 	}
 	return values, nil
 }
@@ -585,9 +631,9 @@ func (u *UnsignedVeryLong) GetValue(index int) (uint64, error) {
 		return 0, fmt.Errorf("index %d out of range [0, %d)", index, u.Count())
 	}
 
-	data := make([]byte, 8)
 	offset := uint32(index * 8) // #nosec G115 -- index is range-checked above
-	if err := u.buffer.GetByteRange(offset, 8, data); err != nil {
+	data, err := numericValue(u.buffer, offset, 8)
+	if err != nil {
 		return 0, err
 	}
 
@@ -601,13 +647,14 @@ func (u *UnsignedVeryLong) GetValues() ([]uint64, error) {
 		return nil, nil
 	}
 
+	data, err := numericBytes(u.buffer)
+	if err != nil {
+		return nil, err
+	}
+	order := u.getByteOrder()
 	values := make([]uint64, count)
-	for i := 0; i < count; i++ {
-		v, err := u.GetValue(i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = v
+	for i := range values {
+		values[i] = order.Uint64(data[i*8:])
 	}
 	return values, nil
 }

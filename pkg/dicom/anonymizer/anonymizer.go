@@ -429,11 +429,23 @@ func (a *Anonymizer) blankItem(ds *dataset.Dataset, elem element.Element, nonZer
 		return ds.AddOrUpdate(element.NewString(t, vrValue, []string{}))
 	}
 
-	// Binary types (OB, OW, OD, OF, OL, OV, UN) - replace with empty buffer
-	if vrCode == vr.CodeOB || vrCode == vr.CodeOW || vrCode == vr.CodeOD ||
-		vrCode == vr.CodeOF || vrCode == vr.CodeOL || vrCode == vr.CodeOV ||
-		vrCode == vr.CodeUN {
-		return ds.AddOrUpdate(element.NewOtherByte(t, []byte{}))
+	// Binary types - preserve the original VR and use a zero-filled value when a
+	// non-zero length is required (ActionD/C/U); ActionZ gets an empty value.
+	switch vrCode {
+	case vr.CodeOB:
+		return ds.AddOrUpdate(element.NewOtherByte(t, zeroedBinaryValue(vrValue, nonZeroLength)))
+	case vr.CodeOW:
+		return ds.AddOrUpdate(element.NewOtherWord(t, zeroedBinaryValue(vrValue, nonZeroLength)))
+	case vr.CodeOD:
+		return ds.AddOrUpdate(element.NewOtherDouble(t, zeroedBinaryValue(vrValue, nonZeroLength)))
+	case vr.CodeOF:
+		return ds.AddOrUpdate(element.NewOtherFloat(t, zeroedBinaryValue(vrValue, nonZeroLength)))
+	case vr.CodeOL:
+		return ds.AddOrUpdate(element.NewOtherLong(t, zeroedBinaryValue(vrValue, nonZeroLength)))
+	case vr.CodeOV:
+		return ds.AddOrUpdate(element.NewOtherVeryLong(t, zeroedBinaryValue(vrValue, nonZeroLength)))
+	case vr.CodeUN:
+		return ds.AddOrUpdate(element.NewUnknown(t, zeroedBinaryValue(vrValue, nonZeroLength)))
 	}
 
 	// Numeric types - replace with zero value or empty array
@@ -487,6 +499,20 @@ func (a *Anonymizer) blankItem(ds *dataset.Dataset, elem element.Element, nonZer
 		// For other types, create empty buffer
 		return ds.AddOrUpdate(element.NewOtherByte(t, []byte{}))
 	}
+}
+
+// zeroedBinaryValue returns an empty value for ActionZ, or a zero-filled value
+// sized to one element unit for dummy (non-zero length) actions. Values must be
+// an even number of bytes, so a minimum of two bytes is used.
+func zeroedBinaryValue(vrValue *vr.VR, nonZeroLength bool) []byte {
+	if !nonZeroLength {
+		return []byte{}
+	}
+	size := vrValue.UnitSize()
+	if size < 2 {
+		size = 2
+	}
+	return make([]byte, size)
 }
 
 func dummyStringValue(vrValue *vr.VR) string {

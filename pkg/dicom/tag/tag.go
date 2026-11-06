@@ -228,12 +228,12 @@ func (t *Tag) Hash() uint32 {
 // Note: Private creator lookup requires a dictionary, which is not available yet.
 // For now, private tags are parsed but the creator is stored as-is.
 func Parse(s string) (*Tag, error) {
+	// Trim surrounding whitespace first so whitespace-only input cannot slip
+	// past the length check and panic on the first byte access below.
+	s = strings.TrimSpace(s)
 	if len(s) < 8 {
 		return nil, fmt.Errorf("tag string too short: '%s' (expected at least 8 characters)", s)
 	}
-
-	// Remove spaces
-	s = strings.TrimSpace(s)
 
 	pos := 0
 

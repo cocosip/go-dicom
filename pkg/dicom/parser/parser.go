@@ -5,6 +5,7 @@
 package parser
 
 import (
+	"bufio"
 	"bytes"
 	"compress/flate"
 	"context"
@@ -54,6 +55,10 @@ const (
 	// allowed in an undefined-length sequence or fragment sequence. This prevents
 	// infinite loops on malformed data missing the delimitation item.
 	maxSequenceItems = 100000
+
+	// defaultMaxSequenceDepth is the default maximum nesting depth for sequences.
+	// It bounds recursion on malformed or maliciously deep sequences.
+	defaultMaxSequenceDepth = 100
 )
 
 // FileFormat represents the structure of a DICOM file.
@@ -161,6 +166,14 @@ type parseContext struct {
 	transferSyntaxRegistry *transfer.Registry
 	sequenceItemObserver   SequenceItemObserver
 	position               *readerPosition
+
+	// Recursion guard for nested sequences (SQ and undefined-length UN items).
+	maxSequenceDepth int
+	sequenceDepth    int
+
+	// strictVR makes an unrecognized explicit VR code abort parsing. When false
+	// (the default) unknown VR codes are tolerated and treated as UN.
+	strictVR bool
 
 	// File format detection
 	detectedFormat FileFormat
@@ -280,6 +293,27 @@ func WithContext(parent context.Context) Option {
 	}
 }
 
+// WithMaxSequenceDepth sets the maximum nesting depth for sequences.
+// Parsing fails when a sequence is nested deeper than this limit.
+// Defaults to 100. A non-positive value keeps the default.
+func WithMaxSequenceDepth(depth int) Option {
+	return func(ctx *parseContext) {
+		if depth > 0 {
+			ctx.maxSequenceDepth = depth
+		}
+	}
+}
+
+// WithStrictVR controls how an unrecognized explicit VR code is handled.
+// When strict is false (the default), unknown VR codes are tolerated and the
+// element is read as UN so a single bad element does not abort the whole file.
+// When strict is true, parsing fails.
+func WithStrictVR(strict bool) Option {
+	return func(ctx *parseContext) {
+		ctx.strictVR = strict
+	}
+}
+
 // newParseContext creates a new parse context with the given options.
 func newParseContext(opts ...Option) *parseContext {
 	ctx := &parseContext{
@@ -291,6 +325,7 @@ func newParseContext(opts ...Option) *parseContext {
 		readOption:             ReadDefault,
 		largeObjectSize:        65536,     // Default 64KB
 		maxElementSize:         524288000, // Default 500MB (prevent runaway allocation)
+		maxSequenceDepth:       defaultMaxSequenceDepth,
 		detectedFormat:         FormatUnknown,
 		transferSyntaxRegistry: transfer.NewRegistry(),
 	}
@@ -513,7 +548,9 @@ func (p *parseContext) contextAwareReader(r io.Reader) io.Reader {
 	if rs, ok := r.(io.ReadSeeker); ok {
 		return p.contextAwareReadSeeker(rs)
 	}
-	return &ctxReader{ctx: p.ctx, r: r}
+	// Buffer non-seekable readers to cut per-field Read syscalls. The seekable
+	// path is left unbuffered so lazy-loading seeks keep their exact semantics.
+	return bufio.NewReader(&ctxReader{ctx: p.ctx, r: r})
 }
 
 func (p *parseContext) contextAwareReadSeeker(rs io.ReadSeeker) io.ReadSeeker {
@@ -1128,7 +1165,16 @@ func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 		if _, err := io.ReadFull(p.reader, vrBytes); err != nil {
 			return nil, err
 		}
-		return vr.ParseBytes(vrBytes)
+		v, err := vr.ParseBytes(vrBytes)
+		if err != nil {
+			if p.strictVR {
+				return nil, err
+			}
+			// Tolerate unknown VR codes: read the element as UN so one bad
+			// element does not abort the whole file.
+			return vr.UN, nil
+		}
+		return v, nil
 	}
 	if isPrivateCreatorTag(t) {
 		return vr.LO, nil
@@ -1196,6 +1242,12 @@ func (p *parseContext) readLength(v *vr.VR) (uint32, error) {
 
 // readSequence reads a sequence element (VR=SQ).
 func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequence, error) {
+	if p.sequenceDepth >= p.maxSequenceDepth {
+		return nil, fmt.Errorf("maximum sequence nesting depth %d exceeded at tag %s", p.maxSequenceDepth, t)
+	}
+	p.sequenceDepth++
+	defer func() { p.sequenceDepth-- }()
+
 	seq := dataset.NewSequence(t)
 
 	// Handle undefined length (0xFFFFFFFF)

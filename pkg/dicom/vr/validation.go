@@ -233,14 +233,16 @@ func ValidateLT(content string) error {
 
 // ValidatePN validates Person Name (PN) values.
 func ValidatePN(content string) error {
-	// 64 characters maximum per component group
-	if len(content) > 64 {
-		return newValidationError("PN", content, "value exceeds maximum length of 64 characters")
+	// PS3.5 limits each component group to 64 characters. Component groups are
+	// separated by '=': alphabetic=ideographic=phonetic.
+	for _, group := range strings.Split(content, "=") {
+		if len(group) > 64 {
+			return newValidationError("PN", content, "component group exceeds maximum length of 64 characters")
+		}
 	}
 
 	// Person names can have up to 5 components separated by ^
 	// and up to 3 component groups separated by =
-	// For now, basic validation
 	return nil
 }
 

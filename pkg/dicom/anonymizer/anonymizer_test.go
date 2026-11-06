@@ -660,3 +660,55 @@ func TestSecurityProfileOptions(t *testing.T) {
 		t.Error("Profile with combined options should have rules")
 	}
 }
+
+func TestAnonymizerBlankItemPreservesBinaryVR(t *testing.T) {
+	tests := []struct {
+		name  string
+		elem  element.Element
+		want  *vr.VR
+		units int
+	}{
+		{"OB", element.NewOtherByte(tag.New(0x0028, 0x9001), []byte{1, 2}), vr.OB, 2},
+		{"OW", element.NewOtherWord(tag.New(0x0028, 0x9002), []byte{1, 2}), vr.OW, 2},
+		{"OD", element.NewOtherDouble(tag.New(0x0028, 0x9003), make([]byte, 8)), vr.OD, 8},
+		{"OF", element.NewOtherFloat(tag.New(0x0028, 0x9004), make([]byte, 4)), vr.OF, 4},
+		{"OL", element.NewOtherLong(tag.New(0x0028, 0x9005), make([]byte, 4)), vr.OL, 4},
+		{"OV", element.NewOtherVeryLong(tag.New(0x0028, 0x9006), make([]byte, 8)), vr.OV, 8},
+		{"UN", element.NewUnknown(tag.New(0x0028, 0x9007), []byte{1, 2}), vr.UN, 2},
+	}
+
+	for _, tt := range tests {
+		for _, action := range []SecurityProfileAction{ActionD, ActionZ} {
+			t.Run(tt.name+"/"+action.String(), func(t *testing.T) {
+				ds := dataset.New()
+				ds.SetAutoValidate(false)
+				if err := ds.Add(tt.elem); err != nil {
+					t.Fatalf("Add() error = %v", err)
+				}
+				profile := &SecurityProfile{}
+				tagText := tt.elem.Tag().String()
+				if err := profile.AddRule(tagText[1:len(tagText)-1], action); err != nil {
+					t.Fatalf("AddRule() error = %v", err)
+				}
+				if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+					t.Fatalf("AnonymizeInPlace() error = %v", err)
+				}
+
+				got, ok := ds.Get(tt.elem.Tag())
+				if !ok {
+					t.Fatal("element missing after anonymization")
+				}
+				if got.ValueRepresentation() != tt.want {
+					t.Fatalf("VR = %s, want %s", got.ValueRepresentation(), tt.want)
+				}
+				wantLen := 0
+				if action == ActionD {
+					wantLen = tt.units
+				}
+				if got.Length() != uint32(wantLen) {
+					t.Fatalf("length = %d, want %d", got.Length(), wantLen)
+				}
+			})
+		}
+	}
+}

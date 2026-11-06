@@ -375,3 +375,13 @@ func TestParsePrivateCreator(t *testing.T) {
 	}
 
 }
+
+func TestParseWhitespaceOnlyDoesNotPanic(t *testing.T) {
+	// Eight or more whitespace characters must return an error, not panic on the
+	// trimmed-to-empty string.
+	for _, input := range []string{"        ", "\t\t\t\t\t\t\t\t", "          "} {
+		if _, err := tag.Parse(input); err == nil {
+			t.Errorf("Parse(%q) error = nil, want an error", input)
+		}
+	}
+}

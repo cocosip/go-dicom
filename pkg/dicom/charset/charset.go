@@ -6,8 +6,12 @@ package charset
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"log/slog"
 	"strings"
+
+	"github.com/cocosip/go-dicom/pkg/logging"
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
@@ -156,7 +160,22 @@ func GetCharsetName(enc encoding.Encoding) (string, error) {
 // DecodeString decodes a byte slice using the specified encodings.
 // For single-byte character sets, only the first encoding is used.
 // For multi-byte or extended character sets, escape sequences are processed.
+//
+// Values using the DICOM default repertoire (no Specific Character Set declared)
+// that contain bytes above 0x7F are decoded leniently as ISO-8859-1 with a
+// warning instead of failing. Use DecodeStringStrict to reject such bytes.
 func DecodeString(data []byte, encodings []encoding.Encoding) (string, error) {
+	return decodeString(data, encodings, false)
+}
+
+// DecodeStringStrict is like DecodeString but enforces the 7-bit DICOM default
+// repertoire: bytes above 0x7F with no declared Specific Character Set are
+// reported as an error instead of being decoded as ISO-8859-1.
+func DecodeStringStrict(data []byte, encodings []encoding.Encoding) (string, error) {
+	return decodeString(data, encodings, true)
+}
+
+func decodeString(data []byte, encodings []encoding.Encoding, strict bool) (string, error) {
 	if len(data) == 0 {
 		return "", nil
 	}
@@ -173,9 +192,23 @@ func DecodeString(data []byte, encodings []encoding.Encoding) (string, error) {
 	if enc == nil {
 		enc = Default
 	}
-	if _, strict := enc.(*asciiEncoding); strict {
+	if _, isDefault := enc.(*asciiEncoding); isDefault {
 		if !isASCII(data) {
-			return "", fmt.Errorf("DICOM default character set only permits 7-bit ASCII")
+			if strict {
+				return "", fmt.Errorf("DICOM default character set only permits 7-bit ASCII")
+			}
+			logging.Emit(context.Background(), logging.Record{
+				Level:     slog.LevelWarn,
+				Component: "dicom.charset",
+				Event:     "default_charset_extended_bytes",
+				Message:   "DICOM default character set contains bytes above 0x7F; decoding leniently as ISO-8859-1",
+				Attrs:     []slog.Attr{slog.Int("byte_count", len(data))},
+			})
+			decoded, err := charmap.ISO8859_1.NewDecoder().Bytes(data)
+			if err != nil {
+				return "", fmt.Errorf("failed to decode string as ISO-8859-1: %w", err)
+			}
+			return string(decoded), nil
 		}
 		return string(data), nil
 	}

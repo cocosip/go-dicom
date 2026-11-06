@@ -220,6 +220,24 @@ func TestDefaultCharsetRejectsNonASCIIBytesInISO2022ASCIISegment(t *testing.T) {
 	}
 }
 
+func TestDecodeStringDefaultCharsetLenientForHighBytes(t *testing.T) {
+	// "Café" encoded as ISO-8859-1: no Specific Character Set declared.
+	data := []byte{'C', 'a', 'f', 0xe9}
+	got, err := charset.DecodeString(data, nil)
+	if err != nil {
+		t.Fatalf("DecodeString() error = %v, want lenient ISO-8859-1 decoding", err)
+	}
+	if got != "Café" {
+		t.Fatalf("DecodeString() = %q, want %q", got, "Café")
+	}
+}
+
+func TestDecodeStringStrictRejectsHighBytes(t *testing.T) {
+	if _, err := charset.DecodeStringStrict([]byte{0xe9}, nil); err == nil {
+		t.Fatal("DecodeStringStrict() accepted a byte above 0x7F in the default repertoire")
+	}
+}
+
 func TestEncodeStringAddsDICOMISO2022Designation(t *testing.T) {
 	data, err := charset.EncodeString("张三", charset.GetEncodings([]string{testCharsetISO2022IR58}))
 	if err != nil {

@@ -165,8 +165,9 @@ func (e *base) numericByteOrder() (binary.ByteOrder, bool) {
 
 // NumericByteOrder returns the byte order used by an element's numeric value
 // buffer and whether that order was explicitly established. Raw binary
-// constructors leave the order unspecified so callers can inherit it from the
-// containing Dataset's transfer syntax.
+// constructors leave the order unspecified, and the writer then emits the value
+// bytes unchanged; call element.SetByteOrder when those bytes were produced in
+// an order other than the destination transfer syntax.
 func NumericByteOrder(elem Element) (binary.ByteOrder, bool) {
 	if elem == nil {
 		return nil, false

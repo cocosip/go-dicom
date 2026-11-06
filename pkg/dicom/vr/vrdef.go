@@ -310,7 +310,10 @@ var (
 		is16bitLength:   true,
 		isMultiValue:    true,
 		paddingValue:    padSpace,
-		maximumLength:   64,
+		// PS3.5 limits each component group to 64 characters, not the whole
+		// value, so the generic per-value limit is disabled and the per-group
+		// check lives in ValidatePN.
+		maximumLength:   0,
 		unitSize:        1,
 		byteSwap:        1,
 		valueType:       reflect.TypeOf(""),

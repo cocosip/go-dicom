@@ -5,6 +5,7 @@ package element
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/daterange"
@@ -110,6 +111,26 @@ func (d *Date) GetDate(index int) (time.Time, error) {
 
 	// DICOM DA format: YYYYMMDD
 	return time.Parse("20060102", dateStr)
+}
+
+// normalizeFractionalSeconds expands a fractional-seconds component of 1-6
+// digits to the 6-digit form expected by the time layouts. DICOM permits any
+// precision from 1 to 6 digits. The value is returned unchanged when it has no
+// fractional component or one that is not 1-6 digits.
+func normalizeFractionalSeconds(value string) string {
+	dot := strings.IndexByte(value, '.')
+	if dot < 0 {
+		return value
+	}
+	end := dot + 1
+	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+		end++
+	}
+	digits := end - dot - 1
+	if digits < 1 || digits > 6 {
+		return value
+	}
+	return value[:dot+1] + value[dot+1:end] + strings.Repeat("0", 6-digits) + value[end:]
 }
 
 // GetDates parses and returns all dates.
@@ -234,17 +255,18 @@ func (tm *Time) GetTime(index int) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("time at index %d is empty", index)
 	}
 
-	// Try different DICOM TM formats
+	// Try different DICOM TM formats. Fractional seconds are accepted with 1 to
+	// 6 digits and normalized to the fixed 6-digit layout.
+	normalized := normalizeFractionalSeconds(timeStr)
 	formats := []string{
-		"150405.000000", // HHMMSS.FFFFFF
-		"150405.000",    // HHMMSS.FFF
+		"150405.000000", // HHMMSS.FFFFFF (fraction normalized to 6 digits)
 		"150405",        // HHMMSS
 		"1504",          // HHMM
 		"15",            // HH
 	}
 
 	for _, format := range formats {
-		if t, err := time.Parse(format, timeStr); err == nil {
+		if t, err := time.Parse(format, normalized); err == nil {
 			return t, nil
 		}
 	}
@@ -381,7 +403,9 @@ func (dt *DateTime) GetDateTime(index int) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("datetime at index %d is empty", index)
 	}
 
-	// Try different DICOM DT formats
+	// Try different DICOM DT formats. Fractional seconds are accepted with 1 to
+	// 6 digits and normalized to the fixed 6-digit layout.
+	normalized := normalizeFractionalSeconds(dtStr)
 	formats := []string{
 		"20060102150405.000000-0700", // YYYYMMDDHHMMSS.FFFFFF&ZZXX
 		"20060102150405.000000",      // YYYYMMDDHHMMSS.FFFFFF
@@ -392,7 +416,7 @@ func (dt *DateTime) GetDateTime(index int) (time.Time, error) {
 	}
 
 	for _, format := range formats {
-		if t, err := time.Parse(format, dtStr); err == nil {
+		if t, err := time.Parse(format, normalized); err == nil {
 			return t, nil
 		}
 	}

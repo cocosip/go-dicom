@@ -4,6 +4,7 @@
 package writer
 
 import (
+	"bufio"
 	"compress/flate"
 	"context"
 	"encoding/binary"
@@ -370,6 +371,17 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 		return err
 	}
 
+	// Buffer writes to the destination so per-element field writes do not each
+	// become a syscall. The positionWriter (when enabled) is placed above this
+	// buffer, so every byte it counts was accepted for delivery to the
+	// destination and item offsets match the final encoded stream.
+	buffered := bufio.NewWriter(w)
+	defer func() {
+		if flushErr := buffered.Flush(); flushErr != nil {
+			err = errors.Join(err, flushErr)
+		}
+	}()
+
 	// Apply options to configuration
 	// Use global defaults initially
 	config := &writeConfig{
@@ -414,7 +426,7 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 
 	// Create internal writer
 	writer := &Writer{
-		writer:                      w,
+		writer:                      buffered,
 		transferSyntax:              config.transferSyntax,
 		isExplicitVR:                config.transferSyntax.IsExplicitVR(),
 		includePreamble:             config.includePreamble,
@@ -425,7 +437,7 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 		sequenceItemObserver:        config.sequenceItemObserver,
 	}
 	if config.sequenceItemObserver != nil {
-		positioned := &positionWriter{writer: w}
+		positioned := &positionWriter{writer: buffered}
 		writer.writer = positioned
 		writer.positionWriter = positioned
 	}

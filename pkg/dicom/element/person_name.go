@@ -37,6 +37,22 @@ func (p *PersonNameComponents) String() string {
 	}, "^")
 }
 
+// firstComponentGroup returns the first non-empty '='-separated component group
+// of a DICOM person name. Well-formed values have the alphabetic group first,
+// followed optionally by the ideographic and phonetic groups.
+func firstComponentGroup(name string) string {
+	groups := strings.Split(name, "=")
+	for _, group := range groups {
+		if strings.TrimSpace(group) != "" {
+			return group
+		}
+	}
+	if len(groups) > 0 {
+		return groups[0]
+	}
+	return name
+}
+
 // PersonName represents a DICOM element with VR = PN (Person Name).
 // Person names have special structure: FamilyName^GivenName^MiddleName^NamePrefix^NameSuffix
 type PersonName struct {
@@ -115,13 +131,16 @@ func (p *PersonName) GetValue(index int) string {
 }
 
 // GetComponents returns the person name components at the specified index.
+// DICOM person names may contain up to three '='-separated component groups
+// (alphabetic=ideographic=phonetic). The components are taken from the first
+// non-empty group, which is the alphabetic group in a well-formed value.
 func (p *PersonName) GetComponents(index int) (*PersonNameComponents, error) {
 	name := p.GetValue(index)
 	if name == "" {
 		return nil, fmt.Errorf("person name at index %d is empty", index)
 	}
 
-	parts := strings.Split(name, "^")
+	parts := strings.Split(firstComponentGroup(name), "^")
 	components := &PersonNameComponents{}
 
 	if len(parts) > 0 {

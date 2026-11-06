@@ -100,8 +100,10 @@ func TestVRProperties(t *testing.T) {
 	if !vr.PN.Is16bitLength() {
 		t.Error("PN.Is16bitLength() should be true")
 	}
-	if vr.PN.MaximumLength() != 64 {
-		t.Errorf("PN.MaximumLength() = %v, want 64", vr.PN.MaximumLength())
+	// PN length is validated per component group in ValidatePN, so the generic
+	// per-value maximum length is unlimited.
+	if vr.PN.MaximumLength() != 0 {
+		t.Errorf("PN.MaximumLength() = %v, want 0 (per-group validation in ValidatePN)", vr.PN.MaximumLength())
 	}
 
 	// Test US (Unsigned Short) properties

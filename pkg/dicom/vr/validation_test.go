@@ -187,6 +187,31 @@ func TestValidateLO(t *testing.T) {
 	}
 }
 
+func TestValidatePN(t *testing.T) {
+	// Each component group may be up to 64 characters; the whole value may be
+	// longer when it contains multiple component groups.
+	group64 := "A234567890123456789012345678901234567890123456789012345678901234"
+	group65 := group64 + "5"
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{"single group at limit", group64, false},
+		{"single group too long", group65, true},
+		{"multiple groups each at limit", group64 + "=" + group64 + "=" + group64, false},
+		{"one group too long among several", group64 + "=" + group65, true},
+		{testCaseEmpty, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := vr.ValidatePN(tt.value); (err != nil) != tt.wantErr {
+				t.Errorf("ValidatePN() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidateTM(t *testing.T) {
 	tests := []struct {
 		name    string

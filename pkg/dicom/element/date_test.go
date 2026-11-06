@@ -106,6 +106,38 @@ func TestTime(t *testing.T) {
 	})
 }
 
+// TestTimeFractionalSecondsPrecision verifies TM accepts 1-6 fractional digits.
+func TestTimeFractionalSecondsPrecision(t *testing.T) {
+	// DICOM permits 1 to 6 fractional-second digits; all should normalize.
+	for _, value := range []string{"123456.7", "123456.78", "123456.789", "123456.789012"} {
+		t.Run(value, func(t *testing.T) {
+			elem := element.NewTime(tag.StudyTime, []string{value})
+			tm, err := elem.GetTime(0)
+			if err != nil {
+				t.Fatalf("GetTime(%q) error = %v", value, err)
+			}
+			if tm.Hour() != 12 || tm.Minute() != 34 || tm.Second() != 56 {
+				t.Fatalf("GetTime(%q) = %v, want 12:34:56", value, tm)
+			}
+		})
+	}
+}
+
+func TestDateTimeFractionalSecondsPrecision(t *testing.T) {
+	for _, value := range []string{"20250106123456.7", "20250106123456.789", "20250106123456.789012"} {
+		t.Run(value, func(t *testing.T) {
+			elem := element.NewDateTime(tag.AcquisitionDateTime, []string{value})
+			dt, err := elem.GetDateTime(0)
+			if err != nil {
+				t.Fatalf("GetDateTime(%q) error = %v", value, err)
+			}
+			if dt.Year() != 2025 || dt.Month() != 1 || dt.Day() != 6 || dt.Second() != 56 {
+				t.Fatalf("GetDateTime(%q) = %v, want 2025-01-06 12:34:56", value, dt)
+			}
+		})
+	}
+}
+
 // TestDateTime tests DT (DateTime) elements
 func TestDateTime(t *testing.T) {
 	t.Run("FullFormat", func(t *testing.T) {
