@@ -40,7 +40,9 @@ type AAssociateAC struct {
 	PresentationContexts []PresentationContextAC
 
 	// UserInformation contains optional user information items
-	UserInformation *UserInformation
+	UserInformation         *UserInformation
+	applicationContextCount uint8
+	userInformationCount    uint8
 }
 
 // PresentationContextAC represents an accepted presentation context in A-ASSOCIATE-AC.
@@ -333,6 +335,9 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 
 	// Reserved (32 bytes) - skip
 
+	applicationContextCount := 0
+	userInformationCount := 0
+	seenPresentationContexts := make(map[byte]struct{})
 	// Parse variable items
 	itemsData := data[68:]
 	reader := bytes.NewReader(itemsData)
@@ -348,6 +353,7 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 
 		switch itemType {
 		case ItemTypeApplicationContext:
+			applicationContextCount++
 			a.ApplicationContext = string(itemData)
 
 		case ItemTypePresentationContextAC:
@@ -355,9 +361,14 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 			if err != nil {
 				return fmt.Errorf("decoding presentation context: %w", err)
 			}
+			if _, exists := seenPresentationContexts[pc.ID]; exists {
+				return fmt.Errorf("duplicate presentation context ID %d", pc.ID)
+			}
+			seenPresentationContexts[pc.ID] = struct{}{}
 			a.PresentationContexts = append(a.PresentationContexts, pc)
 
 		case ItemTypeUserInformation:
+			userInformationCount++
 			ui, err := a.decodeUserInformation(itemData)
 			if err != nil {
 				return fmt.Errorf("decoding user information: %w", err)
@@ -369,6 +380,28 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 		}
 	}
 
+	a.applicationContextCount = uint8(applicationContextCount)
+	a.userInformationCount = uint8(userInformationCount)
+	return nil
+}
+
+// ValidateStructure validates the mandatory A-ASSOCIATE-AC structure.
+func (a *AAssociateAC) ValidateStructure() error {
+	if a == nil {
+		return fmt.Errorf("A-ASSOCIATE-AC is nil")
+	}
+	if a.applicationContextCount != 0 && a.applicationContextCount != 1 {
+		return fmt.Errorf("A-ASSOCIATE-AC must contain exactly one application context item, got %d", a.applicationContextCount)
+	}
+	if a.ApplicationContext == "" {
+		return fmt.Errorf("A-ASSOCIATE-AC is missing application context")
+	}
+	if a.userInformationCount != 0 && a.userInformationCount != 1 {
+		return fmt.Errorf("A-ASSOCIATE-AC must contain exactly one user information item, got %d", a.userInformationCount)
+	}
+	if a.UserInformation == nil || !a.UserInformation.hasMaximumLength {
+		return fmt.Errorf("A-ASSOCIATE-AC is missing maximum length user information")
+	}
 	return nil
 }
 
@@ -381,6 +414,12 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 	pc := PresentationContextAC{
 		ID:     data[0],
 		Result: data[2],
+	}
+	if pc.ID == 0 || pc.ID%2 == 0 {
+		return PresentationContextAC{}, fmt.Errorf("invalid presentation context ID %d", pc.ID)
+	}
+	if pc.Result > ResultTransferSyntaxesNotSupported {
+		return PresentationContextAC{}, fmt.Errorf("invalid presentation context result %d", pc.Result)
 	}
 
 	// Parse sub-items (only Transfer Syntax for accepted contexts)
@@ -401,6 +440,12 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 			}
 		}
 	}
+	if pc.Result == ResultAcceptance && pc.TransferSyntax == "" {
+		return PresentationContextAC{}, fmt.Errorf("accepted presentation context %d has no transfer syntax", pc.ID)
+	}
+	if pc.Result != ResultAcceptance && pc.TransferSyntax != "" {
+		return PresentationContextAC{}, fmt.Errorf("rejected presentation context %d contains a transfer syntax", pc.ID)
+	}
 
 	return pc, nil
 }
@@ -408,6 +453,7 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 // decodeUserInformation decodes the User Information item.
 func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, error) {
 	ui := &UserInformation{}
+	maximumLengthSeen := false
 	reader := bytes.NewReader(data)
 
 	for {
@@ -425,6 +471,7 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 				return nil, fmt.Errorf("invalid maximum length data: %d bytes", len(itemData))
 			}
 			ui.MaximumLength = binary.BigEndian.Uint32(itemData)
+			maximumLengthSeen = true
 
 		case ItemTypeImplementationClassUID:
 			ui.ImplementationClassUID = string(itemData)
@@ -475,5 +522,6 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 		}
 	}
 
+	ui.hasMaximumLength = maximumLengthSeen
 	return ui, nil
 }

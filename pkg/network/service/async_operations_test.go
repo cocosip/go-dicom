@@ -51,6 +51,41 @@ func TestSendCEchoLimitsOutstandingRequestsToNegotiatedMaximum(t *testing.T) {
 	assertCEchoResults(t, results, 3)
 }
 
+func TestSendCEchoUsesPeerPerformedLimitForOutgoingRequests(t *testing.T) {
+	assoc := createTestAssociation()
+	assoc.RequestedAsynchronousOperations = association.NewAsynchronousOperationsWindow(4, 3)
+	assoc.AsynchronousOperations = association.NewAsynchronousOperationsWindow(2, 1)
+	service := NewService(nil, assoc, WithAssociationRequestor(true))
+	t.Cleanup(func() { _ = service.Close() })
+
+	slots := service.asyncOperationSlots
+	if slots == nil {
+		t.Fatal("async operation slots = nil")
+	}
+	select {
+	case slots <- struct{}{}:
+	case <-time.After(time.Second):
+		t.Fatal("first async operation slot was unavailable")
+	}
+	select {
+	case slots <- struct{}{}:
+		t.Fatal("second async operation slot acquired despite peer performed limit of one")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestReceiveOperationsUseLocalPerformedLimit(t *testing.T) {
+	assoc := createTestAssociation()
+	assoc.RequestedAsynchronousOperations = association.NewAsynchronousOperationsWindow(4, 3)
+	assoc.AsynchronousOperations = association.NewAsynchronousOperationsWindow(2, 2)
+	service := NewService(nil, assoc)
+	t.Cleanup(func() { _ = service.Close() })
+
+	if got := cap(service.asyncPerformedSlots); got != 2 {
+		t.Fatalf("performed operation slot capacity = %d, want 2", got)
+	}
+}
+
 func TestSendCEchoTreatsZeroMaximumAsUnlimited(t *testing.T) {
 	service := newAsyncOperationsTestService(t, 0)
 	sent := consumeCEchoSendQueue(service)

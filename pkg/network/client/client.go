@@ -457,6 +457,9 @@ func (c *Client) AddPresentationContextWithRoles(
 // The supplied transfer syntaxes must be decodable by the CStoreHandler
 // configured with WithCStoreHandler.
 func (c *Client) AddStoragePresentationContexts(sopClassUIDs []string, transferSyntaxes ...string) error {
+	if len(transferSyntaxes) == 0 {
+		transferSyntaxes = defaultStorageTransferSyntaxes()
+	}
 	return c.AddPresentationContexts(StoragePresentationContextSpecsFor(sopClassUIDs, transferSyntaxes...))
 }
 
@@ -470,7 +473,17 @@ func (c *Client) AddStoragePresentationContexts(sopClassUIDs []string, transferS
 // Beware that all matching contexts count towards the 128 presentation context
 // limit of a single association.
 func (c *Client) AddStoragePresentationContextsByCategory(category uid.StorageCategory, transferSyntaxes ...string) error {
+	if len(transferSyntaxes) == 0 {
+		transferSyntaxes = defaultStorageTransferSyntaxes()
+	}
 	return c.AddPresentationContexts(StoragePresentationContextSpecs(category, transferSyntaxes...))
+}
+
+func defaultStorageTransferSyntaxes() []string {
+	return []string{
+		transfer.ImplicitVRLittleEndian.UID().UID(),
+		transfer.ExplicitVRLittleEndian.UID().UID(),
+	}
 }
 
 // GetConfig returns the client configuration.

@@ -123,16 +123,21 @@ func TestAdvancedNegotiationRoundTripEnforcesAsyncWindow(t *testing.T) {
 		go func() { results <- client.CEcho(ctx) }()
 	}
 	first := receiveIntegratedCEcho(ctx, t, received)
-	second := receiveIntegratedCEcho(ctx, t, received)
 	select {
-	case third := <-received:
-		t.Fatalf("third request %d arrived while requests %d and %d were outstanding",
-			third.MessageID(), first.MessageID(), second.MessageID())
+	case second := <-received:
+		t.Fatalf("second request %d arrived while request %d was outstanding",
+			second.MessageID(), first.MessageID())
 	case <-time.After(100 * time.Millisecond):
 	}
 
 	releaseHandler <- struct{}{}
-	receiveIntegratedCEcho(ctx, t, received)
+	second := receiveIntegratedCEcho(ctx, t, received)
+	select {
+	case third := <-received:
+		t.Fatalf("third request %d arrived while request %d was outstanding",
+			third.MessageID(), second.MessageID())
+	case <-time.After(100 * time.Millisecond):
+	}
 	releaseHandler <- struct{}{}
 	releaseHandler <- struct{}{}
 	for range 3 {

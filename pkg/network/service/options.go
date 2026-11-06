@@ -9,6 +9,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 )
@@ -33,6 +34,9 @@ type serviceConfig struct {
 	// Default: 16384 (16 KB)
 	// DICOM standard allows up to 2^32-1, but practical limits are lower.
 	maxPDULength uint32
+
+	// asynchronousOperations is the local AE's negotiated operation window.
+	asynchronousOperations *association.AsynchronousOperationsWindow
 
 	// readTimeout is the timeout for reading PDUs from the connection.
 	// Default: disabled
@@ -85,6 +89,14 @@ func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
 	}
 }
 
+// WithAsynchronousOperations sets the local AE's asynchronous operation window.
+// A value of zero means unlimited operations in that direction.
+func WithAsynchronousOperations(maxInvoked, maxPerformed uint16) Option {
+	return func(c *serviceConfig) {
+		c.asynchronousOperations = association.NewAsynchronousOperationsWindow(maxInvoked, maxPerformed)
+	}
+}
+
 // WithEventObserver sets the network lifecycle event observer.
 func WithEventObserver(observer observability.EventObserver) Option {
 	return func(c *serviceConfig) {
@@ -111,6 +123,7 @@ func WithConnectionID(id observability.ConnectionID) Option {
 func defaultServiceConfig() *serviceConfig {
 	return &serviceConfig{
 		maxPDULength:           16384, // 16 KB
+		asynchronousOperations: association.NewAsynchronousOperationsWindow(1, 1),
 		transferSyntaxRegistry: transfer.NewRegistry(),
 		readTimeout:            0,
 		writeTimeout:           30 * time.Second,

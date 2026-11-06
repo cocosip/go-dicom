@@ -212,6 +212,9 @@ func TestObservabilityRoutesAssociationDecodeWarningToLogger(t *testing.T) {
 	rq := pdu.NewAAssociateRQ()
 	rq.CallingAETitle = testCallingAE
 	rq.CalledAETitle = testCalledAE
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID: 1, AbstractSyntax: verificationSOPClassUID, TransferSyntaxes: []string{implicitVRLittleEndianUID},
+	}}
 	raw, err := rq.Encode()
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)

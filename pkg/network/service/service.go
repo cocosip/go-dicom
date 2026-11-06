@@ -68,6 +68,8 @@ type Service struct {
 	inboundRequestsMu     sync.RWMutex
 	asyncOperationSlots   chan struct{}
 	asyncOperationSlotsMu sync.RWMutex
+	asyncPerformedSlots   chan struct{}
+	asyncPerformedSlotsMu sync.RWMutex
 
 	// DIMSE message handlers (optional, for server mode)
 	handlers   *Handlers
@@ -263,18 +265,60 @@ func (s *Service) GetAssociation() *association.Association {
 }
 
 func (s *Service) configureAsyncOperationSlots(assoc *association.Association) {
-	maxInvoked := uint16(1)
-	if assoc != nil && assoc.AsynchronousOperations != nil {
-		maxInvoked = assoc.AsynchronousOperations.MaxInvokedOperations
-	}
-
-	var slots chan struct{}
+	maxInvoked, maxPerformed := s.asyncOperationLimits(assoc)
+	var invokedSlots, performedSlots chan struct{}
 	if maxInvoked > 0 {
-		slots = make(chan struct{}, maxInvoked)
+		invokedSlots = make(chan struct{}, maxInvoked)
+	}
+	if maxPerformed > 0 {
+		performedSlots = make(chan struct{}, maxPerformed)
 	}
 	s.asyncOperationSlotsMu.Lock()
-	s.asyncOperationSlots = slots
+	s.asyncOperationSlots = invokedSlots
 	s.asyncOperationSlotsMu.Unlock()
+	s.asyncPerformedSlotsMu.Lock()
+	s.asyncPerformedSlots = performedSlots
+	s.asyncPerformedSlotsMu.Unlock()
+}
+
+func (s *Service) asyncOperationLimits(assoc *association.Association) (uint16, uint16) {
+	localInvoked, localPerformed := uint16(1), uint16(1)
+	peerPerformed := uint16(0)
+	if assoc != nil {
+		if s.config.associationRequestor {
+			if requested := assoc.RequestedAsynchronousOperations; requested != nil {
+				localInvoked = requested.MaxInvokedOperations
+				localPerformed = requested.MaxPerformedOperations
+			} else if current := assoc.AsynchronousOperations; current != nil {
+				localInvoked = current.MaxInvokedOperations
+				localPerformed = current.MaxPerformedOperations
+			}
+			if accepted := assoc.AsynchronousOperations; accepted != nil {
+				peerPerformed = accepted.MaxPerformedOperations
+			}
+		} else {
+			if current := assoc.AsynchronousOperations; current != nil {
+				localInvoked = current.MaxInvokedOperations
+				localPerformed = current.MaxPerformedOperations
+			}
+			if requested := assoc.RequestedAsynchronousOperations; requested != nil {
+				peerPerformed = requested.MaxPerformedOperations
+			}
+		}
+	} else {
+		peerPerformed = 1
+	}
+	return minAsyncLimit(localInvoked, peerPerformed), localPerformed
+}
+
+func minAsyncLimit(first, second uint16) uint16 {
+	if first == 0 {
+		return second
+	}
+	if second == 0 || first < second {
+		return first
+	}
+	return second
 }
 
 func (s *Service) acquireAsyncOperation(ctx context.Context) (func(), error) {
@@ -291,6 +335,24 @@ func (s *Service) acquireAsyncOperation(ctx context.Context) (func(), error) {
 		return func() {
 			once.Do(func() { <-slots })
 		}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-s.closeCh:
+		return nil, s.CloseError()
+	}
+}
+
+func (s *Service) acquirePerformedOperation(ctx context.Context) (func(), error) {
+	s.asyncPerformedSlotsMu.RLock()
+	slots := s.asyncPerformedSlots
+	s.asyncPerformedSlotsMu.RUnlock()
+	if slots == nil {
+		return func() {}, nil
+	}
+	select {
+	case slots <- struct{}{}:
+		var once sync.Once
+		return func() { once.Do(func() { <-slots }) }, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-s.closeCh:

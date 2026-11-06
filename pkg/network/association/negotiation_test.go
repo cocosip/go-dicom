@@ -105,8 +105,8 @@ func TestApplyAAssociateACPreservesRequestedAndAcceptedNegotiation(t *testing.T)
 	if extended == nil || !bytes.Equal(extended.RequestedApplicationInfo, []byte{1, 1, 0}) {
 		t.Fatalf("requested extended negotiation = %#v", extended)
 	}
-	if !bytes.Equal(extended.AcceptedApplicationInfo, []byte{1, 0, 1}) {
-		t.Fatalf("accepted extended negotiation = %v, want [1 0 1]", extended.AcceptedApplicationInfo)
+	if !bytes.Equal(extended.AcceptedApplicationInfo, []byte{1, 0, 1, 1}) {
+		t.Fatalf("accepted extended negotiation = %v, want [1 0 1 1]", extended.AcceptedApplicationInfo)
 	}
 
 	if assoc.UserIdentity == nil || assoc.UserIdentity.Type != UserIdentityTypeJWT ||
@@ -272,7 +272,7 @@ func TestToAAssociateACIncludesOnlyExplicitlyAcceptedNegotiation(t *testing.T) {
 	assoc.UserIdentity.ServerResponse = []byte{}
 	accepted := ToAAssociateAC(assoc)
 	if got := accepted.UserInformation.ExtendedNegotiations; len(got) != 1 ||
-		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0}) {
+		!bytes.Equal(got[0].ServiceClassAppInfo, []byte{1, 0, 1}) {
 		t.Fatalf("accepted extended negotiation = %#v", got)
 	}
 	if accepted.UserInformation.UserIdentityResponse == nil ||

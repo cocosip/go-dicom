@@ -122,6 +122,10 @@ type Config struct {
 	// Default: 16384 bytes
 	MaxPDULength uint32
 
+	// AsynchronousOperations is the local SCP operation window.
+	// A value of zero means unlimited operations in that direction.
+	AsynchronousOperations *association.AsynchronousOperationsWindow
+
 	// AcceptTimeout is the timeout for accepting new connections
 	// Default: no timeout
 	AcceptTimeout time.Duration
@@ -203,6 +207,14 @@ func WithMaxPDULength(length uint32) Option {
 	}
 }
 
+// WithAsynchronousOperations sets the local SCP asynchronous operation window.
+// A value of zero means unlimited operations in that direction.
+func WithAsynchronousOperations(maxInvoked, maxPerformed uint16) Option {
+	return func(o *Config) {
+		o.AsynchronousOperations = association.NewAsynchronousOperationsWindow(maxInvoked, maxPerformed)
+	}
+}
+
 // WithAcceptTimeout sets the accept timeout.
 func WithAcceptTimeout(timeout time.Duration) Option {
 	return func(o *Config) {
@@ -278,6 +290,7 @@ func defaultServerConfig() *Config {
 	return &Config{
 		Port:                      104,
 		MaxPDULength:              16384,
+		AsynchronousOperations:    association.NewAsynchronousOperationsWindow(1, 1),
 		AcceptTimeout:             0, // No timeout
 		AssociationTimeout:        10 * time.Second,
 		RequestTimeout:            30 * time.Second,
@@ -749,6 +762,10 @@ func (s *Server) serviceOptionsForConnection(connectionID observability.Connecti
 		service.WithEventObserver(s.config.EventObserver),
 		service.WithMetricsObserver(s.config.MetricsObserver),
 		service.WithMaxPDULength(s.config.MaxPDULength),
+		service.WithAsynchronousOperations(
+			s.config.AsynchronousOperations.MaxInvokedOperations,
+			s.config.AsynchronousOperations.MaxPerformedOperations,
+		),
 		service.WithRequestTimeout(s.config.RequestTimeout),
 		service.WithReadTimeout(s.config.TransportReadTimeout),
 		service.WithWriteTimeout(s.config.TransportWriteTimeout),

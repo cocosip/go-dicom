@@ -77,8 +77,10 @@ func ReadPDU(conn net.Conn, timeout time.Duration) (*pdu.RawPDU, error) {
 	}
 
 	return &pdu.RawPDU{
-		Type: pduType,
-		Data: data,
+		Type:     pduType,
+		Reserved: header[1],
+		Length:   length,
+		Data:     data,
 	}, nil
 }
 

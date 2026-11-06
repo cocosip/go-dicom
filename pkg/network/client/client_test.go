@@ -608,6 +608,20 @@ func TestAddStoragePresentationContextsRequestsSCPRole(t *testing.T) {
 	}
 }
 
+func TestAddStoragePresentationContextsUsesDefaultTransferSyntaxes(t *testing.T) {
+	client := New()
+	if err := client.AddStoragePresentationContexts([]string{testCTImageStorageUID}); err != nil {
+		t.Fatalf("AddStoragePresentationContexts() error = %v", err)
+	}
+
+	rq := client.buildAssociateRQ()
+	if got := rq.PresentationContexts[0].TransferSyntaxes; len(got) != 2 ||
+		got[0] != transfer.ImplicitVRLittleEndian.UID().UID() ||
+		got[1] != transfer.ExplicitVRLittleEndian.UID().UID() {
+		t.Fatalf("default transfer syntaxes = %v", got)
+	}
+}
+
 func TestAddStoragePresentationContextsByCategoryRequestsSCPRole(t *testing.T) {
 	client := New()
 	if err := client.AddStoragePresentationContextsByCategory(uid.StorageCategoryImage, testExplicitVRLittleEndianUID); err != nil {

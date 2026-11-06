@@ -43,6 +43,9 @@ func TestReadWritePDU_Basic(t *testing.T) {
 	if receivedPDU.Type != testPDU.Type {
 		t.Errorf("Expected PDU type %d, got %d", testPDU.Type, receivedPDU.Type)
 	}
+	if receivedPDU.Length != uint32(len(testPDU.Data)) {
+		t.Errorf("Expected PDU length %d, got %d", len(testPDU.Data), receivedPDU.Length)
+	}
 	if !bytes.Equal(receivedPDU.Data, testPDU.Data) {
 		t.Errorf("Expected data %v, got %v", testPDU.Data, receivedPDU.Data)
 	}

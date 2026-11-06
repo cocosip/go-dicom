@@ -139,6 +139,16 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 	s.requestWg.Add(1)
 	go func() {
 		defer s.requestWg.Done()
+		if !isCancel {
+			releasePerformed, err := s.acquirePerformedOperation(ctx)
+			if err != nil {
+				lifecycle.finishError(ctx, err)
+				s.unregisterInboundRequest(req.MessageID(), lifecycle)
+				_ = s.abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, err, false)
+				return
+			}
+			defer releasePerformed()
+		}
 		if err := s.dispatchRequest(ctx, req, handlers); err != nil {
 			lifecycle.finishError(ctx, err)
 			if !isCancel {

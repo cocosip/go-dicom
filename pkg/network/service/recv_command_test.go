@@ -53,15 +53,52 @@ func TestHandlePDataTFReturnsErrorForMalformedCommandFragments(t *testing.T) {
 		t.Fatalf("CreatePDataTFPDU failed: %v", err)
 	}
 
-	var commandFragments []byte
-	var datasetFragments []byte
-	var currentContextID byte
-
-	err = new(Service).handlePDataTF(rawPDU, &commandFragments, &datasetFragments, &currentContextID)
+	assoc := createTestAssociation()
+	service := NewService(nil, assoc)
+	t.Cleanup(func() { _ = service.Close() })
+	err = service.handlePDataTF(rawPDU, make(map[byte]*dimseMessageFragments))
 	if err == nil {
 		t.Fatal("expected malformed command fragments to return an error")
 	}
 	if !strings.Contains(err.Error(), "CommandDataSetType") {
 		t.Fatalf("expected CommandDataSetType error, got %v", err)
+	}
+}
+
+func TestHandlePDataTFKeepsFragmentsPerPresentationContext(t *testing.T) {
+	rawPDU, err := CreatePDataTFPDU([]*PDV{
+		{PresentationContextID: 1, IsCommand: true, Data: []byte{1, 2}},
+		{PresentationContextID: 3, IsCommand: true, Data: []byte{3, 4}},
+	})
+	if err != nil {
+		t.Fatalf("CreatePDataTFPDU failed: %v", err)
+	}
+
+	service := NewService(nil, createTestAssociation())
+	t.Cleanup(func() { _ = service.Close() })
+	fragments := make(map[byte]*dimseMessageFragments)
+	if err := service.handlePDataTF(rawPDU, fragments); err != nil {
+		t.Fatalf("handlePDataTF() error = %v", err)
+	}
+	if len(fragments) != 2 || len(fragments[1].command) != 2 || len(fragments[3].command) != 2 {
+		t.Fatalf("fragments = %#v, want independent state for contexts 1 and 3", fragments)
+	}
+}
+
+func TestHandlePDataTFRejectsUnknownPresentationContext(t *testing.T) {
+	rawPDU, err := CreatePDataTFPDU([]*PDV{{
+		PresentationContextID: 5,
+		IsCommand:             true,
+		IsLastFragment:        false,
+		Data:                  []byte{1},
+	}})
+	if err != nil {
+		t.Fatalf("CreatePDataTFPDU failed: %v", err)
+	}
+
+	service := NewService(nil, createTestAssociation())
+	t.Cleanup(func() { _ = service.Close() })
+	if err := service.handlePDataTF(rawPDU, make(map[byte]*dimseMessageFragments)); err == nil {
+		t.Fatal("handlePDataTF() error = nil, want unknown presentation context error")
 	}
 }

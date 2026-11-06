@@ -42,9 +42,7 @@ import (
 // - An error occurs (including receiving A-ABORT or A-RELEASE-RP)
 func (s *Service) recvLoop(ctx context.Context) error {
 	// Message reassembly state
-	var commandFragments []byte
-	var datasetFragments []byte
-	var currentContextID byte
+	fragments := make(map[byte]*dimseMessageFragments)
 
 	for {
 		select {
@@ -60,13 +58,17 @@ func (s *Service) recvLoop(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to read PDU: %w", err)
 			}
+			if err := s.validateInboundPDULength(rawPDU); err != nil {
+				_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+				return err
+			}
 			s.emitPDUBytes(ctx, observability.DirectionInbound, rawPDU)
 
 			// Handle different PDU types
 			switch rawPDU.Type {
 			case pdu.TypePDataTF:
 				// Handle P-DATA-TF: Parse PDVs and process DIMSE messages
-				if err := s.handlePDataTF(rawPDU, &commandFragments, &datasetFragments, &currentContextID); err != nil {
+				if err := s.handlePDataTF(rawPDU, fragments); err != nil {
 					return fmt.Errorf("failed to handle P-DATA-TF: %w", err)
 				}
 
@@ -117,19 +119,48 @@ func (s *Service) recvLoop(ctx context.Context) error {
 	}
 }
 
+type dimseMessageFragments struct {
+	command         []byte
+	dataset         []byte
+	commandComplete bool
+	expectsDataset  bool
+}
+
+func (s *Service) validateInboundPDULength(rawPDU *pdu.RawPDU) error {
+	if rawPDU == nil || s.config.maxPDULength == 0 {
+		return nil
+	}
+	if rawPDU.Length > s.config.maxPDULength {
+		return fmt.Errorf("received PDU length %d exceeds negotiated maximum %d", rawPDU.Length, s.config.maxPDULength)
+	}
+	return nil
+}
+
 // getTransferSyntaxForContext gets the transfer syntax for a presentation context ID.
 func (s *Service) getTransferSyntaxForContext(contextID byte) *transfer.Syntax {
 	assoc := s.GetAssociation()
 	if assoc == nil {
-		return transfer.ExplicitVRLittleEndian // Default fallback
+		return nil
 	}
 
 	pc := assoc.FindPresentationContextByID(contextID)
-	if pc == nil || pc.AcceptedTransferSyntax == nil {
-		return transfer.ExplicitVRLittleEndian // Default fallback
+	if pc == nil || !pc.IsAccepted() {
+		return nil
 	}
 
 	return pc.AcceptedTransferSyntax
+}
+
+func (s *Service) acceptedTransferSyntaxForContext(contextID byte) (*transfer.Syntax, error) {
+	assoc := s.GetAssociation()
+	if assoc == nil {
+		return nil, fmt.Errorf("presentation context ID %d is not negotiated", contextID)
+	}
+	pc := assoc.FindPresentationContextByID(contextID)
+	if pc == nil || !pc.IsAccepted() {
+		return nil, fmt.Errorf("presentation context ID %d is not accepted", contextID)
+	}
+	return pc.AcceptedTransferSyntax, nil
 }
 
 // processReceivedMessage decodes and dispatches a received DIMSE message.
@@ -164,7 +195,7 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 
 // handlePDataTF processes a P-DATA-TF PDU.
 // It parses PDVs, accumulates fragments, and decodes complete DIMSE messages.
-func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, commandFragments, datasetFragments *[]byte, currentContextID *byte) error {
+func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, fragments map[byte]*dimseMessageFragments) error {
 	// Parse PDVs from P-DATA-TF PDU
 	pdvs, err := ParsePDataTFPDU(rawPDU)
 	if err != nil {
@@ -173,65 +204,49 @@ func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, commandFragments, datasetFra
 
 	// Process each PDV
 	for _, pdv := range pdvs {
-
-		// If this is the first PDV or context ID changed, reset state
-		if *currentContextID == 0 {
-			*currentContextID = pdv.PresentationContextID
-		} else if *currentContextID != pdv.PresentationContextID {
-			return fmt.Errorf("presentation context ID changed mid-message: %d -> %d",
-				*currentContextID, pdv.PresentationContextID)
+		if pdv.PresentationContextID == 0 || pdv.PresentationContextID%2 == 0 {
+			return fmt.Errorf("invalid presentation context ID %d", pdv.PresentationContextID)
 		}
-
-		// Accumulate fragments
+		transferSyntax, err := s.acceptedTransferSyntaxForContext(pdv.PresentationContextID)
+		if err != nil {
+			return err
+		}
+		state := fragments[pdv.PresentationContextID]
+		if state == nil {
+			state = &dimseMessageFragments{}
+			fragments[pdv.PresentationContextID] = state
+		}
 		if pdv.IsCommand {
-			*commandFragments = append(*commandFragments, pdv.Data...)
+			if state.commandComplete {
+				return fmt.Errorf("received a new command before dataset completed on presentation context %d", pdv.PresentationContextID)
+			}
+			state.command = append(state.command, pdv.Data...)
 		} else {
-			*datasetFragments = append(*datasetFragments, pdv.Data...)
+			if !state.commandComplete || !state.expectsDataset {
+				return fmt.Errorf("received dataset before command completed on presentation context %d", pdv.PresentationContextID)
+			}
+			state.dataset = append(state.dataset, pdv.Data...)
 		}
-
-		// Process message only when we have received all fragments
-		// IMPORTANT: IsLastFragment=true means the last fragment of the CURRENT TYPE (command or data)
-		// For messages with data (e.g., C-STORE), we need to wait for BOTH:
-		//   1. Command PDV with IsLastFragment=true
-		//   2. Data PDV with IsLastFragment=true
-		// For messages without data (e.g., C-ECHO), only command PDVs are sent
 		if pdv.IsLastFragment {
 			if pdv.IsCommand {
-				// Command PDV is complete
-				// Check CommandDataSetType to see if data is expected
-				// 0x0101 = NO_DATA_SET_PRESENT
-				hasData, err := s.inspectCommandHasDataset(*commandFragments)
+				hasData, err := s.inspectCommandHasDataset(state.command)
 				if err != nil {
 					return fmt.Errorf("failed to inspect CommandDataSetType: %w", err)
 				}
-
 				if !hasData {
-					// No data dataset expected - process message now
-					transferSyntax := s.getTransferSyntaxForContext(*currentContextID)
-					err := s.processReceivedMessage(*commandFragments, *datasetFragments, transferSyntax, *currentContextID)
-					if err != nil {
+					if err := s.processReceivedMessage(state.command, state.dataset, transferSyntax, pdv.PresentationContextID); err != nil {
 						return fmt.Errorf("failed to process received message: %w", err)
 					}
-
-					*commandFragments = nil
-					*datasetFragments = nil
-					*currentContextID = 0
+					delete(fragments, pdv.PresentationContextID)
+				} else {
+					state.commandComplete = true
+					state.expectsDataset = true
 				}
-				// else: Data dataset expected - wait for data PDVs
 			} else {
-				// Data PDV is complete - now we can process the entire message
-				transferSyntax := s.getTransferSyntaxForContext(*currentContextID)
-
-				// Decode the complete message
-				err := s.processReceivedMessage(*commandFragments, *datasetFragments, transferSyntax, *currentContextID)
-				if err != nil {
+				if err := s.processReceivedMessage(state.command, state.dataset, transferSyntax, pdv.PresentationContextID); err != nil {
 					return fmt.Errorf("failed to process received message: %w", err)
 				}
-
-				// Reset state for next message
-				*commandFragments = nil
-				*datasetFragments = nil
-				*currentContextID = 0
+				delete(fragments, pdv.PresentationContextID)
 			}
 		}
 	}

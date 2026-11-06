@@ -20,6 +20,16 @@ const (
 	automaticCancelTimeout     = time.Second
 )
 
+// StatusError reports a non-success DIMSE response while preserving its DICOM status.
+type StatusError struct {
+	Operation string
+	Status    *status.Status
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s failed with status: %s", e.Operation, e.Status)
+}
+
 // CEcho sends a C-ECHO request and waits for the response.
 // This is used to verify connectivity and association status.
 //
@@ -50,7 +60,7 @@ func (c *Client) CEcho(ctx context.Context) error {
 
 	// Check status
 	if !resp.Status().IsSuccess() {
-		return fmt.Errorf("C-ECHO failed with status: %s", resp.Status())
+		return &StatusError{Operation: "C-ECHO", Status: resp.Status()}
 	}
 
 	return nil
@@ -102,7 +112,7 @@ func (c *Client) CStore(ctx context.Context, ds *dataset.Dataset) error {
 
 	// Check status
 	if !resp.Status().IsSuccess() {
-		return fmt.Errorf("C-STORE failed with status: %s", resp.Status())
+		return &StatusError{Operation: "C-STORE", Status: resp.Status()}
 	}
 
 	return nil
@@ -358,7 +368,7 @@ func cFindFinalStatusError(statusCode uint16, cancelRequested bool) error {
 	if statusCode == status.Success.Code || cancelRequested && statusCode == status.Cancel.Code {
 		return nil
 	}
-	return fmt.Errorf("C-FIND failed with status: 0x%04X", statusCode)
+	return &StatusError{Operation: "C-FIND", Status: status.LookupStatus(statusCode)}
 }
 
 func bufferedCFindFinal(eventCh <-chan service.ResponseEvent[*dimse.CFindResponse], cancelRequested bool) (bool, error) {
@@ -431,7 +441,7 @@ func (c *Client) CStoreWithPriority(ctx context.Context, ds *dataset.Dataset, pr
 
 	// Check status
 	if !resp.Status().IsSuccess() {
-		return fmt.Errorf("C-STORE failed with status: %s", resp.Status())
+		return &StatusError{Operation: "C-STORE", Status: resp.Status()}
 	}
 
 	return nil
@@ -574,7 +584,7 @@ func cMoveFinalStatusError(statusCode uint16, cancelRequested bool) error {
 		cancelRequested && statusCode == status.Cancel.Code {
 		return nil
 	}
-	return fmt.Errorf("C-MOVE failed with status: 0x%04X", statusCode)
+	return &StatusError{Operation: "C-MOVE", Status: status.LookupStatus(statusCode)}
 }
 
 func sendCMove(ctx context.Context, svc *service.Service, req *dimse.CMoveRequest) (<-chan service.ResponseEvent[*dimse.CMoveResponse], error) {
@@ -677,7 +687,7 @@ func cGetFinalStatusError(statusCode uint16, cancelRequested bool) error {
 		cancelRequested && statusCode == status.Cancel.Code {
 		return nil
 	}
-	return fmt.Errorf("C-GET failed with status: 0x%04X", statusCode)
+	return &StatusError{Operation: "C-GET", Status: status.LookupStatus(statusCode)}
 }
 
 type subOperationResponse interface {

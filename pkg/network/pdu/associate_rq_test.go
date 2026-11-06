@@ -102,6 +102,16 @@ func TestAAssociateRQDecodeRejectsInvalidPresentationContexts(t *testing.T) {
 	}
 }
 
+func TestAAssociateRQDecodeRejectsMissingRequiredItems(t *testing.T) {
+	rq := &AAssociateRQ{}
+	if err := rq.Decode(NewRawPDU(TypeAAssociateRQ, make([]byte, 68))); err != nil {
+		t.Fatalf("Decode() error = %v, want permissive decode", err)
+	}
+	if err := rq.ValidateStructure(); err == nil {
+		t.Fatal("Decode() error = nil, want missing required item error")
+	}
+}
+
 const (
 	testCTImageStorageUID          = "1.2.840.10008.5.1.4.1.1.2"
 	testExtendedSOPClassUID        = "1.2.3"

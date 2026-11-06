@@ -340,6 +340,9 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		if err := ac.Decode(rawPDU); err != nil {
 			return nil, fmt.Errorf("failed to decode A-ASSOCIATE-AC: %w", err)
 		}
+		if err := ac.ValidateStructure(); err != nil {
+			return nil, fmt.Errorf("invalid A-ASSOCIATE-AC structure: %w", err)
+		}
 
 		// Transition to AssociationAccepted state
 		if err := s.setState(StateAssociationAccepted); err != nil {
@@ -409,6 +412,9 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 	}); err != nil {
 		return nil, fmt.Errorf("failed to decode A-ASSOCIATE-RQ: %w", err)
 	}
+	if err := rq.ValidateStructure(); err != nil {
+		return nil, fmt.Errorf("invalid A-ASSOCIATE-RQ structure: %w", err)
+	}
 	s.ensureAssociationIdentity(rq.CallingAETitle, rq.CalledAETitle)
 	associationInfo := s.associationObservationForRQ(rq)
 	for _, warning := range warnings {
@@ -441,6 +447,12 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 
 	// Build Association from A-ASSOCIATE-RQ
 	assoc := association.FromAAssociateRQ(rq, s.config.transferSyntaxRegistry)
+	if configured := s.config.asynchronousOperations; configured != nil {
+		assoc.AsynchronousOperations = association.NewAsynchronousOperationsWindow(
+			configured.MaxInvokedOperations,
+			configured.MaxPerformedOperations,
+		)
+	}
 
 	// Create responder for the negotiator
 	responder := &serviceResponder{

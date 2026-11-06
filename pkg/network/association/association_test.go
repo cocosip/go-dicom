@@ -174,6 +174,15 @@ func TestAssociation_AddExtendedNegotiationRetainsInsertedObject(t *testing.T) {
 	}
 }
 
+func TestExtendedNegotiationAcceptApplicationInfoPreservesResponseLength(t *testing.T) {
+	negotiation := NewExtendedNegotiation(testExtendedSOPClassUID, []byte{1})
+	negotiation.AcceptApplicationInfo([]byte{1, 2, 3})
+
+	if got := negotiation.AcceptedApplicationInfo; !bytes.Equal(got, []byte{1, 2, 3}) {
+		t.Fatalf("accepted application info = %v, want [1 2 3]", got)
+	}
+}
+
 func TestAssociation_RoleSelection(t *testing.T) {
 	assoc := NewAssociation("SCU", "SCP")
 

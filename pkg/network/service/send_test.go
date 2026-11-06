@@ -18,6 +18,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
@@ -163,6 +164,25 @@ func TestSendMessage(t *testing.T) {
 	}
 	if got := req.PresentationContextID(); got != 1 {
 		t.Fatalf("PresentationContextID = %d, want negotiated context 1", got)
+	}
+}
+
+func TestSendMessageRejectsExplicitUnacceptedPresentationContext(t *testing.T) {
+	assoc := association.NewAssociation("TEST-SCU", "TEST-SCP")
+	pc := association.NewPresentationContext(1, uid.Verification.UID(), transfer.ExplicitVRLittleEndian)
+	pc.Reject(association.ResultAbstractSyntaxNotSupported)
+	if err := assoc.AddPresentationContext(pc); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
+
+	service := NewService(nil, assoc, WithAssociationRequestor(true))
+	t.Cleanup(func() { _ = service.Close() })
+	req := dimse.NewCEchoRequest()
+	req.SetPresentationContextID(1)
+
+	err := service.sendMessage(&sendRequest{message: req, resultCh: make(chan error, 1)})
+	if err == nil {
+		t.Fatal("sendMessage() error = nil, want rejected presentation context error")
 	}
 }
 
@@ -523,8 +543,6 @@ func TestSendMessageDoesNotRequireCodecWithoutPixelData(t *testing.T) {
 }
 
 func TestSendMessageValidatesExplicitCStoreContextWithoutPixelData(t *testing.T) {
-	const verificationSOPClassUID = "1.2.840.10008.1.1"
-
 	tests := []struct {
 		name    string
 		context *association.PresentationContext

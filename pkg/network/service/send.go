@@ -11,7 +11,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
-	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
@@ -129,6 +128,9 @@ func (s *Service) sendMessage(req *sendRequest) error {
 			return fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
 		}
 	}
+	if !pc.IsAccepted() {
+		return fmt.Errorf("presentation context ID %d is not accepted", pc.ID)
+	}
 	if dimse.CommandField(message.CommandField()).IsRequest() {
 		if err := s.requireLocalRole(pc, true); err != nil {
 			return err
@@ -138,8 +140,7 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	// Get transfer syntax from presentation context
 	transferSyntax := pc.AcceptedTransferSyntax
 	if transferSyntax == nil {
-		// Fall back to Explicit VR Little Endian
-		transferSyntax = transfer.ExplicitVRLittleEndian
+		return fmt.Errorf("presentation context ID %d has no accepted transfer syntax", pc.ID)
 	}
 	message.SetPresentationContextID(pc.ID)
 

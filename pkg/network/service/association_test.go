@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	testCalledAE  = "CALLED_AE"
-	testCallingAE = "CALLING_AE"
+	testCalledAE              = "CALLED_AE"
+	testCallingAE             = "CALLING_AE"
+	implicitVRLittleEndianUID = "1.2.840.10008.1.2"
+	verificationSOPClassUID   = "1.2.840.10008.1.1"
 )
 
 // mockConn is a mock net.Conn for testing
@@ -451,6 +453,9 @@ func TestReceiveAssociationRequest(t *testing.T) {
 	rq := pdu.NewAAssociateRQ()
 	rq.CalledAETitle = testCalledAE
 	rq.CallingAETitle = testCallingAE
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID: 1, AbstractSyntax: verificationSOPClassUID, TransferSyntaxes: []string{implicitVRLittleEndianUID},
+	}}
 
 	rawPDU, err := rq.Encode()
 	if err != nil {
@@ -492,6 +497,9 @@ func TestReceiveAssociationRequestRejectsUnsupportedProtocolVersion(t *testing.T
 	rq.ProtocolVersion = 0x0002
 	rq.CalledAETitle = testCalledAE
 	rq.CallingAETitle = testCallingAE
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID: 1, AbstractSyntax: verificationSOPClassUID, TransferSyntaxes: []string{implicitVRLittleEndianUID},
+	}}
 	rawRQ, err := rq.Encode()
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)

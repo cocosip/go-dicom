@@ -155,18 +155,18 @@ func TestGetTransferSyntaxForContext(t *testing.T) {
 		t.Errorf("Expected ExplicitVRLittleEndian, got %v", ts)
 	}
 
-	// Test invalid context ID (should return default)
+	// Test invalid context ID
 	ts = service.getTransferSyntaxForContext(99)
-	if ts != transfer.ExplicitVRLittleEndian {
-		t.Errorf("Expected default ExplicitVRLittleEndian, got %v", ts)
+	if ts != nil {
+		t.Errorf("Expected nil for unknown context, got %v", ts)
 	}
 
-	// Test with nil association (should return default)
+	// Test with nil association
 	service2 := NewService(nil, nil)
 	defer func() { _ = service2.Close() }()
 	ts = service2.getTransferSyntaxForContext(1)
-	if ts != transfer.ExplicitVRLittleEndian {
-		t.Errorf("Expected default ExplicitVRLittleEndian with nil association, got %v", ts)
+	if ts != nil {
+		t.Errorf("Expected nil with nil association, got %v", ts)
 	}
 }
 
@@ -277,6 +277,18 @@ func TestRecvLoop_NonPDataTFPDU(t *testing.T) {
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("recvLoop did not exit")
+	}
+}
+
+func TestValidateInboundPDULengthUsesNegotiatedLimit(t *testing.T) {
+	service := NewService(nil, nil, WithMaxPDULength(16))
+	t.Cleanup(func() { _ = service.Close() })
+
+	if err := service.validateInboundPDULength(pdu.NewRawPDU(pdu.TypePDataTF, make([]byte, 17))); err == nil {
+		t.Fatal("validateInboundPDULength() error = nil, want negotiated limit error")
+	}
+	if err := service.validateInboundPDULength(pdu.NewRawPDU(pdu.TypePDataTF, make([]byte, 16))); err != nil {
+		t.Fatalf("validateInboundPDULength() error = %v for limit-sized PDU", err)
 	}
 }
 

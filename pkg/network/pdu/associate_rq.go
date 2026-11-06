@@ -29,12 +29,14 @@ var (
 // AAssociateRQ represents an A-ASSOCIATE-RQ PDU.
 // This PDU is sent by the SCU to request an association with an SCP.
 type AAssociateRQ struct {
-	ProtocolVersion      uint16                  // Protocol version (always 0x0001)
-	CalledAETitle        string                  // Called AE Title (max 16 bytes)
-	CallingAETitle       string                  // Calling AE Title (max 16 bytes)
-	ApplicationContext   string                  // Application Context Name (UID)
-	PresentationContexts []PresentationContextRQ // Presentation contexts
-	UserInformation      *UserInformation        // User information
+	ProtocolVersion         uint16                  // Protocol version (always 0x0001)
+	CalledAETitle           string                  // Called AE Title (max 16 bytes)
+	CallingAETitle          string                  // Calling AE Title (max 16 bytes)
+	ApplicationContext      string                  // Application Context Name (UID)
+	PresentationContexts    []PresentationContextRQ // Presentation contexts
+	UserInformation         *UserInformation        // User information
+	applicationContextCount uint8
+	userInformationCount    uint8
 }
 
 // DecodeWarningCode identifies a forward-compatible association decode warning.
@@ -76,6 +78,7 @@ type UserInformation struct {
 	CommonExtendedNegotiations []CommonExtendedNegotiation      // Optional: Common extended negotiations (RQ only)
 	UserIdentity               *UserIdentityNegotiation         // Optional: User identity
 	UserIdentityResponse       *UserIdentityNegotiationResponse // Optional: A-ASSOCIATE-AC identity response
+	hasMaximumLength           bool
 }
 
 // AsynchronousOperationsWindow represents async operations sub-item.
@@ -366,6 +369,8 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 
 	// Reserved (bytes 36-67) - ignored
 
+	applicationContextCount := 0
+	userInformationCount := 0
 	// Read variable items
 	for {
 		itemType, data, err := readItem(r)
@@ -378,6 +383,7 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 
 		switch itemType {
 		case ItemTypeApplicationContext:
+			applicationContextCount++
 			a.ApplicationContext = string(data)
 
 		case ItemTypePresentationContextRQ:
@@ -388,6 +394,7 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 			a.PresentationContexts = append(a.PresentationContexts, *pc)
 
 		case ItemTypeUserInformation:
+			userInformationCount++
 			ui, err := a.decodeUserInformation(data, handler)
 			if err != nil {
 				return fmt.Errorf("decoding user information: %w", err)
@@ -400,7 +407,32 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 		}
 	}
 
+	a.applicationContextCount = uint8(applicationContextCount)
+	a.userInformationCount = uint8(userInformationCount)
 	return validatePresentationContexts(a.PresentationContexts)
+}
+
+// ValidateStructure validates the mandatory A-ASSOCIATE-RQ structure.
+func (a *AAssociateRQ) ValidateStructure() error {
+	if a == nil {
+		return fmt.Errorf("A-ASSOCIATE-RQ is nil")
+	}
+	if a.applicationContextCount != 0 && a.applicationContextCount != 1 {
+		return fmt.Errorf("A-ASSOCIATE-RQ must contain exactly one application context item, got %d", a.applicationContextCount)
+	}
+	if a.ApplicationContext == "" {
+		return fmt.Errorf("A-ASSOCIATE-RQ is missing application context")
+	}
+	if len(a.PresentationContexts) == 0 {
+		return fmt.Errorf("A-ASSOCIATE-RQ must contain at least one presentation context")
+	}
+	if a.userInformationCount != 0 && a.userInformationCount != 1 {
+		return fmt.Errorf("A-ASSOCIATE-RQ must contain exactly one user information item, got %d", a.userInformationCount)
+	}
+	if a.UserInformation == nil || !a.UserInformation.hasMaximumLength {
+		return fmt.Errorf("A-ASSOCIATE-RQ is missing maximum length user information")
+	}
+	return nil
 }
 
 func validatePresentationContexts(contexts []PresentationContextRQ) error {
@@ -476,6 +508,7 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 		ExtendedNegotiations:       []ExtendedNegotiation{},
 		CommonExtendedNegotiations: []CommonExtendedNegotiation{},
 	}
+	maximumLengthSeen := false
 
 	r := bytes.NewReader(data)
 
@@ -491,9 +524,11 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 
 		switch itemType {
 		case ItemTypeMaximumLength:
-			if len(itemData) >= 4 {
-				ui.MaximumLength = binary.BigEndian.Uint32(itemData)
+			if len(itemData) != 4 {
+				return nil, fmt.Errorf("invalid maximum length data: %d bytes", len(itemData))
 			}
+			maximumLengthSeen = true
+			ui.MaximumLength = binary.BigEndian.Uint32(itemData)
 
 		case ItemTypeImplementationClassUID:
 			ui.ImplementationClassUID = string(itemData)
@@ -502,11 +537,12 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 			ui.ImplementationVersionName = string(itemData)
 
 		case ItemTypeAsynchronousOperationsWindow:
-			if len(itemData) >= 4 {
-				ui.AsynchronousOperations = &AsynchronousOperationsWindow{
-					MaximumNumberOperationsInvoked:   binary.BigEndian.Uint16(itemData[0:2]),
-					MaximumNumberOperationsPerformed: binary.BigEndian.Uint16(itemData[2:4]),
-				}
+			if len(itemData) != 4 {
+				return nil, fmt.Errorf("invalid asynchronous operations window: %d bytes", len(itemData))
+			}
+			ui.AsynchronousOperations = &AsynchronousOperationsWindow{
+				MaximumNumberOperationsInvoked:   binary.BigEndian.Uint16(itemData[0:2]),
+				MaximumNumberOperationsPerformed: binary.BigEndian.Uint16(itemData[2:4]),
 			}
 
 		case ItemTypeSCPSCURoleSelection:
@@ -542,6 +578,7 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 		}
 	}
 
+	ui.hasMaximumLength = maximumLengthSeen
 	return ui, nil
 }
 

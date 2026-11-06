@@ -488,14 +488,12 @@ func mergeExtendedNegotiation(existing, incoming *ExtendedNegotiation) {
 	}
 }
 
-// AcceptApplicationInfo records the accepted application information while
-// discarding fields that were not present in the request.
+// AcceptApplicationInfo records the accepted application information.
 func (e *ExtendedNegotiation) AcceptApplicationInfo(appInfo []byte) {
-	if e == nil || len(e.RequestedApplicationInfo) == 0 {
+	if e == nil {
 		return
 	}
-	length := min(len(appInfo), len(e.RequestedApplicationInfo))
-	e.AcceptedApplicationInfo = append([]byte(nil), appInfo[:length]...)
+	e.AcceptedApplicationInfo = append([]byte(nil), appInfo...)
 }
 
 // ServiceApplicationInfo encapsulates the Service Class Application Information field
