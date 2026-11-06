@@ -102,9 +102,6 @@ This document contains performance benchmark results for the go-dicom library. B
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
-| GetBufferSmall (1KB) | 29.04 | 24 | 1 |
-| GetBufferMedium (32KB) | 193.7 | 24 | 1 |
-| GetBufferLarge (512KB) | 10,720 | 33 | 1 |
 | AllocateSmallNormal | 0.17 | 0 | 0 |
 | AllocateMediumNormal | 0.20 | 0 | 0 |
 | AllocateLargeNormal | 61,029 | 524,288 | 1 |
