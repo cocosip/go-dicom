@@ -22,13 +22,10 @@ type serviceResponder struct {
 
 // SendAccept sends an A-ASSOCIATE-AC (Association Accept) PDU.
 func (r *serviceResponder) SendAccept(ctx context.Context, assoc *association.Association) error {
-	// Convert Association to A-ASSOCIATE-AC PDU
-	ac := association.ToAAssociateAC(assoc)
-	// The AC advertises the acceptor's receive limit. Keep assoc.MaxPDULength
-	// as the requestor's receive limit so outgoing PDUs still honor the peer.
-	if ac.UserInformation != nil {
-		ac.UserInformation.MaximumLength = r.service.config.maxPDULength
-	}
+	// Convert Association to A-ASSOCIATE-AC PDU. The AC advertises the
+	// acceptor's own receive limit; assoc.MaxPDULength is the requestor's limit
+	// and is retained for outgoing PDU fragmentation.
+	ac := association.ToAAssociateACWithMaxPDULength(assoc, r.service.config.maxPDULength)
 	// Keep the negotiated request-side contexts available while the AC log is emitted.
 	r.service.SetAssociation(assoc)
 
@@ -50,6 +47,24 @@ type pduEncoder interface {
 	Encode() (*pdu.RawPDU, error)
 }
 
+// writePDU serializes all writes to the connection and applies the configured
+// write timeout. Serialization is required because a DICOM PDU is emitted with
+// several Write calls (header then body); concurrent writers would interleave.
+func (s *Service) writePDU(ctx context.Context, raw *pdu.RawPDU) error {
+	if s.conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if deadline := deadlineFromContext(ctx, s.config.writeTimeout); !deadline.IsZero() {
+		if err := s.conn.SetWriteDeadline(deadline); err != nil {
+			return fmt.Errorf("failed to set write deadline: %w", err)
+		}
+		defer func() { _ = s.conn.SetWriteDeadline(time.Time{}) }()
+	}
+	return raw.Write(s.conn)
+}
+
 // sendAssociationPDU is a helper that sends an association-related PDU and transitions state.
 func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pduName string, newState State) error {
 	if s.conn == nil {
@@ -66,13 +81,7 @@ func (s *Service) sendAssociationPDU(ctx context.Context, pduData pduEncoder, pd
 	if err != nil {
 		return fmt.Errorf("failed to encode %s: %w", pduName, err)
 	}
-	if deadline := deadlineFromContext(ctx, s.config.writeTimeout); !deadline.IsZero() {
-		if err := s.conn.SetWriteDeadline(deadline); err != nil {
-			return fmt.Errorf("failed to set write deadline: %w", err)
-		}
-		defer func() { _ = s.conn.SetWriteDeadline(time.Time{}) }()
-	}
-	if err := rawPDU.Write(s.conn); err != nil {
+	if err := s.writePDU(ctx, rawPDU); err != nil {
 		return fmt.Errorf("failed to write %s: %w", pduName, err)
 	}
 	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
@@ -146,14 +155,7 @@ func (s *Service) SendAssociationReject(ctx context.Context, result, source, rea
 	}
 
 	// Write to connection with timeout
-	if deadline := deadlineFromContext(ctx, s.config.writeTimeout); !deadline.IsZero() {
-		if err := s.conn.SetWriteDeadline(deadline); err != nil {
-			return fmt.Errorf("failed to set write deadline: %w", err)
-		}
-		defer func() { _ = s.conn.SetWriteDeadline(time.Time{}) }()
-	}
-
-	if err := rawPDU.Write(s.conn); err != nil {
+	if err := s.writePDU(ctx, rawPDU); err != nil {
 		return fmt.Errorf("failed to write A-ASSOCIATE-RJ: %w", err)
 	}
 	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
@@ -207,13 +209,7 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 	}
 
 	// Write to connection with timeout
-	if s.config.writeTimeout > 0 {
-		if err := s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout)); err != nil {
-			return fmt.Errorf("failed to set write deadline: %w", err)
-		}
-	}
-
-	if err := rawPDU.Write(s.conn); err != nil {
+	if err := s.writePDU(ctx, rawPDU); err != nil {
 		return fmt.Errorf("failed to write A-RELEASE-RQ: %w", err)
 	}
 	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
@@ -248,13 +244,7 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 	}
 
 	// Write to connection with timeout
-	if s.config.writeTimeout > 0 {
-		if err := s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout)); err != nil {
-			return fmt.Errorf("failed to set write deadline: %w", err)
-		}
-	}
-
-	if err := rawPDU.Write(s.conn); err != nil {
+	if err := s.writePDU(ctx, rawPDU); err != nil {
 		return fmt.Errorf("failed to write A-RELEASE-RP: %w", err)
 	}
 	s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
@@ -293,10 +283,7 @@ func (s *Service) SendAbort(ctx context.Context, source, reason byte) error {
 	// Write to connection with timeout (ignore errors if connection is broken)
 	var writeErr error
 	if s.conn != nil {
-		if s.config.writeTimeout > 0 {
-			_ = s.conn.SetWriteDeadline(deadlineFromContext(ctx, s.config.writeTimeout))
-		}
-		writeErr = rawPDU.Write(s.conn)
+		writeErr = s.writePDU(ctx, rawPDU)
 		if writeErr == nil {
 			s.emitPDUBytes(ctx, observability.DirectionOutbound, rawPDU)
 		}
@@ -330,7 +317,7 @@ func (s *Service) ReceiveAssociationResponse(ctx context.Context) (*pdu.AAssocia
 		return nil, fmt.Errorf("cannot receive association response in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), s.config.maxPDULength)
+	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}
@@ -397,7 +384,7 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		return nil, fmt.Errorf("cannot receive association request in state %s", currentState)
 	}
 
-	rawPDU, err := transport.ReadPDUMaxLength(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout), s.config.maxPDULength)
+	rawPDU, err := transport.ReadPDU(s.conn, readTimeoutFromContext(ctx, s.config.readTimeout))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PDU: %w", err)
 	}

@@ -29,26 +29,22 @@ type PDV struct {
 	Data                  []byte // PDV data
 }
 
-// Encode encodes the PDV into bytes for transmission.
-func (p *PDV) Encode() []byte {
-	// Calculate total length (1 byte context ID + 1 byte header + data)
+// encodedSize returns the number of bytes the PDV occupies on the wire.
+func (p *PDV) encodedSize() int { return 6 + len(p.Data) }
+
+// encodeInto writes the PDV into dst and returns the number of bytes written.
+// dst must be at least encodedSize() bytes long.
+func (p *PDV) encodeInto(dst []byte) int {
+	// PDV length covers context ID + control header + data.
 	total := 1 + 1 + len(p.Data)
 	if total > int(math.MaxUint32) {
 		// defensive: extremely unlikely in tests/typical usage
 		total = int(math.MaxUint32)
 	}
-	length := uint32(total) // #nosec G115 -- bounded above
+	binary.BigEndian.PutUint32(dst[0:4], uint32(total)) // #nosec G115 -- bounded above
 
-	// Create buffer
-	buf := make([]byte, 4+length)
+	dst[4] = p.PresentationContextID
 
-	// Write length
-	binary.BigEndian.PutUint32(buf[0:4], length)
-
-	// Write presentation context ID
-	buf[4] = p.PresentationContextID
-
-	// Write message control header
 	var header byte
 	if p.IsLastFragment {
 		header |= 0x02 // Set bit 1
@@ -56,11 +52,16 @@ func (p *PDV) Encode() []byte {
 	if p.IsCommand {
 		header |= 0x01 // Set bit 0
 	}
-	buf[5] = header
+	dst[5] = header
 
-	// Write data
-	copy(buf[6:], p.Data)
+	copy(dst[6:], p.Data)
+	return 4 + total
+}
 
+// Encode encodes the PDV into bytes for transmission.
+func (p *PDV) Encode() []byte {
+	buf := make([]byte, p.encodedSize())
+	p.encodeInto(buf)
 	return buf
 }
 
@@ -106,10 +107,11 @@ func CreatePDataTFPDU(pdvs []*PDV) (*pdu.RawPDU, error) {
 		return nil, fmt.Errorf("no PDVs to encode")
 	}
 
-	// Calculate total size
+	// Calculate total size once; then encode each PDV exactly once into the
+	// final buffer (previously each PDV was encoded twice).
 	totalSize := 0
 	for _, pdv := range pdvs {
-		totalSize += len(pdv.Encode())
+		totalSize += pdv.encodedSize()
 	}
 
 	// Create buffer
@@ -118,9 +120,7 @@ func CreatePDataTFPDU(pdvs []*PDV) (*pdu.RawPDU, error) {
 	// Encode all PDVs
 	offset := 0
 	for _, pdv := range pdvs {
-		encoded := pdv.Encode()
-		copy(buf[offset:], encoded)
-		offset += len(encoded)
+		offset += pdv.encodeInto(buf[offset:])
 	}
 
 	return &pdu.RawPDU{

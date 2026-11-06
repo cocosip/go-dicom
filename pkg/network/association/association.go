@@ -1091,6 +1091,14 @@ func lookupTransferSyntax(registry *transfer.Registry, value *uid.UID) (*transfe
 // This is typically used by an SCP (server) to send the association acceptance response.
 // The Association should have been negotiated (presentation contexts accepted/rejected).
 func ToAAssociateAC(assoc *Association) *pdu.AAssociateAC {
+	return ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
+}
+
+// ToAAssociateACWithMaxPDULength builds an A-ASSOCIATE-AC whose Maximum Length
+// user information advertises the acceptor's own receive limit (PS3.8 D.1).
+// assoc.MaxPDULength holds the requestor's limit, so a server must pass its own
+// configured limit here instead of relying on the association value.
+func ToAAssociateACWithMaxPDULength(assoc *Association, maxPDULength uint32) *pdu.AAssociateAC {
 	ac := pdu.NewAAssociateAC()
 	ac.CallingAETitle = assoc.CallingAE
 	ac.CalledAETitle = assoc.CalledAE
@@ -1098,7 +1106,7 @@ func ToAAssociateAC(assoc *Association) *pdu.AAssociateAC {
 
 	// Set user information
 	ac.UserInformation = &pdu.UserInformation{
-		MaximumLength:             assoc.MaxPDULength,
+		MaximumLength:             maxPDULength,
 		ImplementationClassUID:    assoc.ImplementationClassUID,
 		ImplementationVersionName: assoc.ImplementationVersionName,
 	}

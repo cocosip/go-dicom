@@ -69,6 +69,12 @@ type Server struct {
 	connections   map[string]*serverConnection
 	connectionsMu sync.RWMutex
 
+	// inflightConnections counts accepted connections that have not finished,
+	// including ones still negotiating the association. MaxConnections is
+	// enforced against this count so a peer cannot exceed the limit by opening
+	// many connections that never complete negotiation.
+	inflightConnections int
+
 	// Service options to apply to each connection
 	serviceOptions []service.Option
 	optionsMu      sync.RWMutex
@@ -157,7 +163,8 @@ type Config struct {
 	// Default: "GO-DICOM-1.0"
 	ImplementationVersionName string
 
-	// MaxConnections limits the number of concurrent connections
+	// MaxConnections limits the number of concurrent connections, counting
+	// connections that are still negotiating an association.
 	// 0 means no limit
 	// Default: 0 (no limit)
 	MaxConnections int
@@ -461,6 +468,34 @@ func (s *Server) ActiveConnections() int {
 	return len(s.connections)
 }
 
+// acquireConnectionSlot reserves a connection slot when MaxConnections is set.
+// It reports false when the limit is already reached.
+func (s *Server) acquireConnectionSlot() bool {
+	s.connectionsMu.Lock()
+	defer s.connectionsMu.Unlock()
+	if s.config.MaxConnections > 0 && s.inflightConnections >= s.config.MaxConnections {
+		return false
+	}
+	s.inflightConnections++
+	return true
+}
+
+// releaseConnectionSlot returns a slot reserved by acquireConnectionSlot.
+func (s *Server) releaseConnectionSlot() {
+	s.connectionsMu.Lock()
+	if s.inflightConnections > 0 {
+		s.inflightConnections--
+	}
+	s.connectionsMu.Unlock()
+}
+
+// connectionLimitReached reports whether MaxConnections currently applies.
+func (s *Server) connectionLimitReached() bool {
+	s.connectionsMu.RLock()
+	defer s.connectionsMu.RUnlock()
+	return s.config.MaxConnections > 0 && s.inflightConnections >= s.config.MaxConnections
+}
+
 // buildUserInformation builds the UserInformation structure for A-ASSOCIATE-AC.
 func (s *Server) buildUserInformation() *pdu.UserInformation {
 	return &pdu.UserInformation{
@@ -543,7 +578,7 @@ func (s *Server) acceptLoop(ctx context.Context, listener serverListener) error 
 		default:
 		}
 
-		if s.config.MaxConnections > 0 && s.ActiveConnections() >= s.config.MaxConnections {
+		if s.connectionLimitReached() {
 			select {
 			case <-time.After(100 * time.Millisecond):
 			case <-ctx.Done():
@@ -567,6 +602,12 @@ func (s *Server) acceptLoop(ctx context.Context, listener serverListener) error 
 		if err := ctx.Err(); err != nil {
 			_ = conn.Close()
 			return err
+		}
+		// Reserve the slot before serving the connection so connections that
+		// never finish negotiating still count against MaxConnections.
+		if !s.acquireConnectionSlot() {
+			_ = conn.Close()
+			continue
 		}
 
 		s.wg.Add(1)
@@ -680,6 +721,7 @@ func (s *Server) stopAccepting() (<-chan struct{}, error) {
 // handleConnection handles a single client connection.
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
+	defer s.releaseConnectionSlot()
 	defer func() { _ = conn.Close() }()
 
 	// Create connection ID

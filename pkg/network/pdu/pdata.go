@@ -160,6 +160,12 @@ func (p *PDataTF) Decode(pdu *RawPDU) error {
 
 		// Read PDV Data (remaining bytes)
 		dataLength := pdvLength - 2 // Subtract Context ID (1) + Header (1)
+		// Bound the allocation by the bytes actually remaining before making the
+		// slice: the 4-byte length field is attacker-controlled and must not be
+		// trusted to size an allocation above the PDU payload.
+		if int64(dataLength) > int64(reader.Len()) {
+			return fmt.Errorf("PDV data length %d exceeds remaining PDU bytes %d", dataLength, reader.Len())
+		}
 		pdvData := make([]byte, dataLength)
 		if dataLength > 0 {
 			if _, err := io.ReadFull(reader, pdvData); err != nil {

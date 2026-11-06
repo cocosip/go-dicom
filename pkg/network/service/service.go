@@ -36,6 +36,11 @@ type Service struct {
 	// Connection
 	conn net.Conn
 
+	// writeMu serializes all writes to conn. A DICOM PDU is framed with several
+	// Write calls, so the send loop and the release/abort paths must not write
+	// concurrently or PDU framing can be interleaved on the wire.
+	writeMu sync.Mutex
+
 	// Association information
 	assoc   *association.Association
 	assocMu sync.RWMutex

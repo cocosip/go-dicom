@@ -35,6 +35,11 @@ type serviceConfig struct {
 	// DICOM standard allows up to 2^32-1, but practical limits are lower.
 	maxPDULength uint32
 
+	// maxMessageSize bounds the total reassembled size of a single inbound DIMSE
+	// message spread across many PDVs. Zero (the default) means unlimited, which
+	// matches the previous behavior and allows very large C-STORE instances.
+	maxMessageSize uint32
+
 	// asynchronousOperations is the local AE's negotiated operation window.
 	asynchronousOperations *association.AsynchronousOperationsWindow
 
@@ -137,6 +142,16 @@ func defaultServiceConfig() *serviceConfig {
 func WithMaxPDULength(length uint32) Option {
 	return func(c *serviceConfig) {
 		c.maxPDULength = length
+	}
+}
+
+// WithMaxMessageSize bounds the total reassembled size of a single inbound DIMSE
+// message spread across many PDVs. Zero (the default) is unlimited, so large
+// instances are unaffected. Set it when accepting associations from peers that
+// are not trusted to respect memory limits.
+func WithMaxMessageSize(size uint32) Option {
+	return func(c *serviceConfig) {
+		c.maxMessageSize = size
 	}
 }
 

@@ -132,6 +132,7 @@ func NewAAssociateRQ() *AAssociateRQ {
 		UserInformation: &UserInformation{
 			MaximumLength:          16384,                                // Default 16KB
 			ImplementationClassUID: "1.2.826.0.1.3680043.9.7278.1.0.0.0", // Placeholder
+			hasMaximumLength:       true,
 		},
 	}
 }
@@ -143,6 +144,11 @@ func (a *AAssociateRQ) Encode() (*RawPDU, error) {
 	}
 	if err := validatePresentationContexts(a.PresentationContexts); err != nil {
 		return nil, err
+	}
+	// The encoder always writes a Maximum Length sub-item, so mark it present
+	// to keep ValidateStructure() consistent for programmatically built PDUs.
+	if a.UserInformation != nil {
+		a.UserInformation.hasMaximumLength = true
 	}
 	var buf bytes.Buffer
 

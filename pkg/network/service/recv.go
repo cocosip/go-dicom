@@ -126,6 +126,12 @@ type dimseMessageFragments struct {
 	expectsDataset  bool
 }
 
+// messageSizeLimit returns the maximum reassembled DIMSE message size.
+// Zero means unlimited.
+func (s *Service) messageSizeLimit() uint32 {
+	return s.config.maxMessageSize
+}
+
 // getTransferSyntaxForContext gets the transfer syntax for a presentation context ID.
 func (s *Service) getTransferSyntaxForContext(contextID byte) *transfer.Syntax {
 	assoc := s.GetAssociation()
@@ -205,6 +211,13 @@ func (s *Service) handlePDataTF(rawPDU *pdu.RawPDU, fragments map[byte]*dimseMes
 		if state == nil {
 			state = &dimseMessageFragments{}
 			fragments[pdv.PresentationContextID] = state
+		}
+		// Bound the total reassembled message size when configured, so a peer
+		// cannot exhaust memory by streaming unlimited fragments for one message.
+		// Unlimited by default: a single instance may legitimately be very large.
+		if limit := s.messageSizeLimit(); limit > 0 &&
+			uint64(len(state.command))+uint64(len(state.dataset))+uint64(len(pdv.Data)) > uint64(limit) {
+			return fmt.Errorf("reassembled DIMSE message exceeds maximum size %d bytes on presentation context %d", limit, pdv.PresentationContextID)
 		}
 		if pdv.IsCommand {
 			if state.commandComplete {

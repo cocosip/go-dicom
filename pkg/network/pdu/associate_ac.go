@@ -132,6 +132,7 @@ func NewAAssociateAC() *AAssociateAC {
 		UserInformation: &UserInformation{
 			MaximumLength:          16384,                         // Default 16KB
 			ImplementationClassUID: "1.2.826.0.1.3680043.8.498.1", // go-dicom implementation UID
+			hasMaximumLength:       true,
 		},
 	}
 }
@@ -140,6 +141,14 @@ func NewAAssociateAC() *AAssociateAC {
 func (a *AAssociateAC) Encode() (*RawPDU, error) {
 	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
 		return nil, err
+	}
+	if err := validatePresentationContextsAC(a.PresentationContexts); err != nil {
+		return nil, err
+	}
+	// The encoder always writes a Maximum Length sub-item, so mark it present
+	// to keep ValidateStructure() consistent for programmatically built PDUs.
+	if a.UserInformation != nil {
+		a.UserInformation.hasMaximumLength = true
 	}
 	var buf bytes.Buffer
 
@@ -411,6 +420,34 @@ func (a *AAssociateAC) ValidateStructure() error {
 	return nil
 }
 
+// validatePresentationContextsAC validates presentation contexts before encoding
+// an A-ASSOCIATE-AC, mirroring the checks performed for A-ASSOCIATE-RQ so this
+// library never emits an AC that its own decoder would reject.
+func validatePresentationContextsAC(contexts []PresentationContextAC) error {
+	if len(contexts) > maximumPresentationContexts {
+		return fmt.Errorf("%w: got %d, maximum is %d", ErrTooManyPresentationContexts, len(contexts), maximumPresentationContexts)
+	}
+	seen := make(map[byte]struct{}, len(contexts))
+	for _, pc := range contexts {
+		if pc.ID == 0 || pc.ID%2 == 0 {
+			return fmt.Errorf("%w: ID must be a non-zero odd value, got %d", ErrInvalidPresentationContext, pc.ID)
+		}
+		if _, exists := seen[pc.ID]; exists {
+			return fmt.Errorf("%w: duplicate ID %d", ErrInvalidPresentationContext, pc.ID)
+		}
+		seen[pc.ID] = struct{}{}
+		if pc.Result > ResultTransferSyntaxesNotSupported {
+			return fmt.Errorf("%w: invalid result %d for ID %d", ErrInvalidPresentationContext, pc.Result, pc.ID)
+		}
+		if pc.Result == ResultAcceptance && pc.TransferSyntax == "" {
+			return fmt.Errorf("%w: accepted context %d has no transfer syntax", ErrInvalidPresentationContext, pc.ID)
+		}
+		// A stale transfer syntax on a rejected context is not an error: the
+		// encoder simply omits the sub-item, matching decode tolerance.
+	}
+	return nil
+}
+
 // decodePresentationContextAC decodes a Presentation Context (AC) item.
 func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationContextAC, error) {
 	if len(data) < 4 {
@@ -449,8 +486,11 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 	if pc.Result == ResultAcceptance && pc.TransferSyntax == "" {
 		return PresentationContextAC{}, fmt.Errorf("accepted presentation context %d has no transfer syntax", pc.ID)
 	}
-	if pc.Result != ResultAcceptance && pc.TransferSyntax != "" {
-		return PresentationContextAC{}, fmt.Errorf("rejected presentation context %d contains a transfer syntax", pc.ID)
+	// Some real PACS echo a transfer syntax sub-item on rejected contexts. That
+	// is non-conformant but harmless, so ignore it rather than abort the whole
+	// association. Only an accepted context without a transfer syntax is fatal.
+	if pc.Result != ResultAcceptance {
+		pc.TransferSyntax = ""
 	}
 
 	return pc, nil

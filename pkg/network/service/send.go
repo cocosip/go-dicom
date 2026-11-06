@@ -14,7 +14,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
-	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
 type dataDatasetMessage struct {
@@ -183,8 +182,8 @@ func (s *Service) sendMessage(req *sendRequest) error {
 			return fmt.Errorf("failed to create P-DATA-TF PDU: %w", err)
 		}
 
-		// Write PDU to connection
-		err = transport.WritePDU(s.conn, s.config.writeTimeout, pduData)
+		// Write PDU to connection (serialized against release/abort writers)
+		err = s.writePDU(req.ctx, pduData)
 		if err != nil {
 			return fmt.Errorf("failed to write PDU: %w", err)
 		}

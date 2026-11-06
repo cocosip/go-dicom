@@ -90,9 +90,9 @@ var (
 // General failure statuses
 var (
 	RefusedOutOfResources            = NewStatus(0x0110, StateFailure, "Refused: Out of resources")
-	RefusedMoveDestinationUnknown    = NewStatus(0x0112, StateFailure, "Refused: Move destination unknown")
+	RefusedMoveDestinationUnknown    = NewStatus(0xA801, StateFailure, "Refused: Move destination unknown")
 	ErrorCannotUnderstand            = NewStatus(0x0122, StateFailure, "Cannot understand")
-	ErrorDataSetDoesNotMatchSOPClass = NewStatus(0x0117, StateFailure, "Dataset does not match SOP class")
+	ErrorDataSetDoesNotMatchSOPClass = NewStatus(0xA900, StateFailure, "Dataset does not match SOP class")
 	ErrorDuplicateInvocation         = NewStatus(0x0210, StateFailure, "Duplicate invocation")
 	ErrorDuplicateSOPInstance        = NewStatus(0x0111, StateFailure, "Duplicate SOP instance")
 	ErrorInvalidArgumentValue        = NewStatus(0x0115, StateFailure, "Invalid argument value")
