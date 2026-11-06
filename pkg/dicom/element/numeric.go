@@ -14,9 +14,9 @@ import (
 	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
 
-// numericBytes returns an element's entire raw value bytes. In-memory buffers
-// are returned without copying; other buffers are read once into a new slice so
-// callers can decode all values in a single pass.
+// numericBytes returns an element's entire raw value bytes. A plain in-memory
+// buffer is read without copying; any other buffer (file, stream, or an
+// endian/swap/range wrapper whose Data allocates) is read once into a new slice.
 func numericBytes(buf buffer.ByteBuffer) ([]byte, error) {
 	if buf == nil {
 		return nil, nil
@@ -25,7 +25,7 @@ func numericBytes(buf buffer.ByteBuffer) ([]byte, error) {
 	if size == 0 {
 		return nil, nil
 	}
-	if buf.IsMemory() {
+	if _, ok := buf.(*buffer.MemoryByteBuffer); ok {
 		if data := buf.Data(); len(data) == int(size) {
 			return data, nil
 		}
@@ -37,10 +37,10 @@ func numericBytes(buf buffer.ByteBuffer) ([]byte, error) {
 	return data, nil
 }
 
-// numericValue returns the raw bytes of a single value. In-memory buffers are
-// sliced without copying; other buffers are read into a small new slice.
+// numericValue returns the raw bytes of a single value. A plain in-memory buffer
+// is sliced without copying; any other buffer is read into a small new slice.
 func numericValue(buf buffer.ByteBuffer, offset uint32, size int) ([]byte, error) {
-	if buf.IsMemory() {
+	if _, ok := buf.(*buffer.MemoryByteBuffer); ok {
 		if data := buf.Data(); len(data) >= int(offset)+size {
 			start := int(offset)
 			return data[start : start+size], nil
