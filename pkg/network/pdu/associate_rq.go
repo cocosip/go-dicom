@@ -393,6 +393,12 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 			a.ApplicationContext = string(data)
 
 		case ItemTypePresentationContextRQ:
+			// Bound the count while decoding: the association PDU is read with a
+			// hard size cap, so without this a peer could make the decoder
+			// allocate millions of context structs before negotiation policy runs.
+			if len(a.PresentationContexts) >= maximumPresentationContexts {
+				return fmt.Errorf("%w: got more than %d", ErrTooManyPresentationContexts, maximumPresentationContexts)
+			}
 			pc, err := a.decodePresentationContext(data, handler)
 			if err != nil {
 				return fmt.Errorf("decoding presentation context: %w", err)

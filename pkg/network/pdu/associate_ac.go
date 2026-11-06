@@ -366,6 +366,12 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 			a.ApplicationContext = string(itemData)
 
 		case ItemTypePresentationContextAC:
+			// Bound the count while decoding: the association PDU is read with a
+			// hard size cap, so without this a peer could make the decoder
+			// allocate millions of context structs.
+			if len(a.PresentationContexts) >= maximumPresentationContexts {
+				return fmt.Errorf("%w: got more than %d", ErrTooManyPresentationContexts, maximumPresentationContexts)
+			}
 			pc, err := a.decodePresentationContextAC(itemData)
 			if err != nil {
 				return fmt.Errorf("decoding presentation context: %w", err)
