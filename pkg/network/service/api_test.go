@@ -182,7 +182,9 @@ func TestRegisterUnregisterPendingRequest(t *testing.T) {
 	messageID := uint16(123)
 	req := dimse.NewCEchoRequest()
 
-	service.registerPendingRequest(messageID, req, respCh)
+	if _, err := service.registerPendingRequest(messageID, req, respCh); err != nil {
+		t.Fatalf("registerPendingRequest() error = %v", err)
+	}
 
 	// Check it was registered
 	service.pendingRequestsMu.Lock()
@@ -203,6 +205,20 @@ func TestRegisterUnregisterPendingRequest(t *testing.T) {
 
 	if exists {
 		t.Error("Pending request was not unregistered")
+	}
+}
+
+func TestRegisterPendingRequestRejectsDuplicateMessageID(t *testing.T) {
+	service := NewService(nil, nil)
+	defer func() { _ = service.Close() }()
+
+	request := dimse.NewCEchoRequest()
+	if _, err := service.registerPendingRequest(123, request, make(chan dimse.Response, 1)); err != nil {
+		t.Fatalf("first registration error = %v", err)
+	}
+	defer service.unregisterPendingRequest(123)
+	if _, err := service.registerPendingRequest(123, request, make(chan dimse.Response, 1)); err == nil {
+		t.Fatal("duplicate registration error = nil")
 	}
 }
 

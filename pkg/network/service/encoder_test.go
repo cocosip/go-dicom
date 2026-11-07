@@ -16,6 +16,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 	"github.com/cocosip/go-dicom/pkg/io/endian"
+	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"golang.org/x/text/encoding/unicode"
 )
 
@@ -62,6 +63,15 @@ func TestDecodeDIMSEMessage_PreservesSequenceItems(t *testing.T) {
 	}
 	if gotPatientID != "12345" {
 		t.Fatalf("PatientID = %q, want %q", gotPatientID, "12345")
+	}
+}
+
+func TestEncodeDIMSEMessageRejectsInvalidPriority(t *testing.T) {
+	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelPatient, nil)
+	req.SetPriority(0xFFFF)
+
+	if _, _, err := EncodeDIMSEMessage(req, transfer.ImplicitVRLittleEndian); err == nil {
+		t.Fatal("EncodeDIMSEMessage() error = nil, want invalid priority error")
 	}
 }
 

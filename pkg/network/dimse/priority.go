@@ -30,3 +30,13 @@ func (p Priority) String() string {
 		return "UNKNOWN"
 	}
 }
+
+// IsValidPriority reports whether value is one of the three DICOM priorities.
+func IsValidPriority(value uint16) bool {
+	switch Priority(value) {
+	case PriorityMedium, PriorityHigh, PriorityLow:
+		return true
+	default:
+		return false
+	}
+}

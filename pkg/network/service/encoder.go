@@ -29,6 +29,15 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 	if commandDS == nil {
 		return nil, nil, fmt.Errorf("message has no command dataset")
 	}
+	if _, hasPriority := commandDS.Get(tag.Priority); hasPriority {
+		priority, priorityErr := commandDS.GetUInt16(tag.Priority, 0)
+		if priorityErr != nil {
+			return nil, nil, fmt.Errorf("invalid DICOM priority: %w", priorityErr)
+		}
+		if !dimse.IsValidPriority(priority) {
+			return nil, nil, fmt.Errorf("invalid DICOM priority 0x%04X", priority)
+		}
+	}
 
 	dataDS := msg.DataDataset()
 	if dataDS != nil {

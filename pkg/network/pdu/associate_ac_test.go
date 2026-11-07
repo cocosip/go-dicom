@@ -54,6 +54,9 @@ func TestNewAAssociateAC(t *testing.T) {
 	if ac.UserInformation.MaximumLength != 16384 {
 		t.Errorf("Expected default MaximumLength 16384, got %d", ac.UserInformation.MaximumLength)
 	}
+	if ac.UserInformation.ImplementationClassUID != DefaultImplementationClassUID {
+		t.Errorf("Expected canonical implementation class UID %q, got %q", DefaultImplementationClassUID, ac.UserInformation.ImplementationClassUID)
+	}
 }
 
 func TestAAssociateACValidateStructureRequiresPresentationContext(t *testing.T) {
@@ -95,6 +98,37 @@ func TestAAssociateACEncodeRejectsMissingMandatoryFields(t *testing.T) {
 
 			if _, err := ac.Encode(); err == nil {
 				t.Fatal("Encode() error = nil, want validation error")
+			}
+		})
+	}
+}
+
+func TestAAssociateACValidateStructureRequiresImplementationClassUID(t *testing.T) {
+	ac := NewAAssociateAC()
+	ac.CalledAETitle = testCalledAETitle
+	ac.CallingAETitle = testCallingAETitle
+	ac.PresentationContexts = testAcceptedContexts()
+	ac.UserInformation.ImplementationClassUID = ""
+
+	if err := ac.ValidateStructure(); err == nil {
+		t.Fatal("ValidateStructure() error = nil, want missing implementation class UID error")
+	}
+}
+
+func TestAAssociateACEncodeRejectsInvalidImplementationIdentification(t *testing.T) {
+	for name, mutate := range map[string]func(*AAssociateAC){
+		"invalid UID":     func(ac *AAssociateAC) { ac.UserInformation.ImplementationClassUID = "1.2.bad" },
+		"long version":    func(ac *AAssociateAC) { ac.UserInformation.ImplementationVersionName = "12345678901234567" },
+		"control version": func(ac *AAssociateAC) { ac.UserInformation.ImplementationVersionName = "GO\x00DICOM" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			ac := NewAAssociateAC()
+			ac.CalledAETitle = testCalledAETitle
+			ac.CallingAETitle = testCallingAETitle
+			ac.PresentationContexts = testAcceptedContexts()
+			mutate(ac)
+			if _, err := ac.Encode(); err == nil {
+				t.Fatal("Encode() error = nil, want invalid implementation identification error")
 			}
 		})
 	}

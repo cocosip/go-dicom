@@ -57,7 +57,7 @@ This guide is the single, consolidated reference for go-dicom's networking layer
 
 This package provides the SCU (Service Class User) and SCP (Service Class Provider) foundation for the DICOM network protocol stack.
 
-The DICOM network protocol is based on TCP/IP, using the Association mechanism for connection management and DIMSE (DICOM Message Service Element) for message exchange. This implementation fully supports the DICOM standard's networking features.
+The DICOM network protocol is based on TCP/IP, using the Association mechanism for connection management and DIMSE (DICOM Message Service Element) for message exchange. This implementation supports the network services implemented in this repository; external PACS interoperability still depends on the negotiated SOP classes and transfer syntaxes.
 
 ### Key Features
 
@@ -241,8 +241,8 @@ c := client.New(
 | `WithTransportReadTimeout(timeout)` | time.Duration | 0 | Single PDU read timeout; 0 allows an established association to stay idle |
 | `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | Single PDU write timeout |
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association negotiation timeout |
-| `WithImplementationClassUID(uid)` | string | "1.2.826.0.1.3680043.10.854" | Implementation class UID |
-| `WithImplementationVersionName(name)` | string | "GO-DICOM-1.0" | Implementation version name |
+| `WithImplementationClassUID(uid)` | string | "1.2.826.0.1.3680043.8.498.1" | Implementation class UID |
+| `WithImplementationVersionName(name)` | string | "go-dicom-1.0" | Implementation version name |
 | `WithTransferSyntaxRegistry(registry)` | `*transfer.Registry` | Independent standard catalog view | Explicitly inject a custom Transfer Syntax; standard and unknown syntaxes can still be parsed when not registered |
 
 ### Adding Presentation Contexts
@@ -1036,9 +1036,11 @@ In DICOM network communication, every request needs a unique MessageID. Managing
 ```go
 // ❌ Not recommended: manual MessageID management
 msgID := 1
-req1 := dimse.NewCEchoRequest(msgID)
+req1 := dimse.NewCEchoRequest()
+_ = req1.SetMessageID(uint16(msgID))
 msgID++
-req2 := dimse.NewCStoreRequest(msgID, dataset)
+req2, _ := dimse.NewCStoreRequest(dataset)
+_ = req2.SetMessageID(uint16(msgID))
 msgID++
 // ... easy to forget to increment or to duplicate
 ```
@@ -1049,10 +1051,10 @@ Use `MessageIDGenerator` to manage MessageIDs automatically:
 // ✅ Recommended: use MessageIDGenerator
 idGen := dimse.NewMessageIDGenerator()
 
-// Pass 0 when creating a request (means unassigned)
-req1 := dimse.NewCEchoRequest(0)
-req2 := dimse.NewCStoreRequest(0, dataset)
-req3 := dimse.NewCFindRequestPatientRoot(0, level, query)
+// Create requests without a MessageID; the generator assigns one before sending.
+req1 := dimse.NewCEchoRequest()
+req2, _ := dimse.NewCStoreRequest(dataset)
+req3 := dimse.NewCFindRequestPatientRoot(level, query)
 
 // Assign a MessageID automatically before sending
 idGen.AssignMessageID(req1)  // MessageID = 1
@@ -1099,7 +1101,7 @@ func main() {
     client := NewClient()
 
     // No need to worry about MessageID!
-    req := dimse.NewCEchoRequest(0)
+    req := dimse.NewCEchoRequest()
     client.Send(req)
 }
 ```
@@ -1228,7 +1230,7 @@ dimse.PriorityHigh    // 0x0001
 
 ```go
 // Priority
-req := dimse.NewCStoreRequest(0, dataset)
+req, _ := dimse.NewCStoreRequest(dataset)
 req.SetPriority(uint16(dimse.PriorityHigh))    // High priority
 req.SetPriority(uint16(dimse.PriorityMedium))  // Medium priority (default)
 req.SetPriority(uint16(dimse.PriorityLow))     // Low priority
@@ -1236,7 +1238,7 @@ req.SetPriority(uint16(dimse.PriorityLow))     // Low priority
 
 ```go
 // Move Originator (C-MOVE sub-operations)
-req, _ := dimse.NewCStoreRequest(0, dataset)
+req, _ := dimse.NewCStoreRequest(dataset)
 _ = req.SetMoveOriginator("MOVE_SCU", 999)
 ```
 

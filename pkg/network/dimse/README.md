@@ -18,10 +18,12 @@ In DICOM network communication, every request needs a unique MessageID. Managing
 
 ```go
 // ❌ Not recommended: manual MessageID management
-msgID := 1
-req1 := dimse.NewCEchoRequest(msgID)
+msgID := uint16(1)
+req1 := dimse.NewCEchoRequest()
+_ = req1.SetMessageID(msgID)
 msgID++
-req2 := dimse.NewCStoreRequest(msgID, dataset)
+req2, _ := dimse.NewCStoreRequest(dataset)
+_ = req2.SetMessageID(msgID)
 msgID++
 // ... easy to forget to increment or to duplicate
 ```
@@ -34,10 +36,10 @@ Use `MessageIDGenerator` to manage MessageIDs automatically:
 // ✅ Recommended: use MessageIDGenerator
 idGen := dimse.NewMessageIDGenerator()
 
-// Pass 0 when creating a request (means unassigned)
-req1 := dimse.NewCEchoRequest(0)
-req2 := dimse.NewCStoreRequest(0, dataset)
-req3 := dimse.NewCFindRequestPatientRoot(0, level, query)
+// Create requests without a MessageID; the generator assigns one before sending.
+req1 := dimse.NewCEchoRequest()
+req2, _ := dimse.NewCStoreRequest(dataset)
+req3 := dimse.NewCFindRequestPatientRoot(level, query)
 
 // Assign a MessageID automatically before sending
 idGen.AssignMessageID(req1)  // MessageID = 1
@@ -69,7 +71,7 @@ func main() {
     idGen := dimse.NewMessageIDGenerator()
 
     // Create a C-ECHO request (MessageID=0 means unassigned)
-    req := dimse.NewCEchoRequest(0)
+    req := dimse.NewCEchoRequest()
 
     // Assign a MessageID
     msgID, err := idGen.AssignMessageID(req)
@@ -108,7 +110,7 @@ func main() {
         []string{"Doe^John"}))
 
     // Create a C-STORE request
-    req, err := dimse.NewCStoreRequest(0, ds)
+    req, err := dimse.NewCStoreRequest(ds)
     if err != nil {
         panic(err)
     }
@@ -145,7 +147,6 @@ func main() {
 
     // Create a C-FIND request (Patient Root Query)
     req := dimse.NewCFindRequestPatientRoot(
-        0,
         dimse.QueryRetrieveLevelPatient,
         query,
     )
@@ -189,7 +190,7 @@ func main() {
     client := NewClient()
 
     // No need to worry about MessageID!
-    req := dimse.NewCEchoRequest(0)
+    req := dimse.NewCEchoRequest()
     client.Send(req)
 }
 ```
@@ -252,7 +253,7 @@ if finalResp.IsSuccess() {
 ### Priority
 
 ```go
-req := dimse.NewCStoreRequest(0, dataset)
+req, _ := dimse.NewCStoreRequest(dataset)
 req.SetPriority(uint16(dimse.PriorityHigh))    // High priority
 req.SetPriority(uint16(dimse.PriorityMedium))  // Medium priority (default)
 req.SetPriority(uint16(dimse.PriorityLow))     // Low priority
@@ -261,7 +262,7 @@ req.SetPriority(uint16(dimse.PriorityLow))     // Low priority
 ### Move Originator (C-MOVE sub-operations)
 
 ```go
-req, _ := dimse.NewCStoreRequest(0, dataset)
+req, _ := dimse.NewCStoreRequest(dataset)
 req.SetMoveOriginator("MOVE_SCU", 999)
 ```
 

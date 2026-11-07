@@ -46,3 +46,16 @@ func TestPriority_Values(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidPriority(t *testing.T) {
+	for _, value := range []uint16{0x0000, 0x0001, 0x0002} {
+		if !IsValidPriority(value) {
+			t.Errorf("IsValidPriority(0x%04X) = false, want true", value)
+		}
+	}
+	for _, value := range []uint16{0x0003, 0xFFFF} {
+		if IsValidPriority(value) {
+			t.Errorf("IsValidPriority(0x%04X) = true, want false", value)
+		}
+	}
+}

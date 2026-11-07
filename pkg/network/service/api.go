@@ -213,9 +213,12 @@ func (s *Service) SendNEventReport(ctx context.Context, req *dimse.NEventReportR
 }
 
 // registerPendingRequest registers a pending request to receive its response.
-func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request, respCh chan dimse.Response) *pendingRequest {
+func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request, respCh chan dimse.Response) (*pendingRequest, error) {
 	s.pendingRequestsMu.Lock()
 	defer s.pendingRequestsMu.Unlock()
+	if _, exists := s.pendingRequests[messageID]; exists {
+		return nil, fmt.Errorf("message ID %d is already pending", messageID)
+	}
 
 	pending := &pendingRequest{
 		request:    request,
@@ -225,7 +228,7 @@ func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request
 		lifecycle:  newRequestLifecycle(s, observability.DirectionOutbound, request),
 	}
 	s.pendingRequests[messageID] = pending
-	return pending
+	return pending, nil
 }
 
 // unregisterPendingRequest removes a pending request.
@@ -333,7 +336,10 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 		return zero, fmt.Errorf("failed to assign message ID: %w", err)
 	}
 	respCh := make(chan dimse.Response, 1)
-	pending := s.registerPendingRequest(msgID, req, respCh)
+	pending, err := s.registerPendingRequest(msgID, req, respCh)
+	if err != nil {
+		return zero, err
+	}
 	defer s.unregisterPendingRequest(msgID)
 	if err := s.Send(ctx, req); err != nil {
 		pending.lifecycle.finishContext(ctx, err)
@@ -394,7 +400,11 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	}
 	eventCh := make(chan ResponseEvent[Resp], 10)
 	respCh := make(chan dimse.Response, 10)
-	pending := s.registerPendingRequest(msgID, req, respCh)
+	pending, err := s.registerPendingRequest(msgID, req, respCh)
+	if err != nil {
+		release()
+		return nil, fmt.Errorf("%s: %w", errMsg, err)
+	}
 
 	if err := s.Send(ctx, req); err != nil {
 		pending.lifecycle.finishContext(ctx, err)

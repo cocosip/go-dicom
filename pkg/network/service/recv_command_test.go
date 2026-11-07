@@ -32,6 +32,21 @@ func TestCommandHasDataset(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects an invalid dataset type", func(t *testing.T) {
+		var command bytes.Buffer
+		for _, value := range []interface{}{uint16(0x0000), uint16(0xFFFF)} {
+			command.Reset()
+			_ = binary.Write(&command, binary.LittleEndian, uint16(0x0000))
+			_ = binary.Write(&command, binary.LittleEndian, uint16(0x0800))
+			_ = binary.Write(&command, binary.LittleEndian, uint32(2))
+			_ = binary.Write(&command, binary.LittleEndian, value)
+
+			if _, err := new(Service).inspectCommandHasDataset(command.Bytes()); err == nil {
+				t.Fatalf("CommandDataSetType 0x%04X accepted", value)
+			}
+		}
+	})
+
 	t.Run("truncated command data returns error", func(t *testing.T) {
 		hasData := new(Service).commandHasDataset([]byte{0x00, 0x00, 0x00})
 		if hasData {

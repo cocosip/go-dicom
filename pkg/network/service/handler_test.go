@@ -721,7 +721,9 @@ func TestHandleResponse(t *testing.T) {
 	msgID := uint16(123)
 	req := dimse.NewCEchoRequest()
 	respCh := make(chan dimse.Response, 1)
-	service.registerPendingRequest(msgID, req, respCh)
+	if _, err := service.registerPendingRequest(msgID, req, respCh); err != nil {
+		t.Fatalf("registerPendingRequest() error = %v", err)
+	}
 
 	// Create a response
 	resp := dimse.NewCEchoResponse(msgID, status.Success)

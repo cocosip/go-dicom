@@ -301,11 +301,11 @@ func (s *Service) groupPDVsIntoPDUs(pdvs []*PDV) [][]*PDV {
 		return nil
 	}
 
-	const pduHeaderSize = 6 // PDU header: 1 byte type + 1 byte reserved + 4 bytes length
-
 	var groups [][]*PDV
 	var currentGroup []*PDV
-	currentSize := pduHeaderSize
+	// MaximumLengthReceived applies to the PDU variable field and excludes the
+	// six-byte PDU header (PS3.8).
+	currentSize := 0
 	maxPDULength := int(s.outgoingMaxPDULength())
 
 	for _, pdv := range pdvs {
@@ -318,7 +318,7 @@ func (s *Service) groupPDVsIntoPDUs(pdvs []*PDV) [][]*PDV {
 			// Start a new PDU
 			groups = append(groups, currentGroup)
 			currentGroup = []*PDV{pdv}
-			currentSize = pduHeaderSize + pdvSize
+			currentSize = pdvSize
 		} else {
 			// Add to current PDU
 			currentGroup = append(currentGroup, pdv)

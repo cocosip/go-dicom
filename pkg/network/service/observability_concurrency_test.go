@@ -66,7 +66,10 @@ func TestObservabilityCloseFinalizesPendingAndInboundOnce(t *testing.T) {
 	if err := outbound.SetMessageID(11); err != nil {
 		t.Fatalf("outbound SetMessageID() error = %v", err)
 	}
-	pending := service.registerPendingRequest(11, outbound, make(chan dimse.Response, 1))
+	pending, err := service.registerPendingRequest(11, outbound, make(chan dimse.Response, 1))
+	if err != nil {
+		t.Fatalf("registerPendingRequest() error = %v", err)
+	}
 	pending.lifecycle.sent(context.Background())
 
 	inbound := dimse.NewCEchoRequest()

@@ -5,11 +5,12 @@ package dimse
 
 import "sync/atomic"
 
-// MessageIDGenerator generates unique message IDs for DIMSE messages.
+// MessageIDGenerator generates sequential message IDs for DIMSE messages.
 // It is thread-safe and can be used concurrently.
 //
 // MessageID is used to correlate DIMSE requests with their responses.
-// Each request should have a unique MessageID within an association.
+// Each outstanding request should have a unique MessageID within an association;
+// the sequence wraps after 65535 and the service rejects an outstanding collision.
 type MessageIDGenerator struct {
 	counter uint32
 }

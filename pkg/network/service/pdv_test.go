@@ -281,6 +281,7 @@ func TestFragmentData(t *testing.T) {
 		{"Empty data", []byte{}, 16384, 0},            // no empty PDVs (PS3.8 E.1)
 		{"Large data", make([]byte, 50000), 16384, 4}, // Should split into multiple fragments
 		{"Exact fit", make([]byte, 16384-12), 16384, 1},
+		{"Small legal PDU variable field", []byte{1, 2}, 8, 1},
 	}
 
 	for _, tt := range tests {

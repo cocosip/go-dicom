@@ -130,8 +130,8 @@ func NewAAssociateAC() *AAssociateAC {
 		ApplicationContext:   applicationContextUID, // DICOM Application Context
 		PresentationContexts: make([]PresentationContextAC, 0),
 		UserInformation: &UserInformation{
-			MaximumLength:          16384,                         // Default 16KB
-			ImplementationClassUID: "1.2.826.0.1.3680043.8.498.1", // go-dicom implementation UID
+			MaximumLength:          16384, // Default 16KB
+			ImplementationClassUID: DefaultImplementationClassUID,
 			hasMaximumLength:       true,
 		},
 	}
@@ -153,8 +153,8 @@ func (a *AAssociateAC) validateForEncode() error {
 	if a.UserInformation == nil {
 		return fmt.Errorf("A-ASSOCIATE-AC is missing user information")
 	}
-	if a.UserInformation.ImplementationClassUID == "" {
-		return fmt.Errorf("A-ASSOCIATE-AC is missing implementation class UID")
+	if err := validateImplementationIdentification(a.UserInformation, "A-ASSOCIATE-AC"); err != nil {
+		return err
 	}
 	if len(a.PresentationContexts) == 0 {
 		return fmt.Errorf("A-ASSOCIATE-AC must contain at least one presentation context")
@@ -441,6 +441,9 @@ func (a *AAssociateAC) ValidateStructure() error {
 	}
 	if a.UserInformation == nil || !a.UserInformation.hasMaximumLength {
 		return fmt.Errorf("A-ASSOCIATE-AC is missing maximum length user information")
+	}
+	if err := validateImplementationIdentification(a.UserInformation, "A-ASSOCIATE-AC"); err != nil {
+		return err
 	}
 	return nil
 }

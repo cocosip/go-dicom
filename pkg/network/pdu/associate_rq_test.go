@@ -133,6 +133,37 @@ func TestAAssociateRQEncodeRejectsMissingMandatoryFields(t *testing.T) {
 	}
 }
 
+func TestAAssociateRQValidateStructureRequiresImplementationClassUID(t *testing.T) {
+	rq := NewAAssociateRQ()
+	rq.CalledAETitle = testCalledAETitle
+	rq.CallingAETitle = testCallingAETitle
+	rq.PresentationContexts = testProposedContexts()
+	rq.UserInformation.ImplementationClassUID = ""
+
+	if err := rq.ValidateStructure(); err == nil {
+		t.Fatal("ValidateStructure() error = nil, want missing implementation class UID error")
+	}
+}
+
+func TestAAssociateRQEncodeRejectsInvalidImplementationIdentification(t *testing.T) {
+	for name, mutate := range map[string]func(*AAssociateRQ){
+		"invalid UID":     func(rq *AAssociateRQ) { rq.UserInformation.ImplementationClassUID = "1.2.bad" },
+		"long version":    func(rq *AAssociateRQ) { rq.UserInformation.ImplementationVersionName = strings.Repeat("A", 17) },
+		"control version": func(rq *AAssociateRQ) { rq.UserInformation.ImplementationVersionName = "GO\x00DICOM" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			rq := NewAAssociateRQ()
+			rq.CalledAETitle = testCalledAETitle
+			rq.CallingAETitle = testCallingAETitle
+			rq.PresentationContexts = testProposedContexts()
+			mutate(rq)
+			if _, err := rq.Encode(); err == nil {
+				t.Fatal("Encode() error = nil, want invalid implementation identification error")
+			}
+		})
+	}
+}
+
 func TestAAssociateRQDecodeRejectsInvalidPresentationContexts(t *testing.T) {
 	data := make([]byte, 68)
 	data[1] = 1

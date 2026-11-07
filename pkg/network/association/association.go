@@ -20,8 +20,8 @@ import (
 // configure its own. They identify the go-dicom implementation in the
 // A-ASSOCIATE-RQ / A-ASSOCIATE-AC User Information item (PS3.7 D.3.3.2).
 const (
-	DefaultImplementationClassUID    = "1.2.826.0.1.3680043.8.498.1"
-	DefaultImplementationVersionName = "go-dicom-1.0"
+	DefaultImplementationClassUID    = pdu.DefaultImplementationClassUID
+	DefaultImplementationVersionName = pdu.DefaultImplementationVersionName
 )
 
 // Association represents a DICOM association between two Application Entities.

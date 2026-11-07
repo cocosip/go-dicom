@@ -11,9 +11,18 @@ import (
 	"io"
 	"math"
 	"strings"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 )
 
 const applicationContextUID = "1.2.840.10008.3.1.1.1"
+
+const (
+	// DefaultImplementationClassUID identifies the go-dicom implementation.
+	DefaultImplementationClassUID = "1.2.826.0.1.3680043.8.498.1"
+	// DefaultImplementationVersionName identifies the go-dicom implementation version.
+	DefaultImplementationVersionName = "go-dicom-1.0"
+)
 
 const maximumPresentationContexts = 128
 
@@ -130,8 +139,8 @@ func NewAAssociateRQ() *AAssociateRQ {
 		ApplicationContext:   applicationContextUID, // Default Application Context
 		PresentationContexts: []PresentationContextRQ{},
 		UserInformation: &UserInformation{
-			MaximumLength:          16384,                                // Default 16KB
-			ImplementationClassUID: "1.2.826.0.1.3680043.9.7278.1.0.0.0", // Placeholder
+			MaximumLength:          16384, // Default 16KB
+			ImplementationClassUID: DefaultImplementationClassUID,
 			hasMaximumLength:       true,
 		},
 	}
@@ -164,8 +173,8 @@ func (a *AAssociateRQ) validateForEncode() error {
 	if a.UserInformation == nil {
 		return fmt.Errorf("A-ASSOCIATE-RQ is missing user information")
 	}
-	if a.UserInformation.ImplementationClassUID == "" {
-		return fmt.Errorf("A-ASSOCIATE-RQ is missing implementation class UID")
+	if err := validateImplementationIdentification(a.UserInformation, "A-ASSOCIATE-RQ"); err != nil {
+		return err
 	}
 	if len(a.PresentationContexts) == 0 {
 		return fmt.Errorf("A-ASSOCIATE-RQ must contain at least one presentation context")
@@ -476,6 +485,30 @@ func (a *AAssociateRQ) ValidateStructure() error {
 	}
 	if a.UserInformation == nil || !a.UserInformation.hasMaximumLength {
 		return fmt.Errorf("A-ASSOCIATE-RQ is missing maximum length user information")
+	}
+	if err := validateImplementationIdentification(a.UserInformation, "A-ASSOCIATE-RQ"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateImplementationIdentification(ui *UserInformation, pduName string) error {
+	if ui == nil || ui.ImplementationClassUID == "" {
+		return fmt.Errorf("%s is missing implementation class UID", pduName)
+	}
+	if !uid.IsValid(ui.ImplementationClassUID) {
+		return fmt.Errorf("%s has invalid implementation class UID %q", pduName, ui.ImplementationClassUID)
+	}
+	if ui.ImplementationVersionName == "" {
+		return nil
+	}
+	if len(ui.ImplementationVersionName) > 16 {
+		return fmt.Errorf("%s implementation version name exceeds 16 bytes", pduName)
+	}
+	for i := 0; i < len(ui.ImplementationVersionName); i++ {
+		if ui.ImplementationVersionName[i] < 0x20 || ui.ImplementationVersionName[i] > 0x7E {
+			return fmt.Errorf("%s implementation version name contains an invalid character", pduName)
+		}
 	}
 	return nil
 }

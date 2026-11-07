@@ -77,6 +77,18 @@ func TestEncodeDIMSEMessage(t *testing.T) {
 	}
 }
 
+func TestGroupPDVsIntoPDUsUsesVariableFieldMaximum(t *testing.T) {
+	service := NewService(nil, nil, WithMaxPDULength(16))
+	t.Cleanup(func() { _ = service.Close() })
+	groups := service.groupPDVsIntoPDUs([]*PDV{
+		{PresentationContextID: 1, IsCommand: true, Data: []byte{1, 2}},
+		{PresentationContextID: 1, IsCommand: true, Data: []byte{3, 4}},
+	})
+	if len(groups) != 1 || len(groups[0]) != 2 {
+		t.Fatalf("groups = %#v, want one PDU containing two PDVs", groups)
+	}
+}
+
 func TestEncodeDIMSEMessageWithDataset(t *testing.T) {
 	t.Skip("Skipping test - CreateTestDataset helper not yet implemented")
 	// TODO: Implement this test once we have a test dataset creation helper
@@ -746,7 +758,9 @@ func recordedDIMSEData(t *testing.T, conn *recordingConn) ([]byte, []byte) {
 
 func TestSendMessageReturnsErrorWhenMaxPDUTooSmall(t *testing.T) {
 	assoc := createTestAssociation()
-	assoc.MaxPDULength = 11
+	// MaximumLengthReceived excludes the six-byte PDU header. A value of 7
+	// cannot hold the six-byte PDV header plus an even command fragment.
+	assoc.MaxPDULength = 7
 
 	service := acceptedService(t, &recordingConn{}, assoc, WithAssociationRequestor(true))
 

@@ -179,13 +179,12 @@ func FragmentData(data []byte, contextID byte, isCommand bool, maxPDULength uint
 	}
 
 	// Calculate max PDV data size
-	// PDU header: 6 bytes (type + reserved + length)
 	// PDV header per fragment: 6 bytes (length + context ID + control header)
-	// We need to leave room for at least one PDV header
-	const pduHeaderSize = 6
 	const pdvHeaderSize = 6
 
-	maxPDVDataSize := int(maxPDULength) - pduHeaderSize - pdvHeaderSize
+	// MaximumLengthReceived is the maximum variable-field length and excludes
+	// the six-byte PDU header (PS3.8). Only the PDV header consumes this budget.
+	maxPDVDataSize := int(maxPDULength) - pdvHeaderSize
 
 	// PS3.8 E.1: every fragment shall consist of an even number of bytes.
 	maxPDVDataSize &^= 1

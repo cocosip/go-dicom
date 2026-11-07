@@ -335,8 +335,14 @@ func (s *Service) inspectCommandHasDataset(commandData []byte) (bool, error) {
 			if err := binary.Read(r, byteOrder, &dataSetType); err != nil {
 				return false, fmt.Errorf("CommandDataSetType not readable: %w", err)
 			}
-			// 0x0101 = NO_DATA_SET_PRESENT
-			return dataSetType != 0x0101, nil
+			switch dataSetType {
+			case 0x0001: // data set present
+				return true, nil
+			case 0x0101: // NO_DATA_SET_PRESENT
+				return false, nil
+			default:
+				return false, fmt.Errorf("invalid CommandDataSetType 0x%04X", dataSetType)
+			}
 		}
 
 		// Skip value
