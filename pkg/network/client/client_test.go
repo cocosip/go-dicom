@@ -56,6 +56,12 @@ func TestNew(t *testing.T) {
 	if opts.AssociationTimeout != 10*time.Second {
 		t.Errorf("Expected AssociationTimeout 10s, got %v", opts.AssociationTimeout)
 	}
+	if opts.ImplementationClassUID != association.DefaultImplementationClassUID {
+		t.Errorf("Expected default ImplementationClassUID %q, got %q", association.DefaultImplementationClassUID, opts.ImplementationClassUID)
+	}
+	if opts.ImplementationVersionName != association.DefaultImplementationVersionName {
+		t.Errorf("Expected default ImplementationVersionName %q, got %q", association.DefaultImplementationVersionName, opts.ImplementationVersionName)
+	}
 	if opts.TranscodeManager == nil {
 		t.Fatal("default client has no transcode Manager")
 	}

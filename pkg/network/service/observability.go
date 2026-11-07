@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ type queuedRequestEvent struct {
 
 type requestLifecycle struct {
 	service                *Service
+	enabled                bool
 	association            observability.Association
 	direction              observability.Direction
 	messageID              uint16
@@ -66,6 +68,7 @@ func newRequestLifecycle(s *Service, direction observability.Direction, req dims
 	}
 	return &requestLifecycle{
 		service:               s,
+		enabled:               true,
 		association:           s.observationAssociation(),
 		direction:             direction,
 		messageID:             messageID,
@@ -80,6 +83,24 @@ func newRequestLifecycle(s *Service, direction observability.Direction, req dims
 		moveDestinationAE:     requestMoveDestination(req),
 		presentationContextID: req.PresentationContextID(),
 		transferSyntax:        requestTransferSyntax(s, req),
+	}
+}
+
+// newInboundRequestLifecycle keeps a stable registration identity even when
+// observability is disabled, so stale cleanup cannot remove a newer request.
+func newInboundRequestLifecycle(s *Service, req dimse.Request) *requestLifecycle {
+	lifecycle := newRequestLifecycle(s, observability.DirectionInbound, req)
+	if lifecycle != nil {
+		return lifecycle
+	}
+	return &requestLifecycle{
+		service:     s,
+		direction:   observability.DirectionInbound,
+		messageID:   req.MessageID(),
+		command:     req.CommandField(),
+		started:     time.Now(),
+		request:     req,
+		operationID: observability.NewOperationID(),
 	}
 }
 
@@ -101,7 +122,7 @@ func operationIDFromContext(ctx context.Context) uint64 {
 }
 
 func (l *requestLifecycle) setParentOperationID(operationID uint64) {
-	if l == nil || operationID == 0 {
+	if l == nil || !l.enabled || operationID == 0 {
 		return
 	}
 	l.mu.Lock()
@@ -112,7 +133,7 @@ func (l *requestLifecycle) setParentOperationID(operationID uint64) {
 }
 
 func (l *requestLifecycle) received(ctx context.Context) {
-	if l == nil {
+	if l == nil || !l.enabled {
 		return
 	}
 	l.mu.Lock()
@@ -124,7 +145,7 @@ func (l *requestLifecycle) received(ctx context.Context) {
 }
 
 func (l *requestLifecycle) sent(ctx context.Context) {
-	if l == nil {
+	if l == nil || !l.enabled {
 		return
 	}
 	l.mu.Lock()
@@ -140,7 +161,7 @@ func (l *requestLifecycle) sent(ctx context.Context) {
 }
 
 func (l *requestLifecycle) response(ctx context.Context, resp dimse.Response) {
-	if l == nil || resp == nil {
+	if l == nil || !l.enabled || resp == nil {
 		return
 	}
 	statusValue := resp.Status()
@@ -229,7 +250,7 @@ func (l *requestLifecycle) finishError(ctx context.Context, err error) {
 }
 
 func (l *requestLifecycle) finish(ctx context.Context, kind observability.EventKind, outcome observability.Outcome, err error) {
-	if l == nil {
+	if l == nil || !l.enabled {
 		return
 	}
 	l.mu.Lock()
@@ -400,18 +421,23 @@ func (s *Service) observeSentMessage(message dimse.Message, lifecycle *requestLi
 	}
 }
 
-func (s *Service) registerInboundRequest(req dimse.Request) *requestLifecycle {
-	lifecycle := newRequestLifecycle(s, observability.DirectionInbound, req)
-	if lifecycle == nil {
-		return nil
+func (s *Service) registerInboundRequest(req dimse.Request) (*requestLifecycle, error) {
+	if req == nil {
+		return nil, fmt.Errorf("inbound request is nil")
 	}
+	lifecycle := newInboundRequestLifecycle(s, req)
 	if parent := s.parentOperationForInbound(req); parent != 0 {
 		lifecycle.setParentOperationID(parent)
 	}
 	s.inboundRequestsMu.Lock()
+	if _, exists := s.inboundMessageIDs[req.MessageID()]; exists {
+		s.inboundRequestsMu.Unlock()
+		return nil, fmt.Errorf("message ID %d is already active", req.MessageID())
+	}
+	s.inboundMessageIDs[req.MessageID()] = struct{}{}
 	s.inboundRequests[req.MessageID()] = lifecycle
 	s.inboundRequestsMu.Unlock()
-	return lifecycle
+	return lifecycle, nil
 }
 
 func (s *Service) pendingRequestOperation(messageID uint16) uint64 {
@@ -508,12 +534,10 @@ func (s *Service) inboundRequest(messageID uint16) *requestLifecycle {
 }
 
 func (s *Service) unregisterInboundRequest(messageID uint16, lifecycle *requestLifecycle) {
-	if lifecycle == nil {
-		return
-	}
 	s.inboundRequestsMu.Lock()
 	if current := s.inboundRequests[messageID]; current == lifecycle {
 		delete(s.inboundRequests, messageID)
+		delete(s.inboundMessageIDs, messageID)
 	}
 	s.inboundRequestsMu.Unlock()
 }

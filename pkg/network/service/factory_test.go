@@ -32,6 +32,43 @@ func TestCreateCGetRequestRequiresQueryRetrieveLevel(t *testing.T) {
 	}
 }
 
+func TestCreateMessageFromDatasetsRejectsZeroRequestMessageID(t *testing.T) {
+	command := dimse.CreateCommandDataset(uint16(dimse.CommandCEchoRQ), 0)
+	if err := command.Add(element.NewUnsignedShort(tag.MessageID, []uint16{0})); err != nil {
+		t.Fatalf("failed to add zero MessageID: %v", err)
+	}
+
+	_, err := createMessageFromDatasets(command, nil)
+	if err == nil {
+		t.Fatal("expected zero request MessageID to be rejected")
+	}
+	if !strings.Contains(err.Error(), "MessageID") {
+		t.Fatalf("expected MessageID error, got %v", err)
+	}
+}
+
+func TestCreateMessageFromDatasetsRejectsInvalidPriority(t *testing.T) {
+	command := dimse.CreateCommandDataset(uint16(dimse.CommandCFindRQ), 1)
+	if err := command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.2.1.1"})); err != nil {
+		t.Fatalf("failed to add AffectedSOPClassUID: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.Priority, []uint16{0xFFFF})); err != nil {
+		t.Fatalf("failed to add Priority: %v", err)
+	}
+	identifier := dataset.New()
+	if err := identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(dimse.QueryRetrieveLevelStudy)})); err != nil {
+		t.Fatalf("failed to add QueryRetrieveLevel: %v", err)
+	}
+
+	_, err := createMessageFromDatasets(command, identifier)
+	if err == nil {
+		t.Fatal("expected invalid Priority to be rejected")
+	}
+	if !strings.Contains(err.Error(), "Priority") {
+		t.Fatalf("expected Priority error, got %v", err)
+	}
+}
+
 func TestCreateCMoveRequestRequiresMoveDestinationAndQueryRetrieveLevel(t *testing.T) {
 	t.Run("missing MoveDestination", func(t *testing.T) {
 		command := dataset.New()

@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
-## [v0.8.4] - 2026-11-06
+## [v0.8.4] - 2026-11-07
 
 ### Added
 
@@ -19,10 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **network/client**: C-GET now preflight-validates that a C-STORE handler is configured and that at least one Storage SOP Class is negotiated with the SCP role, returning an actionable error instead of a silent `0xB000`.
 - **license**: relicensed the project from MS-PL to the MIT License; Go source headers, license badges, and documentation were updated.
+- **network/dimse**: request constructors no longer accept caller-supplied Message IDs; the service assigns IDs before sending.
+- **network**: association defaults now use one implementation UID and version name across PDU, client, server, and service layers.
 
 ### Fixed
 
 - **network/client**: C-GET no longer reports success while delivering zero instances when storage sub-operations cannot be sent back to the requestor.
+- **network**: reject malformed DIMSE command sets with zero or duplicate request Message IDs, invalid priorities, or inconsistent dataset flags.
+- **network**: validate association implementation identity and negotiated PDU length accounting before transmission.
 
 ## [v0.8.3] - 2026-11-03
 

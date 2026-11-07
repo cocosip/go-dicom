@@ -76,7 +76,10 @@ func TestObservabilityCloseFinalizesPendingAndInboundOnce(t *testing.T) {
 	if err := inbound.SetMessageID(12); err != nil {
 		t.Fatalf("inbound SetMessageID() error = %v", err)
 	}
-	inboundLifecycle := service.registerInboundRequest(inbound)
+	inboundLifecycle, err := service.registerInboundRequest(inbound)
+	if err != nil {
+		t.Fatalf("registerInboundRequest() error = %v", err)
+	}
 	inboundLifecycle.received(context.Background())
 
 	if err := service.Close(); err != nil {
@@ -94,6 +97,62 @@ func TestObservabilityCloseFinalizesPendingAndInboundOnce(t *testing.T) {
 		if len(requestEventsForID) != 2 || !isTerminalRequestEvent(requestEventsForID[1].Kind) {
 			t.Errorf("message %d events = %#v, want initial plus one terminal", messageID, requestEventsForID)
 		}
+	}
+}
+
+func TestRegisterInboundRequestRejectsDuplicateMessageID(t *testing.T) {
+	service := NewService(nil, nil, WithEventObserver(observability.EventObserverFunc(func(context.Context, observability.Event) {})))
+	defer func() { _ = service.Close() }()
+
+	first := dimse.NewCEchoRequest()
+	if err := first.SetMessageID(1); err != nil {
+		t.Fatalf("first SetMessageID() error = %v", err)
+	}
+	second := dimse.NewCEchoRequest()
+	if err := second.SetMessageID(1); err != nil {
+		t.Fatalf("second SetMessageID() error = %v", err)
+	}
+
+	registered, err := service.registerInboundRequest(first)
+	if err != nil {
+		t.Fatalf("first registerInboundRequest() error = %v", err)
+	}
+	if registered == nil {
+		t.Fatal("first request was not registered")
+	}
+	if duplicate, err := service.registerInboundRequest(second); err == nil || duplicate != nil {
+		t.Fatal("duplicate request was registered")
+	}
+	if current := service.inboundRequest(1); current != registered {
+		t.Fatal("duplicate registration replaced the original request")
+	}
+}
+
+func TestRegisterInboundRequestCleanupDoesNotRemoveReplacementWithoutObservability(t *testing.T) {
+	service := NewService(nil, nil)
+	defer func() { _ = service.Close() }()
+
+	first := dimse.NewCEchoRequest()
+	if err := first.SetMessageID(1); err != nil {
+		t.Fatalf("first SetMessageID() error = %v", err)
+	}
+	firstLifecycle, err := service.registerInboundRequest(first)
+	if err != nil {
+		t.Fatalf("first registerInboundRequest() error = %v", err)
+	}
+	service.unregisterInboundRequest(first.MessageID(), firstLifecycle)
+
+	second := dimse.NewCEchoRequest()
+	if err := second.SetMessageID(1); err != nil {
+		t.Fatalf("second SetMessageID() error = %v", err)
+	}
+	secondLifecycle, err := service.registerInboundRequest(second)
+	if err != nil {
+		t.Fatalf("second registerInboundRequest() error = %v", err)
+	}
+	service.unregisterInboundRequest(first.MessageID(), firstLifecycle)
+	if current := service.inboundRequest(second.MessageID()); current != secondLifecycle {
+		t.Fatal("stale cleanup removed the replacement request")
 	}
 }
 

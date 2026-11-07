@@ -162,11 +162,11 @@ type Config struct {
 	TransportWriteTimeout time.Duration
 
 	// ImplementationClassUID identifies the implementation
-	// Default: "1.2.826.0.1.3680043.10.854"
+	// Default: association.DefaultImplementationClassUID
 	ImplementationClassUID string
 
 	// ImplementationVersionName identifies the implementation version
-	// Default: "GO-DICOM-1.0"
+	// Default: association.DefaultImplementationVersionName
 	ImplementationVersionName string
 
 	// MaxConnections limits the number of concurrent connections, counting
@@ -318,8 +318,8 @@ func defaultServerConfig() *Config {
 		RequestTimeout:            30 * time.Second,
 		TransportReadTimeout:      0,
 		TransportWriteTimeout:     30 * time.Second,
-		ImplementationClassUID:    "1.2.826.0.1.3680043.10.854",
-		ImplementationVersionName: "GO-DICOM-1.0",
+		ImplementationClassUID:    association.DefaultImplementationClassUID,
+		ImplementationVersionName: association.DefaultImplementationVersionName,
 		MaxConnections:            0, // No limit
 		TLSConfig:                 nil,
 		TranscodeManager:          manager,

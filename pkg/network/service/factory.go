@@ -22,6 +22,9 @@ func createMessageFromDatasets(commandDS, dataDS *dataset.Dataset) (dimse.Messag
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CommandField: %w", err)
 	}
+	if err := validateMessageID(commandDS, dimse.CommandField(commandField)); err != nil {
+		return nil, err
+	}
 
 	// Dispatch based on command type
 	switch dimse.CommandField(commandField) {
@@ -100,6 +103,23 @@ func createMessageFromDatasets(commandDS, dataDS *dataset.Dataset) (dimse.Messag
 	}
 }
 
+func validateMessageID(commandDS *dataset.Dataset, commandField dimse.CommandField) error {
+	field := tag.MessageIDBeingRespondedTo
+	if commandField == dimse.CommandCCancelRQ {
+		field = tag.MessageIDBeingRespondedTo
+	} else if commandField.IsRequest() {
+		field = tag.MessageID
+	}
+	messageID, err := commandDS.GetUInt16(field, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get MessageID: %w", err)
+	}
+	if messageID == 0 {
+		return fmt.Errorf("invalid MessageID 0 for %s", commandField)
+	}
+	return nil
+}
+
 func requiredString(commandDS *dataset.Dataset, fieldName string, fieldTag *tag.Tag) (string, error) {
 	value, ok := commandDS.GetString(fieldTag)
 	if !ok {
@@ -121,6 +141,17 @@ func optionalUInt16(commandDS *dataset.Dataset, fieldTag *tag.Tag) (uint16, erro
 		return 0, nil
 	}
 	return commandDS.GetUInt16(fieldTag, 0)
+}
+
+func optionalPriority(commandDS *dataset.Dataset) (uint16, error) {
+	priority, err := optionalUInt16(commandDS, tag.Priority)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get Priority: %w", err)
+	}
+	if !dimse.IsValidPriority(priority) {
+		return 0, fmt.Errorf("invalid DICOM Priority 0x%04X", priority)
+	}
+	return priority, nil
 }
 
 // copyOptionalCommandElements preserves the optional diagnostic command
@@ -215,9 +246,9 @@ func createCStoreRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CStoreReque
 			return nil, fmt.Errorf("failed to set Move Originator: %w", err)
 		}
 	}
-	priority, err := optionalUInt16(commandDS, tag.Priority)
+	priority, err := optionalPriority(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Priority: %w", err)
+		return nil, err
 	}
 	req.SetPriority(priority)
 	return req, nil
@@ -288,9 +319,9 @@ func createCFindRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRequest
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
-	priority, err := optionalUInt16(commandDS, tag.Priority)
+	priority, err := optionalPriority(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Priority: %w", err)
+		return nil, err
 	}
 	req.SetPriority(priority)
 	return req, nil
@@ -328,9 +359,9 @@ func createCGetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CGetRequest, 
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
-	priority, err := optionalUInt16(commandDS, tag.Priority)
+	priority, err := optionalPriority(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Priority: %w", err)
+		return nil, err
 	}
 	req.SetPriority(priority)
 	return req, nil
@@ -412,9 +443,9 @@ func createCMoveRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CMoveRequest
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
-	priority, err := optionalUInt16(commandDS, tag.Priority)
+	priority, err := optionalPriority(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Priority: %w", err)
+		return nil, err
 	}
 	req.SetPriority(priority)
 	return req, nil

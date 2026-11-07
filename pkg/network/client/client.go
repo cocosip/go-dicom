@@ -136,11 +136,11 @@ type Config struct {
 	TLSConfig *tls.Config
 
 	// ImplementationClassUID identifies the implementation
-	// Default: "1.2.826.0.1.3680043.10.854"
+	// Default: association.DefaultImplementationClassUID
 	ImplementationClassUID string
 
 	// ImplementationVersionName identifies the implementation version
-	// Default: "GO-DICOM-1.0"
+	// Default: association.DefaultImplementationVersionName
 	ImplementationVersionName string
 
 	// CStoreHandler handles incoming C-STORE requests on this connection.
@@ -375,8 +375,8 @@ func defaultClientConfig() *Config {
 		RequestTimeout:                           30 * time.Second,
 		TransportWriteTimeout:                    30 * time.Second,
 		AssociationTimeout:                       10 * time.Second,
-		ImplementationClassUID:                   "1.2.826.0.1.3680043.10.854",
-		ImplementationVersionName:                "GO-DICOM-1.0",
+		ImplementationClassUID:                   association.DefaultImplementationClassUID,
+		ImplementationVersionName:                association.DefaultImplementationVersionName,
 		AsynchronousOperations:                   association.NewAsynchronousOperationsWindow(1, 1),
 		RoleSelections:                           make([]*association.RoleSelection, 0),
 		ExtendedNegotiations:                     make([]*association.ExtendedNegotiation, 0),

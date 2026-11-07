@@ -157,7 +157,11 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 	if isCancel {
 		lifecycle = newRequestLifecycle(s, observability.DirectionInbound, req)
 	} else {
-		lifecycle = s.registerInboundRequest(req)
+		var err error
+		lifecycle, err = s.registerInboundRequest(req)
+		if err != nil {
+			return err
+		}
 	}
 	lifecycle.received(ctx)
 	operationCtx := ctx

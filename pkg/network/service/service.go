@@ -71,6 +71,7 @@ type Service struct {
 	activeOperations      map[uint16]*activeOperation
 	activeOperationsMu    sync.RWMutex
 	inboundRequests       map[uint16]*requestLifecycle
+	inboundMessageIDs     map[uint16]struct{}
 	inboundRequestsMu     sync.RWMutex
 	asyncOperationSlots   chan struct{}
 	asyncOperationSlotsMu sync.RWMutex
@@ -246,6 +247,7 @@ func NewService(conn net.Conn, assoc *association.Association, opts ...Option) *
 		pendingRequests:            make(map[uint16]*pendingRequest),
 		activeOperations:           make(map[uint16]*activeOperation),
 		inboundRequests:            make(map[uint16]*requestLifecycle),
+		inboundMessageIDs:          make(map[uint16]struct{}),
 		ctx:                        ctx,
 		cancel:                     cancel,
 		handlers:                   config.handlers,
@@ -483,6 +485,7 @@ func (s *Service) takeInboundRequestLifecycles() []*requestLifecycle {
 		lifecycles = append(lifecycles, lifecycle)
 	}
 	s.inboundRequests = make(map[uint16]*requestLifecycle)
+	s.inboundMessageIDs = make(map[uint16]struct{})
 	s.inboundRequestsMu.Unlock()
 	return lifecycles
 }

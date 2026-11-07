@@ -11,6 +11,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
+	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/service"
 	"github.com/cocosip/go-dicom/pkg/network/status"
@@ -44,6 +45,12 @@ func TestNew(t *testing.T) {
 	}
 	if config.TransportWriteTimeout != 30*time.Second {
 		t.Errorf("Expected TransportWriteTimeout 30s, got %v", config.TransportWriteTimeout)
+	}
+	if config.ImplementationClassUID != association.DefaultImplementationClassUID {
+		t.Errorf("Expected default ImplementationClassUID %q, got %q", association.DefaultImplementationClassUID, config.ImplementationClassUID)
+	}
+	if config.ImplementationVersionName != association.DefaultImplementationVersionName {
+		t.Errorf("Expected default ImplementationVersionName %q, got %q", association.DefaultImplementationVersionName, config.ImplementationVersionName)
 	}
 	if config.TranscodeManager == nil {
 		t.Fatal("default server has no transcode Manager")
