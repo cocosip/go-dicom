@@ -455,9 +455,38 @@ func (dtr *DateTimeRange) Contains(dt time.Time) bool {
 // findRangeDash finds the dash character that separates range bounds.
 // It returns -1 if no dash is found or if the dash is part of a timezone offset.
 // Timezone offsets have format like -0700 (dash followed by 4 digits after another digit).
+// isASCIIDigits reports whether every byte is an ASCII digit.
+func isASCIIDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// validZZXX reports whether d is a plausible 4-digit UTC offset (HHMM within
+// the PS3.5 range -1200..+1400).
+func validZZXX(d string) bool {
+	if len(d) != 4 {
+		return false
+	}
+	hh := int(d[0]-'0')*10 + int(d[1]-'0')
+	mm := int(d[2]-'0')*10 + int(d[3]-'0')
+	return mm < 60 && (hh < 14 || (hh == 14 && mm == 0))
+}
+
 func findRangeDash(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '-' {
+			// A 4-digit year followed by a +/-ZZXX offset (e.g. "2007-0500") is
+			// a datetime, not a range.
+			if i == 4 && len(s) == 9 && isASCIIDigits(s[5:9]) && validZZXX(s[5:9]) {
+				continue
+			}
 			// Check if this is a timezone offset (dash followed by 4 digits after a digit).
 			// A timezone offset can only follow a date/time with at least a full date
 			// (8 digits); otherwise a 4-digit TM like "1000-1800" would be misread.

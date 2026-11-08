@@ -32,7 +32,7 @@ func TestTranscoderEncodeAppliesCodecMetadataAndAppendsLossyHistory(t *testing.T
 			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
 		}
 	}
-	if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{1, 2, 3, 4, 5, 6, 7, 8})); err != nil {
+	if err := ds.Add(element.NewOtherByte(tag.PixelData, make([]byte, 16))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -58,7 +58,7 @@ func TestTranscoderEncodeAppliesCodecMetadataAndAppendsLossyHistory(t *testing.T
 	if got, _ := result.GetStrings(tag.LossyImageCompressionMethod); !reflect.DeepEqual(got, []string{"ISO_15444_1", "ISO_10918_1"}) {
 		t.Fatalf("LossyImageCompressionMethod = %v, want prior and current methods", got)
 	}
-	if got, _ := result.GetStrings(tag.LossyImageCompressionRatio); !reflect.DeepEqual(got, []string{"1.500", "1.000"}) {
+	if got, _ := result.GetStrings(tag.LossyImageCompressionRatio); !reflect.DeepEqual(got, []string{"1.500", "4.000"}) {
 		t.Fatalf("LossyImageCompressionRatio = %v, want prior ratio and all-frame ratio", got)
 	}
 }
@@ -150,9 +150,14 @@ func metadataTestDataset(t *testing.T, syntax *transfer.Syntax, photometric stri
 	if strings.HasPrefix(photometric, "MONOCHROME") {
 		samplesPerPixel = 1
 	}
+	rows, columns := uint16(1), uint16(1)
+	if strings.Contains(photometric, "422") {
+		// Native 4:2:2 requires an even number of columns (PS3.3 Table C.7-11c).
+		rows, columns = 2, 2
+	}
 	for _, elem := range []element.Element{
-		element.NewUnsignedShort(tag.Rows, []uint16{1}),
-		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.Rows, []uint16{rows}),
+		element.NewUnsignedShort(tag.Columns, []uint16{columns}),
 		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
 		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
 		element.NewUnsignedShort(tag.HighBit, []uint16{7}),

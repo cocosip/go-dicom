@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/charset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -298,30 +299,23 @@ func (s *String) validateValue() error {
 		return fmt.Errorf("decode string for VR %s: %w", s.vr.Code(), err)
 	}
 
-	// Check the maximum length of each encoded value, excluding separators and
-	// the Value Field's trailing padding.
+	values, err := s.GetValuesWithError()
+	if err != nil {
+		return fmt.Errorf("decode values for VR %s: %w", s.vr.Code(), err)
+	}
+
+	// Check the maximum length of each value in characters (PS3.5 Table 6.2-1
+	// defines string VR maximum lengths in characters, not bytes).
 	maxLen := s.vr.MaximumLength()
 	if maxLen > 0 {
-		data := []byte(nil)
-		if s.buffer != nil {
-			data = bytes.TrimRight(s.buffer.Data(), string(s.vr.PaddingValue()))
-		}
-		values := bytes.Split(data, []byte{'\\'})
-		if s.hasLiteralBackslash() {
-			values = [][]byte{data}
-		}
 		for i, value := range values {
-			if uint32(len(value)) > maxLen {
-				return fmt.Errorf("value[%d] length %d exceeds maximum %d for VR %s", i, len(value), maxLen, s.vr.Code())
+			if length := utf8.RuneCountInString(value); uint32(length) > maxLen {
+				return fmt.Errorf("value[%d] length %d exceeds maximum %d for VR %s", i, length, maxLen, s.vr.Code())
 			}
 		}
 	}
 
 	// Perform VR-specific validation on each value
-	values, err := s.GetValuesWithError()
-	if err != nil {
-		return fmt.Errorf("decode values for VR %s: %w", s.vr.Code(), err)
-	}
 	for i, value := range values {
 		if err := s.vr.ValidateStringValue(value); err != nil {
 			return fmt.Errorf("value[%d] validation failed for VR %s: %w", i, s.vr.Code(), err)

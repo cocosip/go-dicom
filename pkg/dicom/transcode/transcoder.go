@@ -775,12 +775,20 @@ func applyOutputFrameInfo(ds *dataset.Dataset, output codec.FrameInfo) error {
 		{tag.HighBit, output.BitDepth.HighBit, "high bit"},
 		{tag.SamplesPerPixel, output.SamplesPerPixel, "samples per pixel"},
 		{tag.PixelRepresentation, uint16(output.PixelRepresentation), "pixel representation"},
-		{tag.PlanarConfiguration, uint16(output.PlanarConfiguration), "planar configuration"},
 	}
 	for _, update := range updates {
 		if err := ds.AddOrUpdate(element.NewUnsignedShort(update.tag, []uint16{update.value})); err != nil {
 			return fmt.Errorf("update %s: %w", update.name, err)
 		}
+	}
+	// Planar Configuration shall only be present for multi-sample pixels
+	// (PS3.3 C.7.6.3.1.3).
+	if output.SamplesPerPixel > 1 {
+		if err := ds.AddOrUpdate(element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{uint16(output.PlanarConfiguration)})); err != nil {
+			return fmt.Errorf("update planar configuration: %w", err)
+		}
+	} else {
+		ds.Remove(tag.PlanarConfiguration)
 	}
 	if output.PhotometricInterpretation.Value == "" {
 		return fmt.Errorf("codec output photometric interpretation is empty")

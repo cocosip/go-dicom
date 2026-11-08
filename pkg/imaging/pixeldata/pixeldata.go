@@ -140,6 +140,12 @@ func (info *Info) Validate() error {
 			// PS3.5 8.2: these photometric interpretations are not encodable in
 			// native (uncompressed) Pixel Data.
 			return fmt.Errorf("%s is not permitted for native Pixel Data", value)
+		case pixel.YbrFull422.Value, pixel.YbrPartial422.Value:
+			// PS3.3 Table C.7-11c: native 4:2:2 packs pixel pairs, so Columns
+			// must be an even number.
+			if info.Width%2 != 0 {
+				return fmt.Errorf("native %s requires an even number of columns, got %d", value, info.Width)
+			}
 		}
 	}
 

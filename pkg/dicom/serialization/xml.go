@@ -807,9 +807,27 @@ func (r *xmlReader) readBinary(t *tag.Tag, vrCode *vr.VR, data string) (element.
 
 // readPersonName parses PersonName values
 func (r *xmlReader) readPersonName(t *tag.Tag, personNames []personName) *element.PersonName {
-	values := make([]string, 0, len(personNames))
+	maxNumber := 0
+	for _, pn := range personNames {
+		if pn.Number > maxNumber {
+			maxNumber = pn.Number
+		}
+	}
+	if maxNumber == 0 {
+		maxNumber = len(personNames)
+	}
+	values := make([]string, maxNumber)
+	next := 0
 
 	for _, pn := range personNames {
+		index := pn.Number - 1
+		if index < 0 || index >= maxNumber {
+			index = next
+		}
+		if index >= next {
+			next = index + 1
+		}
+
 		var components []string
 
 		// Build Alphabetic component
@@ -836,9 +854,7 @@ func (r *xmlReader) readPersonName(t *tag.Tag, personNames []personName) *elemen
 			components = append(components, pn.Phonetic.String())
 		}
 
-		if len(components) > 0 {
-			values = append(values, strings.Join(components, "="))
-		}
+		values[index] = strings.Join(components, "=")
 	}
 
 	if len(values) == 0 {

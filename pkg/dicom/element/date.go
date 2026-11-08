@@ -418,6 +418,10 @@ func (dt *DateTime) GetDateTime(index int) (time.Time, error) {
 		"200601021504",               // YYYYMMDDHHMM
 		"2006010215",                 // YYYYMMDDHH
 		"20060102",                   // YYYYMMDD
+		"2006-0700",                  // YYYY±ZZXX
+		"200601-0700",                // YYYYMM±ZZXX
+		"2006",                       // YYYY
+		"200601",                     // YYYYMM
 	}
 
 	for _, format := range formats {
@@ -471,15 +475,41 @@ func (dt *DateTime) IsRange() bool {
 	return findRangeDash(dtStr) != -1
 }
 
+// allASCIIDigits reports whether every byte is an ASCII digit.
+func allASCIIDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// validZZXX reports whether d is a plausible 4-digit UTC offset (HHMM within
+// the PS3.5 range -1200..+1400).
+func validZZXX(d string) bool {
+	if len(d) != 4 {
+		return false
+	}
+	hh := int(d[0]-'0')*10 + int(d[1]-'0')
+	mm := int(d[2]-'0')*10 + int(d[3]-'0')
+	return mm < 60 && (hh < 14 || (hh == 14 && mm == 0))
+}
+
 // findRangeDash returns the index of the range-separating dash, or -1 if none.
 // Skips dashes that are part of a timezone offset (digit + '-' + exactly 4 digits,
 // no more digits after). This matches the logic in daterange.findRangeDash.
 func findRangeDash(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '-' {
-			// Only treat '-' plus 4 digits as a timezone offset when preceded by
-			// at least a full date (8 digits); otherwise a TM range like
-			// "1000-1800" would be misread as an offset.
+			// A 4-digit year followed by a +/-ZZXX offset (e.g. "2007-0500") is
+			// a datetime, not a range.
+			if i == 4 && len(s) == 9 && allASCIIDigits(s[5:9]) && validZZXX(s[5:9]) {
+				continue
+			}
 			if i >= 8 && i+4 < len(s) {
 				isDigitBefore := s[i-1] >= '0' && s[i-1] <= '9'
 				isDigitsAfter := (s[i+1] >= '0' && s[i+1] <= '9') &&

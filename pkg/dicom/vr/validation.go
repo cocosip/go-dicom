@@ -247,6 +247,9 @@ func validateDateTimeFields(dateTime string) error {
 		if day := atoi2(dateTime[6:8]); day < 1 || day > 31 {
 			return fmt.Errorf("day out of range")
 		}
+		if _, err := time.Parse("20060102", dateTime[:8]); err != nil {
+			return fmt.Errorf("date is not a valid calendar date")
+		}
 	}
 	if len(dateTime) >= 10 {
 		if hour := atoi2(dateTime[8:10]); hour > 23 {
