@@ -86,8 +86,8 @@ func TestServerShutdownWaitsForStartupPublication(t *testing.T) {
 	if err := server.Shutdown(context.Background()); err != nil {
 		t.Fatalf("cleanup Shutdown() error = %v", err)
 	}
-	if err := <-serveDone; !errors.Is(err, context.Canceled) {
-		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
+	if err := <-serveDone; err != nil {
+		t.Fatalf("ListenAndServe() error = %v, want nil", err)
 	}
 }
 
@@ -122,8 +122,8 @@ func TestServerRejectsConcurrentListenWhileStarting(t *testing.T) {
 	if err := server.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() error = %v", err)
 	}
-	if err := <-serveDone; !errors.Is(err, context.Canceled) {
-		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
+	if err := <-serveDone; err != nil {
+		t.Fatalf("ListenAndServe() error = %v, want nil", err)
 	}
 }
 
@@ -158,8 +158,8 @@ func TestServerShutdownWaitsForAcceptLoopBeforeConnectionWait(t *testing.T) {
 			t.Fatalf("Shutdown() error = %v", err)
 		}
 	}
-	if err := <-serveDone; !errors.Is(err, context.Canceled) {
-		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
+	if err := <-serveDone; err != nil {
+		t.Fatalf("ListenAndServe() error = %v, want nil", err)
 	}
 	if returnedBeforeAcceptExited {
 		t.Fatal("Shutdown() called connection Wait before the accept loop could finish adding work")
@@ -195,8 +195,8 @@ func TestServerAcceptTimeoutRearmsListener(t *testing.T) {
 		t.Fatal("server stopped after an accept timeout")
 	}
 	cancel()
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Fatalf("ListenAndServe() error = %v, want context.Canceled", err)
+	if err := <-done; err != nil {
+		t.Fatalf("ListenAndServe() error = %v, want nil", err)
 	}
 }
 

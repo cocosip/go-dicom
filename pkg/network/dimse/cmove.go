@@ -159,16 +159,15 @@ type CMoveResponse struct {
 //   - status.CMoveFailedIdentifierDoesNotMatchSOPClass (0xA900): Identifier does not match SOP Class
 //   - status.CMoveFailedUnableToProcess (0xC000): Unable to process
 func NewCMoveResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string) *CMoveResponse {
+	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCMoveRSP), 0)
 
 	// Set message ID being responded to
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
-	// Set affected SOP Class UID (optional but recommended)
-	if sopClassUID != "" {
-		_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
-	}
+	// Affected SOP Class UID is Type 1 in C-MOVE-RSP (PS3.7 Table 9.3-10).
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
 
 	// Set status
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))

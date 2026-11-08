@@ -115,6 +115,9 @@ func (s *Service) SendCCancel(ctx context.Context, messageIDBeingRespondedTo uin
 	if presentationContextID == 0 {
 		return fmt.Errorf("presentation context ID is required for C-CANCEL")
 	}
+	if messageIDBeingRespondedTo == 0 {
+		return fmt.Errorf("C-CANCEL requires a non-zero MessageIDBeingRespondedTo")
+	}
 	req := dimse.NewCCancelRequest(messageIDBeingRespondedTo)
 	req.SetPresentationContextID(presentationContextID)
 	return s.Send(ctx, req)

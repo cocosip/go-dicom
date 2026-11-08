@@ -95,8 +95,57 @@ func NewAAssociateRJ(result, source, reason byte) *AAssociateRJ {
 	}
 }
 
+// validReasonForSource reports whether reason is defined for the given Source
+// per PS3.8 Table 9-21.
+func validReasonForSource(source, reason byte) bool {
+	switch source {
+	case SourceServiceUser:
+		switch reason {
+		case ReasonServiceUserNoReasonGiven,
+			ReasonServiceUserApplicationContextNotSupported,
+			ReasonServiceUserCallingAETitleNotRecognized,
+			ReasonServiceUserCalledAETitleNotRecognized:
+			return true
+		}
+	case SourceServiceProviderACSE:
+		switch reason {
+		case ReasonServiceProviderACSENoReasonGiven,
+			ReasonServiceProviderACSEProtocolVersionNotSupported:
+			return true
+		}
+	case SourceServiceProviderPresentation:
+		switch reason {
+		case ReasonServiceProviderPresentationTemporaryCongestion,
+			ReasonServiceProviderPresentationLocalLimitExceeded:
+			return true
+		}
+	}
+	return false
+}
+
+// validate checks Result/Source/Reason against PS3.8 Table 9-21.
+func (a *AAssociateRJ) validate() error {
+	switch a.Result {
+	case ResultRejectedPermanent, ResultRejectedTransient:
+	default:
+		return fmt.Errorf("invalid A-ASSOCIATE-RJ result 0x%02X", a.Result)
+	}
+	switch a.Source {
+	case SourceServiceUser, SourceServiceProviderACSE, SourceServiceProviderPresentation:
+	default:
+		return fmt.Errorf("invalid A-ASSOCIATE-RJ source 0x%02X", a.Source)
+	}
+	if !validReasonForSource(a.Source, a.Reason) {
+		return fmt.Errorf("invalid A-ASSOCIATE-RJ reason 0x%02X for source 0x%02X", a.Reason, a.Source)
+	}
+	return nil
+}
+
 // Encode encodes the A-ASSOCIATE-RJ to a RawPDU.
 func (a *AAssociateRJ) Encode() (*RawPDU, error) {
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
 	data := make([]byte, 4)
 	data[0] = 0x00 // Reserved
 	data[1] = a.Result
@@ -121,6 +170,10 @@ func (a *AAssociateRJ) Decode(pdu *RawPDU) error {
 	a.Result = data[1]
 	a.Source = data[2]
 	a.Reason = data[3]
+
+	if err := a.validate(); err != nil {
+		return err
+	}
 
 	return nil
 }

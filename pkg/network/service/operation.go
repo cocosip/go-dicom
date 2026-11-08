@@ -215,14 +215,17 @@ func newCMoveOperation(req *dimse.CMoveRequest, send func(*dimse.CMoveResponse) 
 	return &cMoveOperation{
 		subOperationBase: subOperationBase{
 			sendPending: func(remaining, completed, failed, warning uint16) error {
-				return send(dimse.NewCMoveResponsePending(
+				resp := dimse.NewCMoveResponsePending(
 					req.MessageID(), req.AffectedSOPClassUID(),
 					remaining, completed, failed, warning,
-				))
+				)
+				resp.SetPresentationContextID(req.PresentationContextID())
+				return send(resp)
 			},
 			sendFinal: func(s *status.Status, remaining, completed, failed, warning uint16) error {
 				resp := dimse.NewCMoveResponse(req.MessageID(), s, req.AffectedSOPClassUID())
 				resp.SetSubOperationCounts(remaining, completed, failed, warning)
+				resp.SetPresentationContextID(req.PresentationContextID())
 				return send(resp)
 			},
 		},
@@ -283,14 +286,17 @@ func newCGetOperation(
 	return &cGetOperation{
 		subOperationBase: subOperationBase{
 			sendPending: func(remaining, completed, failed, warning uint16) error {
-				return sendResp(dimse.NewCGetResponsePending(
+				resp := dimse.NewCGetResponsePending(
 					req.MessageID(), req.AffectedSOPClassUID(),
 					remaining, completed, failed, warning,
-				))
+				)
+				resp.SetPresentationContextID(req.PresentationContextID())
+				return sendResp(resp)
 			},
 			sendFinal: func(s *status.Status, remaining, completed, failed, warning uint16) error {
 				resp := dimse.NewCGetResponse(req.MessageID(), s, req.AffectedSOPClassUID())
 				resp.SetSubOperationCounts(remaining, completed, failed, warning)
+				resp.SetPresentationContextID(req.PresentationContextID())
 				return sendResp(resp)
 			},
 		},

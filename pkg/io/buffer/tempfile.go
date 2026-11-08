@@ -97,13 +97,8 @@ func (t *TempFileBuffer) Data() []byte {
 		return nil
 	}
 
-	// Read all data
-	n, err := t.file.Read(data)
-	if err != nil && err != io.EOF {
-		return nil
-	}
-
-	if uint32(n) != t.size { //nolint:gosec // bytes read check
+	// Read all data; a single Read may legally return fewer bytes than requested.
+	if _, err := io.ReadFull(t.file, data); err != nil {
 		return nil
 	}
 

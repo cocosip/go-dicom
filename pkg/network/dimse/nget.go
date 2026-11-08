@@ -108,6 +108,7 @@ func NewNGetResponse(
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NGetResponse {
+	s = resolveStatus(s)
 	command := createNResponseCommand(uint16(CommandNGetRSP), messageIDBeingRespondedTo,
 		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
 	return &NGetResponse{

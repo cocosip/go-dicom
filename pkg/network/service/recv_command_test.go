@@ -32,17 +32,20 @@ func TestCommandHasDataset(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects an invalid dataset type", func(t *testing.T) {
-		var command bytes.Buffer
-		for _, value := range []interface{}{uint16(0x0000), uint16(0xFFFF)} {
-			command.Reset()
+	t.Run("treats any non-0x0101 value as dataset present", func(t *testing.T) {
+		for _, value := range []uint16{0x0000, 0x0001, 0x0102, 0xFFFF} {
+			var command bytes.Buffer
 			_ = binary.Write(&command, binary.LittleEndian, uint16(0x0000))
 			_ = binary.Write(&command, binary.LittleEndian, uint16(0x0800))
 			_ = binary.Write(&command, binary.LittleEndian, uint32(2))
 			_ = binary.Write(&command, binary.LittleEndian, value)
 
-			if _, err := new(Service).inspectCommandHasDataset(command.Bytes()); err == nil {
-				t.Fatalf("CommandDataSetType 0x%04X accepted", value)
+			hasData, err := new(Service).inspectCommandHasDataset(command.Bytes())
+			if err != nil {
+				t.Fatalf("CommandDataSetType 0x%04X: unexpected error %v", value, err)
+			}
+			if !hasData {
+				t.Fatalf("CommandDataSetType 0x%04X should be treated as data set present (PS3.7 Table E.1-1)", value)
 			}
 		}
 	})

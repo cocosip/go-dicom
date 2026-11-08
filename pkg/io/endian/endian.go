@@ -141,12 +141,11 @@ func ConvertEndianness(data []byte, bytesPerSample int) ([]byte, error) {
 // SwapBytesN swaps bytes in a byte slice in groups of bytesToSwap bytes,
 // processing up to count bytes.
 func SwapBytesN(bytesToSwap int, data []byte, count int) {
-	if count > len(data) {
-		panic("count exceeds data length")
-	}
-
-	if bytesToSwap == 1 || count == 0 {
+	if bytesToSwap <= 1 || count <= 0 {
 		return
+	}
+	if count > len(data) {
+		count = len(data)
 	}
 
 	if bytesToSwap == 2 {

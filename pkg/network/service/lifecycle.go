@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // Run starts the service by launching the send and receive loops,
@@ -177,8 +178,17 @@ func (s *Service) GracefulRelease(ctx context.Context) error {
 		return s.Close()
 	}
 
-	// Send A-RELEASE-RQ
-	if err := s.SendReleaseRequest(ctx); err != nil {
+	// Send A-RELEASE-RQ. Acquiring sendPause guarantees no DIMSE message is being
+	// written concurrently, so the release cannot truncate a multi-PDU message
+	// (PS3.8 requires release only after outstanding operations complete). The
+	// acquisition respects ctx so a stalled peer cannot block shutdown forever.
+	if err := s.acquireSendPause(ctx); err != nil {
+		_ = s.Abort(ctx, 0, 0)
+		return fmt.Errorf("timed out waiting for in-flight send to finish: %w", err)
+	}
+	err := s.SendReleaseRequest(ctx)
+	s.sendPause.Unlock()
+	if err != nil {
 		// If send fails, abort
 		_ = s.Abort(ctx, 0, 0)
 		return fmt.Errorf("failed to send release request: %w", err)
@@ -194,6 +204,27 @@ func (s *Service) GracefulRelease(ctx context.Context) error {
 	case <-ctx.Done():
 		_ = s.Close()
 		return fmt.Errorf("timed out waiting for A-RELEASE-RP: %w", ctx.Err())
+	}
+}
+
+// acquireSendPause acquires sendPause, waiting until any in-flight DIMSE message
+// finishes or ctx is done. The non-blocking fast path avoids overhead in the
+// common (idle send loop) case; the bounded poll only runs under contention.
+func (s *Service) acquireSendPause(ctx context.Context) error {
+	if s.sendPause.TryLock() {
+		return nil
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if s.sendPause.TryLock() {
+				return nil
+			}
+		}
 	}
 }
 

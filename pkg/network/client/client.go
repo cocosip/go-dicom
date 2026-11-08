@@ -866,7 +866,7 @@ func (c *Client) buildAcceptedAssociation(rq *pdu.AAssociateRQ, ac *pdu.AAssocia
 
 // dial establishes a TCP connection to the remote host.
 func (c *Client) dial(ctx context.Context, host string, port int) error {
-	address := fmt.Sprintf("%s:%d", host, port)
+	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 
 	if c.config.TLSConfig != nil {
 		dialCtx := ctx
@@ -918,9 +918,14 @@ func (c *Client) dial(ctx context.Context, host string, port int) error {
 
 // negotiateAssociation performs DICOM association negotiation.
 func (c *Client) negotiateAssociation(ctx context.Context) error {
-	// Create timeout context for association
-	assocCtx, cancel := context.WithTimeout(ctx, c.config.AssociationTimeout)
-	defer cancel()
+	// Create timeout context for association (0 disables the timeout, matching
+	// the server-side AssociationTimeout semantics).
+	assocCtx := ctx
+	if c.config.AssociationTimeout > 0 {
+		var cancel context.CancelFunc
+		assocCtx, cancel = context.WithTimeout(ctx, c.config.AssociationTimeout)
+		defer cancel()
+	}
 
 	// Create service
 	svcOpts := []service.Option{
@@ -977,6 +982,10 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	// Validate and merge the response with the original request.
 	acceptedAssociation, err := c.buildAcceptedAssociation(rq, ac)
 	if err != nil {
+		// PS3.8: an invalid A-ASSOCIATE-AC must be answered with A-ABORT (source
+		// service-user), never a bare TCP close that leaves the acceptor
+		// believing the association is established.
+		_ = svc.Abort(assocCtx, pdu.AbortSourceServiceUser, pdu.AbortReasonServiceUserNotSpecified)
 		return fmt.Errorf("invalid A-ASSOCIATE-AC: %w", err)
 	}
 

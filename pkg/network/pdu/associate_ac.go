@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 )
 
 // AAssociateAC represents an A-ASSOCIATE-AC (Association Accept) PDU.
@@ -41,8 +43,8 @@ type AAssociateAC struct {
 
 	// UserInformation contains optional user information items
 	UserInformation         *UserInformation
-	applicationContextCount uint8
-	userInformationCount    uint8
+	applicationContextCount int
+	userInformationCount    int
 }
 
 // PresentationContextAC represents an accepted presentation context in A-ASSOCIATE-AC.
@@ -144,6 +146,11 @@ func (a *AAssociateAC) validateForEncode() error {
 	if a == nil {
 		return fmt.Errorf("A-ASSOCIATE-AC is nil")
 	}
+	if a.ProtocolVersion&0x0001 == 0 {
+		return fmt.Errorf("A-ASSOCIATE-AC protocol version 0x%04X does not support version 1", a.ProtocolVersion)
+	}
+	// PS3.8 Table 9-17: these Reserved fields echo the requestor's Called/Calling
+	// AE Titles, which are already validated on the request path.
 	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
 		return err
 	}
@@ -359,10 +366,10 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 	// Reserved (2 bytes) - skip
 
 	// Called AE Title (16 bytes)
-	a.CalledAETitle = trimTrailingSpaces(string(data[4:20]))
+	a.CalledAETitle = trimAETitleSpaces(string(data[4:20]))
 
 	// Calling AE Title (16 bytes)
-	a.CallingAETitle = trimTrailingSpaces(string(data[20:36]))
+	a.CallingAETitle = trimAETitleSpaces(string(data[20:36]))
 
 	// Reserved (32 bytes) - skip
 
@@ -417,8 +424,8 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 		}
 	}
 
-	a.applicationContextCount = uint8(applicationContextCount)
-	a.userInformationCount = uint8(userInformationCount)
+	a.applicationContextCount = applicationContextCount
+	a.userInformationCount = userInformationCount
 	return nil
 }
 
@@ -469,6 +476,9 @@ func validatePresentationContextsAC(contexts []PresentationContextAC) error {
 		}
 		if pc.Result == ResultAcceptance && pc.TransferSyntax == "" {
 			return fmt.Errorf("%w: accepted context %d has no transfer syntax", ErrInvalidPresentationContext, pc.ID)
+		}
+		if pc.TransferSyntax != "" && !uid.IsValid(pc.TransferSyntax) {
+			return fmt.Errorf("%w: invalid transfer syntax %q for ID %d", ErrInvalidPresentationContext, pc.TransferSyntax, pc.ID)
 		}
 		// A stale transfer syntax on a rejected context is not an error: the
 		// encoder simply omits the sub-item, matching decode tolerance.

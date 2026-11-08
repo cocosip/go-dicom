@@ -187,7 +187,7 @@ func (s *String) GetValue(index int) string {
 		return str
 	}
 
-	return strings.TrimSpace(values[index])
+	return strings.TrimRight(values[index], " ")
 }
 
 // GetValues returns all values as a slice of strings.
@@ -210,9 +210,10 @@ func (s *String) GetValuesWithError() ([]string, error) {
 	}
 
 	values := strings.Split(str, "\\")
-	// Trim spaces from each value
+	// Only trailing spaces are insignificant; leading spaces are significant
+	// (PS3.5 §6.2), so do not use TrimSpace here.
 	for i, v := range values {
-		values[i] = strings.TrimSpace(v)
+		values[i] = strings.TrimRight(v, " ")
 	}
 	return values, nil
 }

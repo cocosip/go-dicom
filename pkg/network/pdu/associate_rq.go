@@ -44,8 +44,8 @@ type AAssociateRQ struct {
 	ApplicationContext      string                  // Application Context Name (UID)
 	PresentationContexts    []PresentationContextRQ // Presentation contexts
 	UserInformation         *UserInformation        // User information
-	applicationContextCount uint8
-	userInformationCount    uint8
+	applicationContextCount int
+	userInformationCount    int
 }
 
 // DecodeWarningCode identifies a forward-compatible association decode warning.
@@ -163,6 +163,9 @@ func validateApplicationContext(applicationContext string) error {
 func (a *AAssociateRQ) validateForEncode() error {
 	if a == nil {
 		return fmt.Errorf("A-ASSOCIATE-RQ is nil")
+	}
+	if a.ProtocolVersion&0x0001 == 0 {
+		return fmt.Errorf("A-ASSOCIATE-RQ protocol version 0x%04X does not support version 1", a.ProtocolVersion)
 	}
 	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
 		return err
@@ -410,10 +413,10 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 	// Reserved (bytes 2-3) - ignored
 
 	// Called AE Title (bytes 4-19)
-	a.CalledAETitle = trimTrailingSpaces(string(fixedFields[4:20]))
+	a.CalledAETitle = trimAETitleSpaces(string(fixedFields[4:20]))
 
 	// Calling AE Title (bytes 20-35)
-	a.CallingAETitle = trimTrailingSpaces(string(fixedFields[20:36]))
+	a.CallingAETitle = trimAETitleSpaces(string(fixedFields[20:36]))
 
 	// Reserved (bytes 36-67) - ignored
 
@@ -461,8 +464,8 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 		}
 	}
 
-	a.applicationContextCount = uint8(applicationContextCount)
-	a.userInformationCount = uint8(userInformationCount)
+	a.applicationContextCount = applicationContextCount
+	a.userInformationCount = userInformationCount
 	return validatePresentationContexts(a.PresentationContexts)
 }
 
@@ -530,12 +533,18 @@ func validatePresentationContexts(contexts []PresentationContextRQ) error {
 		if pc.AbstractSyntax == "" {
 			return fmt.Errorf("%w: abstract syntax is empty for ID %d", ErrInvalidPresentationContext, pc.ID)
 		}
+		if !uid.IsValid(pc.AbstractSyntax) {
+			return fmt.Errorf("%w: invalid abstract syntax %q for ID %d", ErrInvalidPresentationContext, pc.AbstractSyntax, pc.ID)
+		}
 		if len(pc.TransferSyntaxes) == 0 {
 			return fmt.Errorf("%w: transfer syntaxes are empty for ID %d", ErrInvalidPresentationContext, pc.ID)
 		}
 		for _, transferSyntax := range pc.TransferSyntaxes {
 			if transferSyntax == "" {
 				return fmt.Errorf("%w: transfer syntax is empty for ID %d", ErrInvalidPresentationContext, pc.ID)
+			}
+			if !uid.IsValid(transferSyntax) {
+				return fmt.Errorf("%w: invalid transfer syntax %q for ID %d", ErrInvalidPresentationContext, transferSyntax, pc.ID)
 			}
 		}
 	}

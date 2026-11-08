@@ -403,16 +403,7 @@ func (c *ManagedClient) takeCompatibleJob(
 		(c.options.MaximumRequestsPerAssociation > 0 && executed >= c.options.MaximumRequestsPerAssociation) {
 		return managedJob{}, false
 	}
-	indexes := make(map[presentationContextKey]int, len(contexts))
-	for index, presentationContext := range contexts {
-		indexes[presentationContextKey{
-			abstractSyntax: presentationContext.AbstractSyntax,
-			scuRole:        presentationContext.SCURole,
-			scpRole:        presentationContext.SCPRole,
-		}] = index
-	}
-	merged, ok := mergePresentationContextSpecs(contexts, indexes, c.jobs[0].contexts)
-	if !ok || !equalPresentationContextSpecs(merged, contexts) {
+	if !jobFitsContexts(contexts, c.jobs[0].contexts) {
 		return managedJob{}, false
 	}
 	next := c.jobs[0]
@@ -420,24 +411,44 @@ func (c *ManagedClient) takeCompatibleJob(
 	return next, true
 }
 
-func equalPresentationContextSpecs(first, second []PresentationContextSpec) bool {
-	if len(first) != len(second) {
+// jobFitsContexts reports whether the already-negotiated presentation contexts
+// satisfy every context the job needs: same abstract syntax and roles with at
+// least one transfer syntax in common. A job that merely proposes extra transfer
+// syntaxes can still reuse the existing association.
+func jobFitsContexts(negotiated, required []PresentationContextSpec) bool {
+	if len(required) == 0 {
 		return false
 	}
-	for index := range first {
-		if first[index].AbstractSyntax != second[index].AbstractSyntax ||
-			first[index].SCURole != second[index].SCURole ||
-			first[index].SCPRole != second[index].SCPRole ||
-			len(first[index].TransferSyntaxes) != len(second[index].TransferSyntaxes) {
-			return false
-		}
-		for syntaxIndex := range first[index].TransferSyntaxes {
-			if first[index].TransferSyntaxes[syntaxIndex] != second[index].TransferSyntaxes[syntaxIndex] {
-				return false
+	for _, want := range required {
+		matched := false
+		for _, have := range negotiated {
+			if have.AbstractSyntax != want.AbstractSyntax ||
+				have.SCURole != want.SCURole || have.SCPRole != want.SCPRole {
+				continue
 			}
+			if transferSyntaxesIntersect(have.TransferSyntaxes, want.TransferSyntaxes) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
 		}
 	}
 	return true
+}
+
+func transferSyntaxesIntersect(a, b []string) bool {
+	set := make(map[string]struct{}, len(a))
+	for _, s := range a {
+		set[s] = struct{}{}
+	}
+	for _, s := range b {
+		if _, ok := set[s]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ManagedClient) setActive(lowLevel *Client) bool {

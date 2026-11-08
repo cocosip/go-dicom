@@ -69,6 +69,12 @@ type Server struct {
 	connections   map[string]*serverConnection
 	connectionsMu sync.RWMutex
 
+	// pendingConnections holds accepted raw connections still in the
+	// association-negotiation phase (before they are moved into connections).
+	// Tracking them lets Close() terminate a peer that stalls before
+	// A-ASSOCIATE-RQ completes, closing the connection/goroutine leak window.
+	pendingConnections map[string]net.Conn
+
 	// inflightConnections counts accepted connections that have not finished,
 	// including ones still negotiating the association. MaxConnections is
 	// enforced against this count so a peer cannot exceed the limit by opening
@@ -335,10 +341,11 @@ func New(opts ...Option) *Server {
 	}
 
 	return &Server{
-		config:         config,
-		connections:    make(map[string]*serverConnection),
-		serviceOptions: make([]service.Option, 0),
-		listenFn:       defaultListenerFactory,
+		config:             config,
+		connections:        make(map[string]*serverConnection),
+		pendingConnections: make(map[string]net.Conn),
+		serviceOptions:     make([]service.Option, 0),
+		listenFn:           defaultListenerFactory,
 	}
 }
 
@@ -582,6 +589,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		s.acceptDone = nil
 	}
 	s.runningMu.Unlock()
+	// A stop driven by context cancellation (Shutdown or the caller's ctx) is a
+	// normal shutdown, not a failure: return nil so callers using
+	// "if err := ListenAndServe(); err != nil { log.Fatal }" do not treat an
+	// orderly stop as an error.
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
 	return err
 }
 
@@ -710,10 +724,21 @@ func (s *Server) Close() error {
 	for _, connection := range s.connections {
 		connections = append(connections, connection)
 	}
+	pending := make([]net.Conn, 0, len(s.pendingConnections))
+	for _, conn := range s.pendingConnections {
+		pending = append(pending, conn)
+	}
 	s.connectionsMu.RUnlock()
 
 	for _, connection := range connections {
 		if err := connection.conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			errs = append(errs, err)
+		}
+	}
+	// Also terminate connections still negotiating the association so a peer
+	// that never sends A-ASSOCIATE-RQ cannot keep a goroutine (and slot) alive.
+	for _, conn := range pending {
+		if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 			errs = append(errs, err)
 		}
 	}
@@ -753,6 +778,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Create connection ID
 	connID := conn.RemoteAddr().String()
 	observationConnectionID := observability.NewConnectionID()
+
+	// Track the raw connection during the association-negotiation phase so that
+	// Close() can terminate a peer that stalls before A-ASSOCIATE-RQ completes.
+	s.trackPendingConnection(connID, conn)
+	defer s.untrackPendingConnection(connID)
 
 	// Build service options from server configuration.
 	svcOpts := s.serviceOptionsForConnection(observationConnectionID)
@@ -810,6 +840,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 	s.connections[connID] = serverConn
+	delete(s.pendingConnections, connID)
 	s.connectionsMu.Unlock()
 
 	defer func() {
@@ -827,6 +858,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// The service will handle incoming DIMSE requests automatically
 	// and call the registered handlers
 	<-svc.Context().Done()
+}
+
+// trackPendingConnection records a raw connection that is still negotiating the
+// association so Close() can terminate it.
+func (s *Server) trackPendingConnection(id string, conn net.Conn) {
+	s.connectionsMu.Lock()
+	s.pendingConnections[id] = conn
+	s.connectionsMu.Unlock()
+}
+
+// untrackPendingConnection forgets a pending connection id.
+func (s *Server) untrackPendingConnection(id string) {
+	s.connectionsMu.Lock()
+	delete(s.pendingConnections, id)
+	s.connectionsMu.Unlock()
 }
 
 func (s *Server) serviceOptionsForConnection(connectionID observability.ConnectionID) []service.Option {

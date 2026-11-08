@@ -118,6 +118,7 @@ func NewNEventReportResponse(
 	eventTypeID uint16,
 	eventReply *dataset.Dataset,
 ) *NEventReportResponse {
+	s = resolveStatus(s)
 	command := createNOperationResponseCommand(
 		uint16(CommandNEventReportRSP),
 		messageIDBeingRespondedTo,

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var (
@@ -207,7 +208,7 @@ func ValidateIS(content string) error {
 // ValidateLO validates Long String (LO) values.
 func ValidateLO(content string) error {
 	// 64 characters maximum per value
-	if len(content) > 64 {
+	if utf8.RuneCountInString(content) > 64 {
 		return newValidationError("LO", content, "value exceeds maximum length of 64 characters")
 	}
 
@@ -224,7 +225,7 @@ func ValidateLO(content string) error {
 // ValidateLT validates Long Text (LT) values.
 func ValidateLT(content string) error {
 	// 10240 characters maximum
-	if len(content) > 10240 {
+	if utf8.RuneCountInString(content) > 10240 {
 		return newValidationError("LT", content, "value exceeds maximum length of 10240 characters")
 	}
 
@@ -236,7 +237,7 @@ func ValidatePN(content string) error {
 	// PS3.5 limits each component group to 64 characters. Component groups are
 	// separated by '=': alphabetic=ideographic=phonetic.
 	for _, group := range strings.Split(content, "=") {
-		if len(group) > 64 {
+		if utf8.RuneCountInString(group) > 64 {
 			return newValidationError("PN", content, "component group exceeds maximum length of 64 characters")
 		}
 	}
@@ -249,7 +250,7 @@ func ValidatePN(content string) error {
 // ValidateSH validates Short String (SH) values.
 func ValidateSH(content string) error {
 	// 16 characters maximum
-	if len(content) > 16 {
+	if utf8.RuneCountInString(content) > 16 {
 		return newValidationError("SH", content, "value exceeds maximum length of 16 characters")
 	}
 

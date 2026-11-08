@@ -26,6 +26,9 @@ func NewElementFromBuffer(t *tag.Tag, valueRepresentation *vr.VR, buf buffer.Byt
 	if valueRepresentation == nil {
 		return nil, fmt.Errorf("element VR is nil")
 	}
+	if err := validateNumericBufferLength(valueRepresentation, buf); err != nil {
+		return nil, err
+	}
 
 	text := func() Element {
 		return NewStringFromBufferWithEncodings(t, valueRepresentation, buf, encodings)
@@ -85,6 +88,35 @@ func NewElementFromBuffer(t *tag.Tag, valueRepresentation *vr.VR, buf buffer.Byt
 	default:
 		return NewUnknownFromBuffer(t, buf), nil
 	}
+}
+
+// numericElementSize returns the fixed byte width of a numeric VR's values, or
+// 0 for VRs that are not fixed-width numeric.
+func numericElementSize(code string) int {
+	switch code {
+	case vr.CodeUS, vr.CodeSS:
+		return 2
+	case vr.CodeUL, vr.CodeSL, vr.CodeFL, vr.CodeAT:
+		return 4
+	case vr.CodeFD, vr.CodeSV, vr.CodeUV:
+		return 8
+	default:
+		return 0
+	}
+}
+
+// validateNumericBufferLength rejects a numeric buffer whose length is not a
+// whole multiple of its element width. Without this, Count()/GetValue() would
+// silently truncate a malformed trailing partial value (PS3.5 §6.2).
+func validateNumericBufferLength(v *vr.VR, buf buffer.ByteBuffer) error {
+	size := numericElementSize(v.Code())
+	if size == 0 || buf == nil {
+		return nil
+	}
+	if int(buf.Size())%size != 0 {
+		return fmt.Errorf("value length %d is not a multiple of %d bytes for VR %s", buf.Size(), size, v.Code())
+	}
+	return nil
 }
 
 // NewElementFromValue creates a concrete Element from a scalar, slice, or

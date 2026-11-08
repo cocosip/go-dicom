@@ -193,7 +193,7 @@ func TestLookupStatus(t *testing.T) {
 		{StatePending, 0xFF00, StatePending},
 		{"PendingWarning", 0xFF01, StatePending},
 		{StateCancel, 0xFE00, StateCancel},
-		{"Warning", 0x0050, StateWarning},
+		{"Reserved 00xx classifies as failure", 0x0050, StateFailure},
 		{"Requested optional Attributes warning", 0x0001, StateWarning},
 		{"Attribute list warning", 0x0107, StateWarning},
 		{"Attribute value warning", 0x0116, StateWarning},

@@ -118,14 +118,13 @@ func NewNCreateResponse(
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
 ) *NCreateResponse {
+	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandNCreateRSP), 0)
 
-	// Set affected SOP Class UID and Instance UID
+	// Affected SOP Class UID / Instance UID are Type 1 in N-CREATE-RSP (PS3.7 Table 10.3-10).
 	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
-	if affectedSOPInstanceUID != "" {
-		_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
-	}
+	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 
 	// MessageIDBeingRespondedTo
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))

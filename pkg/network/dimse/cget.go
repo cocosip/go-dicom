@@ -147,16 +147,15 @@ func hasSubOperationCounts(command *dataset.Dataset) bool {
 // The four sub-operation count elements are always added (zero by default);
 // use SetSubOperationCounts to report progress.
 func NewCGetResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string) *CGetResponse {
+	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCGetRSP), 0)
 
 	// Set message ID being responded to
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 
-	// Set affected SOP Class UID (optional but recommended)
-	if sopClassUID != "" {
-		_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
-	}
+	// Affected SOP Class UID is Type 1 in C-GET-RSP (PS3.7 Table 9.3-7).
+	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
 
 	// Set status
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))

@@ -40,7 +40,7 @@ func TestRGBImageParsing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	t.Log("Parsing TestPattern_RGB.dcm...")
 	result, err := Parse(file)
@@ -182,7 +182,7 @@ func TestRGBImageToImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -288,7 +288,7 @@ func TestRGBImageToPNG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -459,4 +459,3 @@ func BenchmarkRGBImageConversion(b *testing.B) {
 		_, _ = convertDICOMToImage(result)
 	}
 }
-

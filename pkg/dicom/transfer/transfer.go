@@ -240,7 +240,12 @@ func lookupSyntax(u *uid.UID, query func(*uid.UID) *Syntax) (*Syntax, error) {
 		return ts, nil
 	}
 
-	// Create default transfer syntax for unknown UIDs
+	// Deliberate default for an unknown UID: Explicit VR, encapsulated, Little
+	// Endian. DICOM defines no properties for unknown syntaxes; this matches
+	// common practice. Callers that need strictness should reject unknown UIDs
+	// before calling Lookup.
+	// ponytail: silent fallback is a deliberate compatibility choice; add a
+	// strict mode if unknown syntaxes must be rejected.
 	ts = New(u)
 	ts.isExplicitVR = true
 	ts.isEncapsulated = true

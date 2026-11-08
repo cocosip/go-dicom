@@ -8,6 +8,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 func TestNewElementFromValuePreservesVRAndVM(t *testing.T) {
@@ -26,5 +27,14 @@ func TestNewElementFromValuePreservesVRAndVM(t *testing.T) {
 func TestNewElementFromValueRejectsStringForBinaryVR(t *testing.T) {
 	if _, err := NewElementFromValue(tag.SamplesPerPixel, vr.US, "1"); err == nil {
 		t.Fatal("NewElementFromValue() accepted string for US")
+	}
+}
+
+func TestNewElementFromBufferRejectsMisalignedNumericValue(t *testing.T) {
+	if _, err := NewElementFromBuffer(tag.Rows, vr.US, buffer.NewMemory([]byte{1, 2, 3}), nil); err == nil {
+		t.Fatal("NewElementFromBuffer() accepted a 3-byte US value; want error")
+	}
+	if _, err := NewElementFromBuffer(tag.Rows, vr.US, buffer.NewMemory([]byte{1, 2}), nil); err != nil {
+		t.Fatalf("NewElementFromBuffer() rejected a valid US value: %v", err)
 	}
 }

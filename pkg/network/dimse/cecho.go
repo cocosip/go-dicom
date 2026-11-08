@@ -59,6 +59,7 @@ type CEchoResponse struct {
 
 // NewCEchoResponse creates a new C-ECHO-RSP message.
 func NewCEchoResponse(messageIDBeingRespondedTo uint16, s *status.Status) *CEchoResponse {
+	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCEchoRSP), 0) // Response doesn't have its own MessageID
 

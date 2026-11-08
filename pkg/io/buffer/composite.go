@@ -71,9 +71,12 @@ func (c *CompositeByteBuffer) Data() []byte {
 	data := make([]byte, size)
 	offset := uint32(0)
 	for _, buf := range c.buffers {
-		bufData := buf.Data()
-		copy(data[offset:], bufData)
-		offset += uint32(len(bufData)) //nolint:gosec // buffer size within uint32 range
+		bufSize := buf.Size()
+		// Advance by the declared size even if a child returns short data on an
+		// I/O error, so later buffers never overlap and the result length stays
+		// correct (a failed child's span is left zero-filled).
+		copy(data[offset:offset+bufSize], buf.Data())
+		offset += bufSize //nolint:gosec // buffer size within uint32 range
 	}
 	return data
 }

@@ -335,14 +335,9 @@ func (s *Service) inspectCommandHasDataset(commandData []byte) (bool, error) {
 			if err := binary.Read(r, byteOrder, &dataSetType); err != nil {
 				return false, fmt.Errorf("CommandDataSetType not readable: %w", err)
 			}
-			switch dataSetType {
-			case 0x0001: // data set present
-				return true, nil
-			case 0x0101: // NO_DATA_SET_PRESENT
-				return false, nil
-			default:
-				return false, fmt.Errorf("invalid CommandDataSetType 0x%04X", dataSetType)
-			}
+			// PS3.7 Table E.1-1: 0x0101 means no Data Set; any other value
+			// indicates a Data Set is present.
+			return dataSetType != 0x0101, nil
 		}
 
 		// Skip value
@@ -412,6 +407,9 @@ func (s *Service) handleReleaseResponse(ctx context.Context) {
 // It calls the OnAbort callback (if set) for notification.
 func (s *Service) handleAbort(ctx context.Context, abort *pdu.AAbort) {
 	s.emitAssociationObservation(ctx, observability.EventAssociationAborted, observability.DirectionInbound, observability.OutcomeAborted, nil)
+	// PS3.8: receiving A-ABORT moves the association into the Aborted terminal
+	// state (not Closed).
+	_ = s.setState(StateAborted)
 	// Get lifecycle handler
 	s.callbacksMu.RLock()
 	lifecycleHandler := s.connectionLifecycleHandler

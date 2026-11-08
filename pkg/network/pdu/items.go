@@ -197,10 +197,8 @@ func ValidateAETitle(field, value string) error {
 	return validateAETitle(field, value)
 }
 
-// trimTrailingSpaces removes trailing spaces from a string.
-func trimTrailingSpaces(s string) string {
-	for len(s) > 0 && s[len(s)-1] == ' ' {
-		s = s[:len(s)-1]
-	}
-	return s
+// trimAETitleSpaces removes leading and trailing spaces from an AE Title.
+// PS3.8 Table 9-11 makes both leading and trailing spaces non-significant.
+func trimAETitleSpaces(s string) string {
+	return strings.Trim(s, " ")
 }

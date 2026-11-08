@@ -131,6 +131,7 @@ type CStoreResponse struct {
 
 // NewCStoreResponse creates a new C-STORE-RSP message.
 func NewCStoreResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID, sopInstanceUID string) *CStoreResponse {
+	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCStoreRSP), 0)
 

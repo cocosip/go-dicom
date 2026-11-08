@@ -149,6 +149,7 @@ func NewNActionResponse(
 	actionTypeID uint16,
 	actionReply *dataset.Dataset,
 ) *NActionResponse {
+	s = resolveStatus(s)
 	command := createNOperationResponseCommand(
 		uint16(CommandNActionRSP),
 		messageIDBeingRespondedTo,

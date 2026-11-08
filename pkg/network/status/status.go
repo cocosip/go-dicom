@@ -117,9 +117,9 @@ var (
 // C-STORE specific statuses
 var (
 	CStoreRefusedOutOfResources              = NewStatus(0xA700, StateFailure, "Refused: Out of resources")
-	CStoreRefusedDataSetDoesNotMatchSOPClass = NewStatus(0xA900, StateFailure, "Error: Data set does not match SOP class")
+	CStoreRefusedDataSetDoesNotMatchSOPClass = NewStatus(0xA900, StateFailure, "Data Set / Identifier does not match SOP Class")
 	CStoreErrorCannotUnderstand              = NewStatus(0xC000, StateFailure, "Error: Cannot understand")
-	CStoreWarningCoercionOfDataElements      = NewStatus(0xB000, StateWarning, "Coercion of data elements")
+	CStoreWarningCoercionOfDataElements      = NewStatus(0xB000, StateWarning, "Warning: data elements coerced, or sub-operations completed with failures/warnings")
 	CStoreWarningDataSetDoesNotMatchSOPClass = NewStatus(0xB007, StateWarning, "Data set does not match SOP class")
 	CStoreWarningElementsDiscarded           = NewStatus(0xB006, StateWarning, "Elements discarded")
 )
@@ -138,7 +138,6 @@ var (
 var (
 	CGetRefusedOutOfResources                = NewStatus(0xA701, StateFailure, "Refused: Out of resources - Unable to calculate number of matches")
 	CGetRefusedOutOfResourcesSubOps          = NewStatus(0xA702, StateFailure, "Refused: Out of resources - Unable to perform sub-operations")
-	CGetRefusedMoveDestinationUnknown        = NewStatus(0xA801, StateFailure, "Refused: Move destination unknown")
 	CGetFailedIdentifierDoesNotMatchSOPClass = NewStatus(0xA900, StateFailure, "Identifier does not match SOP class")
 	CGetFailedUnableToProcess                = NewStatus(0xC000, StateFailure, "Unable to process")
 	CGetCancelSubOperationsTerminated        = NewStatus(0xFE00, StateCancel, "Sub-operations terminated due to Cancel indication")
@@ -283,8 +282,6 @@ func LookupStatus(code uint16) *Status {
 		return NewStatus(code, StatePending, "Pending")
 	case code == 0xFE00:
 		return NewStatus(code, StateCancel, "Cancel")
-	case code >= 0x0001 && code <= 0x00FF:
-		return NewStatus(code, StateWarning, "Warning")
 	case code >= 0xB000 && code <= 0xBFFF:
 		return NewStatus(code, StateWarning, "Warning")
 	}

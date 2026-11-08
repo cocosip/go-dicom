@@ -32,9 +32,25 @@ func NewDecimalString(t *tag.Tag, values []string) *DecimalString {
 func NewDecimalStringFromFloat(t *tag.Tag, values []float64) *DecimalString {
 	strs := make([]string, len(values))
 	for i, v := range values {
-		strs[i] = strconv.FormatFloat(v, 'f', -1, 64)
+		strs[i] = formatDecimalString(v)
 	}
 	return NewDecimalString(t, strs)
+}
+
+// formatDecimalString renders v as a DS value no longer than the 16-byte
+// maximum (PS3.5 Table 6.2-1), preferring the shortest round-tripping form.
+func formatDecimalString(v float64) string {
+	s := strconv.FormatFloat(v, 'g', -1, 64)
+	if len(s) <= 16 {
+		return s
+	}
+	for precision := 15; precision >= 1; precision-- {
+		s = strconv.FormatFloat(v, 'g', precision, 64)
+		if len(s) <= 16 {
+			return s
+		}
+	}
+	return strconv.FormatFloat(v, 'g', 1, 64)
 }
 
 // NewDecimalStringFromBuffer creates a DS element from an existing buffer.

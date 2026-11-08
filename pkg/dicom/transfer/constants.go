@@ -11,8 +11,11 @@ import (
 // Standard DICOM Transfer Syntaxes
 var (
 	// ImplicitVRBigEndian is a virtual transfer syntax for implicit VR with big endian byte order.
+	// The UID is a go-dicom-internal placeholder under the project's private
+	// root (not a DICOM-assigned transfer syntax); it exists only in memory and is
+	// never written to standard files.
 	ImplicitVRBigEndian = NewBuilder(uid.New(
-		uid.ExplicitVRBigEndianRETIRED.UID()+".123456",
+		uid.GoDicomImplementationClassUID+".1.1",
 		"Implicit VR Big Endian",
 		uid.TypeTransferSyntax,
 		false)).

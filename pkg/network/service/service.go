@@ -42,6 +42,13 @@ type Service struct {
 	// concurrently or PDU framing can be interleaved on the wire.
 	writeMu sync.Mutex
 
+	// sendPause serializes DIMSE sends against association release. The send
+	// loop holds it while sending a message; GracefulRelease holds it while
+	// sending A-RELEASE-RQ, so a multi-PDU message can never be truncated by a
+	// release injected mid-message (PS3.8 requires release only after all
+	// outstanding operations complete).
+	sendPause sync.Mutex
+
 	// Association information
 	assoc   *association.Association
 	assocMu sync.RWMutex

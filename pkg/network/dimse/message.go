@@ -268,6 +268,15 @@ func (r *BaseResponse) AffectedSOPInstanceUID() string {
 	return value
 }
 
+// resolveStatus returns a non-nil status so response constructors never panic
+// when a caller passes nil (missing validation at a public API boundary).
+func resolveStatus(s *status.Status) *status.Status {
+	if s == nil {
+		return status.ErrorProcessingFailure
+	}
+	return s
+}
+
 // CreateCommandDataset creates a command dataset with common fields.
 func CreateCommandDataset(commandField uint16, messageID uint16) *dataset.Dataset {
 	ds := dataset.New()

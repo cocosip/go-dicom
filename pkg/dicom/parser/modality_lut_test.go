@@ -19,7 +19,7 @@ func TestModalityLUTParsing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open Modality LUT test file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	// Get file info
 	fileInfo, err := file.Stat()
@@ -93,7 +93,7 @@ func TestModalityLUTSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -178,7 +178,7 @@ func TestModalityLUTPixelData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	result, err := Parse(file)
 	if err != nil {
@@ -301,7 +301,7 @@ func TestModalityLUTComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-    defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }()
 
 	fileInfo, _ := file.Stat()
 
@@ -382,11 +382,10 @@ func BenchmarkModalityLUTParsing(b *testing.B) {
 
 		_, err = Parse(file)
 		if err != nil {
-            _ = file.Close()
+			_ = file.Close()
 			b.Fatalf("Failed to parse: %v", err)
 		}
 
-        _ = file.Close()
+		_ = file.Close()
 	}
 }
-

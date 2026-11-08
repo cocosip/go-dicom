@@ -6,10 +6,9 @@ package transport
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net"
-	"os"
+	"sync"
 	"time"
 )
 
@@ -71,9 +70,20 @@ func Listen(network, address string, opts ...ListenOption) (*Listener, error) {
 		return nil, fmt.Errorf("failed to listen on %s:%s: %w", network, address, err)
 	}
 
+	// Clone the TLS config so every connection shares a private copy (no data
+	// race on a caller-owned pointer) and enforce at least TLS 1.2, mirroring
+	// DialTLS.
+	tlsConfig := config.tlsConfig
+	if tlsConfig != nil {
+		tlsConfig = tlsConfig.Clone()
+		if tlsConfig.MinVersion == 0 {
+			tlsConfig.MinVersion = tls.VersionTLS12
+		}
+	}
+
 	return &Listener{
 		listener:  listener,
-		tlsConfig: config.tlsConfig,
+		tlsConfig: tlsConfig,
 	}, nil
 }
 
@@ -84,7 +94,10 @@ func Listen(network, address string, opts ...ListenOption) (*Listener, error) {
 // read/write deadline, so a stalled handshake can never block the accept loop.
 //
 // The provided Context can be used to cancel the accept operation. It does not
-// cover the (deferred) TLS handshake.
+// cover the (deferred) TLS handshake: crypto/tls performs it lazily on the first
+// Read/Write under the caller's per-connection deadline. A server bounds it via
+// its association timeout, and Close can interrupt a stalled handshake because
+// not-yet-negotiated connections are tracked.
 //
 // Example:
 //
@@ -115,8 +128,8 @@ func (l *Listener) acceptWithContext(ctx context.Context) (net.Conn, error) {
 		return nil, fmt.Errorf("accept cancelled: %w", err)
 	}
 
-	deadlineCapable, ok := l.listener.(deadlineListener)
-	if !ok {
+	dler, deadlineCapable := l.listener.(deadlineListener)
+	if !deadlineCapable || ctx.Done() == nil {
 		conn, err := l.listener.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
@@ -127,38 +140,39 @@ func (l *Listener) acceptWithContext(ctx context.Context) (net.Conn, error) {
 		return conn, nil
 	}
 
-	for {
-		deadline := time.Now().Add(100 * time.Millisecond)
-		if deadlineErr := deadlineCapable.SetDeadline(deadline); deadlineErr != nil {
-			return nil, fmt.Errorf("accept failed: %w", deadlineErr)
+	// Interrupt a blocking Accept as soon as the context is done, instead of
+	// polling on a fixed interval (which woke the accept loop ~10 times/second
+	// even when idle). The watcher forces an immediate deadline so Accept
+	// returns at once.
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case <-ctx.Done():
+			_ = dler.SetDeadline(time.Now())
+		case <-stop:
 		}
+	}()
 
-		conn, err := l.listener.Accept()
-		if err == nil {
-			if clearErr := deadlineCapable.SetDeadline(time.Time{}); clearErr != nil {
-				_ = conn.Close()
-				return nil, fmt.Errorf("accept failed: %w", clearErr)
-			}
-			return conn, nil
-		}
+	conn, err := l.listener.Accept()
+	close(stop)
+	wg.Wait()
+	_ = dler.SetDeadline(time.Time{})
 
+	if err != nil {
 		if ctx.Err() != nil {
-			_ = deadlineCapable.SetDeadline(time.Time{})
 			return nil, fmt.Errorf("accept cancelled: %w", ctx.Err())
 		}
-
-		if ne, ok := err.(net.Error); ok && ne.Timeout() {
-			continue
-		}
-
-		if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed) {
-			_ = deadlineCapable.SetDeadline(time.Time{})
-			return nil, fmt.Errorf("accept failed: %w", err)
-		}
-
-		_ = deadlineCapable.SetDeadline(time.Time{})
 		return nil, fmt.Errorf("accept failed: %w", err)
 	}
+	if ctx.Err() != nil {
+		// The context raced with a successful accept; drop the connection.
+		_ = conn.Close()
+		return nil, fmt.Errorf("accept cancelled: %w", ctx.Err())
+	}
+	return conn, nil
 }
 
 // Close closes the listener.

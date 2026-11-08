@@ -156,6 +156,9 @@ func (c *Client) CFind(ctx context.Context, level dimse.QueryRetrieveLevel, quer
 // cancelled, and presentationContextID must be the presentation context used by
 // that original request.
 func (c *Client) CCancel(ctx context.Context, messageID uint16, presentationContextID byte) error {
+	if messageID == 0 {
+		return fmt.Errorf("C-CANCEL requires a non-zero MessageIDBeingRespondedTo")
+	}
 	svc, err := c.activeService()
 	if err != nil {
 		return err

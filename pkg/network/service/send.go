@@ -44,11 +44,15 @@ func (s *Service) sendLoop(ctx context.Context) error {
 
 		case req := <-s.sendQueue:
 			// Process send request. Re-check the state here because a message
-			// may have been queued before A-RELEASE started (PS3.8 Sta7).
+			// may have been queued before A-RELEASE started (PS3.8 Sta7). The
+			// sendPause lock keeps a release request from being injected between
+			// two PDUs of a multi-PDU message.
+			s.sendPause.Lock()
 			err := s.checkSendState()
 			if err == nil {
 				err = s.sendMessage(req)
 			}
+			s.sendPause.Unlock()
 			s.observeSentMessage(req.message, req.lifecycle, err)
 			if err != nil {
 				// Send error back to caller

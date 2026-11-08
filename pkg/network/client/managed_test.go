@@ -435,3 +435,28 @@ func TestNewCGetJobRejectsEmptyStorageUID(t *testing.T) {
 		t.Fatal("NewCGetJob() error = nil, want empty storage UID error")
 	}
 }
+
+func TestJobFitsContextsAllowsExtraTransferSyntaxes(t *testing.T) {
+	const abstractSyntax = "1.2.3"
+	negotiated := []PresentationContextSpec{{
+		AbstractSyntax:   abstractSyntax,
+		SCURole:          true,
+		TransferSyntaxes: []string{"1.2.840.10008.1.2.1"},
+	}}
+	withShared := []PresentationContextSpec{{
+		AbstractSyntax:   abstractSyntax,
+		SCURole:          true,
+		TransferSyntaxes: []string{"1.2.840.10008.1.2.1", "1.2.840.10008.1.2"},
+	}}
+	if !jobFitsContexts(negotiated, withShared) {
+		t.Fatal("jobFitsContexts() = false, want true for a shared transfer syntax")
+	}
+	noShared := []PresentationContextSpec{{
+		AbstractSyntax:   abstractSyntax,
+		SCURole:          true,
+		TransferSyntaxes: []string{"1.2.840.10008.1.2"},
+	}}
+	if jobFitsContexts(negotiated, noShared) {
+		t.Fatal("jobFitsContexts() = true, want false with no shared transfer syntax")
+	}
+}

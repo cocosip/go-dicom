@@ -85,6 +85,7 @@ func NewNDeleteResponse(
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 ) *NDeleteResponse {
+	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandNDeleteRSP), 0)
 

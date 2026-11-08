@@ -209,11 +209,18 @@ func (w *Writer) elementHeaderLength(valueRepresentation *vr.VR) uint32 {
 }
 
 func (w *Writer) skipRootElement(root *dataset.Dataset, event dataset.WalkEvent) bool {
-	if event.Dataset != root || event.Element == nil || event.Element.Tag() == nil {
+	if event.Element == nil || event.Element.Tag() == nil {
 		return false
 	}
 	t := event.Element.Tag()
-	return t.Group() == 0x0002 || (!w.keepGroupLengths && t.Element() == 0x0000)
+	// File Meta Information (Group 0002) is only ever written at the root by the
+	// writer itself, never as part of an encoded dataset.
+	if event.Dataset == root && t.Group() == 0x0002 {
+		return true
+	}
+	// Group Length (gggg,0000) elements may appear at any nesting depth; never
+	// emit their (possibly stale) values unless the caller asked to keep them.
+	return !w.keepGroupLengths && t.Element() == 0x0000
 }
 
 type walkDatasetEncoder struct {

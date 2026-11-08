@@ -192,9 +192,9 @@ func TestMultiFrameImage(t *testing.T) {
 
 				// Common uncompressed transfer syntaxes
 				uncompressed := map[string]string{
-					"1.2.840.10008.1.2":     "Implicit VR Little Endian",
-					"1.2.840.10008.1.2.1":   "Explicit VR Little Endian",
-					"1.2.840.10008.1.2.2":   "Explicit VR Big Endian",
+					"1.2.840.10008.1.2":   "Implicit VR Little Endian",
+					"1.2.840.10008.1.2.1": "Explicit VR Little Endian",
+					"1.2.840.10008.1.2.2": "Explicit VR Big Endian",
 				}
 
 				if name, ok := uncompressed[tsUID]; ok {
@@ -393,4 +393,3 @@ func TestMultiFrameVsPrivateSequence(t *testing.T) {
 
 	t.Logf("Found %d private tag elements", privateCount)
 }
-

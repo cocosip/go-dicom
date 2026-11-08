@@ -59,6 +59,11 @@ const (
 	// defaultMaxSequenceDepth is the default maximum nesting depth for sequences.
 	// It bounds recursion on malformed or maliciously deep sequences.
 	defaultMaxSequenceDepth = 100
+
+	// maxHardElementSize is an absolute ceiling on a single element value length,
+	// applied even when the caller disables WithMaxElementSize, so a declared
+	// length cannot drive an unbounded allocation.
+	maxHardElementSize uint32 = 1 << 31
 )
 
 // FileFormat represents the structure of a DICOM file.
@@ -645,8 +650,15 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 	ds.SetAutoValidate(false)
 	defer ds.SetAutoValidate(true)
 
-	// Read elements until we leave Group 0002
-	for {
+	// metaRemaining tracks how many more bytes of Group 0002 must be read once
+	// FileMetaInformationGroupLength (0002,0000) is known. It bounds meta parsing
+	// so a deflated dataset whose compressed bytes happen to decode as a Group
+	// 0002 tag is never mis-read as File Meta Information (PS3.5 §7.1).
+	var metaRemaining int64 = -1
+
+	// Read elements until we leave Group 0002. When the group length is known,
+	// metaRemaining reaches 0 exactly at the end of the meta group.
+	for metaRemaining != 0 {
 		// Peek at the tag first to check if we're still in Group 0002.
 		// Keep raw bytes so the first dataset tag can be re-decoded with dataset byte order.
 		t, rawTag, err := p.readTagWithRaw()
@@ -689,6 +701,25 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 		data := make([]byte, length)
 		if _, err := io.ReadFull(p.reader, data); err != nil {
 			return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
+		}
+
+		// Account for this element's bytes against the meta group length. The
+		// GroupLength element itself declares the count of following bytes, so
+		// it is not subtracted.
+		elemBytes := int64(4 + 2) // tag + VR
+		if vrValue.Is16bitLength() {
+			elemBytes += 2
+		} else {
+			elemBytes += 6
+		}
+		elemBytes += int64(length)
+		if t.Group() == 0x0002 && t.Element() == 0x0000 && len(data) == 4 {
+			metaRemaining = int64(binary.LittleEndian.Uint32(data))
+		} else if metaRemaining > 0 {
+			metaRemaining -= elemBytes
+			if metaRemaining < 0 {
+				metaRemaining = 0
+			}
 		}
 
 		// Create element based on VR
@@ -945,6 +976,13 @@ func (p *parseContext) consumeZeroTrailingPadding() error {
 	}
 }
 
+// isEncapsulatedPixelDataTag reports whether t is a Pixel Data element
+// (conventional, float, or double-float), the only elements that use
+// undefined-length OB/OW encapsulation (PS3.5 §7.5).
+func isEncapsulatedPixelDataTag(t *tag.Tag) bool {
+	return t.Group() == 0x7FE0 && (t.Element() == 0x0010 || t.Element() == 0x0008 || t.Element() == 0x0009)
+}
+
 // readElementData handles reading element data based on size and read options.
 // This is a common helper to avoid code duplication between readElement and readElementWithTag.
 func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buffer.ByteBuffer, error) {
@@ -953,6 +991,11 @@ func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buf
 	// with undefined length indicates a malformed DICOM stream.
 	if length == 0xFFFFFFFF {
 		return nil, fmt.Errorf("element %s has undefined length, expected sequence or fragment handling", t)
+	}
+	// Hard ceiling prevents an unbounded make() even when the caller disabled
+	// WithMaxElementSize (a declared length can otherwise reach 0xFFFFFFFF).
+	if length > maxHardElementSize {
+		return nil, fmt.Errorf("element %s value length %d exceeds hard limit %d", t, length, maxHardElementSize)
 	}
 
 	// Handle large objects based on ReadOption
@@ -1059,8 +1102,8 @@ func (p *parseContext) readElementWithPrivateCreators(privateCreators privateCre
 	}
 
 	// Handle special case: Fragment Sequence (encapsulated pixel data)
-	// Fragment sequences have OB or OW VR with undefined length (0xFFFFFFFF)
-	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF {
+	// Only Pixel Data uses undefined-length OB/OW encapsulation (PS3.5 §7.5).
+	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF && isEncapsulatedPixelDataTag(t) {
 		if p.readOption == SkipLargeTags {
 			if err := p.skipFragmentSequence(); err != nil {
 				return nil, err
@@ -1114,8 +1157,8 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 	}
 
 	// Handle special case: Fragment Sequence (encapsulated pixel data)
-	// Fragment sequences have OB or OW VR with undefined length (0xFFFFFFFF)
-	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF {
+	// Only Pixel Data uses undefined-length OB/OW encapsulation (PS3.5 §7.5).
+	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF && isEncapsulatedPixelDataTag(t) {
 		if p.readOption == SkipLargeTags {
 			if err := p.skipFragmentSequence(); err != nil {
 				return nil, err
@@ -1852,11 +1895,12 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 			}
 			isFirstItem = false
 		} else {
-			// Per DICOM PS3.5 §7.5, fragment items (non-offset-table) must have
-			// a non-zero, even-length value. Zero-length fragments are invalid.
+			// Zero-length fragments carry no data; tolerate them (some encoders
+			// emit an empty trailing fragment) instead of rejecting the file.
 			if itemLength == 0 {
-				return nil, fmt.Errorf("fragment %d has zero length (offset table already read)", len(fragSeq.Fragments())+1)
+				continue
 			}
+			// Fragment items must otherwise have an even length (PS3.5 §7.5).
 			if itemLength%2 != 0 {
 				return nil, fmt.Errorf("fragment %d length %d is not even", len(fragSeq.Fragments())+1, itemLength)
 			}
@@ -1872,7 +1916,7 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 }
 
 func (p *parseContext) readFragmentItemBuffer(itemLength uint32) (buffer.ByteBuffer, error) {
-	if p.readOption == ReadLargeOnDemand && itemLength > p.largeObjectSize {
+	if (p.readOption == ReadLargeOnDemand || p.readOption == ReadDefault) && itemLength > p.largeObjectSize {
 		fragBuf, err := p.createLazyBuffer(itemLength)
 		if err == nil {
 			return fragBuf, nil

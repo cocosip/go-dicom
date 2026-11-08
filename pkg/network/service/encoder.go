@@ -29,6 +29,9 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 	if commandDS == nil {
 		return nil, nil, fmt.Errorf("message has no command dataset")
 	}
+	if err := validateRequiredDataset(msg); err != nil {
+		return nil, nil, err
+	}
 	if _, hasPriority := commandDS.Get(tag.Priority); hasPriority {
 		priority, priorityErr := commandDS.GetUInt16(tag.Priority, 0)
 		if priorityErr != nil {
@@ -105,6 +108,20 @@ func DecodeDIMSEMessage(commandData, datasetData []byte, transferSyntax *transfe
 		dataDS.SetInternalTransferSyntax(transferSyntax)
 	}
 	return commandDS, dataDS, nil
+}
+
+// validateRequiredDataset enforces that DIMSE requests whose data set is
+// mandatory (PS3.7 §9.3) actually carry one, so the encoder never advertises
+// "no data set" for a command that requires it.
+func validateRequiredDataset(msg dimse.Message) error {
+	switch dimse.CommandField(msg.CommandField()) {
+	case dimse.CommandCStoreRQ, dimse.CommandCFindRQ, dimse.CommandCGetRQ,
+		dimse.CommandCMoveRQ, dimse.CommandNSetRQ:
+		if msg.DataDataset() == nil {
+			return fmt.Errorf("%s requires a data set", dimse.CommandField(msg.CommandField()))
+		}
+	}
+	return nil
 }
 
 func decodeRawDataset(data []byte, ts *transfer.Syntax) (*dataset.Dataset, error) {

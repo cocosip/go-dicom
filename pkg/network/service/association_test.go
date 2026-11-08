@@ -596,7 +596,7 @@ func TestReceiveAssociationRequestRejectsUnsupportedApplicationContext(t *testin
 
 func TestReceiveAssociationRequestRejectsUnsupportedProtocolVersion(t *testing.T) {
 	rq := pdu.NewAAssociateRQ()
-	rq.ProtocolVersion = 0x0002
+	rq.ProtocolVersion = 0x0001 // structurally valid so Encode succeeds; patched below
 	rq.CalledAETitle = testCalledAE
 	rq.CallingAETitle = testCallingAE
 	rq.PresentationContexts = []pdu.PresentationContextRQ{{
@@ -606,6 +606,9 @@ func TestReceiveAssociationRequestRejectsUnsupportedProtocolVersion(t *testing.T
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
+	// Force an unsupported protocol version (0x0002) on the wire to exercise the
+	// service-side rejection without asking the encoder to emit an invalid value.
+	rawRQ.Data[0], rawRQ.Data[1] = 0x00, 0x02
 	conn := &mockConn{readData: serializeRawPDUForTest(rawRQ)}
 	negotiatorCalled := false
 	service := NewService(conn, nil, WithAssociationNegotiator(FuncAssociationNegotiator(

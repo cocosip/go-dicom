@@ -490,7 +490,8 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 	// Write main dataset. Deflated Explicit VR Little Endian compresses only
 	// the dataset following File Meta Information.
 	if config.transferSyntax.IsDeflate() {
-		fw, err := flate.NewWriter(writer.writer, flate.DefaultCompression)
+		counter := &byteCountingWriter{w: writer.writer}
+		fw, err := flate.NewWriter(counter, flate.DefaultCompression)
 		if err != nil {
 			return fmt.Errorf("failed to create deflate writer: %w", err)
 		}
@@ -502,6 +503,12 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 		}
 		if err := fw.Close(); err != nil {
 			return fmt.Errorf("failed to finish deflated dataset: %w", err)
+		}
+		// PS3.5 §A.5: if the deflate stream length is odd, append one NUL byte.
+		if counter.n%2 != 0 {
+			if _, err := writer.writer.Write([]byte{0x00}); err != nil {
+				return fmt.Errorf("failed to append deflate padding: %w", err)
+			}
 		}
 	} else if err := writer.writeDataset(ds); err != nil {
 		return fmt.Errorf("failed to write dataset: %w", err)
@@ -1079,4 +1086,18 @@ func (w *Writer) writeFragmentSequence(fs *element.FragmentSequence) error {
 		return err
 	}
 	return w.writeDataset(ds)
+}
+
+// byteCountingWriter counts the bytes written through it so the Deflate writer
+// can append a trailing NUL when the compressed stream length is odd
+// (PS3.5 §A.5).
+type byteCountingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *byteCountingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
 }

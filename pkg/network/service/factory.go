@@ -208,6 +208,11 @@ func createCEchoResponse(commandDS *dataset.Dataset) (*dimse.CEchoResponse, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Status: %w", err)
 	}
+	// PS3.7 Table 9.3-13: a C-ECHO-RSP Status is Success (0000H); the
+	// Verification SOP Class defines no non-success status.
+	if statusCode != 0x0000 {
+		return nil, fmt.Errorf("C-ECHO-RSP has invalid status 0x%04X (must be Success 0x0000)", statusCode)
+	}
 
 	return dimse.NewCEchoResponse(messageID, status.LookupStatus(statusCode)), nil
 }

@@ -144,6 +144,7 @@ type CFindResponse struct {
 // For any other status the identifier argument is dropped so that the command
 // data set type and the attached data set remain consistent.
 func NewCFindResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopClassUID string, identifier *dataset.Dataset) *CFindResponse {
+	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCFindRSP), 0)
 
