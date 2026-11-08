@@ -220,9 +220,13 @@ func (a *AAssociateAC) Encode() (*RawPDU, error) {
 		pcBuf.WriteByte(0x00)
 
 		// Transfer Syntax Sub-item. PS3.8 Table 9-18 requires exactly one to be
-		// present even for a rejected context; only its value is insignificant
-		// when the Result/Reason is not acceptance.
-		tsData := []byte(pc.TransferSyntax)
+		// present even for a rejected context; a zero-length value is invalid,
+		// so fall back to Implicit VR Little Endian when none was set.
+		transferSyntax := pc.TransferSyntax
+		if transferSyntax == "" {
+			transferSyntax = uid.ImplicitVRLittleEndian.UID()
+		}
+		tsData := []byte(transferSyntax)
 		if err := writeItem(&pcBuf, ItemTypeTransferSyntax, tsData); err != nil {
 			return nil, fmt.Errorf("encoding transfer syntax for context %d: %w", i, err)
 		}
@@ -482,8 +486,8 @@ func validatePresentationContextsAC(contexts []PresentationContextAC) error {
 		if pc.TransferSyntax != "" && !uid.IsValid(pc.TransferSyntax) {
 			return fmt.Errorf("%w: invalid transfer syntax %q for ID %d", ErrInvalidPresentationContext, pc.TransferSyntax, pc.ID)
 		}
-		// A stale transfer syntax on a rejected context is not an error: the
-		// encoder simply omits the sub-item, matching decode tolerance.
+		// A Transfer Syntax value is always written by the encoder; an empty
+		// value on a rejected context is replaced by the default syntax there.
 	}
 	return nil
 }
@@ -549,6 +553,9 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 	ui := &UserInformation{}
 	maximumLengthSeen := false
 	implementationClassUIDSeen := false
+	implementationVersionNameSeen := false
+	asynchronousOperationsSeen := false
+	userIdentitySeen := false
 	reader := bytes.NewReader(data)
 
 	for {
@@ -581,9 +588,19 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
 
 		case ItemTypeImplementationVersionName:
+			// PS3.8 D.1.3: only one Implementation Version Name Sub-Item.
+			if implementationVersionNameSeen {
+				return nil, fmt.Errorf("duplicate implementation version name sub-item in user information")
+			}
+			implementationVersionNameSeen = true
 			ui.ImplementationVersionName = string(itemData)
 
 		case ItemTypeAsynchronousOperationsWindow:
+			// PS3.8 D.1.4: only one Asynchronous Operations Window Sub-Item.
+			if asynchronousOperationsSeen {
+				return nil, fmt.Errorf("duplicate asynchronous operations window sub-item in user information")
+			}
+			asynchronousOperationsSeen = true
 			if len(itemData) != 4 {
 				return nil, fmt.Errorf("invalid asynchronous operations window: %d bytes", len(itemData))
 			}
@@ -607,6 +624,11 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 			ui.ExtendedNegotiations = append(ui.ExtendedNegotiations, *negotiation)
 
 		case ItemTypeUserIdentityNegotiationResponse:
+			// PS3.8 D.1.7: only one User Identity Sub-Item.
+			if userIdentitySeen {
+				return nil, fmt.Errorf("duplicate user identity sub-item in user information")
+			}
+			userIdentitySeen = true
 			// Server response to user identity
 			if len(itemData) < 2 {
 				return nil, fmt.Errorf("invalid user identity response: %d bytes", len(itemData))

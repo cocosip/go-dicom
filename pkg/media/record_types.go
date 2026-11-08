@@ -18,6 +18,13 @@ var recordAttributeTags = map[RecordType][]*tag.Tag{
 		tag.PatientBirthDate,
 		tag.PatientSex,
 	},
+	RecordKeyObjectDoc: {
+		tag.InstanceNumber,
+		tag.ContentDate,
+		tag.ContentTime,
+		tag.ConceptNameCodeSequence,
+		tag.ContentSequence,
+	},
 	RecordStudy: {
 		tag.StudyInstanceUID,
 		tag.StudyID,
@@ -93,6 +100,12 @@ var recordRequiredTags = map[RecordType][]*tag.Tag{
 		tag.ContentLabel,
 		tag.PresentationCreationDate,
 		tag.PresentationCreationTime,
+	},
+	RecordKeyObjectDoc: {
+		tag.InstanceNumber,
+		tag.ContentDate,
+		tag.ContentTime,
+		tag.ConceptNameCodeSequence,
 	},
 }
 

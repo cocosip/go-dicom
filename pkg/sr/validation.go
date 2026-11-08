@@ -251,6 +251,20 @@ func validateContentItem(item *ContentItem, root bool, path string) error {
 	if err := validateConceptName(item.dataset); err != nil {
 		return validationPathError(path, err)
 	}
+	// PS3.3 C.17.3.3 Table C.17-6: Concept Name Code Sequence is required for
+	// the root item (always a CONTAINER) and for every non-container value
+	// type; nested unheaded CONTAINER items may omit it.
+	if !item.dataset.Contains(tag.ConceptNameCodeSequence) {
+		switch valueType {
+		case ValueTypeText, ValueTypeCode, ValueTypeNumeric, ValueTypePersonName,
+			ValueTypeDate, ValueTypeTime, ValueTypeDateTime, ValueTypeUIDReference:
+			return validationPathError(path, NewErrorf("%s content item requires a Concept Name Code Sequence", valueType))
+		case ValueTypeContainer:
+			if root {
+				return validationPathError(path, NewError("root CONTAINER requires a Concept Name Code Sequence"))
+			}
+		}
+	}
 	if err := validateContentValue(item, valueType); err != nil {
 		return validationPathError(path, err)
 	}

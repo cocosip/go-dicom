@@ -172,7 +172,7 @@ func (ib *ImageBox) ValidateImageAttributes() error {
 		return err
 	}
 	if sequence == nil {
-		return nil
+		return fmt.Errorf("printing: ImageBox has no image sequence")
 	}
 	required := []*tag.Tag{
 		tag.Rows, tag.Columns, tag.BitsAllocated, tag.BitsStored, tag.HighBit,

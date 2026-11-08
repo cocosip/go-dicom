@@ -127,7 +127,7 @@ func validateRequiredDataset(msg dimse.Message) error {
 	case dimse.CommandCFindRSP:
 		// A Pending C-FIND-RSP must carry an Identifier (PS3.7 9.1.2.1.5).
 		code, err := msg.CommandDataset().GetUInt16(tag.Status, 0)
-		if err == nil && code == status.CFindPending.Code && msg.DataDataset() == nil {
+		if err == nil && status.LookupStatus(code).IsPending() && msg.DataDataset() == nil {
 			return fmt.Errorf("C-FIND-RSP Pending requires a data set")
 		}
 	}

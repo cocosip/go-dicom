@@ -19,4 +19,6 @@ const (
 	RecordSRDocument RecordType = "SR DOCUMENT"
 	// RecordPresentation identifies a PRESENTATION directory record.
 	RecordPresentation RecordType = "PRESENTATION"
+	// RecordKeyObjectDoc identifies a KEY OBJECT DOC directory record.
+	RecordKeyObjectDoc RecordType = "KEY OBJECT DOC"
 )

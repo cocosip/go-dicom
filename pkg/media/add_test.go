@@ -73,6 +73,7 @@ func TestAddFileSelectsFoDicomInstanceRecordTypes(t *testing.T) {
 		{name: "image", sopClass: uid.CTImageStorage, wantType: RecordImage},
 		{name: "structured report", sopClass: uid.BasicTextSRStorage, wantType: RecordSRDocument},
 		{name: "presentation state", sopClass: uid.GrayscaleSoftcopyPresentationStateStorage, wantType: RecordPresentation},
+		{name: "key object selection", sopClass: uid.KeyObjectSelectionDocumentStorage, wantType: RecordKeyObjectDoc},
 	}
 
 	for i, tt := range tests {
@@ -252,8 +253,9 @@ func testParseResult(t *testing.T, values testFileValues) *parser.ParseResult {
 		element.NewString(tag.SOPInstanceUID, vr.UI, []string{values.SOPInstanceUID}),
 		element.NewString(tag.InstanceNumber, vr.IS, []string{"1"}),
 	}
-	switch values.SOPClass.StorageCategory() {
-	case uid.StorageCategoryStructuredReport:
+	category := values.SOPClass.StorageCategory()
+	switch {
+	case category == uid.StorageCategoryStructuredReport || values.SOPClass == uid.KeyObjectSelectionDocumentStorage:
 		concept := dataset.New()
 		for _, e := range []element.Element{
 			element.NewString(tag.CodeValue, vr.SH, []string{"18748-4"}),
@@ -271,7 +273,7 @@ func testParseResult(t *testing.T, values testFileValues) *parser.ParseResult {
 			element.NewString(tag.ContentTime, vr.TM, []string{"120000"}),
 			dataset.NewSequenceWithItems(tag.ConceptNameCodeSequence, []*dataset.Dataset{concept}),
 		)
-	case uid.StorageCategoryPresentationState:
+	case category == uid.StorageCategoryPresentationState:
 		elements = append(elements,
 			element.NewString(tag.ContentLabel, vr.CS, []string{"LABEL"}),
 			element.NewString(tag.PresentationCreationDate, vr.DA, []string{"20240101"}),

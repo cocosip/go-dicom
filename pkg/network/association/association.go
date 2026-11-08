@@ -1195,10 +1195,15 @@ func ToAAssociateACWithMaxPDULength(assoc *Association, maxPDULength uint32) *pd
 		if pc.AcceptedTransferSyntax != nil {
 			transferSyntaxUID = pc.AcceptedTransferSyntax.UID().UID()
 		}
-		if transferSyntaxUID == "" && len(pc.ProposedTransferSyntaxes) > 0 {
+		if transferSyntaxUID == "" {
 			// A Transfer Syntax Sub-Item is mandatory even for a rejected
-			// context (PS3.8 Table 9-18); use the first proposed syntax.
-			transferSyntaxUID = pc.ProposedTransferSyntaxes[0].UID().UID()
+			// context (PS3.8 Table 9-18); use the first proposed syntax, or the
+			// default Implicit VR Little Endian when none is available.
+			if len(pc.ProposedTransferSyntaxes) > 0 {
+				transferSyntaxUID = pc.ProposedTransferSyntaxes[0].UID().UID()
+			} else {
+				transferSyntaxUID = transfer.ImplicitVRLittleEndian.UID().UID()
+			}
 		}
 
 		ac.PresentationContexts = append(ac.PresentationContexts, pdu.PresentationContextAC{

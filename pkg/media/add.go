@@ -225,7 +225,7 @@ func (d *Directory) newRecord(recordType RecordType, key string, source *dataset
 			})
 			continue
 		}
-		if recordType == RecordSRDocument && attributeTag.Equals(tag.ContentSequence) {
+		if (recordType == RecordSRDocument || recordType == RecordKeyObjectDoc) && attributeTag.Equals(tag.ContentSequence) {
 			// PS3.3 F.5.25: only HAS CONCEPT MOD items belong in the SR
 			// DOCUMENT directory record.
 			filtered, ok := filterHasConceptMod(item)
@@ -329,6 +329,10 @@ func instanceRecordType(sopClassUID string) (RecordType, error) {
 	if class == uid.BasicStructuredDisplayStorage {
 		// PS3.3 F.5.23: Structured Display uses the PRESENTATION record.
 		return RecordPresentation, nil
+	}
+	if class == uid.KeyObjectSelectionDocumentStorage {
+		// PS3.3 F.5.26: Key Object Selection Document uses KEY OBJECT DOC.
+		return RecordKeyObjectDoc, nil
 	}
 	switch class.StorageCategory() {
 	case uid.StorageCategoryStructuredReport:

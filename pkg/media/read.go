@@ -157,7 +157,7 @@ func recordsFromSequence(sequence *dataset.Sequence, positions map[*dataset.Data
 
 func knownRecordType(recordType RecordType) bool {
 	switch recordType {
-	case RecordPatient, RecordStudy, RecordSeries, RecordImage, RecordSRDocument, RecordPresentation:
+	case RecordPatient, RecordStudy, RecordSeries, RecordImage, RecordSRDocument, RecordPresentation, RecordKeyObjectDoc:
 		return true
 	default:
 		return false
