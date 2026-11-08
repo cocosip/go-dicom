@@ -4,6 +4,7 @@
 package printing
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestParsePrinterStatus(t *testing.T) {
 		expected  PrinterStatus
 		expectErr bool
 	}{
-		{name: "normal", input: "NORMAL", expected: PrinterStatusNormal},
+		{name: "normal", input: string(PrinterStatusNormal), expected: PrinterStatusNormal},
 		{name: "warning lowercase", input: "warning", expected: PrinterStatusWarning},
 		{name: "failure with spaces", input: "  FAILURE  ", expected: PrinterStatusFailure},
 		{name: "empty", input: "", expected: PrinterStatusUnknown},
@@ -193,7 +194,7 @@ func TestPrinterStatusManagerApplyToDataset(t *testing.T) {
 	}
 
 	ds, err := dataset.NewWithElements([]element.Element{
-		element.NewString(tag.PrinterStatus, vr.CS, []string{"NORMAL"}),
+		element.NewString(tag.PrinterStatus, vr.CS, []string{string(PrinterStatusNormal)}),
 	})
 	if err != nil {
 		t.Fatalf("NewWithElements() error = %v", err)
@@ -222,6 +223,46 @@ func TestPrinterStatusManagerApplyToDataset(t *testing.T) {
 	if got, _ := generated.GetString(tag.PrinterStatus); got != "FAILURE" {
 		t.Fatalf("expected FAILURE in generated dataset, got %q", got)
 	}
+}
+
+func TestPrinterStatusManagerPrinterNameIsSafeUnderConcurrentUpdates(t *testing.T) {
+	manager := NewPrinterStatusManager("PRINTER-A")
+	const iterations = 100
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(3)
+	go func() {
+		defer waitGroup.Done()
+		for index := 0; index < iterations; index++ {
+			manager.SetPrinterName("PRINTER-B")
+		}
+	}()
+	go func() {
+		defer waitGroup.Done()
+		for index := 0; index < iterations; index++ {
+			ds, err := dataset.NewWithElements([]element.Element{
+				element.NewString(tag.PrinterName, vr.LO, []string{"PRINTER-C"}),
+				element.NewString(tag.PrinterStatus, vr.CS, []string{string(PrinterStatusNormal)}),
+			})
+			if err != nil {
+				t.Errorf("NewWithElements() error = %v", err)
+				return
+			}
+			if err := manager.UpdateFromDataset(ds); err != nil {
+				t.Errorf("UpdateFromDataset() error = %v", err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer waitGroup.Done()
+		for index := 0; index < iterations; index++ {
+			if name := manager.PrinterName(); name == "" {
+				t.Error("PrinterName() returned an empty name")
+				return
+			}
+		}
+	}()
+	waitGroup.Wait()
 }
 
 func TestPrinterStatusManagerStateHelpers(t *testing.T) {

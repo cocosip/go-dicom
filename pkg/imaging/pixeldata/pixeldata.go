@@ -503,6 +503,26 @@ func (pd *Data) ConvertMonochrome1ToMonochrome2() error {
 
 	bytesPerSample := pd.Info.BytesAllocated()
 	convertedFrames := make([][]byte, len(pd.frames))
+	if pd.Info.BitsAllocated == 1 {
+		// 1-bit samples are packed LSB-first into a continuous bit stream
+		// (PS3.5 8.1.1 / A.2), so every sample bit must be complemented. Each
+		// stored frame buffer starts on a byte boundary; unused high bits of the
+		// final byte are padding and are cleared after the complement.
+		samplesPerFrame := int(pd.Info.Width) * int(pd.Info.Height) * int(pd.Info.SamplesPerPixel)
+		for fi, frame := range pd.frames {
+			converted := make([]byte, len(frame))
+			for i, value := range frame {
+				converted[i] = ^value
+			}
+			if remainder := samplesPerFrame % 8; remainder != 0 && len(converted) > 0 {
+				converted[len(converted)-1] &= byte(1<<uint(remainder) - 1)
+			}
+			convertedFrames[fi] = converted
+		}
+		pd.frames = convertedFrames
+		pd.Info.PhotometricInterpretation = pixel.Monochrome2
+		return nil
+	}
 	for fi, frame := range pd.frames {
 		converted, err := colorconv.ConvertMono1ToMono2(frame, pd.Info.BitsStored, bytesPerSample, pd.Info.PixelRepresentation == pixel.SignedPixels)
 		if err != nil {
@@ -530,8 +550,10 @@ func (pd *Data) ConvertYBRToRGB() error {
 	if pd.Info.PhotometricInterpretation == nil {
 		return fmt.Errorf("photometric interpretation missing")
 	}
-	if pd.Info.BitsAllocated != 8 && pd.Info.BitsAllocated != 16 {
-		return fmt.Errorf("YBR->RGB conversion only implemented for BitsAllocated=8 or 16")
+	if pd.Info.BitsAllocated != 8 {
+		// The YBR conversion routines decode 8-bit samples only. Accepting
+		// 16-bit input would silently reinterpret every other byte as a sample.
+		return fmt.Errorf("YBR->RGB conversion only implemented for BitsAllocated=8, got %d", pd.Info.BitsAllocated)
 	}
 	switch pd.Info.PhotometricInterpretation.Value {
 	case pixel.YbrFull.Value:
@@ -1305,6 +1327,12 @@ func ConvertPaletteToRGB(ds *dataset.Dataset, pd *Data) error {
 // ConvertPaletteToRGBWithVRMode loads a Dataset palette and converts frames to
 // RGB using the requested LUT Data VR policy (alpha composited over black).
 func ConvertPaletteToRGBWithVRMode(ds *dataset.Dataset, pd *Data, mode LUTVRMode) error {
+	if pd == nil || pd.Info == nil {
+		return fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return fmt.Errorf("cannot convert palette color on encapsulated data; decode first")
+	}
 	lut, err := buildPaletteLUTWithVRMode(ds, mode)
 	if err != nil {
 		return err

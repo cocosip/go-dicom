@@ -389,6 +389,9 @@ func parseXMLVRs(value string) ([]*vr.VR, error) {
 		return []*vr.VR{vr.None}, nil
 	}
 
+	// PS3.6 spells alternative VRs as "US or SS"; accept the same separator
+	// the generator accepts instead of rejecting the whole document.
+	value = strings.ReplaceAll(value, " or ", "/")
 	codes, err := splitXMLVRs(value)
 	if err != nil {
 		return nil, err
@@ -436,19 +439,11 @@ func isXMLVRSeparator(character rune) bool {
 
 func parseXMLVM(value string) (*vm.VM, error) {
 	value = strings.TrimSpace(value)
-	parts := strings.Split(value, " or ")
-	var selected *vm.VM
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		parsed, err := vm.Parse(part)
-		if err != nil {
-			return nil, fmt.Errorf("invalid VM %q: %w", value, err)
-		}
-		if selected == nil {
-			selected = parsed
-		}
+	parsed, err := vm.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid VM %q: %w", value, err)
 	}
-	return selected, nil
+	return parsed, nil
 }
 
 func parseXMLRetired(value string) (bool, error) {

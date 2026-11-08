@@ -89,9 +89,11 @@ func (s *Service) recvLoop(ctx context.Context) error {
 				}
 
 			case pdu.TypeAReleaseRP:
-				// Handle A-RELEASE-RP (response to our release request)
-				// This means the peer accepted our release request
-				s.handleReleaseResponse(ctx)
+				// Handle A-RELEASE-RP: only valid as the peer's confirmation
+				// after a locally requested release (PS3.8 Sta7).
+				if err := s.handleReleaseResponse(ctx); err != nil {
+					return fmt.Errorf("failed to handle A-RELEASE-RP: %w", err)
+				}
 				return nil
 
 			case pdu.TypeAAbort:
@@ -357,7 +359,9 @@ func (s *Service) inspectCommandHasDataset(commandData []byte) (bool, error) {
 }
 
 // handleReleaseRequest processes an A-RELEASE-RQ PDU.
-// It calls the OnAssociationRelease callback (if set) and sends an A-RELEASE-RP response.
+// It calls the OnAssociationRelease callback (if set) and answers the peer's
+// release request. After sending A-RELEASE-RP no further P-DATA may be sent
+// (PS3.8 7.2.2), so the association is always closed.
 func (s *Service) handleReleaseRequest(ctx context.Context) error {
 	// Get release handler
 	s.callbacksMu.RLock()
@@ -372,21 +376,11 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 		}
 	}
 
-	// Send A-RELEASE-RP
-	if s.config.keepConnectionOnPeerRelease {
-		// Compatibility mode: reply with A-RELEASE-RP but leave the association
-		// usable (state stays AssociationAccepted on the live socket).
-		if err := s.acquireSendPause(ctx); err != nil {
-			return fmt.Errorf("failed to wait for in-flight send: %w", err)
-		}
-		err := s.writeReleaseResponse(ctx)
-		s.sendPause.Unlock()
-		if err != nil {
-			return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
-		}
-		s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
-		return nil
+	// A simultaneous release request is a release collision (PS3.8 7.2.2).
+	if s.GetState() == StateReleaseRequested {
+		return s.handleReleaseCollision(ctx)
 	}
+
 	if err := s.SendReleaseResponse(ctx); err != nil {
 		return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
 	}
@@ -394,10 +388,56 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 	return s.initiateClose(StateClosed, nil)
 }
 
+// handleReleaseCollision handles an A-RELEASE-RQ received while the local AE is
+// waiting for its own A-RELEASE-RP (PS3.8 7.2.2, Table 9-8 AR-8).
+//
+// The association-requestor answers the peer's request immediately and keeps
+// reading until its own confirmation arrives. The association-acceptor defers
+// its response until the peer's A-RELEASE-RP confirms its own request (AR-10).
+func (s *Service) handleReleaseCollision(ctx context.Context) error {
+	if s.config.associationRequestor {
+		return s.sendCollisionReleaseResponse(ctx)
+	}
+	s.releaseReplyPending.Store(true)
+	return nil
+}
+
+// sendCollisionReleaseResponse writes an A-RELEASE-RP during a release
+// collision without closing the association yet, so the peer's confirmation of
+// the local A-RELEASE-RQ can still be read.
+func (s *Service) sendCollisionReleaseResponse(ctx context.Context) error {
+	if err := s.acquireSendPause(ctx); err != nil {
+		return fmt.Errorf("failed to wait for in-flight send: %w", err)
+	}
+	defer s.sendPause.Unlock()
+
+	if err := s.writeReleaseResponse(ctx); err != nil {
+		return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
+	}
+	s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess, nil)
+	return nil
+}
+
 // handleReleaseResponse processes an A-RELEASE-RP PDU.
-// This is received in response to our A-RELEASE-RQ, indicating the peer accepted the release.
-// We update the state and notify the waiting graceful release path.
-func (s *Service) handleReleaseResponse(ctx context.Context) {
+//
+// In Sta7 (StateReleaseRequested) it is the peer's confirmation of the local
+// A-RELEASE-RQ and the association is closed (AR-3). Any other state means the
+// peer sent a release response that was never requested, which is a protocol
+// error: PS3.8 Table 9-10 routes it to AA-8 (A-ABORT service-provider source).
+func (s *Service) handleReleaseResponse(ctx context.Context) error {
+	if state := s.GetState(); state != StateReleaseRequested {
+		_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnexpectedPDU)
+		return fmt.Errorf("unexpected A-RELEASE-RP in state %s", state)
+	}
+
+	// Release collision as association-acceptor: the peer's confirmation of the
+	// local request has arrived, so answer the peer's request now (AR-10).
+	if s.releaseReplyPending.CompareAndSwap(true, false) {
+		if err := s.sendCollisionReleaseResponse(ctx); err != nil {
+			return err
+		}
+	}
+
 	s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionInbound, observability.OutcomeSuccess, nil)
 
 	select {
@@ -406,6 +446,7 @@ func (s *Service) handleReleaseResponse(ctx context.Context) {
 	}
 
 	_ = s.initiateClose(StateClosed, nil)
+	return nil
 }
 
 // handleAbort processes an A-ABORT PDU.

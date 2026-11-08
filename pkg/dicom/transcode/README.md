@@ -73,7 +73,8 @@ params := codec.NativeParameters{
 
 - `ByteSwapDefault` follows the native codec's transfer-syntax behavior.
 - `ByteSwapDisabled` preserves source byte order.
-- `ByteSwapEnabled` swaps bytes within each 16-bit native OW word.
+- `ByteSwapEnabled` reverses the bytes of each native sample: one 16-bit OW
+  word for 16-bit data, or the full four bytes of a 32-bit sample.
 
 ## Pixel Data
 
@@ -174,9 +175,11 @@ General byte-order conversion is owned by `io/endian`:
 swapped, err := endian.ConvertEndianness(pixelBytes, bytesPerSample)
 ```
 
-Native DICOM Pixel Data with VR OW is different: its endian unit is always one
-16-bit word, even when `BitsAllocated` is 32 or greater. The transcoder handles
-that conversion and callers should not reverse an entire multi-word sample.
+Native DICOM Pixel Data with VR OW is different: 16-bit data is converted by
+reversing each 16-bit word, while a 32-bit sample spans two words and is
+reversed as a whole so its numeric value survives the transfer-syntax change.
+The transcoder handles that conversion per sample; callers should not mix an
+`io/endian` word swap with it.
 
 ## Pixel Data VR
 

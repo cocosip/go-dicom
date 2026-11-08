@@ -51,73 +51,132 @@ func TestPresentationLUT_SetLUT(t *testing.T) {
 	}
 }
 
+// makeTestLUTData returns a conformant identity-ramp LUT Data slice.
+func makeTestLUTData(entries uint16) []uint16 {
+	data := make([]uint16, entries)
+	for index := range data {
+		data[index] = uint16(index)
+	}
+	return data
+}
+
+// setTestLUT configures a conformant print LUT: 256 or 4096 entries with a
+// 10-16 bit entry width (PS3.4 H.4.9.2.1.1.1).
+func setTestLUT(t *testing.T, lut *PresentationLUT, entries, bitsPerEntry uint16) {
+	t.Helper()
+	if err := lut.SetLUT(entries, 0, bitsPerEntry, makeTestLUTData(entries)); err != nil {
+		t.Fatalf("SetLUT() error = %v", err)
+	}
+}
+
 func TestPresentationLUT_IsValid(t *testing.T) {
 	testCases := []struct {
 		name     string
-		setup    func(*PresentationLUT)
+		setup    func(*testing.T, *PresentationLUT)
 		expected bool
 	}{
 		{
 			name:     "valid IDENTITY shape",
-			setup:    func(_ *PresentationLUT) {},
+			setup:    func(_ *testing.T, _ *PresentationLUT) {},
 			expected: true,
 		},
 		{
 			name: "invalid: shape and LUT both present",
-			setup: func(lut *PresentationLUT) {
-				lut.LUTDescriptor = []uint16{2, 0, 12}
-				lut.LUTData = []uint16{10, 20}
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				lut.LUTDescriptor = []uint16{256, 0, 12}
+				lut.LUTData = makeTestLUTData(256)
 			},
 			expected: false,
 		},
 		{
-			name: "valid LUT",
-			setup: func(lut *PresentationLUT) {
-				lutData := []uint16{0, 100, 200, 300, 400}
-				if err := lut.SetLUT(5, 0, 12, lutData); err != nil {
-					t.Fatalf("SetLUT failed: %v", err)
-				}
+			name: "valid 256-entry LUT",
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 256, 12)
 			},
 			expected: true,
 		},
 		{
+			name: "valid 4096-entry LUT",
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 4096, 12)
+				lut.BitsStored = 12
+			},
+			expected: true,
+		},
+		{
+			name: "valid 256-entry LUT for 8-bit images",
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 256, 10)
+				lut.BitsStored = 8
+			},
+			expected: true,
+		},
+		{
+			name: "invalid: 256 entries for 12-bit images",
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 256, 12)
+				lut.BitsStored = 12
+			},
+			expected: false,
+		},
+		{
+			name: "invalid: 4096 entries for 8-bit images",
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 4096, 12)
+				lut.BitsStored = 8
+			},
+			expected: false,
+		},
+		{
+			name: "invalid: 1024 entries",
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 1024, 12)
+			},
+			expected: false,
+		},
+		{
+			name: "invalid: zero entries",
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				lut.LUTDescriptor = []uint16{0, 0, 12}
+				lut.LUTData = makeTestLUTData(256)
+			},
+			expected: false,
+		},
+		{
 			name: "invalid: bits per entry too low",
-			setup: func(lut *PresentationLUT) {
-				lutData := []uint16{0, 100, 200}
-				_ = lut.SetLUT(3, 0, 8, lutData) // 8 < 10
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 256, 8) // 8 < 10
 			},
 			expected: false,
 		},
 		{
 			name: "invalid: bits per entry too high",
-			setup: func(lut *PresentationLUT) {
-				lutData := []uint16{0, 100, 200}
-				if err := lut.SetLUT(3, 0, 20, lutData); err == nil {
-					t.Log("SetLUT accepted bitsPerEntry > 16 as part of invalid case")
-				}
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				setTestLUT(t, lut, 256, 20) // 20 > 16
 			},
 			expected: false,
 		},
 		{
 			name: "invalid: LUT data size mismatch",
-			setup: func(lut *PresentationLUT) {
-				lutData := []uint16{0, 100}       // Only 2 entries
-				_ = lut.SetLUT(5, 0, 12, lutData) // Intentionally mismatch; ignore error for invalid case
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				lut.LUTDescriptor = []uint16{256, 0, 12}
+				lut.LUTData = makeTestLUTData(2) // Intentionally short
 			},
 			expected: false,
 		},
 		{
 			name: "invalid: first value mapped not 0",
-			setup: func(lut *PresentationLUT) {
-				lutData := []uint16{0, 100, 200}
-				_ = lut.SetLUT(3, 10, 12, lutData) // First value = 10
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				_ = lut.SetLUT(256, 10, 12, makeTestLUTData(256))
 			},
 			expected: false,
 		},
 		{
 			name: "invalid: LUT data exceeds declared output range",
-			setup: func(lut *PresentationLUT) {
-				_ = lut.SetLUT(2, 0, 10, []uint16{0, 1024})
+			setup: func(_ *testing.T, lut *PresentationLUT) {
+				data := makeTestLUTData(256)
+				data[255] = 1024
+				_ = lut.SetLUT(256, 0, 10, data)
 			},
 			expected: false,
 		},
@@ -126,7 +185,7 @@ func TestPresentationLUT_IsValid(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			lut := NewPresentationLUT(testSOPInstanceUID)
-			tc.setup(lut)
+			tc.setup(t, lut)
 
 			result := lut.IsValid()
 			if result != tc.expected {
@@ -216,3 +275,4 @@ func TestPresentationLUT_TransformValue_Clamp(t *testing.T) {
 		t.Errorf("Value above range should clamp to last entry (300), got %d", result)
 	}
 }
+

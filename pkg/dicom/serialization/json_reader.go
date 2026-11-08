@@ -69,6 +69,10 @@ func (r *jsonReader) readDataset(data []byte) (*dataset.Dataset, error) {
 		}
 	}
 
+	if err := ds.EnsureUTF8CharacterSet(); err != nil {
+		return nil, fmt.Errorf("set Specific Character Set: %w", err)
+	}
+
 	if r.config.autoValidate {
 		if err := ds.Validate(); err != nil {
 			return nil, fmt.Errorf("DICOM JSON validation failed: %w", err)
@@ -152,7 +156,7 @@ func (r *jsonReader) readValue(t *tag.Tag, vrObj *vr.VR, data json.RawMessage) (
 	case vr.CodeSQ:
 		return r.readSequence(t, data)
 	case vr.CodePN:
-		return r.readPersonName(t, vrObj, data)
+		return r.readPersonName(t, data)
 	case vr.CodeAT:
 		return r.readAttributeTag(t, vrObj, data)
 	case vr.CodeFL:
@@ -215,18 +219,12 @@ func (r *jsonReader) readNumericStringArray(t *tag.Tag, vrObj *vr.VR, data json.
 			values[i] = ""
 			continue
 		}
-		// Try as number first
+		// Try as number first. JSON numbers are read as their exact source text
+		// (json.Number.String()) so a DS value such as 9999999999999999 or 1E+20
+		// is not corrupted by a float64 round-trip (PS3.18 F.2.3).
 		var num json.Number
 		if err := json.Unmarshal(raw, &num); err == nil {
-			if vrObj.Code() == vr.CodeIS {
-				values[i] = num.String()
-			} else {
-				if f, err := num.Float64(); err == nil {
-					values[i] = strconv.FormatFloat(f, 'f', -1, 64)
-				} else {
-					values[i] = num.String()
-				}
-			}
+			values[i] = num.String()
 			continue
 		}
 		// Try as string
@@ -504,7 +502,7 @@ func isUppercaseHex8(s string) bool {
 }
 
 // readPersonName reads a PN (Person Name) array
-func (r *jsonReader) readPersonName(t *tag.Tag, vr *vr.VR, data json.RawMessage) (element.Element, error) {
+func (r *jsonReader) readPersonName(t *tag.Tag, data json.RawMessage) (element.Element, error) {
 	var rawValues []json.RawMessage
 	if err := json.Unmarshal(data, &rawValues); err != nil {
 		return nil, err
@@ -553,7 +551,7 @@ func (r *jsonReader) readPersonName(t *tag.Tag, vr *vr.VR, data json.RawMessage)
 		}
 	}
 
-	return element.NewString(t, vr, values), nil
+	return element.NewPersonName(t, values), nil
 }
 
 // readSequence reads a SQ (Sequence) value
@@ -656,3 +654,4 @@ func (r *jsonReader) createEmptyElement(t *tag.Tag, vrObj *vr.VR) (element.Eleme
 	}
 	return element.NewElementFromBuffer(t, vrObj, buffer.Empty, nil)
 }
+

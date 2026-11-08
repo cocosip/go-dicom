@@ -18473,7 +18473,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x1200),
 		"Gray Lookup Table Data",
 		"GrayLookupTableData",
-		vm.VM1N,
+		vm.MustParse("1-n or 1"),
 		true,
 		vr.US, vr.SS, vr.OW,
 	))
@@ -18833,7 +18833,7 @@ func loadStandardEntries(d *Dictionary) {
 		tag.New(0x0028, 0x3006),
 		"LUT Data",
 		"LUTData",
-		vm.VM1N,
+		vm.MustParse("1-n or 1"),
 		false,
 		vr.US, vr.OW,
 	))
@@ -42788,5 +42788,77 @@ func loadStandardEntries(d *Dictionary) {
 		vm.VM1,
 		false,
 		vr.SQ,
+	))
+	d.Add(NewEntry(
+		tag.New(0x0008, 0x0202),
+		"Retired-blank",
+		"RetiredBlank00080202",
+		vm.VM1,
+		true,
+		vr.None,
+	))
+	d.Add(NewEntry(
+		tag.New(0x0018, 0x0061),
+		"Retired-blank",
+		"RetiredBlank00180061",
+		vm.VM1,
+		true,
+		vr.DS,
+	))
+	d.Add(NewEntry(
+		tag.New(0x0018, 0x9445),
+		"Retired-blank",
+		"RetiredBlank00189445",
+		vm.VM1,
+		true,
+		vr.None,
+	))
+	d.Add(NewEntry(
+		tag.New(0x0028, 0x0020),
+		"Retired-blank",
+		"RetiredBlank00280020",
+		vm.VM1,
+		true,
+		vr.None,
+	))
+	d.Add(NewEntry(
+		tag.New(0x0040, 0xE012),
+		"Display URI",
+		"DisplayURI",
+		vm.VM1,
+		false,
+		vr.UR,
+	))
+	d.Add(NewEntry(
+		tag.New(0x0400, 0x0315),
+		"Retired-blank",
+		"RetiredBlank04000315",
+		vm.VM1,
+		true,
+		vr.FL,
+	))
+	d.Add(NewEntry(
+		tag.New(0x3004, 0x007F),
+		"Dose Calculation Model Name",
+		"DoseCalculationModelName",
+		vm.VM1,
+		false,
+		vr.LO,
+	))
+	d.Add(NewEntry(
+		tag.New(0x300A, 0x0135),
+		"Retired-blank",
+		"RetiredBlank300A0135",
+		vm.VM1,
+		true,
+		vr.None,
+	))
+	d.Add(NewEntry(
+		tag.New(0x300A, 0x0782),
+		"Retired-blank",
+		"RetiredBlank300A0782",
+		vm.VM1,
+		true,
+		vr.US,
 	))
 }

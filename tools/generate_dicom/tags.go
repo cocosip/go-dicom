@@ -26,6 +26,10 @@ var (
 `, dictionary.Version)
 
 	keywords := make(map[string]struct{}, len(dictionary.Tags))
+	// PS3.6 assigns a few retired tag values to two attributes. Emit the first
+	// keyword as the constant and alias the rest to it so each tag value has one
+	// definition and the aliases cannot drift.
+	canonical := make(map[string]string, len(dictionary.Tags))
 	for _, dictionaryTag := range dictionary.Tags {
 		if dictionaryTag.Keyword == "" {
 			return nil, fmt.Errorf("tag (%s,%s) has no keyword", dictionaryTag.Group, dictionaryTag.Element)
@@ -37,6 +41,25 @@ var (
 		keywords[identifier] = struct{}{}
 
 		description := strings.Join(strings.Fields(dictionaryTag.Name), " ")
+		value := strictNumericTagPart(dictionaryTag.Group) + ", " + strictNumericTagPart(dictionaryTag.Element)
+		if first, exists := canonical[value]; exists {
+			fmt.Fprintf(
+				&output,
+				"\t// %s (%s,%s) VR=%s VM=%s %s\n\t// Alias of %s, which PS3.6 also assigns to this tag value.\n\t%s = %s\n\n",
+				identifier,
+				dictionaryTag.Group,
+				dictionaryTag.Element,
+				dictionaryTag.VR,
+				dictionaryTag.VM,
+				description,
+				first,
+				identifier,
+				first,
+			)
+			continue
+		}
+		canonical[value] = identifier
+
 		fmt.Fprintf(
 			&output,
 			"\t// %s (%s,%s) VR=%s VM=%s %s\n\t%s = New(0x%s, 0x%s)\n\n",
@@ -73,3 +96,4 @@ func formatGenerated(name string, source []byte) ([]byte, error) {
 	}
 	return formatted, nil
 }
+

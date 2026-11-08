@@ -258,8 +258,12 @@ func (f *Fetcher) newRequest(ctx context.Context, method string) (*http.Request,
 	return req, nil
 }
 
+// ifRangeValidator returns the validator to use for If-Range.
+//
+// RFC 9110 Section 13.1.5 forbids weak entity tags in If-Range, so a weak ETag
+// (W/"...") is skipped in favour of Last-Modified.
 func (f *Fetcher) ifRangeValidator() string {
-	if f.etag != "" {
+	if f.etag != "" && !strings.HasPrefix(f.etag, "W/") {
 		return f.etag
 	}
 	return f.lastModified

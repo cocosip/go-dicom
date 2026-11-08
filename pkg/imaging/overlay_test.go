@@ -4,10 +4,43 @@
 package imaging
 
 import (
+	"encoding/binary"
 	"testing"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 )
+
+// TestOverlayDataOtherWordBytesAreSwappedForBigEndian verifies IMG-14: Overlay
+// Data is OW, so a big-endian element's words must be swapped into the little-
+// endian bit stream the renderer unpacks.
+func TestOverlayDataOtherWordBytesAreSwappedForBigEndian(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.New(0x6000, 0x0010), []uint16{16}),
+		element.NewUnsignedShort(tag.New(0x6000, 0x0011), []uint16{1}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+	data := element.NewOtherWord(tag.New(0x6000, 0x3000), []byte{0x00, 0xFF})
+	element.SetByteOrder(data, binary.BigEndian)
+	if err := ds.Add(data); err != nil {
+		t.Fatalf("add Overlay Data: %v", err)
+	}
+
+	overlays := imageOverlays(ds, nil)
+	if len(overlays) != 1 {
+		t.Fatalf("imageOverlays() returned %d overlays, want 1", len(overlays))
+	}
+	if got := overlays[0].Data; len(got) != 2 || got[0] != 0xFF || got[1] != 0x00 {
+		t.Fatalf("overlay data = % x, want ff 00 after OW byte swap", got)
+	}
+}
 
 func TestOverlayType_String(t *testing.T) {
 	testCases := []struct {

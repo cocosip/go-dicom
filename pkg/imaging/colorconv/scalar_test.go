@@ -5,6 +5,7 @@ package colorconv
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"testing"
 
@@ -139,23 +140,16 @@ func TestRGBToYBRICT(t *testing.T) {
 	r, g, b := uint8(100), uint8(150), uint8(200)
 	y, cb, cr := RGBToYBRICT(r, g, b)
 
-	// Verify basic properties
-	// Y should be roughly average of RGB
-	expectedY := (int16(r) + 2*int16(g) + int16(b)) / 4
-	if y != expectedY {
-		t.Errorf("Y mismatch: expected %d, got %d", expectedY, y)
+	// JPEG 2000 irreversible color transform (PS3.3 C.7.6.3.1.3).
+	rf, gf, bf := float64(r), float64(g), float64(b)
+	if want := int16(math.Round(0.299*rf + 0.587*gf + 0.114*bf)); y != want {
+		t.Errorf("Y mismatch: want %d, got %d", want, y)
 	}
-
-	// Cb = B - G
-	expectedCb := int16(b) - int16(g)
-	if cb != expectedCb {
-		t.Errorf("Cb mismatch: expected %d, got %d", expectedCb, cb)
+	if want := int16(math.Round(-0.1687*rf - 0.3313*gf + 0.5*bf)); cb != want {
+		t.Errorf("Cb mismatch: want %d, got %d", want, cb)
 	}
-
-	// Cr = R - G
-	expectedCr := int16(r) - int16(g)
-	if cr != expectedCr {
-		t.Errorf("Cr mismatch: expected %d, got %d", expectedCr, cr)
+	if want := int16(math.Round(0.5*rf - 0.4187*gf - 0.0813*bf)); cr != want {
+		t.Errorf("Cr mismatch: want %d, got %d", want, cr)
 	}
 }
 
@@ -263,6 +257,43 @@ func TestConvertToRGBInterleavesPlanarRGB(t *testing.T) {
 	}
 	if !bytes.Equal(got, want) {
 		t.Fatalf("ConvertToRGB() = %v, want interleaved %v", got, want)
+	}
+}
+
+func TestConvertToRGBWithBitDepthHonorsStoredBits(t *testing.T) {
+	// Two RGB pixels of 12-bit samples 4095 and 2048, right-justified in
+	// 16-bit words (High Bit = 11).
+	data := make([]byte, 12)
+	for sample := 0; sample < 3; sample++ {
+		binary.LittleEndian.PutUint16(data[sample*2:], 4095)
+		binary.LittleEndian.PutUint16(data[(sample+3)*2:], 2048)
+	}
+	got, err := ConvertToRGBWithBitDepth(
+		data, 2, 1, *pixel.RGBPhotometric, pixel.InterleavedPlanar, 16, 12, 11,
+	)
+	if err != nil {
+		t.Fatalf("ConvertToRGBWithBitDepth() error = %v", err)
+	}
+	want := []byte{255, 255, 255, 128, 128, 128}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("ConvertToRGBWithBitDepth() = %v, want %v", got, want)
+	}
+}
+
+func TestConvertToRGBWithBitDepthHonorsHighBit(t *testing.T) {
+	// The same 12-bit samples left-justified in the 16-bit word (High Bit = 15).
+	data := make([]byte, 6)
+	for sample := 0; sample < 3; sample++ {
+		binary.LittleEndian.PutUint16(data[sample*2:], 4095<<4)
+	}
+	got, err := ConvertToRGBWithBitDepth(
+		data, 1, 1, *pixel.RGBPhotometric, pixel.InterleavedPlanar, 16, 12, 15,
+	)
+	if err != nil {
+		t.Fatalf("ConvertToRGBWithBitDepth() error = %v", err)
+	}
+	if want := []byte{255, 255, 255}; !bytes.Equal(got, want) {
+		t.Fatalf("ConvertToRGBWithBitDepth() = %v, want %v", got, want)
 	}
 }
 

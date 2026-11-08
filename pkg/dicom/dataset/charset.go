@@ -51,6 +51,39 @@ func (ds *Dataset) SetSpecificCharacterSet(values ...string) error {
 	return ds.AddOrUpdate(element.NewString(tag.SpecificCharacterSet, vr.CS, normalized))
 }
 
+// EnsureUTF8CharacterSet declares ISO_IR 192 (UTF-8) when the Dataset, or a
+// nested sequence item, holds a string value that element.NewString had to
+// encode as UTF-8 fallback bytes. Writing those bytes without a matching
+// (0008,0005) is non-conformant (PS3.3 C.12.1, Table C.12-1) and corrupts the
+// value for every conformant reader.
+func (ds *Dataset) EnsureUTF8CharacterSet() error {
+	if ds == nil || !ds.needsUTF8() {
+		return nil
+	}
+	if declared := ds.SpecificCharacterSet(); len(declared) == 1 && declared[0] == "ISO_IR 192" {
+		return nil
+	}
+	return ds.SetSpecificCharacterSet("ISO_IR 192")
+}
+
+func (ds *Dataset) needsUTF8() bool {
+	for _, elem := range ds.Elements() {
+		if element.NeedsCharacterSet(elem) {
+			return true
+		}
+		sequence, ok := elem.(*Sequence)
+		if !ok {
+			continue
+		}
+		for i := 0; i < sequence.Count(); i++ {
+			if item := sequence.GetItem(i); item != nil && item.needsUTF8() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func isSingleValueCharacterSet(value string) bool {
 	switch value {
 	case "ISO_IR 192", "GB18030", "GBK":

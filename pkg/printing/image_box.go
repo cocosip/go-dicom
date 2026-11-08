@@ -5,6 +5,7 @@ package printing
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -162,7 +163,9 @@ func NewImageBox(sopInstanceUID string, isColor bool) *ImageBox {
 }
 
 // ValidateImageAttributes checks that the preformatted image sequence carries
-// the Image Pixel Macro attributes required by PS3.3 C.7.6.3 / C.13.5.
+// the Image Box Pixel Presentation Module attributes with values permitted by
+// PS3.3 C.13.5, Table C.13-5. Pixel conversion is the caller's responsibility:
+// an invalid image is rejected instead of being sent unconverted.
 func (ib *ImageBox) ValidateImageAttributes() error {
 	if ib == nil {
 		return fmt.Errorf("printing: nil ImageBox")
@@ -187,7 +190,118 @@ func (ib *ImageBox) ValidateImageAttributes() error {
 			return fmt.Errorf("printing: image box sequence is missing required attribute %s", requiredTag)
 		}
 	}
+	if ib.IsColor {
+		return validateColorImageAttributes(sequence)
+	}
+	return validateGrayscaleImageAttributes(sequence)
+}
+
+func validateGrayscaleImageAttributes(sequence *dataset.Dataset) error {
+	samplesPerPixel, err := uint16ImageAttribute(sequence, tag.SamplesPerPixel)
+	if err != nil {
+		return err
+	}
+	if samplesPerPixel != 1 {
+		return fmt.Errorf("printing: grayscale image box requires Samples per Pixel 1, got %d", samplesPerPixel)
+	}
+	photometric, err := stringImageAttribute(sequence, tag.PhotometricInterpretation)
+	if err != nil {
+		return err
+	}
+	if photometric != "MONOCHROME1" && photometric != "MONOCHROME2" {
+		return fmt.Errorf("printing: grayscale image box requires MONOCHROME1 or MONOCHROME2, got %q", photometric)
+	}
+	bitsStored, err := uint16ImageAttribute(sequence, tag.BitsStored)
+	if err != nil {
+		return err
+	}
+	var bitsAllocated, highBit uint16
+	switch bitsStored {
+	case 8:
+		bitsAllocated, highBit = 8, 7
+	case 12:
+		bitsAllocated, highBit = 16, 11
+	default:
+		return fmt.Errorf("printing: grayscale image box requires Bits Stored 8 or 12, got %d", bitsStored)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.BitsAllocated); err != nil {
+		return err
+	} else if value != bitsAllocated {
+		return fmt.Errorf("printing: grayscale image box with Bits Stored %d requires Bits Allocated %d, got %d", bitsStored, bitsAllocated, value)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.HighBit); err != nil {
+		return err
+	} else if value != highBit {
+		return fmt.Errorf("printing: grayscale image box with Bits Stored %d requires High Bit %d, got %d", bitsStored, highBit, value)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.PixelRepresentation); err != nil {
+		return err
+	} else if value != 0 {
+		return fmt.Errorf("printing: image box requires Pixel Representation 0, got %d", value)
+	}
+	if _, ok := sequence.Get(tag.PlanarConfiguration); ok {
+		return fmt.Errorf("printing: grayscale image box must not carry Planar Configuration")
+	}
 	return nil
+}
+
+func validateColorImageAttributes(sequence *dataset.Dataset) error {
+	samplesPerPixel, err := uint16ImageAttribute(sequence, tag.SamplesPerPixel)
+	if err != nil {
+		return err
+	}
+	if samplesPerPixel != 3 {
+		return fmt.Errorf("printing: color image box requires Samples per Pixel 3, got %d", samplesPerPixel)
+	}
+	photometric, err := stringImageAttribute(sequence, tag.PhotometricInterpretation)
+	if err != nil {
+		return err
+	}
+	if photometric != "RGB" {
+		return fmt.Errorf("printing: color image box requires Photometric Interpretation RGB, got %q", photometric)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.PlanarConfiguration); err != nil {
+		return err
+	} else if value != 1 {
+		return fmt.Errorf("printing: color image box requires Planar Configuration 1, got %d", value)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.BitsAllocated); err != nil {
+		return err
+	} else if value != 8 {
+		return fmt.Errorf("printing: color image box requires Bits Allocated 8, got %d", value)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.BitsStored); err != nil {
+		return err
+	} else if value != 8 {
+		return fmt.Errorf("printing: color image box requires Bits Stored 8, got %d", value)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.HighBit); err != nil {
+		return err
+	} else if value != 7 {
+		return fmt.Errorf("printing: color image box requires High Bit 7, got %d", value)
+	}
+	if value, err := uint16ImageAttribute(sequence, tag.PixelRepresentation); err != nil {
+		return err
+	} else if value != 0 {
+		return fmt.Errorf("printing: image box requires Pixel Representation 0, got %d", value)
+	}
+	return nil
+}
+
+func uint16ImageAttribute(sequence *dataset.Dataset, attributeTag *tag.Tag) (uint16, error) {
+	value, err := sequence.GetUInt16(attributeTag, 0)
+	if err != nil {
+		return 0, fmt.Errorf("printing: image box sequence attribute %s: %w", attributeTag, err)
+	}
+	return value, nil
+}
+
+func stringImageAttribute(sequence *dataset.Dataset, attributeTag *tag.Tag) (string, error) {
+	value, ok := sequence.GetString(attributeTag)
+	if !ok {
+		return "", fmt.Errorf("printing: image box sequence attribute %s is not a string", attributeTag)
+	}
+	return strings.TrimSpace(value), nil
 }
 
 // SetImageData sets the image data for the Image Box

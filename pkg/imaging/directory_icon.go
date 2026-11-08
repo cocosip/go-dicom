@@ -44,6 +44,10 @@ func (g *DirectoryIconGenerator) GenerateDirectoryIcon(ds *dataset.Dataset, fram
 	}
 
 	dicomImage := NewDicomImage(pixelData)
+	// Attach the dataset so a DICOMDIR icon honors stored Window Center/Width,
+	// VOI LUT and Rescale Slope/Intercept instead of falling back to a
+	// data-derived window.
+	dicomImage.dataset = ds.Clone()
 	if pixelData.Info.Encapsulated {
 		if g.registry == nil {
 			return 0, 0, nil, fmt.Errorf("directory icon codec registry is nil")

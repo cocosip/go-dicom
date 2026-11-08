@@ -102,8 +102,8 @@ var (
 		implementationClassUID    string
 		implementationVersionName string
 	}{
-		implementationClassUID:    "1.2.826.0.1.3680043.10.1142", // Default UID
-		implementationVersionName: "GO-DICOM_1.0",                // Default version
+		implementationClassUID:    uid.GoDicomImplementationClassUID, // Default Implementation Class UID
+		implementationVersionName: uid.GoDicomImplementationVersionName, // Default Implementation Version Name
 	}
 )
 
@@ -185,7 +185,7 @@ type writeConfig struct {
 	keepGroupLengths            bool   // Keep group length tags (0xGGGG,0x0000) (default: false)
 	largeObjectSize             uint32 // Threshold for large objects (default: 1MB)
 	implementationClassUID      string // Implementation Class UID (default: auto-generated)
-	implementationVersionName   string // Implementation Version Name (default: GO-DICOM_1.0)
+	implementationVersionName   string // Implementation Version Name (default: uid.GoDicomImplementationVersionName)
 	sequenceItemObserver        SequenceItemObserver
 }
 
@@ -472,6 +472,9 @@ func WriteContext(ctx context.Context, w io.Writer, ds *dataset.Dataset, opts ..
 		if err := synchronizeFileMetaSOPUIDs(fileMetaInfo, ds); err != nil {
 			return err
 		}
+		if err := validateFileMetaInformation(fileMetaInfo); err != nil {
+			return err
+		}
 	}
 
 	// Write preamble and File Meta Information if requested
@@ -573,10 +576,14 @@ func containsExtendedBytes(data []byte) bool {
 }
 
 func validatePixelDataTransferSyntax(ds *dataset.Dataset, ts *transfer.Syntax) error {
+	hasTopLevelPixelData := false
 	for _, pixelTag := range []*tag.Tag{tag.PixelData, tag.FloatPixelData, tag.DoubleFloatPixelData} {
 		pixelData, exists := ds.Get(pixelTag)
 		if !exists {
 			continue
+		}
+		if pixelTag == tag.PixelData {
+			hasTopLevelPixelData = true
 		}
 
 		encapsulated := false
@@ -586,6 +593,41 @@ func validatePixelDataTransferSyntax(ds *dataset.Dataset, ts *transfer.Syntax) e
 		}
 		if encapsulated != ts.IsEncapsulated() {
 			return fmt.Errorf("pixel data representation for tag %s is incompatible with transfer syntax %s", pixelTag, ts.UID().String())
+		}
+		if encapsulated && ts.IsEncapsulated() {
+			valueRepresentation := pixelData.ValueRepresentation()
+			if valueRepresentation != vr.OB && valueRepresentation != vr.OW {
+				return fmt.Errorf("encapsulated pixel data for tag %s must use VR OB, got %s", pixelTag, valueRepresentation)
+			}
+		}
+	}
+	// PS3.5 A.4: an encapsulated transfer syntax shall only be used when
+	// Pixel Data (7FE0,0010) is present in the top-level Data Set.
+	if ts.IsEncapsulated() && !hasTopLevelPixelData {
+		return fmt.Errorf("transfer syntax %s encapsulates pixel data but the dataset has no top-level Pixel Data (7FE0,0010)",
+			ts.UID().String())
+	}
+	return nil
+}
+
+// validateFileMetaInformation enforces the PS3.10 Table 7.1-1 Type 1 values
+// that the writer cannot synthesize for a caller-supplied File Meta Information
+// dataset, and forbids VR UN in group 0002 (PS3.5 6.2.2).
+func validateFileMetaInformation(fileMetaInfo *dataset.Dataset) error {
+	version, exists := fileMetaInfo.Get(tag.FileMetaInformationVersion)
+	if !exists || version.Buffer() == nil || version.Buffer().Size() == 0 {
+		return fmt.Errorf("file meta information is missing required non-empty FileMetaInformationVersion (0002,0001)")
+	}
+	implementationClassUID, ok := fileMetaInfo.GetString(tag.ImplementationClassUID)
+	if !ok || implementationClassUID == "" {
+		return fmt.Errorf("file meta information is missing required non-empty ImplementationClassUID (0002,0012)")
+	}
+	for _, elem := range fileMetaInfo.Elements() {
+		if elem.Tag().Group() != 0x0002 {
+			continue
+		}
+		if valueRepresentation := elem.ValueRepresentation(); valueRepresentation != nil && valueRepresentation.Code() == vr.CodeUN {
+			return fmt.Errorf("file meta information tag %s must not use VR UN", elem.Tag())
 		}
 	}
 	return nil
@@ -687,7 +729,7 @@ func (w *Writer) generateFileMetaInformation() *dataset.Dataset {
 	// Use configured value or default
 	implClassUID := w.implementationClassUID
 	if implClassUID == "" {
-		implClassUID = "1.2.826.0.1.3680043.10.1142" // Default UID
+		implClassUID = uid.GoDicomImplementationClassUID // Default Implementation Class UID
 	}
 	_ = fileMetaInfo.Add(element.NewString(tag.ImplementationClassUID, vr.UI,
 		[]string{implClassUID}))
@@ -696,7 +738,7 @@ func (w *Writer) generateFileMetaInformation() *dataset.Dataset {
 	// Use configured value or default
 	implVersionName := w.implementationVersionName
 	if implVersionName == "" {
-		implVersionName = "GO-DICOM_1.0" // Default version
+		implVersionName = uid.GoDicomImplementationVersionName // Default Implementation Version Name
 	}
 	_ = fileMetaInfo.Add(element.NewString(tag.ImplementationVersionName, vr.SH,
 		[]string{implVersionName}))
@@ -1103,3 +1145,4 @@ func (c *byteCountingWriter) Write(p []byte) (int, error) {
 	c.n += int64(n)
 	return n, err
 }
+

@@ -50,14 +50,13 @@ func TestNewDirectoryCreatesRequiredMediaStorageMetadata(t *testing.T) {
 	}
 }
 
-func TestNewDirectoryAcceptsOnlyFoDicomDirectoryTransferSyntaxes(t *testing.T) {
-	for _, ts := range []*transfer.Syntax{transfer.ExplicitVRLittleEndian, transfer.ImplicitVRLittleEndian} {
-		if _, err := NewDirectory(WithTransferSyntax(ts)); err != nil {
-			t.Fatalf("NewDirectory(%s) error = %v", ts, err)
-		}
+func TestNewDirectoryAcceptsOnlyExplicitVRLittleEndian(t *testing.T) {
+	if _, err := NewDirectory(WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+		t.Fatalf("NewDirectory(Explicit VR Little Endian) error = %v", err)
 	}
 
 	for _, ts := range []*transfer.Syntax{
+		transfer.ImplicitVRLittleEndian,
 		transfer.ExplicitVRBigEndian,
 		transfer.DeflatedExplicitVRLittleEndian,
 		transfer.JPEGBaseline8Bit,

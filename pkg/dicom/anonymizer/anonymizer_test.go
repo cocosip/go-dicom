@@ -382,7 +382,7 @@ func TestAnonymizerAddsTopLevelDeidentificationDeclaration(t *testing.T) {
 	if err := NewAnonymizer(nil).AnonymizeInPlace(ds); err != nil {
 		t.Fatalf("AnonymizeInPlace() error = %v", err)
 	}
-	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != "YES" {
+	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != testPatientRemovedYes {
 		t.Errorf("PatientIdentityRemoved = %q, want YES", got)
 	}
 	if got, _ := ds.GetString(tag.DeidentificationMethod); got == "" {
@@ -521,7 +521,7 @@ func TestExplicitKeepWithConfiguredReplacementReportsIdentityRemoved(t *testing.
 	if got, _ := ds.GetString(tag.PatientID); got != profile.PatientID {
 		t.Errorf("PatientID = %q, want configured replacement", got)
 	}
-	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != "YES" {
+	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != testPatientRemovedYes {
 		t.Errorf("PatientIdentityRemoved = %q, want YES", got)
 	}
 }
@@ -810,3 +810,4 @@ func TestAnonymizerRetainFullDatesKeepsValuesAndMarksUnmodified(t *testing.T) {
 		t.Fatalf("(0028,0303) = %q,%v, want UNMODIFIED", got, ok)
 	}
 }
+

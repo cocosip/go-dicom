@@ -262,6 +262,22 @@ func TestParseMaskedTag(t *testing.T) {
 			false,
 		},
 		{
+			"uppercase wildcards",
+			"(0028,Xx10)",
+			0x0028,
+			0x0010,
+			0xFFFF00FF,
+			false,
+		},
+		{
+			"uppercase repeating group",
+			"(60XX,3000)",
+			0x6000,
+			0x3000,
+			0xFF00FFFF,
+			false,
+		},
+		{
 			"without parentheses",
 			"0028,xx10",
 			0x0028,

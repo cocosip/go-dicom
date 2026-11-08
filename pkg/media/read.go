@@ -8,8 +8,10 @@ import (
 	"io"
 	"math"
 	"os"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
@@ -95,19 +97,37 @@ func Read(r io.Reader, options ...OpenOption) (*Directory, error) {
 		return nil, err
 	}
 
-	sequence, err := result.Dataset.GetSequence(tag.DirectoryRecordSequence)
-	if err != nil {
-		return nil, fmt.Errorf("read Directory Record Sequence: %w", err)
+	_, hasDirectoryRecords := result.Dataset.Get(tag.DirectoryRecordSequence)
+	records := make([]*Record, 0)
+	diagnostics := make([]Diagnostic, 0)
+	if hasDirectoryRecords {
+		sequence, err := result.Dataset.GetSequence(tag.DirectoryRecordSequence)
+		if err != nil {
+			return nil, fmt.Errorf("read Directory Record Sequence: %w", err)
+		}
+		records, diagnostics, err = recordsFromSequence(sequence, positions)
+		if err != nil {
+			return nil, err
+		}
+		// PS3.3 F.3.2.2, Table F.3-3: FFFFH "shall never be present"; this
+		// reader writes exact offsets, so normalize the consistency flag.
+		if err := result.Dataset.AddOrUpdate(element.NewUnsignedShort(tag.FileSetConsistencyFlag, []uint16{0})); err != nil {
+			return nil, fmt.Errorf("normalize File-set Consistency Flag: %w", err)
+		}
 	}
-	records, diagnostics, err := recordsFromSequence(sequence, positions)
-	if err != nil {
-		return nil, err
+
+	// PS3.3 F.3.1 marks the Directory Information Module Usage U, so a
+	// conformant File-set may contain only File-set Identification. Treat the
+	// absent module as an empty directory instead of rejecting the file.
+	var roots []*Record
+	if hasDirectoryRecords {
+		repairDiagnostics := []Diagnostic(nil)
+		roots, repairDiagnostics, err = buildRecordTree(result.Dataset, records, config.offsetPolicy)
+		if err != nil {
+			return nil, err
+		}
+		diagnostics = append(diagnostics, repairDiagnostics...)
 	}
-	roots, repairDiagnostics, err := buildRecordTree(result.Dataset, records, config.offsetPolicy)
-	if err != nil {
-		return nil, err
-	}
-	diagnostics = append(diagnostics, repairDiagnostics...)
 
 	return &Directory{
 		dataset:        result.Dataset,
@@ -115,7 +135,22 @@ func Read(r io.Reader, options ...OpenOption) (*Directory, error) {
 		transferSyntax: result.TransferSyntax,
 		roots:          roots,
 		diagnostics:    diagnostics,
+		fileIDs:        referencedFileIDs(records),
 	}, nil
+}
+
+// referencedFileIDs collects the File IDs already referenced by records so
+// AddFile can reject duplicates (PS3.3 F.2.1 rule 6).
+func referencedFileIDs(records []*Record) map[string]struct{} {
+	fileIDs := make(map[string]struct{}, len(records))
+	for _, record := range records {
+		components, ok := record.dataset.GetStrings(tag.ReferencedFileID)
+		if !ok || len(components) == 0 {
+			continue
+		}
+		fileIDs[strings.Join(components, "/")] = struct{}{}
+	}
+	return fileIDs
 }
 
 func recordsFromSequence(sequence *dataset.Sequence, positions map[*dataset.Dataset]uint64) ([]*Record, []Diagnostic, error) {
@@ -142,6 +177,13 @@ func recordsFromSequence(sequence *dataset.Sequence, positions map[*dataset.Data
 			return nil, nil, fmt.Errorf("directory record at offset %d has no Directory Record Type", offset)
 		}
 		recordType := RecordType(recordTypeValue)
+		// PS3.3 F.3.2.2, Table F.3-3: 0000H "shall never be present"; any other
+		// value shall be interpreted as FFFFH, so normalize on read.
+		if inUse, err := item.GetUInt16(tag.RecordInUseFlag, 0); err != nil || inUse != 0xFFFF {
+			if err := item.AddOrUpdate(element.NewUnsignedShort(tag.RecordInUseFlag, []uint16{0xFFFF})); err != nil {
+				return nil, nil, fmt.Errorf("normalize Record In-use Flag at offset %d: %w", offset, err)
+			}
+		}
 		records = append(records, newRecord(recordType, item, offset))
 		if !knownRecordType(recordType) {
 			diagnostics = append(diagnostics, Diagnostic{

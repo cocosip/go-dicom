@@ -42,8 +42,13 @@
 //	// Write without preamble (for network transmission)
 //	err := writer.Write(w, ds, writer.WithoutPreamble())
 //
-//	// Custom File Meta Information
+//	// Custom File Meta Information. Caller-supplied File Meta Information must
+//	// contain the PS3.10 Type 1 elements the writer does not synthesize,
+//	// including FileMetaInformationVersion and ImplementationClassUID.
 //	fileMetaInfo := dataset.New()
+//	fileMetaInfo.Add(element.NewOtherByte(tag.FileMetaInformationVersion, []byte{0x00, 0x01}))
+//	fileMetaInfo.Add(element.NewString(tag.ImplementationClassUID, vr.UI,
+//	    []string{"1.2.840.12345.1.2.3"}))
 //	fileMetaInfo.Add(element.NewString(tag.SourceApplicationEntityTitle, vr.AE,
 //	    []string{"MY_WORKSTATION"}))
 //	err := writer.Write(w, ds, writer.WithFileMetaInfo(fileMetaInfo))

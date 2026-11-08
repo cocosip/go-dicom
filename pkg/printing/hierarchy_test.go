@@ -85,13 +85,13 @@ func TestFilmSessionHierarchyRejectsDuplicateUIDs(t *testing.T) {
 }
 
 func TestFilmSessionCloneIsIndependentAndReparentsChildren(t *testing.T) {
-	source := NewFilmSession("", "2.25.220", true)
+	source := NewFilmSession("", "2.25.220", false)
 	source.FilmSessionLabel = "source"
 	box := NewFilmBox("2.25.221", testStandardOneByOne)
 	box.ConfigurationInformation = "CS321"
 	box.AnnotationDisplayFormatID = "ANNOTATION_2"
 	box.ReferencedPresentationLUT = SOPReference{SOPClassUID: presentationLUTSOPClassUID, SOPInstanceUID: "2.25.223"}
-	image := NewImageBox("2.25.222", true)
+	image := NewImageBox("2.25.222", false)
 	image.ImageBoxPosition = 1
 	maxDensity := uint16(0)
 	image.MaxDensity = &maxDensity
@@ -108,9 +108,7 @@ func TestFilmSessionCloneIsIndependentAndReparentsChildren(t *testing.T) {
 	box.AddImageBox(image)
 	source.AddFilmBox(box)
 	lut := NewPresentationLUT("2.25.223")
-	if err := lut.SetLUT(2, 0, 12, []uint16{11, 22}); err != nil {
-		t.Fatalf("SetLUT() error = %v", err)
-	}
+	setTestLUT(t, lut, 256, 12)
 	source.AddPresentationLUT(lut)
 
 	clone, err := source.Clone()
@@ -130,7 +128,7 @@ func TestFilmSessionCloneIsIndependentAndReparentsChildren(t *testing.T) {
 		t.Fatal("Clone() retained source parent references")
 	}
 
-	image.PreformattedColorImageSequence[0] = 99
+	image.PreformattedGrayscaleImageSequence[0] = 99
 	lut.LUTData[0] = 99
 	box.ConfigurationInformation = "changed"
 	cloneImageSequence, err := cloneImage.ImageSequence()
@@ -139,7 +137,7 @@ func TestFilmSessionCloneIsIndependentAndReparentsChildren(t *testing.T) {
 	}
 	rows, rowsErr := cloneImageSequence.GetUInt16(tag.Rows, 0)
 	if cloneImage.GetImageData()[0] != 5 || cloneImage.MaxDensity == nil || *cloneImage.MaxDensity != 0 ||
-		rowsErr != nil || rows != 1 || cloneLUT.LUTData[0] != 11 ||
+		rowsErr != nil || rows != 1 || cloneLUT.LUTData[0] != 0 ||
 		cloneBox.ConfigurationInformation != "CS321" || cloneBox.AnnotationDisplayFormatID != "ANNOTATION_2" ||
 		cloneBox.ReferencedPresentationLUT.SOPInstanceUID != "2.25.223" {
 		t.Fatal("Clone() aliases source state")

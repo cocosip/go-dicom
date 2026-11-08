@@ -67,6 +67,8 @@ func TestWriteUsesDatasetTransferSyntaxAndSyncsFileMeta(t *testing.T) {
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Meta^Sync"}))
 
 	fmi := dataset.New()
+	_ = fmi.Add(element.NewOtherByte(tag.FileMetaInformationVersion, []byte{0x00, 0x01}))
+	_ = fmi.Add(element.NewString(tag.ImplementationClassUID, vr.UI, []string{testImplementationClassUID}))
 	_ = fmi.Add(element.NewString(tag.TransferSyntaxUID, vr.UI,
 		[]string{transfer.ExplicitVRLittleEndian.UID().String()}))
 
@@ -678,11 +680,86 @@ func TestWritePart10AllowsDICOMDIRIdentityInFileMetaOnly(t *testing.T) {
 	ds := dataset.New()
 	_ = ds.Add(element.NewString(tag.FileSetID, vr.CS, []string{"TEST"}))
 	fmi := dataset.New()
+	_ = fmi.Add(element.NewOtherByte(tag.FileMetaInformationVersion, []byte{0x00, 0x01}))
+	_ = fmi.Add(element.NewString(tag.ImplementationClassUID, vr.UI, []string{testImplementationClassUID}))
 	_ = fmi.Add(element.NewString(tag.MediaStorageSOPClassUID, vr.UI, []string{uid.MediaStorageDirectoryStorage.UID()}))
 	_ = fmi.Add(element.NewString(tag.MediaStorageSOPInstanceUID, vr.UI, []string{testSOPInstanceUID}))
 
 	if err := Write(&bytes.Buffer{}, ds, WithFileMetaInfo(fmi)); err != nil {
 		t.Fatalf("Write() rejected standard DICOMDIR identity placement: %v", err)
+	}
+}
+
+func TestWriteValidatesCallerSuppliedFileMetaInformation(t *testing.T) {
+	newFMI := func() *dataset.Dataset {
+		fmi := dataset.New()
+		_ = fmi.Add(element.NewOtherByte(tag.FileMetaInformationVersion, []byte{0x00, 0x01}))
+		_ = fmi.Add(element.NewString(tag.ImplementationClassUID, vr.UI, []string{testImplementationClassUID}))
+		return fmi
+	}
+	newDataset := func() *dataset.Dataset {
+		ds := dataset.New()
+		addTestSOPUIDs(t, ds)
+		return ds
+	}
+
+	t.Run("missing File Meta Information Version", func(t *testing.T) {
+		fmi := dataset.New()
+		_ = fmi.Add(element.NewString(tag.ImplementationClassUID, vr.UI, []string{testImplementationClassUID}))
+		err := Write(&bytes.Buffer{}, newDataset(), WithFileMetaInfo(fmi))
+		if err == nil || !strings.Contains(err.Error(), "FileMetaInformationVersion") {
+			t.Fatalf("Write() error = %v, want missing FileMetaInformationVersion", err)
+		}
+	})
+
+	t.Run("empty File Meta Information Version", func(t *testing.T) {
+		fmi := newFMI()
+		_ = fmi.AddOrUpdate(element.NewOtherByte(tag.FileMetaInformationVersion, nil))
+		err := Write(&bytes.Buffer{}, newDataset(), WithFileMetaInfo(fmi))
+		if err == nil || !strings.Contains(err.Error(), "FileMetaInformationVersion") {
+			t.Fatalf("Write() error = %v, want empty FileMetaInformationVersion rejection", err)
+		}
+	})
+
+	t.Run("missing Implementation Class UID", func(t *testing.T) {
+		fmi := dataset.New()
+		_ = fmi.Add(element.NewOtherByte(tag.FileMetaInformationVersion, []byte{0x00, 0x01}))
+		err := Write(&bytes.Buffer{}, newDataset(), WithFileMetaInfo(fmi))
+		if err == nil || !strings.Contains(err.Error(), "ImplementationClassUID") {
+			t.Fatalf("Write() error = %v, want missing ImplementationClassUID", err)
+		}
+	})
+
+	t.Run("UN value representation", func(t *testing.T) {
+		fmi := newFMI()
+		fmi.SetAutoValidate(false)
+		if err := fmi.Add(element.NewString(tag.New(0x0002, 0x1000), vr.UN, []string{"x"})); err != nil {
+			t.Fatalf("Add(UN) error: %v", err)
+		}
+		err := Write(&bytes.Buffer{}, newDataset(), WithFileMetaInfo(fmi))
+		if err == nil || !strings.Contains(err.Error(), "UN") {
+			t.Fatalf("Write() error = %v, want VR UN rejection", err)
+		}
+	})
+
+	t.Run("valid File Meta Information", func(t *testing.T) {
+		if err := Write(&bytes.Buffer{}, newDataset(), WithFileMetaInfo(newFMI())); err != nil {
+			t.Fatalf("Write() rejected valid File Meta Information: %v", err)
+		}
+	})
+}
+
+func TestWriteRejectsEncapsulatedTransferSyntaxWithoutPixelData(t *testing.T) {
+	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
+	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
+
+	err := Write(&bytes.Buffer{}, ds, WithTransferSyntax(transfer.JPEGBaseline8Bit))
+	if err == nil {
+		t.Fatal("Write() accepted an encapsulated transfer syntax without top-level Pixel Data")
+	}
+	if !strings.Contains(err.Error(), "Pixel Data") {
+		t.Fatalf("Write() error = %v, want missing Pixel Data error", err)
 	}
 }
 

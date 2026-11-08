@@ -5,6 +5,8 @@ package writer
 
 import (
 	"bytes"
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -61,12 +63,11 @@ func testWriteFragmentSequenceSingleFrame(t *testing.T) {
 	obf := element.NewOtherByteFragment(tag.PixelData)
 	obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
 
+	// PS3.5 A.4: an empty Basic Offset Table is always permitted (A.4 Note 1);
+	// the writer no longer synthesizes a single-entry table.
 	offsetTable := roundTripOtherByteFragment(t, obf).OffsetTable()
-	if len(offsetTable) != 1 {
-		t.Errorf("Single-frame offset table length = %d, want 1", len(offsetTable))
-	}
-	if len(offsetTable) > 0 && offsetTable[0] != 0 {
-		t.Errorf("Single-frame offset table[0] = %d, want 0", offsetTable[0])
+	if len(offsetTable) != 0 {
+		t.Errorf("Single-frame offset table length = %d, want 0 (empty BOT)", len(offsetTable))
 	}
 }
 
@@ -82,12 +83,13 @@ func testWriteFragmentSequenceEmptyOffsetTable(t *testing.T) {
 
 func testWriteFragmentSequenceWithOffsetTable(t *testing.T) {
 	obf := element.NewOtherByteFragment(tag.PixelData)
-	obf.SetOffsetTable([]uint32{0, 8})
+	// Each encoded fragment item is 8 header bytes + 4 padded value bytes.
+	obf.SetOffsetTable([]uint32{0, 12})
 	obf.AddFragment(buffer.NewMemory([]byte{0x11, 0x22, 0x33, 0x44}))
 	obf.AddFragment(buffer.NewMemory([]byte{0x55, 0x66, 0x77, 0x88}))
 
-	if got := roundTripOtherByteFragment(t, obf).OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 8 {
-		t.Errorf("OffsetTable = %v, want [0 8]", got)
+	if got := roundTripOtherByteFragment(t, obf).OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 12 {
+		t.Errorf("OffsetTable = %v, want [0 12]", got)
 	}
 }
 
@@ -183,4 +185,131 @@ func TestFragmentSequenceRoundTrip(t *testing.T) {
 			t.Errorf("Fragment 1 size = %d, want 8", frag2.Size())
 		}
 	})
+}
+
+func TestWriteFragmentSequenceOmitsBasicOffsetTableWhenExtendedOffsetTablePresent(t *testing.T) {
+	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
+
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	// A caller-supplied table must be ignored while an EOT is present.
+	obf.SetOffsetTable([]uint32{0})
+	obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
+	if err := ds.Add(obf); err != nil {
+		t.Fatalf("Add(PixelData) error: %v", err)
+	}
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, make([]byte, 8))); err != nil {
+		t.Fatalf("Add(ExtendedOffsetTable) error: %v", err)
+	}
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, make([]byte, 8))); err != nil {
+		t.Fatalf("Add(ExtendedOffsetTableLengths) error: %v", err)
+	}
+
+	buf := &bytes.Buffer{}
+	if err := Write(buf, ds, WithTransferSyntax(transfer.JPEG2000Lossless)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
+	if !exists {
+		t.Fatal("PixelData not found after round-trip")
+	}
+	readObf, ok := pixelDataElem.(*element.OtherByteFragment)
+	if !ok {
+		t.Fatalf("PixelData is not OtherByteFragment, got %T", pixelDataElem)
+	}
+	if got := readObf.OffsetTable(); len(got) != 0 {
+		t.Errorf("Basic Offset Table = %v, want empty when Extended Offset Table is present", got)
+	}
+	if !result.Dataset.Contains(tag.ExtendedOffsetTable) {
+		t.Fatal("Extended Offset Table was not preserved")
+	}
+}
+
+func TestWriteNormalizesEncapsulatedPixelDataToOB(t *testing.T) {
+	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
+
+	owf := element.NewOtherWordFragment(tag.PixelData)
+	owf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
+	if err := ds.Add(owf); err != nil {
+		t.Fatalf("Add(PixelData) error: %v", err)
+	}
+
+	buf := &bytes.Buffer{}
+	if err := Write(buf, ds, WithTransferSyntax(transfer.JPEG2000Lossless)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	result, err := parser.Parse(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	pixelDataElem, exists := result.Dataset.Get(tag.PixelData)
+	if !exists {
+		t.Fatal("PixelData not found after round-trip")
+	}
+	if _, ok := pixelDataElem.(*element.OtherByteFragment); !ok {
+		t.Fatalf("encapsulated Pixel Data = %T, want *element.OtherByteFragment (VR OB)", pixelDataElem)
+	}
+}
+
+func TestWriteRejectsInvalidBasicOffsetTable(t *testing.T) {
+	tests := []struct {
+		name    string
+		offsets []uint32
+	}{
+		{"first entry not zero", []uint32{4, 16}},
+		{"offset not at fragment item", []uint32{0, 8}},
+		{"more entries than fragments", []uint32{0, 16, 32}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ds := dataset.New()
+			addTestSOPUIDs(t, ds)
+			obf := element.NewOtherByteFragment(tag.PixelData)
+			obf.AddFragment(buffer.NewMemory(make([]byte, 8)))
+			obf.AddFragment(buffer.NewMemory(make([]byte, 8)))
+			obf.SetOffsetTable(tt.offsets)
+			if err := ds.Add(obf); err != nil {
+				t.Fatalf("Add(PixelData) error: %v", err)
+			}
+			err := Write(&bytes.Buffer{}, ds, WithTransferSyntax(transfer.JPEG2000Lossless))
+			if err == nil {
+				t.Fatalf("Write() succeeded with basic offset table %v", tt.offsets)
+			}
+			if !strings.Contains(err.Error(), "offset table") {
+				t.Fatalf("Write() error = %v, want basic offset table error", err)
+			}
+		})
+	}
+}
+
+func TestWriteRejectsEmptyFragmentItem(t *testing.T) {
+	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.AddFragment(buffer.NewMemory(nil))
+	if err := ds.Add(obf); err != nil {
+		t.Fatalf("Add(PixelData) error: %v", err)
+	}
+
+	err := Write(&bytes.Buffer{}, ds, WithTransferSyntax(transfer.JPEG2000Lossless))
+	if err == nil {
+		t.Fatal("Write() emitted a zero-length fragment item")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Fatalf("Write() error = %v, want empty fragment error", err)
+	}
+}
+
+func TestUint32LengthRejectsUndefinedLengthSentinel(t *testing.T) {
+	if _, err := uint32Length(math.MaxUint32, "sequence", "test"); err == nil {
+		t.Fatal("uint32Length accepted the 0xFFFFFFFF undefined-length sentinel")
+	}
+	if got, err := uint32Length(math.MaxUint32-1, "sequence", "test"); err != nil || got != math.MaxUint32-1 {
+		t.Fatalf("uint32Length(MaxUint32-1) = %d, %v; want %d, nil", got, err, uint32(math.MaxUint32-1))
+	}
 }

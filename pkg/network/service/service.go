@@ -58,6 +58,12 @@ type Service struct {
 	state   State
 	stateMu sync.RWMutex
 
+	// releaseReplyPending is set when an A-RELEASE-RQ arrives during a release
+	// collision and the local AE is the association-acceptor. PS3.8 7.2.2
+	// (Table 9-8, AR-10) requires it to wait for the peer's A-RELEASE-RP
+	// confirmation of its own request before sending its own A-RELEASE-RP.
+	releaseReplyPending atomic.Bool
+
 	// Goroutine communication
 	sendQueue    chan *sendRequest
 	closeOnce    sync.Once

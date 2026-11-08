@@ -365,23 +365,30 @@ func TestFromXML_RestoresEmptyNumericAndAttributeTagElements(t *testing.T) {
 }
 
 func TestXMLRoundTripPreservesTypedValueElements(t *testing.T) {
+	privateCreator := tag.NewPrivateCreator("ACME")
+	privateTag := func(element uint16) *tag.Tag {
+		return tag.NewWithPrivateCreator(0x0011, element, privateCreator)
+	}
 	tests := []struct {
 		name string
 		tag  *tag.Tag
 		elem element.Element
 	}{
-		{name: xmlUnsignedShortName, tag: tag.New(0x0011, 0x1010), elem: element.NewUnsignedShort(tag.New(0x0011, 0x1010), []uint16{65535})},
-		{name: xmlUnsignedLongName, tag: tag.New(0x0011, 0x1011), elem: element.NewUnsignedLong(tag.New(0x0011, 0x1011), []uint32{4294967295})},
-		{name: xmlSignedShortName, tag: tag.New(0x0011, 0x1012), elem: element.NewSignedShort(tag.New(0x0011, 0x1012), []int16{-32768})},
-		{name: xmlSignedLongName, tag: tag.New(0x0011, 0x1013), elem: element.NewSignedLong(tag.New(0x0011, 0x1013), []int32{-2147483648})},
-		{name: xmlFloatName, tag: tag.New(0x0011, 0x1014), elem: element.NewFloat(tag.New(0x0011, 0x1014), []float32{1.5})},
-		{name: xmlDoubleName, tag: tag.New(0x0011, 0x1015), elem: element.NewDouble(tag.New(0x0011, 0x1015), []float64{-2.25})},
-		{name: xmlSignedVeryLongName, tag: tag.New(0x0011, 0x1016), elem: element.NewSignedVeryLong(tag.New(0x0011, 0x1016), []int64{-9223372036854775807})},
-		{name: xmlUnsignedVeryLongName, tag: tag.New(0x0011, 0x1017), elem: element.NewUnsignedVeryLong(tag.New(0x0011, 0x1017), []uint64{18446744073709551614})},
-		{name: xmlAttributeTagName, tag: tag.New(0x0011, 0x1018), elem: element.NewAttributeTag(tag.New(0x0011, 0x1018), []*tag.Tag{tag.Rows})},
+		{name: xmlUnsignedShortName, tag: privateTag(0x1010), elem: element.NewUnsignedShort(privateTag(0x1010), []uint16{65535})},
+		{name: xmlUnsignedLongName, tag: privateTag(0x1011), elem: element.NewUnsignedLong(privateTag(0x1011), []uint32{4294967295})},
+		{name: xmlSignedShortName, tag: privateTag(0x1012), elem: element.NewSignedShort(privateTag(0x1012), []int16{-32768})},
+		{name: xmlSignedLongName, tag: privateTag(0x1013), elem: element.NewSignedLong(privateTag(0x1013), []int32{-2147483648})},
+		{name: xmlFloatName, tag: privateTag(0x1014), elem: element.NewFloat(privateTag(0x1014), []float32{1.5})},
+		{name: xmlDoubleName, tag: privateTag(0x1015), elem: element.NewDouble(privateTag(0x1015), []float64{-2.25})},
+		{name: xmlSignedVeryLongName, tag: privateTag(0x1016), elem: element.NewSignedVeryLong(privateTag(0x1016), []int64{-9223372036854775807})},
+		{name: xmlUnsignedVeryLongName, tag: privateTag(0x1017), elem: element.NewUnsignedVeryLong(privateTag(0x1017), []uint64{18446744073709551614})},
+		{name: xmlAttributeTagName, tag: privateTag(0x1018), elem: element.NewAttributeTag(privateTag(0x1018), []*tag.Tag{tag.Rows})},
 	}
 
 	original := dataset.New()
+	if err := original.Add(element.NewString(tag.New(0x0011, 0x0010), vr.LO, []string{"ACME"})); err != nil {
+		t.Fatalf("Add(Private Creator) error = %v", err)
+	}
 	for _, tt := range tests {
 		if err := original.Add(tt.elem); err != nil {
 			t.Fatalf("Add(%s) error = %v", tt.name, err)

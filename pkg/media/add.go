@@ -24,6 +24,61 @@ type Entry struct {
 	Instance *Record
 }
 
+// fileReferences holds the File Meta Information values a directory record
+// needs when it references a file.
+type fileReferences struct {
+	sopClassUID    string
+	sopInstanceUID string
+	transferSyntax string
+}
+
+// requiredFileReferences extracts the mandatory File Meta Information
+// references for a new directory record (PS3.10 Table 7.1-1).
+func requiredFileReferences(fmi *dataset.FileMetaInformation) (fileReferences, error) {
+	var refs fileReferences
+
+	sopClassUID, ok := fmi.MediaStorageSOPClassUID()
+	if !ok || sopClassUID == "" {
+		return refs, fmt.Errorf("missing MediaStorageSOPClassUID")
+	}
+	referencedInstanceUID, ok := fmi.MediaStorageSOPInstanceUID()
+	if !ok || referencedInstanceUID == "" {
+		return refs, fmt.Errorf("missing MediaStorageSOPInstanceUID")
+	}
+	transferSyntaxUID, ok := fmi.TransferSyntaxUID()
+	if !ok || transferSyntaxUID == "" {
+		return refs, fmt.Errorf("missing TransferSyntaxUID")
+	}
+
+	refs.sopClassUID = sopClassUID
+	refs.sopInstanceUID = referencedInstanceUID
+	refs.transferSyntax = transferSyntaxUID
+	return refs, nil
+}
+
+// addInstanceReferenceElements adds the Type 1 file reference attributes of an
+// instance record (PS3.3 F.3.2.2, Table F.3-3).
+func addInstanceReferenceElements(instance *Record, source *dataset.Dataset, fileID FileID, refs fileReferences) error {
+	for _, item := range []element.Element{
+		element.NewString(tag.ReferencedFileID, vr.CS, fileID.Components()),
+		element.NewString(tag.ReferencedSOPClassUIDInFile, vr.UI, []string{refs.sopClassUID}),
+		element.NewString(tag.ReferencedSOPInstanceUIDInFile, vr.UI, []string{refs.sopInstanceUID}),
+		element.NewString(tag.ReferencedTransferSyntaxUIDInFile, vr.UI, []string{refs.transferSyntax}),
+	} {
+		if err := instance.dataset.AddOrUpdate(item); err != nil {
+			return fmt.Errorf("add instance reference %s: %w", item.Tag(), err)
+		}
+	}
+	// PS3.3 F.3.2.2, Table F.3-3: Referenced Related General SOP Class UID in
+	// File is Type 1C when the referenced instance encodes it.
+	if relatedGeneral, ok := source.GetStrings(tag.RelatedGeneralSOPClassUID); ok && len(relatedGeneral) > 0 {
+		if err := instance.dataset.AddOrUpdate(element.NewString(tag.ReferencedRelatedGeneralSOPClassUIDInFile, vr.UI, relatedGeneral)); err != nil {
+			return fmt.Errorf("add Referenced Related General SOP Class UID in File: %w", err)
+		}
+	}
+	return nil
+}
+
 // AddFile adds a parsed DICOM file to the directory without modifying the source file.
 func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, error) {
 	if d == nil {
@@ -34,6 +89,9 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 	}
 	if err := fileID.validate(); err != nil {
 		return nil, fmt.Errorf("invalid Referenced File ID: %w", err)
+	}
+	if components := fileID.Components(); len(components) == 1 && strings.EqualFold(components[0], dicomDirFileName) {
+		return nil, fmt.Errorf("file ID %q is reserved for the DICOMDIR file (PS3.10 §8.6)", fileID)
 	}
 
 	studyUID, err := requiredString(file.Dataset, tag.StudyInstanceUID)
@@ -49,18 +107,9 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 		return nil, err
 	}
 
-	fmi := file.FileMetaInformation
-	sopClassUID, ok := fmi.MediaStorageSOPClassUID()
-	if !ok || sopClassUID == "" {
-		return nil, fmt.Errorf("missing MediaStorageSOPClassUID")
-	}
-	referencedInstanceUID, ok := fmi.MediaStorageSOPInstanceUID()
-	if !ok || referencedInstanceUID == "" {
-		return nil, fmt.Errorf("missing MediaStorageSOPInstanceUID")
-	}
-	transferSyntaxUID, ok := fmi.TransferSyntaxUID()
-	if !ok || transferSyntaxUID == "" {
-		return nil, fmt.Errorf("missing TransferSyntaxUID")
+	refs, err := requiredFileReferences(file.FileMetaInformation)
+	if err != nil {
+		return nil, err
 	}
 
 	patientID, _ := stringValue(file.Dataset, tag.PatientID)
@@ -96,7 +145,14 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 		}
 	}
 
-	instanceType, err := instanceRecordType(sopClassUID)
+	// PS3.3 F.2.1 rule 6: a File of the File-set may be referenced by at most
+	// one Directory Record.
+	fileIDKey := fileID.key()
+	if _, exists := d.fileIDs[fileIDKey]; exists {
+		return nil, fmt.Errorf("file ID %q is already referenced by another directory record", fileID)
+	}
+
+	instanceType, err := instanceRecordType(refs.sopClassUID)
 	if err != nil {
 		return nil, err
 	}
@@ -104,20 +160,17 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 	if err != nil {
 		return nil, err
 	}
-	for _, item := range []element.Element{
-		element.NewString(tag.ReferencedFileID, vr.CS, fileID.Components()),
-		element.NewString(tag.ReferencedSOPClassUIDInFile, vr.UI, []string{sopClassUID}),
-		element.NewString(tag.ReferencedSOPInstanceUIDInFile, vr.UI, []string{referencedInstanceUID}),
-		element.NewString(tag.ReferencedTransferSyntaxUIDInFile, vr.UI, []string{transferSyntaxUID}),
-	} {
-		if err := instance.dataset.AddOrUpdate(item); err != nil {
-			return nil, fmt.Errorf("add instance reference %s: %w", item.Tag(), err)
-		}
+	if err := addInstanceReferenceElements(instance, file.Dataset, fileID, refs); err != nil {
+		return nil, err
 	}
 	if err := d.addInstanceIcon(file.Dataset, instance); err != nil {
 		return nil, err
 	}
 	series.addChild(instance)
+	if d.fileIDs == nil {
+		d.fileIDs = make(map[string]struct{})
+	}
+	d.fileIDs[fileIDKey] = struct{}{}
 
 	return &Entry{Patient: patient, Study: study, Series: series, Instance: instance}, nil
 }
@@ -242,6 +295,15 @@ func (d *Directory) newRecord(recordType RecordType, key string, source *dataset
 		}
 		if err := recordDataset.Add(item); err != nil {
 			return nil, fmt.Errorf("copy %s record attribute %s: %w", recordType, attributeTag, err)
+		}
+	}
+
+	// PS3.3 F.5.25, Table F.5-25: Verification DateTime is Type 1C, required
+	// when Verification Flag is VERIFIED.
+	if recordType == RecordSRDocument {
+		if verificationFlag, ok := recordDataset.GetString(tag.VerificationFlag); ok &&
+			verificationFlag == "VERIFIED" && !recordDataset.Contains(tag.VerificationDateTime) {
+			return nil, fmt.Errorf("verified %s record requires Verification DateTime (0040,A030)", recordType)
 		}
 	}
 

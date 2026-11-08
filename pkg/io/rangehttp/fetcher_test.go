@@ -31,6 +31,33 @@ func (r *countingReadCloser) Read(p []byte) (int, error) {
 
 func (r *countingReadCloser) Close() error { return nil }
 
+func TestFetcherSkipsWeakETagForIfRange(t *testing.T) {
+	data := []byte("abcdefghijklmnopqrstuvwxyz")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead:
+			w.Header().Set("Content-Length", fmt.Sprint(len(data)))
+			w.Header().Set("ETag", `W/"weak-1"`)
+			w.Header().Set("Last-Modified", "Tue, 14 Jul 2026 00:00:00 GMT")
+		case http.MethodGet:
+			if got := r.Header.Get("If-Range"); got != "Tue, 14 Jul 2026 00:00:00 GMT" {
+				t.Fatalf("If-Range header = %q, want Last-Modified (weak ETag must be skipped)", got)
+			}
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-1/%d", len(data)))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write(data[0:2])
+		}
+	}))
+	defer server.Close()
+
+	fetcher, err := NewFetcher(context.Background(), server.URL)
+	if err != nil {
+		t.Fatalf("NewFetcher() error = %v", err)
+	}
+	if _, err := fetcher.Fetch(context.Background(), rangeio.FetchRequest{Offset: 0, Length: 2}); err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+}
 func TestFetcherProbesAndFetchesRanges(t *testing.T) {
 	data := []byte("abcdefghijklmnopqrstuvwxyz")
 	var sawHead bool
@@ -236,3 +263,4 @@ func TestFetcherBoundsOversizedRangeProbeRead(t *testing.T) {
 		t.Fatalf("range probe read %d bytes, want at most expected length plus one", body.read)
 	}
 }
+

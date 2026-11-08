@@ -38,6 +38,7 @@ func runCommand(args []string, stdout io.Writer) error {
 	flags.SetOutput(stdout)
 	standardPath := flags.String("standard", "", "path to DICOM Dictionary.xml")
 	privatePath := flags.String("private", "", "path to Private Dictionary.xml")
+	supplementPath := flags.String("supplement", "", "optional path to supplemental standard dictionary XML rows")
 	root := flags.String("root", "", "repository root receiving generated files")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -49,6 +50,16 @@ func runCommand(args []string, stdout io.Writer) error {
 	standard, err := dicomxml.Load(*standardPath)
 	if err != nil {
 		return err
+	}
+	if *supplementPath != "" {
+		// The pinned baseline is older than the current PS3.6 edition; the
+		// supplemental document carries the registry rows it does not have.
+		supplement, err := dicomxml.Load(*supplementPath)
+		if err != nil {
+			return err
+		}
+		standard.Tags = append(standard.Tags, supplement.Tags...)
+		standard.UIDs = append(standard.UIDs, supplement.UIDs...)
 	}
 	privateDictionaries, err := dicomxml.LoadPrivate(*privatePath)
 	if err != nil {

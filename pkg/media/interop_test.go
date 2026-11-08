@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 )
 
 func TestWriteFoDicomInteropFiles(t *testing.T) {
@@ -20,20 +18,12 @@ func TestWriteFoDicomInteropFiles(t *testing.T) {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 
-	for _, fixture := range []struct {
-		name   string
-		syntax *transfer.Syntax
-	}{
-		{name: "explicit.dicomdir", syntax: transfer.ExplicitVRLittleEndian},
-		{name: "implicit.dicomdir", syntax: transfer.ImplicitVRLittleEndian},
-	} {
-		dir, _ := roundTripDirectory(t, fixture.syntax)
-		path := filepath.Join(outputDirectory, fixture.name)
-		if err := dir.Save(path); err != nil {
-			t.Fatalf("Save(%s) error = %v", fixture.name, err)
-		}
-		if _, err := Open(path, WithOffsetPolicy(StrictOffsets)); err != nil {
-			t.Fatalf("strict Open(%s) error = %v", fixture.name, err)
-		}
+	dir, _ := roundTripDirectory(t)
+	path := filepath.Join(outputDirectory, "explicit.dicomdir")
+	if err := dir.Save(path); err != nil {
+		t.Fatalf("Save(explicit.dicomdir) error = %v", err)
+	}
+	if _, err := Open(path, WithOffsetPolicy(StrictOffsets)); err != nil {
+		t.Fatalf("strict Open(explicit.dicomdir) error = %v", err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 const testExplicitVRLittleLE = "1.2.840.10008.1.2.1"
@@ -60,8 +61,11 @@ func TestWriteWithDefaults(t *testing.T) {
 func TestWriteWithFileMetaInfo(t *testing.T) {
 	buf := &bytes.Buffer{}
 
-	// Create custom file meta info (without TransferSyntaxUID)
+	// Create custom file meta info (without TransferSyntaxUID). The PS3.10
+	// Type 1 elements not synthesized by the writer must be supplied.
 	fileMetaInfo := dataset.New()
+	_ = fileMetaInfo.Add(element.NewOtherByte(tag.FileMetaInformationVersion, []byte{0x00, 0x01}))
+	_ = fileMetaInfo.Add(element.NewString(tag.ImplementationClassUID, vr.UI, []string{testImplementationClassUID}))
 	// Note: TransferSyntaxUID will be added automatically
 
 	// Create a simple dataset
@@ -161,6 +165,12 @@ func TestWriteUsesDatasetInternalTransferSyntax(t *testing.T) {
 	ds := dataset.NewWithTransferSyntax(transfer.JPEG2000Lossless)
 	addTestSOPUIDs(t, ds)
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"TS^FromDataset"}))
+	// PS3.5 A.4: an encapsulated transfer syntax requires top-level Pixel Data.
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	fragments.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
+	if err := ds.Add(fragments); err != nil {
+		t.Fatalf("Add(PixelData) error = %v", err)
+	}
 
 	if err := Write(buf, ds); err != nil {
 		t.Fatalf("Write() error = %v", err)

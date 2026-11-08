@@ -28,7 +28,7 @@ func TestMonochrome1WithPresentationLUTShapeInverseInvertsOnce(t *testing.T) {
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{256})); err != nil {
 		t.Fatalf("add WindowWidth: %v", err)
 	}
-	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{"INVERSE"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{lutShapeInverse})); err != nil {
 		t.Fatalf("add PresentationLUTShape: %v", err)
 	}
 
@@ -75,3 +75,4 @@ func TestMonochrome1WithoutPresentationLUTShapeStillInverts(t *testing.T) {
 		}
 	}
 }
+

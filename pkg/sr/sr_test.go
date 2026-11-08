@@ -191,7 +191,7 @@ func TestError_Wrap(t *testing.T) {
 
 func TestContentItem_Text(t *testing.T) {
 	code := NewCodeItem("121071", "DCM", "Finding")
-	item, err := NewContentItemText(code, RelationshipContains, "No abnormalities detected")
+	item, err := NewContentItemText(code, RelationshipContains, testFindingText)
 
 	if err != nil {
 		t.Fatalf("Failed to create text content item: %v", err)
@@ -211,7 +211,7 @@ func TestContentItem_Text(t *testing.T) {
 		t.Fatalf("Failed to get text: %v", err)
 	}
 
-	if text != "No abnormalities detected" {
+	if text != testFindingText {
 		t.Errorf("Expected text 'No abnormalities detected', got '%s'", text)
 	}
 }
@@ -280,7 +280,7 @@ func TestStructuredReport_AddItems(t *testing.T) {
 	err = report.AddText(
 		NewCodeItem("121071", "DCM", "Finding"),
 		RelationshipContains,
-		"No abnormalities detected",
+		testFindingText,
 	)
 	if err != nil {
 		t.Fatalf("Failed to add text item: %v", err)

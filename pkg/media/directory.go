@@ -24,6 +24,7 @@ type Directory struct {
 	diagnostics    []Diagnostic
 	iconGenerator  IconGenerator
 	imageIcons     bool
+	fileIDs        map[string]struct{}
 }
 
 // NewDirectory creates an empty DICOMDIR.
@@ -32,8 +33,11 @@ func NewDirectory(options ...Option) (*Directory, error) {
 	for _, option := range options {
 		option(&config)
 	}
-	if err := validateDirectoryTransferSyntax(config.transferSyntax); err != nil {
+	if err := validateDirectoryWriteTransferSyntax(config.transferSyntax); err != nil {
 		return nil, err
+	}
+	if config.fileSetIDErr != nil {
+		return nil, config.fileSetIDErr
 	}
 
 	sopInstanceUID := uid.GenerateDerivedFromUUID().UID()
@@ -50,7 +54,7 @@ func NewDirectory(options ...Option) (*Directory, error) {
 
 	ds := dataset.NewWithTransferSyntax(config.transferSyntax)
 	for _, item := range []element.Element{
-		element.NewString(tag.FileSetID, vr.CS, []string{""}),
+		element.NewString(tag.FileSetID, vr.CS, []string{config.fileSetID}),
 		element.NewUnsignedLong(tag.OffsetOfTheFirstDirectoryRecordOfTheRootDirectoryEntity, []uint32{0}),
 		element.NewUnsignedLong(tag.OffsetOfTheLastDirectoryRecordOfTheRootDirectoryEntity, []uint32{0}),
 		element.NewUnsignedShort(tag.FileSetConsistencyFlag, []uint16{0}),
@@ -67,15 +71,44 @@ func NewDirectory(options ...Option) (*Directory, error) {
 		transferSyntax: config.transferSyntax,
 		iconGenerator:  config.iconGenerator,
 		imageIcons:     config.imageIcons,
+		fileIDs:        make(map[string]struct{}),
 	}, nil
 }
 
+// validateDirectoryTransferSyntax accepts what a reader tolerates: legacy
+// File-sets in Implicit VR Little Endian are readable even though PS3.10 §8.6
+// forbids writing them.
 func validateDirectoryTransferSyntax(ts *transfer.Syntax) error {
 	if ts == nil {
 		return fmt.Errorf("DICOMDIR transfer syntax cannot be nil")
 	}
 	if ts != transfer.ExplicitVRLittleEndian && ts != transfer.ImplicitVRLittleEndian {
 		return fmt.Errorf("unsupported DICOMDIR transfer syntax %s", ts.UID())
+	}
+	return nil
+}
+
+// validateDirectoryWriteTransferSyntax enforces PS3.10 §8.6: the DICOMDIR File
+// shall use the Explicit VR Little Endian Transfer Syntax.
+func validateDirectoryWriteTransferSyntax(ts *transfer.Syntax) error {
+	if err := validateDirectoryTransferSyntax(ts); err != nil {
+		return err
+	}
+	if ts != transfer.ExplicitVRLittleEndian {
+		return fmt.Errorf("DICOMDIR must use Explicit VR Little Endian (PS3.10 §8.6), got %s", ts.UID())
+	}
+	return nil
+}
+
+// validateDirectoryFileSetID rejects a File-set ID that violates PS3.10 §8.1,
+// including values written through direct Dataset mutation.
+func validateDirectoryFileSetID(ds *dataset.Dataset) error {
+	fileSetID, ok := ds.GetString(tag.FileSetID)
+	if !ok {
+		return nil
+	}
+	if err := validateFileSetID(fileSetID); err != nil {
+		return err
 	}
 	return nil
 }

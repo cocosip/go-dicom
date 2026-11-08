@@ -87,5 +87,46 @@ func presentationSequenceLUT(ds *dataset.Dataset, mode LUTVRMode) (lut.LUT, erro
 	}
 	table := &voiTableLUT{values: values, first: descriptor.FirstMappedValue}
 	maximumOutput := float64(uint32(1)<<descriptor.BitsPerEntry - 1)
-	return scaledVOITable(table, 0, maximumOutput), nil
+	// PS3.3 C.11.6.1: "there is an implicit linear scaling of the output range of
+	// the preceding transformation (such as the VOI LUT transformation) so that
+	// it is always mapped to the specified input range of the Presentation LUT."
+	// The preceding stages emit this library's 0..255 intermediate, so map that
+	// range onto the LUT's declared input range before indexing the table.
+	inputMinimum := float64(descriptor.FirstMappedValue)
+	inputMaximum := inputMinimum + float64(len(values)-1)
+	composite := lut.NewCompositeLUT()
+	if inputMinimum != 0 || inputMaximum != 255 {
+		composite.Add(newPresentationInputScaleLUT(inputMinimum, inputMaximum))
+	}
+	composite.Add(table)
+	composite.Add(newVOIOutputScaleLUT(0, maximumOutput))
+	return composite, nil
+}
+
+// presentationInputScaleLUT maps the preceding transformation's 0..255 output
+// range onto a Presentation LUT's declared input range (PS3.3 C.11.6.1).
+type presentationInputScaleLUT struct {
+	minimum float64
+	maximum float64
+}
+
+func newPresentationInputScaleLUT(minimum, maximum float64) *presentationInputScaleLUT {
+	if maximum <= minimum {
+		maximum = minimum + 1
+	}
+	return &presentationInputScaleLUT{minimum: minimum, maximum: maximum}
+}
+
+func (p *presentationInputScaleLUT) IsValid() bool               { return true }
+func (p *presentationInputScaleLUT) MinimumOutputValue() float64 { return p.minimum }
+func (p *presentationInputScaleLUT) MaximumOutputValue() float64 { return p.maximum }
+func (p *presentationInputScaleLUT) Recalculate()                {}
+func (p *presentationInputScaleLUT) Transform(input float64) float64 {
+	if input <= 0 {
+		return p.minimum
+	}
+	if input >= 255 {
+		return p.maximum
+	}
+	return p.minimum + input*(p.maximum-p.minimum)/255
 }

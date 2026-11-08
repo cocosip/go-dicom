@@ -775,6 +775,12 @@ func (p *parseContext) normalizeImplicitVR(ds *dataset.Dataset) error {
 		tag.RealWorldValueLastValueMapped.ToUint32():  true,
 		tag.HistogramFirstBinValue.ToUint32():         true,
 		tag.HistogramLastBinValue.ToUint32():          true,
+		// Further PS3.5 Table 6.2-1 attributes whose VR depends on Pixel
+		// Representation and that are registered as US or SS.
+		tag.ZeroVelocityPixelValue.ToUint32():     true,
+		tag.MappedPixelValue.ToUint32():           true,
+		tag.PerimeterValueRETIRED.ToUint32():      true,
+		tag.GrayLookupTableDataRETIRED.ToUint32(): true,
 	}
 	dictionary := p.dictionary
 	if dictionary == nil {
@@ -1101,12 +1107,11 @@ func (p *parseContext) readElementWithPrivateCreators(privateCreators privateCre
 		return p.readSequence(t, length)
 	}
 
-	// Handle special case: VR=UN with undefined length
-	// In DICOM, private tags or unknown tags may be encoded as UN
-	// When combined with undefined length, they are typically sequences
-	// Treat UN with undefined length as a sequence
+	// Handle special case: VR=UN with undefined length.
+	// PS3.5 6.2.2 requires the value to remain in Implicit VR Little Endian
+	// form regardless of the enclosing transfer syntax.
 	if vrValue.Code() == vr.CodeUN && length == 0xFFFFFFFF {
-		return p.readSequence(t, length)
+		return p.readImplicitVRSequence(t, length)
 	}
 
 	// Handle special case: Fragment Sequence (encapsulated pixel data)
@@ -1156,12 +1161,11 @@ func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
 		return p.readSequence(t, length)
 	}
 
-	// Handle special case: VR=UN with undefined length
-	// In DICOM, private tags or unknown tags may be encoded as UN
-	// When combined with undefined length, they are typically sequences
-	// Treat UN with undefined length as a sequence
+	// Handle special case: VR=UN with undefined length.
+	// PS3.5 6.2.2 requires the value to remain in Implicit VR Little Endian
+	// form regardless of the enclosing transfer syntax.
 	if vrValue.Code() == vr.CodeUN && length == 0xFFFFFFFF {
-		return p.readSequence(t, length)
+		return p.readImplicitVRSequence(t, length)
 	}
 
 	// Handle special case: Fragment Sequence (encapsulated pixel data)
@@ -1230,10 +1234,10 @@ func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 	if isPrivateCreatorTag(t) {
 		return vr.LO, nil
 	}
-	// PS3.5 A.1 assigns OW to native Pixel Data in Implicit VR Little Endian.
-	// The dictionary lists OB/OW for explicit transfer syntaxes, so taking its
-	// first VR would incorrectly reconstruct implicit Pixel Data as OB.
-	if t.Equals(tag.PixelData) {
+	// PS3.5 A.1 fixes the VR of Pixel Data, Overlay Data and Waveform Data to
+	// OW in Implicit VR Little Endian. The dictionary lists OB first for these
+	// elements, so taking its first VR would misreport them as OB.
+	if implicitVRMustBeOW(t) {
 		return vr.OW, nil
 	}
 
@@ -1327,6 +1331,16 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 				break
 			}
 
+			// Tolerate a redundant Item Delimitation Item; some
+			// implementations emit one after a defined-length item.
+			if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE00D {
+				var delimitLength uint32
+				if err := binary.Read(p.reader, p.byteOrder, &delimitLength); err != nil {
+					return nil, err
+				}
+				continue
+			}
+
 			// Should be Item tag (FFFE,E000)
 			if itemTag.Group() != 0xFFFE || itemTag.Element() != 0xE000 {
 				return nil, fmt.Errorf("expected Item tag, got %s", itemTag)
@@ -1360,6 +1374,16 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 					return err
 				}
 
+				// Tolerate a redundant Item Delimitation Item after a
+				// defined-length item.
+				if itemTag.Group() == 0xFFFE && itemTag.Element() == 0xE00D {
+					var delimitLength uint32
+					if err := binary.Read(p.reader, p.byteOrder, &delimitLength); err != nil {
+						return err
+					}
+					continue
+				}
+
 				// Should be Item tag (FFFE,E000)
 				if itemTag.Group() != 0xFFFE || itemTag.Element() != 0xE000 {
 					return fmt.Errorf("expected Item tag in sequence, got %s", itemTag)
@@ -1390,6 +1414,41 @@ func (p *parseContext) readSequence(t *tag.Tag, length uint32) (*dataset.Sequenc
 	}
 
 	return seq, nil
+}
+
+// readImplicitVRSequence parses an undefined-length UN value.
+//
+// PS3.5 Section 6.2.2: "In the case of Undefined Length Sequences, the Value
+// shall remain in Implicit VR form." The enclosing transfer syntax may be
+// explicit, so the content is always decoded as Implicit VR Little Endian.
+func (p *parseContext) readImplicitVRSequence(t *tag.Tag, length uint32) (*dataset.Sequence, error) {
+	savedExplicitVR := p.isExplicitVR
+	savedByteOrder := p.byteOrder
+	p.isExplicitVR = false
+	p.byteOrder = binary.LittleEndian
+	defer func() {
+		p.isExplicitVR = savedExplicitVR
+		p.byteOrder = savedByteOrder
+	}()
+	return p.readSequence(t, length)
+}
+
+// implicitVRMustBeOW reports whether PS3.5 Annex A.1 fixes the Value
+// Representation of t to OW for Implicit VR Little Endian. The data dictionary
+// lists OB first for these elements because explicit VR allows either.
+func implicitVRMustBeOW(t *tag.Tag) bool {
+	if t == nil {
+		return false
+	}
+	if t.Equals(tag.PixelData) {
+		return true
+	}
+	// Overlay Data (60xx,3000), where 60xx covers groups 6000-60FF.
+	if t.Group()&0xFF00 == 0x6000 && t.Element() == 0x3000 {
+		return true
+	}
+	// Waveform Data (5400,1010).
+	return t.Group() == 0x5400 && t.Element() == 0x1010
 }
 
 func (p *parseContext) observeSequenceItem(sequenceTag *tag.Tag, item *dataset.Dataset, offset uint64) error {
@@ -1666,6 +1725,11 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 		// Skip past this data in the stream
 		if _, err := p.file.Seek(int64(length), io.SeekCurrent); err != nil {
 			return nil, fmt.Errorf("failed to skip data: %w", err)
+		}
+		// The seek bypasses the position-tracking reader, so advance the
+		// tracked offset explicitly to keep observer offsets absolute.
+		if p.position != nil {
+			p.position.offset += uint64(length)
 		}
 		p.consumeBounded(length)
 

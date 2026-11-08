@@ -62,7 +62,7 @@ The DICOM network protocol is based on TCP/IP, using the Association mechanism f
 ### Key Features
 
 - ✅ **Full PDU support**: 7 PDU types (A-ASSOCIATE-RQ/AC/RJ, P-DATA-TF, A-RELEASE-RQ/RP, A-ABORT)
-- ✅ **Association management**: automatic negotiation of Presentation Contexts, MaxPDULength, and other parameters
+- ✅ **Association management**: automatic negotiation of Presentation Contexts and user-information parameters, with a per-direction Maximum PDU Length advertisement (PS3.7 D.3.3.1)
 - ✅ **DIMSE message model and covered service workflows**:
   - C-ECHO (connectivity verification)
   - C-STORE (store images)
@@ -234,7 +234,7 @@ c := client.New(
 |------|------|--------|------|
 | `WithCallingAE(ae)` | string | "GO_DICOM_SCU" | Local AE Title |
 | `WithCalledAE(ae)` | string | "ANY_SCP" | Remote AE Title |
-| `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length |
+| `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length this AE can receive (per direction) |
 | `WithMaxMessageSize(size)` | uint32 | 512 MiB | Bound for a reassembled inbound DIMSE message (0=unlimited) |
 | `WithConnectTimeout(timeout)` | time.Duration | 10s | TCP connection timeout |
 | `WithRequestTimeout(timeout)` | time.Duration | 30s | DIMSE request timeout |
@@ -378,6 +378,13 @@ if err := c.Abort(ctx); err != nil {
 }
 ```
 
+After an A-RELEASE-RP is sent, the association cannot carry any further P-DATA
+(PS3.8 7.2.2), so the transport is closed. When both AEs request release at the
+same time, the release collision is resolved per PS3.8: the association-requestor
+answers first, and the association-acceptor waits for the peer's confirmation
+before sending its own A-RELEASE-RP. An A-RELEASE-RP that was never requested is
+treated as an abnormal condition and aborts the association (A-ABORT, AA-8).
+
 ### DIMSE Operations
 
 All operations are available as synchronous methods on `client.Client`. Complete runnable programs for the common operations are in [Client Examples](#client-examples).
@@ -468,7 +475,9 @@ assoc := c.GetAssociation()
 if assoc != nil {
     fmt.Printf("CallingAE: %s\n", assoc.CallingAE)
     fmt.Printf("CalledAE: %s\n", assoc.CalledAE)
-    fmt.Printf("MaxPDULength: %d\n", assoc.MaxPDULength)
+    // Maximum PDU length the peer advertised for what it can receive.
+    // Each direction has its own independent limit (PS3.7 D.3.3.1).
+    fmt.Printf("Peer MaxPDULength: %d\n", assoc.MaxPDULength)
 
     // Get the accepted Presentation Contexts
     accepted := assoc.GetAcceptedPresentationContexts()
@@ -686,7 +695,7 @@ srv := server.New(
 |------|------|--------|------|
 | `WithAETitle(ae)` | string | "GO_DICOM_SCP" | Local AE Title |
 | `WithPort(port)` | int | 104 | Listening port |
-| `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length |
+| `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length this AE can receive (per direction) |
 | `WithMaxMessageSize(size)` | uint32 | 512 MiB | Bound for a reassembled inbound DIMSE message (0=unlimited) |
 | `WithMaxConnections(max)` | int | 0 | Maximum concurrent connections (0=unlimited) |
 | `WithAcceptTimeout(timeout)` | time.Duration | 0 | Single Accept timeout (0=obey only the Server context) |
@@ -875,7 +884,7 @@ func main() {
     // Set the C-ECHO handler
     srv.SetCEchoHandler(func(ctx context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
         log.Println("Received C-ECHO request")
-        return dimse.NewCEchoResponseFromRequest(req, 0x0000), nil
+        return dimse.NewCEchoResponseFromRequest(req, status.Success), nil
     })
 
     // Start the server
@@ -1124,31 +1133,40 @@ req := dimse.NewCFindRequestStudyRoot(level, query)
 
 // C-MOVE
 req := dimse.NewCMoveRequest(level, destination, identifier)
-req := dimse.NewCMoveRequestPatientRoot(destination, identifier)
-req := dimse.NewCMoveRequestStudyRoot(destination, identifier)
+req := dimse.NewCMoveRequestPatientRoot(level, destination, identifier)
+req := dimse.NewCMoveRequestStudyRoot(level, destination, identifier)
 
 // C-GET
 req := dimse.NewCGetRequest(level, identifier)
-req := dimse.NewCGetRequestPatientRoot(identifier)
-req := dimse.NewCGetRequestStudyRoot(identifier)
+req := dimse.NewCGetRequestPatientRoot(level, identifier)
+req := dimse.NewCGetRequestStudyRoot(level, identifier)
 ```
 
 ### Creating Response Messages
 
 ```go
-// Create a response from a request
-resp := dimse.NewCEchoResponseFromRequest(req, statusCode)
-resp := dimse.NewCStoreResponseFromRequest(req, statusCode)
+import "github.com/cocosip/go-dicom/pkg/network/status"
 
-// Pending response
-resp := dimse.NewCFindResponsePending(req, identifier)
-resp := dimse.NewCMoveResponsePending(req, remaining, completed, failed, warning)
-resp := dimse.NewCGetResponsePending(req, remaining, completed, failed, warning)
+// Create a response from a request. The status argument is *status.Status.
+echoResp := dimse.NewCEchoResponseFromRequest(req, status.Success)
+storeResp := dimse.NewCStoreResponseFromRequest(req, status.Success)
+findResp := dimse.NewCFindResponseFromRequest(req, status.CFindPending, identifier)
+moveResp := dimse.NewCMoveResponseFromRequest(req, status.CMovePending)
+getResp := dimse.NewCGetResponseFromRequest(req, status.CGetPending)
+```
+
+```go
+// Pending response (the constructors take the request's MessageID and SOP Class UID)
+resp := dimse.NewCFindResponsePending(req.MessageID(), req.AffectedSOPClassUID(), identifier)
+resp := dimse.NewCMoveResponsePending(
+    req.MessageID(), req.AffectedSOPClassUID(), remaining, completed, failed, warning)
+resp := dimse.NewCGetResponsePending(
+    req.MessageID(), req.AffectedSOPClassUID(), remaining, completed, failed, warning)
 
 // Success response
-resp := dimse.NewCFindResponseSuccess(req)
-resp := dimse.NewCMoveResponseSuccess(req)
-resp := dimse.NewCGetResponseSuccess(req)
+resp := dimse.NewCFindResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
+resp := dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
+resp := dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
 ```
 
 ### Checking Response Status
@@ -1621,7 +1639,9 @@ for i := 0; i < 100; i++ {
 ### 2. Tune MaxPDULength
 
 ```go
-// Increase PDU length for large file transfers
+// Advertise a larger receive limit for large file transfers. MaxPDULength is a
+// per-direction receive limit (PS3.7 D.3.3.1); the peer may advertise a
+// different value. Outgoing PDUs use the smaller of the two limits.
 c := client.New(
     client.WithMaxPDULength(65536), // Default 16384
 )

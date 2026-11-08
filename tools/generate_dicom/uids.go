@@ -92,8 +92,10 @@ func mapUIDType(value string) (string, error) {
 		return "TypeApplicationHostingModel", nil
 	case "Coding Scheme", "DICOM UIDs as a Coding Scheme":
 		return "TypeCodingScheme", nil
-	case "Synchronization Frame of Reference":
+	case "Synchronization Frame of Reference", "Well-known Frame of Reference":
 		return "TypeFrameOfReference", nil
+	case "Document TemplateID", "Section TemplateID", "Entry TemplateID", "Element Set TemplateID":
+		return "TypeTemplate", nil
 	case "LDAP OID":
 		return "TypeLDAP", nil
 	case "Mapping Resource":

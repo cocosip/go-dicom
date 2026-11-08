@@ -95,6 +95,7 @@ var (
 //   - "1-n": 1 or more values (unlimited)
 //   - "2-2n": 2, 4, 6, 8, ... values (multiples of 2)
 //   - "3-3n": 3, 6, 9, 12, ... values (multiples of 3)
+//   - "1-n or 1": the union of the alternatives (PS3.6 spelling, e.g. LUTData)
 func Parse(s string) (*VM, error) {
 	// Check cache first
 	vmCacheMu.RLock()
@@ -130,6 +131,26 @@ func MustParse(s string) *VM {
 
 // parseVM performs the actual parsing logic.
 func parseVM(s string) (*VM, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, fmt.Errorf("empty VM string")
+	}
+
+	// PS3.6 registers alternative multiplicities as "1-n or 1" (for example
+	// LUTData). Cover the union of every alternative instead of rejecting the
+	// spelling or silently keeping only the first alternative.
+	if parts := strings.Split(strings.ToLower(s), " or "); len(parts) > 1 {
+		var union *VM
+		for _, part := range parts {
+			parsed, err := parseVM(strings.TrimSpace(part))
+			if err != nil {
+				return nil, fmt.Errorf("invalid VM alternative %q in %q: %w", part, s, err)
+			}
+			union = unionVM(union, parsed)
+		}
+		return union, nil
+	}
+
 	// Split by "-", " ", or "or"
 	// Examples: "1-2", "1 or 2", "1-n", "2-2n"
 	parts := strings.FieldsFunc(s, func(r rune) bool {
@@ -205,6 +226,25 @@ func parseVM(s string) (*VM, error) {
 	}
 
 	return nil, fmt.Errorf("invalid VM format: '%s'", s)
+}
+
+// unionVM returns a VM that accepts every count accepted by either alternative.
+// A stride is preserved only when both alternatives share the same minimum and
+// multiplicity, so "1-n or 1" stays "1-n" while mixed strides widen to a plain
+// range (a superset, because VM cannot express a non-contiguous union).
+func unionVM(a, b *VM) *VM {
+	if a == nil {
+		return b
+	}
+	union := &VM{
+		minimum:      min(a.minimum, b.minimum),
+		maximum:      max(a.maximum, b.maximum),
+		multiplicity: 1,
+	}
+	if a.minimum == b.minimum && a.multiplicity == b.multiplicity {
+		union.multiplicity = a.multiplicity
+	}
+	return union
 }
 
 // Standard VM constants

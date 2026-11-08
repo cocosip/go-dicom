@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Supplemental PS3.6 2026d registry rows.
+
+  The pinned fo-dicom merge in tools/data/2026b predates PS3.6 2026d. This
+  document adds only the rows that are missing from that baseline:
+    * 9 data elements from Tables 6-1/7-1/8-1/9-1, and
+    * 62 UIDs from Annex A (A-1: 5, A-2: 28, A-3: 5, A-4: 24).
+
+  Entries that PS3.6 itself publishes with a blank name, keyword, VR or VM are
+  marked retired and given a deterministic RetiredBlank* identifier so the
+  generated Go identifiers stay unique. A-3/A-4 rows whose DocBook cells are
+  unresolved cross references carry a descriptive local identifier.
+
+  Regenerate with tools/generate_dicom and the -supplement flag.
+-->
+<dictionary version="2026d">
+    <tag group="0008" element="0202" keyword="RetiredBlank00080202" vm="1" retired="true">Retired-blank</tag>
+    <tag group="0018" element="0061" keyword="RetiredBlank00180061" vr="DS" vm="1" retired="true">Retired-blank</tag>
+    <tag group="0018" element="9445" keyword="RetiredBlank00189445" vm="1" retired="true">Retired-blank</tag>
+    <tag group="0028" element="0020" keyword="RetiredBlank00280020" vm="1" retired="true">Retired-blank</tag>
+    <tag group="0040" element="E012" keyword="DisplayURI" vr="UR" vm="1">Display URI</tag>
+    <tag group="0400" element="0315" keyword="RetiredBlank04000315" vr="FL" vm="1" retired="true">Retired-blank</tag>
+    <tag group="3004" element="007F" keyword="DoseCalculationModelName" vr="LO" vm="1">Dose Calculation Model Name</tag>
+    <tag group="300A" element="0135" keyword="RetiredBlank300A0135" vm="1" retired="true">Retired-blank</tag>
+    <tag group="300A" element="0782" keyword="RetiredBlank300A0782" vr="US" vm="1" retired="true">Retired-blank</tag>
+
+    <uid uid="1.2.840.10008.5.1.4.1.1.2.3" keyword="CTImageStorageForProcessing" type="SOP Class">CT Image Storage - For Processing</uid>
+    <uid uid="1.2.840.10008.5.1.4.1.1.2.4" keyword="EnhancedCTImageStorageForProcessing" type="SOP Class">Enhanced CT Image Storage - For Processing</uid>
+    <uid uid="1.2.840.10008.5.1.4.1.1.2.5" keyword="LegacyConvertedEnhancedCTImageStorageForProcessing" type="SOP Class">Legacy Converted Enhanced CT Image Storage - For Processing</uid>
+    <uid uid="1.2.840.10008.5.1.4.1.1.12.77" keyword="SOPClassUID1277" type="SOP Class" retired="true">(Retired)</uid>
+    <uid uid="1.2.840.10008.5.1.4.1.1.40" keyword="SOPClassUID40" type="SOP Class" retired="true">(Retired)</uid>
+
+    <uid uid="1.2.840.10008.1.4.1.1" keyword="TalairachBrainAtlas" type="Well-known Frame of Reference">Talairach Brain Atlas Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.2" keyword="SPM2T1" type="Well-known Frame of Reference">SPM2 T1 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.3" keyword="SPM2T2" type="Well-known Frame of Reference">SPM2 T2 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.4" keyword="SPM2PD" type="Well-known Frame of Reference">SPM2 PD Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.5" keyword="SPM2EPI" type="Well-known Frame of Reference">SPM2 EPI Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.6" keyword="SPM2FILT1" type="Well-known Frame of Reference">SPM2 FIL T1 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.7" keyword="SPM2PET" type="Well-known Frame of Reference">SPM2 PET Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.8" keyword="SPM2TRANSM" type="Well-known Frame of Reference">SPM2 TRANSM Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.9" keyword="SPM2SPECT" type="Well-known Frame of Reference">SPM2 SPECT Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.10" keyword="SPM2GRAY" type="Well-known Frame of Reference">SPM2 GRAY Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.11" keyword="SPM2WHITE" type="Well-known Frame of Reference">SPM2 WHITE Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.12" keyword="SPM2CSF" type="Well-known Frame of Reference">SPM2 CSF Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.13" keyword="SPM2BRAINMASK" type="Well-known Frame of Reference">SPM2 BRAINMASK Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.14" keyword="SPM2AVG305T1" type="Well-known Frame of Reference">SPM2 AVG305T1 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.15" keyword="SPM2AVG152T1" type="Well-known Frame of Reference">SPM2 AVG152T1 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.16" keyword="SPM2AVG152T2" type="Well-known Frame of Reference">SPM2 AVG152T2 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.17" keyword="SPM2AVG152PD" type="Well-known Frame of Reference">SPM2 AVG152PD Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.1.18" keyword="SPM2SINGLESUBJT1" type="Well-known Frame of Reference">SPM2 SINGLESUBJT1 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.2.1" keyword="ICBM452T1" type="Well-known Frame of Reference">ICBM 452 T1 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.2.2" keyword="ICBMSingleSubjectMRI" type="Well-known Frame of Reference">ICBM Single Subject MRI Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.3.1" keyword="IEC61217FixedCoordinateSystem" type="Well-known Frame of Reference">IEC 61217 Fixed Coordinate System Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.3.2" keyword="StandardRoboticArmCoordinateSystem" type="Well-known Frame of Reference">Standard Robotic-Arm Coordinate System Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.3.3" keyword="IEC61217TableTopCoordinateSystem" type="Well-known Frame of Reference">IEC 61217 Table Top Coordinate System Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.4.1" keyword="SRI24" type="Well-known Frame of Reference">SRI24 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.5.1" keyword="Colin27" type="Well-known Frame of Reference">Colin27 Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.6.1" keyword="LPBA40AIR" type="Well-known Frame of Reference">LPBA40/AIR Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.6.2" keyword="LPBA40FLIRT" type="Well-known Frame of Reference">LPBA40/FLIRT Frame of Reference</uid>
+    <uid uid="1.2.840.10008.1.4.6.3" keyword="LPBA40SPM5" type="Well-known Frame of Reference">LPBA40/SPM5 Frame of Reference</uid>
+
+    <uid uid="1.2.840.10008.6.1.837" keyword="ContextGroupUID837" type="Context Group Name">Context Group UID 837 (unassigned)</uid>
+    <uid uid="1.2.840.10008.6.1.888" keyword="ContextGroupUID888" type="Context Group Name" retired="true">Context Group UID 888 (retired)</uid>
+    <uid uid="1.2.840.10008.6.1.945" keyword="ContextGroupUID945" type="Context Group Name" retired="true">Context Group UID 945 (retired)</uid>
+    <uid uid="1.2.840.10008.6.1.946" keyword="ContextGroupUID946" type="Context Group Name" retired="true">Context Group UID 946 (retired)</uid>
+    <uid uid="1.2.840.10008.6.1.1572" keyword="ImageQualityReferenceParameter10037" type="Context Group Name">Image Quality Reference Parameter (10037)</uid>
+
+    <uid uid="1.2.840.10008.9.1" keyword="DocumentTemplateID91" type="Document TemplateID">Document Template ID 9.1</uid>
+    <uid uid="1.2.840.10008.9.2" keyword="SectionTemplateID92" type="Section TemplateID">Section Template ID 9.2</uid>
+    <uid uid="1.2.840.10008.9.3" keyword="SectionTemplateID93" type="Section TemplateID">Section Template ID 9.3</uid>
+    <uid uid="1.2.840.10008.9.4" keyword="SectionTemplateID94" type="Section TemplateID">Section Template ID 9.4</uid>
+    <uid uid="1.2.840.10008.9.5" keyword="SectionTemplateID95" type="Section TemplateID">Section Template ID 9.5</uid>
+    <uid uid="1.2.840.10008.9.6" keyword="SectionTemplateID96" type="Section TemplateID">Section Template ID 9.6</uid>
+    <uid uid="1.2.840.10008.9.7" keyword="SectionTemplateID97" type="Section TemplateID">Section Template ID 9.7</uid>
+    <uid uid="1.2.840.10008.9.8" keyword="SectionTemplateID98" type="Section TemplateID">Section Template ID 9.8</uid>
+    <uid uid="1.2.840.10008.9.9" keyword="SectionTemplateID99" type="Section TemplateID">Section Template ID 9.9</uid>
+    <uid uid="1.2.840.10008.9.10" keyword="SectionTemplateID910" type="Section TemplateID">Section Template ID 9.10</uid>
+    <uid uid="1.2.840.10008.9.11" keyword="SectionTemplateID911" type="Section TemplateID">Section Template ID 9.11</uid>
+    <uid uid="1.2.840.10008.9.12" keyword="SectionTemplateID912" type="Section TemplateID">Section Template ID 9.12</uid>
+    <uid uid="1.2.840.10008.9.13" keyword="EntryTemplateID913" type="Entry TemplateID">Entry Template ID 9.13</uid>
+    <uid uid="1.2.840.10008.9.14" keyword="EntryTemplateID914" type="Entry TemplateID">Entry Template ID 9.14</uid>
+    <uid uid="1.2.840.10008.9.15" keyword="EntryTemplateID915" type="Entry TemplateID">Entry Template ID 9.15</uid>
+    <uid uid="1.2.840.10008.9.16" keyword="EntryTemplateID916" type="Entry TemplateID">Entry Template ID 9.16</uid>
+    <uid uid="1.2.840.10008.9.17" keyword="EntryTemplateID917" type="Entry TemplateID">Entry Template ID 9.17</uid>
+    <uid uid="1.2.840.10008.9.18" keyword="EntryTemplateID918" type="Entry TemplateID">Entry Template ID 9.18</uid>
+    <uid uid="1.2.840.10008.9.19" keyword="ElementSetTemplateID919" type="Element Set TemplateID">Element Set Template ID 9.19</uid>
+    <uid uid="1.2.840.10008.9.20" keyword="ElementSetTemplateID920" type="Element Set TemplateID">Element Set Template ID 9.20</uid>
+    <uid uid="1.2.840.10008.9.21" keyword="ElementSetTemplateID921" type="Element Set TemplateID">Element Set Template ID 9.21</uid>
+    <uid uid="1.2.840.10008.9.22" keyword="ElementSetTemplateID922" type="Element Set TemplateID">Element Set Template ID 9.22</uid>
+    <uid uid="1.2.840.10008.9.23" keyword="ElementSetTemplateID923" type="Element Set TemplateID">Element Set Template ID 9.23</uid>
+    <uid uid="1.2.840.10008.9.24" keyword="DocumentTemplateID924" type="Document TemplateID">Document Template ID 9.24</uid>
+</dictionary>

@@ -120,7 +120,7 @@ func TestEnhancedMultiFrameGeometryUsesSharedAndPerFrameMacros(t *testing.T) {
 	}
 }
 
-func TestFrameGeometryUsesFODICOMSpacingPrecedence(t *testing.T) {
+func TestFrameGeometryPrefersPixelSpacingOverImagerPixelSpacing(t *testing.T) {
 	ds := classicGeometryDataset(
 		[]float64{0, 0, 0},
 		[]float64{1, 0, 0, 0, 1, 0},
@@ -137,8 +137,8 @@ func TestFrameGeometryUsesFODICOMSpacingPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFrameGeometry() error = %v", err)
 	}
-	if geometry.PixelSpacingRows != 4 || geometry.PixelSpacingColumns != 5 {
-		t.Fatalf("pixel spacing = %v/%v, want top-level Imager Pixel Spacing 4/5", geometry.PixelSpacingRows, geometry.PixelSpacingColumns)
+	if geometry.PixelSpacingRows != 2 || geometry.PixelSpacingColumns != 3 {
+		t.Fatalf("pixel spacing = %v/%v, want top-level Pixel Spacing 2/3", geometry.PixelSpacingRows, geometry.PixelSpacingColumns)
 	}
 }
 

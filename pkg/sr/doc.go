@@ -28,6 +28,10 @@
 //   - UIDREF: UID reference
 //   - SCOORD: Two-dimensional spatial coordinates
 //   - TCOORD: Temporal coordinates
+//   - TABLE: Tabulated values (row/column counts plus cell values)
+//
+// Nested CONTAINER items may omit the Concept Name Code Sequence; the root
+// CONTAINER and all non-container value types require one (PS3.3 C.17.3.2.2).
 //
 // **Relationship Types**:
 //   - CONTAINS: Parent-child containment

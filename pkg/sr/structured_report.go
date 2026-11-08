@@ -12,6 +12,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
@@ -33,6 +34,12 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 	// Create root container (relationship type is not needed for root)
 	ds := dataset.New()
 
+	// SOP Common Module Type 1 attributes (PS3.3 C.12.1, Table C.12-1). A new
+	// report uses the Comprehensive SR Storage SOP Class and a generated
+	// instance UID so that Save can produce a Part 10 file.
+	_ = ds.AddOrUpdate(element.NewString(tag.SOPClassUID, vr.UI, []string{uid.ComprehensiveSRStorage.UID()}))
+	_ = ds.AddOrUpdate(element.NewString(tag.SOPInstanceUID, vr.UI, []string{uid.GenerateDerivedFromUUID().UID()}))
+
 	// Set concept name code sequence
 	if err := setConceptNameCode(ds, rootCode); err != nil {
 		return nil, err
@@ -52,6 +59,9 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 		element.NewString(tag.VerificationFlag, vr.CS, []string{"UNVERIFIED"}),
 		element.NewDateFromTime(tag.ContentDate, []time.Time{now}),
 		element.NewTimeFromTime(tag.ContentTime, []time.Time{now}),
+		// Performed Procedure Code Sequence (0040,A372) is Type 2: present but
+		// allowed to be empty.
+		dataset.NewSequence(tag.PerformedProcedureCodeSequence),
 	} {
 		_ = ds.AddOrUpdate(item)
 	}
@@ -67,6 +77,10 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 
 		seq := dataset.NewSequenceWithItems(tag.ContentSequence, datasets)
 		_ = ds.AddOrUpdate(seq)
+	}
+
+	if err := ds.EnsureUTF8CharacterSet(); err != nil {
+		return nil, WrapError("set Specific Character Set", err)
 	}
 
 	contentItem := NewContentItemFromDataset(ds)
@@ -186,6 +200,9 @@ func (sr *StructuredReport) Write(output io.Writer, options ...writer.WriteOptio
 	if output == nil {
 		return NewError("structured report writer is nil")
 	}
+	if err := sr.Dataset().EnsureUTF8CharacterSet(); err != nil {
+		return WrapError("set Specific Character Set", err)
+	}
 	if err := sr.Validate(); err != nil {
 		return WrapError("validate structured report", err)
 	}
@@ -197,6 +214,9 @@ func (sr *StructuredReport) Write(output io.Writer, options ...writer.WriteOptio
 
 // Save validates and writes the structured report to a file.
 func (sr *StructuredReport) Save(path string, options ...writer.WriteOption) error {
+	if err := sr.Dataset().EnsureUTF8CharacterSet(); err != nil {
+		return WrapError("set Specific Character Set", err)
+	}
 	if err := sr.Validate(); err != nil {
 		return WrapError("validate structured report", err)
 	}
@@ -221,3 +241,5 @@ func (sr *StructuredReport) writeOptions(options []writer.WriteOption) []writer.
 	)
 	return result
 }
+
+

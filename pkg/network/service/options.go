@@ -37,9 +37,9 @@ type serviceConfig struct {
 	// The default is false for services accepting inbound associations.
 	associationRequestor bool
 
-	// maxPDULength is the maximum PDU length in bytes.
-	// Default: 16384 (16 KB)
-	// DICOM standard allows up to 2^32-1, but practical limits are lower.
+	// maxPDULength is the maximum PDU length this AE advertises it can receive.
+	// It is a per-direction limit (PS3.7 D.3.3.1); the peer advertises its own.
+	// Default: 16384 (16 KB). DICOM allows up to 2^32-1, but practical limits are lower.
 	maxPDULength uint32
 
 	// maxMessageSize bounds the total reassembled size of a single inbound DIMSE
@@ -84,8 +84,9 @@ type serviceConfig struct {
 	// Default: 100
 	sendQueueSize int
 
-	// keepConnectionOnPeerRelease keeps the TCP connection open after replying
-	// to a peer A-RELEASE-RQ for compatibility with non-conformant PACS.
+	// keepConnectionOnPeerRelease is retained for source compatibility and has
+	// no effect. PS3.8 7.2.2 forbids any further P-DATA after the A-RELEASE-RP,
+	// so replying to a peer release always ends the association.
 	keepConnectionOnPeerRelease bool
 
 	// Lifecycle callbacks (optional)
@@ -197,8 +198,9 @@ func WithMaxConcurrentRequests(limit int) Option {
 	}
 }
 
-// WithMaxPDULength sets the maximum PDU length.
-// Default: 16384 bytes (16 KB).
+// WithMaxPDULength sets the maximum PDU length this AE advertises it can
+// receive. Outgoing PDUs are fragmented to the smaller of this value and the
+// peer's advertised limit. Default: 16384 bytes (16 KB); 0 means unlimited.
 func WithMaxPDULength(length uint32) Option {
 	return func(c *serviceConfig) {
 		c.maxPDULength = length
@@ -255,9 +257,13 @@ func WithSendQueueSize(size int) Option {
 	}
 }
 
-// WithKeepConnectionOnPeerRelease controls whether the service closes the TCP
-// connection after responding to an A-RELEASE-RQ from the peer. The default is
-// false, which closes the connection according to the normal release lifecycle.
+// WithKeepConnectionOnPeerRelease is deprecated and has no effect.
+//
+// After the local AE answers a peer A-RELEASE-RQ with A-RELEASE-RP it must not
+// send any further P-DATA and the transport is closed (PS3.8 7.2.2), so the
+// association can never stay usable on the same connection.
+//
+// Deprecated: keeping the connection open after a release is not conformant.
 func WithKeepConnectionOnPeerRelease(keep bool) Option {
 	return func(c *serviceConfig) {
 		c.keepConnectionOnPeerRelease = keep

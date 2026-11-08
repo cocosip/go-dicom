@@ -200,9 +200,10 @@ func ParseMaskedTag(s string) (*MaskedTag, error) {
 
 // parseMaskedTagParts parses a masked tag from group and element strings.
 func parseMaskedTagParts(group, element string) (*MaskedTag, error) {
-	// Parse group and element, replacing 'x' with '0'
-	groupClean := strings.ToLower(strings.ReplaceAll(group, "x", "0"))
-	elementClean := strings.ToLower(strings.ReplaceAll(element, "x", "0"))
+	// Normalise case before replacing the wildcard so uppercase 'X' (accepted
+	// by validateXMLTagPart in the dictionary loader) is handled too.
+	groupClean := strings.ReplaceAll(strings.ToLower(group), "x", "0")
+	elementClean := strings.ReplaceAll(strings.ToLower(element), "x", "0")
 
 	g, err := strconv.ParseUint(groupClean, 16, 16)
 	if err != nil {

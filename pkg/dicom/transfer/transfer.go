@@ -112,6 +112,11 @@ var standardTransferSyntaxes = []*Syntax{
 	JPIPHTJ2KReferenced,
 	JPIPHTJ2KReferencedDeflate,
 	RLELossless,
+	EncapsulatedUncompressedExplicitVRLittleEndian,
+	JPEGXLLossless,
+	JPEGXLJPEGRecompression,
+	JPEGXL,
+	DeflatedImageFrameCompression,
 	RFC2557MIMEEncapsulation,
 	XMLEncoding,
 }

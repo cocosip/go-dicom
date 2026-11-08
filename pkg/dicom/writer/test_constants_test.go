@@ -4,9 +4,10 @@
 package writer
 
 const (
-	testPatientNameJohn   = "Doe^John"
-	testPatientName       = "Test^Patient"
-	testReferencedUID     = "1.2.3.4"
-	testCTImageStorageUID = "1.2.840.10008.5.1.4.1.1.2"
-	testSOPInstanceUID    = "1.2.3.4.5"
+	testPatientNameJohn        = "Doe^John"
+	testPatientName            = "Test^Patient"
+	testReferencedUID          = "1.2.3.4"
+	testCTImageStorageUID      = "1.2.840.10008.5.1.4.1.1.2"
+	testSOPInstanceUID         = "1.2.3.4.5"
+	testImplementationClassUID = "1.2.840.12345.1.2.3"
 )

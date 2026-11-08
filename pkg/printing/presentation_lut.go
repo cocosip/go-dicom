@@ -37,6 +37,11 @@ type PresentationLUT struct {
 	// LUTData contains the LUT entry values (P-Values)
 	LUTData []uint16
 
+	// BitsStored is the image Bits Stored this LUT applies to when known. A
+	// print Presentation LUT maps 8-bit images with 256 entries and 12-bit
+	// images with 4096 entries (PS3.4 H.4.9.2.1.1.1); zero leaves it unspecified.
+	BitsStored uint16
+
 	// PresentationLUTShape specifies the shape of the Presentation LUT.
 	// Print presentation LUTs accept only IDENTITY or LIN OD (PS3.3 C.11.4,
 	// Table C.11-4); INVERSE is a softcopy (C.11.6) value.
@@ -117,11 +122,21 @@ func (p *PresentationLUT) IsValid() bool {
 		return false
 	}
 
-	entryCount := int(numberOfEntries)
-	if entryCount == 0 {
-		entryCount = 65536
+	// PS3.4 H.4.9.2.1.1.1: the first LUT Descriptor value is 256 for 8-bit
+	// images and 4096 for 12-bit images; no other count is permitted for print.
+	switch numberOfEntries {
+	case 256:
+		if p.BitsStored != 0 && p.BitsStored != 8 {
+			return false
+		}
+	case 4096:
+		if p.BitsStored != 0 && p.BitsStored != 12 {
+			return false
+		}
+	default:
+		return false
 	}
-	if len(p.LUTData) != entryCount {
+	if len(p.LUTData) != int(numberOfEntries) {
 		return false
 	}
 	maxValue := uint16((uint32(1) << bitsPerEntry) - 1)

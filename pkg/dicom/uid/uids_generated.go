@@ -5790,6 +5790,192 @@ var (
 
 	// MetalArtifactReductionAlgorithmFamily10036 Metal Artifact Reduction Algorithm Family (10036)
 	MetalArtifactReductionAlgorithmFamily10036 = New("1.2.840.10008.6.1.1571", "Metal Artifact Reduction Algorithm Family (10036)", TypeContextGroupName, false)
+
+	// CTImageStorageForProcessing CT Image Storage - For Processing
+	CTImageStorageForProcessing = New("1.2.840.10008.5.1.4.1.1.2.3", "CT Image Storage - For Processing", TypeSOPClass, false)
+
+	// EnhancedCTImageStorageForProcessing Enhanced CT Image Storage - For Processing
+	EnhancedCTImageStorageForProcessing = New("1.2.840.10008.5.1.4.1.1.2.4", "Enhanced CT Image Storage - For Processing", TypeSOPClass, false)
+
+	// LegacyConvertedEnhancedCTImageStorageForProcessing Legacy Converted Enhanced CT Image Storage - For Processing
+	LegacyConvertedEnhancedCTImageStorageForProcessing = New("1.2.840.10008.5.1.4.1.1.2.5", "Legacy Converted Enhanced CT Image Storage - For Processing", TypeSOPClass, false)
+
+	// SOPClassUID1277RETIRED (Retired)
+	SOPClassUID1277RETIRED = New("1.2.840.10008.5.1.4.1.1.12.77", "(Retired)", TypeSOPClass, true)
+
+	// SOPClassUID40RETIRED (Retired)
+	SOPClassUID40RETIRED = New("1.2.840.10008.5.1.4.1.1.40", "(Retired)", TypeSOPClass, true)
+
+	// TalairachBrainAtlas Talairach Brain Atlas Frame of Reference
+	TalairachBrainAtlas = New("1.2.840.10008.1.4.1.1", "Talairach Brain Atlas Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2T1 SPM2 T1 Frame of Reference
+	SPM2T1 = New("1.2.840.10008.1.4.1.2", "SPM2 T1 Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2T2 SPM2 T2 Frame of Reference
+	SPM2T2 = New("1.2.840.10008.1.4.1.3", "SPM2 T2 Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2PD SPM2 PD Frame of Reference
+	SPM2PD = New("1.2.840.10008.1.4.1.4", "SPM2 PD Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2EPI SPM2 EPI Frame of Reference
+	SPM2EPI = New("1.2.840.10008.1.4.1.5", "SPM2 EPI Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2FILT1 SPM2 FIL T1 Frame of Reference
+	SPM2FILT1 = New("1.2.840.10008.1.4.1.6", "SPM2 FIL T1 Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2PET SPM2 PET Frame of Reference
+	SPM2PET = New("1.2.840.10008.1.4.1.7", "SPM2 PET Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2TRANSM SPM2 TRANSM Frame of Reference
+	SPM2TRANSM = New("1.2.840.10008.1.4.1.8", "SPM2 TRANSM Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2SPECT SPM2 SPECT Frame of Reference
+	SPM2SPECT = New("1.2.840.10008.1.4.1.9", "SPM2 SPECT Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2GRAY SPM2 GRAY Frame of Reference
+	SPM2GRAY = New("1.2.840.10008.1.4.1.10", "SPM2 GRAY Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2WHITE SPM2 WHITE Frame of Reference
+	SPM2WHITE = New("1.2.840.10008.1.4.1.11", "SPM2 WHITE Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2CSF SPM2 CSF Frame of Reference
+	SPM2CSF = New("1.2.840.10008.1.4.1.12", "SPM2 CSF Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2BRAINMASK SPM2 BRAINMASK Frame of Reference
+	SPM2BRAINMASK = New("1.2.840.10008.1.4.1.13", "SPM2 BRAINMASK Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2AVG305T1 SPM2 AVG305T1 Frame of Reference
+	SPM2AVG305T1 = New("1.2.840.10008.1.4.1.14", "SPM2 AVG305T1 Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2AVG152T1 SPM2 AVG152T1 Frame of Reference
+	SPM2AVG152T1 = New("1.2.840.10008.1.4.1.15", "SPM2 AVG152T1 Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2AVG152T2 SPM2 AVG152T2 Frame of Reference
+	SPM2AVG152T2 = New("1.2.840.10008.1.4.1.16", "SPM2 AVG152T2 Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2AVG152PD SPM2 AVG152PD Frame of Reference
+	SPM2AVG152PD = New("1.2.840.10008.1.4.1.17", "SPM2 AVG152PD Frame of Reference", TypeFrameOfReference, false)
+
+	// SPM2SINGLESUBJT1 SPM2 SINGLESUBJT1 Frame of Reference
+	SPM2SINGLESUBJT1 = New("1.2.840.10008.1.4.1.18", "SPM2 SINGLESUBJT1 Frame of Reference", TypeFrameOfReference, false)
+
+	// ICBM452T1 ICBM 452 T1 Frame of Reference
+	ICBM452T1 = New("1.2.840.10008.1.4.2.1", "ICBM 452 T1 Frame of Reference", TypeFrameOfReference, false)
+
+	// ICBMSingleSubjectMRI ICBM Single Subject MRI Frame of Reference
+	ICBMSingleSubjectMRI = New("1.2.840.10008.1.4.2.2", "ICBM Single Subject MRI Frame of Reference", TypeFrameOfReference, false)
+
+	// IEC61217FixedCoordinateSystem IEC 61217 Fixed Coordinate System Frame of Reference
+	IEC61217FixedCoordinateSystem = New("1.2.840.10008.1.4.3.1", "IEC 61217 Fixed Coordinate System Frame of Reference", TypeFrameOfReference, false)
+
+	// StandardRoboticArmCoordinateSystem Standard Robotic-Arm Coordinate System Frame of Reference
+	StandardRoboticArmCoordinateSystem = New("1.2.840.10008.1.4.3.2", "Standard Robotic-Arm Coordinate System Frame of Reference", TypeFrameOfReference, false)
+
+	// IEC61217TableTopCoordinateSystem IEC 61217 Table Top Coordinate System Frame of Reference
+	IEC61217TableTopCoordinateSystem = New("1.2.840.10008.1.4.3.3", "IEC 61217 Table Top Coordinate System Frame of Reference", TypeFrameOfReference, false)
+
+	// SRI24 SRI24 Frame of Reference
+	SRI24 = New("1.2.840.10008.1.4.4.1", "SRI24 Frame of Reference", TypeFrameOfReference, false)
+
+	// Colin27 Colin27 Frame of Reference
+	Colin27 = New("1.2.840.10008.1.4.5.1", "Colin27 Frame of Reference", TypeFrameOfReference, false)
+
+	// LPBA40AIR LPBA40/AIR Frame of Reference
+	LPBA40AIR = New("1.2.840.10008.1.4.6.1", "LPBA40/AIR Frame of Reference", TypeFrameOfReference, false)
+
+	// LPBA40FLIRT LPBA40/FLIRT Frame of Reference
+	LPBA40FLIRT = New("1.2.840.10008.1.4.6.2", "LPBA40/FLIRT Frame of Reference", TypeFrameOfReference, false)
+
+	// LPBA40SPM5 LPBA40/SPM5 Frame of Reference
+	LPBA40SPM5 = New("1.2.840.10008.1.4.6.3", "LPBA40/SPM5 Frame of Reference", TypeFrameOfReference, false)
+
+	// ContextGroupUID837 Context Group UID 837 (unassigned)
+	ContextGroupUID837 = New("1.2.840.10008.6.1.837", "Context Group UID 837 (unassigned)", TypeContextGroupName, false)
+
+	// ContextGroupUID888RETIRED Context Group UID 888 (retired)
+	ContextGroupUID888RETIRED = New("1.2.840.10008.6.1.888", "Context Group UID 888 (retired)", TypeContextGroupName, true)
+
+	// ContextGroupUID945RETIRED Context Group UID 945 (retired)
+	ContextGroupUID945RETIRED = New("1.2.840.10008.6.1.945", "Context Group UID 945 (retired)", TypeContextGroupName, true)
+
+	// ContextGroupUID946RETIRED Context Group UID 946 (retired)
+	ContextGroupUID946RETIRED = New("1.2.840.10008.6.1.946", "Context Group UID 946 (retired)", TypeContextGroupName, true)
+
+	// ImageQualityReferenceParameter10037 Image Quality Reference Parameter (10037)
+	ImageQualityReferenceParameter10037 = New("1.2.840.10008.6.1.1572", "Image Quality Reference Parameter (10037)", TypeContextGroupName, false)
+
+	// DocumentTemplateID91 Document Template ID 9.1
+	DocumentTemplateID91 = New("1.2.840.10008.9.1", "Document Template ID 9.1", TypeTemplate, false)
+
+	// SectionTemplateID92 Section Template ID 9.2
+	SectionTemplateID92 = New("1.2.840.10008.9.2", "Section Template ID 9.2", TypeTemplate, false)
+
+	// SectionTemplateID93 Section Template ID 9.3
+	SectionTemplateID93 = New("1.2.840.10008.9.3", "Section Template ID 9.3", TypeTemplate, false)
+
+	// SectionTemplateID94 Section Template ID 9.4
+	SectionTemplateID94 = New("1.2.840.10008.9.4", "Section Template ID 9.4", TypeTemplate, false)
+
+	// SectionTemplateID95 Section Template ID 9.5
+	SectionTemplateID95 = New("1.2.840.10008.9.5", "Section Template ID 9.5", TypeTemplate, false)
+
+	// SectionTemplateID96 Section Template ID 9.6
+	SectionTemplateID96 = New("1.2.840.10008.9.6", "Section Template ID 9.6", TypeTemplate, false)
+
+	// SectionTemplateID97 Section Template ID 9.7
+	SectionTemplateID97 = New("1.2.840.10008.9.7", "Section Template ID 9.7", TypeTemplate, false)
+
+	// SectionTemplateID98 Section Template ID 9.8
+	SectionTemplateID98 = New("1.2.840.10008.9.8", "Section Template ID 9.8", TypeTemplate, false)
+
+	// SectionTemplateID99 Section Template ID 9.9
+	SectionTemplateID99 = New("1.2.840.10008.9.9", "Section Template ID 9.9", TypeTemplate, false)
+
+	// SectionTemplateID910 Section Template ID 9.10
+	SectionTemplateID910 = New("1.2.840.10008.9.10", "Section Template ID 9.10", TypeTemplate, false)
+
+	// SectionTemplateID911 Section Template ID 9.11
+	SectionTemplateID911 = New("1.2.840.10008.9.11", "Section Template ID 9.11", TypeTemplate, false)
+
+	// SectionTemplateID912 Section Template ID 9.12
+	SectionTemplateID912 = New("1.2.840.10008.9.12", "Section Template ID 9.12", TypeTemplate, false)
+
+	// EntryTemplateID913 Entry Template ID 9.13
+	EntryTemplateID913 = New("1.2.840.10008.9.13", "Entry Template ID 9.13", TypeTemplate, false)
+
+	// EntryTemplateID914 Entry Template ID 9.14
+	EntryTemplateID914 = New("1.2.840.10008.9.14", "Entry Template ID 9.14", TypeTemplate, false)
+
+	// EntryTemplateID915 Entry Template ID 9.15
+	EntryTemplateID915 = New("1.2.840.10008.9.15", "Entry Template ID 9.15", TypeTemplate, false)
+
+	// EntryTemplateID916 Entry Template ID 9.16
+	EntryTemplateID916 = New("1.2.840.10008.9.16", "Entry Template ID 9.16", TypeTemplate, false)
+
+	// EntryTemplateID917 Entry Template ID 9.17
+	EntryTemplateID917 = New("1.2.840.10008.9.17", "Entry Template ID 9.17", TypeTemplate, false)
+
+	// EntryTemplateID918 Entry Template ID 9.18
+	EntryTemplateID918 = New("1.2.840.10008.9.18", "Entry Template ID 9.18", TypeTemplate, false)
+
+	// ElementSetTemplateID919 Element Set Template ID 9.19
+	ElementSetTemplateID919 = New("1.2.840.10008.9.19", "Element Set Template ID 9.19", TypeTemplate, false)
+
+	// ElementSetTemplateID920 Element Set Template ID 9.20
+	ElementSetTemplateID920 = New("1.2.840.10008.9.20", "Element Set Template ID 9.20", TypeTemplate, false)
+
+	// ElementSetTemplateID921 Element Set Template ID 9.21
+	ElementSetTemplateID921 = New("1.2.840.10008.9.21", "Element Set Template ID 9.21", TypeTemplate, false)
+
+	// ElementSetTemplateID922 Element Set Template ID 9.22
+	ElementSetTemplateID922 = New("1.2.840.10008.9.22", "Element Set Template ID 9.22", TypeTemplate, false)
+
+	// ElementSetTemplateID923 Element Set Template ID 9.23
+	ElementSetTemplateID923 = New("1.2.840.10008.9.23", "Element Set Template ID 9.23", TypeTemplate, false)
+
+	// DocumentTemplateID924 Document Template ID 9.24
+	DocumentTemplateID924 = New("1.2.840.10008.9.24", "Document Template ID 9.24", TypeTemplate, false)
 )
 
 var generatedStandardUIDEntries = []*UID{
@@ -7721,6 +7907,68 @@ var generatedStandardUIDEntries = []*UID{
 	UltrasoundZScorePopulationIndex12027,
 	FetalUltrasoundZScoreReferenceAuthority12028,
 	MetalArtifactReductionAlgorithmFamily10036,
+	CTImageStorageForProcessing,
+	EnhancedCTImageStorageForProcessing,
+	LegacyConvertedEnhancedCTImageStorageForProcessing,
+	SOPClassUID1277RETIRED,
+	SOPClassUID40RETIRED,
+	TalairachBrainAtlas,
+	SPM2T1,
+	SPM2T2,
+	SPM2PD,
+	SPM2EPI,
+	SPM2FILT1,
+	SPM2PET,
+	SPM2TRANSM,
+	SPM2SPECT,
+	SPM2GRAY,
+	SPM2WHITE,
+	SPM2CSF,
+	SPM2BRAINMASK,
+	SPM2AVG305T1,
+	SPM2AVG152T1,
+	SPM2AVG152T2,
+	SPM2AVG152PD,
+	SPM2SINGLESUBJT1,
+	ICBM452T1,
+	ICBMSingleSubjectMRI,
+	IEC61217FixedCoordinateSystem,
+	StandardRoboticArmCoordinateSystem,
+	IEC61217TableTopCoordinateSystem,
+	SRI24,
+	Colin27,
+	LPBA40AIR,
+	LPBA40FLIRT,
+	LPBA40SPM5,
+	ContextGroupUID837,
+	ContextGroupUID888RETIRED,
+	ContextGroupUID945RETIRED,
+	ContextGroupUID946RETIRED,
+	ImageQualityReferenceParameter10037,
+	DocumentTemplateID91,
+	SectionTemplateID92,
+	SectionTemplateID93,
+	SectionTemplateID94,
+	SectionTemplateID95,
+	SectionTemplateID96,
+	SectionTemplateID97,
+	SectionTemplateID98,
+	SectionTemplateID99,
+	SectionTemplateID910,
+	SectionTemplateID911,
+	SectionTemplateID912,
+	EntryTemplateID913,
+	EntryTemplateID914,
+	EntryTemplateID915,
+	EntryTemplateID916,
+	EntryTemplateID917,
+	EntryTemplateID918,
+	ElementSetTemplateID919,
+	ElementSetTemplateID920,
+	ElementSetTemplateID921,
+	ElementSetTemplateID922,
+	ElementSetTemplateID923,
+	DocumentTemplateID924,
 }
 
 var generatedStandardUIDIndex = map[string]*UID{
@@ -9652,4 +9900,66 @@ var generatedStandardUIDIndex = map[string]*UID{
 	"1.2.840.10008.6.1.1569":           UltrasoundZScorePopulationIndex12027,
 	"1.2.840.10008.6.1.1570":           FetalUltrasoundZScoreReferenceAuthority12028,
 	"1.2.840.10008.6.1.1571":           MetalArtifactReductionAlgorithmFamily10036,
+	"1.2.840.10008.5.1.4.1.1.2.3":      CTImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.2.4":      EnhancedCTImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.2.5":      LegacyConvertedEnhancedCTImageStorageForProcessing,
+	"1.2.840.10008.5.1.4.1.1.12.77":    SOPClassUID1277RETIRED,
+	"1.2.840.10008.5.1.4.1.1.40":       SOPClassUID40RETIRED,
+	"1.2.840.10008.1.4.1.1":            TalairachBrainAtlas,
+	"1.2.840.10008.1.4.1.2":            SPM2T1,
+	"1.2.840.10008.1.4.1.3":            SPM2T2,
+	"1.2.840.10008.1.4.1.4":            SPM2PD,
+	"1.2.840.10008.1.4.1.5":            SPM2EPI,
+	"1.2.840.10008.1.4.1.6":            SPM2FILT1,
+	"1.2.840.10008.1.4.1.7":            SPM2PET,
+	"1.2.840.10008.1.4.1.8":            SPM2TRANSM,
+	"1.2.840.10008.1.4.1.9":            SPM2SPECT,
+	"1.2.840.10008.1.4.1.10":           SPM2GRAY,
+	"1.2.840.10008.1.4.1.11":           SPM2WHITE,
+	"1.2.840.10008.1.4.1.12":           SPM2CSF,
+	"1.2.840.10008.1.4.1.13":           SPM2BRAINMASK,
+	"1.2.840.10008.1.4.1.14":           SPM2AVG305T1,
+	"1.2.840.10008.1.4.1.15":           SPM2AVG152T1,
+	"1.2.840.10008.1.4.1.16":           SPM2AVG152T2,
+	"1.2.840.10008.1.4.1.17":           SPM2AVG152PD,
+	"1.2.840.10008.1.4.1.18":           SPM2SINGLESUBJT1,
+	"1.2.840.10008.1.4.2.1":            ICBM452T1,
+	"1.2.840.10008.1.4.2.2":            ICBMSingleSubjectMRI,
+	"1.2.840.10008.1.4.3.1":            IEC61217FixedCoordinateSystem,
+	"1.2.840.10008.1.4.3.2":            StandardRoboticArmCoordinateSystem,
+	"1.2.840.10008.1.4.3.3":            IEC61217TableTopCoordinateSystem,
+	"1.2.840.10008.1.4.4.1":            SRI24,
+	"1.2.840.10008.1.4.5.1":            Colin27,
+	"1.2.840.10008.1.4.6.1":            LPBA40AIR,
+	"1.2.840.10008.1.4.6.2":            LPBA40FLIRT,
+	"1.2.840.10008.1.4.6.3":            LPBA40SPM5,
+	"1.2.840.10008.6.1.837":            ContextGroupUID837,
+	"1.2.840.10008.6.1.888":            ContextGroupUID888RETIRED,
+	"1.2.840.10008.6.1.945":            ContextGroupUID945RETIRED,
+	"1.2.840.10008.6.1.946":            ContextGroupUID946RETIRED,
+	"1.2.840.10008.6.1.1572":           ImageQualityReferenceParameter10037,
+	"1.2.840.10008.9.1":                DocumentTemplateID91,
+	"1.2.840.10008.9.2":                SectionTemplateID92,
+	"1.2.840.10008.9.3":                SectionTemplateID93,
+	"1.2.840.10008.9.4":                SectionTemplateID94,
+	"1.2.840.10008.9.5":                SectionTemplateID95,
+	"1.2.840.10008.9.6":                SectionTemplateID96,
+	"1.2.840.10008.9.7":                SectionTemplateID97,
+	"1.2.840.10008.9.8":                SectionTemplateID98,
+	"1.2.840.10008.9.9":                SectionTemplateID99,
+	"1.2.840.10008.9.10":               SectionTemplateID910,
+	"1.2.840.10008.9.11":               SectionTemplateID911,
+	"1.2.840.10008.9.12":               SectionTemplateID912,
+	"1.2.840.10008.9.13":               EntryTemplateID913,
+	"1.2.840.10008.9.14":               EntryTemplateID914,
+	"1.2.840.10008.9.15":               EntryTemplateID915,
+	"1.2.840.10008.9.16":               EntryTemplateID916,
+	"1.2.840.10008.9.17":               EntryTemplateID917,
+	"1.2.840.10008.9.18":               EntryTemplateID918,
+	"1.2.840.10008.9.19":               ElementSetTemplateID919,
+	"1.2.840.10008.9.20":               ElementSetTemplateID920,
+	"1.2.840.10008.9.21":               ElementSetTemplateID921,
+	"1.2.840.10008.9.22":               ElementSetTemplateID922,
+	"1.2.840.10008.9.23":               ElementSetTemplateID923,
+	"1.2.840.10008.9.24":               DocumentTemplateID924,
 }

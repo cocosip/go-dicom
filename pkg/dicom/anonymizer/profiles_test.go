@@ -231,13 +231,14 @@ func TestNewRetainInstitutionProfile(t *testing.T) {
 		t.Errorf("Institution Name action = %v, want ActionK", action)
 	}
 
-	// Check that Referring Physician's Name is kept
+	// Clinician identifiers are not part of the Retain Institution Identity
+	// Option; they follow the Basic Profile action.
 	action, found = profile.FindAction(mustParseTag("(0008,0090)"))
 	if !found {
 		t.Error("Referring Physician's Name rule not found")
 	}
-	if action != ActionK {
-		t.Errorf("Referring Physician's Name action = %v, want ActionK", action)
+	if action == ActionK {
+		t.Errorf("Referring Physician's Name action = ActionK, want the Basic Profile action")
 	}
 }
 

@@ -236,13 +236,12 @@ func Parse(s string) (*Tag, error) {
 	}
 
 	pos := 0
-
-	// Skip opening parenthesis if present
-	if s[pos] == '(' {
+	hasParentheses := s[pos] == '('
+	if hasParentheses {
 		pos++
 	}
 
-	// Parse group (4 hex digits)
+	// Parse group (exactly 4 hex digits).
 	if pos+4 > len(s) {
 		return nil, fmt.Errorf("invalid tag format: '%s'", s)
 	}
@@ -252,12 +251,12 @@ func Parse(s string) (*Tag, error) {
 	}
 	pos += 4
 
-	// Skip comma if present
+	// Skip comma if present (the compact form omits it).
 	if pos < len(s) && s[pos] == ',' {
 		pos++
 	}
 
-	// Parse element (4 hex digits)
+	// Parse element (exactly 4 hex digits).
 	if pos+4 > len(s) {
 		return nil, fmt.Errorf("invalid tag format: '%s'", s)
 	}
@@ -272,16 +271,32 @@ func Parse(s string) (*Tag, error) {
 		element: uint16(element),
 	}
 
-	// Check for private creator
+	// Check for private creator.
 	if pos < len(s) && s[pos] == ':' {
 		pos++
+		creatorEnd := len(s)
+		if hasParentheses {
+			if s[creatorEnd-1] != ')' {
+				return nil, fmt.Errorf("invalid tag format: '%s' (missing closing parenthesis)", s)
+			}
+			creatorEnd--
+		}
+		creator := s[pos:creatorEnd]
+		if creator == "" || strings.ContainsAny(creator, "()") {
+			return nil, fmt.Errorf("invalid private creator in tag '%s'", s)
+		}
+		tag.privateCreator = NewPrivateCreator(creator)
+		pos = len(s)
+	} else if hasParentheses {
+		if pos >= len(s) || s[pos] != ')' {
+			return nil, fmt.Errorf("invalid tag format: '%s' (missing closing parenthesis)", s)
+		}
+		pos++
+	}
 
-		// Extract creator string
-		creatorStr := s[pos:]
-
-		creatorStr = strings.TrimSuffix(creatorStr, ")")
-
-		tag.privateCreator = NewPrivateCreator(creatorStr)
+	// Reject trailing garbage instead of silently ignoring it.
+	if pos != len(s) {
+		return nil, fmt.Errorf("invalid tag format: '%s' (unexpected trailing characters)", s)
 	}
 
 	return tag, nil

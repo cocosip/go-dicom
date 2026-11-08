@@ -126,15 +126,26 @@ func swapPixelDataBytes(data []byte, info *Info) []byte {
 	if info == nil {
 		return data
 	}
-	if info.BytesAllocated() == 1 {
+	bytesPerSample := info.BytesAllocated()
+	if bytesPerSample == 1 {
 		return data
 	}
 	out := make([]byte, len(data))
 	copy(out, data)
-	// DICOM OW values are sequences of 16-bit words, regardless of the native
-	// sample width represented by those words.
-	for offset := 0; offset+1 < len(out); offset += 2 {
-		out[offset], out[offset+1] = out[offset+1], out[offset]
+	switch bytesPerSample {
+	case 4:
+		// A 32-bit sample occupies two OW words; swapping must reverse the whole
+		// sample so its numeric value is preserved across byte orders.
+		for offset := 0; offset+3 < len(out); offset += 4 {
+			out[offset], out[offset+3] = out[offset+3], out[offset]
+			out[offset+1], out[offset+2] = out[offset+2], out[offset+1]
+		}
+	default:
+		// DICOM OW values are sequences of 16-bit words, regardless of the
+		// native sample width represented by those words.
+		for offset := 0; offset+1 < len(out); offset += 2 {
+			out[offset], out[offset+1] = out[offset+1], out[offset]
+		}
 	}
 	return out
 }

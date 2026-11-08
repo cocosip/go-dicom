@@ -202,6 +202,20 @@ func imageStoredValueRange(bitsStored uint16, signed bool) (float64, float64) {
 	return 0, math.Pow(2, float64(bitsStored)) - 1
 }
 
+// grayscaleTransforms holds the modality and VOI transformation inputs resolved
+// for one frame.
+type grayscaleTransforms struct {
+	modalityLUT         lut.LUT
+	rescaleSlope        float64
+	rescaleIntercept    float64
+	voiDescriptorSigned bool
+	voiPrimary          *dataset.Dataset
+	voiFallback         *dataset.Dataset
+	windowCenter        float64
+	windowWidth         float64
+	hasExplicitWindow   bool
+}
+
 func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipeline, error) {
 	if img.pixelData.Info.BitsStored == 0 {
 		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false), nil
@@ -209,109 +223,223 @@ func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipe
 
 	pixelSigned := img.pixelData.Info.PixelRepresentation == pixel.SignedPixels
 	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, pixelSigned)
+	presentationStateApplied := img.presentationState != nil
 
-	// Calculate a fallback window from actual pixel data.
-	windowCenter, windowWidth := 1.0, 1.0
-	if img.pixelData.Info.BitsStored != 1 {
-		windowCenter, windowWidth = img.pixelData.CalculateOptimalWindow()
+	transforms, err := img.resolveGrayscaleTransforms(frame, presentationStateApplied, pixelSigned, minInput, maxInput)
+	if err != nil {
+		return nil, err
 	}
-	rescaleSlope, rescaleIntercept := 1.0, 0.0
-	var modalityLUT lut.LUT
-	voiDescriptorSigned := pixelSigned
-	hasExplicitWindow := false
-	functional := (*dataset.Dataset)(nil)
+
+	pipeline := render.NewGrayscalePipeline(
+		transforms.rescaleSlope, transforms.rescaleIntercept,
+		transforms.windowCenter, transforms.windowWidth, minInput, maxInput, false,
+	)
+	if img.dataset != nil {
+		if err := img.configurePipelineLUTs(pipeline, transforms, presentationStateApplied); err != nil {
+			return nil, err
+		}
+	}
+	function := lut.VOILUTFunctionLinear
+	if img.dataset != nil {
+		if value, ok := imageStringFrom(transforms.voiPrimary, transforms.voiFallback, tag.VOILUTFunction); ok {
+			function = lut.VOILUTFunction(value)
+		}
+	}
+	if _, err := lut.CreateValidatedVOILUT(function, transforms.windowCenter, transforms.windowWidth); err != nil {
+		return nil, err
+	}
+	return pipeline, nil
+}
+
+// resolveGrayscaleTransforms resolves the modality and VOI transformations for
+// one frame, including the window that the render pipeline should use.
+func (img *DicomImage) resolveGrayscaleTransforms(
+	frame int, presentationStateApplied, pixelSigned bool, minInput, maxInput float64,
+) (grayscaleTransforms, error) {
+	transforms := grayscaleTransforms{
+		rescaleSlope:        1.0,
+		rescaleIntercept:    0.0,
+		windowCenter:        1.0,
+		windowWidth:         1.0,
+		voiDescriptorSigned: pixelSigned,
+	}
+
+	// Without a Presentation State, fall back to a window derived from the
+	// actual pixel data. With one, PS3.4 N.2 replaces that heuristic: an absent
+	// VOI transformation is identity, so the image data must not be consulted.
+	if !presentationStateApplied && img.pixelData.Info.BitsStored != 1 {
+		transforms.windowCenter, transforms.windowWidth = img.pixelData.CalculateOptimalWindow()
+	}
+
+	var functional *dataset.Dataset
 	if img.dataset != nil {
 		functional = imageFunctionalGroupValues(img.dataset, frame)
 	}
 	// Enhanced multi-frame functional groups override top-level image
 	// attributes for the selected frame. The top-level Dataset remains the
 	// fallback for legacy images and attributes omitted from the macro.
-	voiPrimary := functional
-	voiFallback := img.dataset
-	if img.dataset != nil {
-		var err error
-		modalityLUT, rescaleSlope, rescaleIntercept, voiDescriptorSigned, err = imageModalityTransformWithLUTMode(
+	transforms.voiPrimary, transforms.voiFallback = functional, img.dataset
+	switch {
+	case presentationStateApplied:
+		// PS3.4 N.2: transformations defined by the Presentation State replace
+		// those of the referenced image, and absent ones are treated as
+		// identity instead of falling back to the image attributes.
+		modalityLUT, slope, intercept, descriptorSigned, err := imageModalityTransformWithLUTMode(
+			img.presentationState, nil, pixelSigned, minInput, maxInput, img.lutVRMode,
+		)
+		if err != nil {
+			return transforms, err
+		}
+		transforms.modalityLUT = modalityLUT
+		transforms.rescaleSlope = slope
+		transforms.rescaleIntercept = intercept
+		transforms.voiDescriptorSigned = descriptorSigned
+		transforms.voiPrimary, transforms.voiFallback = nil, nil
+		if img.dataset != nil {
+			softcopyVOI, err := imageSoftcopyVOI(img.presentationState, img.dataset, frame)
+			if err != nil {
+				return transforms, err
+			}
+			if softcopyVOI != nil {
+				transforms.voiPrimary = softcopyVOI
+			}
+		}
+		if err := transforms.applyExplicitWindow(nil, img.windowIndex); err != nil {
+			return transforms, err
+		}
+	case img.dataset != nil:
+		modalityLUT, slope, intercept, descriptorSigned, err := imageModalityTransformWithLUTMode(
 			functional, img.dataset, pixelSigned, minInput, maxInput, img.lutVRMode,
 		)
 		if err != nil {
-			return nil, err
+			return transforms, err
 		}
+		transforms.modalityLUT = modalityLUT
+		transforms.rescaleSlope = slope
+		transforms.rescaleIntercept = intercept
+		transforms.voiDescriptorSigned = descriptorSigned
 		softcopyVOI, err := imageSoftcopyVOI(img.presentationState, img.dataset, frame)
 		if err != nil {
-			return nil, err
+			return transforms, err
 		}
 		if softcopyVOI != nil {
-			voiPrimary, voiFallback = softcopyVOI, nil
+			transforms.voiPrimary, transforms.voiFallback = softcopyVOI, nil
 		}
-		if datasetWithAnyTag(voiPrimary, voiFallback, tag.WindowCenter, tag.WindowWidth) != nil {
-			center, width, err := imageWindowPairAt(voiPrimary, voiFallback, img.windowIndex)
-			if err != nil {
-				return nil, err
-			}
-			windowCenter, windowWidth = center, width
-			hasExplicitWindow = true
-		}
-	}
-	if !hasExplicitWindow && img.dataset != nil && img.pixelData.Info.BitsStored != 1 {
-		minimum, maximum, err := 0.0, 0.0, fmt.Errorf("image pixel value range is unavailable")
-		if img.dataset != nil {
-			minimum, maximum, err = pixeldata.DatasetValueRange(img.dataset)
-		}
-		if err != nil {
-			minimum, maximum, err = img.pixelData.MinMax(true)
-		}
-		if err == nil {
-			if modalityLUT != nil {
-				minimum = modalityLUT.Transform(minimum)
-				maximum = modalityLUT.Transform(maximum)
-			} else {
-				minimum = minimum*rescaleSlope + rescaleIntercept
-				maximum = maximum*rescaleSlope + rescaleIntercept
-			}
-			windowCenter = (minimum + maximum) / 2
-			windowWidth = math.Max(1, math.Abs(maximum-minimum))
+		if err := transforms.applyExplicitWindow(img.dataset, img.windowIndex); err != nil {
+			return transforms, err
 		}
 	}
 
-	pipeline := render.NewGrayscalePipeline(rescaleSlope, rescaleIntercept, windowCenter, windowWidth, minInput, maxInput, false)
-	if img.dataset != nil {
-		if modalityLUT != nil {
-			pipeline.SetModalityLUT(modalityLUT)
+	if img.dataset == nil {
+		return transforms, nil
+	}
+	if !transforms.hasExplicitWindow && !presentationStateApplied && img.pixelData.Info.BitsStored != 1 {
+		img.deriveWindowFromPixels(&transforms)
+	}
+	if presentationStateApplied && !transforms.hasExplicitWindow {
+		transforms.applyIdentityWindow(minInput, maxInput)
+	}
+	return transforms, nil
+}
+
+// applyExplicitWindow adopts an explicitly encoded Window Center/Width pair.
+func (t *grayscaleTransforms) applyExplicitWindow(fallback *dataset.Dataset, windowIndex int) error {
+	if datasetWithAnyTag(t.voiPrimary, fallback, tag.WindowCenter, tag.WindowWidth) == nil {
+		return nil
+	}
+	center, width, err := imageWindowPairAt(t.voiPrimary, fallback, windowIndex)
+	if err != nil {
+		return err
+	}
+	t.windowCenter, t.windowWidth = center, width
+	t.hasExplicitWindow = true
+	return nil
+}
+
+// deriveWindowFromPixels sets the window from the actual pixel value range.
+func (img *DicomImage) deriveWindowFromPixels(t *grayscaleTransforms) {
+	minimum, maximum, err := pixeldata.DatasetValueRange(img.dataset)
+	if err != nil {
+		minimum, maximum, err = img.pixelData.MinMax(true)
+	}
+	if err != nil {
+		return
+	}
+	if t.modalityLUT != nil {
+		minimum = t.modalityLUT.Transform(minimum)
+		maximum = t.modalityLUT.Transform(maximum)
+	} else {
+		minimum = minimum*t.rescaleSlope + t.rescaleIntercept
+		maximum = maximum*t.rescaleSlope + t.rescaleIntercept
+	}
+	t.windowCenter = (minimum + maximum) / 2
+	t.windowWidth = math.Max(1, math.Abs(maximum-minimum))
+}
+
+// applyIdentityWindow applies the identity VOI transformation that PS3.3
+// C.11.2.1.2.1 Note 4 defines over the possible input range. It also provides
+// the implicit scaling to the 0..255 intermediate requested by Note 9 and by
+// the Presentation LUT.
+func (t *grayscaleTransforms) applyIdentityWindow(minInput, maxInput float64) {
+	minimum, maximum := minInput, maxInput
+	if t.modalityLUT != nil {
+		minimum = t.modalityLUT.MinimumOutputValue()
+		maximum = t.modalityLUT.MaximumOutputValue()
+	} else {
+		minimum = minimum*t.rescaleSlope + t.rescaleIntercept
+		maximum = maximum*t.rescaleSlope + t.rescaleIntercept
+	}
+	if minimum > maximum {
+		minimum, maximum = maximum, minimum
+	}
+	t.windowCenter = (minimum + maximum + 1) / 2
+	t.windowWidth = math.Max(1, maximum-minimum+1)
+}
+
+// configurePipelineLUTs attaches the modality, VOI and presentation LUTs.
+func (img *DicomImage) configurePipelineLUTs(
+	pipeline *render.GrayscalePipeline, t grayscaleTransforms, presentationStateApplied bool,
+) error {
+	if t.modalityLUT != nil {
+		pipeline.SetModalityLUT(t.modalityLUT)
+	}
+	if datasetWithAnyTag(t.voiPrimary, t.voiFallback, tag.VOILUTSequence) != nil {
+		var voiLUT lut.LUT
+		var err error
+		if presentationStateApplied {
+			voiLUT, err = pixeldata.SoftcopyVOILUTFromWithVRMode(t.voiPrimary, t.voiFallback, t.voiDescriptorSigned, img.voiLUTIndex, img.lutVRMode)
+		} else {
+			voiLUT, err = pixeldata.VOILUTFromWithVRMode(t.voiPrimary, t.voiFallback, t.voiDescriptorSigned, img.voiLUTIndex, img.lutVRMode)
 		}
-		if datasetWithAnyTag(voiPrimary, voiFallback, tag.VOILUTSequence) != nil {
-			voiLUT, err := pixeldata.VOILUTFromWithVRMode(voiPrimary, voiFallback, voiDescriptorSigned, img.voiLUTIndex, img.lutVRMode)
-			if err != nil {
-				return nil, err
-			}
-			pipeline.SetVOILUT(voiLUT)
-		}
-		if function, ok := imageStringFrom(voiPrimary, voiFallback, tag.VOILUTFunction); ok {
-			pipeline.SetVOILUTFunction(lut.VOILUTFunction(function))
-		}
-		presentationSource := datasetWithAnyTag(
-			img.presentationState,
-			img.dataset,
-			tag.PresentationLUTSequence,
-			tag.PresentationLUTShape,
-		)
-		presentationLUT, present, err := pixeldata.PresentationLUTWithVRMode(presentationSource, img.lutVRMode)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if present {
-			pipeline.SetPresentationLUT(presentationLUT)
-		}
+		pipeline.SetVOILUT(voiLUT)
 	}
-	function := lut.VOILUTFunctionLinear
-	if img.dataset != nil {
-		if value, ok := imageStringFrom(voiPrimary, voiFallback, tag.VOILUTFunction); ok {
-			function = lut.VOILUTFunction(value)
-		}
+	if function, ok := imageStringFrom(t.voiPrimary, t.voiFallback, tag.VOILUTFunction); ok {
+		pipeline.SetVOILUTFunction(lut.VOILUTFunction(function))
 	}
-	if _, err := lut.CreateValidatedVOILUT(function, windowCenter, windowWidth); err != nil {
-		return nil, err
+	// PS3.4 N.2: when a Presentation State is applied, its Presentation LUT
+	// (including the absence of one, which means identity) replaces any
+	// Presentation LUT carried by the referenced image.
+	var presentationSource *dataset.Dataset
+	if presentationStateApplied {
+		presentationSource = datasetWithAnyTag(
+			img.presentationState, nil, tag.PresentationLUTSequence, tag.PresentationLUTShape,
+		)
+	} else {
+		presentationSource = datasetWithAnyTag(
+			nil, img.dataset, tag.PresentationLUTSequence, tag.PresentationLUTShape,
+		)
 	}
-	return pipeline, nil
+	presentationLUT, present, err := pixeldata.PresentationLUTWithVRMode(presentationSource, img.lutVRMode)
+	if err != nil {
+		return err
+	}
+	if present {
+		pipeline.SetPresentationLUT(presentationLUT)
+	}
+	return nil
 }
 
 // SetPipeline sets the rendering pipeline for the specified frame.
@@ -559,7 +687,10 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 	switch img.pixelData.Info.SamplesPerPixel {
 	case 1:
 		photometric := pixel.Monochrome2.Value
-		if img.pixelData.Info.PhotometricInterpretation != nil {
+		// PS3.4 N.2: the referenced image's MONOCHROME1/MONOCHROME2 value is
+		// ignored when a Presentation State is applied, because the presentation
+		// transformations own display polarity.
+		if img.presentationState == nil && img.pixelData.Info.PhotometricInterpretation != nil {
 			photometric = img.pixelData.Info.PhotometricInterpretation.Value
 		}
 		rendered, err = exporter.RenderGrayscaleImageWithBitDepth(
@@ -580,13 +711,15 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 		if img.pixelData.Info.PhotometricInterpretation != nil {
 			photometric = img.pixelData.Info.PhotometricInterpretation.Value
 		}
-		rendered, err = exporter.RenderRGBImageWithBytesPerSample(
+		rendered, err = exporter.RenderRGBImageWithBitDepth(
 			frameData,
 			int(img.Width()),
 			int(img.Height()),
 			photometric,
 			int(img.pixelData.Info.PlanarConfiguration),
-			int(img.pixelData.Info.BitsAllocated)/8,
+			int(img.pixelData.Info.BitsAllocated),
+			int(img.pixelData.Info.BitsStored),
+			int(img.pixelData.Info.HighBit),
 		)
 	case 4:
 		photometric := pixel.ARGBPhotometric.Value

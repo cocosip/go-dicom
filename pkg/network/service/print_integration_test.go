@@ -147,7 +147,10 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 	session := printing.NewFilmSession(printFilmSessionClassUID, "2.25.601", false)
 	session.FilmSessionLabel = "wire workflow"
 	lut := printing.NewPresentationLUT("2.25.602")
-	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
+	// PS3.4 H.4.9.2.1.1.1: a print Presentation LUT has 256 entries for an
+	// 8-bit image; 2-entry LUTs are not valid here.
+	lutEntries := make([]uint16, 256)
+	if err := lut.SetLUT(256, 0, 10, lutEntries); err != nil {
 		t.Fatalf("SetLUT() error = %v", err)
 	}
 	session.AddPresentationLUT(lut)
@@ -185,8 +188,8 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 	if got[3].operation != "N-SET" || got[3].classUID != printImageBoxClassUID || got[3].instance != printRemoteImageBoxUID || got[3].position != 1 {
 		t.Errorf("Image Box operation = %#v", got[3])
 	}
-	if got[4].operation != "N-ACTION" || got[4].classUID != printFilmSessionClassUID || got[4].instance != "2.25.601" || got[4].actionID != 1 {
-		t.Errorf("Film Session print operation = %#v", got[4])
+	if got[4].operation != "N-ACTION" || got[4].classUID != printFilmBoxClassUID || got[4].instance != "2.25.603" || got[4].actionID != 1 {
+		t.Errorf("Film Box print operation = %#v", got[4])
 	}
 }
 func completeImageItem(t *testing.T, data []byte) *dataset.Dataset {

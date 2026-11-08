@@ -272,14 +272,6 @@ func (a *AAssociateAC) encodeUserInformation() ([]byte, error) {
 		}
 	}
 
-	// Implementation Version Name Sub-item (optional)
-	if ui.ImplementationVersionName != "" {
-		implVersionData := []byte(ui.ImplementationVersionName)
-		if err := writeItem(&buf, ItemTypeImplementationVersionName, implVersionData); err != nil {
-			return nil, fmt.Errorf("encoding implementation version name: %w", err)
-		}
-	}
-
 	// Asynchronous Operations Window Sub-item (optional)
 	if ui.AsynchronousOperations != nil {
 		asyncData := make([]byte, 4)
@@ -302,6 +294,16 @@ func (a *AAssociateAC) encodeUserInformation() ([]byte, error) {
 		roleData.WriteByte(role.SCPRole)
 		if err := writeItem(&buf, ItemTypeSCPSCURoleSelection, roleData.Bytes()); err != nil {
 			return nil, fmt.Errorf("encoding role selection: %w", err)
+		}
+	}
+
+	// Implementation Version Name Sub-item (optional). Written after 0x53/0x54 so
+	// the sub-items remain in ascending item-type order (PS3.8 9.3.2.3 warns
+	// that older applications may expect that order).
+	if ui.ImplementationVersionName != "" {
+		implVersionData := []byte(ui.ImplementationVersionName)
+		if err := writeItem(&buf, ItemTypeImplementationVersionName, implVersionData); err != nil {
+			return nil, fmt.Errorf("encoding implementation version name: %w", err)
 		}
 	}
 
@@ -556,6 +558,7 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 	implementationVersionNameSeen := false
 	asynchronousOperationsSeen := false
 	userIdentitySeen := false
+	seenRoleSelections := make(map[string]struct{})
 	reader := bytes.NewReader(data)
 
 	for {
@@ -614,6 +617,12 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 			if err != nil {
 				return nil, fmt.Errorf("decoding role selection: %w", err)
 			}
+			// PS3.7 D.3.3.4/9.3.3.4: at most one SCP/SCU Role Selection
+			// Sub-Item per SOP Class UID in the A-ASSOCIATE-AC.
+			if _, duplicate := seenRoleSelections[role.SOPClassUID]; duplicate {
+				return nil, fmt.Errorf("duplicate SCP/SCU role selection sub-item for SOP Class %s", role.SOPClassUID)
+			}
+			seenRoleSelections[role.SOPClassUID] = struct{}{}
 			ui.SCPSCURoleSelections = append(ui.SCPSCURoleSelections, *role)
 
 		case ItemTypeExtendedNegotiation:

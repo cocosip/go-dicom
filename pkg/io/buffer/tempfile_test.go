@@ -5,6 +5,7 @@ package buffer_test
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"testing"
 
@@ -325,6 +326,32 @@ func TestTempFileBuffer_Close(t *testing.T) {
 	}
 }
 
+func TestTempFileBuffer_UseAfterClose(t *testing.T) {
+	tb, err := buffer.NewTempFile([]byte{1, 2, 3, 4, 5})
+	if err != nil {
+		t.Fatalf("NewTempFile() unexpected error: %v", err)
+	}
+	if err := tb.Close(); err != nil {
+		t.Fatalf("Close() unexpected error: %v", err)
+	}
+
+	if got := tb.Data(); got != nil {
+		t.Errorf("Data() after Close() = %v, want nil", got)
+	}
+
+	out := make([]byte, 5)
+	if err := tb.GetByteRange(0, 5, out); err == nil {
+		t.Error("GetByteRange() after Close() returned nil error, want error")
+	}
+
+	if _, err := tb.WriteTo(io.Discard); err == nil {
+		t.Error("WriteTo() after Close() returned nil error, want error")
+	}
+
+	if got := tb.Size(); got != 5 {
+		t.Errorf("Size() after Close() = %d, want 5", got)
+	}
+}
 func TestTempFileBuffer_MultipleReads(t *testing.T) {
 	testData := make([]byte, 100)
 	for i := range testData {
@@ -378,3 +405,4 @@ func TestTempFileBuffer_CleanupOnError(t *testing.T) {
 	// Second close should not panic (may return error since file is already closed)
 	_ = tb.Close() // Ignore error as file is already closed
 }
+

@@ -875,7 +875,7 @@ func TestPresentationLUTShapeInverseIsAppliedAfterVOI(t *testing.T) {
 	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{256})); err != nil {
 		t.Fatalf("add WindowWidth: %v", err)
 	}
-	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{"INVERSE"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{lutShapeInverse})); err != nil {
 		t.Fatalf("add PresentationLUTShape: %v", err)
 	}
 
@@ -944,7 +944,7 @@ func TestPresentationLUTRejectsSequenceAndShapeTogether(t *testing.T) {
 	if err := addLegacyTestElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item})); err != nil {
 		t.Fatal(err)
 	}
-	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{"IDENTITY"})); err != nil {
+	if err := ds.Add(element.NewString(tag.PresentationLUTShape, vr.CS, []string{lutShapeIdentity})); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1465,10 +1465,9 @@ func TestDatasetImageRenders32BitGrayscalePixels(t *testing.T) {
 func TestDatasetImageRendersExplicitVRBigEndian32BitPixels(t *testing.T) {
 	pixels := make([]byte, 12)
 	for index, value := range []uint32{0, 1 << 31, ^uint32(0)} {
-		// OW byte order is applied independently to each 16-bit word. The
-		// low word remains before the high word for a 32-bit native sample.
-		binary.BigEndian.PutUint16(pixels[index*4:], uint16(value))
-		binary.BigEndian.PutUint16(pixels[index*4+2:], uint16(value>>16))
+		// A 32-bit native sample spans two OW words; byte order conversion
+		// reverses the whole sample so its numeric value is preserved.
+		binary.BigEndian.PutUint32(pixels[index*4:], value)
 	}
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRBigEndian)
 	elements := []element.Element{
@@ -2207,3 +2206,4 @@ func newNativeMonochromeDataset(t *testing.T, width, height uint16, pixels []byt
 	}
 	return ds
 }
+

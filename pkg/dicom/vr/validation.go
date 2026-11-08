@@ -159,13 +159,55 @@ func ValidateDS(content string) error {
 // The date/time part must use an even number of digits, fractional seconds are
 // only allowed after full seconds, and the optional UTC offset must be prefixed
 // with '&' (e.g. "&+0800"). The offset "-0000" is not permitted.
+//
+// Range matching values (PS3.4 C.2.2.2.5.3) of the form "<datetime1>-<datetime2>",
+// "-<datetime1>" and "<datetime1>-" are also accepted.
 func ValidateDT(content string) error {
 	if content == "" {
 		return nil
 	}
 
 	trimmed := strings.TrimRight(content, " ")
+	singleValueErr := validateDTValue(trimmed)
+	if singleValueErr == nil {
+		return nil
+	}
+	if validateDTRange(trimmed) {
+		return nil
+	}
+	return singleValueErr
+}
 
+// validateDTRange reports whether value is a PS3.4 C.2.2.2.5.3 DT range. A
+// hyphen can also introduce a negative UTC offset, so every hyphen is tried as
+// the range separator and the value is accepted if both sides are valid.
+func validateDTRange(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] != '-' {
+			continue
+		}
+		// A hyphen followed by exactly four trailing digits after a full date is
+		// a UTC offset (e.g. "...-0500"), not a range separator; the single-value
+		// parse above decides whether that offset is valid.
+		// ponytail: this also rejects the rare 4-digit-year end range such as
+		// "20240101-2024"; expand only if such query keys need support.
+		if i >= 8 && i+5 == len(value) && allDigits(value[i+1:]) {
+			continue
+		}
+		left := strings.TrimRight(value[:i], " ")
+		right := strings.TrimRight(value[i+1:], " ")
+		if left != "" && validateDTValue(left) != nil {
+			continue
+		}
+		if right != "" && validateDTValue(right) != nil {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func validateDTValue(trimmed string) error {
 	main := trimmed
 	offset := ""
 	hasOffset := false
@@ -188,39 +230,39 @@ func ValidateDT(content string) error {
 	}
 
 	if len(dateTime) < 4 || len(dateTime) > 14 || len(dateTime)%2 != 0 {
-		return newValidationError("DT", content, "date/time component must be an even number of digits between 4 and 14")
+		return newValidationError("DT", trimmed, "date/time component must be an even number of digits between 4 and 14")
 	}
 	if !allDigits(dateTime) {
-		return newValidationError("DT", content, "date/time component must contain only digits")
+		return newValidationError("DT", trimmed, "date/time component must contain only digits")
 	}
 	if hasFraction {
 		if len(dateTime) != 14 {
-			return newValidationError("DT", content, "fractional seconds require a full YYYYMMDDHHMMSS date/time")
+			return newValidationError("DT", trimmed, "fractional seconds require a full YYYYMMDDHHMMSS date/time")
 		}
 		if len(fraction) < 1 || len(fraction) > 6 || !allDigits(fraction) {
-			return newValidationError("DT", content, "fractional seconds must be 1 to 6 digits")
+			return newValidationError("DT", trimmed, "fractional seconds must be 1 to 6 digits")
 		}
 	}
 
 	if err := validateDateTimeFields(dateTime); err != nil {
-		return newValidationError("DT", content, err.Error())
+		return newValidationError("DT", trimmed, err.Error())
 	}
 
 	if hasOffset {
 		if len(offset) != 5 || (offset[0] != '+' && offset[0] != '-') {
-			return newValidationError("DT", content, "UTC offset must be a sign followed by 4 digits (ZZXX)")
+			return newValidationError("DT", trimmed, "UTC offset must be a sign followed by 4 digits (ZZXX)")
 		}
 		if !allDigits(offset[1:]) {
-			return newValidationError("DT", content, "UTC offset digits must be numeric")
+			return newValidationError("DT", trimmed, "UTC offset digits must be numeric")
 		}
 		if offset == "-0000" {
-			return newValidationError("DT", content, "negative UTC hours component with value -0000 is not allowed")
+			return newValidationError("DT", trimmed, "negative UTC hours component with value -0000 is not allowed")
 		}
 		hours := int(offset[1]-'0')*10 + int(offset[2]-'0')
 		minutes := int(offset[3]-'0')*10 + int(offset[4]-'0')
 		// PS3.5 Table 6.2-1: UTC offset range is -1200 to +1400.
 		if hours > 14 || minutes > 59 || (hours == 14 && minutes != 0) || (offset[0] == '-' && hours > 12) {
-			return newValidationError("DT", content, "UTC offset out of range (-1200 to +1400)")
+			return newValidationError("DT", trimmed, "UTC offset out of range (-1200 to +1400)")
 		}
 	}
 
@@ -360,8 +402,8 @@ func ValidateSH(content string) error {
 
 // ValidateST validates Short Text (ST) values.
 func ValidateST(content string) error {
-	// 1024 characters maximum
-	if len(content) > 1024 {
+	// 1024 characters maximum (count runes, not UTF-8 bytes)
+	if utf8.RuneCountInString(content) > 1024 {
 		return newValidationError("ST", content, "value exceeds maximum length of 1024 characters")
 	}
 
@@ -370,37 +412,60 @@ func ValidateST(content string) error {
 
 // ValidateTM validates Time (TM) values.
 // Format: HHMMSS.FFFFFF
+//
+// Range matching values (PS3.4 C.2.2.2.5.2) of the form "<time1>-<time2>",
+// "-<time1>" and "<time1>-" are also accepted.
 func ValidateTM(content string) error {
 	if content == "" {
 		return nil
 	}
 
 	trimmed := strings.TrimRight(content, " ")
+	if err := validateTMValue(trimmed); err == nil {
+		return nil
+	}
 
+	parts := strings.Split(trimmed, "-")
+	if len(parts) > 2 {
+		return newValidationError("TM", content, "value contains too many range separators '-'")
+	}
+	for _, part := range parts {
+		part = strings.TrimRight(part, " ")
+		if part == "" {
+			continue
+		}
+		if err := validateTMValue(part); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateTMValue(trimmed string) error {
 	// Basic format check
 	if !timePattern.MatchString(trimmed) {
-		return newValidationError("TM", content, "value does not match pattern HH[MM[SS[.F{1-6}]]]")
+		return newValidationError("TM", trimmed, "value does not match pattern HH[MM[SS[.F{1-6}]]]")
 	}
 
 	// Validate hour, minute, second components
 	if len(trimmed) >= 2 {
 		hour, _ := strconv.Atoi(trimmed[0:2])
 		if hour > 23 {
-			return newValidationError("TM", content, "hour component exceeds 23")
+			return newValidationError("TM", trimmed, "hour component exceeds 23")
 		}
 	}
 
 	if len(trimmed) >= 4 {
 		minute, _ := strconv.Atoi(trimmed[2:4])
 		if minute > 59 {
-			return newValidationError("TM", content, "minute component exceeds 59")
+			return newValidationError("TM", trimmed, "minute component exceeds 59")
 		}
 	}
 
 	if len(trimmed) >= 6 {
 		second, _ := strconv.Atoi(trimmed[4:6])
 		if second > 60 { // 60 allowed for leap second
-			return newValidationError("TM", content, "second component exceeds 60")
+			return newValidationError("TM", trimmed, "second component exceeds 60")
 		}
 	}
 

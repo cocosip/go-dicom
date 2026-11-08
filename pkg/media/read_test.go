@@ -13,6 +13,7 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
@@ -198,6 +199,128 @@ func TestReadRejectsStructuralCorruptionInBothPolicies(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReadAcceptsDICOMDIRWithoutDirectoryInformationModule(t *testing.T) {
+	encoded := encodeMinimalDirectory(t)
+
+	dir, err := Read(bytes.NewReader(encoded), WithOffsetPolicy(StrictOffsets))
+	if err != nil {
+		t.Fatalf("Read() error = %v; PS3.3 F.3.1 makes the Directory Information Module optional", err)
+	}
+	if got := len(dir.RootRecords()); got != 0 {
+		t.Fatalf("root records = %d, want 0", got)
+	}
+	if got := len(dir.Diagnostics()); got != 0 {
+		t.Fatalf("diagnostics = %#v, want none", got)
+	}
+
+	var output bytes.Buffer
+	if err := dir.Write(&output); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	reopened, err := Read(bytes.NewReader(output.Bytes()), WithOffsetPolicy(StrictOffsets))
+	if err != nil {
+		t.Fatalf("strict Read(round trip) error = %v", err)
+	}
+	if got := len(reopened.RootRecords()); got != 0 {
+		t.Fatalf("round-trip root records = %d, want 0", got)
+	}
+}
+
+func TestReadRejectsNonSequenceDirectoryRecordSequence(t *testing.T) {
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatalf("NewDirectory() error = %v", err)
+	}
+	ds := dir.Dataset()
+	ds.SetAutoValidate(false)
+	ds.Remove(tag.DirectoryRecordSequence)
+	if err := ds.Add(element.NewString(tag.DirectoryRecordSequence, vr.LO, []string{"not a sequence"})); err != nil {
+		t.Fatalf("add malformed Directory Record Sequence: %v", err)
+	}
+
+	var encoded bytes.Buffer
+	if err := writer.Write(&encoded, ds,
+		writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian),
+		writer.WithFileMetaInfo(dir.FileMetaInformation()),
+	); err != nil {
+		t.Fatalf("writer.Write() error = %v", err)
+	}
+	if _, err := Read(bytes.NewReader(encoded.Bytes())); err == nil || !strings.Contains(err.Error(), "Directory Record Sequence") {
+		t.Fatalf("Read() error = %v, want Directory Record Sequence error", err)
+	}
+}
+
+func TestReadNormalizesRetiredFlags(t *testing.T) {
+	encoded := encodeDirectoryForReadTest(t, func(fixture *readTestFixture) {
+		if err := fixture.items["image"].AddOrUpdate(element.NewUnsignedShort(tag.RecordInUseFlag, []uint16{0x0000})); err != nil {
+			t.Fatalf("set retired Record In-use Flag: %v", err)
+		}
+		if err := fixture.dataset.AddOrUpdate(element.NewUnsignedShort(tag.FileSetConsistencyFlag, []uint16{0xFFFF})); err != nil {
+			t.Fatalf("set retired File-set Consistency Flag: %v", err)
+		}
+	})
+
+	dir, err := Read(bytes.NewReader(encoded), WithOffsetPolicy(StrictOffsets))
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if err := dir.Walk(func(record *Record) error {
+		flag, err := record.Dataset().GetUInt16(tag.RecordInUseFlag, 0)
+		if err != nil || flag != 0xFFFF {
+			t.Errorf("Record In-use Flag of %s = %#x, %v; want 0xFFFF", record.Type(), flag, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Walk() error = %v", err)
+	}
+
+	var output bytes.Buffer
+	if err := dir.Write(&output); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	parsed, err := parser.Parse(bytes.NewReader(output.Bytes()))
+	if err != nil {
+		t.Fatalf("parse written DICOMDIR: %v", err)
+	}
+	if flag, err := parsed.Dataset.GetUInt16(tag.FileSetConsistencyFlag, 0); err != nil || flag != 0 {
+		t.Fatalf("written File-set Consistency Flag = %#x, %v; want 0", flag, err)
+	}
+	sequence, err := parsed.Dataset.GetSequence(tag.DirectoryRecordSequence)
+	if err != nil {
+		t.Fatalf("read written Directory Record Sequence: %v", err)
+	}
+	for index := 0; index < sequence.Count(); index++ {
+		if flag, err := sequence.GetItem(index).GetUInt16(tag.RecordInUseFlag, 0); err != nil || flag != 0xFFFF {
+			t.Fatalf("written record %d Record In-use Flag = %#x, %v; want 0xFFFF", index, flag, err)
+		}
+	}
+}
+
+func encodeMinimalDirectory(t *testing.T) []byte {
+	t.Helper()
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatalf("NewDirectory() error = %v", err)
+	}
+	ds := dir.Dataset()
+	for _, optional := range []*tag.Tag{
+		tag.DirectoryRecordSequence,
+		tag.OffsetOfTheFirstDirectoryRecordOfTheRootDirectoryEntity,
+		tag.OffsetOfTheLastDirectoryRecordOfTheRootDirectoryEntity,
+		tag.FileSetConsistencyFlag,
+	} {
+		ds.Remove(optional)
+	}
+	var encoded bytes.Buffer
+	if err := writer.Write(&encoded, ds,
+		writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian),
+		writer.WithFileMetaInfo(dir.FileMetaInformation()),
+	); err != nil {
+		t.Fatalf("writer.Write() error = %v", err)
+	}
+	return encoded.Bytes()
 }
 
 type readTestFixture struct {

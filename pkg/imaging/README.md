@@ -64,8 +64,10 @@ case geometry.GeometryNone:
 
 For enhanced multi-frame datasets, shared functional-group values are loaded
 first and matching per-frame values override them. Top-level spacing follows
-fo-dicom precedence: Imager Pixel Spacing, Pixel Spacing, Nominal Scanned Pixel
-Spacing, then functional-group spacing.
+patient-mm precedence: Pixel Spacing, Nominal Scanned Pixel Spacing, Imager
+Pixel Spacing, then functional-group spacing. Pixel Spacing is already
+magnification-corrected, whereas Imager Pixel Spacing is measured at the
+detector (PS3.3 C.7.6.2.1.1).
 
 The complete Dataset construction and coordinate round-trip are compiled as
 part of [`ExampleNewFrameGeometry`](geometry/example_test.go).
@@ -321,7 +323,7 @@ The Native codec handles uncompressed pixel data with various byte orders:
 
 **Features**:
 - ✅ Little Endian / Big Endian support
-- ✅ Byte swapping for multi-byte samples (16-bit, 32-bit, 64-bit)
+- ✅ Byte swapping for multi-byte samples (16-bit and 32-bit)
 - ✅ Direct copy for single-byte samples
 - ✅ Read/Write helpers for uint16/uint32 with endianness
 

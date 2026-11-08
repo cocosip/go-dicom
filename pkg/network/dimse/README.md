@@ -7,6 +7,10 @@ DIMSE (DICOM Message Service Element) is the core message layer of DICOM network
 - ✅ C-ECHO: verify connectivity
 - ✅ C-STORE: store DICOM instances
 - ✅ C-FIND: query the DICOM archive
+- ✅ C-MOVE: retrieve instances to a third-party destination
+- ✅ C-GET: retrieve instances over the same association
+- ✅ C-CANCEL: cancel a pending C-FIND/C-MOVE/C-GET operation
+- ✅ N-EVENT-REPORT, N-GET, N-SET, N-ACTION, N-CREATE, N-DELETE
 - ✅ Automatic MessageID management
 - ✅ Priority support
 - ✅ Status code handling
@@ -280,20 +284,31 @@ idGen.Reset()
 idGen.Next()  // 1 (starts over)
 ```
 
-## Future Development
+## Higher-level Client API
 
-In Phase 9.7 (Client API), we will provide a higher-level API:
+For most applications the package-level messages above are created for you by
+`github.com/cocosip/go-dicom/pkg/network/client`:
 
 ```go
-// Future API (coming soon)
-client := dicom.NewClient("MY_SCU")
-client.Connect("localhost", 11112, "REMOTE_SCP")
+c := client.New(client.WithCallingAE("MY_SCU"), client.WithCalledAE("PACS"))
+if err := c.AddPresentationContextWithRoles(
+    "1.2.840.10008.5.1.4.1.1.2", true, false, "1.2.840.10008.1.2.1",
+); err != nil {
+    return err
+}
+if err := c.Connect(ctx, "192.168.1.100", 104); err != nil {
+    return err
+}
+defer c.Close()
 
-// No need to create Request objects at all!
-err := client.Echo()
-err := client.Store(dataset)
-results := client.Find(query)
+if err := c.CEcho(ctx); err != nil {
+    return err
+}
 ```
+
+The client exposes `CEcho`, `CStore`, `CFind`, `CMove`, `CGet`, and the six
+N-Service methods; `client.ManagedClient` provides a queued alternative. See
+[docs/network/README.md](../../../docs/network/README.md) for the full guide.
 
 ## Testing
 

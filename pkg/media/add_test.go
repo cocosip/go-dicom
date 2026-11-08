@@ -6,6 +6,7 @@ package media
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -30,7 +31,7 @@ func TestAddFileGroupsRecordsAndReturnsExistingDuplicate(t *testing.T) {
 	})
 	second := testParseResult(t, testFileValues{
 		PatientID: testPatientID, PatientName: "Pat^Name^^^", StudyUID: testStudyUID,
-		SeriesUID: testSeriesUID, SOPInstanceUID: "1.2.3.1.1.2",
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID2,
 	})
 	differentName := testParseResult(t, testFileValues{
 		PatientID: testPatientID, PatientName: "PAT^Name^", StudyUID: "1.2.3.2",
@@ -342,6 +343,116 @@ func (g *iconGeneratorStub) GenerateDirectoryIcon(_ *dataset.Dataset, frame int)
 	return g.width, g.height, append([]byte(nil), g.pixels...), g.err
 }
 
+func TestAddFileRejectsReservedAndDuplicateFileIDs(t *testing.T) {
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatalf("NewDirectory() error = %v", err)
+	}
+	first := testParseResult(t, testFileValues{
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
+	})
+	reserved, err := ParseFileID(testDICOMDIRFileID)
+	if err != nil {
+		t.Fatalf("ParseFileID(DICOMDIR) error = %v", err)
+	}
+	if _, err := dir.AddFile(first, reserved); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("AddFile(DICOMDIR) error = %v, want reserved-name error", err)
+	}
+
+	id, err := ParseFileID("DIR1/IMAGE001")
+	if err != nil {
+		t.Fatalf("ParseFileID() error = %v", err)
+	}
+	if _, err := dir.AddFile(first, id); err != nil {
+		t.Fatalf("first AddFile() error = %v", err)
+	}
+	second := testParseResult(t, testFileValues{
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID2,
+	})
+	if _, err := dir.AddFile(second, id); err == nil || !strings.Contains(err.Error(), "already referenced") {
+		t.Fatalf("duplicate File ID AddFile() error = %v, want duplicate error", err)
+	}
+	// Re-adding the same instance remains idempotent.
+	if _, err := dir.AddFile(first, id); err != nil {
+		t.Fatalf("idempotent AddFile() error = %v", err)
+	}
+}
+
+func TestAddFileRequiresVerificationDateTimeForVerifiedSR(t *testing.T) {
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatalf("NewDirectory() error = %v", err)
+	}
+	file := testParseResult(t, testFileValues{
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
+		SOPClass: uid.BasicTextSRStorage,
+	})
+	if err := file.Dataset.AddOrUpdate(element.NewString(tag.VerificationFlag, vr.CS, []string{"VERIFIED"})); err != nil {
+		t.Fatalf("set Verification Flag: %v", err)
+	}
+	id, err := ParseFileID("DIR1/SR00001")
+	if err != nil {
+		t.Fatalf("ParseFileID() error = %v", err)
+	}
+	if _, err := dir.AddFile(file, id); err == nil || !strings.Contains(err.Error(), "Verification DateTime") {
+		t.Fatalf("AddFile(VERIFIED SR without Verification DateTime) error = %v", err)
+	}
+
+	if err := file.Dataset.AddOrUpdate(element.NewString(tag.VerificationDateTime, vr.DT, []string{"20240101120000"})); err != nil {
+		t.Fatalf("set Verification DateTime: %v", err)
+	}
+	entry, err := dir.AddFile(file, id)
+	if err != nil {
+		t.Fatalf("AddFile(VERIFIED SR) error = %v", err)
+	}
+	if got, ok := entry.Instance.Dataset().GetString(tag.VerificationDateTime); !ok || got != "20240101120000" {
+		t.Fatalf("directory record Verification DateTime = %q, %v", got, ok)
+	}
+}
+
+func TestAddFileCopiesRelatedGeneralSOPClassUID(t *testing.T) {
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatalf("NewDirectory() error = %v", err)
+	}
+	file := testParseResult(t, testFileValues{
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
+	})
+	related := []string{"1.2.840.10008.5.1.4.1.1.2", "1.2.840.10008.5.1.4.1.1.2.1"}
+	if err := file.Dataset.AddOrUpdate(element.NewString(tag.RelatedGeneralSOPClassUID, vr.UI, related)); err != nil {
+		t.Fatalf("add Related General SOP Class UID: %v", err)
+	}
+	entry := addTestFile(t, dir, file, "DIR1/IMAGE001")
+	got, ok := entry.Instance.Dataset().GetStrings(tag.ReferencedRelatedGeneralSOPClassUIDInFile)
+	if !ok || len(got) != len(related) {
+		t.Fatalf("Referenced Related General SOP Class UID in File = %v, %v", got, ok)
+	}
+	for index := range related {
+		if got[index] != related[index] {
+			t.Fatalf("Referenced Related General SOP Class UID in File[%d] = %q, want %q", index, got[index], related[index])
+		}
+	}
+}
+
+func TestAddFileOmitsRecordWithoutRelatedGeneralSOPClassUID(t *testing.T) {
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatalf("NewDirectory() error = %v", err)
+	}
+	file := testParseResult(t, testFileValues{
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
+	})
+	entry := addTestFile(t, dir, file, "DIR1/IMAGE001")
+	if entry.Instance.Dataset().Contains(tag.ReferencedRelatedGeneralSOPClassUIDInFile) {
+		t.Fatal("(0004,151A) was emitted for an instance without (0008,001A)")
+	}
+}
+
 func TestRecordWritesZeroLengthType2Attributes(t *testing.T) {
 	dir, err := NewDirectory()
 	if err != nil {
@@ -365,3 +476,4 @@ func TestRecordWritesZeroLengthType2Attributes(t *testing.T) {
 		}
 	}
 }
+

@@ -92,9 +92,28 @@ func TestNewFromXMLIgnoresUIDElementsFromCombinedFODICOMSource(t *testing.T) {
 	}
 }
 
-func TestNewFromXMLNormalizesAlternativeVM(t *testing.T) {
+func TestNewFromXMLAcceptsAlternativeVRSpelling(t *testing.T) {
+	const input = `<dictionary>
+  <tag group="0028" element="0106" keyword="SmallestImagePixelValue" vr="US or SS" vm="1">Smallest Image Pixel Value</tag>
+</dictionary>`
+
+	d, err := dict.NewFromXML(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("NewFromXML() error = %v", err)
+	}
+	entry := d.Lookup(tag.New(0x0028, 0x0106))
+	if entry == nil {
+		t.Fatal("Lookup(SmallestImagePixelValue) = nil, want entry")
+	}
+	if got := entry.VRs(); len(got) != 2 || got[0] != "US" || got[1] != "SS" {
+		t.Errorf("SmallestImagePixelValue.VRs() = %v, want [US SS]", got)
+	}
+}
+
+func TestNewFromXMLCoversAlternativeVM(t *testing.T) {
 	const input = `<dictionary>
   <tag group="0028" element="3006" keyword="LUTData" vr="US/OW" vm="1-n or 1">LUT Data</tag>
+  <tag group="0018" element="9999" keyword="WiderAlternatives" vr="DS" vm="1-2 or 1-3">Wider Alternatives</tag>
 </dictionary>`
 
 	d, err := dict.NewFromXML(strings.NewReader(input))
@@ -108,6 +127,15 @@ func TestNewFromXMLNormalizesAlternativeVM(t *testing.T) {
 	}
 	if entry.VM() != "1-n" {
 		t.Errorf("LUTData.VM() = %q, want 1-n", entry.VM())
+	}
+
+	// The wider alternative must be part of the VM, not silently dropped.
+	wider := d.Lookup(tag.New(0x0018, 0x9999))
+	if wider == nil {
+		t.Fatal("Lookup(WiderAlternatives) = nil, want entry")
+	}
+	if wider.VM() != "1-3" {
+		t.Errorf("WiderAlternatives.VM() = %q, want 1-3", wider.VM())
 	}
 }
 
@@ -208,6 +236,33 @@ func TestPrivateExactEntryIgnoresAllocatedCreatorBlock(t *testing.T) {
 	}
 	if d.Lookup(tag.NewWithPrivateCreator(0x0019, 0x1100, d.GetPrivateCreator("OTHER"))) != nil {
 		t.Fatal("private exact entry resolved for a different creator")
+	}
+}
+
+func TestPrivateLookupRejectsCreatorAndReservedElements(t *testing.T) {
+	const input = `<dictionary creator="ACME">
+  <tag group="0011" element="1010" keyword="AcmeTen" vr="DS" vm="1">ACME Ten</tag>
+  <tag group="0011" element="1000" keyword="AcmeZero" vr="DS" vm="1">ACME Zero</tag>
+  <tag group="0011" element="10FF" keyword="AcmeFF" vr="DS" vm="1">ACME FF</tag>
+</dictionary>`
+
+	d, err := dict.NewFromXML(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("NewFromXML() error = %v", err)
+	}
+	creator := d.GetPrivateCreator("ACME")
+
+	// Creator elements (<= 0x00FF) and the reserved 0x0100-0x0FFF range must
+	// not alias a private data entry through the low element byte.
+	for _, element := range []uint16{0x0000, 0x0010, 0x00FF, 0x0100, 0x0FFF} {
+		if entry := d.Lookup(tag.NewWithPrivateCreator(0x0011, element, creator)); entry != nil {
+			t.Errorf("Lookup((0011,%04X)) = %q, want nil", element, entry.Name())
+		}
+	}
+
+	entry := d.Lookup(tag.NewWithPrivateCreator(0x0011, 0x1110, creator))
+	if entry == nil || entry.Name() != "ACME Ten" {
+		t.Fatalf("Lookup((0011,1110)) = %#v, want ACME Ten", entry)
 	}
 }
 

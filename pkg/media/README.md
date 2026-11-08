@@ -29,6 +29,16 @@ return directory.Save("DICOMDIR")
 `AddFile` records the supplied File ID but does not scan, copy, move, rename, or
 rewrite the referenced file. File IDs contain one to eight components; each
 component contains one to eight uppercase ASCII letters, digits, or underscores.
+The reserved `DICOMDIR` name and File IDs already referenced by another record
+are rejected.
+
+Writing always uses Explicit VR Little Endian because PS3.10 §8.6 requires it for
+the DICOMDIR File; `media.WithTransferSyntax` rejects any other syntax. Reading
+still tolerates legacy Implicit VR Little Endian File-sets. `WithFileSetID` sets
+and validates File-set ID (0004,1130); the default is zero length.
+
+A File-set that omits the optional Directory Information Module (PS3.3 F.3.1) is
+read as an empty directory.
 
 ## Read
 

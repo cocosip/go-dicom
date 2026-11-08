@@ -18,6 +18,9 @@ type PaletteColorLUT struct {
 	Bits int
 	// FirstMappedValue is the input value mapped to LUT entry zero.
 	FirstMappedValue int
+	// ByteOrder is the byte order of 16-bit LUT Data. Defaults to
+	// binary.LittleEndian.
+	ByteOrder binary.ByteOrder
 	// Red channel LUT data
 	Red []byte
 	// Green channel LUT data
@@ -32,19 +35,43 @@ type PaletteColorLUT struct {
 	LUT []colorconv.Color32
 }
 
+// PaletteColorLUTOptions controls descriptor interpretation for palette LUTs
+// whose LUT Descriptor uses Signed Short for the first mapped value and/or
+// whose LUT Data uses Big Endian byte order.
+type PaletteColorLUTOptions struct {
+	ByteOrder              binary.ByteOrder
+	SignedFirstMappedValue bool
+}
+
 // NewPaletteColorLUT creates a new palette color LUT from descriptor and data
 func NewPaletteColorLUT(descriptorRed []uint16, red, green, blue []byte) (*PaletteColorLUT, error) {
-	return newPaletteColorLUT(descriptorRed, nil, red, green, blue, nil)
+	return newPaletteColorLUT(descriptorRed, nil, red, green, blue, nil, PaletteColorLUTOptions{})
+}
+
+// NewPaletteColorLUTWithOptions creates a palette color LUT with an explicit
+// byte order and first-mapped-value interpretation.
+func NewPaletteColorLUTWithOptions(descriptorRed []uint16, red, green, blue []byte, options PaletteColorLUTOptions) (*PaletteColorLUT, error) {
+	return newPaletteColorLUT(descriptorRed, nil, red, green, blue, nil, options)
 }
 
 // NewPaletteColorLUTWithAlpha creates a palette color LUT with the optional
 // DICOM Alpha Palette Color LUT. Alpha descriptors must share the RGB entry
 // count and first mapped value, and must declare 8 bits per entry.
 func NewPaletteColorLUTWithAlpha(descriptorRed, descriptorAlpha []uint16, red, green, blue, alpha []byte) (*PaletteColorLUT, error) {
-	return newPaletteColorLUT(descriptorRed, descriptorAlpha, red, green, blue, alpha)
+	return newPaletteColorLUT(descriptorRed, descriptorAlpha, red, green, blue, alpha, PaletteColorLUTOptions{})
 }
 
-func newPaletteColorLUT(descriptorRed, descriptorAlpha []uint16, red, green, blue, alpha []byte) (*PaletteColorLUT, error) {
+// NewPaletteColorLUTWithAlphaAndOptions creates an alpha-capable palette color
+// LUT with an explicit byte order and first-mapped-value interpretation.
+func NewPaletteColorLUTWithAlphaAndOptions(descriptorRed, descriptorAlpha []uint16, red, green, blue, alpha []byte, options PaletteColorLUTOptions) (*PaletteColorLUT, error) {
+	return newPaletteColorLUT(descriptorRed, descriptorAlpha, red, green, blue, alpha, options)
+}
+
+func newPaletteColorLUT(descriptorRed, descriptorAlpha []uint16, red, green, blue, alpha []byte, options PaletteColorLUTOptions) (*PaletteColorLUT, error) {
+	byteOrder := options.ByteOrder
+	if byteOrder == nil {
+		byteOrder = binary.LittleEndian
+	}
 	if len(descriptorRed) != 3 {
 		return nil, fmt.Errorf("palette descriptor must have exactly 3 values")
 	}
@@ -75,10 +102,16 @@ func newPaletteColorLUT(descriptorRed, descriptorAlpha []uint16, red, green, blu
 		}
 	}
 
+	firstMapped := int(descriptorRed[1])
+	if options.SignedFirstMappedValue {
+		firstMapped = int(int16(descriptorRed[1]))
+	}
+
 	p := &PaletteColorLUT{
 		Size:             size,
 		Bits:             bits,
-		FirstMappedValue: int(descriptorRed[1]),
+		FirstMappedValue: firstMapped,
+		ByteOrder:        byteOrder,
 		Red:              red,
 		Green:            green,
 		Blue:             blue,
@@ -109,13 +142,19 @@ func (p *PaletteColorLUT) parseLUT() error {
 			p.LUT[i] = colorconv.NewColor32(0xFF, p.Red[i], p.Green[i], p.Blue[i])
 		}
 	} else if paletteDataLengthsEqual(p, wordLength) {
-		offset := 0
-		if p.Bits == 16 {
-			offset = 1
+		// 8-bit entries packed in 16-bit words occupy the word's low byte; a
+		// 16-bit entry's approximation is its high byte. The byte positions
+		// depend on the LUT Data byte order.
+		wordOffset := 1
+		if p.Bits == 8 {
+			wordOffset = 0
+		}
+		if p.ByteOrder == binary.BigEndian {
+			wordOffset = 1 - wordOffset
 		}
 
 		for i := 0; i < p.Size; i++ {
-			idx := i*2 + offset
+			idx := i*2 + wordOffset
 			p.LUT[i] = colorconv.NewColor32(0xFF, p.Red[idx], p.Green[idx], p.Blue[idx])
 		}
 	} else {
@@ -128,8 +167,12 @@ func (p *PaletteColorLUT) parseLUT() error {
 				p.LUT[i].A = p.Alpha[i]
 			}
 		} else if len(p.Alpha) == wordLength {
+			alphaOffset := 0
+			if p.ByteOrder == binary.BigEndian {
+				alphaOffset = 1
+			}
 			for i := 0; i < p.Size; i++ {
-				p.LUT[i].A = p.Alpha[i*2]
+				p.LUT[i].A = p.Alpha[i*2+alphaOffset]
 			}
 		} else {
 			return fmt.Errorf("invalid alpha palette LUT data size: got %d, expected compact length %d or word length %d",
@@ -151,6 +194,13 @@ func paletteDataLengthsEqual(p *PaletteColorLUT, lengths ...int) bool {
 
 // GetColor returns the color for the specified pixel value
 func (p *PaletteColorLUT) GetColor(pixelValue uint16) colorconv.Color32 {
+	return p.GetColorValue(int32(pixelValue))
+}
+
+// GetColorValue returns the color for a signed-or-unsigned pixel value. Unlike
+// GetColor it can express the negative samples that signed pixel data and a
+// Signed Short LUT Descriptor can produce.
+func (p *PaletteColorLUT) GetColorValue(pixelValue int32) colorconv.Color32 {
 	if len(p.LUT) == 0 {
 		return colorconv.NewColor32(0xFF, 0, 0, 0)
 	}

@@ -268,9 +268,13 @@ func findSpacing(primary, functional *dataset.Dataset) ([2]float64, bool, error)
 		dataset *dataset.Dataset
 		tag     *tag.Tag
 	}{
-		{primary, tag.ImagerPixelSpacing},
+		// PS3.3 C.7.6.2.1.1: Pixel Spacing is measured in the patient (and
+		// already corrected for magnification), while Imager Pixel Spacing is
+		// measured at the detector. Prefer the patient-relative attribute so
+		// DX/MG distances are physical; Imager Pixel Spacing is the last resort.
 		{primary, tag.PixelSpacing},
 		{primary, tag.NominalScannedPixelSpacing},
+		{primary, tag.ImagerPixelSpacing},
 		{functional, tag.PixelSpacing},
 		{functional, tag.ImagerPixelSpacing},
 	} {

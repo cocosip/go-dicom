@@ -45,6 +45,8 @@ const (
 	TypeContextGroupName
 	// TypeUnknown represents an unknown UID type
 	TypeUnknown
+	// TypeTemplate represents a template UID (PS3.6 Annex A Table A-4)
+	TypeTemplate
 )
 
 // StorageCategory represents the category of a storage SOP class.
@@ -86,8 +88,13 @@ type UID struct {
 }
 
 var (
-	// RootUID is the base UID for generating new UIDs
-	RootUID = "1.2.826.0.1.3680043.2.1343.1"
+	// RootUID is the base UID for generating new instance UIDs. It is derived
+	// from GoDicomImplementationClassUID instead of a third-party root, but it
+	// is a placeholder pending ISO/UID registration: production callers must
+	// generate instance UIDs under their own registered root. The ".2" arc
+	// keeps generated instance UIDs clear of the ".1.1" virtual transfer
+	// syntax UID in pkg/dicom/transfer.
+	RootUID = GoDicomImplementationClassUID + ".2"
 
 	// UID validation regex: digits and dots, starting and ending with digit
 	uidPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
@@ -276,10 +283,18 @@ func IsValid(s string) bool {
 
 // Append appends a sequence number to a base UID.
 //
-// It returns nil when the resulting UID would exceed the 64-character limit
-// required by PS3.5 Section 9.1.
+// It returns nil when baseUID is nil, when the base UID is not a valid DICOM
+// UID, when seq is negative, or when the resulting UID would exceed the
+// 64-character limit required by PS3.5 Section 9.1.
 func Append(baseUID *UID, seq int64) *UID {
-	newUID := fmt.Sprintf("%s.%d", baseUID.uid, seq)
+	if baseUID == nil {
+		return nil
+	}
+	base := normalize(baseUID.uid)
+	if !IsValid(base) || seq < 0 {
+		return nil
+	}
+	newUID := fmt.Sprintf("%s.%d", base, seq)
 	if len(newUID) > 64 {
 		return nil
 	}

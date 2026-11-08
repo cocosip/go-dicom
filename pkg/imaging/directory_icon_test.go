@@ -104,6 +104,35 @@ func TestDirectoryIconGeneratorRejectsInvalidFrame(t *testing.T) {
 	}
 }
 
+func TestDirectoryIconGeneratorHonorsWindowMetadata(t *testing.T) {
+	// Stored values 10 and 20; an explicit window far above them makes both
+	// black, whereas the data-derived fallback would stretch them to 0..255.
+	ds := iconTestDataset(t, 2, 1, 1, pixel.Monochrome2.Value, []byte{10, 20})
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowCenter, []float64{100})); err != nil {
+		t.Fatalf("add Window Center: %v", err)
+	}
+	if err := ds.Add(element.NewDecimalStringFromFloat(tag.WindowWidth, []float64{50})); err != nil {
+		t.Fatalf("add Window Width: %v", err)
+	}
+
+	_, _, pixels, err := NewDirectoryIconGenerator(codec.NewRegistry()).GenerateDirectoryIcon(ds, 0)
+	if err != nil {
+		t.Fatalf("GenerateDirectoryIcon() error = %v", err)
+	}
+	if len(pixels) != 2 || pixels[0] != 0 || pixels[1] != 0 {
+		t.Fatalf("windowed icon pixels = %v, want [0 0] from Window Center/Width", pixels)
+	}
+
+	control := iconTestDataset(t, 2, 1, 1, pixel.Monochrome2.Value, []byte{10, 20})
+	_, _, fallback, err := NewDirectoryIconGenerator(codec.NewRegistry()).GenerateDirectoryIcon(control, 0)
+	if err != nil {
+		t.Fatalf("control GenerateDirectoryIcon() error = %v", err)
+	}
+	if len(fallback) != 2 || fallback[0] != 0 || fallback[1] != 255 {
+		t.Fatalf("control icon pixels = %v, want the data-derived [0 255]", fallback)
+	}
+}
+
 func iconTestDataset(t *testing.T, width, height, samples int, photometric string, pixels []byte) *dataset.Dataset {
 	t.Helper()
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)

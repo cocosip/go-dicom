@@ -34,13 +34,15 @@ var contentValueTags = []contentValueTag{
 	{tag.ReferencedSamplePositions, "Referenced Sample Positions"},
 	{tag.ReferencedTimeOffsets, "Referenced Time Offsets"},
 	{tag.ReferencedDateTime, "Referenced Date Time"},
+	{tag.NumericValueQualifierCodeSequence, "Numeric Value Qualifier Code Sequence"},
+	{tag.TabulatedValuesSequence, "Tabulated Values Sequence"},
 }
 
 var allowedValueTags = map[ValueType]map[uint32]bool{
 	ValueTypeContainer:         {},
 	ValueTypeText:              tagSet(tag.TextValue),
 	ValueTypeCode:              tagSet(tag.ConceptCodeSequence),
-	ValueTypeNumeric:           tagSet(tag.MeasuredValueSequence),
+	ValueTypeNumeric:           tagSet(tag.MeasuredValueSequence, tag.NumericValueQualifierCodeSequence),
 	ValueTypePersonName:        tagSet(tag.PersonName),
 	ValueTypeDate:              tagSet(tag.Date),
 	ValueTypeTime:              tagSet(tag.Time),
@@ -56,6 +58,7 @@ var allowedValueTags = map[ValueType]map[uint32]bool{
 		tag.ReferencedTimeOffsets,
 		tag.ReferencedDateTime,
 	),
+	ValueTypeTable: tagSet(tag.TabulatedValuesSequence),
 }
 
 func tagSet(tags ...*tag.Tag) map[uint32]bool {
@@ -101,7 +104,7 @@ func (c *CodeItem) Validate() error {
 	return nil
 }
 
-// Validate verifies that a measured value contains a number and one valid unit.
+// Validate verifies that a measured value contains one number and one valid unit.
 func (m *MeasuredValue) Validate() error {
 	if m == nil || m.dataset == nil {
 		return NewError("measured value is nil")
@@ -114,6 +117,14 @@ func (m *MeasuredValue) Validate() error {
 		if _, ok := numeric.(*element.String); !ok {
 			return NewError("numeric value has invalid VR")
 		}
+	}
+	// PS3.3 C.18.1 Table C.18.1-1: only a single Numeric Value shall be present.
+	values, err := m.dataset.GetStringsWithError(tag.NumericValue)
+	if err != nil {
+		return WrapError("read numeric value", err)
+	}
+	if len(values) != 1 {
+		return NewErrorf("numeric value has %d values, want 1", len(values))
 	}
 	units, err := requiredSingleSequence(tag.MeasurementUnitsCodeSequence, "measurement units code", m.dataset)
 	if err != nil {
@@ -165,10 +176,28 @@ func (sr *StructuredReport) Validate() error {
 	if sr.Dataset().Contains(tag.RelationshipType) {
 		return NewError("root must not have Relationship Type")
 	}
+	if err := validateSOPCommonModule(sr.Dataset()); err != nil {
+		return err
+	}
 	if err := validateSRGeneralModule(sr.Dataset()); err != nil {
 		return err
 	}
 	return validateContentItem(sr.ContentItem, true, "")
+}
+
+// validateSOPCommonModule enforces the Type 1 attributes of the SOP Common
+// Module (PS3.3 C.12.1, Table C.12-1).
+func validateSOPCommonModule(ds *dataset.Dataset) error {
+	for _, required := range []*tag.Tag{tag.SOPClassUID, tag.SOPInstanceUID} {
+		value, ok := ds.GetString(required)
+		if !ok || strings.TrimSpace(value) == "" {
+			return NewErrorf("SOP Common Module requires %s", required)
+		}
+		if !uid.IsValid(strings.TrimSpace(value)) {
+			return NewErrorf("SOP Common Module has invalid %s %q", required, value)
+		}
+	}
+	return nil
 }
 
 // validateSRGeneralModule enforces the Type 1 attributes of the SR Document
@@ -216,6 +245,14 @@ func validateSRGeneralModule(ds *dataset.Dataset) error {
 			}
 		}
 	}
+	// Performed Procedure Code Sequence is Type 2 in Table C.17-2: it must be
+	// present (it may be empty).
+	if !ds.Contains(tag.PerformedProcedureCodeSequence) {
+		return NewError("SR Document General Module requires Performed Procedure Code Sequence (0040,A372)")
+	}
+	if _, err := ds.GetSequence(tag.PerformedProcedureCodeSequence); err != nil {
+		return WrapError("validate Performed Procedure Code Sequence", err)
+	}
 	return nil
 }
 
@@ -251,13 +288,13 @@ func validateContentItem(item *ContentItem, root bool, path string) error {
 	if err := validateConceptName(item.dataset); err != nil {
 		return validationPathError(path, err)
 	}
-	// PS3.3 C.17.3.3 Table C.17-6: Concept Name Code Sequence is required for
-	// the root item (always a CONTAINER) and for every non-container value
-	// type; nested unheaded CONTAINER items may omit it.
+	// PS3.3 C.17.3.2.2 (Concept Name Code Sequence): the attribute is required
+	// for the root item and for every non-container value type; nested unheaded
+	// CONTAINER items may omit it.
 	if !item.dataset.Contains(tag.ConceptNameCodeSequence) {
 		switch valueType {
 		case ValueTypeText, ValueTypeCode, ValueTypeNumeric, ValueTypePersonName,
-			ValueTypeDate, ValueTypeTime, ValueTypeDateTime, ValueTypeUIDReference:
+			ValueTypeDate, ValueTypeTime, ValueTypeDateTime, ValueTypeUIDReference, ValueTypeTable:
 			return validationPathError(path, NewErrorf("%s content item requires a Concept Name Code Sequence", valueType))
 		case ValueTypeContainer:
 			if root {
@@ -362,11 +399,31 @@ func validateContentValue(item *ContentItem, valueType ValueType) error {
 		}
 		return NewCodeItemFromDataset(value).Validate()
 	case ValueTypeNumeric:
-		value, err := requiredSingleSequence(tag.MeasuredValueSequence, "measured value", item.dataset)
-		if err != nil {
-			return err
+		// PS3.3 C.18.1, Table C.18.1-1: Measured Value Sequence is Type 2 and
+		// shall contain zero or one Item. An empty sequence is allowed when the
+		// Numeric Value Qualifier Code Sequence explains the missing value.
+		if !item.dataset.Contains(tag.MeasuredValueSequence) {
+			return NewError("measured value sequence not found")
 		}
-		return NewMeasuredValueFromDataset(value).Validate()
+		sequence, err := item.dataset.GetSequence(tag.MeasuredValueSequence)
+		if err != nil {
+			return WrapError("measured value has invalid VR", err)
+		}
+		switch sequence.Count() {
+		case 0:
+			qualifier, err := item.GetNumericQualifier()
+			if err != nil {
+				return err
+			}
+			if qualifier == nil {
+				return NewError("empty measured value sequence requires a numeric value qualifier")
+			}
+			return qualifier.Validate()
+		case 1:
+			return NewMeasuredValueFromDataset(sequence.GetItem(0)).Validate()
+		default:
+			return NewErrorf("measured value sequence has %d items, want zero or one", sequence.Count())
+		}
 	case ValueTypePersonName:
 		_, err := item.GetPersonName()
 		return err
@@ -399,6 +456,12 @@ func validateContentValue(item *ContentItem, valueType ValueType) error {
 	case ValueTypeTemporalCoordinate:
 		_, err := item.GetTemporalCoordinate()
 		return err
+	case ValueTypeTable:
+		value, err := item.GetTable()
+		if err != nil {
+			return err
+		}
+		return value.Validate()
 	}
 	return nil
 }

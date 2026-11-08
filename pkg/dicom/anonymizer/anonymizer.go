@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -200,12 +201,83 @@ func NewAnonymizer(profile *SecurityProfile) *Anonymizer {
 
 // AnonymizeInPlace anonymizes a dataset without cloning
 func (a *Anonymizer) AnonymizeInPlace(ds *dataset.Dataset) error {
-	state := &anonymizationState{retainedOverrides: make(map[uint32]*tag.Tag)}
+	state := &anonymizationState{retained: make(map[uint32]*tag.Tag)}
 	return a.anonymizeInPlace(ds, true, state)
 }
 
+// anonymizationState collects the attributes whose original value was retained
+// during one anonymization run. PS3.3 C.7.1.1 allows Patient Identity Removed
+// (0012,0062) to be YES only when no such attribute remains.
 type anonymizationState struct {
-	retainedOverrides map[uint32]*tag.Tag
+	retained map[uint32]*tag.Tag
+}
+
+func (s *anonymizationState) retain(t *tag.Tag) {
+	if s == nil || t == nil {
+		return
+	}
+	s.retained[t.ToUint32()] = t
+}
+
+// basicProfileOnce initializes the Basic Profile-only rule set used to decide
+// whether a retained value is protected identifiable information.
+var (
+	basicProfileOnce sync.Once
+	basicProfile     *SecurityProfile
+)
+
+func basicSecurityProfile() *SecurityProfile {
+	basicProfileOnce.Do(func() {
+		basicProfile = NewSecurityProfile(BasicProfile)
+	})
+	return basicProfile
+}
+
+// isBasicProtected reports whether the Basic Application Level Confidentiality
+// Profile removes, dummies, or cleans the attribute (X, Z, D, or C). An
+// attribute retained with that meaning leaves identity data in the output.
+// UID replacement (U) is not counted: the Retain UIDs Option explicitly allows
+// keeping internally consistent UIDs while still claiming de-identification.
+func isBasicProtected(t *tag.Tag) bool {
+	action, ok := basicSecurityProfile().FindAction(t)
+	if !ok {
+		return false
+	}
+	switch action {
+	case ActionX, ActionZ, ActionD, ActionC:
+		return true
+	default:
+		return false
+	}
+}
+
+// retainsProtectedValue reports whether the element keeps a value that the
+// Basic profile would have removed, dummied, or cleaned.
+func (a *Anonymizer) retainsProtectedValue(elem element.Element, action SecurityProfileAction, hasAction bool) bool {
+	t := elem.Tag()
+	if a.hasConfiguredReplacement(t) {
+		return false
+	}
+	if !hasAction {
+		// Profiles that omit the Basic rows (for example NewMinimalProfile or
+		// NewSecurityProfile(0)) leave protected attributes untouched.
+		return isBasicProtected(t)
+	}
+	if action == ActionK {
+		if _, overridden := a.Profile.exactOverrideAction(t); overridden {
+			// An explicit retain decision always counts as retained identity.
+			return true
+		}
+		return isBasicProtected(t)
+	}
+	// Full dates are kept verbatim even under a cleaning action.
+	if action == ActionC && a.retainFullDates {
+		switch elem.ValueRepresentation().Code() {
+		case vr.CodeDA, vr.CodeDT:
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool, state *anonymizationState) error {
@@ -222,9 +294,8 @@ func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool, state 
 		}
 
 		action, hasAction := a.resolveAction(elem.Tag(), elem)
-		if override, exact := a.Profile.exactOverrideAction(elem.Tag()); exact && override == ActionK &&
-			hasAction && action == ActionK && !a.hasConfiguredReplacement(elem.Tag()) {
-			state.retainedOverrides[elem.Tag().ToUint32()] = elem.Tag()
+		if a.retainsProtectedValue(elem, action, hasAction) {
+			state.retain(elem.Tag())
 		}
 
 		skipAction, err := a.anonymizeSequence(elem, hasAction, action, state)
@@ -280,6 +351,12 @@ func (a *Anonymizer) anonymizeSequence(elem element.Element, hasAction bool, act
 	if !ok {
 		return false, nil
 	}
+	// PS3.15 E.3.4 / Table E.1-1: the Content Sequence and the equivalent
+	// structured content sequences are cleaned recursively instead of being
+	// deleted, so the report structure survives de-identification.
+	if hasAction && (action == ActionC || action == ActionD) && isStructuredContentSequence(elem.Tag()) {
+		return true, a.cleanStructuredContent(seq, action == ActionD, state)
+	}
 	if hasAction && action != ActionK && action != ActionC && action != ActionD && action != ActionU {
 		return false, nil
 	}
@@ -294,16 +371,16 @@ func (a *Anonymizer) anonymizeSequence(elem element.Element, hasAction bool, act
 func addDeidentificationDeclaration(ds *dataset.Dataset, state *anonymizationState) error {
 	identityRemoved := "YES"
 	methods := []string{"go-dicom profile-based de-identification"}
-	if len(state.retainedOverrides) > 0 {
+	if len(state.retained) > 0 {
 		identityRemoved = "NO"
-		retained := make([]string, 0, len(state.retainedOverrides))
-		for _, retainedTag := range state.retainedOverrides {
+		retained := make([]string, 0, len(state.retained))
+		for _, retainedTag := range state.retained {
 			retained = append(retained, retainedTag.String())
 		}
 		sort.Strings(retained)
 		methods = make([]string, 0, len(retained)+1)
 		for _, retainedTag := range retained {
-			methods = append(methods, "go-dicom retained explicit override: "+retainedTag)
+			methods = append(methods, "go-dicom retained attribute: "+retainedTag)
 		}
 		methods = append(methods, "go-dicom profile-based de-identification")
 	}
@@ -440,11 +517,14 @@ func (a *Anonymizer) resolveAction(t *tag.Tag, elem element.Element) (SecurityPr
 }
 
 // isSafePrivateVR reports whether a private attribute's VR is one that cannot
-// hold free-text identifying information.
+// hold free text or opaque data identifying a patient. Binary and unknown VRs
+// are excluded: an OB/OW/UN value can embed an XML, PDF, or free-text dump.
+// PS3.15 E.3.10 requires the (0008,0303) SAFE characteristic for such data;
+// without it, VR alone is not evidence of safety.
 func isSafePrivateVR(v *vr.VR) bool {
 	switch v.Code() {
-	case vr.CodeUS, vr.CodeSS, vr.CodeUL, vr.CodeSL, vr.CodeFL, vr.CodeFD, vr.CodeAT,
-		vr.CodeOB, vr.CodeOW, vr.CodeOF, vr.CodeOD, vr.CodeOL, vr.CodeOV:
+	case vr.CodeUS, vr.CodeSS, vr.CodeUL, vr.CodeSL, vr.CodeFL, vr.CodeFD,
+		vr.CodeSV, vr.CodeUV, vr.CodeAT:
 		return true
 	}
 	return false
@@ -511,69 +591,112 @@ func (a *Anonymizer) shiftDateValue(ds *dataset.Dataset, elem element.Element) e
 }
 
 // shiftDateTimeValue shifts a DT value by the configured offset, preserving the
-// original precision and timezone.
+// original precision, fractional seconds, and timezone (PS3.5 §6.2).
 func (a *Anonymizer) shiftDateTimeValue(ds *dataset.Dataset, elem element.Element) error {
 	old, ok := ds.GetString(elem.Tag())
 	if !ok || strings.TrimSpace(old) == "" {
 		return nil
 	}
-	trimmed := normalizeDTFraction(strings.TrimSpace(old))
-	for _, layout := range []string{
-		"20060102150405.000000-0700",
-		"20060102150405",
-		"200601021504",
-		"2006010215",
-		"20060102",
-	} {
-		t, err := time.Parse(layout, trimmed)
-		if err != nil {
-			continue
-		}
-		shifted := t.AddDate(0, 0, a.dateOffsetDays).Format(layout)
+	if shifted, ok := shiftDTValue(strings.TrimSpace(old), a.dateOffsetDays); ok {
 		return ds.AddOrUpdate(element.NewString(elem.Tag(), vr.DT, []string{shifted}))
 	}
 	return a.replaceString(ds, elem, dummyStringValue(elem.ValueRepresentation()))
 }
 
-// normalizeDTFraction pads a 1-5 digit fractional-second component to 6 digits
-// so the fixed DT layouts can parse it.
-func normalizeDTFraction(value string) string {
-	dot := strings.IndexByte(value, '.')
-	if dot < 0 {
-		return value
+// shiftDTValue shifts the date part of a DT value while keeping the time,
+// fractional seconds, and UTC offset exactly as they were written.
+func shiftDTValue(value string, offsetDays int) (string, bool) {
+	const dateLayout = "20060102"
+	if len(value) < 8 {
+		return "", false
 	}
-	end := dot + 1
-	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
-		end++
+	datePart := value[:8]
+	for i := 0; i < 8; i++ {
+		if value[i] < '0' || value[i] > '9' {
+			return "", false
+		}
 	}
-	digits := end - dot - 1
-	if digits < 1 || digits > 6 {
-		return value
+	rest := value[8:]
+
+	// Split an optional trailing UTC offset before validating the time part.
+	offset := ""
+	if len(rest) >= 5 {
+		signIndex := len(rest) - 5
+		if rest[signIndex] == '+' || rest[signIndex] == '-' {
+			candidate := rest[signIndex:]
+			if digits(candidate[1:]) {
+				offset = candidate
+				rest = rest[:signIndex]
+			}
+		}
 	}
-	return value[:dot+1] + value[dot+1:end] + strings.Repeat("0", 6-digits) + value[end:]
+
+	// The remaining time part must be empty or HH, HHMM, HHMMSS, HHMMSS.F.
+	fraction := ""
+	if dot := strings.IndexByte(rest, '.'); dot >= 0 {
+		fraction = rest[dot:]
+		rest = rest[:dot]
+		if !digits(fraction[1:]) || len(fraction)-1 < 1 || len(fraction)-1 > 6 {
+			return "", false
+		}
+	}
+	switch len(rest) {
+	case 0, 2, 4, 6:
+	default:
+		return "", false
+	}
+	if rest != "" && !digits(rest) {
+		return "", false
+	}
+
+	t, err := time.Parse(dateLayout, datePart)
+	if err != nil {
+		return "", false
+	}
+	shifted := t.AddDate(0, 0, offsetDays).Format(dateLayout)
+	return shifted + rest + fraction + offset, true
 }
 
-// replaceUID replaces a UID element with a new anonymized UID
+func digits(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// replaceUID replaces a UID element with new anonymized UIDs. PS3.15 Table
+// E.1-1a applies the "U" action value by value, so multi-valued UI attributes
+// keep their cardinality.
 func (a *Anonymizer) replaceUID(ds *dataset.Dataset, elem element.Element) error {
-	// Get the old UID value
-	oldUID, ok := ds.GetString(elem.Tag())
-	if !ok || oldUID == "" {
+	values, ok := ds.GetStrings(elem.Tag())
+	if !ok || len(values) == 0 {
 		return nil // No need to replace empty values
 	}
 
-	var newUID string
-	if replaced, exists := a.ReplacedUIDs[oldUID]; exists {
-		// Use previously replaced UID for consistency
-		newUID = replaced
-	} else {
-		// Generate new UID
-		generatedUID := uid.GenerateDerivedFromUUID()
-		newUID = generatedUID.UID()
-		a.ReplacedUIDs[oldUID] = newUID
+	replaced := make([]string, 0, len(values))
+	changed := false
+	for _, oldUID := range values {
+		oldUID = strings.TrimSpace(oldUID)
+		if oldUID == "" {
+			replaced = append(replaced, "")
+			continue
+		}
+		newUID, exists := a.ReplacedUIDs[oldUID]
+		if !exists {
+			newUID = uid.GenerateDerivedFromUUID().UID()
+			a.ReplacedUIDs[oldUID] = newUID
+		}
+		replaced = append(replaced, newUID)
+		changed = true
+	}
+	if !changed {
+		return nil
 	}
 
 	// Replace in dataset
-	if err := ds.AddOrUpdate(element.NewString(elem.Tag(), vr.UI, []string{newUID})); err != nil {
+	if err := ds.AddOrUpdate(element.NewString(elem.Tag(), vr.UI, replaced)); err != nil {
 		return fmt.Errorf("failed to update UID element: %w", err)
 	}
 	return nil

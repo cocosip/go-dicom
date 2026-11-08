@@ -78,14 +78,17 @@ func (t *TempFileBuffer) Size() uint32 {
 	return t.size
 }
 
+// errClosed reports use of a buffer after Close.
+var errClosed = fmt.Errorf("temporary file buffer is closed")
+
 // Data reads and returns all data from the temporary file.
 // For large files, consider using GetByteRange or WriteTo to avoid loading
-// everything into memory at once.
+// everything into memory at once. Data returns nil after Close.
 func (t *TempFileBuffer) Data() []byte {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if t.size == 0 {
+	if t.file == nil || t.size == 0 {
 		return nil
 	}
 
@@ -116,6 +119,10 @@ func (t *TempFileBuffer) Data() []byte {
 func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	if t.file == nil {
+		return errClosed
+	}
 
 	if output == nil {
 		return fmt.Errorf("output buffer cannot be nil")
@@ -156,6 +163,10 @@ func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error
 func (t *TempFileBuffer) WriteTo(w io.Writer) (int64, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	if t.file == nil {
+		return 0, errClosed
+	}
 
 	if w == nil {
 		return 0, fmt.Errorf("writer cannot be nil")

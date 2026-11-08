@@ -418,15 +418,30 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ctx context.Context, ds
 	outputUsesWords := inputUsesWords || !t.outputSyntax.IsExplicitVR() || bitsAllocated > 8
 	inputWordsAreBigEndian := inputUsesWords && nativeWordsAreBigEndian(t.inputSyntax)
 	outputWordsAreBigEndian := outputUsesWords && nativeWordsAreBigEndian(t.outputSyntax)
-	if (inputWordsAreBigEndian != outputWordsAreBigEndian) && len(pixelData)%2 != 0 {
-		return nil, fmt.Errorf("pixel data length is not aligned to 16-bit OW words")
+	if inputWordsAreBigEndian != outputWordsAreBigEndian {
+		alignment := 2
+		if bitsAllocated == 32 {
+			alignment = 4
+		}
+		if len(pixelData)%alignment != 0 {
+			return nil, fmt.Errorf("pixel data length is not aligned to %d-byte samples", alignment)
+		}
 	}
 
 	convertedData := append([]byte(nil), pixelData...)
 	if inputWordsAreBigEndian != outputWordsAreBigEndian {
-		for i := 0; i < len(pixelData); i += 2 {
-			convertedData[i] = pixelData[i+1]
-			convertedData[i+1] = pixelData[i]
+		if bitsAllocated == 32 {
+			// A 32-bit sample spans two OW words; reverse the whole sample so its
+			// numeric value is preserved (PS3.5 byte-order semantics).
+			for i := 0; i < len(pixelData); i += 4 {
+				convertedData[i], convertedData[i+3] = pixelData[i+3], pixelData[i]
+				convertedData[i+1], convertedData[i+2] = pixelData[i+2], pixelData[i+1]
+			}
+		} else {
+			for i := 0; i < len(pixelData); i += 2 {
+				convertedData[i] = pixelData[i+1]
+				convertedData[i+1] = pixelData[i]
+			}
 		}
 	}
 
@@ -618,24 +633,13 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	if err != nil {
 		return nil, fmt.Errorf("create native frame source: %w", err)
 	}
-	frameSize := oldPixelData.Info.UncompressedFrameSize()
-	if frameSize <= 0 {
-		return nil, fmt.Errorf("invalid frame size calculated")
-	}
 	for i := 0; i < frameCount; i++ {
-		start := i * frameSize
-		if start >= len(pixelData) {
-			return nil, fmt.Errorf("missing native pixel data for frame %d", i)
+		frameData, err := nativeFrameBytes(pixelData, i, frameCount, frameInfo)
+		if err != nil {
+			return nil, fmt.Errorf("native frame %d: %w", i, err)
 		}
-		end := start + frameSize
-		if end > len(pixelData) {
-			end = len(pixelData)
-		}
-		if start < len(pixelData) {
-			frameData := append([]byte(nil), pixelData[start:end]...)
-			if err := oldPixelData.AddFrame(ctx, frameData); err != nil {
-				return nil, fmt.Errorf("failed to add frame to oldPixelData: %w", err)
-			}
+		if err := oldPixelData.AddFrame(ctx, frameData); err != nil {
+			return nil, fmt.Errorf("failed to add frame to oldPixelData: %w", err)
 		}
 	}
 	if oldPixelData.FrameCount() != frameCount {
@@ -1028,6 +1032,9 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 		SamplesPerPixel:           frameInfo.SamplesPerPixel,
 		PhotometricInterpretation: &frameInfo.PhotometricInterpretation,
 	}).UncompressedFrameSize()
+	if frameInfo.BitDepth.BitsAllocated == 1 {
+		return nativeFrameBytes(pixelData, frameIndex, frameCount, frameInfo)
+	}
 	offset := frameIndex * frameSize
 
 	if offset+frameSize > len(pixelData) {
@@ -1035,6 +1042,51 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 	}
 
 	return pixelData[offset : offset+frameSize], nil
+}
+
+// nativeFrameBytes extracts one frame from native (uncompressed) Pixel Data.
+// 1-bit samples share one continuous LSB-first bit stream across frames
+// (PS3.5 8.1.1 / A.2), so their frames are not byte-aligned. The returned frame
+// starts its first sample at bit 0.
+func nativeFrameBytes(pixelData []byte, frameIndex, frameCount int, info codec.FrameInfo) ([]byte, error) {
+	if info.BitDepth.BitsAllocated == 1 {
+		samplesPerFrame := int(info.Width) * int(info.Height) * int(info.SamplesPerPixel)
+		if samplesPerFrame <= 0 {
+			return nil, fmt.Errorf("invalid 1-bit frame size")
+		}
+		totalSamples := samplesPerFrame * frameCount
+		if totalSamples > len(pixelData)*8 {
+			return nil, fmt.Errorf("missing native pixel data for frame %d", frameIndex)
+		}
+		frame := make([]byte, (samplesPerFrame+7)/8)
+		for sample := 0; sample < samplesPerFrame; sample++ {
+			bit := frameIndex*samplesPerFrame + sample
+			if pixelData[bit/8]&(1<<uint(bit%8)) != 0 {
+				frame[sample/8] |= 1 << uint(sample%8)
+			}
+		}
+		return frame, nil
+	}
+
+	frameSize := (&pixeldata.Info{
+		Width:                     info.Width,
+		Height:                    info.Height,
+		BitsAllocated:             info.BitDepth.BitsAllocated,
+		SamplesPerPixel:           info.SamplesPerPixel,
+		PhotometricInterpretation: &info.PhotometricInterpretation,
+	}).UncompressedFrameSize()
+	if frameSize <= 0 {
+		return nil, fmt.Errorf("invalid frame size calculated")
+	}
+	offset := frameIndex * frameSize
+	if offset >= len(pixelData) {
+		return nil, fmt.Errorf("missing native pixel data for frame %d", frameIndex)
+	}
+	end := offset + frameSize
+	if end > len(pixelData) {
+		end = len(pixelData)
+	}
+	return append([]byte(nil), pixelData[offset:end]...), nil
 }
 
 func copyDatasetElements(dst, src *dataset.Dataset) error {

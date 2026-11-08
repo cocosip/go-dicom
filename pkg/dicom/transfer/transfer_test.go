@@ -543,3 +543,47 @@ func TestIsLossyCompressed(t *testing.T) {
 		t.Error("JPEGBaseline8Bit should be lossy compressed")
 	}
 }
+
+func TestStandardTransferSyntaxCatalogIncludesEncapsulatedUncompressedAndJPEGXL(t *testing.T) {
+	tests := []struct {
+		uid         string
+		name        string
+		lossy       bool
+		lossyMethod string
+	}{
+		{"1.2.840.10008.1.2.1.98", "Encapsulated Uncompressed Explicit VR Little Endian", false, ""},
+		{"1.2.840.10008.1.2.4.110", "JPEG XL Lossless", false, ""},
+		{"1.2.840.10008.1.2.4.111", "JPEG XL JPEG Recompression", false, ""},
+		{"1.2.840.10008.1.2.4.112", "JPEG XL", true, "ISO_18181_1"},
+		{"1.2.840.10008.1.2.8.1", "Deflated Image Frame Compression", false, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.uid, func(t *testing.T) {
+			ts, err := transfer.Parse(tt.uid)
+			if err != nil {
+				t.Fatalf("Parse(%q) error = %v", tt.uid, err)
+			}
+			if ts.UID().Name() != tt.name {
+				t.Errorf("name = %q, want %q", ts.UID().Name(), tt.name)
+			}
+			if !ts.IsExplicitVR() {
+				t.Error("transfer syntax should use explicit VR")
+			}
+			if !ts.IsEncapsulated() {
+				t.Error("transfer syntax should be encapsulated")
+			}
+			if ts.Endian() != endian.Little {
+				t.Error("transfer syntax should be Little Endian")
+			}
+			if ts.IsDeflate() {
+				t.Error("transfer syntax should not deflate the data set")
+			}
+			if ts.IsLossy() != tt.lossy {
+				t.Errorf("IsLossy() = %v, want %v", ts.IsLossy(), tt.lossy)
+			}
+			if ts.LossyCompressionMethod() != tt.lossyMethod {
+				t.Errorf("LossyCompressionMethod() = %q, want %q", ts.LossyCompressionMethod(), tt.lossyMethod)
+			}
+		})
+	}
+}

@@ -198,34 +198,38 @@ srv.SetAssociationNegotiatorFunc(
     })
 ```
 
-### Problem: MaxPDULength negotiation failure
+### Problem: MaxPDULength mismatch
 
 **Error message**:
 ```
 PDU length 65536 exceeds maximum allowed 16384
 ```
 
+**Cause**: Each DICOM AE advertises the maximum PDU length **it can receive**
+in the Maximum Length Sub-item, independently for each direction of data flow
+(PS3.7 D.3.3.1, PS3.8 D.1.1). The limits do not have to match, and a mismatch is
+legal: a sender must simply never exceed the receiver's advertised value. The
+error above means the peer sent a P-DATA-TF PDU larger than this AE advertised.
+
 **Solution**:
 
 ```go
-// The client and server must negotiate a consistent MaxPDULength
-// The smaller of the two values is actually used
+// The local value is the receive limit; it is advertised to the peer.
+// A peer with a different limit is still compliant.
 
-// Client
+// Client: advertise that this SCU can receive PDUs up to 32 KB (0 = unlimited)
 c := client.New(
-    client.WithMaxPDULength(16384),  // 16 KB
+    client.WithMaxPDULength(32768),
 )
 
-// Server
+// Server: advertise that this SCP can receive PDUs up to 64 KB
 srv := server.New(
-    server.WithMaxPDULength(16384),  // 16 KB
-)
-
-// You can increase it for large file transfers (both sides must support it)
-c := client.New(
-    client.WithMaxPDULength(65536),  // 64 KB
+    server.WithMaxPDULength(65536),
 )
 ```
+
+Outgoing PDUs are fragmented to the smaller of the local configured limit and
+the peer's advertised limit, so raising only one side is always safe.
 
 ---
 
@@ -235,7 +239,7 @@ c := client.New(
 
 **Error message**:
 ```
-failed to create C-STORE request: SOPClassUID is required
+failed to create C-STORE request: SOPClassUID not found in dataset
 ```
 
 **Solution**:

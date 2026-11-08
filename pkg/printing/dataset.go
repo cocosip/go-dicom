@@ -313,12 +313,30 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 	if err := addReferenceSequence(ds, tag.ReferencedImageBoxSequence, imageReferences); err != nil {
 		return nil, err
 	}
-	if fb.ReferencedPresentationLUT != (SOPReference{}) {
-		if err := addReferenceSequence(ds, tag.ReferencedPresentationLUTSequence, []SOPReference{fb.ReferencedPresentationLUT}); err != nil {
+	if reference := fb.presentationLUTReference(); reference != (SOPReference{}) {
+		if err := addReferenceSequence(ds, tag.ReferencedPresentationLUTSequence, []SOPReference{reference}); err != nil {
 			return nil, err
 		}
 	}
 	return ds, nil
+}
+
+// presentationLUTReference returns the Presentation LUT this Film Box
+// references. When no reference is set explicitly and the session created
+// exactly one LUT, that LUT is referenced automatically so it is not silently
+// inert (PS3.4 H.4.2.2.1.1, H.4.9.2.1.3).
+func (fb *FilmBox) presentationLUTReference() SOPReference {
+	if fb.ReferencedPresentationLUT != (SOPReference{}) {
+		return fb.ReferencedPresentationLUT
+	}
+	if fb.filmSession == nil || len(fb.filmSession.PresentationLUTs) != 1 {
+		return SOPReference{}
+	}
+	lut := fb.filmSession.PresentationLUTs[0]
+	if lut == nil || lut.SOPInstanceUID == "" {
+		return SOPReference{}
+	}
+	return SOPReference{SOPClassUID: presentationLUTSOPClassUID, SOPInstanceUID: lut.SOPInstanceUID}
 }
 
 // NewFilmBoxFromDataset constructs a Film Box from Dataset values.
@@ -435,19 +453,23 @@ func (ib *ImageBox) ToDataset() (*dataset.Dataset, error) {
 			return nil, err
 		}
 	}
-	if ib.MaxDensity != nil {
-		if err := addElement(ds, element.NewUnsignedShort(tag.MaxDensity, []uint16{*ib.MaxDensity})); err != nil {
-			return nil, err
+	// PS3.4 Table H.4-11 (Basic Color Image Box N-SET) does not list Minimum
+	// Density, Maximum Density, or Configuration Information.
+	if !ib.IsColor {
+		if ib.MaxDensity != nil {
+			if err := addElement(ds, element.NewUnsignedShort(tag.MaxDensity, []uint16{*ib.MaxDensity})); err != nil {
+				return nil, err
+			}
 		}
-	}
-	if ib.MinDensity != nil {
-		if err := addElement(ds, element.NewUnsignedShort(tag.MinDensity, []uint16{*ib.MinDensity})); err != nil {
-			return nil, err
+		if ib.MinDensity != nil {
+			if err := addElement(ds, element.NewUnsignedShort(tag.MinDensity, []uint16{*ib.MinDensity})); err != nil {
+				return nil, err
+			}
 		}
-	}
-	if ib.ConfigurationInformation != nil {
-		if err := addElement(ds, element.NewString(tag.ConfigurationInformation, vr.ST, []string{*ib.ConfigurationInformation})); err != nil {
-			return nil, err
+		if ib.ConfigurationInformation != nil {
+			if err := addElement(ds, element.NewString(tag.ConfigurationInformation, vr.ST, []string{*ib.ConfigurationInformation})); err != nil {
+				return nil, err
+			}
 		}
 	}
 	imageSequence, err := ib.ImageSequence()
@@ -574,15 +596,9 @@ func (p *PresentationLUT) ToDataset() (*dataset.Dataset, error) {
 	if err := addString(lutItem, tag.LUTExplanation, p.LUTExplanation, vr.LO); err != nil {
 		return nil, err
 	}
-	if len(p.LUTData)*2 > int(^uint16(0)) {
-		raw := make([]byte, len(p.LUTData)*2)
-		for index, value := range p.LUTData {
-			binary.LittleEndian.PutUint16(raw[index*2:], value)
-		}
-		if err := addElement(lutItem, element.NewOtherWord(tag.LUTData, raw)); err != nil {
-			return nil, err
-		}
-	} else if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
+	// IsValid restricts print LUTs to 256 or 4096 entries, whose 512 or 8192
+	// bytes always fit the 16-bit Value Length of US.
+	if err := addElement(lutItem, element.NewUnsignedShort(tag.LUTData, append([]uint16(nil), p.LUTData...))); err != nil {
 		return nil, err
 	}
 	if err := addElement(ds, dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{lutItem})); err != nil {

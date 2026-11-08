@@ -93,6 +93,8 @@ func NewPrinterStatusManager(printerName string) *PrinterStatusManager {
 
 // PrinterName returns the configured printer name.
 func (m *PrinterStatusManager) PrinterName() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.printerName
 }
 

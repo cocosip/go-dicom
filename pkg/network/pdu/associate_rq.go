@@ -19,9 +19,9 @@ const applicationContextUID = "1.2.840.10008.3.1.1.1"
 
 const (
 	// DefaultImplementationClassUID identifies the go-dicom implementation.
-	DefaultImplementationClassUID = "1.2.826.0.1.3680043.8.498.1"
+	DefaultImplementationClassUID = uid.GoDicomImplementationClassUID
 	// DefaultImplementationVersionName identifies the go-dicom implementation version.
-	DefaultImplementationVersionName = "go-dicom-1.0"
+	DefaultImplementationVersionName = uid.GoDicomImplementationVersionName
 )
 
 const maximumPresentationContexts = 128
@@ -78,7 +78,10 @@ type PresentationContextRQ struct {
 
 // UserInformation represents the User Information item.
 type UserInformation struct {
-	MaximumLength              uint32                           // Maximum PDU length (0 = unlimited)
+	// MaximumLength is the maximum PDU length the sending AE can receive
+	// (0 = unlimited). It is a per-direction limit (PS3.7 D.3.3.1), not a value
+	// that both AEs must agree on.
+	MaximumLength              uint32
 	ImplementationClassUID     string                           // Implementation Class UID
 	ImplementationVersionName  string                           // Implementation Version Name
 	AsynchronousOperations     *AsynchronousOperationsWindow    // Optional: Async operations
@@ -288,13 +291,6 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 		}
 	}
 
-	// Implementation Version Name Sub-item (optional)
-	if ui.ImplementationVersionName != "" {
-		if err := writeItem(&buf, ItemTypeImplementationVersionName, []byte(ui.ImplementationVersionName)); err != nil {
-			return fmt.Errorf("writing implementation version name: %w", err)
-		}
-	}
-
 	// Asynchronous Operations Window Sub-item (optional)
 	if ui.AsynchronousOperations != nil {
 		asyncData := make([]byte, 4)
@@ -322,6 +318,15 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 
 		if err := writeItem(&buf, ItemTypeSCPSCURoleSelection, roleData.Bytes()); err != nil {
 			return fmt.Errorf("writing role selection: %w", err)
+		}
+	}
+
+	// Implementation Version Name Sub-item (optional). Written after 0x53/0x54 so
+	// the sub-items remain in ascending item-type order (PS3.8 9.3.2.3 warns
+	// that older applications may expect that order).
+	if ui.ImplementationVersionName != "" {
+		if err := writeItem(&buf, ItemTypeImplementationVersionName, []byte(ui.ImplementationVersionName)); err != nil {
+			return fmt.Errorf("writing implementation version name: %w", err)
 		}
 	}
 
@@ -603,6 +608,7 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 	}
 	maximumLengthSeen := false
 	implementationClassUIDSeen := false
+	seenRoleSelections := make(map[string]struct{})
 
 	r := bytes.NewReader(data)
 
@@ -653,6 +659,12 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 			if err != nil {
 				return nil, fmt.Errorf("decoding role selection: %w", err)
 			}
+			// PS3.7 D.3.3.4.1: at most one SCP/SCU Role Selection Sub-Item per
+			// SOP Class UID in the A-ASSOCIATE-RQ.
+			if _, duplicate := seenRoleSelections[role.SOPClassUID]; duplicate {
+				return nil, fmt.Errorf("duplicate SCP/SCU role selection sub-item for SOP Class %s", role.SOPClassUID)
+			}
+			seenRoleSelections[role.SOPClassUID] = struct{}{}
 			ui.SCPSCURoleSelections = append(ui.SCPSCURoleSelections, *role)
 
 		case ItemTypeExtendedNegotiation:
@@ -949,3 +961,4 @@ func (u *UserInformation) String() string {
 	return fmt.Sprintf("UserInformation[MaxPDU=%d, Implementation=%s, Version=%s]",
 		u.MaximumLength, u.ImplementationClassUID, u.ImplementationVersionName)
 }
+

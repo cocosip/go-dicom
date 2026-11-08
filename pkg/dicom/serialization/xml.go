@@ -87,22 +87,29 @@ func (w *xmlWriter) writeElements(ds *dataset.Dataset) error {
 
 // xmlTagString returns the PS3.19 A.1.5 tag attribute. Private data elements
 // use gggg00ee plus the privateCreator attribute; the actual block is restored
-// from the Private Creator on read.
-func xmlTagString(t *tag.Tag) string {
-	if t.IsPrivate() && t.PrivateCreator() != nil && t.PrivateCreator().Creator() != "" {
-		return fmt.Sprintf("%04X00%02X", t.Group(), t.Element()&0xFF)
+// from the Private Creator on read. The Private Creator Data Element itself is
+// written with its full tag (gggg,00bb).
+func xmlTagString(t *tag.Tag) (string, error) {
+	if !t.IsPrivate() || t.Element() <= 0x00FF {
+		return fmt.Sprintf("%04X%04X", t.Group(), t.Element()), nil
 	}
-	// Without a creator the block cannot be reconstructed, so keep the full
-	// element number rather than losing it.
-	return fmt.Sprintf("%04X%04X", t.Group(), t.Element())
+	pc := t.PrivateCreator()
+	if pc == nil || pc.Creator() == "" {
+		return "", fmt.Errorf("private element %s has no Private Creator; PS3.19 A.1.5 requires gggg00ee plus a privateCreator attribute", t)
+	}
+	return fmt.Sprintf("%04X00%02X", t.Group(), t.Element()&0xFF), nil
 }
 
 // writeElement writes a single DICOM element as XML
 func (w *xmlWriter) writeElement(elem element.Element) error {
+	tagString, err := xmlTagString(elem.Tag())
+	if err != nil {
+		return err
+	}
 	// Write opening DicomAttribute tag
 	w.writeIndent()
 	w.buf.WriteString(`<DicomAttribute`)
-	w.writeAttribute("tag", xmlTagString(elem.Tag()))
+	w.writeAttribute("tag", tagString)
 	w.writeAttribute("vr", elem.ValueRepresentation().String())
 
 	// Add keyword if available. Private elements are not part of PS3.6, so no
@@ -140,10 +147,20 @@ func (w *xmlWriter) writeElement(elem element.Element) error {
 	return nil
 }
 
-// isBulkDataVR reports whether a VR may be represented as BulkData.
+// isBulkDataVR reports whether a VR may be represented as BulkData. PS3.19
+// A.1.5 allows BulkData for the Value Field of a DICOM Attribute and defines
+// the encoding for the character set dependent VRs (SH, LO, ST, PN, LT, UC,
+// UT); only SQ (which uses Item elements) is excluded.
 func isBulkDataVR(code string) bool {
+	if code == vr.CodeSQ {
+		return false
+	}
 	switch code {
-	case vr.CodeOB, vr.CodeOD, vr.CodeOF, vr.CodeOW, vr.CodeOL, vr.CodeOV, vr.CodeUN:
+	case vr.CodeAE, vr.CodeAS, vr.CodeAT, vr.CodeCS, vr.CodeDA, vr.CodeDS, vr.CodeDT,
+		vr.CodeFD, vr.CodeFL, vr.CodeIS, vr.CodeLO, vr.CodeLT, vr.CodeOB, vr.CodeOD,
+		vr.CodeOF, vr.CodeOL, vr.CodeOV, vr.CodeOW, vr.CodePN, vr.CodeSH, vr.CodeSL,
+		vr.CodeSS, vr.CodeST, vr.CodeSV, vr.CodeTM, vr.CodeUC, vr.CodeUI, vr.CodeUL,
+		vr.CodeUN, vr.CodeUR, vr.CodeUS, vr.CodeUT, vr.CodeUV:
 		return true
 	}
 	return false
@@ -153,8 +170,8 @@ func isBulkDataVR(code string) bool {
 func (w *xmlWriter) writeElementValue(elem element.Element, vrValue *vr.VR) error {
 	vrCode := vrValue.Code()
 
-	// A lazy BulkDataURI reference is only valid for binary VRs and is written
-	// as <BulkData uri="..."/> (PS3.19 A.1.5).
+	// A lazy BulkDataURI reference is written as <BulkData uri="..."/>
+	// (PS3.19 A.1.5). It is valid for any VR except SQ.
 	if buf := elem.Buffer(); buf != nil {
 		if bulk, ok := buf.(*buffer.BulkDataURIByteBuffer); ok && bulk.BulkDataURI() != "" {
 			if !isBulkDataVR(vrCode) {
@@ -421,10 +438,14 @@ func (w *xmlWriter) getNumericValuesAsStrings(elem element.Element) []string {
 
 // writeSequence writes a DICOM sequence as XML
 func (w *xmlWriter) writeSequence(seq *dataset.Sequence) error {
+	tagString, err := xmlTagString(seq.Tag())
+	if err != nil {
+		return err
+	}
 	// Write opening DicomAttribute tag
 	w.writeIndent()
 	w.buf.WriteString(`<DicomAttribute`)
-	w.writeAttribute("tag", xmlTagString(seq.Tag()))
+	w.writeAttribute("tag", tagString)
 	w.writeAttribute("vr", seq.ValueRepresentation().String())
 
 	// Add keyword if available (private sequences have no PS3.6 keyword).
@@ -554,7 +575,7 @@ func (r *xmlReader) readDataset(xmlData []byte) (*dataset.Dataset, error) {
 	ds := dataset.New()
 	ds.SetAutoValidate(false)
 	defer ds.SetAutoValidate(true)
-	creators := r.collectPrivateCreators(model.DicomAttributes)
+	creators, pending := r.resolvePrivateCreators(model.DicomAttributes)
 	for _, attr := range model.DicomAttributes {
 		elem, err := r.readAttribute(attr, creators)
 		if err != nil {
@@ -566,8 +587,78 @@ func (r *xmlReader) readDataset(xmlData []byte) (*dataset.Dataset, error) {
 			}
 		}
 	}
+	if err := addPrivateCreatorElements(ds, pending); err != nil {
+		return nil, err
+	}
+	if err := ds.EnsureUTF8CharacterSet(); err != nil {
+		return nil, fmt.Errorf("set Specific Character Set: %w", err)
+	}
 
 	return ds, nil
+}
+
+// privateCreatorElement records a Private Creator that was conveyed only by the
+// privateCreator attribute and therefore has to be added to the dataset.
+type privateCreatorElement struct {
+	group   uint16
+	block   uint16
+	creator string
+}
+
+// resolvePrivateCreators returns the block mapping for a set of attributes and
+// allocates a block for every Private Creator that has no creator element.
+func (r *xmlReader) resolvePrivateCreators(attrs []dicomAttribute) (map[string]uint16, []privateCreatorElement) {
+	creators := r.collectPrivateCreators(attrs)
+	var pending []privateCreatorElement
+	seen := make(map[string]bool)
+	for _, attr := range attrs {
+		if attr.PrivateCreator == "" {
+			continue
+		}
+		t, err := r.parseXMLTag(attr)
+		if err != nil || !t.IsPrivate() {
+			continue
+		}
+		key := privateCreatorKey(t.Group(), attr.PrivateCreator)
+		if _, ok := creators[key]; ok || seen[key] {
+			continue
+		}
+		block, ok := allocatePrivateBlock(t.Group(), creators)
+		if !ok {
+			continue
+		}
+		creators[key] = block
+		seen[key] = true
+		pending = append(pending, privateCreatorElement{group: t.Group(), block: block, creator: attr.PrivateCreator})
+	}
+	return creators, pending
+}
+
+// allocatePrivateBlock returns the lowest unused Private Creator block
+// (0x10-0xFF) in the group.
+func allocatePrivateBlock(group uint16, creators map[string]uint16) (uint16, bool) {
+	used := make(map[uint16]bool)
+	for key, block := range creators {
+		if len(key) >= 4 && key[:4] == fmt.Sprintf("%04X", group) {
+			used[block] = true
+		}
+	}
+	for block := uint16(0x10); block <= 0xFF; block++ {
+		if !used[block] {
+			return block, true
+		}
+	}
+	return 0, false
+}
+
+func addPrivateCreatorElements(ds *dataset.Dataset, pending []privateCreatorElement) error {
+	for _, creator := range pending {
+		creatorTag := tag.New(creator.group, creator.block)
+		if err := ds.Add(element.NewString(creatorTag, vr.LO, []string{creator.creator})); err != nil {
+			return fmt.Errorf("failed to add Private Creator %q: %w", creator.creator, err)
+		}
+	}
+	return nil
 }
 
 // nativeDicomModel represents the root XML structure
@@ -640,6 +731,21 @@ func (r *xmlReader) parseXMLTag(attr dicomAttribute) (*tag.Tag, error) {
 	return t, nil
 }
 
+// inferVR resolves the VR of an attribute without a vr attribute from the
+// DICOM dictionary. Ambiguous dictionary entries (for example "US or SS") are
+// not inferred.
+func (r *xmlReader) inferVR(t *tag.Tag) *vr.VR {
+	entry := r.config.lookup.Lookup(t)
+	if entry == nil {
+		return nil
+	}
+	vrs := entry.ValueRepresentations()
+	if len(vrs) != 1 {
+		return nil
+	}
+	return vrs[0]
+}
+
 func privateCreatorKey(group uint16, creator string) string {
 	return fmt.Sprintf("%04X|%s", group, creator)
 }
@@ -650,6 +756,11 @@ func privateCreatorKey(group uint16, creator string) string {
 func (r *xmlReader) collectPrivateCreators(attrs []dicomAttribute) map[string]uint16 {
 	creators := make(map[string]uint16)
 	for _, attr := range attrs {
+		// An attribute carrying privateCreator is a Private Data Element
+		// (gggg00ee), not a Private Creator declaration.
+		if attr.PrivateCreator != "" {
+			continue
+		}
 		t, err := r.parseXMLTag(attr)
 		if err != nil || !t.IsPrivate() {
 			continue
@@ -694,10 +805,20 @@ func (r *xmlReader) readAttribute(attr dicomAttribute, creators map[string]uint1
 		t = tag.NewWithPrivateCreator(t.Group(), elementNumber, tag.NewPrivateCreator(attr.PrivateCreator))
 	}
 
-	// Parse VR
-	vrCode, err := vr.Parse(attr.VR)
-	if err != nil {
-		return nil, fmt.Errorf("invalid VR %q: %w", attr.VR, err)
+	// Parse VR. The vr attribute is optional in PS3.19 A.1.5, Table A.1.5-2:
+	// when absent, the VR is inferred from the DICOM dictionary.
+	var vrCode *vr.VR
+	if strings.TrimSpace(attr.VR) == "" {
+		vrCode = r.inferVR(t)
+		if vrCode == nil {
+			return nil, fmt.Errorf("cannot infer VR for tag %q: no vr attribute and no unique dictionary entry", t)
+		}
+	} else {
+		parsed, err := vr.Parse(attr.VR)
+		if err != nil {
+			return nil, fmt.Errorf("invalid VR %q: %w", attr.VR, err)
+		}
+		vrCode = parsed
 	}
 
 	// BulkData reference
@@ -732,7 +853,7 @@ func (r *xmlReader) readSequence(t *tag.Tag, items []xmlItem, _ map[string]uint1
 	for _, item := range items {
 		itemDS := dataset.New()
 		itemDS.SetAutoValidate(false)
-		itemCreators := r.collectPrivateCreators(item.Attributes)
+		itemCreators, pending := r.resolvePrivateCreators(item.Attributes)
 		for _, attr := range item.Attributes {
 			elem, err := r.readAttribute(attr, itemCreators)
 			if err != nil {
@@ -744,6 +865,9 @@ func (r *xmlReader) readSequence(t *tag.Tag, items []xmlItem, _ map[string]uint1
 				}
 			}
 		}
+		if err := addPrivateCreatorElements(itemDS, pending); err != nil {
+			return nil, err
+		}
 		itemDS.SetAutoValidate(true)
 		seq.AddItem(itemDS)
 	}
@@ -751,31 +875,20 @@ func (r *xmlReader) readSequence(t *tag.Tag, items []xmlItem, _ map[string]uint1
 	return seq, nil
 }
 
-// readBulkData resolves a BulkData reference. Only binary VRs backed by a URI
-// are materialized; UUID references require an external data store.
+// readBulkData resolves a BulkData reference. PS3.19 A.1.5 allows uri and uuid;
+// a uuid has no meaning without the external data store that maps it to bytes,
+// so it is reported separately from an unsupported VR.
 func (r *xmlReader) readBulkData(t *tag.Tag, vrCode *vr.VR, data *xmlBulkData) (element.Element, error) {
 	if data.URI == "" {
-		return nil, fmt.Errorf("BulkData UUID references are not supported without a data store")
+		if data.UUID != "" {
+			return nil, fmt.Errorf("BulkData uuid %q cannot be resolved without a data store", data.UUID)
+		}
+		return nil, fmt.Errorf("BulkData requires a uri or uuid attribute")
 	}
-	buf := buffer.NewBulkDataURI(data.URI)
-	switch vrCode.Code() {
-	case vr.CodeOB:
-		return element.NewOtherByteFromBuffer(t, buf), nil
-	case vr.CodeOW:
-		return element.NewOtherWordFromBuffer(t, buf), nil
-	case vr.CodeOD:
-		return element.NewOtherDoubleFromBuffer(t, buf), nil
-	case vr.CodeOF:
-		return element.NewOtherFloatFromBuffer(t, buf), nil
-	case vr.CodeOL:
-		return element.NewOtherLongFromBuffer(t, buf), nil
-	case vr.CodeOV:
-		return element.NewOtherVeryLongFromBuffer(t, buf), nil
-	case vr.CodeUN:
-		return element.NewUnknownFromBuffer(t, buf), nil
-	default:
+	if !isBulkDataVR(vrCode.Code()) {
 		return nil, fmt.Errorf("BulkData not supported for VR %s", vrCode)
 	}
+	return element.NewElementFromBuffer(t, vrCode, buffer.NewBulkDataURI(data.URI), nil)
 }
 
 // readBinary parses binary data from base64
@@ -995,3 +1108,4 @@ func parseXMLValues[T any](values []string, parse func(string) (T, error)) ([]T,
 	}
 	return parsed, nil
 }
+

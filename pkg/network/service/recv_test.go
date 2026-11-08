@@ -84,7 +84,7 @@ func TestRecvLoopPeerReleaseClosesNormally(t *testing.T) {
 	}
 }
 
-func TestHandleReleaseRequestKeepsConnectionWhenConfigured(t *testing.T) {
+func TestHandleReleaseRequestClosesConnectionEvenWithLegacyOption(t *testing.T) {
 	conn := &mockConn{}
 	service := NewService(conn, nil, WithKeepConnectionOnPeerRelease(true))
 	if err := service.setState(StateAssociationAccepted); err != nil {
@@ -94,20 +94,118 @@ func TestHandleReleaseRequestKeepsConnectionWhenConfigured(t *testing.T) {
 	if err := service.handleReleaseRequest(context.Background()); err != nil {
 		t.Fatalf("handleReleaseRequest() error = %v", err)
 	}
-	if conn.closed {
-		t.Fatal("connection closed after peer release with compatibility mode enabled")
+	// PS3.8 7.2.2: no P-DATA may follow the A-RELEASE-RP, so the deprecated
+	// compatibility option must not leave the association usable.
+	if !conn.closed {
+		t.Fatal("connection stayed open after peer release")
 	}
-	select {
-	case <-service.closeCh:
-		t.Fatal("closeCh closed after peer release with compatibility mode enabled")
-	default:
+	if service.GetState() != StateClosed {
+		t.Fatalf("state = %s, want Closed", service.GetState())
+	}
+	if err := service.checkSendState(); err == nil {
+		t.Fatal("DIMSE send was still allowed after the A-RELEASE-RP")
 	}
 	if len(conn.writeData) == 0 || conn.writeData[0] != pdu.TypeAReleaseRP {
 		t.Fatalf("written PDU type = %#v, want A-RELEASE-RP", conn.writeData)
 	}
+}
 
-	if err := service.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
+// TestRecvLoopUnsolicitedReleaseResponseAborts verifies PS3.8 Table 9-10 Sta6:
+// an A-RELEASE-RP received without a local release request is an abnormal
+// condition handled by AA-8 (A-ABORT, service-provider source, unexpected PDU).
+func TestRecvLoopUnsolicitedReleaseResponseAborts(t *testing.T) {
+	raw, err := pdu.NewAReleaseRP().Encode()
+	if err != nil {
+		t.Fatalf("AReleaseRP.Encode() error = %v", err)
+	}
+
+	conn := &mockConn{readData: serializeRawPDUForTest(raw)}
+	service := NewService(conn, nil)
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	if err := service.recvLoop(context.Background()); err == nil {
+		t.Fatal("recvLoop() error = nil, want protocol error")
+	}
+	if service.GetState() != StateAborted {
+		t.Fatalf("state = %s, want Aborted", service.GetState())
+	}
+	if len(conn.writeData) < 10 || conn.writeData[0] != pdu.TypeAAbort {
+		t.Fatalf("written PDU = % X, want A-ABORT", conn.writeData)
+	}
+	if conn.writeData[8] != pdu.AbortSourceServiceProvider || conn.writeData[9] != pdu.AbortReasonServiceProviderUnexpectedPDU {
+		t.Fatalf("abort source/reason = %d/%d, want %d/%d",
+			conn.writeData[8], conn.writeData[9],
+			pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnexpectedPDU)
+	}
+}
+
+// TestReleaseCollisionAcceptorWaitsForConfirmation verifies the AR-8/AR-10
+// ordering (PS3.8 7.2.2): during a release collision the association-acceptor
+// waits for the peer's A-RELEASE-RP before sending its own A-RELEASE-RP.
+func TestReleaseCollisionAcceptorWaitsForConfirmation(t *testing.T) {
+	conn := &mockConn{}
+	service := NewService(conn, nil) // association-acceptor by default
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	if err := service.setState(StateReleaseRequested); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	if err := service.handleReleaseRequest(context.Background()); err != nil {
+		t.Fatalf("handleReleaseRequest() error = %v", err)
+	}
+	if len(conn.writeData) != 0 {
+		t.Fatalf("acceptor sent %d bytes before the peer confirmed its request", len(conn.writeData))
+	}
+	if conn.closed {
+		t.Fatal("acceptor closed before the peer confirmed its request")
+	}
+
+	if err := service.handleReleaseResponse(context.Background()); err != nil {
+		t.Fatalf("handleReleaseResponse() error = %v", err)
+	}
+	if len(conn.writeData) == 0 || conn.writeData[0] != pdu.TypeAReleaseRP {
+		t.Fatalf("written PDU = % X, want A-RELEASE-RP", conn.writeData)
+	}
+	if !conn.closed || service.GetState() != StateClosed {
+		t.Fatalf("association not closed after collision: closed=%v state=%s", conn.closed, service.GetState())
+	}
+}
+
+// TestReleaseCollisionRequestorAnswersImmediately verifies that during a
+// collision the association-requestor answers the peer's release request at
+// once and still waits for its own confirmation.
+func TestReleaseCollisionRequestorAnswersImmediately(t *testing.T) {
+	conn := &mockConn{}
+	service := NewService(conn, nil, WithAssociationRequestor(true))
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	if err := service.setState(StateReleaseRequested); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+
+	if err := service.handleReleaseRequest(context.Background()); err != nil {
+		t.Fatalf("handleReleaseRequest() error = %v", err)
+	}
+	if len(conn.writeData) == 0 || conn.writeData[0] != pdu.TypeAReleaseRP {
+		t.Fatalf("written PDU = % X, want A-RELEASE-RP", conn.writeData)
+	}
+	if conn.closed {
+		t.Fatal("requestor closed before its own A-RELEASE-RP arrived")
+	}
+
+	if err := service.handleReleaseResponse(context.Background()); err != nil {
+		t.Fatalf("handleReleaseResponse() error = %v", err)
+	}
+	if len(conn.writeData) != 10 {
+		t.Fatalf("requestor wrote %d bytes, want a single A-RELEASE-RP", len(conn.writeData))
+	}
+	if !conn.closed || service.GetState() != StateClosed {
+		t.Fatalf("association not closed after collision: closed=%v state=%s", conn.closed, service.GetState())
 	}
 }
 

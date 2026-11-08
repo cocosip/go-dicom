@@ -4,7 +4,8 @@
 package anonymizer
 
 const (
-	testPatientName      = "Doe^John"
-	testStudyDescription = "Test Study"
-	testStudyUID         = "1.2.3.4.5"
+	testPatientName       = "Doe^John"
+	testStudyDescription  = "Test Study"
+	testStudyUID          = "1.2.3.4.5"
+	testPatientRemovedYes = "YES"
 )

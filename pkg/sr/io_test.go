@@ -178,7 +178,7 @@ func TestWriteForcesExplicitSequenceAndItemLengths(t *testing.T) {
 
 func TestReadRoundTripsStringBackedTypedValues(t *testing.T) {
 	code := NewCodeItem("121071", "DCM", "Finding")
-	personName, err := NewContentItemPersonName(code, RelationshipContains, "Doe^Jane")
+	personName, err := NewContentItemPersonName(code, RelationshipContains, testObserverName)
 	if err != nil {
 		t.Fatalf("NewContentItemPersonName() error = %v", err)
 	}
@@ -211,7 +211,7 @@ func TestReadRoundTripsStringBackedTypedValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Children() error = %v", err)
 	}
-	if got, err := children[0].GetPersonName(); err != nil || got != "Doe^Jane" {
+	if got, err := children[0].GetPersonName(); err != nil || got != testObserverName {
 		t.Fatalf("GetPersonName() = %q, %v, want Doe^Jane, nil", got, err)
 	}
 	gotTemporal, err := children[1].GetTemporalCoordinate()

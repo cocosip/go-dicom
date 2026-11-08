@@ -142,7 +142,12 @@ func getVRCodes(value string) ([]string, error) {
 }
 
 func getVMCode(value string) string {
-	value = strings.TrimSpace(strings.Split(value, " or ")[0])
+	value = strings.TrimSpace(value)
+	if strings.Contains(strings.ToLower(value), " or ") {
+		// Keep every alternative; vm.Parse resolves their union at init time
+		// instead of the generator silently keeping only the first one.
+		return fmt.Sprintf("vm.MustParse(%s)", strconv.Quote(value))
+	}
 	switch value {
 	case "1":
 		return "vm.VM1"

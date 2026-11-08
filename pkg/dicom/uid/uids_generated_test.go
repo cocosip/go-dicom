@@ -118,6 +118,35 @@ func TestImageStorageUIDs(t *testing.T) {
 	}
 }
 
+func TestGeneratedStandardUIDCount(t *testing.T) {
+	if got := len(uid.StandardEntries()); got != 1990 {
+		t.Errorf("len(StandardEntries()) = %d, want 1990", got)
+	}
+}
+
+func TestGeneratedSupplemental2026dUIDs(t *testing.T) {
+	forProcessing := uid.Parse("1.2.840.10008.5.1.4.1.1.2.3", "ignored", uid.TypeUnknown)
+	if forProcessing.Name() != "CT Image Storage - For Processing" {
+		t.Errorf("CTImageStorageForProcessing.Name() = %q", forProcessing.Name())
+	}
+	if !forProcessing.IsImageStorage() {
+		t.Error("CTImageStorageForProcessing.IsImageStorage() = false, want true")
+	}
+
+	frameOfReference := uid.Parse("1.2.840.10008.1.4.1.1", "ignored", uid.TypeUnknown)
+	if frameOfReference.Name() != "Talairach Brain Atlas Frame of Reference" {
+		t.Errorf("TalairachBrainAtlas.Name() = %q", frameOfReference.Name())
+	}
+	if frameOfReference.Type() != uid.TypeFrameOfReference {
+		t.Errorf("TalairachBrainAtlas.Type() = %v, want TypeFrameOfReference", frameOfReference.Type())
+	}
+
+	template := uid.Parse("1.2.840.10008.9.1", "ignored", uid.TypeUnknown)
+	if template.Type() != uid.TypeTemplate {
+		t.Errorf("DocumentTemplateID91.Type() = %v, want TypeTemplate", template.Type())
+	}
+}
+
 // Test retired UIDs
 func TestRetiredUIDs(t *testing.T) {
 	if !uid.ExplicitVRBigEndianRETIRED.IsRetired() {

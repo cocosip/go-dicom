@@ -144,6 +144,14 @@ func (d *Dictionary) Lookup(t *tag.Tag) *Entry {
 	if t == nil {
 		return nil
 	}
+	// Private creator elements (gggg,0010-00FF) and the reserved
+	// (gggg,0100-0FFF) range are not private data elements. Their keys only
+	// contain the low element byte, so without this guard a manually
+	// constructed creator/reserved tag would resolve to a vendor data entry
+	// from the same block.
+	if t.IsPrivate() && t.Element() < 0x1000 {
+		return nil
+	}
 	if creator := t.PrivateCreator(); creator != nil {
 		if d.privateCreator != nil {
 			if creator.Creator() != d.privateCreator.Creator() {

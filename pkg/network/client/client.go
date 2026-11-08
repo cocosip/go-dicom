@@ -100,7 +100,9 @@ type Config struct {
 	// CalledAE is the AE Title of the remote server (SCP)
 	CalledAE string
 
-	// MaxPDULength is the maximum PDU length to negotiate
+	// MaxPDULength is the maximum PDU length this client advertises it can
+	// receive (0 = unlimited). It is a per-direction limit (PS3.7 D.3.3.1); the
+	// peer advertises its own receive limit independently.
 	// Default: 16384 bytes
 	MaxPDULength uint32
 
@@ -148,9 +150,10 @@ type Config struct {
 	// same association, so this handler must be set to receive the images.
 	CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
 
-	// KeepConnectionOnPeerRelease keeps the TCP connection open after replying
-	// to a peer A-RELEASE-RQ for compatibility with non-conformant PACS.
-	// Default: false.
+	// KeepConnectionOnPeerRelease is deprecated and has no effect.
+	//
+	// After answering a peer A-RELEASE-RQ with A-RELEASE-RP no further P-DATA may
+	// be sent, so the association is always closed (PS3.8 7.2.2).
 	KeepConnectionOnPeerRelease bool
 
 	// AsynchronousOperations requests the DIMSE asynchronous operations window.
@@ -229,7 +232,9 @@ func WithCalledAE(ae string) Option {
 	}
 }
 
-// WithMaxPDULength sets the maximum PDU length.
+// WithMaxPDULength sets the maximum PDU length this client advertises it can
+// receive (PS3.7 D.3.3.1 per-direction limit). Default: 16384 bytes; 0 means
+// unlimited.
 func WithMaxPDULength(length uint32) Option {
 	return func(o *Config) {
 		o.MaxPDULength = length
@@ -313,10 +318,13 @@ func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dim
 	}
 }
 
-// WithKeepConnectionOnPeerRelease controls whether the client keeps the TCP
-// connection open after responding to an A-RELEASE-RQ from the peer. The
-// default is false, which closes the connection according to the normal
-// release lifecycle.
+// WithKeepConnectionOnPeerRelease is deprecated and has no effect.
+//
+// After the client answers a peer A-RELEASE-RQ with A-RELEASE-RP it must not
+// send any further P-DATA, so the association and transport are always closed
+// (PS3.8 7.2.2).
+//
+// Deprecated: keeping the connection open after a release is not conformant.
 func WithKeepConnectionOnPeerRelease(keep bool) Option {
 	return func(o *Config) {
 		o.KeepConnectionOnPeerRelease = keep
@@ -940,7 +948,6 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 		service.WithRequestTimeout(c.config.RequestTimeout),
 		service.WithReadTimeout(c.config.TransportReadTimeout),
 		service.WithWriteTimeout(c.config.TransportWriteTimeout),
-		service.WithKeepConnectionOnPeerRelease(c.config.KeepConnectionOnPeerRelease),
 	}
 	if c.config.CStoreHandler != nil {
 		svcOpts = append(svcOpts, service.WithCStoreHandler(c.config.CStoreHandler))
@@ -1134,3 +1141,4 @@ func Dial(ctx context.Context, host string, port int, opts ...Option) (*Client, 
 
 	return c, nil
 }
+

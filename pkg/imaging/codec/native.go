@@ -182,7 +182,7 @@ func (c *NativeCodec) encodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 		return copyFrameInto(ctx, src, *dst)
 	}
 
-	return c.swapOWWords(ctx, src, *dst)
+	return c.swapSampleBytes(ctx, src, *dst, bytesAllocated)
 }
 
 // decodeFrame decodes a single frame (internal helper method).
@@ -214,7 +214,7 @@ func (c *NativeCodec) decodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 		return copyFrameInto(ctx, src, *dst)
 	}
 
-	return c.swapOWWords(ctx, src, *dst)
+	return c.swapSampleBytes(ctx, src, *dst, bytesAllocated)
 }
 
 func copyFrame(ctx context.Context, src []byte, dst *[]byte) error {
@@ -233,17 +233,38 @@ func copyFrameInto(ctx context.Context, src, dst []byte) error {
 	return ctx.Err()
 }
 
-// swapOWWords swaps the bytes within each 16-bit OW word. A pixel sample may
-// occupy multiple words; the order of those words is not reversed.
-func (c *NativeCodec) swapOWWords(ctx context.Context, src, dst []byte) error {
+// swapSampleBytes reverses the byte order of each native sample. A 16-bit
+// sample is one OW word; a 32-bit sample spans two words and must be reversed
+// as a whole so its numeric value survives the transfer syntax change.
+func (c *NativeCodec) swapSampleBytes(ctx context.Context, src, dst []byte, bytesPerSample int) error {
 	if len(src) != len(dst) {
 		return fmt.Errorf("source and destination buffers must be same length")
 	}
-
-	if len(src)%2 != 0 {
-		return fmt.Errorf("data length %d is not aligned to 16-bit OW words", len(src))
+	switch bytesPerSample {
+	case 2:
+		if len(src)%2 != 0 {
+			return fmt.Errorf("data length %d is not aligned to 16-bit OW words", len(src))
+		}
+		return c.swap16(ctx, src, dst)
+	case 4:
+		if len(src)%4 != 0 {
+			return fmt.Errorf("data length %d is not aligned to 32-bit samples", len(src))
+		}
+		for i := 0; i < len(src); i += 4 {
+			if i%contextCopyChunkSize == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
+			dst[i] = src[i+3]
+			dst[i+1] = src[i+2]
+			dst[i+2] = src[i+1]
+			dst[i+3] = src[i]
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported sample width %d bytes for byte swapping", bytesPerSample)
 	}
-	return c.swap16(ctx, src, dst)
 }
 
 // swap16 swaps bytes within each 16-bit OW word.

@@ -60,7 +60,15 @@ func imageOverlays(ds *dataset.Dataset, pixelData *pixeldata.Data) []*DicomOverl
 			case *element.OtherByte:
 				overlay.Data = append([]byte(nil), value.GetData()...)
 			case *element.OtherWord:
-				overlay.Data = append([]byte(nil), value.GetData()...)
+				data := append([]byte(nil), value.GetData()...)
+				// Overlay Data is OW. The renderer unpacks it LSB-first as bytes,
+				// so a big-endian dataset's words must be swapped first.
+				if order, ok := element.NumericByteOrder(value); ok && order == binary.BigEndian {
+					for i := 0; i+1 < len(data); i += 2 {
+						data[i], data[i+1] = data[i+1], data[i]
+					}
+				}
+				overlay.Data = data
 			}
 		} else if overlayBits, err := ds.GetUInt16(tag.New(group, 0x0100), 0); err == nil && pixelData != nil &&
 			(overlayBits == 1 || overlayBits == pixelData.Info.BitsAllocated) {

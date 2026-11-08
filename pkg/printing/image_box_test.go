@@ -5,6 +5,11 @@ package printing
 
 import (
 	"testing"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
 func TestNewImageBox(t *testing.T) {
@@ -364,3 +369,193 @@ func TestImageBoxValidateImageAttributesRequiresPixelMacro(t *testing.T) {
 		t.Fatal("ValidateImageAttributes() = nil, want error for PixelData-only sequence")
 	}
 }
+
+type imageAttributeSet struct {
+	samplesPerPixel     uint16
+	photometric         string
+	bitsAllocated       uint16
+	bitsStored          uint16
+	highBit             uint16
+	pixelRepresentation uint16
+	planarConfiguration *uint16
+}
+
+func uint16Pointer(value uint16) *uint16 {
+	return &value
+}
+
+func imageSequenceDataset(t *testing.T, attributes imageAttributeSet) *dataset.Dataset {
+	t.Helper()
+	item := dataset.New()
+	elements := []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{2}),
+		element.NewUnsignedShort(tag.Columns, []uint16{2}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{attributes.samplesPerPixel}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{attributes.photometric}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{attributes.bitsAllocated}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{attributes.bitsStored}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{attributes.highBit}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{attributes.pixelRepresentation}),
+		element.NewOtherByte(tag.PixelData, []byte{1, 2, 3, 4}),
+	}
+	if attributes.planarConfiguration != nil {
+		elements = append(elements, element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{*attributes.planarConfiguration}))
+	}
+	for _, elem := range elements {
+		if err := item.Add(elem); err != nil {
+			t.Fatalf("build image item %s: %v", elem.Tag(), err)
+		}
+	}
+	return item
+}
+
+// TestImageBoxValidateImageAttributesValues covers PS3.3 C.13.5, Table C.13-5.
+func TestImageBoxValidateImageAttributesValues(t *testing.T) {
+	grayscale := imageAttributeSet{
+		samplesPerPixel: 1, photometric: "MONOCHROME2",
+		bitsAllocated: 8, bitsStored: 8, highBit: 7,
+	}
+	color := imageAttributeSet{
+		samplesPerPixel: 3, photometric: testPhotometricRGB,
+		bitsAllocated: 8, bitsStored: 8, highBit: 7,
+		planarConfiguration: uint16Pointer(1),
+	}
+
+	tests := []struct {
+		name       string
+		isColor    bool
+		attributes imageAttributeSet
+		wantErr    bool
+	}{
+		{name: "valid grayscale 8-bit", attributes: grayscale},
+		{name: "valid grayscale MONOCHROME1", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.photometric = "MONOCHROME1"
+			return attributes
+		}()},
+		{name: "valid grayscale 12-bit", attributes: imageAttributeSet{
+			samplesPerPixel: 1, photometric: "MONOCHROME2",
+			bitsAllocated: 16, bitsStored: 12, highBit: 11,
+		}},
+		{name: "valid color", isColor: true, attributes: color},
+		{name: "grayscale Bits Stored 16", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.bitsAllocated, attributes.bitsStored, attributes.highBit = 16, 16, 15
+			return attributes
+		}(), wantErr: true},
+		{name: "grayscale Bits Allocated mismatch", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.bitsAllocated = 16
+			return attributes
+		}(), wantErr: true},
+		{name: "grayscale High Bit mismatch", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.highBit = 11
+			return attributes
+		}(), wantErr: true},
+		{name: "grayscale Pixel Representation signed", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.pixelRepresentation = 1
+			return attributes
+		}(), wantErr: true},
+		{name: "grayscale RGB photometric", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.photometric = testPhotometricRGB
+			return attributes
+		}(), wantErr: true},
+		{name: "grayscale Samples per Pixel 3", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.samplesPerPixel = 3
+			return attributes
+		}(), wantErr: true},
+		{name: "grayscale Planar Configuration present", attributes: func() imageAttributeSet {
+			attributes := grayscale
+			attributes.planarConfiguration = uint16Pointer(0)
+			return attributes
+		}(), wantErr: true},
+		{name: "color Planar Configuration 0", isColor: true, attributes: func() imageAttributeSet {
+			attributes := color
+			attributes.planarConfiguration = uint16Pointer(0)
+			return attributes
+		}(), wantErr: true},
+		{name: "color Planar Configuration missing", isColor: true, attributes: func() imageAttributeSet {
+			attributes := color
+			attributes.planarConfiguration = nil
+			return attributes
+		}(), wantErr: true},
+		{name: "color Samples per Pixel 1", isColor: true, attributes: func() imageAttributeSet {
+			attributes := color
+			attributes.samplesPerPixel = 1
+			return attributes
+		}(), wantErr: true},
+		{name: "color Photometric Interpretation YBR_FULL", isColor: true, attributes: func() imageAttributeSet {
+			attributes := color
+			attributes.photometric = "YBR_FULL"
+			return attributes
+		}(), wantErr: true},
+		{name: "color 16-bit", isColor: true, attributes: func() imageAttributeSet {
+			attributes := color
+			attributes.bitsAllocated, attributes.bitsStored, attributes.highBit = 16, 12, 11
+			return attributes
+		}(), wantErr: true},
+		{name: "color Pixel Representation signed", isColor: true, attributes: func() imageAttributeSet {
+			attributes := color
+			attributes.pixelRepresentation = 1
+			return attributes
+		}(), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			box := NewImageBox("2.25.701", tt.isColor)
+			if err := box.SetImageSequence(imageSequenceDataset(t, tt.attributes)); err != nil {
+				t.Fatalf("SetImageSequence() error = %v", err)
+			}
+			err := box.ValidateImageAttributes()
+			if tt.wantErr && err == nil {
+				t.Fatal("ValidateImageAttributes() = nil, want error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("ValidateImageAttributes() error = %v", err)
+			}
+		})
+	}
+}
+
+// TestImageBoxColorDatasetOmitsGrayscaleOnlyAttributes covers PS3.4 Table H.4-11,
+// which does not list Minimum/Maximum Density or Configuration Information.
+func TestImageBoxColorDatasetOmitsGrayscaleOnlyAttributes(t *testing.T) {
+	maxDensity, minDensity := uint16(200), uint16(10)
+	configuration := "CS1"
+
+	color := NewImageBox("2.25.702", true)
+	color.MaxDensity = &maxDensity
+	color.MinDensity = &minDensity
+	color.ConfigurationInformation = &configuration
+	color.SetImageData([]byte{1, 2, 3, 4, 5, 6})
+	colorDataset, err := color.ToDataset()
+	if err != nil {
+		t.Fatalf("color ToDataset() error = %v", err)
+	}
+	for _, forbidden := range []*tag.Tag{tag.MaxDensity, tag.MinDensity, tag.ConfigurationInformation} {
+		if _, ok := colorDataset.Get(forbidden); ok {
+			t.Errorf("color Image Box N-SET dataset contains %s", forbidden)
+		}
+	}
+
+	grayscale := NewImageBox("2.25.703", false)
+	grayscale.MaxDensity = &maxDensity
+	grayscale.MinDensity = &minDensity
+	grayscale.ConfigurationInformation = &configuration
+	grayscale.SetImageData([]byte{1, 2, 3, 4})
+	grayscaleDataset, err := grayscale.ToDataset()
+	if err != nil {
+		t.Fatalf("grayscale ToDataset() error = %v", err)
+	}
+	for _, required := range []*tag.Tag{tag.MaxDensity, tag.MinDensity, tag.ConfigurationInformation} {
+		if _, ok := grayscaleDataset.Get(required); !ok {
+			t.Errorf("grayscale Image Box N-SET dataset is missing %s", required)
+		}
+	}
+}
+

@@ -664,3 +664,62 @@ func TestAAssociateACString(t *testing.T) {
 		t.Errorf("PresentationContextAC.String() = %q, want %q", got, want)
 	}
 }
+
+// TestAAssociateACEncodesUserInformationSubItemsInAscendingOrder verifies
+// PS3.8 9.3.2.3: AC sub-items are also written in ascending Item-type order.
+func TestAAssociateACEncodesUserInformationSubItemsInAscendingOrder(t *testing.T) {
+	ac := NewAAssociateAC()
+	ac.CalledAETitle = testCalledAETitle
+	ac.CallingAETitle = testCallingAETitle
+	ac.PresentationContexts = testAcceptedContexts()
+	ac.UserInformation.ImplementationVersionName = testImplVersionName
+	ac.UserInformation.AsynchronousOperations = &AsynchronousOperationsWindow{
+		MaximumNumberOperationsInvoked:   1,
+		MaximumNumberOperationsPerformed: 1,
+	}
+	ac.UserInformation.SCPSCURoleSelections = []SCPSCURoleSelection{{
+		SOPClassUID: testCTImageStorageUID,
+		SCURole:     1,
+		SCPRole:     0,
+	}}
+	ac.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{{
+		SOPClassUID:         testCTImageStorageUID,
+		ServiceClassAppInfo: []byte{1, 0, 1},
+	}}
+	ac.UserInformation.UserIdentityResponse = &UserIdentityNegotiationResponse{
+		ServerResponse: []byte("response"),
+	}
+
+	raw, err := ac.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+
+	want := []byte{
+		ItemTypeMaximumLength,
+		ItemTypeImplementationClassUID,
+		ItemTypeAsynchronousOperationsWindow,
+		ItemTypeSCPSCURoleSelection,
+		ItemTypeImplementationVersionName,
+		ItemTypeExtendedNegotiation,
+		ItemTypeUserIdentityNegotiationResponse,
+	}
+	got := userInformationSubItemTypes(t, raw)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("user information sub-item order = % X, want % X", got, want)
+	}
+}
+
+// TestAAssociateACDecodeRejectsDuplicateRoleSelections verifies that the AC
+// decoder enforces one role selection sub-item per SOP Class UID.
+func TestAAssociateACDecodeRejectsDuplicateRoleSelections(t *testing.T) {
+	data := append(
+		encodeRoleSelectionTestItem(t, testCTImageStorageUID, 1, 0),
+		encodeRoleSelectionTestItem(t, testCTImageStorageUID, 1, 1)...,
+	)
+
+	ac := &AAssociateAC{}
+	if _, err := ac.decodeUserInformation(data); err == nil {
+		t.Fatal("decodeUserInformation() accepted duplicate role selection sub-items")
+	}
+}

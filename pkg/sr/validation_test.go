@@ -17,7 +17,7 @@ func TestStructuredReportValidateAcceptsNestedReport(t *testing.T) {
 	leaf, err := NewContentItemText(
 		NewCodeItem("121071", "DCM", "Finding"),
 		RelationshipContains,
-		"No abnormalities detected",
+		testFindingText,
 	)
 	if err != nil {
 		t.Fatalf("NewContentItemText() error = %v", err)

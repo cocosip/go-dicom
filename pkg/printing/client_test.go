@@ -25,12 +25,15 @@ type recordedPrintCall struct {
 }
 
 type fakeDIMSEService struct {
-	calls           []recordedPrintCall
-	failAt          int
-	statusFailureAt int
-	cancelAfter     int
-	cancel          context.CancelFunc
-	filmBoxResponse *dataset.Dataset
+	calls               []recordedPrintCall
+	failAt              int
+	statusFailureAt     int
+	cancelAfter         int
+	cancel              context.CancelFunc
+	filmBoxResponse     *dataset.Dataset
+	filmBoxResponses    []*dataset.Dataset
+	filmBoxCreations    int
+	rejectSessionAction bool
 }
 
 func newFakeDIMSEService() *fakeDIMSEService {
@@ -68,6 +71,10 @@ func (f *fakeDIMSEService) SendNCreate(_ context.Context, req *dimse.NCreateRequ
 	var responseDataset *dataset.Dataset
 	if req.AffectedSOPClassUID() == basicFilmBoxSOPClassUID {
 		responseDataset = f.filmBoxResponse
+		if f.filmBoxCreations < len(f.filmBoxResponses) {
+			responseDataset = f.filmBoxResponses[f.filmBoxCreations]
+		}
+		f.filmBoxCreations++
 	}
 	return dimse.NewNCreateResponse(req.MessageID(), responseStatus, req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), responseDataset), nil
 }
@@ -85,6 +92,9 @@ func (f *fakeDIMSEService) SendNSet(_ context.Context, req *dimse.NSetRequest) (
 }
 
 func (f *fakeDIMSEService) SendNAction(_ context.Context, req *dimse.NActionRequest) (*dimse.NActionResponse, error) {
+	if f.rejectSessionAction && req.RequestedSOPClassUID() == basicFilmSessionSOPClassUID {
+		return nil, errors.New("Film Session N-ACTION is not supported")
+	}
 	index, err := f.record(fmt.Sprintf("N-ACTION %s %s %d", req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), req.ActionTypeID()), req.DataDataset())
 	if err != nil {
 		return nil, err
@@ -114,9 +124,8 @@ func printableSession(t *testing.T) *FilmSession {
 	session.FilmSessionLabel = "workflow"
 
 	lut := NewPresentationLUT("2.25.502")
-	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
-		t.Fatalf("SetLUT() error = %v", err)
-	}
+	lut.BitsStored = 8
+	setTestLUT(t, lut, 256, 12)
 	session.AddPresentationLUT(lut)
 
 	filmBox := NewFilmBox("2.25.503", testStandardOneByOne)
@@ -140,7 +149,7 @@ func TestClientPrintSendsOrderedDatasetBackedWorkflow(t *testing.T) {
 		"N-CREATE 1.2.840.10008.5.1.1.23 2.25.502",
 		"N-CREATE 1.2.840.10008.5.1.1.2 2.25.503",
 		"N-SET 1.2.840.10008.5.1.1.4 2.25.900",
-		"N-ACTION 1.2.840.10008.5.1.1.1 2.25.501 1",
+		"N-ACTION 1.2.840.10008.5.1.1.2 2.25.503 1",
 	}
 	gotOperations := make([]string, len(service.calls))
 	for index, call := range service.calls {
@@ -157,7 +166,7 @@ func TestClientPrintSendsOrderedDatasetBackedWorkflow(t *testing.T) {
 	if err != nil || lutSequence.Count() != 1 {
 		t.Fatalf("Presentation LUT sequence = %#v, %v", lutSequence, err)
 	}
-	if got, err := lutSequence.GetItem(0).GetUInt16s(tag.LUTDescriptor); err != nil || !reflect.DeepEqual(got, []uint16{2, 0, 12}) {
+	if got, err := lutSequence.GetItem(0).GetUInt16s(tag.LUTDescriptor); err != nil || !reflect.DeepEqual(got, []uint16{256, 0, 12}) {
 		t.Errorf("Presentation LUT descriptor = %v, %v", got, err)
 	}
 	if got, _ := service.calls[2].dataset.GetString(tag.ImageDisplayFormat); got != testStandardOneByOne {
@@ -168,6 +177,11 @@ func TestClientPrintSendsOrderedDatasetBackedWorkflow(t *testing.T) {
 	}
 	assertReferenceSequence(t, service.calls[2].dataset, tag.ReferencedFilmSessionSequence, []SOPReference{{
 		SOPClassUID: basicFilmSessionSOPClassUID, SOPInstanceUID: "2.25.501",
+	}})
+	// MP-7: the single session Presentation LUT is referenced automatically
+	// instead of being created and silently ignored.
+	assertReferenceSequence(t, service.calls[2].dataset, tag.ReferencedPresentationLUTSequence, []SOPReference{{
+		SOPClassUID: presentationLUTSOPClassUID, SOPInstanceUID: "2.25.502",
 	}})
 	if got, err := service.calls[3].dataset.GetUInt16(tag.ImageBoxPosition, 0); err != nil || got != 1 {
 		t.Errorf("Image Box payload position = %d, %v", got, err)
@@ -375,6 +389,76 @@ func TestClientPrintHonorsCancellation(t *testing.T) {
 			t.Fatalf("call count = %d, want 1", len(service.calls))
 		}
 	})
+}
+
+func TestClientPrintActivatesEachFilmBoxWithoutSessionAction(t *testing.T) {
+	session := printableSession(t)
+	secondFilmBox := NewFilmBox("2.25.506", testStandardOneByOne)
+	secondImageBox := NewImageBox("2.25.507", false)
+	secondImageBox.ImageBoxPosition = 1
+	setCompleteGrayscaleImage(t, secondImageBox, []byte{5, 6, 7, 8})
+	secondFilmBox.AddImageBox(secondImageBox)
+	session.AddFilmBox(secondFilmBox)
+
+	service := newFakeDIMSEService()
+	// A minimally conformant SCP implements only the mandatory Film Box N-ACTION.
+	service.rejectSessionAction = true
+	service.filmBoxResponses = []*dataset.Dataset{
+		referencedImageBoxResponseDataset([]SOPReference{{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.908"}}),
+		referencedImageBoxResponseDataset([]SOPReference{{SOPClassUID: SOPClassGrayscaleImageBox, SOPInstanceUID: "2.25.909"}}),
+	}
+
+	if err := NewClient(service).Print(context.Background(), session); err != nil {
+		t.Fatalf("Print() against a Film-Box-only SCP error = %v", err)
+	}
+	wantOperations := []string{
+		"N-CREATE 1.2.840.10008.5.1.1.1 2.25.501",
+		"N-CREATE 1.2.840.10008.5.1.1.23 2.25.502",
+		"N-CREATE 1.2.840.10008.5.1.1.2 2.25.503",
+		"N-SET 1.2.840.10008.5.1.1.4 2.25.908",
+		"N-ACTION 1.2.840.10008.5.1.1.2 2.25.503 1",
+		"N-CREATE 1.2.840.10008.5.1.1.2 2.25.506",
+		"N-SET 1.2.840.10008.5.1.1.4 2.25.909",
+		"N-ACTION 1.2.840.10008.5.1.1.2 2.25.506 1",
+	}
+	gotOperations := make([]string, len(service.calls))
+	for index, call := range service.calls {
+		gotOperations[index] = call.operation
+		if strings.HasPrefix(call.operation, "N-ACTION "+basicFilmSessionSOPClassUID) {
+			t.Errorf("optional Film Session N-ACTION was sent: %q", call.operation)
+		}
+	}
+	if !reflect.DeepEqual(gotOperations, wantOperations) {
+		t.Fatalf("operation order = %#v, want %#v", gotOperations, wantOperations)
+	}
+}
+
+func TestClientPrintWithFilmSessionActionSendsOptionalActionLast(t *testing.T) {
+	service := newFakeDIMSEService()
+	if err := NewClient(service, WithFilmSessionAction(true)).Print(context.Background(), printableSession(t)); err != nil {
+		t.Fatalf("Print() error = %v", err)
+	}
+	last := service.calls[len(service.calls)-1].operation
+	if last != "N-ACTION 1.2.840.10008.5.1.1.1 2.25.501 1" {
+		t.Fatalf("last operation = %q, want optional Film Session N-ACTION", last)
+	}
+}
+
+func TestClientPrintRejectsUnreferencedPresentationLUT(t *testing.T) {
+	session := printableSession(t)
+	second := NewPresentationLUT("2.25.510")
+	second.BitsStored = 8
+	setTestLUT(t, second, 256, 12)
+	session.AddPresentationLUT(second)
+
+	service := newFakeDIMSEService()
+	err := NewClient(service).Print(context.Background(), session)
+	if err == nil || !strings.Contains(err.Error(), "not referenced") {
+		t.Fatalf("Print() error = %v, want unreferenced Presentation LUT error", err)
+	}
+	if len(service.calls) != 0 {
+		t.Fatalf("call count = %d, want validation before network operations", len(service.calls))
+	}
 }
 
 func referencedImageBoxResponseDataset(references []SOPReference) *dataset.Dataset {

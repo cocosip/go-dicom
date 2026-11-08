@@ -11,6 +11,9 @@ import (
 
 const maxFileIDComponents = 8
 
+// dicomDirFileName is reserved for the DICOMDIR file itself (PS3.10 §8.6).
+const dicomDirFileName = "DICOMDIR"
+
 var fileIDComponentPattern = regexp.MustCompile(`^[A-Z0-9_]{1,8}$`)
 
 // FileID is a DICOM Referenced File ID containing one to eight components.
@@ -53,4 +56,9 @@ func (id FileID) String() string {
 func (id FileID) validate() error {
 	_, err := NewFileID(id.components...)
 	return err
+}
+
+// key returns a canonical comparison key for duplicate detection.
+func (id FileID) key() string {
+	return strings.Join(id.components, "/")
 }

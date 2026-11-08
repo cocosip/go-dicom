@@ -4,6 +4,7 @@
 package colorconv
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 
@@ -110,31 +111,36 @@ func YBRPartial422ToRGB(y, cb, cr uint8) (r, g, b uint8) {
 	return
 }
 
-// RGBToYBRICT converts RGB to YBR_ICT (Integer Color Transform, used in JPEG 2000)
-// Y = (R + 2*G + B) / 4
-// Cb = B - G
-// Cr = R - G
+// RGBToYBRICT converts RGB to YBR_ICT, the irreversible JPEG 2000 color
+// transform (PS3.3 C.7.6.3.1.3):
+// Y = +0.299*R + 0.587*G + 0.114*B
+// Cb = -0.1687*R - 0.3313*G + 0.5*B
+// Cr = +0.5*R - 0.4187*G - 0.0813*B
+// The chroma components are centered on zero.
 func RGBToYBRICT(r, g, b uint8) (y, cb, cr int16) {
-	ri, gi, bi := int16(r), int16(g), int16(b)
+	rf, gf, bf := float64(r), float64(g), float64(b)
 
-	y = (ri + 2*gi + bi) / 4
-	cb = bi - gi
-	cr = ri - gi
+	y = int16(math.Round(0.299*rf + 0.587*gf + 0.114*bf))
+	cb = int16(math.Round(-0.1687*rf - 0.3313*gf + 0.5*bf))
+	cr = int16(math.Round(0.5*rf - 0.4187*gf - 0.0813*bf))
 	return
 }
 
-// YBRICTToRGB converts YBR_ICT to RGB
-// G = Y - (Cb + Cr) / 4
-// R = Cr + G
-// B = Cb + G
+// YBRICTToRGB converts YBR_ICT to RGB using the inverse irreversible transform
+// (PS3.3 C.7.6.3.1.3):
+// R = Y + 1.402*Cr
+// G = Y - 0.344136*Cb - 0.714136*Cr
+// B = Y + 1.772*Cb
 func YBRICTToRGB(y, cb, cr int16) (r, g, b uint8) {
-	g16 := y - (cb+cr)/4
-	r16 := cr + g16
-	b16 := cb + g16
+	yf, cbf, crf := float64(y), float64(cb), float64(cr)
 
-	r = clampUint8(float64(r16))
-	g = clampUint8(float64(g16))
-	b = clampUint8(float64(b16))
+	rf := yf + 1.402*crf
+	gf := yf - 0.344136*cbf - 0.714136*crf
+	bf := yf + 1.772*cbf
+
+	r = clampUint8(rf)
+	g = clampUint8(gf)
+	b = clampUint8(bf)
 	return
 }
 
@@ -178,8 +184,21 @@ func ConvertToRGB(data []byte, width, height int, photometric pixel.PhotometricI
 //
 // Two-byte samples are treated as the full 16-bit range and reduced to 8-bit by
 // keeping the high byte (the low byte is dropped, which is equivalent to v>>8).
-// Supported 8-bit YBR conversions reject 16-bit input.
+// Supported 8-bit YBR conversions reject 16-bit input. Use
+// ConvertToRGBWithBitDepth when the samples declare a narrower stored width.
 func ConvertToRGBWithBytesPerSample(data []byte, width, height int, photometric pixel.PhotometricInterpretation, planarConfig pixel.PlanarConfiguration, bytesPerSample int) ([]byte, error) {
+	return convertToRGB(data, width, height, photometric, planarConfig, bytesPerSample, bytesPerSample*8, bytesPerSample*8-1)
+}
+
+// ConvertToRGBWithBitDepth converts color pixel data into 8-bit interleaved RGB,
+// honoring BitsStored and HighBit for 16-bit samples. Stored values are shifted
+// down to the 8-bit display range instead of blindly keeping the high byte.
+func ConvertToRGBWithBitDepth(data []byte, width, height int, photometric pixel.PhotometricInterpretation, planarConfig pixel.PlanarConfiguration, bitsAllocated, bitsStored, highBit int) ([]byte, error) {
+	bytesPerSample := (bitsAllocated + 7) / 8
+	return convertToRGB(data, width, height, photometric, planarConfig, bytesPerSample, bitsStored, highBit)
+}
+
+func convertToRGB(data []byte, width, height int, photometric pixel.PhotometricInterpretation, planarConfig pixel.PlanarConfiguration, bytesPerSample, bitsStored, highBit int) ([]byte, error) {
 	if width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("image dimensions must be positive, got %dx%d", width, height)
 	}
@@ -203,7 +222,7 @@ func ConvertToRGBWithBytesPerSample(data []byte, width, height int, photometric 
 		} else if planarConfig != pixel.InterleavedPlanar {
 			return nil, fmt.Errorf("RGB has invalid planar configuration %d", planarConfig)
 		}
-		return toRGB8(data, bytesPerSample), nil
+		return toRGB8(data, bytesPerSample, bitsStored, highBit), nil
 
 	case "YBR_FULL":
 		if bytesPerSample != 1 {
@@ -253,15 +272,38 @@ func ConvertToRGBWithBytesPerSample(data []byte, width, height int, photometric 
 	}
 }
 
-// toRGB8 reduces interleaved RGB samples of the given byte width to 8-bit.
-func toRGB8(data []byte, bytesPerSample int) []byte {
-	if bytesPerSample == 1 {
+// toRGB8 reduces interleaved color samples of the given byte width to 8-bit.
+// The stored value is extracted using BitsStored/HighBit (PS3.5 8.1.1) and
+// scaled to the 8-bit range instead of assuming a full-width sample whose high
+// byte is the approximation.
+func toRGB8(data []byte, bytesPerSample, bitsStored, highBit int) []byte {
+	widthBits := bytesPerSample * 8
+	if bitsStored <= 0 || bitsStored > widthBits {
+		bitsStored = widthBits
+	}
+	if highBit+1 < bitsStored || highBit >= widthBits {
+		highBit = bitsStored - 1
+	}
+	if bytesPerSample == 1 && bitsStored == 8 {
 		return data
 	}
-	result := make([]byte, len(data)/2)
-	for i, j := 0, 0; i+1 < len(data); i, j = i+2, j+1 {
-		// Little-endian 16-bit sample: the high byte is the 8-bit approximation.
-		result[j] = data[i+1]
+	shift := highBit + 1 - bitsStored
+	mask := uint16(1)<<uint(bitsStored) - 1
+	scale := bitsStored - 8
+	result := make([]byte, len(data)/bytesPerSample)
+	for i, j := 0, 0; i+bytesPerSample <= len(data); i, j = i+bytesPerSample, j+1 {
+		var raw uint16
+		if bytesPerSample == 1 {
+			raw = uint16(data[i])
+		} else {
+			raw = binary.LittleEndian.Uint16(data[i:])
+		}
+		stored := (raw >> uint(shift)) & mask
+		if scale >= 0 {
+			result[j] = byte(stored >> uint(scale))
+		} else {
+			result[j] = byte(stored << uint(-scale))
+		}
 	}
 	return result
 }

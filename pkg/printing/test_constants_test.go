@@ -10,4 +10,5 @@ const (
 	testStandardOneByOne       = "STANDARD\\1,1"
 	testStandardTwoByOne       = "STANDARD\\2,1"
 	testPhotometricMonochrome2 = "MONOCHROME2"
+	testPhotometricRGB         = "RGB"
 )

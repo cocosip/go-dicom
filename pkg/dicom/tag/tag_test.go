@@ -260,6 +260,12 @@ func TestParse(t *testing.T) {
 		{"too short", "0028", 0, 0, true},
 		{"invalid group", "(XXXX,0010)", 0, 0, true},
 		{"invalid element", "(0028,YYYY)", 0, 0, true},
+		{"missing closing paren", "(0028,0010", 0, 0, true},
+		{"missing closing paren with creator", "(0029,1001:TEST", 0, 0, true},
+		{"empty private creator", "(0029,1001:)", 0, 0, true},
+		{"trailing garbage", "(0028,0010)x", 0, 0, true},
+		{"overlength element", "0028,00101", 0, 0, true},
+		{"trailing paren without opener", "0028,0010)", 0, 0, true},
 	}
 
 	for _, tt := range tests {

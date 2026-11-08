@@ -32,7 +32,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
 - ✅ **DICOMDIR Media** - Create, read, traverse, repair, and save media directories with optional image icons
 - ✅ **Transfer Syntax Support** - Explicit/Implicit VR, Big/Little Endian
 - ✅ **Multi-Frame Images** - Full support for multi-frame and video DICOM files
-- ✅ **Character Encoding** - 30+ character sets with auto-detection (UTF-8, Latin, Chinese, Japanese, Korean, Arabic, etc.)
+- ✅ **Character Encoding** - 30+ character sets selected from Specific Character Set (0008,0005) (UTF-8, Latin, Chinese, Japanese, Korean, Arabic, etc.)
 - ✅ **Fragment Sequences** - Read and write compressed pixel data; compressed transfer syntaxes are handled by [go-dicom-codecs](https://github.com/cocosip/go-dicom-codecs)
 - ✅ **Structured Reports (SR)** - Parse and create SR documents with hierarchical content
 - ✅ **Dataset Operations** - Rich API for accessing and manipulating DICOM elements
@@ -48,15 +48,15 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
 ### Included Capabilities
 
 - [x] **Core DICOM data types**
-  - [x] Tag (5347 standard tags + private tag support)
+  - [x] Tag (5356 standard tags + private tag support)
   - [x] VR (35 value representations with validation)
   - [x] VM (15 value multiplicities)
   - [x] Element (string, numeric, binary, date, person name types)
   - [x] Dataset & Sequence (full support with lazy loading)
   - [x] Dictionary (tag/keyword lookup with global default instance)
-  - [x] UID (1928 standard UIDs + 59 private UIDs)
+  - [x] UID (1990 standard UIDs + 59 private UIDs)
   - [x] Transfer Syntax (15+ syntaxes including JPEG and MPEG)
-  - [x] Character Set (30+ encodings with auto-detection)
+  - [x] Character Set (30+ encodings via Specific Character Set (0008,0005))
 
 - [x] **DICOM file reading**
   - [x] Explicit/Implicit VR parsing
@@ -64,9 +64,9 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
   - [x] Fragment sequence support (compressed images)
   - [x] Multi-frame image support
   - [x] ReadOptions: SkipLargeTags, ReadLargeOnDemand, ReadAll
-  - [x] FileFormat detection: DICOM3, DICOM3NoPreamble, ACR-NEMA
+  - [x] FileFormat detection: Part 10 (DICOM3), DICOM3NoPreamble, DICOM3NoFileMetaInfo
   - [x] Large object handling with configurable thresholds
-  - [x] Automatic character set detection and conversion
+  - [x] Character set conversion driven by Specific Character Set (0008,0005)
   - [x] Byte order handling (Little/Big Endian)
 
 - [x] **DICOM file writing**
@@ -93,7 +93,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
 - [x] **DICOMDIR Media**
   - [x] Patient/study/series/instance grouping and traversal
   - [x] Strict validation and bounded compatible offset recovery
-  - [x] Two-pass Explicit/Implicit VR Little Endian writing
+  - [x] Two-pass writing in Explicit VR Little Endian, as PS3.10 §8.6 requires (legacy Implicit VR Little Endian is read-only)
   - [x] Optional pure-Go 8-bit grayscale icon generation
   - [x] fo-dicom fixture and cross-library interoperability verification
 
@@ -106,7 +106,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
   - [x] Direct integration with DICOMDIR record creation
 
 - [x] **JSON/XML Serialization**
-  - [x] DICOM JSON Model (Part 18 compliant)
+  - [x] DICOM JSON Model (PS3.18 Annex F)
   - [x] Native XML format
   - [x] Bulkdata handling with base64 encoding
   - [x] Pretty-print options
@@ -171,7 +171,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
   - [x] Network transport abstraction (TCP/TLS)
   - [x] TLS support (secure DICOM connections)
   - [x] Concurrent DIMSE requests within the negotiated asynchronous operations window; Client Connect, Close, IsConnected, and GetAssociation lifecycle synchronization
-  - [x] 401+ unit tests with >85% code coverage
+  - [x] 2000+ unit tests with >80% package statement coverage (run `go test -coverprofile=coverage.out ./pkg/...` to measure)
   - [x] Asynchronous Operations Window negotiation with request throttling
   - [x] Advanced role negotiation (SCP/SCU Role Selection)
   - [x] Extended negotiation items (SOP Class Extended Negotiation)
@@ -200,7 +200,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
   - [x] Canonical print reference and Presentation LUT sequences
   - [x] Complete grayscale and color Image Box sequence datasets
   - [x] Film Box hierarchy persistence compatible with fo-dicom folder naming
-  - [x] Basic Print N-CREATE/N-SET/N-ACTION workflow using SCP-assigned Image Box UIDs
+  - [x] Basic Print N-CREATE/N-SET/N-ACTION workflow with the mandatory Film Box N-ACTION and SCP-assigned Image Box UIDs
   - [x] Printer status management
 
 ## Performance
@@ -1414,7 +1414,7 @@ import (
 )
 
 func main() {
-    // The parser automatically handles character encoding
+    // The parser decodes text using the declared Specific Character Set (0008,0005)
     file, err := os.Open("chinese_patient.dcm")
     if err != nil {
         log.Fatal(err)
@@ -2062,7 +2062,7 @@ go-dicom/
 ├── docs/                   # Architecture, networking guide, changelog, benchmarks
 ├── pkg/
 │   ├── dicom/              # Core DICOM types
-│   │   ├── tag/            # DICOM tags (5347 standard tags)
+│   │   ├── tag/            # DICOM tags (5356 standard tags)
 │   │   ├── vr/             # Value representations (35 VRs)
 │   │   ├── vm/             # Value multiplicities
 │   │   ├── element/        # DICOM elements (all VR types)
@@ -2071,7 +2071,7 @@ go-dicom/
 │   │   ├── writer/         # DICOM file writing
 │   │   ├── dict/           # Tag dictionary
 │   │   ├── transfer/       # Transfer syntaxes
-│   │   ├── uid/            # Standard UIDs (1928 UIDs)
+│   │   ├── uid/            # Standard UIDs (1990 UIDs)
 │   │   ├── charset/        # Character encoding (30+ charsets)
 │   │   ├── serialization/  # JSON/XML conversion
 │   │   ├── anonymizer/     # Anonymization profiles
@@ -2114,6 +2114,7 @@ go-dicom/
 ├── test-data/              # Test DICOM files
 ├── tools/                  # Code generation tools
 │   ├── data/2026b/         # Pinned fo-dicom dictionary XML inputs
+│   ├── data/2026d/         # Supplemental PS3.6 2026d registry rows
 │   └── generate_dicom/     # Generate tags, UIDs, and dictionaries
 └── AGENTS.md               # Repository guidelines for contributors and AI assistants
 ```
@@ -2141,13 +2142,15 @@ go test -bench='.' -benchmem ./pkg/dicom/...
 ### Regenerating DICOM Data
 
 The repository pins fo-dicom's standard and manually maintained private
-dictionary XML files under `tools/data/2026b`. Regenerate all XML-derived data
-with the unified tool:
+dictionary XML files under `tools/data/2026b`, plus the registry rows that are
+newer than that merge in `tools/data/2026d/Supplement.xml`. Regenerate all
+XML-derived data with the unified tool:
 
 ```powershell
 go run ./tools/generate_dicom `
   -standard "tools/data/2026b/DICOM Dictionary.xml" `
   -private "tools/data/2026b/Private Dictionary.xml" `
+  -supplement "tools/data/2026d/Supplement.xml" `
   -root "."
 ```
 
@@ -2155,9 +2158,11 @@ The command derives in one run the standard Tag constants, standard UID
 constants, standard dictionary, and private dictionary from one pinned
 baseline. To update the baseline, copy both XML files from the selected
 fo-dicom release into a new versioned directory, run the command with those
-paths, and commit the XML and all four generated outputs together. Private UIDs
-in `pkg/dicom/uid/uids_private.go` are not present in either XML input and are
-therefore outside this generator.
+paths, and commit the XML and all four generated outputs together. When the
+pinned merge lags the current PS3.6 edition, add only the missing rows to
+`tools/data/2026d/Supplement.xml` instead of editing the pinned inputs. Private
+UIDs in `pkg/dicom/uid/uids_private.go` are not present in either XML input and
+are therefore outside this generator.
 
 ### Code Quality
 

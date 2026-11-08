@@ -6809,16 +6809,20 @@ var (
 	DetailsOfCoefficientsRETIRED = New(0x0028, 0x0404)
 
 	// RowsForNthOrderCoefficientsRETIRED (0028,04x0) VR=US VM=1 Rows For Nth Order Coefficients
-	RowsForNthOrderCoefficientsRETIRED = New(0x0028, 0x0400)
+	// Alias of TransformLabelRETIRED, which PS3.6 also assigns to this tag value.
+	RowsForNthOrderCoefficientsRETIRED = TransformLabelRETIRED
 
 	// ColumnsForNthOrderCoefficientsRETIRED (0028,04x1) VR=US VM=1 Columns For Nth Order Coefficients
-	ColumnsForNthOrderCoefficientsRETIRED = New(0x0028, 0x0401)
+	// Alias of TransformVersionNumberRETIRED, which PS3.6 also assigns to this tag value.
+	ColumnsForNthOrderCoefficientsRETIRED = TransformVersionNumberRETIRED
 
 	// CoefficientCodingRETIRED (0028,04x2) VR=LO VM=1-n Coefficient Coding
-	CoefficientCodingRETIRED = New(0x0028, 0x0402)
+	// Alias of NumberOfTransformStepsRETIRED, which PS3.6 also assigns to this tag value.
+	CoefficientCodingRETIRED = NumberOfTransformStepsRETIRED
 
 	// CoefficientCodingPointersRETIRED (0028,04x3) VR=AT VM=1-n Coefficient Coding Pointers
-	CoefficientCodingPointersRETIRED = New(0x0028, 0x0403)
+	// Alias of SequenceOfCompressedDataRETIRED, which PS3.6 also assigns to this tag value.
+	CoefficientCodingPointersRETIRED = SequenceOfCompressedDataRETIRED
 
 	// DCTLabelRETIRED (0028,0700) VR=LO VM=1 DCT Label
 	DCTLabelRETIRED = New(0x0028, 0x0700)
@@ -16047,4 +16051,31 @@ var (
 
 	// CurrentFrameFunctionalGroupsSequence (0006,0001) VR=SQ VM=1 Current Frame Functional Groups Sequence
 	CurrentFrameFunctionalGroupsSequence = New(0x0006, 0x0001)
+
+	// RetiredBlank00080202RETIRED (0008,0202) VR= VM=1 Retired-blank
+	RetiredBlank00080202RETIRED = New(0x0008, 0x0202)
+
+	// RetiredBlank00180061RETIRED (0018,0061) VR=DS VM=1 Retired-blank
+	RetiredBlank00180061RETIRED = New(0x0018, 0x0061)
+
+	// RetiredBlank00189445RETIRED (0018,9445) VR= VM=1 Retired-blank
+	RetiredBlank00189445RETIRED = New(0x0018, 0x9445)
+
+	// RetiredBlank00280020RETIRED (0028,0020) VR= VM=1 Retired-blank
+	RetiredBlank00280020RETIRED = New(0x0028, 0x0020)
+
+	// DisplayURI (0040,E012) VR=UR VM=1 Display URI
+	DisplayURI = New(0x0040, 0xE012)
+
+	// RetiredBlank04000315RETIRED (0400,0315) VR=FL VM=1 Retired-blank
+	RetiredBlank04000315RETIRED = New(0x0400, 0x0315)
+
+	// DoseCalculationModelName (3004,007F) VR=LO VM=1 Dose Calculation Model Name
+	DoseCalculationModelName = New(0x3004, 0x007F)
+
+	// RetiredBlank300A0135RETIRED (300A,0135) VR= VM=1 Retired-blank
+	RetiredBlank300A0135RETIRED = New(0x300A, 0x0135)
+
+	// RetiredBlank300A0782RETIRED (300A,0782) VR=US VM=1 Retired-blank
+	RetiredBlank300A0782RETIRED = New(0x300A, 0x0782)
 )

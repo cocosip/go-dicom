@@ -343,13 +343,12 @@ func TestJSON_BulkDataURI_Roundtrip(t *testing.T) {
 	if !found1 {
 		t.Fatal("PatientName element not found after roundtrip")
 	}
-	strElem, ok := elem1.(*element.String)
+	strElem, ok := elem1.(*element.PersonName)
 	if !ok {
-		t.Fatalf("PatientName is not String element, got %T", elem1)
+		t.Fatalf("PatientName is not PersonName element, got %T", elem1)
 	}
-	values := strElem.GetValues()
-	if len(values) != 1 || values[0] != testPatientNameJohn {
-		t.Errorf("PatientName = %v, want [Doe^John]", values)
+	if strElem.Count() != 1 || strElem.GetValue(0) != testPatientNameJohn {
+		t.Errorf("PatientName = %q, want Doe^John", strElem.GetValue(0))
 	}
 
 	// Verify BulkDataURI element

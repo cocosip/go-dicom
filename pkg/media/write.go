@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
+	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 )
@@ -41,7 +42,10 @@ func (d *Directory) Write(output io.Writer, options ...WriteOption) error {
 	if d.dataset == nil || d.fileMeta == nil {
 		return fmt.Errorf("DICOMDIR Dataset and File Meta Information cannot be nil")
 	}
-	if err := validateDirectoryTransferSyntax(d.transferSyntax); err != nil {
+	if err := validateDirectoryWriteTransferSyntax(d.transferSyntax); err != nil {
+		return err
+	}
+	if err := validateDirectoryFileSetID(d.dataset); err != nil {
 		return err
 	}
 	config := writeConfig{verifyPositions: true}
@@ -119,12 +123,20 @@ func (d *Directory) Save(path string, options ...WriteOption) error {
 	return nil
 }
 
+// flattenAndValidateRecords validates the record graph and every offset
+// reference that is present. Offset elements created by an older File-set
+// Creator may be absent (PS3.3 F.3.1 lets a File-set omit the Directory
+// Information Module); zeroDirectoryOffsets adds them as zero-length.
 func flattenAndValidateRecords(d *Directory) ([]*Record, error) {
-	if _, err := requiredOffset(d.dataset, tag.OffsetOfTheFirstDirectoryRecordOfTheRootDirectoryEntity); err != nil {
-		return nil, err
-	}
-	if _, err := requiredOffset(d.dataset, tag.OffsetOfTheLastDirectoryRecordOfTheRootDirectoryEntity); err != nil {
-		return nil, err
+	for _, offsetTag := range []*tag.Tag{
+		tag.OffsetOfTheFirstDirectoryRecordOfTheRootDirectoryEntity,
+		tag.OffsetOfTheLastDirectoryRecordOfTheRootDirectoryEntity,
+	} {
+		if _, ok := d.dataset.Get(offsetTag); ok {
+			if _, err := requiredOffset(d.dataset, offsetTag); err != nil {
+				return nil, err
+			}
+		}
 	}
 	state := make(map[*Record]uint8)
 	records := make([]*Record, 0)
@@ -143,11 +155,15 @@ func flattenAndValidateRecords(d *Directory) ([]*Record, error) {
 			if record.dataset == nil {
 				return fmt.Errorf("%s directory record has a nil Dataset", record.recordType)
 			}
-			if _, err := requiredOffset(record.dataset, tag.OffsetOfTheNextDirectoryRecord); err != nil {
-				return nilRecordError(record, err)
-			}
-			if _, err := requiredOffset(record.dataset, tag.OffsetOfReferencedLowerLevelDirectoryEntity); err != nil {
-				return nilRecordError(record, err)
+			for _, offsetTag := range []*tag.Tag{
+				tag.OffsetOfTheNextDirectoryRecord,
+				tag.OffsetOfReferencedLowerLevelDirectoryEntity,
+			} {
+				if _, ok := record.dataset.Get(offsetTag); ok {
+					if _, err := requiredOffset(record.dataset, offsetTag); err != nil {
+						return nilRecordError(record, err)
+					}
+				}
 			}
 			state[record] = 1
 			records = append(records, record)
@@ -174,6 +190,11 @@ func zeroDirectoryOffsets(directoryDataset *dataset.Dataset, records []*Record) 
 	}
 	if err := setOffsetValue(directoryDataset, tag.OffsetOfTheLastDirectoryRecordOfTheRootDirectoryEntity, 0); err != nil {
 		return err
+	}
+	// PS3.3 F.3.2.2, Table F.3-3: File-set Consistency Flag is enumerated 0000H
+	// and FFFFH shall never be present; this writer always emits exact offsets.
+	if err := directoryDataset.AddOrUpdate(element.NewUnsignedShort(tag.FileSetConsistencyFlag, []uint16{0})); err != nil {
+		return fmt.Errorf("set File-set Consistency Flag: %w", err)
 	}
 	for _, record := range records {
 		record.offset = 0

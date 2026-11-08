@@ -200,8 +200,8 @@ func printSeriesInfo(ds *dataset.Dataset) {
 	if seriesInstanceUID, ok := ds.GetString(tag.SeriesInstanceUID); ok {
 		fmt.Printf("  Series Instance UID: %s\n", seriesInstanceUID)
 	}
-	if seriesNumber, err := ds.GetUInt16(tag.SeriesNumber, 0); err == nil {
-		fmt.Printf("  Series Number: %d\n", seriesNumber)
+	if seriesNumber, ok := ds.GetString(tag.SeriesNumber); ok {
+		fmt.Printf("  Series Number: %s\n", seriesNumber)
 	}
 	if seriesDescription, ok := ds.GetString(tag.SeriesDescription); ok {
 		fmt.Printf("  Series Description: %s\n", seriesDescription)
@@ -219,8 +219,8 @@ func printImageInfo(ds *dataset.Dataset) {
 	if sopInstanceUID, ok := ds.GetString(tag.SOPInstanceUID); ok {
 		fmt.Printf("  SOP Instance UID: %s\n", sopInstanceUID)
 	}
-	if instanceNumber, err := ds.GetUInt16(tag.InstanceNumber, 0); err == nil {
-		fmt.Printf("  Instance Number: %d\n", instanceNumber)
+	if instanceNumber, ok := ds.GetString(tag.InstanceNumber); ok {
+		fmt.Printf("  Instance Number: %s\n", instanceNumber)
 	}
 
 	// Image dimensions (if present)

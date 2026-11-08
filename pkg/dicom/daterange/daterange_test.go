@@ -316,12 +316,24 @@ func TestFindRangeDash(t *testing.T) {
 		input string
 		want  int
 	}{
-		{testFullDateRange, 8},
-		{testOpenEndedDate, 8},
-		{"-20241231", 0},
-		{testRangeStartDate, -1},
+		{"20240101080000-20241231170000", 14},
+		{"20240101080000-", 14},
+		{"-20241231170000", 0},
+		{"20240115120000", -1},
 		{"", -1},
 		{"-", 0},
+		// A trailing -ZZXX is a UTC offset, not a range separator.
+		{"202401-0500", -1},
+		{"2024-0500", -1},
+		{"2007-0500", -1},
+		{"20240101-0500", -1},
+		{"20240101080000-0500", -1},
+		// "1800" is not a legal UTC offset, so this stays a range.
+		{"1000-1800", 4},
+		{"2024-2025", 4},
+		// An offset may precede the range separator.
+		{"20240101-0500-20241231-0500", 13},
+		{"20240101-0500-", 13},
 	}
 
 	for _, tt := range tests {
@@ -331,6 +343,72 @@ func TestFindRangeDash(t *testing.T) {
 				t.Errorf("findRangeDash(%q) = %d, want %d", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseDateRangeRejectsNonConformantDA(t *testing.T) {
+	for _, input := range []string{
+		"20241301",   // impossible month
+		"20240230",   // impossible day
+		"2024",       // partial year
+		"202401",     // partial year/month
+		"2024.01.01", // retired ACR-NEMA form
+		"2024/01/01", // non-conformant form
+		"20240101x",  // trailing garbage
+	} {
+		t.Run(input, func(t *testing.T) {
+			if _, err := ParseDateRange(input); err == nil {
+				t.Errorf("ParseDateRange(%q) = nil error, want ErrInvalidDateFormat", input)
+			}
+		})
+	}
+}
+
+func TestParseDateTimeRangeTreatsTrailingUTCOffsetAsOffset(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantZone int // seconds east of UTC
+		wantYear int
+		wantOpen bool
+	}{
+		{"202401-0500", -5 * 3600, 2024, false},
+		{"2024-0500", -5 * 3600, 2024, false},
+		{"20240101+0800", 8 * 3600, 2024, false},
+		{"20240101-0500-", -5 * 3600, 2024, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, err := ParseDateTimeRange(tt.input)
+			if err != nil {
+				t.Fatalf("ParseDateTimeRange(%q) error = %v", tt.input, err)
+			}
+			if _, offset := r.Minimum.Zone(); offset != tt.wantZone {
+				t.Errorf("Minimum zone offset = %d, want %d", offset, tt.wantZone)
+			}
+			if r.Minimum.Year() != tt.wantYear {
+				t.Errorf("Minimum year = %d, want %d", r.Minimum.Year(), tt.wantYear)
+			}
+			if got := r.Maximum.IsZero(); got != tt.wantOpen {
+				t.Errorf("Maximum.IsZero() = %v, want %v", got, tt.wantOpen)
+			}
+		})
+	}
+}
+
+func TestParseDateTimeRangeWithOffsetsOnBothBounds(t *testing.T) {
+	r, err := ParseDateTimeRange("20240101-0500-20241231-0500")
+	if err != nil {
+		t.Fatalf("ParseDateTimeRange() error = %v", err)
+	}
+	if _, offset := r.Minimum.Zone(); offset != -5*3600 {
+		t.Errorf("Minimum zone offset = %d, want %d", offset, -5*3600)
+	}
+	if _, offset := r.Maximum.Zone(); offset != -5*3600 {
+		t.Errorf("Maximum zone offset = %d, want %d", offset, -5*3600)
+	}
+	if r.Minimum.Year() != 2024 || r.Maximum.Month() != time.December {
+		t.Fatalf("range = %v..%v, want 2024-01-01..2024-12-31", r.Minimum, r.Maximum)
 	}
 }
 

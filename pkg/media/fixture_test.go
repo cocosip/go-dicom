@@ -28,32 +28,39 @@ func TestFoDicomFixtureOpensStrictly(t *testing.T) {
 	}
 }
 
-func TestFoDicomFixtureRoundTripsBothDirectoryTransferSyntaxes(t *testing.T) {
-	for _, syntax := range []*transfer.Syntax{transfer.ExplicitVRLittleEndian, transfer.ImplicitVRLittleEndian} {
-		t.Run(syntax.UID().UID(), func(t *testing.T) {
-			dir, err := Open(foDicomFixturePath(), WithOffsetPolicy(StrictOffsets))
-			if err != nil {
-				t.Fatalf("Open(fo-dicom fixture) error = %v", err)
-			}
-			dir.transferSyntax = syntax
-			dir.dataset.SetInternalTransferSyntax(syntax)
-			fileMeta := dataset.NewFileMetaInformationFromDataset(dir.fileMeta)
-			if err := fileMeta.SetTransferSyntax(syntax); err != nil {
-				t.Fatalf("SetTransferSyntax() error = %v", err)
-			}
+func TestFoDicomFixtureRoundTripsConformantDirectoryTransferSyntax(t *testing.T) {
+	dir, err := Open(foDicomFixturePath(), WithOffsetPolicy(StrictOffsets))
+	if err != nil {
+		t.Fatalf("Open(fo-dicom fixture) error = %v", err)
+	}
 
-			var encoded bytes.Buffer
-			if err := dir.Write(&encoded); err != nil {
-				t.Fatalf("Write() error = %v", err)
-			}
-			opened, err := Read(bytes.NewReader(encoded.Bytes()), WithOffsetPolicy(StrictOffsets))
-			if err != nil {
-				t.Fatalf("strict Read(round trip) error = %v", err)
-			}
-			if got := countDirectoryRecords(t, opened); got != 80 {
-				t.Fatalf("round-trip record count = %d, want 80", got)
-			}
-		})
+	var encoded bytes.Buffer
+	if err := dir.Write(&encoded); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	opened, err := Read(bytes.NewReader(encoded.Bytes()), WithOffsetPolicy(StrictOffsets))
+	if err != nil {
+		t.Fatalf("strict Read(round trip) error = %v", err)
+	}
+	if got := countDirectoryRecords(t, opened); got != 80 {
+		t.Fatalf("round-trip record count = %d, want 80", got)
+	}
+}
+
+func TestFoDicomFixtureWriteRejectsImplicitVR(t *testing.T) {
+	dir, err := Open(foDicomFixturePath(), WithOffsetPolicy(StrictOffsets))
+	if err != nil {
+		t.Fatalf("Open(fo-dicom fixture) error = %v", err)
+	}
+	dir.transferSyntax = transfer.ImplicitVRLittleEndian
+	dir.dataset.SetInternalTransferSyntax(transfer.ImplicitVRLittleEndian)
+	fileMeta := dataset.NewFileMetaInformationFromDataset(dir.fileMeta)
+	if err := fileMeta.SetTransferSyntax(transfer.ImplicitVRLittleEndian); err != nil {
+		t.Fatalf("SetTransferSyntax() error = %v", err)
+	}
+
+	if err := dir.Write(&bytes.Buffer{}); err == nil {
+		t.Fatal("Write() encoded an Implicit VR Little Endian DICOMDIR (PS3.10 §8.6)")
 	}
 }
 

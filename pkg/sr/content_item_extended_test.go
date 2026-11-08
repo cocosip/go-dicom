@@ -50,12 +50,12 @@ func TestScalarContentItemRoundTrips(t *testing.T) {
 	code := NewCodeItem("121071", "DCM", "Finding")
 	dateTime := time.Date(2026, time.August, 15, 13, 14, 15, 123456000, time.FixedZone("CST", 8*60*60))
 
-	personName, err := NewContentItemPersonName(code, RelationshipContains, "Doe^Jane")
+	personName, err := NewContentItemPersonName(code, RelationshipContains, testObserverName)
 	if err != nil {
 		t.Fatalf("NewContentItemPersonName() error = %v", err)
 	}
-	if got, err := personName.GetPersonName(); err != nil || got != "Doe^Jane" {
-		t.Fatalf("GetPersonName() = %q, %v, want %q, nil", got, err, "Doe^Jane")
+	if got, err := personName.GetPersonName(); err != nil || got != testObserverName {
+		t.Fatalf("GetPersonName() = %q, %v, want %q, nil", got, err, testObserverName)
 	}
 
 	dateItem, err := NewContentItemDate(code, RelationshipContains, dateTime)

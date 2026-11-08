@@ -6,6 +6,7 @@ package service
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
@@ -304,14 +305,48 @@ func TestFragmentData(t *testing.T) {
 				t.Error("Last fragment should have IsLastFragment=true")
 			}
 
-			// Verify data integrity
+			// Verify data integrity. Odd-length input is padded with a trailing
+			// zero so every fragment stays even (PS3.8 E.1).
 			var reconstructed []byte
 			for _, pdv := range pdvs {
 				reconstructed = append(reconstructed, pdv.Data...)
 			}
 
-			if !bytes.Equal(reconstructed, tt.data) {
-				t.Error("Reconstructed data doesn't match original")
+			want := tt.data
+			if len(want)%2 != 0 {
+				want = append(append([]byte(nil), want...), 0)
+			}
+			if !bytes.Equal(reconstructed, want) {
+				t.Error("Reconstructed data doesn't match original (padded) data")
+			}
+		})
+	}
+}
+
+// TestFragmentDataPadsOddInput verifies PS3.8 E.1 for odd-length input: every
+// fragment, including the final one, must consist of an even number of bytes.
+func TestFragmentDataPadsOddInput(t *testing.T) {
+	for _, size := range []int{1, 3, 16379} {
+		t.Run(fmt.Sprintf("%d bytes", size), func(t *testing.T) {
+			data := bytes.Repeat([]byte{0xAB}, size)
+			pdvs := FragmentData(data, 1, false, 16384)
+			if len(pdvs) == 0 {
+				t.Fatal("FragmentData() returned no fragments")
+			}
+
+			var reconstructed []byte
+			for i, pdv := range pdvs {
+				if len(pdv.Data)%2 != 0 {
+					t.Fatalf("fragment %d length = %d, want even", i, len(pdv.Data))
+				}
+				reconstructed = append(reconstructed, pdv.Data...)
+			}
+
+			if len(reconstructed) != size+1 {
+				t.Fatalf("reconstructed length = %d, want %d", len(reconstructed), size+1)
+			}
+			if !bytes.Equal(reconstructed[:size], data) || reconstructed[size] != 0 {
+				t.Fatal("odd-length input was not padded with a trailing zero")
 			}
 		})
 	}

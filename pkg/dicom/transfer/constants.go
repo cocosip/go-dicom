@@ -68,6 +68,14 @@ var (
 						SetEndian(endian.Little).
 						Build()
 
+	// EncapsulatedUncompressedExplicitVRLittleEndian uses the encapsulated
+	// (fragment) format without compression (PS3.5 A.4.11).
+	EncapsulatedUncompressedExplicitVRLittleEndian = NewBuilder(uid.EncapsulatedUncompressedExplicitVRLittleEndian).
+							SetExplicitVR(true).
+							SetEncapsulated(true).
+							SetEndian(endian.Little).
+							Build()
+
 	// JPEGBaseline8Bit is JPEG Baseline (Process 1).
 	// Lossy JPEG compression, 8-bit.
 	JPEGBaseline8Bit = NewBuilder(uid.JPEGBaseline8Bit).
@@ -434,6 +442,28 @@ var (
 		SetEndian(endian.Little).
 		Build()
 
+	// JPEGXLLossless is JPEG XL Lossless Image Compression (PS3.5 A.4.12).
+	JPEGXLLossless = NewBuilder(uid.JPEGXLLossless).
+			SetExplicitVR(true).
+			SetEncapsulated(true).
+			SetEndian(endian.Little).
+			Build()
+
+	// JPEGXLJPEGRecompression is JPEG XL JPEG Recompression (PS3.5 A.4.12).
+	JPEGXLJPEGRecompression = NewBuilder(uid.JPEGXLJPEGRecompression).
+				SetExplicitVR(true).
+				SetEncapsulated(true).
+				SetEndian(endian.Little).
+				Build()
+
+	// JPEGXL is JPEG XL Image Compression, which may be lossy (PS3.5 A.4.12).
+	JPEGXL = NewBuilder(uid.JPEGXL).
+		SetExplicitVR(true).
+		SetEncapsulated(true).
+		SetLossy(true, "ISO_18181_1").
+		SetEndian(endian.Little).
+		Build()
+
 	// JPIPHTJ2KReferenced is JPIP HTJ2K Referenced.
 	JPIPHTJ2KReferenced = NewBuilder(uid.JPIPHTJ2KReferenced).
 				SetExplicitVR(true).
@@ -453,6 +483,14 @@ var (
 			SetEncapsulated(true).
 			SetEndian(endian.Little).
 			Build()
+
+	// DeflatedImageFrameCompression applies deflate compression to each
+	// encapsulated image frame; the Data Set itself is not deflated (PS3.5 A.4.13).
+	DeflatedImageFrameCompression = NewBuilder(uid.DeflatedImageFrameCompression).
+					SetExplicitVR(true).
+					SetEncapsulated(true).
+					SetEndian(endian.Little).
+					Build()
 
 	// RFC2557MIMEEncapsulation is RFC 2557 MIME encapsulation.
 	RFC2557MIMEEncapsulation = NewBuilder(uid.RFC2557MIMEEncapsulationRETIRED).
@@ -495,6 +533,10 @@ var (
 		HTJ2KLossless,
 		HTJ2KLosslessRPCL,
 		RLELossless,
+		EncapsulatedUncompressedExplicitVRLittleEndian,
+		JPEGXLLossless,
+		JPEGXLJPEGRecompression,
+		DeflatedImageFrameCompression,
 	}
 
 	// LossyTransferSyntaxes are transfer syntaxes with lossy compression.
@@ -532,6 +574,7 @@ var (
 		HEVCH265MainProfileLevel51,
 		HEVCH265Main10ProfileLevel51,
 		HTJ2K,
+		JPEGXL,
 	}
 )
 

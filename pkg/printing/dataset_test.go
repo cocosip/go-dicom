@@ -4,7 +4,6 @@
 package printing
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"reflect"
@@ -13,12 +12,10 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
-	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
-	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
@@ -391,7 +388,7 @@ func TestImageBoxDatasetRoundTripsCompleteImageSequenceIndependently(t *testing.
 		pixelData   []byte
 	}{
 		{name: "grayscale", sequenceTag: tag.BasicGrayscaleImageSequence, classUID: SOPClassGrayscaleImageBox, photometric: testPhotometricMonochrome2, samples: 1, pixelData: []byte{1, 2, 3, 4}},
-		{name: "color", color: true, sequenceTag: tag.BasicColorImageSequence, classUID: SOPClassColorImageBox, photometric: "RGB", samples: 3, pixelData: []byte{1, 2, 3, 4, 5, 6}},
+		{name: "color", color: true, sequenceTag: tag.BasicColorImageSequence, classUID: SOPClassColorImageBox, photometric: testPhotometricRGB, samples: 3, pixelData: []byte{1, 2, 3, 4, 5, 6}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			item := dataset.New()
@@ -522,9 +519,7 @@ func TestImageBoxDatasetRejectsMalformedImageSequence(t *testing.T) {
 func TestPresentationLUTDatasetRoundTrip(t *testing.T) {
 	want := NewPresentationLUT("2.25.104")
 	want.LUTExplanation = "calibrated"
-	if err := want.SetLUT(3, 0, 12, []uint16{10, 20, 30}); err != nil {
-		t.Fatalf("SetLUT() error = %v", err)
-	}
+	setTestLUT(t, want, 256, 12)
 
 	ds, err := want.ToDataset()
 	if err != nil {
@@ -537,14 +532,14 @@ func TestPresentationLUTDatasetRoundTrip(t *testing.T) {
 
 	if got.SOPInstanceUID != want.SOPInstanceUID || got.LUTExplanation != want.LUTExplanation ||
 		got.PresentationLUTShape != want.PresentationLUTShape ||
-		!reflect.DeepEqual(got.LUTDescriptor, []uint16{3, 0, 12}) ||
-		!reflect.DeepEqual(got.LUTData, []uint16{10, 20, 30}) {
+		!reflect.DeepEqual(got.LUTDescriptor, want.LUTDescriptor) ||
+		!reflect.DeepEqual(got.LUTData, want.LUTData) {
 		t.Fatalf("round trip mismatch: got %#v, want %#v", got, want)
 	}
 
 	want.LUTDescriptor[0] = 99
 	want.LUTData[0] = 99
-	if got.LUTDescriptor[0] != 3 || got.LUTData[0] != 10 {
+	if got.LUTDescriptor[0] != 256 || got.LUTData[0] != 0 {
 		t.Fatal("loaded PresentationLUT aliases source slices")
 	}
 }
@@ -565,9 +560,7 @@ func TestPresentationLUTDatasetWritesOnlyShapeMode(t *testing.T) {
 
 func TestPresentationLUTDatasetWritesOnlySequenceMode(t *testing.T) {
 	lut := NewPresentationLUT("2.25.141")
-	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
-		t.Fatalf("SetLUT() error = %v", err)
-	}
+	setTestLUT(t, lut, 256, 12)
 	ds, err := lut.ToDataset()
 	if err != nil {
 		t.Fatalf("ToDataset() error = %v", err)
@@ -583,9 +576,7 @@ func TestPresentationLUTDatasetWritesOnlySequenceMode(t *testing.T) {
 func TestPresentationLUTDatasetUsesCanonicalSequence(t *testing.T) {
 	lut := NewPresentationLUT("2.25.105")
 	lut.LUTExplanation = "canonical"
-	if err := lut.SetLUT(2, 0, 12, []uint16{11, 22}); err != nil {
-		t.Fatalf("SetLUT() error = %v", err)
-	}
+	setTestLUT(t, lut, 256, 12)
 
 	ds, err := lut.ToDataset()
 	if err != nil {
@@ -599,13 +590,13 @@ func TestPresentationLUTDatasetUsesCanonicalSequence(t *testing.T) {
 		t.Fatalf("PresentationLUTSequence item count = %d, want 1", sequence.Count())
 	}
 	item := sequence.GetItem(0)
-	if got, err := item.GetUInt16s(tag.LUTDescriptor); err != nil || !reflect.DeepEqual(got, []uint16{2, 0, 12}) {
+	if got, err := item.GetUInt16s(tag.LUTDescriptor); err != nil || !reflect.DeepEqual(got, []uint16{256, 0, 12}) {
 		t.Fatalf("nested LUT Descriptor = %v, %v", got, err)
 	}
 	if got, ok := item.GetString(tag.LUTExplanation); !ok || got != "canonical" {
 		t.Fatalf("nested LUT Explanation = %q, %v", got, ok)
 	}
-	if got, err := item.GetUInt16s(tag.LUTData); err != nil || !reflect.DeepEqual(got, []uint16{11, 22}) {
+	if got, err := item.GetUInt16s(tag.LUTData); err != nil || !reflect.DeepEqual(got, makeTestLUTData(256)) {
 		t.Fatalf("nested LUT Data = %v, %v", got, err)
 	}
 	for _, forbidden := range []*tag.Tag{tag.LUTDescriptor, tag.LUTExplanation, tag.LUTData} {
@@ -617,10 +608,10 @@ func TestPresentationLUTDatasetUsesCanonicalSequence(t *testing.T) {
 
 func TestPresentationLUTDatasetReadsOtherWordData(t *testing.T) {
 	item := dataset.New()
-	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 12})); err != nil {
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{256, 0, 12})); err != nil {
 		t.Fatalf("add LUT Descriptor: %v", err)
 	}
-	raw := make([]byte, 4)
+	raw := make([]byte, 256*2)
 	binary.BigEndian.PutUint16(raw[0:], 11)
 	binary.BigEndian.PutUint16(raw[2:], 22)
 	if err := item.Add(element.NewOtherWord(tag.LUTData, raw)); err != nil {
@@ -642,51 +633,54 @@ func TestPresentationLUTDatasetReadsOtherWordData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPresentationLUTFromDataset() error = %v", err)
 	}
-	if !reflect.DeepEqual(got.LUTData, []uint16{11, 22}) {
-		t.Fatalf("LUT Data = %v, want [11 22]", got.LUTData)
+	if len(got.LUTData) != 256 || got.LUTData[0] != 11 || got.LUTData[1] != 22 {
+		t.Fatalf("LUT Data = %v..., want first entries [11 22]", got.LUTData[:2])
 	}
 }
 
-func TestPresentationLUTDatasetWrites65536EntriesAsOtherWord(t *testing.T) {
-	values := make([]uint16, 65536)
-	for index := range values {
-		values[index] = uint16(index)
-	}
+func TestPresentationLUTDatasetRejectsNonConformantEntryCount(t *testing.T) {
 	lut := NewPresentationLUT("2.25.144")
-	if err := lut.SetLUT(0, 0, 16, values); err != nil {
+	if err := lut.SetLUT(1024, 0, 12, makeTestLUTData(1024)); err != nil {
 		t.Fatalf("SetLUT() error = %v", err)
 	}
+	if _, err := lut.ToDataset(); err == nil {
+		t.Fatal("ToDataset() accepted a 1024-entry print Presentation LUT (PS3.4 H.4.9.2.1.1.1)")
+	}
+}
 
-	ds, err := lut.ToDataset()
+func TestPresentationLUTDatasetReads4096OtherWordEntries(t *testing.T) {
+	item := dataset.New()
+	if err := item.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{4096, 0, 16})); err != nil {
+		t.Fatalf("add LUT Descriptor: %v", err)
+	}
+	raw := make([]byte, 4096*2)
+	for index := 0; index < 4096; index++ {
+		binary.LittleEndian.PutUint16(raw[index*2:], uint16(index))
+	}
+	if err := item.Add(element.NewOtherWord(tag.LUTData, raw)); err != nil {
+		t.Fatalf("add LUT Data: %v", err)
+	}
+
+	ds := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewString(tag.SOPClassUID, vr.UI, []string{presentationLUTSOPClassUID}),
+		element.NewString(tag.SOPInstanceUID, vr.UI, []string{"2.25.146"}),
+		dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{item}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	got, err := NewPresentationLUTFromDataset("", ds)
 	if err != nil {
-		t.Fatalf("ToDataset() error = %v", err)
+		t.Fatalf("NewPresentationLUTFromDataset() error = %v", err)
 	}
-	sequence, err := ds.GetSequence(tag.PresentationLUTSequence)
-	if err != nil {
-		t.Fatalf("PresentationLUTSequence missing: %v", err)
+	if len(got.LUTData) != 4096 {
+		t.Fatalf("LUT Data length = %d, want 4096", len(got.LUTData))
 	}
-	dataElement, ok := sequence.GetItem(0).Get(tag.LUTData)
-	if !ok || dataElement.ValueRepresentation() != vr.OW {
-		t.Fatalf("LUT Data VR = %v, want OW", dataElement.ValueRepresentation())
-	}
-	var encoded bytes.Buffer
-	if err := writer.Write(&encoded, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
-		t.Fatalf("write Presentation LUT Dataset: %v", err)
-	}
-	parsed, err := parser.Parse(bytes.NewReader(encoded.Bytes()))
-	if err != nil {
-		t.Fatalf("parse Presentation LUT Dataset: %v", err)
-	}
-	roundTripped, err := NewPresentationLUTFromDataset("", parsed.Dataset)
-	if err != nil {
-		t.Fatalf("read round-tripped Presentation LUT: %v", err)
-	}
-	if len(roundTripped.LUTData) != 65536 {
-		t.Fatalf("round-tripped LUT Data length = %d, want 65536", len(roundTripped.LUTData))
-	}
-	if roundTripped.LUTData[0] != 0 || roundTripped.LUTData[65535] != 65535 {
-		t.Fatalf("round-tripped LUT Data boundaries = first %d, last %d, want 0 and 65535",
-			roundTripped.LUTData[0], roundTripped.LUTData[65535])
+	if got.LUTData[0] != 0 || got.LUTData[4095] != 4095 {
+		t.Fatalf("LUT Data boundaries = first %d, last %d, want 0 and 4095", got.LUTData[0], got.LUTData[4095])
 	}
 }
 
@@ -695,9 +689,9 @@ func TestPresentationLUTDatasetReadsLegacyTopLevelValues(t *testing.T) {
 	legacy := []element.Element{
 		element.NewString(tag.SOPClassUID, vr.UI, []string{presentationLUTSOPClassUID}),
 		element.NewString(tag.SOPInstanceUID, vr.UI, []string{"2.25.106"}),
-		element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 12}),
+		element.NewUnsignedShort(tag.LUTDescriptor, []uint16{256, 0, 12}),
 		element.NewString(tag.LUTExplanation, vr.LO, []string{"legacy"}),
-		element.NewUnsignedShort(tag.LUTData, []uint16{33, 44}),
+		element.NewUnsignedShort(tag.LUTData, makeTestLUTData(256)),
 	}
 	for _, value := range legacy {
 		if err := ds.Add(value); err != nil {
@@ -709,18 +703,16 @@ func TestPresentationLUTDatasetReadsLegacyTopLevelValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPresentationLUTFromDataset() error = %v", err)
 	}
-	if !reflect.DeepEqual(lut.LUTDescriptor, []uint16{2, 0, 12}) ||
+	if !reflect.DeepEqual(lut.LUTDescriptor, []uint16{256, 0, 12}) ||
 		lut.LUTExplanation != "legacy" ||
-		!reflect.DeepEqual(lut.LUTData, []uint16{33, 44}) {
+		!reflect.DeepEqual(lut.LUTData, makeTestLUTData(256)) {
 		t.Fatalf("legacy LUT values = %#v", lut)
 	}
 }
 
 func TestPresentationLUTDatasetRejectsShapeAndSequence(t *testing.T) {
 	lut := NewPresentationLUT("2.25.142")
-	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
-		t.Fatalf("SetLUT() error = %v", err)
-	}
+	setTestLUT(t, lut, 256, 12)
 	ds, err := lut.ToDataset()
 	if err != nil {
 		t.Fatalf("ToDataset() error = %v", err)
@@ -736,9 +728,7 @@ func TestPresentationLUTDatasetRejectsShapeAndSequence(t *testing.T) {
 
 func TestPresentationLUTDatasetRejectsWrongVRShapeAndSequence(t *testing.T) {
 	lut := NewPresentationLUT("2.25.145")
-	if err := lut.SetLUT(2, 0, 12, []uint16{10, 20}); err != nil {
-		t.Fatalf("SetLUT() error = %v", err)
-	}
+	setTestLUT(t, lut, 256, 12)
 	ds, err := lut.ToDataset()
 	if err != nil {
 		t.Fatalf("ToDataset() error = %v", err)
@@ -760,8 +750,8 @@ func TestPresentationLUTDatasetRejectsMalformedCanonicalSequence(t *testing.T) {
 		element.NewString(tag.SOPClassUID, vr.UI, []string{presentationLUTSOPClassUID}),
 		element.NewString(tag.SOPInstanceUID, vr.UI, []string{"2.25.107"}),
 		element.NewString(tag.PresentationLUTSequence, vr.LO, []string{"not a sequence"}),
-		element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, 12}),
-		element.NewUnsignedShort(tag.LUTData, []uint16{33, 44}),
+		element.NewUnsignedShort(tag.LUTDescriptor, []uint16{256, 0, 12}),
+		element.NewUnsignedShort(tag.LUTData, makeTestLUTData(256)),
 	} {
 		if err := ds.Add(value); err != nil {
 			t.Fatalf("add malformed element %s: %v", value.Tag(), err)
@@ -791,3 +781,4 @@ func assertReferenceSequence(t *testing.T, ds *dataset.Dataset, sequenceTag *tag
 		}
 	}
 }
+

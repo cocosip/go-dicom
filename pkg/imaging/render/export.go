@@ -288,18 +288,35 @@ func (e *ImageExporter) RenderRGBImageWithBytesPerSample(
 	planarConfig int,
 	bytesPerSample int,
 ) (*image.RGBA, error) {
+	return e.RenderRGBImageWithBitDepth(
+		pixelData, width, height, photometric, planarConfig,
+		bytesPerSample*8, bytesPerSample*8, bytesPerSample*8-1,
+	)
+}
+
+// RenderRGBImageWithBitDepth converts supported color pixels into an RGBA image
+// without encoding it, honoring BitsStored/HighBit for two-byte samples.
+func (e *ImageExporter) RenderRGBImageWithBitDepth(
+	pixelData []byte,
+	width, height int,
+	photometric string,
+	planarConfig int,
+	bitsAllocated, bitsStored, highBit int,
+) (*image.RGBA, error) {
 	if width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("image dimensions must be positive")
 	}
 
 	// Convert to 8-bit RGB if needed
-	rgbData, err := colorconv.ConvertToRGBWithBytesPerSample(
+	rgbData, err := colorconv.ConvertToRGBWithBitDepth(
 		pixelData,
 		width,
 		height,
 		pixel.PhotometricInterpretation{Value: photometric},
 		pixel.PlanarConfiguration(planarConfig),
-		bytesPerSample,
+		bitsAllocated,
+		bitsStored,
+		highBit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to RGB: %w", err)
@@ -449,8 +466,8 @@ func (e *ImageExporter) RenderFrameWithHighBit(
 		return e.ExportGrayscaleWithHighBit(writer, frameData, width, height, bitsAllocated, bitsStored, highBit, isSigned, photometric, options)
 	case 3:
 		// RGB/YBR
-		img, err := e.RenderRGBImageWithBytesPerSample(
-			frameData, width, height, photometric, planarConfig, (bitsAllocated+7)/8,
+		img, err := e.RenderRGBImageWithBitDepth(
+			frameData, width, height, photometric, planarConfig, bitsAllocated, bitsStored, highBit,
 		)
 		if err != nil {
 			return err

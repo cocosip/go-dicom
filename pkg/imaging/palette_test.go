@@ -28,6 +28,50 @@ func TestNewColor32(t *testing.T) {
 	}
 }
 
+func TestPaletteColorLUTIsByteOrderAware(t *testing.T) {
+	descriptor := []uint16{2, 0, 16}
+	bigEndianWords := []byte{0x12, 0x34, 0x56, 0x78}
+	lut, err := NewPaletteColorLUTWithOptions(
+		descriptor, bigEndianWords, bigEndianWords, bigEndianWords,
+		PaletteColorLUTOptions{ByteOrder: binary.BigEndian},
+	)
+	if err != nil {
+		t.Fatalf("NewPaletteColorLUTWithOptions() error = %v", err)
+	}
+	// The 16-bit entry's high byte is at offset 0 in Big Endian data; the old
+	// little-endian-only parser would have read 0x34/0x78 instead.
+	if got, want := lut.LUT[0].R, uint8(0x12); got != want {
+		t.Fatalf("entry 0 red = %#x, want %#x", got, want)
+	}
+	if got, want := lut.LUT[1].R, uint8(0x56); got != want {
+		t.Fatalf("entry 1 red = %#x, want %#x", got, want)
+	}
+}
+
+func TestPaletteColorLUTSupportsSignedFirstMappedValue(t *testing.T) {
+	lut, err := NewPaletteColorLUTWithOptions(
+		[]uint16{2, 0xFFFE, 8}, // first mapped value -2
+		[]byte{10, 20}, []byte{30, 40}, []byte{50, 60},
+		PaletteColorLUTOptions{SignedFirstMappedValue: true},
+	)
+	if err != nil {
+		t.Fatalf("NewPaletteColorLUTWithOptions() error = %v", err)
+	}
+	if lut.FirstMappedValue != -2 {
+		t.Fatalf("FirstMappedValue = %d, want -2", lut.FirstMappedValue)
+	}
+	if got := lut.GetColorValue(-2); got.R != 10 || got.G != 30 || got.B != 50 {
+		t.Fatalf("GetColorValue(-2) = %+v, want first entry", got)
+	}
+	if got := lut.GetColorValue(-1); got.R != 20 {
+		t.Fatalf("GetColorValue(-1) = %+v, want second entry", got)
+	}
+	// Values above the mapped range clamp to the last entry.
+	if got := lut.GetColorValue(0); got.R != 20 {
+		t.Fatalf("GetColorValue(0) = %+v, want clamped last entry", got)
+	}
+}
+
 func TestPaletteColorLUTApplyToPixelDataWithByteOrder(t *testing.T) {
 	lut, err := NewPaletteColorLUT(
 		[]uint16{2, 0, 8},

@@ -21,10 +21,11 @@ type walkLengths struct {
 }
 
 type lengthFrame struct {
-	kind      dataset.WalkEventKind
-	path      string
-	content   uint64
-	fragments *element.FragmentSequence
+	kind                   dataset.WalkEventKind
+	path                   string
+	content                uint64
+	fragments              *element.FragmentSequence
+	hasExtendedOffsetTable bool
 }
 
 type walkLengthCalculator struct {
@@ -123,7 +124,12 @@ func (c *walkLengthCalculator) visit(event dataset.WalkEvent) (dataset.WalkActio
 		if !ok || fragments == nil {
 			return dataset.WalkContinue, fmt.Errorf("fragment event contains %T", event.Element)
 		}
-		c.frames = append(c.frames, lengthFrame{kind: event.Kind, path: path, fragments: fragments})
+		c.frames = append(c.frames, lengthFrame{
+			kind:                   event.Kind,
+			path:                   path,
+			fragments:              fragments,
+			hasExtendedOffsetTable: hasExtendedOffsetTable(event.Dataset),
+		})
 
 	case dataset.WalkFragmentItem:
 		if event.Fragment == nil {
@@ -143,8 +149,13 @@ func (c *walkLengthCalculator) visit(event dataset.WalkEvent) (dataset.WalkActio
 		if err != nil {
 			return dataset.WalkContinue, err
 		}
-		offsetCount := effectiveOffsetCount(frame.fragments)
-		total := uint64(c.writer.elementHeaderLength(frame.fragments.ValueRepresentation())) +
+		offsetCount := len(frame.fragments.OffsetTable())
+		if frame.hasExtendedOffsetTable {
+			// PS3.5 A.4: the Basic Offset Table Item Length is zero when an
+			// Extended Offset Table is present.
+			offsetCount = 0
+		}
+		total := uint64(c.writer.elementHeaderLength(fragmentValueRepresentation(frame.fragments))) +
 			8 + uint64(offsetCount)*4 + frame.content + 8
 		return dataset.WalkContinue, c.add(total)
 	}
@@ -181,8 +192,10 @@ func (c *walkLengthCalculator) consumeSkipped(path string, kind dataset.WalkEven
 }
 
 func uint32Length(length uint64, name, path string) (uint32, error) {
-	if length > math.MaxUint32 {
-		return 0, fmt.Errorf("%s at %s exceeds maximum encoded length", name, path)
+	// 0xFFFFFFFF is the undefined-length sentinel (PS3.5 7.5); an explicit
+	// length must never encode it without the required delimitation items.
+	if length >= math.MaxUint32 {
+		return 0, fmt.Errorf("%s at %s exceeds maximum encoded explicit length", name, path)
 	}
 	return uint32(length), nil
 }
@@ -303,7 +316,7 @@ func (e *walkDatasetEncoder) visit(event dataset.WalkEvent) (dataset.WalkAction,
 			return dataset.WalkSkipChildren, nil
 		}
 		fragments := event.Element.(*element.FragmentSequence)
-		return dataset.WalkContinue, e.writer.writeFragmentBegin(fragments)
+		return dataset.WalkContinue, e.writer.writeFragmentBegin(fragments, hasExtendedOffsetTable(event.Dataset))
 
 	case dataset.WalkFragmentItem:
 		return dataset.WalkContinue, e.writer.writeFragmentItem(event.Fragment)
@@ -332,16 +345,17 @@ func (w *Writer) writeDelimiter(elementNumber uint16) error {
 	return binary.Write(w.writer, w.byteOrder, uint32(0))
 }
 
-func (w *Writer) writeFragmentBegin(fs *element.FragmentSequence) error {
+func (w *Writer) writeFragmentBegin(fs *element.FragmentSequence, hasExtendedOffsetTable bool) error {
+	valueRepresentation := fragmentValueRepresentation(fs)
 	if err := w.writeTag(fs.Tag()); err != nil {
 		return fmt.Errorf("failed to write fragment sequence tag: %w", err)
 	}
 	if w.isExplicitVR {
-		if err := w.writeVR(fs.ValueRepresentation()); err != nil {
+		if err := w.writeVR(valueRepresentation); err != nil {
 			return fmt.Errorf("failed to write fragment sequence VR: %w", err)
 		}
 	}
-	if err := w.writeLength(fs.ValueRepresentation(), math.MaxUint32); err != nil {
+	if err := w.writeLength(valueRepresentation, math.MaxUint32); err != nil {
 		return fmt.Errorf("failed to write undefined fragment length: %w", err)
 	}
 	if err := w.writeTag(tag.New(0xFFFE, 0xE000)); err != nil {
@@ -349,8 +363,12 @@ func (w *Writer) writeFragmentBegin(fs *element.FragmentSequence) error {
 	}
 
 	offsets := fs.OffsetTable()
-	if len(offsets) == 0 && fs.FragmentCount() == 1 {
-		offsets = []uint32{0}
+	if hasExtendedOffsetTable {
+		// PS3.5 A.4: a Basic Offset Table Item Value is not permitted when an
+		// Extended Offset Table (7FE0,0001) is present.
+		offsets = nil
+	} else if err := validateBasicOffsetTable(offsets, fs.Fragments()); err != nil {
+		return err
 	}
 	if len(offsets) > int(math.MaxUint32/4) {
 		return fmt.Errorf("offset table too large: %d entries", len(offsets))
@@ -366,11 +384,68 @@ func (w *Writer) writeFragmentBegin(fs *element.FragmentSequence) error {
 	return nil
 }
 
+// fragmentValueRepresentation returns the VR to encode for an encapsulated
+// fragment sequence. PS3.5 A.4 requires OB for all encapsulated Pixel Data;
+// callers that built the element with OW are normalized to OB on write.
+func fragmentValueRepresentation(fs *element.FragmentSequence) *vr.VR {
+	if fs != nil && fs.ValueRepresentation() == vr.OW {
+		return vr.OB
+	}
+	if fs == nil {
+		return nil
+	}
+	return fs.ValueRepresentation()
+}
+
+// validateBasicOffsetTable checks caller-supplied Basic Offset Table values
+// against the fragment layout that will be encoded. Every entry must be the
+// byte offset (measured from the first Fragment Item Tag) of a Fragment Item;
+// the first entry must be zero (PS3.5 A.4).
+func validateBasicOffsetTable(offsets []uint32, fragments []buffer.ByteBuffer) error {
+	if len(offsets) == 0 {
+		return nil
+	}
+	if offsets[0] != 0 {
+		return fmt.Errorf("basic offset table first entry must be 0, got %d", offsets[0])
+	}
+	if len(offsets) > len(fragments) {
+		return fmt.Errorf("basic offset table has %d entries but only %d fragments", len(offsets), len(fragments))
+	}
+	next := 0
+	var fragmentOffset uint64
+	for _, fragment := range fragments {
+		if next < len(offsets) && uint64(offsets[next]) == fragmentOffset {
+			next++
+		}
+		if fragment == nil {
+			return fmt.Errorf("fragment item is nil")
+		}
+		fragmentLength := uint64(fragment.Size())
+		if fragmentLength%2 != 0 {
+			fragmentLength++
+		}
+		fragmentOffset += 8 + fragmentLength
+	}
+	if next < len(offsets) {
+		return fmt.Errorf("basic offset table entry %d (%d) does not point at a Fragment Item Tag", next, offsets[next])
+	}
+	return nil
+}
+
+func hasExtendedOffsetTable(ds *dataset.Dataset) bool {
+	return ds != nil && ds.Contains(tag.ExtendedOffsetTable)
+}
+
 func (w *Writer) writeFragmentItem(fragment buffer.ByteBuffer) error {
 	if fragment == nil {
 		return fmt.Errorf("fragment buffer is nil")
 	}
 	length := fragment.Size()
+	if length == 0 {
+		// PS3.5 A.4: every item containing an encoded Fragment shall be of an
+		// even number of bytes greater than or equal to two.
+		return fmt.Errorf("fragment item is empty; PS3.5 A.4 requires at least 2 bytes")
+	}
 	paddedLength := length
 	if length%2 != 0 {
 		if length == math.MaxUint32 {
@@ -395,11 +470,4 @@ func (w *Writer) writeFragmentItem(fragment buffer.ByteBuffer) error {
 		return writeAll(w.writer, []byte{0})
 	}
 	return nil
-}
-
-func effectiveOffsetCount(fs *element.FragmentSequence) int {
-	if len(fs.OffsetTable()) == 0 && fs.FragmentCount() == 1 {
-		return 1
-	}
-	return len(fs.OffsetTable())
 }

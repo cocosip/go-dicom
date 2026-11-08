@@ -47,8 +47,35 @@ func VOILUTAt(ds *dataset.Dataset, signed bool, index int) (lut.LUT, error) {
 
 // VOILUTAtWithVRMode reads one VOI LUT item using the requested VR policy.
 func VOILUTAtWithVRMode(ds *dataset.Dataset, signed bool, index int, mode LUTVRMode) (lut.LUT, error) {
+	return voiLUTAtWithVRMode(ds, signed, index, mode, false)
+}
+
+// SoftcopyVOILUTFromWithVRMode reads a VOI LUT supplied by a Presentation State
+// Softcopy VOI LUT item. Presentation State IODs permit 8 through 16 bits per
+// entry; Image IODs keep the stricter 8-or-16 rule (PS3.3 C.11.2.1.1).
+func SoftcopyVOILUTFromWithVRMode(primary, fallback *dataset.Dataset, signed bool, index int, mode LUTVRMode) (lut.LUT, error) {
+	if err := validateLUTVRMode(mode); err != nil {
+		return nil, err
+	}
+	if primary != nil && primary.Contains(tag.VOILUTSequence) {
+		return voiLUTAtWithVRMode(primary, signed, index, mode, true)
+	}
+	if fallback != nil && fallback.Contains(tag.VOILUTSequence) {
+		return voiLUTAtWithVRMode(fallback, signed, index, mode, true)
+	}
+	return nil, fmt.Errorf("VOI LUT Sequence is missing")
+}
+
+func validateLUTVRMode(mode LUTVRMode) error {
 	if mode != LUTCompatible && mode != LUTStandard {
-		return nil, fmt.Errorf("unsupported LUT VR mode: %d", mode)
+		return fmt.Errorf("unsupported LUT VR mode: %d", mode)
+	}
+	return nil
+}
+
+func voiLUTAtWithVRMode(ds *dataset.Dataset, signed bool, index int, mode LUTVRMode, presentationState bool) (lut.LUT, error) {
+	if err := validateLUTVRMode(mode); err != nil {
+		return nil, err
 	}
 	sequence, err := ds.GetSequence(tag.VOILUTSequence)
 	if err != nil || sequence.Count() == 0 {
@@ -65,7 +92,7 @@ func VOILUTAtWithVRMode(ds *dataset.Dataset, signed bool, index int, mode LUTVRM
 	if err != nil {
 		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
 	}
-	if err := validateImageVOILUTDescriptor(descriptor); err != nil {
+	if err := validateVOILUTDescriptor(descriptor, presentationState); err != nil {
 		return nil, fmt.Errorf("read VOI LUT descriptor: %w", err)
 	}
 	values, err := readLUTData(item, tag.LUTData, descriptor, dicomlut.ByteOrder(ds), mode)
@@ -160,6 +187,18 @@ func applyVOILUTWithModality(pd *Data, ds *dataset.Dataset, _, _ float64, ignore
 type voiTableLUT struct {
 	values []uint16
 	first  int
+}
+
+func validateVOILUTDescriptor(descriptor dicomlut.Descriptor, presentationState bool) error {
+	if presentationState {
+		// PS3.3 C.11.2.1.1: a Presentation State IOD may use 8 through 16 bits
+		// per entry, unlike the 8-or-16 restriction of an Image IOD.
+		if descriptor.BitsPerEntry < 8 || descriptor.BitsPerEntry > 16 {
+			return fmt.Errorf("bits per entry must be 8 through 16 for a Presentation State IOD, got %d", descriptor.BitsPerEntry)
+		}
+		return nil
+	}
+	return validateImageVOILUTDescriptor(descriptor)
 }
 
 func validateImageVOILUTDescriptor(descriptor dicomlut.Descriptor) error {

@@ -333,3 +333,112 @@ func TestApplyAAssociateACRejectsRoleNotRequested(t *testing.T) {
 		t.Fatalf("ApplyAAssociateAC error = %v, want unrequested SCP role error", err)
 	}
 }
+
+// newAsyncNegotiationPDUs returns a request/acceptance pair sharing one
+// presentation context; the caller sets the Asynchronous Operations Window.
+func newAsyncNegotiationPDUs() (*pdu.AAssociateRQ, *pdu.AAssociateAC) {
+	rq := pdu.NewAAssociateRQ()
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID:               1,
+		AbstractSyntax:   testStorageSOPClassUID,
+		TransferSyntaxes: []string{testExplicitVRLittleEndianUID},
+	}}
+	ac := pdu.NewAAssociateAC()
+	ac.PresentationContexts = []pdu.PresentationContextAC{{
+		ID:             1,
+		Result:         pdu.ResultAcceptance,
+		TransferSyntax: testExplicitVRLittleEndianUID,
+	}}
+	return rq, ac
+}
+
+// TestApplyAAssociateACRejectsUnproposedAsyncWindow verifies PS3.7 D.3.3.3: the
+// A-ASSOCIATE-AC may not carry an Asynchronous Operations Window when the
+// request omitted it.
+func TestApplyAAssociateACRejectsUnproposedAsyncWindow(t *testing.T) {
+	rq, ac := newAsyncNegotiationPDUs()
+	ac.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
+		MaximumNumberOperationsInvoked:   5,
+		MaximumNumberOperationsPerformed: 5,
+	}
+
+	registry := transfer.NewRegistry()
+	err := ApplyAAssociateAC(FromAAssociateRQ(rq, registry), ac, registry)
+	if err == nil || !strings.Contains(err.Error(), "not proposed") {
+		t.Fatalf("ApplyAAssociateAC error = %v, want unproposed async window error", err)
+	}
+}
+
+// TestApplyAAssociateACRejectsAsyncWindowAboveProposal verifies PS3.7 D.3.3.3:
+// accepted values must be equal to or less than the proposed values, with zero
+// meaning unlimited in both directions.
+func TestApplyAAssociateACRejectsAsyncWindowAboveProposal(t *testing.T) {
+	tests := []struct {
+		name               string
+		requestedInvoked   uint16
+		requestedPerformed uint16
+		acceptedInvoked    uint16
+		acceptedPerformed  uint16
+		wantErr            bool
+	}{
+		{"invoked above proposal", 4, 3, 5, 3, true},
+		{"performed above proposal", 4, 3, 4, 4, true},
+		{"unlimited acceptance above finite proposal", 4, 3, 0, 3, true},
+		{"within proposal", 4, 3, 2, 1, false},
+		{"equal to proposal", 4, 0, 4, 0, false},
+		{"finite acceptance within unlimited proposal", 0, 0, 5, 5, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq, ac := newAsyncNegotiationPDUs()
+			rq.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
+				MaximumNumberOperationsInvoked:   tt.requestedInvoked,
+				MaximumNumberOperationsPerformed: tt.requestedPerformed,
+			}
+			ac.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
+				MaximumNumberOperationsInvoked:   tt.acceptedInvoked,
+				MaximumNumberOperationsPerformed: tt.acceptedPerformed,
+			}
+
+			registry := transfer.NewRegistry()
+			assoc := FromAAssociateRQ(rq, registry)
+			err := ApplyAAssociateAC(assoc, ac, registry)
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "above the proposal") {
+					t.Fatalf("ApplyAAssociateAC error = %v, want above-proposal error", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ApplyAAssociateAC error = %v", err)
+			}
+			if assoc.AsynchronousOperations == nil ||
+				assoc.AsynchronousOperations.MaxInvokedOperations != tt.acceptedInvoked ||
+				assoc.AsynchronousOperations.MaxPerformedOperations != tt.acceptedPerformed {
+				t.Fatalf("accepted async window = %#v", assoc.AsynchronousOperations)
+			}
+		})
+	}
+}
+
+// TestApplyAAssociateACDefaultsAsyncWindowWhenOmitted verifies the PS3.7
+// D.3.3.3 default of one operation in each direction.
+func TestApplyAAssociateACDefaultsAsyncWindowWhenOmitted(t *testing.T) {
+	rq, ac := newAsyncNegotiationPDUs()
+	rq.UserInformation.AsynchronousOperations = &pdu.AsynchronousOperationsWindow{
+		MaximumNumberOperationsInvoked:   4,
+		MaximumNumberOperationsPerformed: 3,
+	}
+
+	registry := transfer.NewRegistry()
+	assoc := FromAAssociateRQ(rq, registry)
+	if err := ApplyAAssociateAC(assoc, ac, registry); err != nil {
+		t.Fatalf("ApplyAAssociateAC error = %v", err)
+	}
+	if assoc.AsynchronousOperations == nil ||
+		assoc.AsynchronousOperations.MaxInvokedOperations != 1 ||
+		assoc.AsynchronousOperations.MaxPerformedOperations != 1 {
+		t.Fatalf("default async window = %#v, want 1,1", assoc.AsynchronousOperations)
+	}
+}

@@ -430,7 +430,7 @@ func TestTranscoderNativePixelDataByteOrderUsesVR(t *testing.T) {
 	}
 }
 
-func TestTranscoderNativeThirtyTwoBitOWSwapsSixteenBitWords(t *testing.T) {
+func TestTranscoderNativeThirtyTwoBitOWReversesSamples(t *testing.T) {
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
 	for _, elem := range []element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
@@ -464,7 +464,7 @@ func TestTranscoderNativeThirtyTwoBitOWSwapsSixteenBitWords(t *testing.T) {
 	if !ok {
 		t.Fatalf("transcoded Pixel Data = %T, want OW", gotElem)
 	}
-	want := []byte{0x22, 0x11, 0x44, 0x33}
+	want := []byte{0x44, 0x33, 0x22, 0x11}
 	if got := word.GetData(); !bytes.Equal(got, want) {
 		t.Fatalf("Pixel Data = % x, want % x", got, want)
 	}
@@ -720,6 +720,41 @@ func TestTranscoder_DecodeFrame(t *testing.T) {
 			t.Fatalf("DecodeFrame() = %x, want 0f", frame)
 		}
 	})
+}
+
+func TestTranscoderDecodeFrameHandlesPackedOneBitMultiFrame(t *testing.T) {
+	ds := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{3}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{1}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{0}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewIntegerStringFromInt(tag.NumberOfFrames, []int{2}),
+		// 3 samples per frame, LSB-first: frame 0 = 101, frame 1 = 010, then padding.
+		element.NewOtherByte(tag.PixelData, []byte{0x15, 0xAA}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+
+	transcoder := newTestTranscoder(t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.ExplicitVRLittleEndian,
+	)
+	for frame, want := range [][]byte{{0x05}, {0x02}} {
+		got, err := transcoder.DecodeFrame(context.Background(), ds, frame)
+		if err != nil {
+			t.Fatalf("DecodeFrame(%d) error = %v", frame, err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("DecodeFrame(%d) = %#x, want %#x", frame, got, want)
+		}
+	}
 }
 
 func TestTranscoderRejectsNilDataset(t *testing.T) {
@@ -1434,7 +1469,9 @@ func TestTranscoderPixelDataVRRoundTripsThroughWriter(t *testing.T) {
 		wantVR *vr.VR
 	}{
 		{name: "strict encapsulated Pixel Data uses OB", strict: true, wantVR: vr.OB},
-		{name: "compatibility mode preserves 16-bit OW", strict: false, wantVR: vr.OW},
+		// Compatibility mode may carry an OW fragment internally, but writing
+		// normalizes encapsulated Pixel Data to OB (PS3.5 A.4).
+		{name: "compatibility mode writes standard OB", strict: false, wantVR: vr.OB},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

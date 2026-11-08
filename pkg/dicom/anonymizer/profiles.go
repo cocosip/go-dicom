@@ -23,6 +23,9 @@ func NewRetainUIDsProfile() *SecurityProfile {
 
 // NewRetainInstitutionProfile creates a profile that retains institution identifiers.
 // This is useful for multi-center studies where institution tracking is needed.
+// Clinician names remain subject to the Basic Profile actions: only the
+// institution attributes allowed by the Retain Institution Identity Option
+// (PS3.15 E.3.11) are kept.
 func NewRetainInstitutionProfile() *SecurityProfile {
 	profile := NewSecurityProfile(BasicProfile | RetainInstitutionIdent)
 
@@ -31,15 +34,7 @@ func NewRetainInstitutionProfile() *SecurityProfile {
 		{mustCompile("(?i)" + `0008,0080`), ActionK}, // Institution Name
 		{mustCompile("(?i)" + `0008,0081`), ActionK}, // Institution Address
 		{mustCompile("(?i)" + `0008,0082`), ActionK}, // Institution Code Sequence
-		{mustCompile("(?i)" + `0008,0090`), ActionK}, // Referring Physician's Name
-		{mustCompile("(?i)" + `0008,0092`), ActionK}, // Referring Physician's Address
-		{mustCompile("(?i)" + `0008,0094`), ActionK}, // Referring Physician's Telephone Numbers
-		{mustCompile("(?i)" + `0008,0096`), ActionK}, // Referring Physician Identification Sequence
 		{mustCompile("(?i)" + `0008,1040`), ActionK}, // Institutional Department Name
-		{mustCompile("(?i)" + `0008,1048`), ActionK}, // Physician(s) of Record
-		{mustCompile("(?i)" + `0008,1050`), ActionK}, // Performing Physician's Name
-		{mustCompile("(?i)" + `0008,1060`), ActionK}, // Name of Physician(s) Reading Study
-		{mustCompile("(?i)" + `0008,1070`), ActionK}, // Operators' Name
 	}, profile.rules...)
 
 	return profile
@@ -47,9 +42,12 @@ func NewRetainInstitutionProfile() *SecurityProfile {
 
 // NewRetainDatesProfile creates a profile that retains all dates.
 // This is useful for longitudinal studies where date information is critical.
+// Only one date option can be selected, so Retain Long Full Dates is used and
+// the dates are retained verbatim; identifiers that merely contain date-like
+// text (Accession Number, Clinical Trial IDs, Modality) are not retained.
 // Note: This may compromise privacy in some jurisdictions.
 func NewRetainDatesProfile() *SecurityProfile {
-	profile := NewSecurityProfile(BasicProfile | RetainLongFullDates | RetainLongModifDates)
+	profile := NewSecurityProfile(BasicProfile | RetainLongFullDates)
 
 	// Override date-related tags to keep them
 	profile.rules = append([]profileRule{
@@ -63,19 +61,9 @@ func NewRetainDatesProfile() *SecurityProfile {
 		{mustCompile("(?i)" + `0008,0031`), ActionK}, // Series Time
 		{mustCompile("(?i)" + `0008,0032`), ActionK}, // Acquisition Time
 		{mustCompile("(?i)" + `0008,0033`), ActionK}, // Content Time
-		{mustCompile("(?i)" + `0008,0050`), ActionK}, // Accession Number (often contains date info)
-		{mustCompile("(?i)" + `0008,0060`), ActionK}, // Modality
 		{mustCompile("(?i)" + `0010,0030`), ActionK}, // Patient's Birth Date
 		{mustCompile("(?i)" + `0010,0032`), ActionK}, // Patient's Birth Time
 		{mustCompile("(?i)" + `0010,0033`), ActionK}, // Patient's Birth Date in Alternative Calendar
-		{mustCompile("(?i)" + `0010,0034`), ActionK}, // Patient's Alternative Calendar
-		{mustCompile("(?i)" + `0012,0050`), ActionK}, // Clinical Trial Time Point ID
-		{mustCompile("(?i)" + `0012,0051`), ActionK}, // Clinical Trial Time Point Description
-		{mustCompile("(?i)" + `0012,0071`), ActionK}, // Clinical Trial Coordinating Center Name
-		{mustCompile("(?i)" + `0012,0072`), ActionK}, // Clinical Trial Protocol ID
-		{mustCompile("(?i)" + `0012,0073`), ActionK}, // Clinical Trial Protocol Name
-		{mustCompile("(?i)" + `0012,0081`), ActionK}, // Clinical Trial Site ID
-		{mustCompile("(?i)" + `0012,0082`), ActionK}, // Clinical Trial Site Name
 		{mustCompile("(?i)" + `0040,0002`), ActionK}, // Study Entry Date
 		{mustCompile("(?i)" + `0040,0003`), ActionK}, // Study Entry Time
 		{mustCompile("(?i)" + `0040,0004`), ActionK}, // Study End Date
@@ -197,7 +185,7 @@ func NewResearchProfile() *SecurityProfile {
 		{`0010,0010`, ActionZ}, // Patient's Name (zero out)
 		{`0010,0020`, ActionZ}, // Patient ID (zero out)
 		{`0010,0030`, ActionZ}, // Patient's Birth Date (zero out)
-		{`0010,0040`, ActionC}, // Patient's Sex (clean - keep value)
+		{`0010,0040`, ActionK}, // Patient's Sex (keep for analysis; the Basic Profile zeroes it)
 		{`0010,0050`, ActionX}, // Insurance Plan Identification (remove)
 		{`0010,1010`, ActionK}, // Patient's Age (keep for analysis)
 		{`0010,1020`, ActionK}, // Patient's Size (keep for analysis)

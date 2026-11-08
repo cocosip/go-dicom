@@ -35,6 +35,8 @@ const (
 	ValueTypeSpatialCoordinate ValueType = "SCOORD"
 	// ValueTypeTemporalCoordinate represents temporal coordinates
 	ValueTypeTemporalCoordinate ValueType = "TCOORD"
+	// ValueTypeTable represents a two-dimensional tabulation of data
+	ValueTypeTable ValueType = "TABLE"
 )
 
 // String returns the string representation of the ValueType

@@ -63,6 +63,9 @@ func NewDateRangeAll() *DateRange {
 //   - "YYYYMMDD-" - from start date onwards
 //   - "-YYYYMMDD" - up to end date
 //   - "YYYYMMDD" - exact date (single value)
+//
+// PS3.5 Table 6.2-1 defines DA as exactly eight digits, so partial-year and
+// dotted/slashed ACR-NEMA forms are rejected.
 func ParseDateRange(s string) (*DateRange, error) {
 	if s == "" || s == "-" {
 		return NewDateRangeAll(), nil
@@ -71,7 +74,7 @@ func ParseDateRange(s string) (*DateRange, error) {
 	minVal := time.Time{}
 	maxVal := time.Time{}
 
-	dashIdx := findRangeDash(s)
+	dashIdx := strings.IndexByte(s, '-')
 
 	if dashIdx == -1 {
 		date, err := parseDicomDate(s)
@@ -113,29 +116,19 @@ func MustParseDateRange(s string) *DateRange {
 }
 
 // parseDicomDate parses a DICOM date string (DA format: YYYYMMDD).
+//
+// PS3.5 Table 6.2-1 fixes DA at exactly eight digits; the retired ACR-NEMA
+// YYYY.MM.DD form and partial year/month forms are not accepted. time.Parse
+// rejects impossible calendar dates such as 20241301 and 20240230.
 func parseDicomDate(s string) (time.Time, error) {
-	if len(s) < 8 {
+	if len(s) != 8 || !isASCIIDigits(s) {
 		return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateFormat, s)
 	}
-
-	formats := []string{
-		"20060102",
-		"2006.01.02",
-		"2006/01/02",
-		"200601",
-		"2006.01",
-		"2006",
+	t, err := time.Parse("20060102", s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateFormat, s)
 	}
-
-	for _, format := range formats {
-		if len(s) >= len(format) {
-			if t, err := time.Parse(format, s[:len(format)]); err == nil {
-				return t, nil
-			}
-		}
-	}
-
-	return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateFormat, s)
+	return t, nil
 }
 
 // String returns the DICOM date range string representation (DA format).
@@ -223,7 +216,7 @@ func ParseTimeRange(s string) (*TimeRange, error) {
 	minVal := time.Time{}
 	maxVal := time.Time{}
 
-	dashIdx := findRangeDash(s)
+	dashIdx := strings.IndexByte(s, '-')
 
 	if dashIdx == -1 {
 		t, err := parseDicomTime(s)
@@ -452,9 +445,6 @@ func (dtr *DateTimeRange) Contains(dt time.Time) bool {
 	return minOK && maxOK
 }
 
-// findRangeDash finds the dash character that separates range bounds.
-// It returns -1 if no dash is found or if the dash is part of a timezone offset.
-// Timezone offsets have format like -0700 (dash followed by 4 digits after another digit).
 // isASCIIDigits reports whether every byte is an ASCII digit.
 func isASCIIDigits(s string) bool {
 	if s == "" {
@@ -479,33 +469,65 @@ func validZZXX(d string) bool {
 	return mm < 60 && (hh < 14 || (hh == 14 && mm == 0))
 }
 
+// findRangeDash finds the dash that separates the bounds of a DT range.
+//
+// It returns -1 when no separator is present. A dash that introduces a
+// trailing "-ZZXX" UTC offset is not a separator: PS3.5 Table 6.2-1 note 5
+// allows the offset after a partial date/time (e.g. "202401-0500" is the
+// datetime 2024-01 with a -05:00 offset). The offset can only appear at the
+// end of a value (or immediately before the range separator), and only when
+// the text before it is a legal DT prefix, so the decision is made by
+// look-ahead instead of by absolute position. This keeps TM values such as
+// "1000-1800" a range because "1800" is not a legal UTC offset.
 func findRangeDash(s string) int {
 	for i := 0; i < len(s); i++ {
-		if s[i] == '-' {
-			// A 4-digit year followed by a +/-ZZXX offset (e.g. "2007-0500") is
-			// a datetime, not a range.
-			if i == 4 && len(s) == 9 && isASCIIDigits(s[5:9]) && validZZXX(s[5:9]) {
-				continue
-			}
-			// Check if this is a timezone offset (dash followed by 4 digits after a digit).
-			// A timezone offset can only follow a date/time with at least a full date
-			// (8 digits); otherwise a 4-digit TM like "1000-1800" would be misread.
-			if i >= 8 && i+4 < len(s) {
-				isDigitBefore := s[i-1] >= '0' && s[i-1] <= '9'
-				isDigitsAfter := (s[i+1] >= '0' && s[i+1] <= '9') &&
-					(s[i+2] >= '0' && s[i+2] <= '9') &&
-					(s[i+3] >= '0' && s[i+3] <= '9') &&
-					(s[i+4] >= '0' && s[i+4] <= '9')
-				// Also check if there are more digits after (could be longer timezone)
-				hasMoreDigits := i+5 < len(s) && (s[i+5] >= '0' && s[i+5] <= '9')
-
-				if isDigitBefore && isDigitsAfter && !hasMoreDigits {
-					// This looks like a timezone offset, skip it
-					continue
-				}
-			}
-			return i
+		if s[i] != '-' {
+			continue
 		}
+		if i == 0 {
+			return 0 // open-started range
+		}
+		if isUTCOffsetAt(s, i) {
+			continue
+		}
+		return i
 	}
 	return -1
+}
+
+// isUTCOffsetAt reports whether the dash at s[i] introduces a "-ZZXX" UTC
+// offset on a legal DT value prefix.
+func isUTCOffsetAt(s string, i int) bool {
+	if i+5 > len(s) {
+		return false
+	}
+	offset := s[i+1 : i+5]
+	if !isASCIIDigits(offset) || !validZZXX(offset) {
+		return false
+	}
+	if i+5 != len(s) && s[i+5] != '-' {
+		return false
+	}
+	return isDateTimePrefix(s[:i])
+}
+
+// isDateTimePrefix reports whether s is a legal DT value prefix: YYYY,
+// YYYYMM, YYYYMMDD, YYYYMMDDHH, YYYYMMDDHHMM or YYYYMMDDHHMMSS, optionally
+// followed by a fractional-second part.
+func isDateTimePrefix(s string) bool {
+	if dot := strings.IndexByte(s, '.'); dot >= 0 {
+		if !isASCIIDigits(s[dot+1:]) {
+			return false
+		}
+		s = s[:dot]
+	}
+	if !isASCIIDigits(s) {
+		return false
+	}
+	switch len(s) {
+	case 4, 6, 8, 10, 12, 14:
+		return true
+	default:
+		return false
+	}
 }

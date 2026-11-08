@@ -16,6 +16,7 @@ const (
 	privateFlag        = "-private"
 	rootFlag           = "-root"
 	standardFlag       = "-standard"
+	supplementFlag     = "-supplement"
 	version2026bMarker = "version 2026b"
 )
 
@@ -95,6 +96,7 @@ func TestGetVMCodeUsesCurrentVMSymbolNames(t *testing.T) {
 		{value: "1-8", want: "vm.VM18"},
 		{value: "1-n", want: "vm.VM1N"},
 		{value: "2-2n", want: "vm.VM22N"},
+		{value: "1-n or 1", want: `vm.MustParse("1-n or 1")`},
 	}
 
 	for _, test := range tests {
@@ -150,13 +152,19 @@ func TestBundled2026bGenerationIsDeterministic(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join("..", ".."))
 	standard := filepath.Join(repositoryRoot, "tools", "data", "2026b", "DICOM Dictionary.xml")
 	private := filepath.Join(repositoryRoot, "tools", "data", "2026b", "Private Dictionary.xml")
+	supplement := filepath.Join(repositoryRoot, "tools", "data", "2026d", "Supplement.xml")
 
-	const wantCounts = "Generated 5347 tags, 1928 UIDs, 235 private creators, 4678 private entries from DICOM 2026b\n"
+	const wantCounts = "Generated 5356 tags, 1990 UIDs, 235 private creators, 4678 private entries from DICOM 2026b\n"
 	generatedRoots := []string{t.TempDir(), t.TempDir()}
 	for i, generatedRoot := range generatedRoots {
 		var stdout bytes.Buffer
 		if err := runCommand(
-			[]string{standardFlag, standard, privateFlag, private, rootFlag, generatedRoot},
+			[]string{
+				standardFlag, standard,
+				privateFlag, private,
+				supplementFlag, supplement,
+				rootFlag, generatedRoot,
+			},
 			&stdout,
 		); err != nil {
 			t.Fatalf("runCommand(run %d) error = %v", i+1, err)
@@ -183,6 +191,23 @@ func TestBundled2026bGenerationIsDeterministic(t *testing.T) {
 		if !bytes.Equal(normalizeLineEndings(first), normalizeLineEndings(second)) {
 			t.Errorf("generated %s differs between runs", output)
 		}
+	}
+
+	// The supplemental 2026d rows must actually reach every generated table.
+	tags := readTestFile(t, filepath.Join(generatedRoots[0], filepath.FromSlash(tagsOutput)))
+	if !strings.Contains(tags, "DisplayURI = New(0x0040, 0xE012)") {
+		t.Error("generated tags do not contain (0040,E012) DisplayURI")
+	}
+	uids := readTestFile(t, filepath.Join(generatedRoots[0], filepath.FromSlash(uidsOutput)))
+	if !strings.Contains(uids, `CTImageStorageForProcessing = New("1.2.840.10008.5.1.4.1.1.2.3"`) {
+		t.Error("generated UIDs do not contain CTImageStorageForProcessing")
+	}
+	dictionary := readTestFile(t, filepath.Join(generatedRoots[0], filepath.FromSlash(dictionaryOutput)))
+	if !strings.Contains(dictionary, `"DoseCalculationModelName"`) {
+		t.Error("generated dictionary does not contain DoseCalculationModelName")
+	}
+	if !strings.Contains(dictionary, `vm.MustParse("1-n or 1")`) {
+		t.Error("generated dictionary truncates the PS3.6 alternative VM")
 	}
 }
 

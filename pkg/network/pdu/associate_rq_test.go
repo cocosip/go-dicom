@@ -5,12 +5,58 @@ package pdu
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
 	"strings"
 	"testing"
 )
+
+// userInformationSubItemTypes returns the item types of every sub-item in the
+// first User Information item of an encoded association PDU.
+func userInformationSubItemTypes(t *testing.T, raw *RawPDU) []byte {
+	t.Helper()
+	if len(raw.Data) < 68 {
+		t.Fatalf("association PDU data too short: %d", len(raw.Data))
+	}
+	reader := bytes.NewReader(raw.Data[68:])
+	for {
+		itemType, data, err := readItem(reader)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("readItem() error = %v", err)
+		}
+		if itemType != ItemTypeUserInformation {
+			continue
+		}
+		subReader := bytes.NewReader(data)
+		var types []byte
+		for {
+			subType, _, err := readItem(subReader)
+			if err == io.EOF {
+				return types
+			}
+			if err != nil {
+				t.Fatalf("readItem() sub-item error = %v", err)
+			}
+			types = append(types, subType)
+		}
+	}
+	t.Fatal("User Information item not found")
+	return nil
+}
+
+func encodeRoleSelectionTestItem(t *testing.T, sopClassUID string, scu, scp byte) []byte {
+	t.Helper()
+	data := make([]byte, 2, 4+len(sopClassUID))
+	binary.BigEndian.PutUint16(data, uint16(len(sopClassUID)))
+	data = append(data, sopClassUID...)
+	data = append(data, scu, scp)
+	return encodeTestItem(ItemTypeSCPSCURoleSelection, data)
+}
 
 // testProposedContexts returns one minimal valid proposed presentation context
 // so user-information-focused tests satisfy the mandatory-item encode checks.
@@ -878,5 +924,87 @@ func TestAAssociateRQString(t *testing.T) {
 	want = "UserInformation[MaxPDU=16384, Implementation=, Version=]"
 	if got := rq.UserInformation.String(); got != want {
 		t.Errorf("UserInformation.String() = %q, want %q", got, want)
+	}
+}
+
+// TestAAssociateRQEncodesUserInformationSubItemsInAscendingOrder verifies
+// PS3.8 9.3.2.3: sub-items are written in ascending Item-type order so older
+// applications that stop at an unexpected order still read every sub-item.
+func TestAAssociateRQEncodesUserInformationSubItemsInAscendingOrder(t *testing.T) {
+	rq := NewAAssociateRQ()
+	rq.CalledAETitle = testCalledAETitle
+	rq.CallingAETitle = testCallingAETitle
+	rq.PresentationContexts = testProposedContexts()
+	rq.UserInformation.ImplementationVersionName = testImplVersionName
+	rq.UserInformation.AsynchronousOperations = &AsynchronousOperationsWindow{
+		MaximumNumberOperationsInvoked:   1,
+		MaximumNumberOperationsPerformed: 1,
+	}
+	rq.UserInformation.SCPSCURoleSelections = []SCPSCURoleSelection{{
+		SOPClassUID: testCTImageStorageUID,
+		SCURole:     1,
+		SCPRole:     0,
+	}}
+	rq.UserInformation.ExtendedNegotiations = []ExtendedNegotiation{{
+		SOPClassUID:         testCTImageStorageUID,
+		ServiceClassAppInfo: []byte{1, 0, 1},
+	}}
+	rq.UserInformation.CommonExtendedNegotiations = []CommonExtendedNegotiation{{
+		SOPClassUID:     testCTImageStorageUID,
+		ServiceClassUID: testExtendedServiceClassUID,
+	}}
+	rq.UserInformation.UserIdentity = &UserIdentityNegotiation{
+		UserIdentityType: 1,
+		PrimaryField:     []byte("user"),
+	}
+
+	raw, err := rq.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+
+	want := []byte{
+		ItemTypeMaximumLength,
+		ItemTypeImplementationClassUID,
+		ItemTypeAsynchronousOperationsWindow,
+		ItemTypeSCPSCURoleSelection,
+		ItemTypeImplementationVersionName,
+		ItemTypeExtendedNegotiation,
+		ItemTypeCommonExtendedNegotiation,
+		ItemTypeUserIdentityNegotiation,
+	}
+	got := userInformationSubItemTypes(t, raw)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("user information sub-item order = % X, want % X", got, want)
+	}
+}
+
+// TestAAssociateRQDecodeRejectsDuplicateRoleSelections verifies PS3.7
+// D.3.3.4.1: only one SCP/SCU Role Selection Sub-Item per SOP Class UID.
+func TestAAssociateRQDecodeRejectsDuplicateRoleSelections(t *testing.T) {
+	data := append(
+		encodeRoleSelectionTestItem(t, testCTImageStorageUID, 1, 0),
+		encodeRoleSelectionTestItem(t, testCTImageStorageUID, 1, 1)...,
+	)
+
+	rq := &AAssociateRQ{}
+	if _, err := rq.decodeUserInformation(data, nil); err == nil {
+		t.Fatal("decodeUserInformation() accepted duplicate role selection sub-items")
+	}
+}
+
+func TestAAssociateRQDecodeAcceptsRoleSelectionsForDistinctSOPClasses(t *testing.T) {
+	data := append(
+		encodeRoleSelectionTestItem(t, testCTImageStorageUID, 1, 0),
+		encodeRoleSelectionTestItem(t, testVerificationSOPUID, 0, 1)...,
+	)
+
+	rq := &AAssociateRQ{}
+	ui, err := rq.decodeUserInformation(data, nil)
+	if err != nil {
+		t.Fatalf("decodeUserInformation() error = %v", err)
+	}
+	if got := len(ui.SCPSCURoleSelections); got != 2 {
+		t.Fatalf("role selections = %d, want 2", got)
 	}
 }

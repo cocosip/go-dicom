@@ -255,7 +255,7 @@ func TestNativeCodec_BigEndianEncodeSwapsByDefault(t *testing.T) {
 	}
 }
 
-func TestNativeCodec_BigEndianDecodeSwapsThirtyTwoBitOWByWord(t *testing.T) {
+func TestNativeCodec_BigEndianDecodeSwapsThirtyTwoBitSamples(t *testing.T) {
 	frameInfo := FrameInfo{
 		Width:                     1,
 		Height:                    1,
@@ -280,7 +280,7 @@ func TestNativeCodec_BigEndianDecodeSwapsThirtyTwoBitOWByWord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []byte{0x22, 0x11, 0x44, 0x33}
+	want := []byte{0x44, 0x33, 0x22, 0x11}
 	if !bytes.Equal(got, want) {
 		t.Fatalf("Decode() frame = % x, want % x", got, want)
 	}

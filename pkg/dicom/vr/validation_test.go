@@ -4,6 +4,7 @@
 package vr_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
@@ -338,5 +339,57 @@ func TestValidateDTOffsetRange(t *testing.T) {
 		if err := vr.ValidateDT(value); err == nil {
 			t.Fatalf("ValidateDT(%q) = nil, want error", value)
 		}
+	}
+}
+
+func TestValidateTMAndDTRangeValues(t *testing.T) {
+	tmTests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"080000-170000", false},
+		{"-170000", false},
+		{"080000-", false},
+		{"080000", false},
+		{"080000-1700", false},
+		{"080000--170000", true},
+		{"080000-250000", true},
+		{"080000-170000-180000", true},
+	}
+	for _, tt := range tmTests {
+		if err := vr.ValidateTM(tt.value); (err != nil) != tt.wantErr {
+			t.Errorf("ValidateTM(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+		}
+	}
+
+	dtTests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"20000101-20010101", false},
+		{"-20010101", false},
+		{"20000101-", false},
+		{"20240101120000-0500", false},
+		{"20240101120000-0500-20250101120000-0500", false},
+		{"20000101", false},
+		{"20000101-20011301", true},
+		{"20000101-20010101-20020101", true},
+		{"2000010X-20010101", true},
+	}
+	for _, tt := range dtTests {
+		if err := vr.ValidateDT(tt.value); (err != nil) != tt.wantErr {
+			t.Errorf("ValidateDT(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+		}
+	}
+}
+
+func TestValidateSTCountsCharactersNotBytes(t *testing.T) {
+	// 1024 multi-byte characters exceed 1024 bytes but are within the
+	// 1024-character limit (PS3.5 Table 6.2-1).
+	if err := vr.ValidateST(strings.Repeat("汉", 1024)); err != nil {
+		t.Fatalf("ValidateST(1024 runes) error = %v", err)
+	}
+	if err := vr.ValidateST(strings.Repeat("汉", 1025)); err == nil {
+		t.Fatal("ValidateST(1025 runes) = nil, want error")
 	}
 }

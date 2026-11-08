@@ -36,11 +36,15 @@ func NewRegistry() *Registry {
 	}
 }
 
-// StandardEntries returns an independent, UID-sorted view of the immutable catalog.
+// StandardEntries returns an independent, UID-sorted view of the PS3.6
+// standard catalog.
+//
+// The vendor private UIDs in uids_private.go are not registered by NEMA: they
+// remain resolvable through Parse/Registry.Resolve, but they are not part of
+// the standard catalog. Use Registry.Enumerate to include them.
 func StandardEntries() []*UID {
-	entries := make([]*UID, 0, len(generatedStandardUIDEntries)+len(privateUIDEntries))
-	entries = append(entries, generatedStandardUIDEntries...)
-	entries = append(entries, privateUIDEntries...)
+	entries := make([]*UID, len(generatedStandardUIDEntries))
+	copy(entries, generatedStandardUIDEntries)
 	sortUIDs(entries)
 	return entries
 }

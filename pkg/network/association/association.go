@@ -38,7 +38,10 @@ type Association struct {
 
 	// Protocol negotiation
 	ProtocolVersion uint16 // Usually 0x0001
-	MaxPDULength    uint32 // Maximum PDU length (default 16384)
+	// MaxPDULength is the peer's advertised maximum PDU length, i.e. the limit
+	// on what the remote AE can receive. Maximum PDU length is a per-direction
+	// receive limit (PS3.7 D.3.3.1), so it is not a value both sides must share.
+	MaxPDULength uint32
 
 	// Implementation identification of the remote AE (as received in the
 	// A-ASSOCIATE-RQ or A-ASSOCIATE-AC).
@@ -885,21 +888,9 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ, registry *transfer.Registry) *Associ
 	return assoc
 }
 
-// ApplyAAssociateAC merges an association acceptance into the original request
-// association so callers can inspect both proposed and accepted values.
-func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC, registry *transfer.Registry) error {
-	if assoc == nil || ac == nil {
-		return fmt.Errorf("association request and acceptance cannot be nil")
-	}
-	if ac.UserInformation == nil {
-		return fmt.Errorf("A-ASSOCIATE-AC User Information is missing")
-	}
-
-	assoc.ProtocolVersion = ac.ProtocolVersion
-	assoc.MaxPDULength = ac.UserInformation.MaximumLength
-	assoc.ImplementationClassUID = ac.UserInformation.ImplementationClassUID
-	assoc.ImplementationVersionName = ac.UserInformation.ImplementationVersionName
-
+// applyAcceptedPresentationContexts copies the accepted results onto the
+// request's presentation contexts (PS3.7 D.3.3.2).
+func applyAcceptedPresentationContexts(assoc *Association, ac *pdu.AAssociateAC, registry *transfer.Registry) error {
 	seenContexts := make(map[byte]struct{}, len(ac.PresentationContexts))
 	for i := range ac.PresentationContexts {
 		accepted := &ac.PresentationContexts[i]
@@ -930,15 +921,12 @@ func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC, registry *trans
 	if len(seenContexts) != len(assoc.PresentationContexts) {
 		return fmt.Errorf("A-ASSOCIATE-AC returned %d presentation contexts, want %d", len(seenContexts), len(assoc.PresentationContexts))
 	}
+	return nil
+}
 
-	assoc.AsynchronousOperations = &AsynchronousOperationsWindow{MaxInvokedOperations: 1, MaxPerformedOperations: 1}
-	if async := ac.UserInformation.AsynchronousOperations; async != nil {
-		assoc.AsynchronousOperations = &AsynchronousOperationsWindow{
-			MaxInvokedOperations:   async.MaximumNumberOperationsInvoked,
-			MaxPerformedOperations: async.MaximumNumberOperationsPerformed,
-		}
-	}
-
+// applyAcceptedRoleSelections applies the accepted SCP/SCU role selections,
+// rejecting any value above the proposal (PS3.7 D.3.3.4.1).
+func applyAcceptedRoleSelections(assoc *Association, ac *pdu.AAssociateAC) error {
 	assoc.RoleSelections = assoc.RoleSelections[:0]
 	for _, pc := range assoc.PresentationContexts {
 		pc.AcceptedRole = nil
@@ -965,6 +953,53 @@ func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC, registry *trans
 			}
 		}
 	}
+	return nil
+}
+
+// ApplyAAssociateAC merges an association acceptance into the original request
+// association so callers can inspect both proposed and accepted values.
+func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC, registry *transfer.Registry) error {
+	if assoc == nil || ac == nil {
+		return fmt.Errorf("association request and acceptance cannot be nil")
+	}
+	if ac.UserInformation == nil {
+		return fmt.Errorf("A-ASSOCIATE-AC User Information is missing")
+	}
+
+	assoc.ProtocolVersion = ac.ProtocolVersion
+	assoc.MaxPDULength = ac.UserInformation.MaximumLength
+	assoc.ImplementationClassUID = ac.UserInformation.ImplementationClassUID
+	assoc.ImplementationVersionName = ac.UserInformation.ImplementationVersionName
+
+	if err := applyAcceptedPresentationContexts(assoc, ac, registry); err != nil {
+		return err
+	}
+
+	// PS3.7 D.3.3.3: the Asynchronous Operations Window may only be returned
+	// when the request proposed it, and the accepted values must not exceed the
+	// offered ones. The absent case defaults to one operation in each direction.
+	assoc.AsynchronousOperations = &AsynchronousOperationsWindow{MaxInvokedOperations: 1, MaxPerformedOperations: 1}
+	if async := ac.UserInformation.AsynchronousOperations; async != nil {
+		requested := assoc.RequestedAsynchronousOperations
+		if requested == nil {
+			return fmt.Errorf("A-ASSOCIATE-AC contains an Asynchronous Operations Window that was not proposed")
+		}
+		if asyncOperationExceedsOffer(async.MaximumNumberOperationsInvoked, requested.MaxInvokedOperations) ||
+			asyncOperationExceedsOffer(async.MaximumNumberOperationsPerformed, requested.MaxPerformedOperations) {
+			return fmt.Errorf(
+				"A-ASSOCIATE-AC accepted an Asynchronous Operations Window above the proposal (got %d,%d, offered %d,%d)",
+				async.MaximumNumberOperationsInvoked, async.MaximumNumberOperationsPerformed,
+				requested.MaxInvokedOperations, requested.MaxPerformedOperations)
+		}
+		assoc.AsynchronousOperations = &AsynchronousOperationsWindow{
+			MaxInvokedOperations:   async.MaximumNumberOperationsInvoked,
+			MaxPerformedOperations: async.MaximumNumberOperationsPerformed,
+		}
+	}
+
+	if err := applyAcceptedRoleSelections(assoc, ac); err != nil {
+		return err
+	}
 
 	for _, accepted := range ac.UserInformation.ExtendedNegotiations {
 		if requested := assoc.FindExtendedNegotiation(accepted.SOPClassUID); requested != nil {
@@ -983,6 +1018,17 @@ func ApplyAAssociateAC(assoc *Association, ac *pdu.AAssociateAC, registry *trans
 
 	assoc.IsEstablished = true
 	return nil
+}
+
+// asyncOperationExceedsOffer reports whether an accepted Asynchronous Operations
+// Window value exceeds the offered one. Zero means unlimited (PS3.7 D.3.3.3): an
+// unlimited offer accepts any value, while an unlimited acceptance exceeds any
+// finite offer.
+func asyncOperationExceedsOffer(accepted, offered uint16) bool {
+	if offered == 0 {
+		return false
+	}
+	return accepted == 0 || accepted > offered
 }
 
 func cloneAsynchronousOperationsWindow(value *AsynchronousOperationsWindow) *AsynchronousOperationsWindow {

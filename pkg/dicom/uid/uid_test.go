@@ -90,6 +90,53 @@ func TestAppend(t *testing.T) {
 	}
 }
 
+func TestAppendRejectsInvalidInput(t *testing.T) {
+	if got := uid.Append(nil, 1); got != nil {
+		t.Errorf("Append(nil, 1) = %q, want nil", got.UID())
+	}
+	for _, value := range []string{"", "1.02.3", "1..2", "not-a-uid"} {
+		base := uid.New(value, "Base UID", uid.TypeUnknown, false)
+		if got := uid.Append(base, 1); got != nil {
+			t.Errorf("Append(%q, 1) = %q, want nil", value, got.UID())
+		}
+	}
+	if got := uid.Append(uid.New("1.2.3.4", "Base UID", uid.TypeUnknown, false), -1); got != nil {
+		t.Errorf("Append(base, -1) = %q, want nil", got.UID())
+	}
+}
+
+func TestCanonicalImplementationIdentification(t *testing.T) {
+	if !uid.IsValid(uid.GoDicomImplementationClassUID) {
+		t.Fatalf("GoDicomImplementationClassUID %q is not a valid UID", uid.GoDicomImplementationClassUID)
+	}
+	if len(uid.GoDicomImplementationVersionName) > 16 {
+		t.Errorf("GoDicomImplementationVersionName length = %d, want <= 16",
+			len(uid.GoDicomImplementationVersionName))
+	}
+	if uid.RootUID != uid.GoDicomImplementationClassUID+".2" {
+		t.Errorf("RootUID = %q, want %q", uid.RootUID, uid.GoDicomImplementationClassUID+".2")
+	}
+	if !uid.IsValid(uid.RootUID) {
+		t.Errorf("RootUID %q is not a valid UID", uid.RootUID)
+	}
+}
+
+func TestStandardEntriesExcludePrivateVendorUIDs(t *testing.T) {
+	const privateVendorUID = "1.2.840.113619.5.2" // GE private Implicit VR Big Endian
+
+	for _, entry := range uid.StandardEntries() {
+		if entry.UID() == privateVendorUID {
+			t.Fatalf("StandardEntries() contains private vendor UID %q", privateVendorUID)
+		}
+	}
+
+	// Private UIDs stay resolvable, they are just not part of the standard catalog.
+	parsed := uid.Parse(privateVendorUID, "ignored", uid.TypeUnknown)
+	if parsed.UID() != privateVendorUID || parsed.Name() == "ignored" || parsed.Name() == "" {
+		t.Fatalf("Parse(private vendor UID) = %#v, want the canonical private entry", parsed)
+	}
+}
+
 func TestEquals(t *testing.T) {
 	u1 := uid.New(testImplicitVRLittleLE, "Name1", uid.TypeTransferSyntax, false)
 	u2 := uid.New(testImplicitVRLittleLE, "Name2", uid.TypeSOPClass, false)

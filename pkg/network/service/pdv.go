@@ -178,6 +178,14 @@ func FragmentData(data []byte, contextID byte, isCommand bool, maxPDULength uint
 		return nil
 	}
 
+	// PS3.8 E.1: every fragment shall consist of an even number of bytes. Pad an
+	// odd-length value with a trailing zero (the DICOM padding convention) so the
+	// final fragment is valid too. Copy first: appending to a caller slice with
+	// spare capacity would mutate its backing array.
+	if len(data)%2 != 0 {
+		data = append(append([]byte(nil), data...), 0)
+	}
+
 	// Calculate max PDV data size
 	// PDV header per fragment: 6 bytes (length + context ID + control header)
 	const pdvHeaderSize = 6

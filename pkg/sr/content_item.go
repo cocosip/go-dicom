@@ -112,13 +112,19 @@ func NewContentItemNumeric(code *CodeItem, relationship Relationship, value *Mea
 	return &ContentItem{dataset: ds}, nil
 }
 
-// NewContentItemContainer creates a container content item
+// NewContentItemContainer creates a container content item.
+//
+// A nil code creates a nested unheaded CONTAINER. PS3.3 C.17.3.2.2 allows
+// nested CONTAINER Content Items to omit the Concept Name Code Sequence; the
+// root CONTAINER and all non-container value types still require one.
 func NewContentItemContainer(code *CodeItem, relationship Relationship, continuity Continuity, items ...*ContentItem) (*ContentItem, error) {
 	ds := dataset.New()
 
-	// Set concept name code sequence
-	if err := setConceptNameCode(ds, code); err != nil {
-		return nil, err
+	// Set concept name code sequence (optional for nested containers)
+	if code != nil {
+		if err := setConceptNameCode(ds, code); err != nil {
+			return nil, err
+		}
 	}
 
 	// Set value type (0040,A040) VR=CS
@@ -235,6 +241,87 @@ func NewContentItemImage(code *CodeItem, relationship Relationship, value *Refer
 // NewContentItemWaveform creates a waveform-reference content item.
 func NewContentItemWaveform(code *CodeItem, relationship Relationship, value *ReferencedSOP) (*ContentItem, error) {
 	return newContentItemReferencedSOP(code, relationship, ValueTypeWaveform, value)
+}
+
+// NewContentItemTable creates a TABLE content item (PS3.3 C.18.10).
+func NewContentItemTable(code *CodeItem, relationship Relationship, value *TableValue) (*ContentItem, error) {
+	if value == nil || value.Dataset() == nil {
+		return nil, NewError("table value is nil")
+	}
+	ds, err := newContentItemDataset(code, relationship, ValueTypeTable)
+	if err != nil {
+		return nil, err
+	}
+	if err := ds.AddOrUpdate(dataset.NewSequenceWithItems(tag.TabulatedValuesSequence, []*dataset.Dataset{value.Dataset()})); err != nil {
+		return nil, WrapError("set tabulated values", err)
+	}
+	return &ContentItem{dataset: ds}, nil
+}
+
+// TableValue represents the value of a TABLE Content Item: a single Tabulated
+// Values Sequence Item carrying the row and column counts (Type 1) together
+// with the optional row/column definitions and cell values.
+type TableValue struct {
+	dataset *dataset.Dataset
+}
+
+// NewTableValue creates a table value with the required row and column counts.
+func NewTableValue(rows, columns uint32) *TableValue {
+	ds := dataset.New()
+	_ = ds.AddOrUpdate(element.NewUnsignedLong(tag.NumberOfTableRows, []uint32{rows}))
+	_ = ds.AddOrUpdate(element.NewUnsignedLong(tag.NumberOfTableColumns, []uint32{columns}))
+	return &TableValue{dataset: ds}
+}
+
+// NewTableValueFromDataset wraps an existing Tabulated Values Sequence Item.
+func NewTableValueFromDataset(ds *dataset.Dataset) *TableValue {
+	if ds == nil {
+		return nil
+	}
+	return &TableValue{dataset: ds}
+}
+
+// Dataset returns the underlying Tabulated Values Sequence Item.
+func (t *TableValue) Dataset() *dataset.Dataset {
+	if t == nil {
+		return nil
+	}
+	return t.dataset
+}
+
+// Rows returns Number of Table Rows (0040,A802).
+func (t *TableValue) Rows() (uint32, error) {
+	if t == nil || t.dataset == nil {
+		return 0, NewError("table value is nil")
+	}
+	return t.dataset.GetUInt32(tag.NumberOfTableRows, 0)
+}
+
+// Columns returns Number of Table Columns (0040,A803).
+func (t *TableValue) Columns() (uint32, error) {
+	if t == nil || t.dataset == nil {
+		return 0, NewError("table value is nil")
+	}
+	return t.dataset.GetUInt32(tag.NumberOfTableColumns, 0)
+}
+
+// Validate verifies the Type 1 content of the Tabulated Values Sequence Item.
+func (t *TableValue) Validate() error {
+	rows, err := t.Rows()
+	if err != nil {
+		return WrapError("validate Number of Table Rows", err)
+	}
+	columns, err := t.Columns()
+	if err != nil {
+		return WrapError("validate Number of Table Columns", err)
+	}
+	if rows == 0 {
+		return NewError("Number of Table Rows must be greater than zero")
+	}
+	if columns == 0 {
+		return NewError("Number of Table Columns must be greater than zero")
+	}
+	return nil
 }
 
 // NewContentItemFromDataset creates a ContentItem from an existing dataset
@@ -362,6 +449,48 @@ func (c *ContentItem) GetNumeric() (*MeasuredValue, error) {
 		return nil, NewErrorf("content item is not NUM type, got %s", vt)
 	}
 	return NewMeasuredValueFromSequence(tag.MeasuredValueSequence, c.dataset)
+}
+
+// GetTable returns the TABLE value (for TABLE type).
+func (c *ContentItem) GetTable() (*TableValue, error) {
+	if err := c.requireValueType(ValueTypeTable); err != nil {
+		return nil, err
+	}
+	item, err := requiredSingleSequence(tag.TabulatedValuesSequence, "tabulated values", c.dataset)
+	if err != nil {
+		return nil, err
+	}
+	return NewTableValueFromDataset(item), nil
+}
+
+// GetNumericQualifier returns the Numeric Value Qualifier Code Sequence
+// (0040,A301) of a NUM Content Item, or nil when absent. PS3.3 C.18.1 uses it
+// to explain why the Measured Value Sequence is empty.
+func (c *ContentItem) GetNumericQualifier() (*CodeItem, error) {
+	if c == nil || c.dataset == nil {
+		return nil, NewError("content item is nil")
+	}
+	if !c.dataset.Contains(tag.NumericValueQualifierCodeSequence) {
+		return nil, nil
+	}
+	item, err := requiredSingleSequence(tag.NumericValueQualifierCodeSequence, "numeric value qualifier", c.dataset)
+	if err != nil {
+		return nil, err
+	}
+	return NewCodeItemFromDataset(item), nil
+}
+
+// SetNumericQualifier sets the Numeric Value Qualifier Code Sequence
+// (0040,A301) of a NUM Content Item.
+func (c *ContentItem) SetNumericQualifier(value *CodeItem) error {
+	if c == nil || c.dataset == nil {
+		return NewError("content item is nil")
+	}
+	if value == nil || value.Dataset() == nil {
+		return NewError("numeric value qualifier is nil")
+	}
+	seq := dataset.NewSequenceWithItems(tag.NumericValueQualifierCodeSequence, []*dataset.Dataset{value.Dataset()})
+	return c.dataset.AddOrUpdate(seq)
 }
 
 // GetCode returns the code value (for CODE type)
