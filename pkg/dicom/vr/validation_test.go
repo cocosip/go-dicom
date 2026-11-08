@@ -318,3 +318,25 @@ func TestValidateDT(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDARejectsInvalidCalendar(t *testing.T) {
+	for _, value := range []string{"20250230", "20250001", "20200132"} {
+		if err := vr.ValidateDA(value); err == nil {
+			t.Fatalf("ValidateDA(%q) = nil, want error", value)
+		}
+	}
+	if err := vr.ValidateDA("20240229"); err != nil {
+		t.Fatalf("ValidateDA(20240229) error = %v", err)
+	}
+}
+
+func TestValidateDTOffsetRange(t *testing.T) {
+	if err := vr.ValidateDT("20251108172000+1400"); err != nil {
+		t.Fatalf("ValidateDT(+1400) error = %v", err)
+	}
+	for _, value := range []string{"20251108172000+2300", "20251108172000-1300", "20251108172000+1401"} {
+		if err := vr.ValidateDT(value); err == nil {
+			t.Fatalf("ValidateDT(%q) = nil, want error", value)
+		}
+	}
+}

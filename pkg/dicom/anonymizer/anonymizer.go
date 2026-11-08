@@ -167,8 +167,12 @@ type Anonymizer struct {
 	ReplacedUIDs map[string]string // Context for UID replacement consistency
 
 	// dateOffsetDays shifts retained dates by a constant so longitudinal
-	// relationships are preserved (PS3.15 E.3.6). Zero means no date retention.
+	// relationships are preserved (PS3.15 E.3.6). Zero means no shifting.
 	dateOffsetDays int
+	// retainFullDates keeps original dates verbatim (Retain Long Full Dates).
+	retainFullDates bool
+	// dateMarker is written to (0028,0303) when date retention is active.
+	dateMarker string
 }
 
 // NewAnonymizer creates a new Anonymizer with the specified profile
@@ -181,10 +185,15 @@ func NewAnonymizer(profile *SecurityProfile) *Anonymizer {
 		Profile:      profile,
 		ReplacedUIDs: make(map[string]string),
 	}
-	if profile.options&(RetainLongFullDates|RetainLongModifDates) != 0 {
-		// A fixed, deterministic offset preserves intervals without revealing
-		// absolute dates.
+	switch {
+	case profile.options&RetainLongModifDates != 0:
+		// Shift dates by a fixed, deterministic offset and mark them MODIFIED.
 		a.dateOffsetDays = -10000
+		a.dateMarker = "MODIFIED"
+	case profile.options&RetainLongFullDates != 0:
+		// Keep dates verbatim and mark them UNMODIFIED.
+		a.retainFullDates = true
+		a.dateMarker = "UNMODIFIED"
 	}
 	return a
 }
@@ -212,7 +221,7 @@ func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool, state 
 			patientIDElement = elem
 		}
 
-		action, hasAction := a.resolveAction(elem.Tag())
+		action, hasAction := a.resolveAction(elem.Tag(), elem)
 		if override, exact := a.Profile.exactOverrideAction(elem.Tag()); exact && override == ActionK &&
 			hasAction && action == ActionK && !a.hasConfiguredReplacement(elem.Tag()) {
 			state.retainedOverrides[elem.Tag().ToUint32()] = elem.Tag()
@@ -376,14 +385,20 @@ func (a *Anonymizer) AnonymizeFileInPlace(ds *dataset.Dataset, source *dataset.F
 func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, action SecurityProfileAction) error {
 	vrValue := elem.ValueRepresentation()
 
-	// PS3.15 E.3.6: when long dates are retained, shift DA/DT by a constant
-	// offset instead of replacing them with a dummy value.
-	if a.dateOffsetDays != 0 && action == ActionC {
+	// PS3.15 E.3.6: when long dates are retained, do not replace them with a
+	// dummy value. Full dates are kept verbatim; modified dates are shifted.
+	if action == ActionC {
 		switch vrValue.Code() {
-		case vr.CodeDA:
-			return a.shiftDateValue(ds, elem)
-		case vr.CodeDT:
-			return a.shiftDateTimeValue(ds, elem)
+		case vr.CodeDA, vr.CodeDT:
+			if a.retainFullDates {
+				return nil
+			}
+			if a.dateOffsetDays != 0 {
+				if vrValue.Code() == vr.CodeDA {
+					return a.shiftDateValue(ds, elem)
+				}
+				return a.shiftDateTimeValue(ds, elem)
+			}
 		}
 	}
 
@@ -409,13 +424,14 @@ func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, acti
 }
 
 // resolveAction combines the profile rule with the RetainSafePrivate option.
-func (a *Anonymizer) resolveAction(t *tag.Tag) (SecurityProfileAction, bool) {
+func (a *Anonymizer) resolveAction(t *tag.Tag, elem element.Element) (SecurityProfileAction, bool) {
 	action, hasAction := a.Profile.FindAction(t)
-	// PS3.15 E.3.10 Retain Safe Private: keep the Private Creator so the block
-	// remains decodable, and remove other private attributes that cannot be
-	// certified safe without a private dictionary.
+	// PS3.15 E.3.10 Retain Safe Private: keep the Private Creator and private
+	// attributes whose VR is numeric/binary (cannot carry free-text identity).
+	// Textual private attributes are removed. A full 0008,0300/0008,0303 SAFE
+	// list is not available, so this is a conservative, documented restriction.
 	if a.Profile.options&RetainSafePrivate != 0 && isPrivateTag(t) {
-		if isPrivateCreatorTag(t) {
+		if isPrivateCreatorTag(t) || isSafePrivateVR(elem.ValueRepresentation()) {
 			return ActionK, true
 		}
 		return ActionX, true
@@ -423,24 +439,50 @@ func (a *Anonymizer) resolveAction(t *tag.Tag) (SecurityProfileAction, bool) {
 	return action, hasAction
 }
 
+// isSafePrivateVR reports whether a private attribute's VR is one that cannot
+// hold free-text identifying information.
+func isSafePrivateVR(v *vr.VR) bool {
+	switch v.Code() {
+	case vr.CodeUS, vr.CodeSS, vr.CodeUL, vr.CodeSL, vr.CodeFL, vr.CodeFD, vr.CodeAT,
+		vr.CodeOB, vr.CodeOW, vr.CodeOF, vr.CodeOD, vr.CodeOL, vr.CodeOV:
+		return true
+	}
+	return false
+}
+
 // applyTopLevelTransforms performs dataset-level clean-up required by PS3.15
 // E.1.1 (Group 0004 removal) and E.3.6 (temporal modification marker).
 func (a *Anonymizer) applyTopLevelTransforms(ds *dataset.Dataset) {
-	sopClass, _ := ds.GetString(tag.SOPClassUID)
-	if sopClass != uid.MediaStorageDirectoryStorage.UID() {
-		var group4 []*tag.Tag
-		for _, elem := range ds.Elements() {
-			if elem.Tag().Group() == 0x0004 {
-				group4 = append(group4, elem.Tag())
+	// DICOMDIR is identified by its Directory Record Sequence; its SOP Class
+	// lives in the File Meta Information, which is not part of this dataset.
+	if !ds.Contains(tag.DirectoryRecordSequence) {
+		sopClass, _ := ds.GetString(tag.SOPClassUID)
+		if sopClass != uid.MediaStorageDirectoryStorage.UID() {
+			var group4 []*tag.Tag
+			for _, elem := range ds.Elements() {
+				if elem.Tag().Group() == 0x0004 {
+					group4 = append(group4, elem.Tag())
+				}
+			}
+			for _, t := range group4 {
+				ds.Remove(t)
 			}
 		}
-		for _, t := range group4 {
-			ds.Remove(t)
+	}
+	if a.dateMarker != "" && hasDateAttribute(ds) {
+		_ = ds.AddOrUpdate(element.NewString(tag.LongitudinalTemporalInformationModified, vr.CS, []string{a.dateMarker}))
+	}
+}
+
+// hasDateAttribute reports whether the dataset carries a date-type attribute
+// that PS3.15 E.3.6 requires to be summarized in (0028,0303).
+func hasDateAttribute(ds *dataset.Dataset) bool {
+	for _, t := range []*tag.Tag{tag.StudyDate, tag.SeriesDate, tag.AcquisitionDate, tag.ContentDate, tag.AcquisitionDateTime} {
+		if ds.Contains(t) {
+			return true
 		}
 	}
-	if a.dateOffsetDays != 0 {
-		_ = ds.AddOrUpdate(element.NewString(tag.LongitudinalTemporalInformationModified, vr.CS, []string{"MODIFIED"}))
-	}
+	return false
 }
 
 // isPrivateTag reports whether the tag belongs to an odd (private) group.

@@ -242,12 +242,41 @@ func testParseResult(t *testing.T, values testFileValues) *parser.ParseResult {
 		element.NewString(tag.PatientID, vr.LO, []string{values.PatientID}),
 		element.NewPersonName(tag.PatientName, []string{values.PatientName}),
 		element.NewString(tag.StudyInstanceUID, vr.UI, []string{values.StudyUID}),
+		element.NewString(tag.StudyDate, vr.DA, []string{"20240101"}),
+		element.NewString(tag.StudyTime, vr.TM, []string{"120000"}),
 		element.NewString(tag.StudyID, vr.SH, []string{"STUDY1"}),
 		element.NewString(tag.SeriesInstanceUID, vr.UI, []string{values.SeriesUID}),
+		element.NewString(tag.SeriesNumber, vr.IS, []string{"1"}),
 		element.NewString(tag.Modality, vr.CS, []string{"CT"}),
 		element.NewString(tag.SOPClassUID, vr.UI, []string{values.SOPClass.UID()}),
 		element.NewString(tag.SOPInstanceUID, vr.UI, []string{values.SOPInstanceUID}),
 		element.NewString(tag.InstanceNumber, vr.IS, []string{"1"}),
+	}
+	switch values.SOPClass.StorageCategory() {
+	case uid.StorageCategoryStructuredReport:
+		concept := dataset.New()
+		for _, e := range []element.Element{
+			element.NewString(tag.CodeValue, vr.SH, []string{"18748-4"}),
+			element.NewString(tag.CodingSchemeDesignator, vr.SH, []string{"DCM"}),
+			element.NewString(tag.CodeMeaning, vr.LO, []string{"Diagnostic Imaging Report"}),
+		} {
+			if err := concept.Add(e); err != nil {
+				t.Fatalf("concept item Add: %v", err)
+			}
+		}
+		elements = append(elements,
+			element.NewString(tag.CompletionFlag, vr.CS, []string{"COMPLETE"}),
+			element.NewString(tag.VerificationFlag, vr.CS, []string{"UNVERIFIED"}),
+			element.NewString(tag.ContentDate, vr.DA, []string{"20240101"}),
+			element.NewString(tag.ContentTime, vr.TM, []string{"120000"}),
+			dataset.NewSequenceWithItems(tag.ConceptNameCodeSequence, []*dataset.Dataset{concept}),
+		)
+	case uid.StorageCategoryPresentationState:
+		elements = append(elements,
+			element.NewString(tag.ContentLabel, vr.CS, []string{"LABEL"}),
+			element.NewString(tag.PresentationCreationDate, vr.DA, []string{"20240101"}),
+			element.NewString(tag.PresentationCreationTime, vr.TM, []string{"120000"}),
+		)
 	}
 	for _, item := range elements {
 		if err := ds.Add(item); err != nil {
@@ -309,4 +338,28 @@ type iconGeneratorStub struct {
 func (g *iconGeneratorStub) GenerateDirectoryIcon(_ *dataset.Dataset, frame int) (int, int, []byte, error) {
 	g.frame = frame
 	return g.width, g.height, append([]byte(nil), g.pixels...), g.err
+}
+
+func TestRecordWritesZeroLengthType2Attributes(t *testing.T) {
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := testParseResult(t, testFileValues{
+		PatientID: testPatientID, PatientName: "", StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
+	})
+	entry := addTestFile(t, dir, res, "DIR1/IMAGE001")
+	for _, attr := range []*tag.Tag{tag.PatientName, tag.StudyDescription, tag.AccessionNumber} {
+		var ds = entry.Patient.Dataset()
+		if attr == tag.StudyDescription || attr == tag.AccessionNumber {
+			ds = entry.Study.Dataset()
+		}
+		if !ds.Contains(attr) {
+			t.Fatalf("Type 2 attribute %s missing from record", attr)
+		}
+		if value, _ := ds.GetString(attr); value != "" {
+			t.Fatalf("Type 2 attribute %s = %q, want zero length", attr, value)
+		}
+	}
 }

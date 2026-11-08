@@ -22,7 +22,7 @@ import (
 )
 
 func TestTranscoderEncodeAppliesCodecMetadataAndAppendsLossyHistory(t *testing.T) {
-	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "YBR_FULL_422", 1, 2)
+	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "YBR_FULL_422", 2)
 	for _, elem := range []element.Element{
 		element.NewString(tag.LossyImageCompression, vr.CS, []string{"01"}),
 		element.NewString(tag.LossyImageCompressionMethod, vr.CS, []string{"ISO_15444_1"}),
@@ -64,7 +64,7 @@ func TestTranscoderEncodeAppliesCodecMetadataAndAppendsLossyHistory(t *testing.T
 }
 
 func TestTranscoderDecodeAppliesCodecOutputMetadata(t *testing.T) {
-	ds := metadataTestDataset(t, transfer.JPEGBaseline8Bit, "YBR_FULL_422", 1, 1)
+	ds := metadataTestDataset(t, transfer.JPEGBaseline8Bit, "YBR_FULL_422", 1)
 	fragments := element.NewOtherByteFragment(tag.PixelData)
 	fragments.AddFragment(buffer.NewMemory([]byte{1, 2, 3}))
 	if err := ds.Add(fragments); err != nil {
@@ -90,7 +90,7 @@ func TestTranscoderDecodeAppliesCodecOutputMetadata(t *testing.T) {
 }
 
 func TestTranscoderRejectsInvalidCodecOutputMetadata(t *testing.T) {
-	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 0, 1)
+	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 1)
 	if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{1})); err != nil {
 		t.Fatal(err)
 	}
@@ -109,16 +109,16 @@ func TestTranscoderRejectsInvalidCodecOutputMetadata(t *testing.T) {
 }
 
 func TestTranscoderEncodeWritesAllCodecOutputMetadata(t *testing.T) {
-	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 0, 1)
+	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 1)
 	if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{1})); err != nil {
 		t.Fatal(err)
 	}
 	outputInfo := codec.FrameInfo{
 		Width:                     2,
 		Height:                    2,
-		BitDepth:                  *pixel.NewBitDepth(16, 12, 11, true),
+		BitDepth:                  *pixel.NewBitDepth(8, 8, 7, false),
 		SamplesPerPixel:           1,
-		PixelRepresentation:       pixel.SignedPixels,
+		PixelRepresentation:       pixel.UnsignedPixels,
 		PlanarConfiguration:       pixel.InterleavedPlanar,
 		PhotometricInterpretation: *pixel.Monochrome2,
 	}
@@ -130,11 +130,11 @@ func TestTranscoderEncodeWritesAllCodecOutputMetadata(t *testing.T) {
 	checks := map[*tag.Tag]uint16{
 		tag.Rows:                2,
 		tag.Columns:             2,
-		tag.BitsAllocated:       16,
-		tag.BitsStored:          12,
-		tag.HighBit:             11,
+		tag.BitsAllocated:       8,
+		tag.BitsStored:          8,
+		tag.HighBit:             7,
 		tag.SamplesPerPixel:     1,
-		tag.PixelRepresentation: 1,
+		tag.PixelRepresentation: 0,
 	}
 	for tagValue, want := range checks {
 		if got := result.TryGetUInt16(tagValue, 0); got != want {
@@ -143,7 +143,7 @@ func TestTranscoderEncodeWritesAllCodecOutputMetadata(t *testing.T) {
 	}
 }
 
-func metadataTestDataset(t *testing.T, syntax *transfer.Syntax, photometric string, planar uint16, frames int) *dataset.Dataset {
+func metadataTestDataset(t *testing.T, syntax *transfer.Syntax, photometric string, frames int) *dataset.Dataset {
 	t.Helper()
 	ds := dataset.NewWithTransferSyntax(syntax)
 	samplesPerPixel := uint16(3)
@@ -158,7 +158,7 @@ func metadataTestDataset(t *testing.T, syntax *transfer.Syntax, photometric stri
 		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{samplesPerPixel}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{planar}),
+		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
 		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{photometric}),
 		element.NewString(tag.NumberOfFrames, vr.IS, []string{strconv.Itoa(frames)}),
 	} {

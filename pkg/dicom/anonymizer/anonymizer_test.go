@@ -775,3 +775,38 @@ func TestAnonymizerRetainSafePrivateKeepsCreatorRemovesData(t *testing.T) {
 		t.Fatal("unsafe private data element was not removed")
 	}
 }
+
+func TestAnonymizerKeepsGroup0004ForDICOMDIR(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(dataset.NewSequence(tag.DirectoryRecordSequence)); err != nil {
+		t.Fatal(err)
+	}
+	group4 := tag.New(0x0004, 0x1130) // FileSetID-like group 0004 element
+	if err := ds.Add(element.NewString(group4, vr.CS, []string{"FILESET"})); err != nil {
+		t.Fatal(err)
+	}
+	anon := NewAnonymizer(NewSecurityProfile(BasicProfile))
+	if err := anon.AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if !ds.Contains(group4) || !ds.Contains(tag.DirectoryRecordSequence) {
+		t.Fatal("DICOMDIR Group 0004 attributes must be preserved")
+	}
+}
+
+func TestAnonymizerRetainFullDatesKeepsValuesAndMarksUnmodified(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.StudyDate, vr.DA, []string{"20200101"})); err != nil {
+		t.Fatal(err)
+	}
+	anon := NewAnonymizer(NewSecurityProfile(BasicProfile | RetainLongFullDates))
+	if err := anon.AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if got, _ := ds.GetString(tag.StudyDate); got != "20200101" {
+		t.Fatalf("StudyDate = %q, want unchanged 20200101", got)
+	}
+	if got, ok := ds.GetString(tag.LongitudinalTemporalInformationModified); !ok || got != "UNMODIFIED" {
+		t.Fatalf("(0028,0303) = %q,%v, want UNMODIFIED", got, ok)
+	}
+}

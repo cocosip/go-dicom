@@ -78,8 +78,8 @@ func (info *Info) BytesAllocated() int {
 //
 // Native YBR_FULL_422 and YBR_PARTIAL_422 rows pack two luma samples followed by
 // one CB/CR pair, so the frame size is Rows*Columns*2*bytes (PS3.3 C.7.6.3.1.2,
-// note 2). Info.Validate rejects odd Columns for these photometric
-// interpretations, since a partial pixel pair cannot be encoded.
+// note 2). This is the encoded size; colour conversion routines may additionally
+// require an even number of samples.
 func (info *Info) UncompressedFrameSize() int {
 	if info.BitsAllocated == 1 {
 		// Bit-packed samples: all samples of every pixel share one continuous
@@ -942,6 +942,24 @@ func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Paramete
 	return newPD, nil
 }
 
+// nativeSafePhotometric replaces an encapsulated-only photometric
+// interpretation (YBR_RCT/YBR_ICT/YBR_PARTIAL_420) with a native-safe one for
+// decoded (uncompressed) output (PS3.5 8.2).
+func nativeSafePhotometric(pi *pixel.PhotometricInterpretation, samplesPerPixel int) *pixel.PhotometricInterpretation {
+	if pi == nil {
+		return nil
+	}
+	switch pi.Value {
+	case pixel.YbrRct.Value, pixel.YbrIct.Value, pixel.YbrPartial420.Value:
+		safe := pixel.RGBPhotometric
+		if samplesPerPixel == 1 {
+			safe = pixel.Monochrome2
+		}
+		return safe
+	}
+	return pi
+}
+
 // Decode decodes the pixel data using the specified codec and returns a new Data.
 func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Parameters) (*Data, error) {
 	if pd == nil || pd.Info == nil {
@@ -954,7 +972,10 @@ func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Paramete
 		return nil, fmt.Errorf("codec must not be nil")
 	}
 
-	// Create new pixel data info for decoded data
+	// Create new pixel data info for decoded data. The decoded (native) data
+	// cannot carry an encapsulated-only photometric interpretation, so a
+	// native-safe placeholder is used; codecs may refine it via SetFrameInfo.
+	decodedPI := nativeSafePhotometric(pd.Info.PhotometricInterpretation, int(pd.Info.SamplesPerPixel))
 	newInfo := &Info{
 		Width:                     pd.Info.Width,
 		Height:                    pd.Info.Height,
@@ -965,7 +986,7 @@ func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Paramete
 		SamplesPerPixel:           pd.Info.SamplesPerPixel,
 		PixelRepresentation:       pd.Info.PixelRepresentation,
 		PlanarConfiguration:       pd.Info.PlanarConfiguration,
-		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
+		PhotometricInterpretation: decodedPI,
 		VRCode:                    "",
 		Encapsulated:              false, // Decoded data is not encapsulated
 		TransferSyntaxUID:         transfer.ExplicitVRLittleEndian.UID().UID(),

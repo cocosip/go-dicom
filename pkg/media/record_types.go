@@ -3,7 +3,10 @@
 
 package media
 
-import "github.com/cocosip/go-dicom/pkg/dicom/tag"
+import (
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+)
 
 // recordAttributeTags lists the attributes copied from the source instance into
 // each directory record. Attributes absent from the source are reported; the
@@ -64,9 +67,53 @@ var recordRequiredTags = map[RecordType][]*tag.Tag{
 		tag.PatientID,
 	},
 	RecordStudy: {
+		tag.StudyDate,
+		tag.StudyTime,
+		tag.StudyID,
 		tag.StudyInstanceUID,
 	},
 	RecordSeries: {
+		tag.Modality,
 		tag.SeriesInstanceUID,
+		tag.SeriesNumber,
+	},
+	RecordImage: {
+		tag.InstanceNumber,
+	},
+	RecordSRDocument: {
+		tag.InstanceNumber,
+		tag.CompletionFlag,
+		tag.VerificationFlag,
+		tag.ContentDate,
+		tag.ContentTime,
+		tag.ConceptNameCodeSequence,
+	},
+	RecordPresentation: {
+		tag.InstanceNumber,
+		tag.ContentLabel,
+		tag.PresentationCreationDate,
+		tag.PresentationCreationTime,
+	},
+}
+
+// type2Attribute is a Type 2 directory record key written as a zero-length
+// element when the source instance does not provide it (PS3.3 F.5).
+type type2Attribute struct {
+	tag *tag.Tag
+	vr  *vr.VR
+}
+
+// recordType2Tags lists the Type 2 keys of each record type. They are written
+// with zero length when absent so the record remains conformant.
+var recordType2Tags = map[RecordType][]type2Attribute{
+	RecordPatient: {
+		{tag.PatientName, vr.PN},
+	},
+	RecordStudy: {
+		{tag.StudyDescription, vr.LO},
+		{tag.AccessionNumber, vr.SH},
+	},
+	RecordPresentation: {
+		{tag.ContentDescription, vr.LO},
 	},
 }

@@ -469,6 +469,12 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 		return nil, fmt.Errorf("failed to decode A-ASSOCIATE-RQ: %w", err)
 	}
+	// PS3.8 9.3.3.1 / Table 9-21: a non-DICOM Application Context is rejected
+	// with A-ASSOCIATE-RJ (application-context-name-not-supported).
+	if rq.ApplicationContext != "1.2.840.10008.3.1.1.1" {
+		_ = s.SendAssociationReject(ctx, pdu.ResultRejectedPermanent, pdu.SourceServiceUser, pdu.ReasonServiceUserApplicationContextNotSupported)
+		return nil, fmt.Errorf("%w: unsupported application context %q", ErrAssociationRejected, rq.ApplicationContext)
+	}
 	if err := rq.ValidateStructure(); err != nil {
 		_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 		return nil, fmt.Errorf("invalid A-ASSOCIATE-RQ structure: %w", err)

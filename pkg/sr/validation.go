@@ -185,9 +185,36 @@ func validateSRGeneralModule(ds *dataset.Dataset) error {
 			return NewErrorf("SR Document General Module requires %s", required)
 		}
 	}
-	if verificationFlag, ok := ds.GetString(tag.VerificationFlag); ok && strings.TrimSpace(verificationFlag) == "VERIFIED" &&
-		!ds.Contains(tag.VerifyingObserverSequence) {
-		return NewError("VERIFIED SR requires a Verifying Observer Sequence")
+	completionFlag, _ := ds.GetString(tag.CompletionFlag)
+	completionFlag = strings.TrimSpace(completionFlag)
+	if completionFlag != "PARTIAL" && completionFlag != "COMPLETE" {
+		return NewErrorf("Completion Flag must be PARTIAL or COMPLETE, got %q", completionFlag)
+	}
+	verificationFlag, _ := ds.GetString(tag.VerificationFlag)
+	verificationFlag = strings.TrimSpace(verificationFlag)
+	if verificationFlag != "UNVERIFIED" && verificationFlag != "VERIFIED" {
+		return NewErrorf("Verification Flag must be UNVERIFIED or VERIFIED, got %q", verificationFlag)
+	}
+	if verificationFlag == "VERIFIED" {
+		if completionFlag != "COMPLETE" {
+			return NewError("VERIFIED SR requires Completion Flag COMPLETE")
+		}
+		sequence, err := ds.GetSequence(tag.VerifyingObserverSequence)
+		if err != nil || sequence == nil || sequence.Count() == 0 {
+			return NewError("VERIFIED SR requires a Verifying Observer Sequence")
+		}
+		for i := 0; i < sequence.Count(); i++ {
+			item := sequence.GetItem(i)
+			for _, required := range []*tag.Tag{
+				tag.VerifyingObserverName,
+				tag.VerifyingOrganization,
+				tag.VerificationDateTime,
+			} {
+				if !item.Contains(required) {
+					return NewErrorf("Verifying Observer item %d requires %s", i, required)
+				}
+			}
+		}
 	}
 	return nil
 }

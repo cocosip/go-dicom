@@ -1195,6 +1195,11 @@ func ToAAssociateACWithMaxPDULength(assoc *Association, maxPDULength uint32) *pd
 		if pc.AcceptedTransferSyntax != nil {
 			transferSyntaxUID = pc.AcceptedTransferSyntax.UID().UID()
 		}
+		if transferSyntaxUID == "" && len(pc.ProposedTransferSyntaxes) > 0 {
+			// A Transfer Syntax Sub-Item is mandatory even for a rejected
+			// context (PS3.8 Table 9-18); use the first proposed syntax.
+			transferSyntaxUID = pc.ProposedTransferSyntaxes[0].UID().UID()
+		}
 
 		ac.PresentationContexts = append(ac.PresentationContexts, pdu.PresentationContextAC{
 			ID:             pc.ID,

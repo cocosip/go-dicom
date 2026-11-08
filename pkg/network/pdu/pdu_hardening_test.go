@@ -57,11 +57,13 @@ func appendPresentationContextItems(data []byte, itemType byte, count int, abstr
 			if err := writeItem(&sub, ItemTypeAbstractSyntax, []byte(abstractSyntax)); err != nil {
 				panic(err)
 			}
-			if err := writeItem(&sub, ItemTypeTransferSyntax, []byte("1.2.840.10008.1.2")); err != nil {
-				panic(err)
-			}
 			body = append(body, sub.Bytes()...)
 		}
+		var ts bytes.Buffer
+		if err := writeItem(&ts, ItemTypeTransferSyntax, []byte("1.2.840.10008.1.2")); err != nil {
+			panic(err)
+		}
+		body = append(body, ts.Bytes()...)
 		if err := writeItem(&items, itemType, body); err != nil {
 			panic(err)
 		}

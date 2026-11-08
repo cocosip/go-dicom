@@ -172,16 +172,14 @@ func (p *PaletteColorLUT) ApplyToPixelData(pixelData []byte, bitsAllocated uint1
 }
 
 // ApplyToPixelDataWithByteOrder applies the palette using the supplied byte
-// order for 16-bit input samples. Output is RGB, or RGBA when Alpha is present.
+// order for 16-bit input samples. Output is always RGB (3 samples per pixel);
+// when an Alpha palette is present its opacity is composited over black.
 func (p *PaletteColorLUT) ApplyToPixelDataWithByteOrder(pixelData []byte, bitsAllocated uint16, order binary.ByteOrder) ([]byte, error) {
 	if order == nil {
 		order = binary.LittleEndian
 	}
 	var pixelCount int
-	channels := 3
-	if p.HasAlpha {
-		channels = 4
-	}
+	const channels = 3
 	var colorData []byte
 
 	switch bitsAllocated {
@@ -214,10 +212,14 @@ func (p *PaletteColorLUT) ApplyToPixelDataWithByteOrder(pixelData []byte, bitsAl
 }
 
 func writePaletteColor(output []byte, offset int, value colorconv.Color32, alpha bool) {
-	output[offset] = value.R
-	output[offset+1] = value.G
-	output[offset+2] = value.B
+	r, g, b := value.R, value.G, value.B
 	if alpha {
-		output[offset+3] = value.A
+		// Composite over black: c * a / 255 (rounded).
+		r = uint8((uint32(value.R)*uint32(value.A) + 127) / 255)
+		g = uint8((uint32(value.G)*uint32(value.A) + 127) / 255)
+		b = uint8((uint32(value.B)*uint32(value.A) + 127) / 255)
 	}
+	output[offset] = r
+	output[offset+1] = g
+	output[offset+2] = b
 }

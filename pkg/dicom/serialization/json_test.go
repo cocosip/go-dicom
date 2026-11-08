@@ -33,35 +33,28 @@ func TestFromJSONPreservesInvalidValueForExplicitValidation(t *testing.T) {
 	}
 }
 
-func TestToJSON_AsNumberRejectsInvalidJSONNumber(t *testing.T) {
+func TestToJSON_NormalizesDICOMNumbersAsJSON(t *testing.T) {
 	ds := dataset.New()
-	if err := ds.Add(element.NewString(tag.New(0x0020, 0x0013), vr.IS, []string{"+1"})); err != nil {
+	if err := ds.Add(element.NewString(tag.New(0x0020, 0x0013), vr.IS, []string{"+789"})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.New(0x0018, 0x0050), vr.DS, []string{".5"})); err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if _, err := ToJSON(ds, WithNumberSerializationMode(AsNumber)); err == nil {
-		t.Fatal("ToJSON() error = nil, want invalid JSON number error")
-	}
-}
-
-func TestToJSON_PreferablyAsNumberFallsBackToString(t *testing.T) {
-	ds := dataset.New()
-	if err := ds.Add(element.NewString(tag.New(0x0020, 0x0013), vr.IS, []string{"+1"})); err != nil {
-		t.Fatalf("Add() error = %v", err)
-	}
-
-	jsonData, err := ToJSON(ds, WithNumberSerializationMode(PreferablyAsNumber))
+	jsonData, err := ToJSON(ds, WithNumberSerializationMode(AsNumber))
 	if err != nil {
 		t.Fatalf("ToJSON() error = %v", err)
 	}
-
 	var result map[string]map[string]any
 	if err := json.Unmarshal(jsonData, &result); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	values, ok := result["00200013"]["Value"].([]any)
-	if !ok || len(values) != 1 || values[0] != "+1" {
-		t.Fatalf("Value = %#v, want string +1", result["00200013"]["Value"])
+	if got := result["00200013"]["Value"].([]any)[0]; got != float64(789) {
+		t.Fatalf("IS value = %v, want 789", got)
+	}
+	if got := result["00180050"]["Value"].([]any)[0]; got != 0.5 {
+		t.Fatalf("DS value = %v, want 0.5", got)
 	}
 }
 

@@ -51,7 +51,7 @@ func TestPaletteColorLUTApplyToPixelDataWithByteOrder(t *testing.T) {
 	}
 }
 
-func TestPaletteColorLUTWithAlphaOutputsRGBA(t *testing.T) {
+func TestPaletteColorLUTWithAlphaCompositesToRGB(t *testing.T) {
 	lut, err := NewPaletteColorLUTWithAlpha(
 		[]uint16{2, 0, 8},
 		[]uint16{2, 0, 8},
@@ -67,8 +67,8 @@ func TestPaletteColorLUTWithAlphaOutputsRGBA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyToPixelData() error = %v", err)
 	}
-	if want := []byte{10, 30, 50, 70, 20, 40, 60, 80}; !bytes.Equal(got, want) {
-		t.Fatalf("palette RGBA output = %v, want %v", got, want)
+	if want := []byte{3, 8, 14, 6, 13, 19}; !bytes.Equal(got, want) {
+		t.Fatalf("palette RGB output = %v, want %v", got, want)
 	}
 
 	for _, alphaDescriptor := range [][]uint16{

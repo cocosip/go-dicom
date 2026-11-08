@@ -540,6 +540,9 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 			return nil, fmt.Errorf("add decoded pixel data: %w", err)
 		}
 	}
+	if err := validateOutputFrameInfo(newPixelData.FrameInfo(), outputSyntax); err != nil {
+		return nil, err
+	}
 	if err := applyOutputFrameInfo(newDS, newPixelData.FrameInfo()); err != nil {
 		return nil, err
 	}
@@ -723,6 +726,38 @@ func validateOutputFrameInfo(output codec.FrameInfo, outputTS *transfer.Syntax) 
 	}
 	if output.SamplesPerPixel > 1 && output.PlanarConfiguration != pixel.InterleavedPlanar && output.PlanarConfiguration != pixel.PlanarPlanar {
 		return fmt.Errorf("color image requires a valid Planar Configuration, got %d", output.PlanarConfiguration)
+	}
+	if err := validateBitDepthForSyntax(output.BitDepth, outputTS); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateBitDepthForSyntax enforces the bit-depth limits of the destination
+// transfer syntax (e.g. JPEG Baseline is 8-bit, PS3.5 A.4.1).
+func validateBitDepthForSyntax(depth pixel.BitDepth, outputTS *transfer.Syntax) error {
+	if outputTS == nil {
+		return nil
+	}
+	var maxStored, exactAlloc uint16
+	switch outputTS.UID().UID() {
+	case "1.2.840.10008.1.2.4.50", // JPEG Baseline (Process 1)
+		"1.2.840.10008.1.2.4.100", "1.2.840.10008.1.2.4.101", "1.2.840.10008.1.2.4.102":
+		maxStored, exactAlloc = 8, 8
+	case "1.2.840.10008.1.2.4.51", // JPEG Extended (Process 2 & 4)
+		"1.2.840.10008.1.2.4.57", "1.2.840.10008.1.2.4.70":
+		maxStored = 12
+	case "1.2.840.10008.1.2.4.80", "1.2.840.10008.1.2.4.81", // JPEG-LS
+		"1.2.840.10008.1.2.4.90", "1.2.840.10008.1.2.4.91": // JPEG 2000
+		maxStored = 16
+	default:
+		return nil
+	}
+	if exactAlloc != 0 && depth.BitsAllocated != exactAlloc {
+		return fmt.Errorf("%s requires BitsAllocated=%d, got %d", outputTS.UID().UID(), exactAlloc, depth.BitsAllocated)
+	}
+	if maxStored != 0 && depth.BitsStored > maxStored {
+		return fmt.Errorf("%s supports at most %d bits stored, got %d", outputTS.UID().UID(), maxStored, depth.BitsStored)
 	}
 	return nil
 }

@@ -225,14 +225,65 @@ func (d *Directory) newRecord(recordType RecordType, key string, source *dataset
 			})
 			continue
 		}
+		if recordType == RecordSRDocument && attributeTag.Equals(tag.ContentSequence) {
+			// PS3.3 F.5.25: only HAS CONCEPT MOD items belong in the SR
+			// DOCUMENT directory record.
+			filtered, ok := filterHasConceptMod(item)
+			if !ok {
+				d.diagnostics = append(d.diagnostics, Diagnostic{
+					Code:       DiagnosticOptionalAttributeMissing,
+					Severity:   SeverityInfo,
+					RecordType: recordType,
+					Message:    "no HAS CONCEPT MOD content items for SR DOCUMENT record",
+				})
+				continue
+			}
+			item = filtered
+		}
 		if err := recordDataset.Add(item); err != nil {
 			return nil, fmt.Errorf("copy %s record attribute %s: %w", recordType, attributeTag, err)
+		}
+	}
+
+	// Write Type 2 keys as zero-length elements when absent (PS3.3 F.5).
+	for _, attr := range recordType2Tags[recordType] {
+		if recordDataset.Contains(attr.tag) {
+			continue
+		}
+		var item element.Element
+		if attr.vr == vr.PN {
+			item = element.NewPersonName(attr.tag, nil)
+		} else {
+			item = element.NewString(attr.tag, attr.vr, nil)
+		}
+		if err := recordDataset.Add(item); err != nil {
+			return nil, fmt.Errorf("add zero-length %s record attribute %s: %w", recordType, attr.tag, err)
 		}
 	}
 
 	record := newRecord(recordType, recordDataset, 0)
 	record.key = key
 	return record, nil
+}
+
+// filterHasConceptMod keeps only content items whose Relationship Type is
+// HAS CONCEPT MOD (PS3.3 F.5.25). It reports false when none remain.
+func filterHasConceptMod(item element.Element) (element.Element, bool) {
+	sequence, ok := item.(*dataset.Sequence)
+	if !ok {
+		return nil, false
+	}
+	var kept []*dataset.Dataset
+	for i := 0; i < sequence.Count(); i++ {
+		child := sequence.GetItem(i)
+		if relationship, ok := child.GetString(tag.RelationshipType); ok && relationship == "HAS CONCEPT MOD" {
+			kept = append(kept, child)
+		}
+	}
+	if len(kept) == 0 {
+		return nil, false
+	}
+	return dataset.NewSequenceWithItems(tag.ContentSequence, kept), true
 }
 
 func requiredString(ds *dataset.Dataset, valueTag *tag.Tag) (string, error) {
@@ -275,6 +326,10 @@ func normalizePersonName(value string) string {
 
 func instanceRecordType(sopClassUID string) (RecordType, error) {
 	class := uid.Parse(sopClassUID, "", uid.TypeSOPClass)
+	if class == uid.BasicStructuredDisplayStorage {
+		// PS3.3 F.5.23: Structured Display uses the PRESENTATION record.
+		return RecordPresentation, nil
+	}
 	switch class.StorageCategory() {
 	case uid.StorageCategoryStructuredReport:
 		return RecordSRDocument, nil

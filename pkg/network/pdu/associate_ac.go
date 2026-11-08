@@ -505,7 +505,9 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 		return PresentationContextAC{}, fmt.Errorf("invalid presentation context result %d", pc.Result)
 	}
 
-	// Parse sub-items (only Transfer Syntax for accepted contexts)
+	// Parse sub-items. PS3.8 Table 9-18: each presentation context shall contain
+	// exactly one Transfer Syntax Sub-Item, even when the context is rejected.
+	transferSyntaxCount := 0
 	if len(data) > 4 {
 		reader := bytes.NewReader(data[4:])
 		for {
@@ -519,9 +521,16 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 
 			switch itemType {
 			case ItemTypeTransferSyntax:
+				transferSyntaxCount++
+				if transferSyntaxCount > 1 {
+					return PresentationContextAC{}, fmt.Errorf("presentation context %d has more than one Transfer Syntax Sub-Item", pc.ID)
+				}
 				pc.TransferSyntax = trimUIDPadding(string(itemData))
 			}
 		}
+	}
+	if transferSyntaxCount != 1 {
+		return PresentationContextAC{}, fmt.Errorf("presentation context %d must contain exactly one Transfer Syntax Sub-Item", pc.ID)
 	}
 	if pc.Result == ResultAcceptance && pc.TransferSyntax == "" {
 		return PresentationContextAC{}, fmt.Errorf("accepted presentation context %d has no transfer syntax", pc.ID)

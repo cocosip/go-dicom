@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -116,11 +117,14 @@ func ValidateDA(content string) error {
 		month, _ := strconv.Atoi(trimmed[4:6])
 		day, _ := strconv.Atoi(trimmed[6:8])
 
-		if month > 12 {
-			return newValidationError("DA", content, "month component exceeds 12")
+		if month < 1 || month > 12 {
+			return newValidationError("DA", content, "month component out of range")
 		}
-		if day > 31 {
-			return newValidationError("DA", content, "day component exceeds 31")
+		if day < 1 || day > 31 {
+			return newValidationError("DA", content, "day component out of range")
+		}
+		if _, err := time.Parse("20060102", trimmed); err != nil {
+			return newValidationError("DA", content, "date is not a valid calendar date")
 		}
 	}
 
@@ -214,8 +218,9 @@ func ValidateDT(content string) error {
 		}
 		hours := int(offset[1]-'0')*10 + int(offset[2]-'0')
 		minutes := int(offset[3]-'0')*10 + int(offset[4]-'0')
-		if hours > 23 || minutes > 59 {
-			return newValidationError("DT", content, "UTC offset out of range")
+		// PS3.5 Table 6.2-1: UTC offset range is -1200 to +1400.
+		if hours > 14 || minutes > 59 || (hours == 14 && minutes != 0) || (offset[0] == '-' && hours > 12) {
+			return newValidationError("DT", content, "UTC offset out of range (-1200 to +1400)")
 		}
 	}
 

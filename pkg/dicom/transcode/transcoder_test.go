@@ -735,7 +735,7 @@ func TestTranscoderRejectsNilDataset(t *testing.T) {
 }
 
 func TestTranscoderEncodeRejectsMissingNativeFrame(t *testing.T) {
-	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 0, 2)
+	ds := metadataTestDataset(t, transfer.ExplicitVRLittleEndian, "MONOCHROME2", 2)
 	if err := ds.Add(element.NewOtherByte(tag.PixelData, []byte{1})); err != nil {
 		t.Fatal(err)
 	}
@@ -874,7 +874,7 @@ func TestTranscoderKeepsDatasetPolicyIndependentFromGlobalValidation(t *testing.
 
 func newAutoValidationPolicyTestDataset(t *testing.T, syntax *transfer.Syntax) *dataset.Dataset {
 	t.Helper()
-	ds := metadataTestDataset(t, syntax, pixel.Monochrome2.Value, 0, 1)
+	ds := metadataTestDataset(t, syntax, pixel.Monochrome2.Value, 1)
 	ds.SetAutoValidate(false)
 	if err := ds.Add(element.NewString(tag.PatientAge, vr.AS, []string{invalidPatientAgeValue})); err != nil {
 		t.Fatalf("add invalid PatientAge with automatic validation disabled: %v", err)

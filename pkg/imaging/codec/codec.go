@@ -65,6 +65,15 @@ func (info FrameInfo) Validate() error {
 		info.SamplesPerPixel != 1 {
 		return fmt.Errorf("grayscale images require exactly 1 sample per pixel, got %d", info.SamplesPerPixel)
 	}
+	if info.PhotometricInterpretation.IsPalette && info.SamplesPerPixel != 1 {
+		return fmt.Errorf("PALETTE COLOR requires exactly 1 sample per pixel, got %d", info.SamplesPerPixel)
+	}
+	switch info.PhotometricInterpretation.Value {
+	case pixel.YbrFull422.Value, pixel.YbrIct.Value, pixel.YbrRct.Value, pixel.YbrPartial420.Value:
+		if info.PlanarConfiguration != pixel.InterleavedPlanar {
+			return fmt.Errorf("%s requires Planar Configuration 0 (interleaved)", info.PhotometricInterpretation.Value)
+		}
+	}
 	return nil
 }
 

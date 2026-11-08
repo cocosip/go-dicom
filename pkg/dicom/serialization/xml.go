@@ -140,12 +140,26 @@ func (w *xmlWriter) writeElement(elem element.Element) error {
 	return nil
 }
 
+// isBulkDataVR reports whether a VR may be represented as BulkData.
+func isBulkDataVR(code string) bool {
+	switch code {
+	case vr.CodeOB, vr.CodeOD, vr.CodeOF, vr.CodeOW, vr.CodeOL, vr.CodeOV, vr.CodeUN:
+		return true
+	}
+	return false
+}
+
 // writeElementValue writes the value of an element based on its VR
 func (w *xmlWriter) writeElementValue(elem element.Element, vrValue *vr.VR) error {
-	// A lazy BulkDataURI reference is written as <BulkData uri="..."/> for
-	// every VR (PS3.19 A.1.5).
+	vrCode := vrValue.Code()
+
+	// A lazy BulkDataURI reference is only valid for binary VRs and is written
+	// as <BulkData uri="..."/> (PS3.19 A.1.5).
 	if buf := elem.Buffer(); buf != nil {
 		if bulk, ok := buf.(*buffer.BulkDataURIByteBuffer); ok && bulk.BulkDataURI() != "" {
+			if !isBulkDataVR(vrCode) {
+				return fmt.Errorf("BulkData reference is not supported for VR %s", vrCode)
+			}
 			w.indent++
 			w.writeIndent()
 			w.buf.WriteString(`<BulkData`)
@@ -158,8 +172,6 @@ func (w *xmlWriter) writeElementValue(elem element.Element, vrValue *vr.VR) erro
 			return nil
 		}
 	}
-
-	vrCode := vrValue.Code()
 
 	// Binary VRs - write as InlineBinary base64
 	if vrCode == vr.CodeOB || vrCode == vr.CodeOD || vrCode == vr.CodeOF ||
@@ -862,11 +874,26 @@ func (g nameComponentGroup) String() string {
 	return strings.Join(parts[:lastNonEmpty+1], "^")
 }
 
+// xmlPreservesValueSpace reports whether leading/trailing spaces are
+// significant for the VR (PS3.19 A.1.5, xml:space="preserve").
+func xmlPreservesValueSpace(v *vr.VR) bool {
+	switch v.Code() {
+	case vr.CodeLO, vr.CodeLT, vr.CodeST, vr.CodeUT, vr.CodeUR, vr.CodeUC, vr.CodeSH, vr.CodePN:
+		return true
+	}
+	return false
+}
+
 // readStringElement parses string or numeric elements
 func (r *xmlReader) readStringElement(t *tag.Tag, vrCode *vr.VR, values []xmlValue) (element.Element, error) {
 	strValues := make([]string, 0, len(values))
+	preserveSpace := xmlPreservesValueSpace(vrCode)
 	for _, v := range values {
-		strValues = append(strValues, strings.TrimSpace(v.Value))
+		value := v.Value
+		if !preserveSpace {
+			value = strings.TrimSpace(value)
+		}
+		strValues = append(strValues, value)
 	}
 
 	var result element.Element

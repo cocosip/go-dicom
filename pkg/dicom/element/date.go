@@ -409,6 +409,10 @@ func (dt *DateTime) GetDateTime(index int) (time.Time, error) {
 	normalized := normalizeFractionalSeconds(dtStr)
 	formats := []string{
 		"20060102150405.000000-0700", // YYYYMMDDHHMMSS.FFFFFF±ZZXX (PS3.5 Table 6.2-1)
+		"20060102150405-0700",        // YYYYMMDDHHMMSS±ZZXX
+		"200601021504-0700",          // YYYYMMDDHHMM±ZZXX
+		"2006010215-0700",            // YYYYMMDDHH±ZZXX
+		"20060102-0700",              // YYYYMMDD±ZZXX
 		"20060102150405.000000",      // YYYYMMDDHHMMSS.FFFFFF
 		"20060102150405",             // YYYYMMDDHHMMSS
 		"200601021504",               // YYYYMMDDHHMM

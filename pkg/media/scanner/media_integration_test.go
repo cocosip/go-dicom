@@ -70,6 +70,12 @@ func writeExternalScannerDICOM(path string) error {
 	appendExternalShortElement(&file, 0x0020, 0x000D, "UI", "1.2.826.0.1.3680043.10.543.2")
 	appendExternalShortElement(&file, 0x0020, 0x000E, "UI", "1.2.826.0.1.3680043.10.543.3")
 	appendExternalShortElement(&file, 0x0008, 0x0018, "UI", "1.2.826.0.1.3680043.10.543.1")
+	appendExternalShortElement(&file, 0x0008, 0x0020, "DA", "20240101")
+	appendExternalShortElement(&file, 0x0008, 0x0030, "TM", "120000")
+	appendExternalShortElement(&file, 0x0020, 0x0010, "SH", "SCAN1")
+	appendExternalShortElement(&file, 0x0008, 0x0060, "CS", "CT")
+	appendExternalShortElement(&file, 0x0020, 0x0011, "IS", "1")
+	appendExternalShortElement(&file, 0x0020, 0x0013, "IS", "1")
 	appendExternalLongElement(&file, 0x7FE0, 0x0010, "OB", bytes.Repeat([]byte{0x5A}, 1024))
 	return os.WriteFile(path, file.Bytes(), 0o600)
 }

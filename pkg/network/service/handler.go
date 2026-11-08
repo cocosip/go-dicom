@@ -386,9 +386,9 @@ func (s *Service) handleCEchoRequest(ctx context.Context, req *dimse.CEchoReques
 
 // handleCStoreRequest handles a C-STORE request.
 func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequest, handlers *Handlers) error {
-	// PS3.7 9.1.1.1.9: the SCP rejects a Data Set that does not match the
-	// SOP Class / Instance identified by the command set with 0xA900. A
-	// mismatched instance UID indicates a duplicate/corrupt instance (0x0111).
+	// PS3.7 9.1.1.1.9: a Data Set that does not match the SOP Class / Instance
+	// identified by the command set is rejected with 0xA900 (Data Set does not
+	// match SOP Class); 0x0111 is not a legal C-STORE status.
 	if dataDS := req.DataDataset(); dataDS != nil {
 		if classUID, ok := dataDS.GetString(tag.SOPClassUID); ok && classUID != "" &&
 			classUID != req.AffectedSOPClassUID() {
@@ -396,7 +396,7 @@ func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequ
 		}
 		if instanceUID, ok := dataDS.GetString(tag.SOPInstanceUID); ok && instanceUID != "" &&
 			instanceUID != req.AffectedSOPInstanceUID() {
-			return s.Send(ctx, dimse.NewCStoreResponseFromRequest(req, status.ErrorDuplicateSOPInstance))
+			return s.Send(ctx, dimse.NewCStoreResponseFromRequest(req, status.ErrorDataSetDoesNotMatchSOPClass))
 		}
 	}
 
@@ -407,8 +407,8 @@ func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequ
 		var err error
 		resp, err = handlers.CStoreHandler(ctx, req)
 		if err != nil {
-			// Handler returned error - send failure response
-			resp = dimse.NewCStoreResponseFromRequest(req, status.CStoreRefusedOutOfResources)
+			// Handler returned error - send processing failure response
+			resp = dimse.NewCStoreResponseFromRequest(req, status.ErrorProcessingFailure)
 		}
 	} else {
 		// No handler means this SCP does not store the SOP Class at all

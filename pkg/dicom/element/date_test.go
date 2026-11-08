@@ -207,3 +207,15 @@ func TestDateTimeTimezoneUsesSignedOffset(t *testing.T) {
 		t.Fatalf("parsed offset = %d, want %d", offset, 8*60*60)
 	}
 }
+
+func TestDateTimeParsesOffsetWithoutFraction(t *testing.T) {
+	dt := element.NewDateTime(tag.AcquisitionDateTime, []string{"20251108172000+0800"})
+	got, err := dt.GetDateTime(0)
+	if err != nil {
+		t.Fatalf("GetDateTime() error = %v", err)
+	}
+	_, offset := got.Zone()
+	if got.Hour() != 17 || offset != 8*3600 {
+		t.Fatalf("parsed = %v (offset %d), want 17:00 at +0800", got, offset)
+	}
+}

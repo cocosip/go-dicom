@@ -520,9 +520,9 @@ func (w *jsonWriter) writeNumericStringArray(elem element.Element, vrCode string
 			w.buf.WriteString("null")
 		} else {
 			trimmed := strings.TrimSpace(val)
-			if vrCode == vr.CodeDS {
-				trimmed = fixDecimalString(trimmed)
-			}
+			// Normalize IS/DS into valid JSON number syntax (leading '+',
+			// ".5", "1." are legal DICOM but not legal JSON numbers).
+			trimmed = fixDecimalString(trimmed)
 			if err := w.writeNumberOrString(trimmed); err != nil {
 				return fmt.Errorf("invalid %s value %q: %w", vrCode, val, err)
 			}
@@ -606,6 +606,13 @@ func fixDecimalString(val string) string {
 	if negative {
 		val = "-" + val
 	}
+
+	// JSON requires a leading digit before the decimal point and at least one
+	// digit after it.
+	if strings.HasPrefix(val, ".") {
+		val = "0" + val
+	}
+	val = strings.TrimSuffix(val, ".")
 
 	return val
 }

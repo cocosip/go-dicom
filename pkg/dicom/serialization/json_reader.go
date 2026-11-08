@@ -463,7 +463,8 @@ func (r *jsonReader) readAttributeTag(t *tag.Tag, _ *vr.VR, data json.RawMessage
 	values := make([]*tag.Tag, 0, len(rawValues))
 	for i, raw := range rawValues {
 		if isJSONNull(raw) {
-			return nil, fmt.Errorf("value %d: AT values cannot be null", i)
+			// A JSON null represents an empty value (PS3.18 F.2.2); skip it.
+			continue
 		}
 		var tagStr string
 		if err := json.Unmarshal(raw, &tagStr); err != nil {
