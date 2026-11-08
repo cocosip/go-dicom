@@ -62,7 +62,7 @@ func defaultJSONConfig() jsonConfig {
 		writeTagsAsKeywords:     false,
 		writeKeyword:            false,
 		writeName:               false,
-		autoValidate:            true,
+		autoValidate:            false,
 		numberSerializationMode: AsNumber,
 		indent:                  "",
 	}

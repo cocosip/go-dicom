@@ -217,12 +217,26 @@ type DefaultAssociationNegotiator struct {
 	// is rejected with result=4 (transfer-syntaxes-not-supported, PS3.8
 	// 9.3.3.2). When nil, the first proposed syntax is accepted.
 	Registry *transfer.Registry
+
+	// SupportedSOPClasses is the set of abstract syntaxes this SCP implements.
+	// When non-empty, a presentation context proposing any other abstract
+	// syntax is rejected with result=3 (abstract-syntax-not-supported, PS3.8
+	// 9.3.3.2). When nil/empty, every abstract syntax is accepted.
+	SupportedSOPClasses map[string]struct{}
 }
 
 // OnAssociationRequest accepts all association requests and accepts each
 // presentation context with the first proposed transfer syntax it supports.
 func (n *DefaultAssociationNegotiator) OnAssociationRequest(ctx context.Context, assoc *association.Association, responder AssociationResponder) error {
 	for _, pc := range assoc.PresentationContexts {
+		if len(n.SupportedSOPClasses) > 0 {
+			if _, ok := n.SupportedSOPClasses[trimSOPClassUID(pc.AbstractSyntax)]; !ok {
+				// PS3.8 9.3.3.2 Table 9-18: unsupported abstract syntax is
+				// rejected with result=3.
+				pc.Reject(association.ResultAbstractSyntaxNotSupported)
+				continue
+			}
+		}
 		accepted := false
 		for _, ts := range pc.ProposedTransferSyntaxes {
 			if n.supportsTransferSyntax(ts) {

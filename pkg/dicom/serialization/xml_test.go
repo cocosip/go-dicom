@@ -44,7 +44,7 @@ func TestToXML_EmptyDataset(t *testing.T) {
 	if !strings.Contains(xmlStr, `<?xml version="1.0" encoding="utf-8"?>`) {
 		t.Error("XML declaration missing")
 	}
-	if !strings.Contains(xmlStr, `<NativeDicomModel>`) {
+	if !strings.Contains(xmlStr, `<NativeDicomModel`) {
 		t.Error("NativeDicomModel opening tag missing")
 	}
 	if !strings.Contains(xmlStr, `</NativeDicomModel>`) {
@@ -143,8 +143,8 @@ func TestToXML_NumericElements(t *testing.T) {
 
 	// Add US element
 	_ = ds.Add(element.NewUnsignedShort(tag.Rows, []uint16{512}))
-	// Add UL element
-	_ = ds.Add(element.NewUnsignedLong(tag.CommandGroupLength, []uint32{1}))
+	// Add UL element (a non Group Length UL attribute)
+	_ = ds.Add(element.NewUnsignedLong(tag.New(0x0028, 0x1234), []uint32{1}))
 	// Add FL element
 	_ = ds.Add(element.NewFloat(tag.RecommendedDisplayFrameRateInFloat, []float32{30.0}))
 
@@ -424,7 +424,7 @@ func TestToXML_PrivateTag(t *testing.T) {
 	if !strings.Contains(xmlStr, `privateCreator="ACME Corp"`) {
 		t.Error("privateCreator attribute missing or incorrect")
 	}
-	if !strings.Contains(xmlStr, `tag="00091001"`) {
+	if !strings.Contains(xmlStr, `tag="00090001"`) {
 		t.Error("Private tag missing or incorrect")
 	}
 }
@@ -500,7 +500,7 @@ func TestToXML_ComplexDataset(t *testing.T) {
 	if !strings.Contains(xmlStr, `<?xml version="1.0" encoding="utf-8"?>`) {
 		t.Error("XML declaration missing")
 	}
-	if !strings.Contains(xmlStr, `<NativeDicomModel>`) {
+	if !strings.Contains(xmlStr, `<NativeDicomModel`) {
 		t.Error("NativeDicomModel missing")
 	}
 

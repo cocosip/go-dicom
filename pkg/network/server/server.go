@@ -126,6 +126,12 @@ type Config struct {
 	// during association negotiation.
 	TransferSyntaxRegistry *transfer.Registry
 
+	// SupportedSOPClasses lists the SOP Class UIDs this SCP implements. When
+	// non-empty, A-ASSOCIATE negotiation rejects any other abstract syntax with
+	// result 3 (abstract-syntax-not-supported) and inbound requests for other
+	// SOP Classes are refused with 0x0122. Empty means no restriction.
+	SupportedSOPClasses []string
+
 	// Port is the TCP port to listen on
 	// Default: 104 (standard DICOM port)
 	Port int
@@ -209,6 +215,17 @@ func WithTranscodeManager(manager *transcode.Manager) Option {
 func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
 	return func(o *Config) {
 		o.TransferSyntaxRegistry = registry
+	}
+}
+
+// WithSupportedSOPClasses declares the SOP Class UIDs this SCP implements.
+// When at least one UID is given, unsupported abstract syntaxes are rejected
+// during A-ASSOCIATE negotiation (result 3, PS3.8 9.3.3.2) and inbound requests
+// for other SOP Classes are refused with 0x0122. A zero-length list keeps the
+// default accept-all behaviour.
+func WithSupportedSOPClasses(uids ...string) Option {
+	return func(o *Config) {
+		o.SupportedSOPClasses = append([]string(nil), uids...)
 	}
 }
 
@@ -885,6 +902,7 @@ func (s *Server) serviceOptionsForConnection(connectionID observability.Connecti
 		service.WithMetricsObserver(s.config.MetricsObserver),
 		service.WithMaxPDULength(s.config.MaxPDULength),
 		service.WithMaxMessageSize(s.config.MaxMessageSize),
+		service.WithSupportedSOPClasses(s.config.SupportedSOPClasses...),
 		service.WithImplementationClassUID(userInfo.ImplementationClassUID),
 		service.WithImplementationVersionName(userInfo.ImplementationVersionName),
 		service.WithAsynchronousOperations(

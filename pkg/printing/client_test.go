@@ -122,7 +122,7 @@ func printableSession(t *testing.T) *FilmSession {
 	filmBox := NewFilmBox("2.25.503", testStandardOneByOne)
 	imageBox := NewImageBox("2.25.504", false)
 	imageBox.ImageBoxPosition = 1
-	imageBox.SetImageData([]byte{1, 2, 3, 4})
+	setCompleteGrayscaleImage(t, imageBox, []byte{1, 2, 3, 4})
 	filmBox.AddImageBox(imageBox)
 	session.AddFilmBox(filmBox)
 	return session
@@ -230,7 +230,7 @@ func TestClientPrintRejectsDuplicateRemoteImageBoxUID(t *testing.T) {
 	box := session.BasicFilmBoxes[0]
 	second := NewImageBox("2.25.505", false)
 	second.ImageBoxPosition = 2
-	second.SetImageData([]byte{5, 6, 7, 8})
+	setCompleteGrayscaleImage(t, second, []byte{5, 6, 7, 8})
 	box.AddImageBox(second)
 	box.ImageDisplayFormat = testStandardTwoByOne
 
@@ -301,7 +301,7 @@ func TestClientPrintDefersConfigurationDependentImageBoxCounts(t *testing.T) {
 			filmBox.ImageDisplayFormat = displayFormat
 			second := NewImageBox("2.25.505", false)
 			second.ImageBoxPosition = 2
-			second.SetImageData([]byte{5, 6, 7, 8})
+			setCompleteGrayscaleImage(t, second, []byte{5, 6, 7, 8})
 			filmBox.AddImageBox(second)
 
 			service := newFakeDIMSEService()
@@ -388,4 +388,27 @@ func referencedImageBoxResponseDataset(references []SOPReference) *dataset.Datas
 	}
 	_ = ds.Add(dataset.NewSequenceWithItems(tag.ReferencedImageBoxSequence, items))
 	return ds
+}
+
+func setCompleteGrayscaleImage(t *testing.T, ib *ImageBox, data []byte) {
+	t.Helper()
+	item := dataset.New()
+	for _, e := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{2}),
+		element.NewUnsignedShort(tag.Columns, []uint16{2}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{testPhotometricMonochrome2}),
+		element.NewOtherByte(tag.PixelData, data),
+	} {
+		if err := item.Add(e); err != nil {
+			t.Fatalf("build image item: %v", err)
+		}
+	}
+	if err := ib.SetImageSequence(item); err != nil {
+		t.Fatalf("SetImageSequence: %v", err)
+	}
 }

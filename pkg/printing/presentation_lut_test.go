@@ -150,11 +150,13 @@ func TestPresentationLUT_TransformValue_Identity(t *testing.T) {
 	}
 }
 
-func TestPresentationLUT_InverseShapeIsValidAndTransformsValues(t *testing.T) {
+func TestPresentationLUT_InverseShapeIsNotValidForPrint(t *testing.T) {
 	lut := NewPresentationLUT(testSOPInstanceUID)
 	lut.PresentationLUTShape = PresentationLUTShapeInverse
-	if !lut.IsValid() {
-		t.Fatal("INVERSE Presentation LUT shape is not valid")
+	// PS3.3 C.11.4 Table C.11-4: INVERSE is not a valid print Presentation LUT
+	// shape (only IDENTITY and LIN OD).
+	if lut.IsValid() {
+		t.Fatal("INVERSE Presentation LUT shape must not be valid for print")
 	}
 	if got := lut.TransformValue(0); got != ^uint16(0) {
 		t.Fatalf("INVERSE transform of zero = %d, want %d", got, ^uint16(0))

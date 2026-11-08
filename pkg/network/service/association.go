@@ -551,8 +551,13 @@ func (s *Service) ReceiveAssociationRequest(ctx context.Context) (*pdu.AAssociat
 		}
 	} else {
 		// No negotiator - use default behavior: accept all contexts with the
-		// first proposed transfer syntax that the registry knows about.
-		defaultNegotiator := &DefaultAssociationNegotiator{Registry: s.config.transferSyntaxRegistry}
+		// first proposed transfer syntax that the registry knows about. When a
+		// supported SOP Class set is configured, other abstract syntaxes are
+		// rejected during negotiation (PS3.8 9.3.3.2).
+		defaultNegotiator := &DefaultAssociationNegotiator{
+			Registry:            s.config.transferSyntaxRegistry,
+			SupportedSOPClasses: s.config.supportedSOPClasses,
+		}
 		if err := defaultNegotiator.OnAssociationRequest(ctx, assoc, responder); err != nil {
 			return nil, fmt.Errorf("default association negotiation failed: %w", err)
 		}

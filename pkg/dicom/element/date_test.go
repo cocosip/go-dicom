@@ -183,3 +183,27 @@ func TestDateTime(t *testing.T) {
 		}
 	})
 }
+
+func TestDateTimeTimezoneUsesSignedOffset(t *testing.T) {
+	loc := time.FixedZone("CST", 8*60*60)
+	elem := element.NewDateTimeFromTime(tag.AcquisitionDateTime, []time.Time{
+		time.Date(2025, 11, 8, 17, 20, 0, 0, loc),
+	})
+	got := elem.GetValue(0)
+	if want := "20251108172000.000000+0800"; got != want {
+		t.Fatalf("NewDateTimeFromTime value = %q, want %q", got, want)
+	}
+	if len(got) > 26 {
+		t.Fatalf("DT value length = %d, want <= 26 (PS3.5 Table 6.2-1)", len(got))
+	}
+
+	// A conformant value with a signed offset must parse back successfully.
+	parsed := element.NewDateTime(tag.AcquisitionDateTime, []string{"20251108172000.000000+0800"})
+	dt, err := parsed.GetDateTime(0)
+	if err != nil {
+		t.Fatalf("GetDateTime() of conformant DT error = %v", err)
+	}
+	if _, offset := dt.Zone(); offset != 8*60*60 {
+		t.Fatalf("parsed offset = %d, want %d", offset, 8*60*60)
+	}
+}

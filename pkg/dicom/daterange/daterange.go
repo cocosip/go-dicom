@@ -458,9 +458,10 @@ func (dtr *DateTimeRange) Contains(dt time.Time) bool {
 func findRangeDash(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '-' {
-			// Check if this is a timezone offset (dash followed by 4+ digits after a digit)
-			// Timezone pattern: digit + '-' + 4 digits
-			if i > 0 && i+4 < len(s) {
+			// Check if this is a timezone offset (dash followed by 4 digits after a digit).
+			// A timezone offset can only follow a date/time with at least a full date
+			// (8 digits); otherwise a 4-digit TM like "1000-1800" would be misread.
+			if i >= 8 && i+4 < len(s) {
 				isDigitBefore := s[i-1] >= '0' && s[i-1] <= '9'
 				isDigitsAfter := (s[i+1] >= '0' && s[i+1] <= '9') &&
 					(s[i+2] >= '0' && s[i+2] <= '9') &&

@@ -148,30 +148,116 @@ func ValidateDS(content string) error {
 }
 
 // ValidateDT validates Date Time (DT) values.
-// Format: YYYYMMDDHHMMSS.FFFFFF&ZZXX
+// Format (PS3.5 Table 6.2-1):
+//
+//	YYYY[MM[DD[HH[MM[SS[.FFFFFF]]]]]][&ZZXX]
+//
+// The date/time part must use an even number of digits, fractional seconds are
+// only allowed after full seconds, and the optional UTC offset must be prefixed
+// with '&' (e.g. "&+0800"). The offset "-0000" is not permitted.
 func ValidateDT(content string) error {
-	// This is a simplified validation. The full validation in fo-dicom is very complex.
-	// For now, we'll implement basic checks.
-
 	if content == "" {
 		return nil
 	}
 
-	// Remove trailing spaces
 	trimmed := strings.TrimRight(content, " ")
 
-	// Check if it contains invalid negative UTC
-	if strings.Contains(content, "-0000") {
-		return newValidationError("DT", content, "negative UTC hours component with value -0000 is not allowed")
+	main := trimmed
+	offset := ""
+	hasOffset := false
+	// The optional suffix is a signed UTC offset: '+' or '-' followed by 4
+	// digits (PS3.5 Table 6.2-1, where the '&' in "&ZZXX" denotes the sign).
+	if i := strings.IndexAny(trimmed, "+-"); i >= 0 {
+		main = trimmed[:i]
+		offset = trimmed[i:]
+		hasOffset = true
 	}
 
-	// Basic format check: at minimum YYYY (4 digits)
-	if len(trimmed) < 4 {
-		return newValidationError("DT", content, "value is too short (minimum YYYY required)")
+	// Date/time magnitude: at least YYYY, at most YYYYMMDDHHMMSS.
+	dateTime := main
+	fraction := ""
+	hasFraction := false
+	if dot := strings.IndexByte(main, '.'); dot >= 0 {
+		dateTime = main[:dot]
+		fraction = main[dot+1:]
+		hasFraction = true
 	}
 
-	// More detailed validation would go here following fo-dicom's complex logic
-	// For now, this provides basic validation
+	if len(dateTime) < 4 || len(dateTime) > 14 || len(dateTime)%2 != 0 {
+		return newValidationError("DT", content, "date/time component must be an even number of digits between 4 and 14")
+	}
+	if !allDigits(dateTime) {
+		return newValidationError("DT", content, "date/time component must contain only digits")
+	}
+	if hasFraction {
+		if len(dateTime) != 14 {
+			return newValidationError("DT", content, "fractional seconds require a full YYYYMMDDHHMMSS date/time")
+		}
+		if len(fraction) < 1 || len(fraction) > 6 || !allDigits(fraction) {
+			return newValidationError("DT", content, "fractional seconds must be 1 to 6 digits")
+		}
+	}
+
+	if err := validateDateTimeFields(dateTime); err != nil {
+		return newValidationError("DT", content, err.Error())
+	}
+
+	if hasOffset {
+		if len(offset) != 5 || (offset[0] != '+' && offset[0] != '-') {
+			return newValidationError("DT", content, "UTC offset must be a sign followed by 4 digits (ZZXX)")
+		}
+		if !allDigits(offset[1:]) {
+			return newValidationError("DT", content, "UTC offset digits must be numeric")
+		}
+		if offset == "-0000" {
+			return newValidationError("DT", content, "negative UTC hours component with value -0000 is not allowed")
+		}
+		hours := int(offset[1]-'0')*10 + int(offset[2]-'0')
+		minutes := int(offset[3]-'0')*10 + int(offset[4]-'0')
+		if hours > 23 || minutes > 59 {
+			return newValidationError("DT", content, "UTC offset out of range")
+		}
+	}
+
+	return nil
+}
+
+func allDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func validateDateTimeFields(dateTime string) error {
+	atoi2 := func(s string) int { return int(s[0]-'0')*10 + int(s[1]-'0') }
+	if len(dateTime) >= 6 {
+		if month := atoi2(dateTime[4:6]); month < 1 || month > 12 {
+			return fmt.Errorf("month out of range")
+		}
+	}
+	if len(dateTime) >= 8 {
+		if day := atoi2(dateTime[6:8]); day < 1 || day > 31 {
+			return fmt.Errorf("day out of range")
+		}
+	}
+	if len(dateTime) >= 10 {
+		if hour := atoi2(dateTime[8:10]); hour > 23 {
+			return fmt.Errorf("hour out of range")
+		}
+	}
+	if len(dateTime) >= 12 {
+		if minute := atoi2(dateTime[10:12]); minute > 59 {
+			return fmt.Errorf("minute out of range")
+		}
+	}
+	if len(dateTime) >= 14 {
+		if second := atoi2(dateTime[12:14]); second > 60 {
+			return fmt.Errorf("second out of range")
+		}
+	}
 	return nil
 }
 

@@ -335,7 +335,8 @@ func NewDateTime(t *tag.Tag, datetimes []string) *DateTime {
 func NewDateTimeFromTime(t *tag.Tag, times []time.Time) *DateTime {
 	datetimes := make([]string, len(times))
 	for i, tm := range times {
-		// Format with timezone: YYYYMMDDHHMMSS.FFFFFF&ZZXX
+		// Format with timezone: YYYYMMDDHHMMSS.FFFFFF±ZZXX (PS3.5 Table 6.2-1).
+		// The '&' in the standard notation denotes the '+'/'-' sign itself.
 		datetimes[i] = tm.Format("20060102150405.000000-0700")
 	}
 	return NewDateTime(t, datetimes)
@@ -407,7 +408,7 @@ func (dt *DateTime) GetDateTime(index int) (time.Time, error) {
 	// 6 digits and normalized to the fixed 6-digit layout.
 	normalized := normalizeFractionalSeconds(dtStr)
 	formats := []string{
-		"20060102150405.000000-0700", // YYYYMMDDHHMMSS.FFFFFF&ZZXX
+		"20060102150405.000000-0700", // YYYYMMDDHHMMSS.FFFFFF±ZZXX (PS3.5 Table 6.2-1)
 		"20060102150405.000000",      // YYYYMMDDHHMMSS.FFFFFF
 		"20060102150405",             // YYYYMMDDHHMMSS
 		"200601021504",               // YYYYMMDDHHMM
@@ -472,7 +473,10 @@ func (dt *DateTime) IsRange() bool {
 func findRangeDash(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '-' {
-			if i > 0 && i+4 < len(s) {
+			// Only treat '-' plus 4 digits as a timezone offset when preceded by
+			// at least a full date (8 digits); otherwise a TM range like
+			// "1000-1800" would be misread as an offset.
+			if i >= 8 && i+4 < len(s) {
 				isDigitBefore := s[i-1] >= '0' && s[i-1] <= '9'
 				isDigitsAfter := (s[i+1] >= '0' && s[i+1] <= '9') &&
 					(s[i+2] >= '0' && s[i+2] <= '9') &&

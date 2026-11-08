@@ -5,6 +5,7 @@ package sr
 
 import (
 	"io"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -42,6 +43,18 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 
 	// Set continuity to SEPARATE (typical for SR root) (0040,A050) VR=CS
 	_ = ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(ContinuitySeparate)}))
+
+	// SR Document General Module Type 1 attributes (PS3.3 C.17.2, Table C.17-2).
+	now := time.Now()
+	for _, item := range []element.Element{
+		element.NewString(tag.InstanceNumber, vr.IS, []string{"1"}),
+		element.NewString(tag.CompletionFlag, vr.CS, []string{"PARTIAL"}),
+		element.NewString(tag.VerificationFlag, vr.CS, []string{"UNVERIFIED"}),
+		element.NewDateFromTime(tag.ContentDate, []time.Time{now}),
+		element.NewTimeFromTime(tag.ContentTime, []time.Time{now}),
+	} {
+		_ = ds.AddOrUpdate(item)
+	}
 
 	// Note: RelationshipType is intentionally NOT set for the root element
 

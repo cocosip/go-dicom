@@ -161,6 +161,35 @@ func NewImageBox(sopInstanceUID string, isColor bool) *ImageBox {
 	}
 }
 
+// ValidateImageAttributes checks that the preformatted image sequence carries
+// the Image Pixel Macro attributes required by PS3.3 C.7.6.3 / C.13.5.
+func (ib *ImageBox) ValidateImageAttributes() error {
+	if ib == nil {
+		return fmt.Errorf("printing: nil ImageBox")
+	}
+	sequence, err := ib.ImageSequence()
+	if err != nil {
+		return err
+	}
+	if sequence == nil {
+		return nil
+	}
+	required := []*tag.Tag{
+		tag.Rows, tag.Columns, tag.BitsAllocated, tag.BitsStored, tag.HighBit,
+		tag.SamplesPerPixel, tag.PhotometricInterpretation, tag.PixelRepresentation,
+		tag.PixelData,
+	}
+	if ib.IsColor {
+		required = append(required, tag.PlanarConfiguration)
+	}
+	for _, requiredTag := range required {
+		if _, ok := sequence.Get(requiredTag); !ok {
+			return fmt.Errorf("printing: image box sequence is missing required attribute %s", requiredTag)
+		}
+	}
+	return nil
+}
+
 // SetImageData sets the image data for the Image Box
 func (ib *ImageBox) SetImageData(imageData []byte) {
 	ib.setLegacyImageData(imageData)

@@ -172,6 +172,21 @@ func (w *jsonWriter) writeElement(elem element.Element) error {
 
 // writeValueByVR writes the element value based on its VR type
 func (w *jsonWriter) writeValueByVR(elem element.Element) error {
+	// A lazy BulkDataURI buffer takes precedence for every VR: the reference
+	// must survive serialization (PS3.18 F.2.2), even when the data has been
+	// loaded into memory.
+	if buf := elem.Buffer(); buf != nil {
+		if bulk, ok := buf.(*buffer.BulkDataURIByteBuffer); ok && bulk.BulkDataURI() != "" {
+			w.buf.WriteString(`,"BulkDataURI":`)
+			encoded, err := json.Marshal(bulk.BulkDataURI())
+			if err != nil {
+				return fmt.Errorf("failed to encode BulkDataURI: %w", err)
+			}
+			w.buf.Write(encoded)
+			return nil
+		}
+	}
+
 	vrCode := elem.ValueRepresentation().Code()
 	switch vrCode {
 	case vr.CodeSQ:

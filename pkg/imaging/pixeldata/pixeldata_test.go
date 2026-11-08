@@ -1141,7 +1141,7 @@ func TestPaletteColorsRejectsDirectAndSegmentedDataForSameChannel(t *testing.T) 
 	}
 }
 
-func TestFromDatasetPaletteAlphaToRGBA(t *testing.T) {
+func TestFromDatasetPaletteAlphaCompositesToRGB(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
 		alphaData element.Element
@@ -1184,11 +1184,15 @@ func TestFromDatasetPaletteAlphaToRGBA(t *testing.T) {
 			if err != nil {
 				t.Fatalf("FromDataset() error = %v", err)
 			}
-			if got, want := pd.Info.SamplesPerPixel, uint16(4); got != want {
+			if got, want := pd.Info.SamplesPerPixel, uint16(3); got != want {
 				t.Fatalf("SamplesPerPixel = %d, want %d", got, want)
 			}
-			if got, want := pd.AllFrames(), []byte{10, 30, 50, 70, 20, 40, 60, 80}; !bytes.Equal(got, want) {
-				t.Fatalf("palette RGBA data = %v, want %v", got, want)
+			if pd.Info.PhotometricInterpretation != pixel.RGBPhotometric {
+				t.Fatalf("PhotometricInterpretation = %v, want RGB", pd.Info.PhotometricInterpretation)
+			}
+			// Alpha is opacity and is composited over black: (entry*alpha+127)/255.
+			if got, want := pd.AllFrames(), []byte{3, 8, 14, 6, 13, 19}; !bytes.Equal(got, want) {
+				t.Fatalf("palette RGB data = %v, want %v", got, want)
 			}
 		})
 	}
@@ -1542,7 +1546,75 @@ func TestData_ConvertYBRPartial422ToRGB(t *testing.T) {
 	}
 }
 
-func TestData_ConvertYBRICTToRGB(t *testing.T) {
+func TestNewRejectsEncapsulatedOnlyPhotometricForNative(t *testing.T) {
+	baseInfo := func(photometric *pixel.PhotometricInterpretation) *Info {
+		return &Info{
+			Width:                     1,
+			Height:                    1,
+			NumberOfFrames:            1,
+			BitsAllocated:             8,
+			BitsStored:                8,
+			HighBit:                   7,
+			SamplesPerPixel:           3,
+			PixelRepresentation:       pixel.UnsignedPixels,
+			PlanarConfiguration:       pixel.InterleavedPlanar,
+			PhotometricInterpretation: photometric,
+		}
+	}
+	for _, photometric := range []*pixel.PhotometricInterpretation{
+		pixel.YbrIct, pixel.YbrRct, pixel.YbrPartial420,
+	} {
+		t.Run(photometric.Value, func(t *testing.T) {
+			if _, err := New(baseInfo(photometric)); err == nil {
+				t.Fatalf("New() accepted native %s (PS3.5 8.2 forbids it)", photometric.Value)
+			}
+
+			encapsulated := baseInfo(photometric)
+			encapsulated.Encapsulated = true
+			encapsulated.VRCode = "OB"
+			if _, err := New(encapsulated); err != nil {
+				t.Fatalf("New() rejected encapsulated %s: %v", photometric.Value, err)
+			}
+		})
+	}
+
+	ybrIct := baseInfo(pixel.YbrIct)
+	pd := &Data{Info: ybrIct}
+	if err := pd.ConvertYBRToRGB(); err == nil {
+		t.Fatal("ConvertYBRToRGB() converted a native YBR_ICT state")
+	}
+}
+
+func TestNativeYBRFull422RequiresEvenColumns(t *testing.T) {
+	info := &Info{
+		Width:                     3,
+		Height:                    1,
+		NumberOfFrames:            1,
+		BitsAllocated:             8,
+		BitsStored:                8,
+		HighBit:                   7,
+		SamplesPerPixel:           3,
+		PixelRepresentation:       pixel.UnsignedPixels,
+		PlanarConfiguration:       pixel.InterleavedPlanar,
+		PhotometricInterpretation: pixel.YbrFull422,
+	}
+	// PS3.3 C.7.6.3.1.2 note 2: frame size is Rows*Columns*2, never Columns+1.
+	if got, want := info.UncompressedFrameSize(), 3*2; got != want {
+		t.Fatalf("UncompressedFrameSize() = %d, want %d", got, want)
+	}
+
+	even := *info
+	even.Width = 4
+	pd, err := NewFromBytes(&even, []byte{1, 2, 3, 4, 5, 6, 7, 8})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	if got, want := pd.Info.UncompressedFrameSize(), 4*2; got != want {
+		t.Fatalf("UncompressedFrameSize() = %d, want %d", got, want)
+	}
+}
+
+func TestToElementRejectsRetiredARGB(t *testing.T) {
 	info := &Info{
 		Width:                     1,
 		Height:                    1,
@@ -1550,71 +1622,69 @@ func TestData_ConvertYBRICTToRGB(t *testing.T) {
 		BitsAllocated:             8,
 		BitsStored:                8,
 		HighBit:                   7,
-		SamplesPerPixel:           3,
-		PixelRepresentation:       pixel.SignedPixels,
+		SamplesPerPixel:           4,
+		PixelRepresentation:       pixel.UnsignedPixels,
 		PlanarConfiguration:       pixel.InterleavedPlanar,
-		PhotometricInterpretation: pixel.YbrIct,
+		PhotometricInterpretation: pixel.ARGBPhotometric,
 	}
-
-	// Y=50, Cb=0, Cr=0 should map to roughly RGB(50,50,50)
-	data := []byte{50, 0, 0}
-	pd, err := NewFromBytes(info, data)
+	pd, err := NewFromBytes(info, []byte{1, 2, 3, 4})
 	if err != nil {
-		t.Fatalf("NewFromBytes() error = %v", err)
+		t.Fatalf("NewFromBytes() rejected readable legacy ARGB data: %v", err)
 	}
-
-	if err := pd.ConvertYBRToRGB(); err != nil {
-		t.Fatalf("ConvertYBRToRGB() error = %v", err)
-	}
-
-	got := pd.AllFrames()
-	if got[0] < 48 || got[0] > 52 || got[1] < 48 || got[1] > 52 || got[2] < 48 || got[2] > 52 {
-		t.Fatalf("YBR_ICT->RGB not near expected 50s: %v", got)
+	if _, err := pd.ToElement(); err == nil {
+		t.Fatal("ToElement() wrote the retired ARGB photometric interpretation")
 	}
 }
 
-func TestData_ConvertYBRRCTToRGB(t *testing.T) {
-	info := &Info{
-		Width:                     1,
-		Height:                    1,
-		NumberOfFrames:            1,
-		BitsAllocated:             16,
-		BitsStored:                16,
-		HighBit:                   15,
-		SamplesPerPixel:           3,
-		PixelRepresentation:       pixel.SignedPixels,
-		PlanarConfiguration:       pixel.InterleavedPlanar,
-		PhotometricInterpretation: pixel.YbrRct,
+func TestWindowOrLUTTo8bitHonorsVOILUTFunction(t *testing.T) {
+	newDataset := func(function string) *dataset.Dataset {
+		elements := []element.Element{
+			element.NewUnsignedShort(tag.Rows, []uint16{1}),
+			element.NewUnsignedShort(tag.Columns, []uint16{1}),
+			element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+			element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+			element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+			element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+			element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+			element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+			element.NewOtherByte(tag.PixelData, []byte{150}),
+		}
+		if function != "" {
+			elements = append(elements, element.NewString(tag.VOILUTFunction, vr.CS, []string{function}))
+		}
+		ds, err := dataset.NewWithElements(elements)
+		if err != nil {
+			t.Fatalf("NewWithElements() error = %v", err)
+		}
+		return ds
 	}
 
-	// From R=100,G=110,B=120 -> Y=floor((R+2G+B)/4)=110, Cb=B-G=10, Cr=R-G=-10
-	y := int16(110)
-	cb := int16(10)
-	cr := int16(-10)
-	data := []byte{
-		byte(y & 0xFF), byte((y >> 8) & 0xFF),
-		byte(cb & 0xFF), byte((cb >> 8) & 0xFF),
-		byte(cr & 0xFF), byte((cr >> 8) & 0xFF),
-	}
-
-	pd, err := NewFromBytes(info, data)
-	if err != nil {
-		t.Fatalf("NewFromBytes() error = %v", err)
-	}
-
-	if err := pd.ConvertYBRToRGB(); err != nil {
-		t.Fatalf("ConvertYBRToRGB() error = %v", err)
-	}
-
-	got := pd.AllFrames()
-	if len(got) < 6 {
-		t.Fatalf("expected 6 bytes, got %d", len(got))
-	}
-	r := int16(got[0]) | int16(got[1])<<8
-	g := int16(got[2]) | int16(got[3])<<8
-	b := int16(got[4]) | int16(got[5])<<8
-	if r != 100 || g != 110 || b != 120 {
-		t.Fatalf("YBR_RCT->RGB mismatch: got R=%d G=%d B=%d", r, g, b)
+	for _, tt := range []struct {
+		function string
+		want     byte
+	}{
+		{"", 188}, // absent => LINEAR
+		{"LINEAR", 188},
+		{"LINEAR_EXACT", 186},
+		{"SIGMOID", 182},
+	} {
+		t.Run("function="+tt.function, func(t *testing.T) {
+			ds := newDataset(tt.function)
+			pd, err := FromDataset(ds)
+			if err != nil {
+				t.Fatalf("FromDataset() error = %v", err)
+			}
+			frames, err := pd.WindowOrLUTTo8bit(ds, 127, 100, false)
+			if err != nil {
+				t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+			}
+			if len(frames) != 1 || len(frames[0]) != 1 {
+				t.Fatalf("WindowOrLUTTo8bit() returned %d frames, want one 1-byte frame", len(frames))
+			}
+			if frames[0][0] != tt.want {
+				t.Fatalf("windowed value = %d, want %d", frames[0][0], tt.want)
+			}
+		})
 	}
 }
 

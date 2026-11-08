@@ -4,6 +4,7 @@
 package serialization
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -65,6 +66,12 @@ func (r *jsonReader) readDataset(data []byte) (*dataset.Dataset, error) {
 			if err := ds.Add(elem); err != nil {
 				return nil, fmt.Errorf("failed to add element %s: %w", tagStr, err)
 			}
+		}
+	}
+
+	if r.config.autoValidate {
+		if err := ds.Validate(); err != nil {
+			return nil, fmt.Errorf("DICOM JSON validation failed: %w", err)
 		}
 	}
 
@@ -181,14 +188,15 @@ func (r *jsonReader) readStringArray(t *tag.Tag, vr *vr.VR, data json.RawMessage
 
 	values := make([]string, len(rawValues))
 	for i, raw := range rawValues {
-		// Check if null
+		if isJSONNull(raw) {
+			values[i] = ""
+			continue
+		}
 		var str string
 		if err := json.Unmarshal(raw, &str); err != nil {
-			// Could be null
-			values[i] = ""
-		} else {
-			values[i] = str
+			return nil, fmt.Errorf("value %d: expected a string or null for VR %s: %w", i, vr.Code(), err)
 		}
+		values[i] = str
 	}
 
 	return element.NewString(t, vr, values), nil
@@ -203,6 +211,10 @@ func (r *jsonReader) readNumericStringArray(t *tag.Tag, vrObj *vr.VR, data json.
 
 	values := make([]string, len(rawValues))
 	for i, raw := range rawValues {
+		if isJSONNull(raw) {
+			values[i] = ""
+			continue
+		}
 		// Try as number first
 		var num json.Number
 		if err := json.Unmarshal(raw, &num); err == nil {
@@ -215,15 +227,14 @@ func (r *jsonReader) readNumericStringArray(t *tag.Tag, vrObj *vr.VR, data json.
 					values[i] = num.String()
 				}
 			}
-		} else {
-			// Try as string
-			var str string
-			if err := json.Unmarshal(raw, &str); err != nil {
-				values[i] = ""
-			} else {
-				values[i] = str
-			}
+			continue
 		}
+		// Try as string
+		var str string
+		if err := json.Unmarshal(raw, &str); err != nil {
+			return nil, fmt.Errorf("value %d: expected a number, string, or null for VR %s: %w", i, vrObj.Code(), err)
+		}
+		values[i] = str
 	}
 
 	return element.NewString(t, vrObj, values), nil
@@ -439,29 +450,56 @@ func (r *jsonReader) readUint64Array(t *tag.Tag, data json.RawMessage) (element.
 	return element.NewUnsignedVeryLong(t, values), nil
 }
 
-// readAttributeTag reads an AT (Attribute Tag) value
-func (r *jsonReader) readAttributeTag(t *tag.Tag, vr *vr.VR, data json.RawMessage) (element.Element, error) {
-	var tagStrs []string
-	if err := json.Unmarshal(data, &tagStrs); err != nil {
+// readAttributeTag reads an AT (Attribute Tag) value.
+//
+// PS3.18 F.2.3: AT values are JSON strings of exactly eight uppercase
+// hexadecimal digits (GGGGEEEE).
+func (r *jsonReader) readAttributeTag(t *tag.Tag, _ *vr.VR, data json.RawMessage) (element.Element, error) {
+	var rawValues []json.RawMessage
+	if err := json.Unmarshal(data, &rawValues); err != nil {
 		return nil, err
 	}
 
-	values := make([]string, len(tagStrs))
-	for i, tagStr := range tagStrs {
-		if tagStr == "" {
-			values[i] = ""
-			continue
+	values := make([]*tag.Tag, 0, len(rawValues))
+	for i, raw := range rawValues {
+		if isJSONNull(raw) {
+			return nil, fmt.Errorf("value %d: AT values cannot be null", i)
 		}
-		// Parse as hex tag
-		if len(tagStr) == 8 {
-			// Format as (GGGG,EEEE)
-			values[i] = fmt.Sprintf("(%s,%s)", tagStr[0:4], tagStr[4:8])
-		} else {
-			values[i] = tagStr
+		var tagStr string
+		if err := json.Unmarshal(raw, &tagStr); err != nil {
+			return nil, fmt.Errorf("value %d: expected a string for VR AT: %w", i, err)
 		}
+		if !isUppercaseHex8(tagStr) {
+			return nil, fmt.Errorf("value %d: AT must be eight uppercase hexadecimal digits, got %q", i, tagStr)
+		}
+		parsed, err := tag.Parse(tagStr)
+		if err != nil {
+			return nil, fmt.Errorf("value %d: invalid AT %q: %w", i, tagStr, err)
+		}
+		values = append(values, parsed)
 	}
 
-	return element.NewString(t, vr, values), nil
+	return element.NewAttributeTag(t, values), nil
+}
+
+// isJSONNull reports whether a raw JSON value is the null literal.
+func isJSONNull(raw json.RawMessage) bool {
+	return bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+// isUppercaseHex8 reports whether s is exactly eight uppercase hexadecimal
+// digits, the only form PS3.18 F.2.3 permits for AT values.
+func isUppercaseHex8(s string) bool {
+	if len(s) != 8 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // readPersonName reads a PN (Person Name) array
@@ -572,7 +610,23 @@ func (r *jsonReader) readInlineBinary(t *tag.Tag, vrObj *vr.VR, data json.RawMes
 	}
 }
 
-// readBulkDataURI reads a BulkDataURI reference
+// bulkDataURIVRs lists the VRs for which PS3.18 F.2.2 permits BulkDataURI.
+func bulkDataURIVRs(code string) bool {
+	switch code {
+	case vr.CodeDS, vr.CodeFL, vr.CodeFD, vr.CodeIS, vr.CodeLT,
+		vr.CodeOB, vr.CodeOD, vr.CodeOF, vr.CodeOL, vr.CodeOV, vr.CodeOW,
+		vr.CodeSL, vr.CodeSS, vr.CodeST, vr.CodeSV,
+		vr.CodeUC, vr.CodeUL, vr.CodeUN, vr.CodeUS, vr.CodeUT, vr.CodeUV:
+		return true
+	default:
+		return false
+	}
+}
+
+// readBulkDataURI reads a BulkDataURI reference.
+//
+// The reference is stored in a lazy buffer and the element keeps its VR, so
+// string and numeric VRs allowed by PS3.18 F.2.2 are preserved as well.
 func (r *jsonReader) readBulkDataURI(t *tag.Tag, vrObj *vr.VR, data json.RawMessage) (element.Element, error) {
 	var uri string
 	if err := json.Unmarshal(data, &uri); err != nil {
@@ -584,38 +638,20 @@ func (r *jsonReader) readBulkDataURI(t *tag.Tag, vrObj *vr.VR, data json.RawMess
 		return nil, fmt.Errorf("BulkDataURI cannot be empty")
 	}
 
-	// Create a BulkDataUri buffer with the URI
-	// The actual data will be loaded later when needed
-	buf := buffer.NewBulkDataURI(uri)
-
-	// Create element based on VR
-	vrCode := vrObj.Code()
-	switch vrCode {
-	case vr.CodeOB:
-		return element.NewOtherByteFromBuffer(t, buf), nil
-	case vr.CodeOW:
-		return element.NewOtherWordFromBuffer(t, buf), nil
-	case vr.CodeOD:
-		return element.NewOtherDoubleFromBuffer(t, buf), nil
-	case vr.CodeOF:
-		return element.NewOtherFloatFromBuffer(t, buf), nil
-	case vr.CodeOL:
-		return element.NewOtherLongFromBuffer(t, buf), nil
-	case vr.CodeOV:
-		return element.NewOtherVeryLongFromBuffer(t, buf), nil
-	case vr.CodeUN:
-		return element.NewUnknownFromBuffer(t, buf), nil
-	default:
-		return nil, fmt.Errorf("BulkDataURI not supported for VR %s", vrCode)
+	if !bulkDataURIVRs(vrObj.Code()) {
+		return nil, fmt.Errorf("BulkDataURI not supported for VR %s", vrObj.Code())
 	}
+
+	buf := buffer.NewBulkDataURI(uri)
+	return element.NewElementFromBuffer(t, vrObj, buf, nil)
 }
 
-// createEmptyElement creates an empty element
+// createEmptyElement creates an empty element with the concrete type that
+// matches its VR (for example *element.AttributeTag for AT and
+// *element.UnsignedShort for US).
 func (r *jsonReader) createEmptyElement(t *tag.Tag, vrObj *vr.VR) (element.Element, error) {
-	switch vrObj.Code() {
-	case vr.CodeSQ:
+	if vrObj.Code() == vr.CodeSQ {
 		return dataset.NewSequence(t), nil
-	default:
-		return element.NewString(t, vrObj, []string{}), nil
 	}
+	return element.NewElementFromBuffer(t, vrObj, buffer.Empty, nil)
 }

@@ -106,9 +106,9 @@ func NewNSetResponse(
 ) *NSetResponse {
 	s = resolveStatus(s)
 	command := createNResponseCommand(uint16(CommandNSetRSP), messageIDBeingRespondedTo,
-		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
+		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList, false)
 	return &NSetResponse{
-		BaseResponse:              NewBaseResponse(command, nResponseData(s, attributeList)),
+		BaseResponse:              NewBaseResponse(command, nResponseData(s, attributeList, false)),
 		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,

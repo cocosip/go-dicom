@@ -91,7 +91,8 @@ var knownCharsets = map[string]*Info{
 	"ISO 2022 IR 13":  {"Japanese Extended", &dicomIR13Encoding{Encoding: japanese.ShiftJIS}},
 	"ISO 2022 IR 87":  {"Japanese (ISO-2022-JP)", japanese.ISO2022JP},
 	"ISO 2022 IR 149": {"Korean Extended", &dicomISO2022Encoding{Encoding: korean.EUCKR, designation: []byte{0x1b, '$', ')', 'C'}}},
-	"ISO 2022 IR 58":  {"Chinese Simplified (GB2312)", &dicomISO2022Encoding{Encoding: simplifiedchinese.GB18030, designation: []byte{0x1b, '$', ')', 'A'}}},
+	"ISO 2022 IR 58":  {"Chinese Simplified (GB2312)", &dicomISO2022Encoding{Encoding: simplifiedchinese.GBK, designation: []byte{0x1b, '$', ')', 'A'}}},
+	"ISO 2022 IR 159": {"Japanese (JIS X 0212)", unsupportedCharset{name: "ISO 2022 IR 159"}},
 	"ISO 2022 IR 166": {"Thai Extended", charmap.Windows874},
 }
 
@@ -263,7 +264,19 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 			enc = japanese.ISO2022JP
 			input = append(append([]byte(nil), designation...), segment...)
 			input = append(input, 0x1b, '(', 'B')
+		case kindIR13Katakana:
+			enc = japanese.ShiftJIS
+			input = segment
 		default:
+			if len(current) == 3 && current[:2] == "sb" {
+				singleEnc, exists := iso2022SingleByte[current[2]]
+				if !exists {
+					return fmt.Errorf("unsupported DICOM ISO-2022 state %q", current)
+				}
+				enc = singleEnc
+				input = segment
+				break
+			}
 			return fmt.Errorf("unsupported DICOM ISO-2022 state %q", current)
 		}
 		decoded, err := enc.NewDecoder().Bytes(input)
@@ -315,6 +328,29 @@ func iso2022EscapeDeclared(kind string, sequence []byte, encodings []encoding.En
 	if kind == iso2022ASCII {
 		return true
 	}
+	if len(kind) == 3 && kind[:2] == "sb" {
+		singleEnc, exists := iso2022SingleByte[kind[2]]
+		if !exists {
+			return false
+		}
+		for _, enc := range encodings {
+			if enc == singleEnc {
+				return true
+			}
+		}
+		return false
+	}
+	if kind == kindIR13Katakana {
+		for _, enc := range encodings {
+			if enc == japanese.ShiftJIS {
+				return true
+			}
+			if dicom, ok := enc.(*dicomIR13Encoding); ok && dicom.Encoding == japanese.ShiftJIS {
+				return true
+			}
+		}
+		return false
+	}
 	for _, enc := range encodings {
 		if enc == japanese.ISO2022JP && kind == iso2022Japanese {
 			return true
@@ -326,11 +362,36 @@ func iso2022EscapeDeclared(kind string, sequence []byte, encodings []encoding.En
 	return false
 }
 
+// iso2022SingleByte holds the G1/G2 single-byte designations used by ISO 2022
+// escape sequences of the form ESC - F / ESC . F (PS3.5 6.1.2.5.3).
+var iso2022SingleByte = map[byte]encoding.Encoding{
+	'A': charmap.ISO8859_1,
+	'B': charmap.ISO8859_2,
+	'C': charmap.ISO8859_3,
+	'D': charmap.ISO8859_4,
+	'L': charmap.ISO8859_5,
+	'M': charmap.ISO8859_6,
+	'F': charmap.ISO8859_7,
+	'G': charmap.ISO8859_8,
+	'H': charmap.ISO8859_9,
+	'T': charmap.Windows874,
+}
+
+const kindIR13Katakana = "ir13katakana"
+
 func parseISO2022Escape(data []byte) (kind string, sequence []byte, consumed int, ok bool) {
 	if len(data) >= 3 && data[0] == 0x1b && data[1] == '(' {
 		switch data[2] {
 		case 'B', 'J', 'H':
 			return iso2022ASCII, nil, 3, true
+		case 'I':
+			// ESC ( I: JIS X 0201 katakana (half-width), part of ISO 2022 IR 13.
+			return kindIR13Katakana, append([]byte(nil), data[:3]...), 3, true
+		}
+	}
+	if len(data) >= 3 && data[0] == 0x1b && (data[1] == '-' || data[1] == '.') {
+		if _, exists := iso2022SingleByte[data[2]]; exists {
+			return "sb" + string(data[2]), append([]byte(nil), data[:3]...), 3, true
 		}
 	}
 	if len(data) >= 3 && data[0] == 0x1b && data[1] == '$' {
@@ -436,3 +497,25 @@ func GetCharsetInfo(charset string) (*Info, bool) {
 	infoCopy := *info
 	return &infoCopy, true
 }
+
+// unsupportedCharset is a placeholder encoding for character sets that are
+// recognized by name but not backed by an available encoder (e.g. ISO 2022
+// IR 159 / JIS X 0212). Using it produces an explicit error instead of silently
+// decoding with the default repertoire.
+type unsupportedCharset struct{ name string }
+
+func (u unsupportedCharset) NewDecoder() *encoding.Decoder {
+	return &encoding.Decoder{Transformer: unsupportedTransformer(u.name)}
+}
+
+func (u unsupportedCharset) NewEncoder() *encoding.Encoder {
+	return &encoding.Encoder{Transformer: unsupportedTransformer(u.name)}
+}
+
+type unsupportedTransformer string
+
+func (u unsupportedTransformer) Transform(_, _ []byte, _ bool) (int, int, error) {
+	return 0, 0, fmt.Errorf("DICOM character set %s is not supported", string(u))
+}
+
+func (unsupportedTransformer) Reset() {}

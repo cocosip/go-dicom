@@ -264,10 +264,10 @@ func TestOutboundRequestObservabilityPendingOrder(t *testing.T) {
 	serverRecorder := &observationRecorder{}
 	clientService := startObservedServicePair(t, clientRecorder, serverRecorder, &Handlers{
 		CFindHandler: func(_ context.Context, operation CFindOperation) error {
-			if err := operation.SendPending(nil); err != nil {
+			if err := operation.SendPending(dataset.New()); err != nil {
 				return err
 			}
-			if err := operation.SendPendingWithStatus(nil, status.PendingWarning); err != nil {
+			if err := operation.SendPendingWithStatus(dataset.New(), status.PendingWarning); err != nil {
 				return err
 			}
 			return operation.SendFinal(status.Success)

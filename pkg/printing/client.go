@@ -118,6 +118,9 @@ func (c *Client) Print(ctx context.Context, session *FilmSession) error {
 				return fmt.Errorf("printing: referenced Image Box %d SOP Class UID %q does not match local Image Box %q",
 					index, remoteReference.SOPClassUID, imageBox.SOPClassUID)
 			}
+			if err := imageBox.ValidateImageAttributes(); err != nil {
+				return err
+			}
 			imageDataset, err := imageBox.ToDataset()
 			if err != nil {
 				return fmt.Errorf("printing: encode Image Box %q: %w", imageBox.SOPInstanceUID, err)

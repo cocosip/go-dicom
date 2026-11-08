@@ -390,7 +390,7 @@ func TestImageBoxDatasetRoundTripsCompleteImageSequenceIndependently(t *testing.
 		samples     uint16
 		pixelData   []byte
 	}{
-		{name: "grayscale", sequenceTag: tag.BasicGrayscaleImageSequence, classUID: SOPClassGrayscaleImageBox, photometric: "MONOCHROME2", samples: 1, pixelData: []byte{1, 2, 3, 4}},
+		{name: "grayscale", sequenceTag: tag.BasicGrayscaleImageSequence, classUID: SOPClassGrayscaleImageBox, photometric: testPhotometricMonochrome2, samples: 1, pixelData: []byte{1, 2, 3, 4}},
 		{name: "color", color: true, sequenceTag: tag.BasicColorImageSequence, classUID: SOPClassColorImageBox, photometric: "RGB", samples: 3, pixelData: []byte{1, 2, 3, 4, 5, 6}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

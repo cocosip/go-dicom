@@ -133,7 +133,7 @@ func NewNCreateResponse(
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
 
 	// CommandDataSetType - attribute list only on Success
-	data := nResponseData(s, attributeList)
+	data := nResponseData(s, attributeList, false)
 	if data != nil {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {

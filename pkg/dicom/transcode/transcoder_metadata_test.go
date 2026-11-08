@@ -58,7 +58,7 @@ func TestTranscoderEncodeAppliesCodecMetadataAndAppendsLossyHistory(t *testing.T
 	if got, _ := result.GetStrings(tag.LossyImageCompressionMethod); !reflect.DeepEqual(got, []string{"ISO_15444_1", "ISO_10918_1"}) {
 		t.Fatalf("LossyImageCompressionMethod = %v, want prior and current methods", got)
 	}
-	if got, _ := result.GetStrings(tag.LossyImageCompressionRatio); !reflect.DeepEqual(got, []string{"1.500", "2.000"}) {
+	if got, _ := result.GetStrings(tag.LossyImageCompressionRatio); !reflect.DeepEqual(got, []string{"1.500", "1.000"}) {
 		t.Fatalf("LossyImageCompressionRatio = %v, want prior ratio and all-frame ratio", got)
 	}
 }

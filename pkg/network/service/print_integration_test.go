@@ -154,7 +154,10 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 	filmBox := printing.NewFilmBox("2.25.603", `STANDARD\1,1`)
 	imageBox := printing.NewImageBox("2.25.604", false)
 	imageBox.ImageBoxPosition = 1
-	imageBox.SetImageData([]byte{1, 2, 3, 4})
+	imageItem := completeImageItem(t, []byte{1, 2, 3, 4})
+	if err := imageBox.SetImageSequence(imageItem); err != nil {
+		t.Fatalf("SetImageSequence() error = %v", err)
+	}
 	filmBox.AddImageBox(imageBox)
 	session.AddFilmBox(filmBox)
 
@@ -185,4 +188,24 @@ func TestPrintClientDIMSEWorkflowEndToEnd(t *testing.T) {
 	if got[4].operation != "N-ACTION" || got[4].classUID != printFilmSessionClassUID || got[4].instance != "2.25.601" || got[4].actionID != 1 {
 		t.Errorf("Film Session print operation = %#v", got[4])
 	}
+}
+func completeImageItem(t *testing.T, data []byte) *dataset.Dataset {
+	t.Helper()
+	item := dataset.New()
+	for _, e := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{2}),
+		element.NewUnsignedShort(tag.Columns, []uint16{2}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}),
+		element.NewOtherByte(tag.PixelData, data),
+	} {
+		if err := item.Add(e); err != nil {
+			t.Fatalf("build image item: %v", err)
+		}
+	}
+	return item
 }

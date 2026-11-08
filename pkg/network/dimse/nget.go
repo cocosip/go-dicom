@@ -99,8 +99,9 @@ type NGetResponse struct {
 //   - s: Status (use status.NGetSuccess, etc.)
 //   - affectedSOPClassUID: The SOP Class UID
 //   - affectedSOPInstanceUID: The SOP Instance UID
-//   - attributeList: Dataset containing the requested attribute values; it is
-//     attached only when the status is Success (PS3.7 9.3.2.2)
+//   - attributeList: Dataset containing the requested attribute values. It is
+//     attached on Success and on Warning 0x0107 (Attribute List Error), which
+//     carries the attributes that could actually be read (PS3.7 10.1.2).
 func NewNGetResponse(
 	messageIDBeingRespondedTo uint16,
 	s *status.Status,
@@ -110,9 +111,9 @@ func NewNGetResponse(
 ) *NGetResponse {
 	s = resolveStatus(s)
 	command := createNResponseCommand(uint16(CommandNGetRSP), messageIDBeingRespondedTo,
-		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList)
+		s, affectedSOPClassUID, affectedSOPInstanceUID, attributeList, true)
 	return &NGetResponse{
-		BaseResponse:              NewBaseResponse(command, nResponseData(s, attributeList)),
+		BaseResponse:              NewBaseResponse(command, nResponseData(s, attributeList, true)),
 		statusCode:                s.Code,
 		affectedSOPClassUID:       affectedSOPClassUID,
 		affectedSOPInstanceUID:    affectedSOPInstanceUID,
@@ -163,10 +164,18 @@ func (r *NGetResponse) String() string {
 }
 
 // nResponseData returns the attribute list that may be attached to an
-// N-GET-RSP, N-SET-RSP or N-CREATE-RSP: a data set is only present on Success.
-// This keeps the attached data consistent with the CommandDataSetType element.
-func nResponseData(s *status.Status, attributeList *dataset.Dataset) *dataset.Dataset {
-	if attributeList != nil && s.IsSuccess() {
+// N-GET-RSP, N-SET-RSP or N-CREATE-RSP. PS3.7 10.1.2 (N-GET) allows the list on
+// Success and on Warning 0x0107 (Attribute List Error), where it carries the
+// attributes that could be read. N-SET and N-CREATE may only attach it on
+// Success (PS3.7 10.1.3).
+func nResponseData(s *status.Status, attributeList *dataset.Dataset, allowAttributeListError bool) *dataset.Dataset {
+	if attributeList == nil {
+		return nil
+	}
+	if s.IsSuccess() {
+		return attributeList
+	}
+	if allowAttributeListError && s.Code == status.AttributeListError.Code {
 		return attributeList
 	}
 	return nil
@@ -181,13 +190,14 @@ func createNResponseCommand(
 	affectedSOPClassUID string,
 	affectedSOPInstanceUID string,
 	attributeList *dataset.Dataset,
+	allowAttributeListError bool,
 ) *dataset.Dataset {
 	command := CreateCommandDataset(commandType, 0)
 	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{affectedSOPClassUID}))
 	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{affectedSOPInstanceUID}))
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))
 	_ = command.Add(element.NewUnsignedShort(tag.Status, []uint16{s.Code}))
-	if nResponseData(s, attributeList) != nil {
+	if nResponseData(s, attributeList, allowAttributeListError) != nil {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0001}))
 	} else {
 		_ = command.AddOrUpdate(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101}))

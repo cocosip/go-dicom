@@ -5,35 +5,39 @@ package pixeldata
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 )
 
-// applyWindowTo8bit maps pixel data to 8-bit frames using a VOI window.
+// applyWindowTo8bit maps pixel data to 8-bit frames using the default LINEAR VOI window.
 func applyWindowTo8bit(pd *Data, center, width float64, ignorePadding bool) ([][]byte, error) {
-	return applyWindowTo8bitWithModality(pd, center, width, ignorePadding, nil)
+	return applyWindowTo8bitWithModality(pd, center, width, ignorePadding, nil, lut.VOILUTFunctionLinear)
 }
 
-func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePadding bool, modality lut.LUT) ([][]byte, error) {
+func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePadding bool, modality lut.LUT, function lut.VOILUTFunction) ([][]byte, error) {
 	if pd.Info == nil {
 		return nil, fmt.Errorf("pixel data info is nil")
 	}
 	if pd.Info.Encapsulated {
 		return nil, fmt.Errorf("cannot apply window on encapsulated data; decode first")
 	}
-	if width < 1 || math.IsNaN(width) || math.IsInf(width, 0) {
-		return nil, fmt.Errorf("window width must be finite and at least 1, got %v", width)
+
+	// Build the VOI LUT using shared lut package to avoid duplicated window math.
+	// Function-specific width rules (LINEAR >= 1, LINEAR_EXACT/SIGMOID > 0) are
+	// validated here so dataset-driven callers cannot silently fall back.
+	if function == "" {
+		function = lut.VOILUTFunctionLinear
+	}
+	voiLUT, err := lut.CreateValidatedVOILUT(function, center, width)
+	if err != nil {
+		return nil, err
 	}
 
 	bytesPerSample := pd.Info.BytesAllocated()
 	if bytesPerSample != 1 && bytesPerSample != 2 && bytesPerSample != 4 {
 		return nil, fmt.Errorf("unsupported BytesAllocated=%d for windowing", bytesPerSample)
 	}
-
-	// Build VOI LUT using shared lut package to avoid duplicated window math.
-	voiLUT := lut.CreateVOILUT(lut.VOILUTFunctionLinear, center, width)
 
 	// Precalculate within the valid input range for faster mapping, but only when
 	// the range fits a table: clamping a larger range would mis-map the upper part

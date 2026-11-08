@@ -62,6 +62,11 @@ func (op *cFindOperation) SendPendingWithStatus(identifier *dataset.Dataset, s *
 	if !s.IsPending() {
 		return fmt.Errorf("C-FIND pending response requires a pending status, got %s", s)
 	}
+	// PS3.7 9.1.2.1.6: a Pending C-FIND-RSP "shall contain a matching
+	// Identifier"; the identifier is only permitted for Pending responses.
+	if identifier == nil {
+		return fmt.Errorf("C-FIND pending response requires an identifier")
+	}
 	return op.forward(dimse.NewCFindResponseFromRequest(op.req, s, identifier), op.sendPending)
 }
 
@@ -275,6 +280,9 @@ func (op *cGetOperation) SendCStore(ctx context.Context, ds *dataset.Dataset) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to create C-STORE request: %w", err)
 	}
+	// PS3.7 9.1.3.1.4: the C-GET Priority "shall also be the priority used
+	// for all sub-operations".
+	req.SetPriority(op.req.Priority())
 	return op.sendCStore(ctx, req)
 }
 

@@ -127,6 +127,35 @@ func TestOpenDatasetUsesElementByteOrderForExtendedTable(t *testing.T) {
 	}
 }
 
+func TestPixelDataExtendedOffsetLengthExcludesPadding(t *testing.T) {
+	// One frame held in a single odd-length fragment. The Extended Offset Table
+	// Length is the unpadded frame length (3), not the padded item length (4).
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, encodeUint64s(0))); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, encodeUint64s(3))); err != nil {
+		t.Fatal(err)
+	}
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	fragments.AddFragment(buffer.NewMemory([]byte{0xAA, 0xBB, 0xCC}))
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	pixelData, err := OpenDataset(ds)
+	if err != nil {
+		t.Fatalf("OpenDataset() error = %v", err)
+	}
+	frames, err := pixelData.Frames(1)
+	if err != nil {
+		t.Fatalf("Frames() error = %v (odd-length frame length must not be padded)", err)
+	}
+	if want := [][]byte{{0xAA, 0xBB, 0xCC}}; !reflect.DeepEqual(frames, want) {
+		t.Fatalf("Frames() = %v, want %v", frames, want)
+	}
+}
+
 func openTestPixelData(t *testing.T, basic []uint32, extended, lengths []uint64) *PixelData {
 	t.Helper()
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)

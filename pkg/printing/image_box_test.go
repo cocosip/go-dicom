@@ -356,3 +356,11 @@ func TestImageBox_SmoothingType(t *testing.T) {
 		t.Error("Failed to set SmoothingType")
 	}
 }
+
+func TestImageBoxValidateImageAttributesRequiresPixelMacro(t *testing.T) {
+	ib := NewImageBox("2.25.700", false)
+	ib.SetImageData([]byte{1, 2, 3, 4})
+	if err := ib.ValidateImageAttributes(); err == nil {
+		t.Fatal("ValidateImageAttributes() = nil, want error for PixelData-only sequence")
+	}
+}

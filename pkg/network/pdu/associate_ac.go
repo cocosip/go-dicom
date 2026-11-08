@@ -219,12 +219,12 @@ func (a *AAssociateAC) Encode() (*RawPDU, error) {
 		// Reserved (1 byte)
 		pcBuf.WriteByte(0x00)
 
-		// Transfer Syntax Sub-item (only if accepted)
-		if pc.Result == ResultAcceptance && pc.TransferSyntax != "" {
-			tsData := []byte(pc.TransferSyntax)
-			if err := writeItem(&pcBuf, ItemTypeTransferSyntax, tsData); err != nil {
-				return nil, fmt.Errorf("encoding transfer syntax for context %d: %w", i, err)
-			}
+		// Transfer Syntax Sub-item. PS3.8 Table 9-18 requires exactly one to be
+		// present even for a rejected context; only its value is insignificant
+		// when the Result/Reason is not acceptance.
+		tsData := []byte(pc.TransferSyntax)
+		if err := writeItem(&pcBuf, ItemTypeTransferSyntax, tsData); err != nil {
+			return nil, fmt.Errorf("encoding transfer syntax for context %d: %w", i, err)
 		}
 
 		if err := writeItem(&buf, ItemTypePresentationContextAC, pcBuf.Bytes()); err != nil {
@@ -526,9 +526,8 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 	if pc.Result == ResultAcceptance && pc.TransferSyntax == "" {
 		return PresentationContextAC{}, fmt.Errorf("accepted presentation context %d has no transfer syntax", pc.ID)
 	}
-	// Some real PACS echo a transfer syntax sub-item on rejected contexts. That
-	// is non-conformant but harmless, so ignore it rather than abort the whole
-	// association. Only an accepted context without a transfer syntax is fatal.
+	// PS3.8 Table 9-18 requires a Transfer Syntax Sub-Item even for a rejected
+	// context; its value is not significant in that case, so drop it.
 	if pc.Result != ResultAcceptance {
 		pc.TransferSyntax = ""
 	}
@@ -540,6 +539,7 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, error) {
 	ui := &UserInformation{}
 	maximumLengthSeen := false
+	implementationClassUIDSeen := false
 	reader := bytes.NewReader(data)
 
 	for {
@@ -553,6 +553,10 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 
 		switch itemType {
 		case ItemTypeMaximumLength:
+			// PS3.8 D.1.1: only one Maximum Length Sub-Item shall be present.
+			if maximumLengthSeen {
+				return nil, fmt.Errorf("duplicate maximum length sub-item in user information")
+			}
 			if len(itemData) != 4 {
 				return nil, fmt.Errorf("invalid maximum length data: %d bytes", len(itemData))
 			}
@@ -560,6 +564,11 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 			maximumLengthSeen = true
 
 		case ItemTypeImplementationClassUID:
+			// PS3.8 D.1.2: only one Implementation Class UID Sub-Item shall be present.
+			if implementationClassUIDSeen {
+				return nil, fmt.Errorf("duplicate implementation class UID sub-item in user information")
+			}
+			implementationClassUIDSeen = true
 			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
 
 		case ItemTypeImplementationVersionName:

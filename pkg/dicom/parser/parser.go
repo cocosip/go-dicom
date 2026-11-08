@@ -760,6 +760,21 @@ func (p *parseContext) normalizeImplicitVR(ds *dataset.Dataset) error {
 		tag.LargestImagePixelValueInPlaneRETIRED.ToUint32():  true,
 		tag.PixelPaddingValue.ToUint32():                     true,
 		tag.PixelPaddingRangeLimit.ToUint32():                true,
+		// LUT / palette descriptors: the first mapped value is US or SS depending
+		// on Pixel Representation (PS3.5 Table 6.2-1).
+		tag.LUTDescriptor.ToUint32():                                      true,
+		tag.GrayLookupTableDescriptorRETIRED.ToUint32():                   true,
+		tag.RedPaletteColorLookupTableDescriptor.ToUint32():               true,
+		tag.GreenPaletteColorLookupTableDescriptor.ToUint32():             true,
+		tag.BluePaletteColorLookupTableDescriptor.ToUint32():              true,
+		tag.LargeRedPaletteColorLookupTableDescriptorRETIRED.ToUint32():   true,
+		tag.LargeGreenPaletteColorLookupTableDescriptorRETIRED.ToUint32(): true,
+		tag.LargeBluePaletteColorLookupTableDescriptorRETIRED.ToUint32():  true,
+		// Real World Value and Histogram mapped values are likewise US or SS.
+		tag.RealWorldValueFirstValueMapped.ToUint32(): true,
+		tag.RealWorldValueLastValueMapped.ToUint32():  true,
+		tag.HistogramFirstBinValue.ToUint32():         true,
+		tag.HistogramLastBinValue.ToUint32():          true,
 	}
 	dictionary := p.dictionary
 	if dictionary == nil {

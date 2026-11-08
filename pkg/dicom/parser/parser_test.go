@@ -271,6 +271,32 @@ func TestParseImplicitVRResolvesSignedPixelValueInNestedItem(t *testing.T) {
 	}
 }
 
+func TestParseImplicitVRResolvesSignedLUTDescriptor(t *testing.T) {
+	var raw bytes.Buffer
+	writeImplicitElement(&raw, 0x0028, 0x0103, []byte{1, 0}) // Pixel Representation = signed
+	// LUT Descriptor {3, -1, 8}: entries=3, first mapped=-1, bits=8.
+	writeImplicitElement(&raw, 0x0028, 0x3002, []byte{3, 0, 0xff, 0xff, 8, 0})
+	result, err := Parse(bytes.NewReader(raw.Bytes()), WithAssumedTransferSyntax(transfer.ImplicitVRLittleEndian))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	elem, ok := result.Dataset.Get(tag.LUTDescriptor)
+	if !ok {
+		t.Fatal("LUTDescriptor not found")
+	}
+	signed, ok := elem.(*element.SignedShort)
+	if !ok {
+		t.Fatalf("LUTDescriptor type = %T, want *element.SignedShort", elem)
+	}
+	values, err := signed.GetValues()
+	if err != nil {
+		t.Fatalf("GetValues() error = %v", err)
+	}
+	if len(values) != 3 || values[0] != 3 || values[1] != -1 || values[2] != 8 {
+		t.Fatalf("LUTDescriptor = %v, want [3 -1 8]", values)
+	}
+}
+
 func TestParseCreatesTypedDecimalStringForDS(t *testing.T) {
 	var raw bytes.Buffer
 	writeImplicitElement(&raw, tag.RescaleSlope.Group(), tag.RescaleSlope.Element(), []byte("1.5 "))

@@ -14,6 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // EncodeDIMSEMessage encodes a DIMSE message into command and data datasets.
@@ -30,6 +31,9 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 		return nil, nil, fmt.Errorf("message has no command dataset")
 	}
 	if err := validateRequiredDataset(msg); err != nil {
+		return nil, nil, err
+	}
+	if err := validateCEchoResponseStatus(msg); err != nil {
 		return nil, nil, err
 	}
 	if _, hasPriority := commandDS.Get(tag.Priority); hasPriority {
@@ -120,6 +124,25 @@ func validateRequiredDataset(msg dimse.Message) error {
 		if msg.DataDataset() == nil {
 			return fmt.Errorf("%s requires a data set", dimse.CommandField(msg.CommandField()))
 		}
+	}
+	return nil
+}
+
+// validateCEchoResponseStatus rejects an outgoing C-ECHO-RSP whose Status is not
+// Success. PS3.7 9.3.5.2 (Table 9.3-13): the C-ECHO-RSP Status "shall have a
+// value of Success". NewCEchoResponse keeps a non-Success status only so a
+// non-conformant peer response can be represented for diagnostics; the wire
+// encoder is the rejection point.
+func validateCEchoResponseStatus(msg dimse.Message) error {
+	if dimse.CommandField(msg.CommandField()) != dimse.CommandCEchoRSP {
+		return nil
+	}
+	code, err := msg.CommandDataset().GetUInt16(tag.Status, 0)
+	if err != nil {
+		return fmt.Errorf("C-ECHO-RSP has no Status element: %w", err)
+	}
+	if code != status.Success.Code {
+		return fmt.Errorf("C-ECHO-RSP status 0x%04X is not allowed: PS3.7 9.3.5.2 requires Success", code)
 	}
 	return nil
 }

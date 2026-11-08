@@ -58,6 +58,11 @@ type CEchoResponse struct {
 }
 
 // NewCEchoResponse creates a new C-ECHO-RSP message.
+//
+// PS3.7 9.3.5.2 (Table 9.3-13) requires the C-ECHO-RSP Status to be Success. A
+// non-Success status is accepted here only so that a non-conformant peer's
+// response can be represented for diagnostics; EncodeDIMSEMessage rejects such
+// a message, so it can never be sent over the wire.
 func NewCEchoResponse(messageIDBeingRespondedTo uint16, s *status.Status) *CEchoResponse {
 	s = resolveStatus(s)
 	// Create command dataset

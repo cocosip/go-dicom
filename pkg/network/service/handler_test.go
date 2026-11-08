@@ -210,16 +210,16 @@ func TestUnhandledDIMSERequestsReturnFailure(t *testing.T) {
 		wantStatus uint16
 		handle     func(*Service, context.Context) error
 	}{
-		{"C-STORE", status.CStoreErrorCannotUnderstand.Code, func(s *Service, ctx context.Context) error {
+		{"C-STORE", status.RefusedSOPClassNotSupported.Code, func(s *Service, ctx context.Context) error {
 			return s.handleCStoreRequest(ctx, storeRequest, nil)
 		}},
-		{"C-FIND", status.CFindFailedUnableToProcess.Code, func(s *Service, ctx context.Context) error {
+		{"C-FIND", status.RefusedSOPClassNotSupported.Code, func(s *Service, ctx context.Context) error {
 			return s.handleCFindRequest(ctx, dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New()), nil)
 		}},
-		{"C-MOVE", status.CMoveFailedUnableToProcess.Code, func(s *Service, ctx context.Context) error {
+		{"C-MOVE", status.RefusedSOPClassNotSupported.Code, func(s *Service, ctx context.Context) error {
 			return s.handleCMoveRequest(ctx, dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST", dataset.New()), nil)
 		}},
-		{"C-GET", status.CGetFailedUnableToProcess.Code, func(s *Service, ctx context.Context) error {
+		{"C-GET", status.RefusedSOPClassNotSupported.Code, func(s *Service, ctx context.Context) error {
 			return s.handleCGetRequest(ctx, dimse.NewCGetRequest(dimse.QueryRetrieveLevelStudy, dataset.New()), nil)
 		}},
 		{"N-EVENT-REPORT", status.NEventReportFailureProcessingFailure.Code, func(s *Service, ctx context.Context) error {

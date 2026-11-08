@@ -343,3 +343,13 @@ func TestMustParseDateRange(t *testing.T) {
 
 	MustParseDateRange(testInvalidRangeInput)
 }
+
+func TestParseTimeRangeDoesNotTreatBoundsAsTimezone(t *testing.T) {
+	r, err := ParseTimeRange("1000-1800")
+	if err != nil {
+		t.Fatalf("ParseTimeRange() error = %v", err)
+	}
+	if r.Minimum.Hour() != 10 || r.Maximum.Hour() != 18 {
+		t.Fatalf("range = %v..%v, want 10:00..18:00", r.Minimum, r.Maximum)
+	}
+}

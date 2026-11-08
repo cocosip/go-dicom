@@ -286,3 +286,35 @@ func TestVRValidateString(t *testing.T) {
 	}
 	vr.PerformValidation = true // Reset
 }
+
+func TestValidateDT(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{"date only", "20251108", false},
+		{"full datetime", "20251108172000", false},
+		{"fractional seconds", "20251108172000.123456", false},
+		{"conformant offset", "20251108172000.000000+0800", false},
+		{"negative offset", "20251108172000-0500", false},
+		{"trailing space", "20251108172000 ", false},
+		{"ampersand offset", "20251108172000.000000&+0800", true},
+		{"negative zero offset", "20251108172000+0000", false},
+		{"minus zero offset", "20251108172000-0000", true},
+		{"odd digit count", "202511081", true},
+		{"bad month", "20251308", true},
+		{"bad hour", "2025110825", true},
+		{"fraction without seconds", "2025110817.5", true},
+		{"too many fraction digits", "20251108172000.1234567", true},
+		{"nondigit", "2025110X", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := vr.ValidateDT(tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateDT(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}

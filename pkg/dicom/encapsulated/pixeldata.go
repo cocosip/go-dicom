@@ -184,10 +184,9 @@ func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
 			length := p.offsets.lengths[frameIndex]
 			var payloadLength uint64
 			for fragmentIndex := start; fragmentIndex < end; fragmentIndex++ {
+				// Extended Offset Table Lengths exclude the trailing pad byte of an
+				// odd-length fragment (PS3.3 Table C.7-11a), so do not round up.
 				fragmentLength := uint64(fragments[fragmentIndex].Size())
-				if fragmentLength%2 != 0 {
-					fragmentLength++
-				}
 				if payloadLength > math.MaxUint64-fragmentLength {
 					return nil, fmt.Errorf("extended offset table length overflow for frame %d", frameIndex)
 				}

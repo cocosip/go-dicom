@@ -75,6 +75,11 @@ func (info *Info) BytesAllocated() int {
 }
 
 // UncompressedFrameSize calculates the uncompressed size of a single frame in bytes.
+//
+// Native YBR_FULL_422 and YBR_PARTIAL_422 rows pack two luma samples followed by
+// one CB/CR pair, so the frame size is Rows*Columns*2*bytes (PS3.3 C.7.6.3.1.2,
+// note 2). Info.Validate rejects odd Columns for these photometric
+// interpretations, since a partial pixel pair cannot be encoded.
 func (info *Info) UncompressedFrameSize() int {
 	if info.BitsAllocated == 1 {
 		// Bit-packed samples: all samples of every pixel share one continuous
@@ -83,26 +88,14 @@ func (info *Info) UncompressedFrameSize() int {
 		return (samples-1)/8 + 1
 	}
 
-	// Handle special case for YBR_FULL_422 with uneven width
-	actualWidth := int(info.Width)
-	if actualWidth%2 != 0 &&
-		info.PhotometricInterpretation != nil &&
-		(info.PhotometricInterpretation.Value == pixel.YbrFull422.Value ||
-			info.PhotometricInterpretation.Value == pixel.YbrPartial422.Value ||
-			info.PhotometricInterpretation.Value == pixel.YbrPartial420.Value) {
-		actualWidth++
-	}
-
-	// Handle YBR_FULL_422 special case for uncompressed data
 	if info.PhotometricInterpretation != nil &&
 		(info.PhotometricInterpretation.Value == pixel.YbrFull422.Value ||
-			info.PhotometricInterpretation.Value == pixel.YbrPartial422.Value ||
-			info.PhotometricInterpretation.Value == pixel.YbrPartial420.Value) {
-		// For uncompressed transfer syntaxes, chrominance channels are downsampled
-		return info.BytesAllocated() * 2 * actualWidth * int(info.Height)
+			info.PhotometricInterpretation.Value == pixel.YbrPartial422.Value) {
+		// Native 4:2:2 packs two pixels into 2*bytes: Y1, Y2, CB, CR.
+		return info.BytesAllocated() * 2 * int(info.Width) * int(info.Height)
 	}
 
-	return info.BytesAllocated() * int(info.SamplesPerPixel) * actualWidth * int(info.Height)
+	return info.BytesAllocated() * int(info.SamplesPerPixel) * int(info.Width) * int(info.Height)
 }
 
 // TotalUncompressedSize returns the total size of all frames uncompressed.
@@ -139,6 +132,15 @@ func (info *Info) Validate() error {
 	}
 	if info.PixelPaddingRangeLimit != nil && info.PixelPaddingValue == nil {
 		return fmt.Errorf("pixel padding range limit requires pixel padding value")
+	}
+	if info.PhotometricInterpretation != nil && !info.Encapsulated {
+		value := info.PhotometricInterpretation.Value
+		switch value {
+		case pixel.YbrRct.Value, pixel.YbrIct.Value, pixel.YbrPartial420.Value:
+			// PS3.5 8.2: these photometric interpretations are not encodable in
+			// native (uncompressed) Pixel Data.
+			return fmt.Errorf("%s is not permitted for native Pixel Data", value)
+		}
 	}
 
 	return nil
@@ -509,7 +511,9 @@ func (pd *Data) ConvertMonochrome1ToMonochrome2() error {
 }
 
 // ConvertYBRToRGB converts uncompressed YBR data to interleaved RGB (Photometric=RGB).
-// Supports YBR_FULL and YBR_FULL_422 with 8-bit samples; other variants are not handled here.
+// Supports YBR_FULL, YBR_FULL_422 and YBR_PARTIAL_422. Encapsulated-only color
+// spaces (YBR_RCT, YBR_ICT, YBR_PARTIAL_420) are rejected by Info.Validate for
+// native data and must be converted by the codec that decodes them.
 func (pd *Data) ConvertYBRToRGB() error {
 	if pd.Info == nil {
 		return fmt.Errorf("pixel data info is nil")
@@ -565,24 +569,8 @@ func (pd *Data) ConvertYBRToRGB() error {
 			}
 			pd.frames[i] = converted
 		}
-	case pixel.YbrIct.Value:
-		bytesPerSample := pd.Info.BytesAllocated()
-		for i, frame := range pd.frames {
-			converted, err := colorconv.ConvertYBRICTToRGB(frame, bytesPerSample*8)
-			if err != nil {
-				return fmt.Errorf("frame %d: %w", i, err)
-			}
-			pd.frames[i] = converted
-		}
-	case pixel.YbrRct.Value:
-		bytesPerSample := pd.Info.BytesAllocated()
-		for i, frame := range pd.frames {
-			converted, err := colorconv.ConvertYBRRCTToRGB(frame, bytesPerSample*8)
-			if err != nil {
-				return fmt.Errorf("frame %d: %w", i, err)
-			}
-			pd.frames[i] = converted
-		}
+	case pixel.YbrIct.Value, pixel.YbrRct.Value:
+		return fmt.Errorf("%s is only permitted for encapsulated Pixel Data (PS3.5 8.2); decode it to RGB in the codec", pd.Info.PhotometricInterpretation.Value)
 	default:
 		return fmt.Errorf("photometric %s not supported for YBR->RGB conversion", pd.Info.PhotometricInterpretation.Value)
 	}
@@ -675,7 +663,8 @@ func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ig
 		if voiSource := datasetContaining(functional, ds, tag.VOILUTSequence); voiSource != nil {
 			converted, err = applyVOILUTWithModality(frameData, voiSource, center, width, ignorePadding, modality)
 		} else {
-			converted, err = applyWindowTo8bitWithModality(frameData, center, width, ignorePadding, modality)
+			function := windowFunctionForDatasets(functional, ds)
+			converted, err = applyWindowTo8bitWithModality(frameData, center, width, ignorePadding, modality, function)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("frame %d: %w", frameIndex, err)
@@ -683,6 +672,24 @@ func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ig
 		result[frameIndex] = converted[0]
 	}
 	return result, nil
+}
+
+// windowFunctionForDatasets reads VOI LUT Function (0028,1056) for the frame,
+// defaulting to LINEAR when absent or empty (PS3.3 C.11.2.1.3).
+func windowFunctionForDatasets(primary, fallback *dataset.Dataset) lut.VOILUTFunction {
+	source := datasetContaining(primary, fallback, tag.VOILUTFunction)
+	if source == nil {
+		return lut.VOILUTFunctionLinear
+	}
+	value, ok := source.GetString(tag.VOILUTFunction)
+	if !ok {
+		return lut.VOILUTFunctionLinear
+	}
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if value == "" {
+		return lut.VOILUTFunctionLinear
+	}
+	return lut.VOILUTFunction(value)
 }
 
 func modalityTransformForDatasets(primary, fallback *dataset.Dataset, pd *Data) (lut.LUT, error) {
@@ -777,6 +784,12 @@ func datasetContaining(primary, fallback *dataset.Dataset, tags ...*tag.Tag) *da
 func (pd *Data) ToElement() (element.Element, error) {
 	if pd.Info == nil {
 		return nil, fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.PhotometricInterpretation != nil &&
+		pd.Info.PhotometricInterpretation.Value == pixel.ARGBPhotometric.Value {
+		// ARGB is retired (PS3.3 C.7.6.3.1.1); legacy ARGB data may be read and
+		// rendered, but must not be written back as a live photometric value.
+		return nil, fmt.Errorf("cannot write Pixel Data with retired photometric interpretation %s", pixel.ARGBPhotometric.Value)
 	}
 
 	// Encapsulated pixel data is always encoded as OB per DICOM Part 5.
@@ -1255,13 +1268,15 @@ type paletteLUT struct {
 	hasAlpha bool
 }
 
-// ConvertPaletteToRGB loads a Dataset palette and converts frames to RGB or RGBA.
+// ConvertPaletteToRGB loads a Dataset palette and converts frames to RGB.
+// When the Alpha Palette Color LUT is present its opacity is composited over
+// black, so the result is always a 3-sample RGB image.
 func ConvertPaletteToRGB(ds *dataset.Dataset, pd *Data) error {
 	return ConvertPaletteToRGBWithVRMode(ds, pd, LUTCompatible)
 }
 
 // ConvertPaletteToRGBWithVRMode loads a Dataset palette and converts frames to
-// RGB or RGBA using the requested LUT Data VR policy.
+// RGB using the requested LUT Data VR policy (alpha composited over black).
 func ConvertPaletteToRGBWithVRMode(ds *dataset.Dataset, pd *Data, mode LUTVRMode) error {
 	lut, err := buildPaletteLUTWithVRMode(ds, mode)
 	if err != nil {
@@ -1275,11 +1290,7 @@ func ConvertPaletteToRGBWithVRMode(ds *dataset.Dataset, pd *Data, mode LUTVRMode
 
 	for fi, frame := range pd.frames {
 		pixelCount := frameSampleCount(frame, pd.Info)
-		channels := 3
-		if lut.hasAlpha {
-			channels = 4
-		}
-		out := make([]byte, pixelCount*channels)
+		out := make([]byte, pixelCount*3)
 
 		for idx := 0; idx < pixelCount; idx++ {
 			off := sampleOffset(idx, pd.Info)
@@ -1300,30 +1311,41 @@ func ConvertPaletteToRGBWithVRMode(ds *dataset.Dataset, pd *Data, mode LUTVRMode
 			}
 
 			color := lut.entries[idxLUT]
-			base := idx * channels
+			base := idx * 3
+			if lut.hasAlpha {
+				// The Alpha Palette LUT carries opacity. Composite it onto an
+				// opaque black background so the result stays a legal RGB image
+				// with SamplesPerPixel=3 (PS3.3 C.7.6.3.1.1); DICOM has no
+				// 4-sample RGB photometric interpretation.
+				out[base] = compositeOverBlack(color.R, color.A)
+				out[base+1] = compositeOverBlack(color.G, color.A)
+				out[base+2] = compositeOverBlack(color.B, color.A)
+				continue
+			}
 			out[base] = color.R
 			out[base+1] = color.G
 			out[base+2] = color.B
-			if lut.hasAlpha {
-				out[base+3] = color.A
-			}
 		}
 
 		pd.frames[fi] = out
 	}
 
-	// Update metadata to RGB
+	// Update metadata to RGB. Alpha, when present, has been composited above,
+	// so the output is always 3 samples per pixel.
 	pd.Info.PhotometricInterpretation = pixel.RGBPhotometric
-	pd.Info.SamplesPerPixel = uint16(3)
-	if lut.hasAlpha {
-		pd.Info.SamplesPerPixel = 4
-	}
+	pd.Info.SamplesPerPixel = 3
 	pd.Info.PlanarConfiguration = pixel.InterleavedPlanar
 	pd.Info.BitsAllocated = 8
 	pd.Info.BitsStored = 8
 	pd.Info.HighBit = 7
 
 	return nil
+}
+
+// compositeOverBlack returns an opaque RGB component for a palette sample with
+// the given opacity, using round-half-up scaling.
+func compositeOverBlack(sample, alpha uint8) uint8 {
+	return uint8((uint32(sample)*uint32(alpha) + 127) / 255)
 }
 
 func buildPaletteLUT(ds *dataset.Dataset) (*paletteLUT, error) {

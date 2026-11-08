@@ -165,7 +165,31 @@ func (sr *StructuredReport) Validate() error {
 	if sr.Dataset().Contains(tag.RelationshipType) {
 		return NewError("root must not have Relationship Type")
 	}
+	if err := validateSRGeneralModule(sr.Dataset()); err != nil {
+		return err
+	}
 	return validateContentItem(sr.ContentItem, true, "")
+}
+
+// validateSRGeneralModule enforces the Type 1 attributes of the SR Document
+// General Module (PS3.3 C.17.2, Table C.17-2).
+func validateSRGeneralModule(ds *dataset.Dataset) error {
+	for _, required := range []*tag.Tag{
+		tag.InstanceNumber,
+		tag.CompletionFlag,
+		tag.VerificationFlag,
+		tag.ContentDate,
+		tag.ContentTime,
+	} {
+		if !ds.Contains(required) {
+			return NewErrorf("SR Document General Module requires %s", required)
+		}
+	}
+	if verificationFlag, ok := ds.GetString(tag.VerificationFlag); ok && strings.TrimSpace(verificationFlag) == "VERIFIED" &&
+		!ds.Contains(tag.VerifyingObserverSequence) {
+		return NewError("VERIFIED SR requires a Verifying Observer Sequence")
+	}
+	return nil
 }
 
 func validateContentItem(item *ContentItem, root bool, path string) error {
@@ -283,8 +307,9 @@ func validateContentValue(item *ContentItem, valueType ValueType) error {
 	switch valueType {
 	case ValueTypeContainer:
 		continuity := item.Continuity()
-		if continuity != ContinuityNone && continuity != ContinuitySeparate && continuity != ContinuityContinuous {
-			return NewErrorf("unknown continuity of content %q", continuity)
+		// Continuity of Content is Type 1 for CONTAINER items.
+		if continuity != ContinuitySeparate && continuity != ContinuityContinuous {
+			return NewErrorf("container requires a valid continuity of content, got %q", continuity)
 		}
 	case ValueTypeText:
 		_, err := item.GetText()

@@ -77,35 +77,15 @@ func GenerateDerivedFromUUID() *UID {
 // convertUUIDToInteger converts a UUID to its integer OID format.
 //
 // According to ISO/IEC 9834-8 (referenced by DICOM PS3.5 B.2), a UUID
-// can be converted to a single integer value in the OID arc 2.25.
+// can be converted to a single integer value in the OID arc 2.25 by
+// interpreting the 128-bit UUID value as an unsigned integer.
 //
-// The UUID bytes are reordered to big-endian format and then interpreted
-// as a 128-bit unsigned integer.
+// A google/uuid.UUID already stores the octets in RFC 4122 (network/big-endian)
+// order, so the octets are used as-is; interpreting them as a big-endian
+// integer yields the UUID's numeric value.
 func convertUUIDToInteger(u uuid.UUID) string {
-	// UUID bytes from uuid.UUID are in RFC 4122 format:
-	// time_low (4 bytes) | time_mid (2 bytes) | time_hi_and_version (2 bytes) |
-	// clock_seq_hi_and_reserved (1 byte) | clock_seq_low (1 byte) | node (6 bytes)
-	//
-	// To convert to a single integer, we need to reorder these bytes to
-	// create a big-endian representation of the 128-bit value.
-	//
-	// The byte order transformation follows the .NET implementation:
-	// Original indices: [0..15]
-	// Reordered: [15,14,13,12,11,10,9,8,6,7,4,5,0,1,2,3]
-	octets := u[:]
-
-	// Create big-endian byte order for BigInt
-	// BigInt expects bytes in big-endian order (most significant byte first)
-	bigEndianOrder := []byte{
-		octets[15], octets[14], octets[13], octets[12],
-		octets[11], octets[10], octets[9], octets[8],
-		octets[6], octets[7], octets[4], octets[5],
-		octets[0], octets[1], octets[2], octets[3],
-	}
-
-	// Convert to big integer
 	var intValue big.Int
-	intValue.SetBytes(bigEndianOrder)
+	intValue.SetBytes(u[:])
 
 	// Return as 2.25.{integer} format
 	return "2.25." + intValue.String()

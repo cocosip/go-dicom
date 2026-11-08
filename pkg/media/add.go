@@ -65,7 +65,13 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 
 	patientID, _ := stringValue(file.Dataset, tag.PatientID)
 	patientName, _ := stringValue(file.Dataset, tag.PatientName)
-	patientKey := patientID + "\x00" + normalizePersonName(patientName)
+	// PS3.3 F.5.1: the Patient ID shall be unique within a File-set, so records
+	// are matched by Patient ID alone. Fall back to the name only when the
+	// (non-conformant) Patient ID is empty.
+	patientKey := patientID
+	if patientKey == "" {
+		patientKey = "\x00" + normalizePersonName(patientName)
+	}
 
 	patient, err := d.findOrCreate(nil, d.roots, RecordPatient, patientKey, file.Dataset)
 	if err != nil {
@@ -90,7 +96,10 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 		}
 	}
 
-	instanceType := instanceRecordType(sopClassUID)
+	instanceType, err := instanceRecordType(sopClassUID)
+	if err != nil {
+		return nil, err
+	}
 	instance, err := d.newRecord(instanceType, instanceUID, file.Dataset)
 	if err != nil {
 		return nil, err
@@ -201,9 +210,13 @@ func (d *Directory) newRecord(recordType RecordType, key string, source *dataset
 		}
 	}
 
+	required := requiredTagSet(recordType)
 	for _, attributeTag := range recordAttributeTags[recordType] {
 		item, ok := source.Get(attributeTag)
 		if !ok {
+			if required[attributeTag.ToUint32()] {
+				return nil, fmt.Errorf("required %s record attribute %s is missing", recordType, attributeTag)
+			}
 			d.diagnostics = append(d.diagnostics, Diagnostic{
 				Code:       DiagnosticOptionalAttributeMissing,
 				Severity:   SeverityInfo,
@@ -260,16 +273,29 @@ func normalizePersonName(value string) string {
 	return strings.Join(representations, "=")
 }
 
-func instanceRecordType(sopClassUID string) RecordType {
+func instanceRecordType(sopClassUID string) (RecordType, error) {
 	class := uid.Parse(sopClassUID, "", uid.TypeSOPClass)
 	switch class.StorageCategory() {
 	case uid.StorageCategoryStructuredReport:
-		return RecordSRDocument
+		return RecordSRDocument, nil
 	case uid.StorageCategoryPresentationState:
-		return RecordPresentation
+		return RecordPresentation, nil
+	case uid.StorageCategoryImage, uid.StorageCategoryVolume:
+		return RecordImage, nil
 	default:
-		return RecordImage
+		// Do not mislabel a non-image SOP Class as an IMAGE record.
+		return "", fmt.Errorf("no DICOMDIR directory record type for SOP Class %s (category %d)", sopClassUID, class.StorageCategory())
 	}
+}
+
+// requiredTagSet returns the Type 1 tags of a record type as a lookup set.
+func requiredTagSet(recordType RecordType) map[uint32]bool {
+	tags := recordRequiredTags[recordType]
+	set := make(map[uint32]bool, len(tags))
+	for _, t := range tags {
+		set[t.ToUint32()] = true
+	}
+	return set
 }
 
 func containsRecord(records []*Record, target *Record) bool {

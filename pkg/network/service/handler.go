@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
@@ -145,6 +146,9 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 			return err
 		}
 		if err := s.requireLocalRole(pc, false); err != nil {
+			return err
+		}
+		if handled, err := s.rejectCRequestForPresentationContext(ctx, pc, req); handled {
 			return err
 		}
 	}
@@ -366,28 +370,36 @@ func (s *Service) dispatchRequest(ctx context.Context, req dimse.Request, handle
 }
 
 // handleCEchoRequest handles a C-ECHO request.
+//
+// PS3.7 9.3.5.2 (Table 9.3-13) requires the C-ECHO-RSP Status to be Success, so
+// a handler error cannot be reported in the response; the handler is expected
+// to log it. The response is therefore always Success.
 func (s *Service) handleCEchoRequest(ctx context.Context, req *dimse.CEchoRequest, handlers *Handlers) error {
-	var resp *dimse.CEchoResponse
-
-	// Use custom handler if available
+	// Call the handler for its side effects, but never forward its status or
+	// error: a C-ECHO-RSP with any status other than Success is non-conformant.
 	if handlers != nil && handlers.CEchoHandler != nil {
-		var err error
-		resp, err = handlers.CEchoHandler(ctx, req)
-		if err != nil {
-			// Handler returned error - send failure response
-			resp = dimse.NewCEchoResponseFromRequest(req, status.ErrorProcessingFailure)
-		}
-	} else {
-		// Default handler - always return success
-		resp = dimse.NewCEchoResponseFromRequest(req, status.Success)
+		_, _ = handlers.CEchoHandler(ctx, req)
 	}
 
-	// Send response
-	return s.Send(ctx, resp)
+	return s.Send(ctx, dimse.NewCEchoResponseFromRequest(req, status.Success))
 }
 
 // handleCStoreRequest handles a C-STORE request.
 func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequest, handlers *Handlers) error {
+	// PS3.7 9.1.1.1.9: the SCP rejects a Data Set that does not match the
+	// SOP Class / Instance identified by the command set with 0xA900. A
+	// mismatched instance UID indicates a duplicate/corrupt instance (0x0111).
+	if dataDS := req.DataDataset(); dataDS != nil {
+		if classUID, ok := dataDS.GetString(tag.SOPClassUID); ok && classUID != "" &&
+			classUID != req.AffectedSOPClassUID() {
+			return s.Send(ctx, dimse.NewCStoreResponseFromRequest(req, status.ErrorDataSetDoesNotMatchSOPClass))
+		}
+		if instanceUID, ok := dataDS.GetString(tag.SOPInstanceUID); ok && instanceUID != "" &&
+			instanceUID != req.AffectedSOPInstanceUID() {
+			return s.Send(ctx, dimse.NewCStoreResponseFromRequest(req, status.ErrorDuplicateSOPInstance))
+		}
+	}
+
 	var resp *dimse.CStoreResponse
 
 	// Use custom handler if available
@@ -399,7 +411,9 @@ func (s *Service) handleCStoreRequest(ctx context.Context, req *dimse.CStoreRequ
 			resp = dimse.NewCStoreResponseFromRequest(req, status.CStoreRefusedOutOfResources)
 		}
 	} else {
-		resp = dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand)
+		// No handler means this SCP does not store the SOP Class at all
+		// (PS3.7 9.1.1.1.9: Refused: SOP Class not supported, 0x0122).
+		resp = dimse.NewCStoreResponseFromRequest(req, status.RefusedSOPClassNotSupported)
 	}
 
 	// Send response
@@ -424,7 +438,9 @@ func (s *Service) handleCFindRequest(ctx context.Context, req *dimse.CFindReques
 	})
 
 	if handlers == nil || handlers.CFindHandler == nil {
-		return op.SendFinal(status.CFindFailedUnableToProcess)
+		// No handler means the Query/Retrieve SOP Class is not supported
+		// (PS3.7 9.1.2.1.6: Refused: SOP Class not supported, 0x0122).
+		return op.SendFinal(status.RefusedSOPClassNotSupported)
 	}
 	handlerErr := handlers.CFindHandler(handlerCtx, op)
 
@@ -457,7 +473,9 @@ func (s *Service) handleCMoveRequest(ctx context.Context, req *dimse.CMoveReques
 	defer unregister()
 
 	if handlers == nil || handlers.CMoveHandler == nil {
-		return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.CMoveFailedUnableToProcess))
+		// No handler means the Query/Retrieve SOP Class is not supported
+		// (PS3.7 9.1.4.1.6: Refused: SOP Class not supported, 0x0122).
+		return s.Send(ctx, dimse.NewCMoveResponseFromRequest(req, status.RefusedSOPClassNotSupported))
 	}
 
 	op := newCMoveOperation(req, func(resp *dimse.CMoveResponse) error {
@@ -494,7 +512,9 @@ func (s *Service) handleCGetRequest(ctx context.Context, req *dimse.CGetRequest,
 	defer unregister()
 
 	if handlers == nil || handlers.CGetHandler == nil {
-		return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.CGetFailedUnableToProcess))
+		// No handler means the Query/Retrieve SOP Class is not supported
+		// (PS3.7 9.1.3.1.6: Refused: SOP Class not supported, 0x0122).
+		return s.Send(ctx, dimse.NewCGetResponseFromRequest(req, status.RefusedSOPClassNotSupported))
 	}
 
 	op := newCGetOperation(

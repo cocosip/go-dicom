@@ -45,14 +45,14 @@ func TestAddFileGroupsRecordsAndReturnsExistingDuplicate(t *testing.T) {
 	if entry1.Patient != entry2.Patient || entry1.Study != entry2.Study || entry1.Series != entry2.Series {
 		t.Fatal("equivalent patient name and identical UIDs did not reuse records")
 	}
-	if entry1.Patient == entry3.Patient {
-		t.Fatal("different patient name content reused the patient record")
+	if entry1.Patient != entry3.Patient {
+		t.Fatal("same Patient ID should reuse the patient record (PS3.3 F.5.1)")
 	}
 	if duplicate.Instance != entry1.Instance {
 		t.Fatal("duplicate SOP Instance UID created another instance record")
 	}
-	if got := len(dir.RootRecords()); got != 2 {
-		t.Fatalf("root records = %d, want 2", got)
+	if got := len(dir.RootRecords()); got != 1 {
+		t.Fatalf("root records = %d, want 1", got)
 	}
 	if got := len(entry1.Series.Children()); got != 2 {
 		t.Fatalf("instance records = %d, want 2", got)

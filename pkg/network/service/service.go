@@ -15,6 +15,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
+	"github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 // Service represents a DICOM network service.
@@ -432,6 +433,67 @@ func presentationContextForRequest(assoc *association.Association, req dimse.Req
 		return nil, fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
 	}
 	return pc, nil
+}
+
+// supportsSOPClass reports whether the configured SCP implements sopClassUID.
+// An empty configured set means "no restriction" (accept all).
+func (s *Service) supportsSOPClass(sopClassUID string) bool {
+	if len(s.config.supportedSOPClasses) == 0 {
+		return true
+	}
+	_, ok := s.config.supportedSOPClasses[trimSOPClassUID(sopClassUID)]
+	return ok
+}
+
+// rejectCRequestForPresentationContext refuses a DIMSE-C request whose SOP Class
+// is unsupported (0x0122) or does not match the abstract syntax of the
+// presentation context it arrived on (0xA900). It reports whether a response
+// was sent. DIMSE-N requests are exempt: their command SOP Class need not match
+// the presentation context (PS3.7 10.1). C-ECHO is exempt because its response
+// Status is always Success (PS3.7 9.3.5.2).
+func (s *Service) rejectCRequestForPresentationContext(ctx context.Context, pc *association.PresentationContext, req dimse.Request) (bool, error) {
+	if pc == nil {
+		return false, nil
+	}
+
+	var sopClassUID string
+	var respond func(*status.Status) dimse.Response
+	switch r := req.(type) {
+	case *dimse.CStoreRequest:
+		sopClassUID = r.AffectedSOPClassUID()
+		respond = func(st *status.Status) dimse.Response {
+			return dimse.NewCStoreResponseFromRequest(r, st)
+		}
+	case *dimse.CFindRequest:
+		sopClassUID = r.AffectedSOPClassUID()
+		respond = func(st *status.Status) dimse.Response {
+			return dimse.NewCFindResponseFromRequest(r, st, nil)
+		}
+	case *dimse.CMoveRequest:
+		sopClassUID = r.AffectedSOPClassUID()
+		respond = func(st *status.Status) dimse.Response {
+			return dimse.NewCMoveResponseFromRequest(r, st)
+		}
+	case *dimse.CGetRequest:
+		sopClassUID = r.AffectedSOPClassUID()
+		respond = func(st *status.Status) dimse.Response {
+			return dimse.NewCGetResponseFromRequest(r, st)
+		}
+	default:
+		return false, nil
+	}
+
+	sopClassUID = trimSOPClassUID(sopClassUID)
+	if sopClassUID == "" {
+		return false, nil
+	}
+	if !s.supportsSOPClass(sopClassUID) {
+		return true, s.Send(ctx, respond(status.RefusedSOPClassNotSupported))
+	}
+	if abstractSyntax := trimSOPClassUID(pc.AbstractSyntax); abstractSyntax != "" && abstractSyntax != sopClassUID {
+		return true, s.Send(ctx, respond(status.ErrorDataSetDoesNotMatchSOPClass))
+	}
+	return false, nil
 }
 
 // GetState returns the current state of the service.

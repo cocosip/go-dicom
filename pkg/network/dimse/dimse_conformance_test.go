@@ -107,7 +107,9 @@ func TestNResponsesAttachAttributeListOnlyOnSuccess(t *testing.T) {
 	getOK := NewNGetResponse(1, status.NGetSuccess, uid, uid, attributeList)
 	check("N-GET success", getOK.CommandDataset(), getOK.DataDataset(), true)
 	getWarn := NewNGetResponse(2, status.NGetWarningAttributeListError, uid, uid, attributeList)
-	check("N-GET warning", getWarn.CommandDataset(), getWarn.DataDataset(), false)
+	// PS3.7 10.1.2 + Annex C: a 0x0107 Attribute List Error still returns the
+	// attribute list that could be read.
+	check("N-GET warning", getWarn.CommandDataset(), getWarn.DataDataset(), true)
 
 	setOK := NewNSetResponse(3, status.NSetSuccess, uid, uid, attributeList)
 	check("N-SET success", setOK.CommandDataset(), setOK.DataDataset(), true)

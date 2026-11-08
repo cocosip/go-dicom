@@ -215,6 +215,15 @@ func NewFilmBox(sopInstanceUID string, imageDisplayFormat string) *FilmBox {
 // ParseImageDisplayFormat parses the image display format string and returns
 // the total number of image boxes required
 func ParseImageDisplayFormat(format string) (int, error) {
+	// SLIDE and SUPERSLIDE are single-token defined terms (PS3.3 C.13.3); the
+	// image-box count is configuration dependent.
+	switch format {
+	case slideImageDisplayFormat:
+		return 20, nil // Typical 35mm slide count
+	case "SUPERSLIDE":
+		return 15, nil // Typical 40mm superslide count
+	}
+
 	parts := strings.Split(format, "\\")
 	if len(parts) < 2 {
 		return 0, fmt.Errorf("invalid image display format: %s", format)

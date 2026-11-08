@@ -19,6 +19,7 @@ const (
 	customPatientName       = "ANONYMOUS^PATIENT"
 	customPatientID         = "ANON-ID-001"
 	explicitlyKeptPatientID = "patient-123"
+	ctImageStorageUID       = "1.2.840.10008.5.1.4.1.1.2"
 )
 
 func TestNewAnonymizer(t *testing.T) {
@@ -391,12 +392,12 @@ func TestAnonymizerAddsTopLevelDeidentificationDeclaration(t *testing.T) {
 
 func TestAnonymizeFileInPlaceRebuildsFileMetaInformation(t *testing.T) {
 	const (
-		sopClassUID       = "1.2.840.10008.5.1.4.1.1.2"
+		sopClassUID       = ctImageStorageUID
 		originalSOPUID    = "1.2.826.0.1.3680043.10.999.1"
 		oldImplementation = "1.2.826.0.1.3680043.10.999.2"
 	)
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{sopClassUID}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{ctImageStorageUID}))
 	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{originalSOPUID}))
 	_ = ds.Add(element.NewString(tag.PatientName, vr.PN, []string{testPatientName}))
 
@@ -582,7 +583,7 @@ func TestCustomPatientReplacementsSurviveRemoveAction(t *testing.T) {
 
 func TestAnonymizeFileInPlaceAppliesSourceTransferSyntaxToDataset(t *testing.T) {
 	ds := dataset.New()
-	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{ctImageStorageUID}))
 	_ = ds.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.826.0.1.3680043.10.999.1"}))
 	source := dataset.NewDefaultFileMetaInformation()
 	_ = source.SetTransferSyntax(transfer.ExplicitVRBigEndian)
@@ -710,5 +711,67 @@ func TestAnonymizerBlankItemPreservesBinaryVR(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestAnonymizerShiftsRetainedDatesAndMarksModified(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.AcquisitionDate, vr.DA, []string{"20200101"})); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{ctImageStorageUID})); err != nil {
+		t.Fatal(err)
+	}
+
+	anon := NewAnonymizer(NewSecurityProfile(BasicProfile | RetainLongModifDates))
+	if err := anon.AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	got, _ := ds.GetString(tag.AcquisitionDate)
+	if got == "20200101" || got == "19000101" {
+		t.Fatalf("AcquisitionDate = %q, want a shifted date", got)
+	}
+	if modified, ok := ds.GetString(tag.LongitudinalTemporalInformationModified); !ok || modified != "MODIFIED" {
+		t.Fatalf("(0028,0303) = %q,%v, want MODIFIED", modified, ok)
+	}
+}
+
+func TestAnonymizerRemovesGroup0004(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{ctImageStorageUID})); err != nil {
+		t.Fatal(err)
+	}
+	group4 := tag.New(0x0004, 0x0002)
+	if err := ds.Add(element.NewOtherByte(group4, []byte{0, 0})); err != nil {
+		t.Fatal(err)
+	}
+	anon := NewAnonymizer(NewSecurityProfile(BasicProfile))
+	if err := anon.AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if ds.Contains(group4) {
+		t.Fatal("Group 0004 element was not removed")
+	}
+}
+
+func TestAnonymizerRetainSafePrivateKeepsCreatorRemovesData(t *testing.T) {
+	ds := dataset.New()
+	creatorTag := tag.New(0x0009, 0x0010)
+	dataTag := tag.New(0x0009, 0x1001)
+	if err := ds.Add(element.NewString(creatorTag, vr.LO, []string{"ACME"})); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewString(dataTag, vr.LO, []string{"secret"})); err != nil {
+		t.Fatal(err)
+	}
+	anon := NewAnonymizer(NewSecurityProfile(BasicProfile | RetainSafePrivate))
+	if err := anon.AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if got, ok := ds.GetString(creatorTag); !ok || got != "ACME" {
+		t.Fatalf("Private Creator = %q,%v; want kept ACME", got, ok)
+	}
+	if ds.Contains(dataTag) {
+		t.Fatal("unsafe private data element was not removed")
 	}
 }

@@ -37,8 +37,9 @@ type PresentationLUT struct {
 	// LUTData contains the LUT entry values (P-Values)
 	LUTData []uint16
 
-	// PresentationLUTShape specifies the shape of the Presentation LUT
-	// Enumerated values: 'IDENTITY', 'INVERSE' or 'LIN OD'
+	// PresentationLUTShape specifies the shape of the Presentation LUT.
+	// Print presentation LUTs accept only IDENTITY or LIN OD (PS3.3 C.11.4,
+	// Table C.11-4); INVERSE is a softcopy (C.11.6) value.
 	PresentationLUTShape PresentationLUTShape
 }
 
@@ -95,8 +96,9 @@ func (p *PresentationLUT) IsValid() bool {
 	hasShape := p.PresentationLUTShape != ""
 	hasLUT := len(p.LUTDescriptor) != 0 || len(p.LUTData) != 0
 	if hasShape {
+		// PS3.3 C.11.4 Table C.11-4: print Presentation LUT Shape is
+		// IDENTITY or LIN OD only. INVERSE is not permitted here.
 		return !hasLUT && (p.PresentationLUTShape == PresentationLUTShapeIdentity ||
-			p.PresentationLUTShape == PresentationLUTShapeInverse ||
 			p.PresentationLUTShape == PresentationLUTShapeLinOD)
 	}
 	if !hasLUT {

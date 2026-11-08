@@ -127,10 +127,12 @@ func NewContentItemContainer(code *CodeItem, relationship Relationship, continui
 	// Set relationship type (0040,A010) VR=CS
 	_ = ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
 
-	// Set continuity (0040,A050) VR=CS
-	if continuity != ContinuityNone {
-		_ = ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(continuity)}))
+	// Set continuity (0040,A050) VR=CS. Continuity of Content is Type 1 for
+	// CONTAINER items, so an unspecified value defaults to SEPARATE.
+	if continuity == ContinuityNone {
+		continuity = ContinuitySeparate
 	}
+	_ = ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(continuity)}))
 
 	// Add content sequence (0040,A730) VR=SQ
 	if len(items) > 0 {

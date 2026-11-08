@@ -566,6 +566,7 @@ func (a *AAssociateRQ) decodePresentationContext(data []byte, handler DecodeWarn
 	r := bytes.NewReader(data[4:])
 
 	// Read sub-items
+	seenAbstractSyntax := false
 	for {
 		itemType, itemData, err := readItem(r)
 		if err != nil {
@@ -577,6 +578,11 @@ func (a *AAssociateRQ) decodePresentationContext(data []byte, handler DecodeWarn
 
 		switch itemType {
 		case ItemTypeAbstractSyntax:
+			// PS3.8 9.3.2.2 (Table 9-12): exactly one Abstract Syntax Sub-Item.
+			if seenAbstractSyntax {
+				return nil, fmt.Errorf("duplicate abstract syntax sub-item in presentation context %d", pc.ID)
+			}
+			seenAbstractSyntax = true
 			pc.AbstractSyntax = trimUIDPadding(string(itemData))
 		case ItemTypeTransferSyntax:
 			pc.TransferSyntaxes = append(pc.TransferSyntaxes, trimUIDPadding(string(itemData)))
@@ -596,6 +602,7 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 		CommonExtendedNegotiations: []CommonExtendedNegotiation{},
 	}
 	maximumLengthSeen := false
+	implementationClassUIDSeen := false
 
 	r := bytes.NewReader(data)
 
@@ -611,6 +618,10 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 
 		switch itemType {
 		case ItemTypeMaximumLength:
+			// PS3.8 D.1.1: only one Maximum Length Sub-Item shall be present.
+			if maximumLengthSeen {
+				return nil, fmt.Errorf("duplicate maximum length sub-item in user information")
+			}
 			if len(itemData) != 4 {
 				return nil, fmt.Errorf("invalid maximum length data: %d bytes", len(itemData))
 			}
@@ -618,6 +629,11 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 			ui.MaximumLength = binary.BigEndian.Uint32(itemData)
 
 		case ItemTypeImplementationClassUID:
+			// PS3.8 D.1.2: only one Implementation Class UID Sub-Item shall be present.
+			if implementationClassUIDSeen {
+				return nil, fmt.Errorf("duplicate implementation class UID sub-item in user information")
+			}
+			implementationClassUIDSeen = true
 			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
 
 		case ItemTypeImplementationVersionName:

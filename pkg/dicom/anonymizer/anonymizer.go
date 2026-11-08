@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -88,6 +90,7 @@ func (a SecurityProfileAction) String() string {
 type SecurityProfile struct {
 	rules          []profileRule
 	exactOverrides map[uint32]SecurityProfileAction
+	options        SecurityProfileOptions
 	PatientName    string // Optional replacement patient name
 	PatientID      string // Optional replacement patient ID
 }
@@ -100,7 +103,8 @@ type profileRule struct {
 // NewSecurityProfile creates a new security profile with the specified options
 func NewSecurityProfile(options SecurityProfileOptions) *SecurityProfile {
 	profile := &SecurityProfile{
-		rules: make([]profileRule, 0),
+		rules:   make([]profileRule, 0),
+		options: options,
 	}
 	profile.loadDefaultProfile(options)
 	return profile
@@ -161,6 +165,10 @@ func (sp *SecurityProfile) FindAction(t *tag.Tag) (SecurityProfileAction, bool) 
 type Anonymizer struct {
 	Profile      *SecurityProfile
 	ReplacedUIDs map[string]string // Context for UID replacement consistency
+
+	// dateOffsetDays shifts retained dates by a constant so longitudinal
+	// relationships are preserved (PS3.15 E.3.6). Zero means no date retention.
+	dateOffsetDays int
 }
 
 // NewAnonymizer creates a new Anonymizer with the specified profile
@@ -169,10 +177,16 @@ func NewAnonymizer(profile *SecurityProfile) *Anonymizer {
 	if profile == nil {
 		profile = NewSecurityProfile(BasicProfile)
 	}
-	return &Anonymizer{
+	a := &Anonymizer{
 		Profile:      profile,
 		ReplacedUIDs: make(map[string]string),
 	}
+	if profile.options&(RetainLongFullDates|RetainLongModifDates) != 0 {
+		// A fixed, deterministic offset preserves intervals without revealing
+		// absolute dates.
+		a.dateOffsetDays = -10000
+	}
+	return a
 }
 
 // AnonymizeInPlace anonymizes a dataset without cloning
@@ -198,7 +212,7 @@ func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool, state 
 			patientIDElement = elem
 		}
 
-		action, hasAction := a.Profile.FindAction(elem.Tag())
+		action, hasAction := a.resolveAction(elem.Tag())
 		if override, exact := a.Profile.exactOverrideAction(elem.Tag()); exact && override == ActionK &&
 			hasAction && action == ActionK && !a.hasConfiguredReplacement(elem.Tag()) {
 			state.retainedOverrides[elem.Tag().ToUint32()] = elem.Tag()
@@ -227,6 +241,10 @@ func (a *Anonymizer) anonymizeInPlace(ds *dataset.Dataset, topLevel bool, state 
 	// below are not immediately deleted when the profile uses ActionX.
 	for _, elem := range toRemove {
 		ds.Remove(elem.Tag())
+	}
+
+	if topLevel {
+		a.applyTopLevelTransforms(ds)
 	}
 
 	// Re-add configured replacements only when the source attribute existed.
@@ -358,6 +376,17 @@ func (a *Anonymizer) AnonymizeFileInPlace(ds *dataset.Dataset, source *dataset.F
 func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, action SecurityProfileAction) error {
 	vrValue := elem.ValueRepresentation()
 
+	// PS3.15 E.3.6: when long dates are retained, shift DA/DT by a constant
+	// offset instead of replacing them with a dummy value.
+	if a.dateOffsetDays != 0 && action == ActionC {
+		switch vrValue.Code() {
+		case vr.CodeDA:
+			return a.shiftDateValue(ds, elem)
+		case vr.CodeDT:
+			return a.shiftDateTimeValue(ds, elem)
+		}
+	}
+
 	switch action {
 	case ActionU, ActionC, ActionD:
 		if vrValue.Code() == vr.CodeUI {
@@ -377,6 +406,109 @@ func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, acti
 	}
 
 	return nil
+}
+
+// resolveAction combines the profile rule with the RetainSafePrivate option.
+func (a *Anonymizer) resolveAction(t *tag.Tag) (SecurityProfileAction, bool) {
+	action, hasAction := a.Profile.FindAction(t)
+	// PS3.15 E.3.10 Retain Safe Private: keep the Private Creator so the block
+	// remains decodable, and remove other private attributes that cannot be
+	// certified safe without a private dictionary.
+	if a.Profile.options&RetainSafePrivate != 0 && isPrivateTag(t) {
+		if isPrivateCreatorTag(t) {
+			return ActionK, true
+		}
+		return ActionX, true
+	}
+	return action, hasAction
+}
+
+// applyTopLevelTransforms performs dataset-level clean-up required by PS3.15
+// E.1.1 (Group 0004 removal) and E.3.6 (temporal modification marker).
+func (a *Anonymizer) applyTopLevelTransforms(ds *dataset.Dataset) {
+	sopClass, _ := ds.GetString(tag.SOPClassUID)
+	if sopClass != uid.MediaStorageDirectoryStorage.UID() {
+		var group4 []*tag.Tag
+		for _, elem := range ds.Elements() {
+			if elem.Tag().Group() == 0x0004 {
+				group4 = append(group4, elem.Tag())
+			}
+		}
+		for _, t := range group4 {
+			ds.Remove(t)
+		}
+	}
+	if a.dateOffsetDays != 0 {
+		_ = ds.AddOrUpdate(element.NewString(tag.LongitudinalTemporalInformationModified, vr.CS, []string{"MODIFIED"}))
+	}
+}
+
+// isPrivateTag reports whether the tag belongs to an odd (private) group.
+func isPrivateTag(t *tag.Tag) bool {
+	return t.Group()%2 == 1
+}
+
+// isPrivateCreatorTag reports whether the tag is a Private Creator element
+// (gggg,0010-00FF) that declares a private block.
+func isPrivateCreatorTag(t *tag.Tag) bool {
+	return isPrivateTag(t) && t.Element() >= 0x0010 && t.Element() <= 0x00FF
+}
+
+// shiftDateValue shifts a DA value by the configured offset (PS3.15 E.3.6).
+func (a *Anonymizer) shiftDateValue(ds *dataset.Dataset, elem element.Element) error {
+	old, ok := ds.GetString(elem.Tag())
+	if !ok || strings.TrimSpace(old) == "" {
+		return nil
+	}
+	t, err := time.Parse("20060102", strings.TrimSpace(old))
+	if err != nil {
+		return a.replaceString(ds, elem, dummyStringValue(elem.ValueRepresentation()))
+	}
+	shifted := t.AddDate(0, 0, a.dateOffsetDays).Format("20060102")
+	return ds.AddOrUpdate(element.NewString(elem.Tag(), vr.DA, []string{shifted}))
+}
+
+// shiftDateTimeValue shifts a DT value by the configured offset, preserving the
+// original precision and timezone.
+func (a *Anonymizer) shiftDateTimeValue(ds *dataset.Dataset, elem element.Element) error {
+	old, ok := ds.GetString(elem.Tag())
+	if !ok || strings.TrimSpace(old) == "" {
+		return nil
+	}
+	trimmed := normalizeDTFraction(strings.TrimSpace(old))
+	for _, layout := range []string{
+		"20060102150405.000000-0700",
+		"20060102150405",
+		"200601021504",
+		"2006010215",
+		"20060102",
+	} {
+		t, err := time.Parse(layout, trimmed)
+		if err != nil {
+			continue
+		}
+		shifted := t.AddDate(0, 0, a.dateOffsetDays).Format(layout)
+		return ds.AddOrUpdate(element.NewString(elem.Tag(), vr.DT, []string{shifted}))
+	}
+	return a.replaceString(ds, elem, dummyStringValue(elem.ValueRepresentation()))
+}
+
+// normalizeDTFraction pads a 1-5 digit fractional-second component to 6 digits
+// so the fixed DT layouts can parse it.
+func normalizeDTFraction(value string) string {
+	dot := strings.IndexByte(value, '.')
+	if dot < 0 {
+		return value
+	}
+	end := dot + 1
+	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+		end++
+	}
+	digits := end - dot - 1
+	if digits < 1 || digits > 6 {
+		return value
+	}
+	return value[:dot+1] + value[dot+1:end] + strings.Repeat("0", 6-digits) + value[end:]
 }
 
 // replaceUID replaces a UID element with a new anonymized UID

@@ -558,6 +558,8 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 // encode compresses pixel data from a dataset using the high-level codec.Encode method.
 // This follows the fo-dicom pattern of creating complete PixelData objects and using
 // the codec's Encode method instead of frame-by-frame processing.
+//
+//nolint:gocyclo // the encode pipeline has many sequential validation branches
 func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *transfer.Syntax) (*dataset.Dataset, error) {
 	if t.outputCodec == nil {
 		return nil, fmt.Errorf("no codec available for encoding to %s", outputTS.UID().UID())
@@ -682,6 +684,9 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	if err := newDS.Add(fragSeq); err != nil {
 		return nil, fmt.Errorf("add encoded pixel data: %w", err)
 	}
+	if err := validateOutputFrameInfo(newPixelData.FrameInfo(), outputTS); err != nil {
+		return nil, err
+	}
 	if err := applyOutputFrameInfo(newDS, newPixelData.FrameInfo()); err != nil {
 		return nil, err
 	}
@@ -690,6 +695,36 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 	}
 
 	return newDS, nil
+}
+
+// validateOutputFrameInfo rejects output pixel formats that are not permitted
+// for the destination transfer syntax (PS3.3 C.7.6.3.1 and PS3.5 8.2).
+func validateOutputFrameInfo(output codec.FrameInfo, outputTS *transfer.Syntax) error {
+	if err := output.Validate(); err != nil {
+		return fmt.Errorf("invalid codec output frame info: %w", err)
+	}
+	pi := output.PhotometricInterpretation.Value
+	switch pi {
+	case pixel.Monochrome1.Value, pixel.Monochrome2.Value, pixel.PaletteColor.Value:
+		if output.SamplesPerPixel != 1 {
+			return fmt.Errorf("%s requires SamplesPerPixel=1, got %d", pi, output.SamplesPerPixel)
+		}
+	case pixel.RGBPhotometric.Value, pixel.YbrFull.Value, pixel.YbrFull422.Value, pixel.YbrPartial422.Value:
+		if output.SamplesPerPixel != 3 {
+			return fmt.Errorf("%s requires SamplesPerPixel=3, got %d", pi, output.SamplesPerPixel)
+		}
+	case pixel.YbrIct.Value, pixel.YbrRct.Value, pixel.YbrPartial420.Value:
+		if output.SamplesPerPixel != 3 {
+			return fmt.Errorf("%s requires SamplesPerPixel=3, got %d", pi, output.SamplesPerPixel)
+		}
+		if outputTS == nil || !outputTS.IsEncapsulated() {
+			return fmt.Errorf("%s is only permitted for encapsulated Pixel Data (PS3.5 8.2)", pi)
+		}
+	}
+	if output.SamplesPerPixel > 1 && output.PlanarConfiguration != pixel.InterleavedPlanar && output.PlanarConfiguration != pixel.PlanarPlanar {
+		return fmt.Errorf("color image requires a valid Planar Configuration, got %d", output.PlanarConfiguration)
+	}
+	return nil
 }
 
 func applyOutputFrameInfo(ds *dataset.Dataset, output codec.FrameInfo) error {

@@ -275,8 +275,14 @@ func IsValid(s string) bool {
 }
 
 // Append appends a sequence number to a base UID.
+//
+// It returns nil when the resulting UID would exceed the 64-character limit
+// required by PS3.5 Section 9.1.
 func Append(baseUID *UID, seq int64) *UID {
 	newUID := fmt.Sprintf("%s.%d", baseUID.uid, seq)
+	if len(newUID) > 64 {
+		return nil
+	}
 	return New(newUID, "SOP Instance UID", TypeSOPInstance, false)
 }
 

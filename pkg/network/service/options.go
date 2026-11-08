@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
@@ -25,6 +26,12 @@ type serviceConfig struct {
 	connectionID           observability.ConnectionID
 	transcodeManager       *transcode.Manager
 	transferSyntaxRegistry *transfer.Registry
+
+	// supportedSOPClasses is the set of SOP Class UIDs this SCP implements.
+	// A non-empty set drives A-ASSOCIATE negotiation (unsupported abstract
+	// syntaxes are rejected with result 3) and the request-time 0x0122
+	// fallback. An empty set means "no restriction" (accept all).
+	supportedSOPClasses map[string]struct{}
 
 	// associationRequestor indicates that the local AE initiated the association.
 	// The default is false for services accepting inbound associations.
@@ -103,6 +110,17 @@ func WithTranscodeManager(manager *transcode.Manager) Option {
 func WithTransferSyntaxRegistry(registry *transfer.Registry) Option {
 	return func(c *serviceConfig) {
 		c.transferSyntaxRegistry = registry
+	}
+}
+
+// WithSupportedSOPClasses declares the SOP Class UIDs this SCP implements. When
+// at least one UID is given, A-ASSOCIATE negotiation rejects any other abstract
+// syntax with abstract-syntax-not-supported (result 3, PS3.8 9.3.3.2) and inbound
+// requests for other SOP Classes are refused with 0x0122. A zero-length list
+// keeps the default accept-all behaviour.
+func WithSupportedSOPClasses(uids ...string) Option {
+	return func(c *serviceConfig) {
+		c.supportedSOPClasses = normalizeSOPClassSet(uids)
 	}
 }
 
@@ -338,4 +356,28 @@ func WithCGetHandler(handler func(ctx context.Context, op CGetOperation) error) 
 		}
 		c.handlers.CGetHandler = handler
 	}
+}
+
+// normalizeSOPClassSet trims and indexes UIDs. A nil or empty result means "no
+// restriction".
+func normalizeSOPClassSet(uids []string) map[string]struct{} {
+	if len(uids) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(uids))
+	for _, sopClassUID := range uids {
+		if sopClassUID = trimSOPClassUID(sopClassUID); sopClassUID != "" {
+			set[sopClassUID] = struct{}{}
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return set
+}
+
+// trimSOPClassUID removes the padding and surrounding spaces from a UID read
+// from a command/data set.
+func trimSOPClassUID(sopClassUID string) string {
+	return strings.TrimSpace(strings.TrimRight(sopClassUID, "\x00"))
 }

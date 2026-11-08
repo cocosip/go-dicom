@@ -95,7 +95,7 @@ func TestFilmBoxFolderRoundTrip(t *testing.T) {
 			element.NewUnsignedShort(tag.Rows, []uint16{1}),
 			element.NewUnsignedShort(tag.Columns, []uint16{2}),
 			element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
-			element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}),
+			element.NewString(tag.PhotometricInterpretation, vr.CS, []string{testPhotometricMonochrome2}),
 			element.NewOtherByte(tag.PixelData, []byte{byte(index + 1), byte(index + 2)}),
 		} {
 			if err := imageItem.Add(imageElement); err != nil {

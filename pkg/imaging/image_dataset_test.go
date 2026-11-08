@@ -1613,7 +1613,7 @@ func TestDatasetImageDecodesEncapsulatedPaletteBeforeRGBConversion(t *testing.T)
 	}
 }
 
-func TestDatasetPaletteAlphaIsPreservedInRendering(t *testing.T) {
+func TestDatasetPaletteAlphaIsCompositedToOpaqueRGB(t *testing.T) {
 	ds, err := dataset.NewWithElements([]element.Element{
 		element.NewUnsignedShort(tag.Rows, []uint16{1}),
 		element.NewUnsignedShort(tag.Columns, []uint16{2}),
@@ -1644,9 +1644,10 @@ func TestDatasetPaletteAlphaIsPreservedInRendering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderFrameImage() error = %v", err)
 	}
+	// DICOM has no 4-sample RGB: alpha is opacity and is composited over black.
 	for x, want := range []color.NRGBA{
-		{R: 10, G: 30, B: 50, A: 70},
-		{R: 20, G: 40, B: 60, A: 80},
+		{R: 3, G: 8, B: 14, A: 255},
+		{R: 6, G: 13, B: 19, A: 255},
 	} {
 		if got := color.NRGBAModel.Convert(rendered.At(x, 0)).(color.NRGBA); got != want {
 			t.Fatalf("pixel %d = %#v, want %#v", x, got, want)

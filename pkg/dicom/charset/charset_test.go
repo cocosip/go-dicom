@@ -420,3 +420,22 @@ func TestMultipleEncodings(t *testing.T) {
 		}
 	}
 }
+
+func TestDecodeISO2022SingleByteEscape(t *testing.T) {
+	enc := charset.GetEncoding("ISO 2022 IR 100")
+	data := append([]byte{0x1b, '-', 'A'}, 0xE9) // ESC - A (Latin-1 G1) + é
+	got, err := charset.DecodeString(data, []encoding.Encoding{enc})
+	if err != nil {
+		t.Fatalf("DecodeString() error = %v", err)
+	}
+	if got != "é" {
+		t.Fatalf("DecodeString() = %q, want %q", got, "é")
+	}
+}
+
+func TestISO2022IR159ReportsUnsupported(t *testing.T) {
+	enc := charset.GetEncoding("ISO 2022 IR 159")
+	if _, err := enc.NewDecoder().Bytes([]byte{0x41}); err == nil {
+		t.Fatal("IR 159 decoder should report an explicit unsupported error")
+	}
+}
