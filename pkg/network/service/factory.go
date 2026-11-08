@@ -208,12 +208,11 @@ func createCEchoResponse(commandDS *dataset.Dataset) (*dimse.CEchoResponse, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Status: %w", err)
 	}
-	// PS3.7 Table 9.3-13: a C-ECHO-RSP Status is Success (0000H); the
-	// Verification SOP Class defines no non-success status.
-	if statusCode != 0x0000 {
-		return nil, fmt.Errorf("C-ECHO-RSP has invalid status 0x%04X (must be Success 0x0000)", statusCode)
-	}
-
+	// A C-ECHO-RSP Status is normally Success (0000H), but a peer (including this
+	// library, whose handler emits ErrorProcessingFailure when the handler fails)
+	// may legitimately report a failure. Surface the status to the caller instead
+	// of rejecting the message, which would abort the association on a mere failed
+	// echo (the client turns a non-success status into a StatusError).
 	return dimse.NewCEchoResponse(messageID, status.LookupStatus(statusCode)), nil
 }
 
@@ -321,6 +320,9 @@ func createCFindRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRequest
 	default:
 		req = dimse.NewCFindRequest(level, dataDS)
 	}
+	// Preserve the SOP Class UID the peer actually sent (PS3.7 9.1.1); the default
+	// constructor above may use a standard root UID that differs from a custom one.
+	req.SetAffectedSOPClassUID(sopClassUID)
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
@@ -361,6 +363,8 @@ func createCGetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CGetRequest, 
 	default:
 		req = dimse.NewCGetRequest(level, dataDS)
 	}
+	// Preserve the SOP Class UID the peer actually sent.
+	req.SetAffectedSOPClassUID(sopClassUID)
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
@@ -445,6 +449,8 @@ func createCMoveRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CMoveRequest
 	default:
 		req = dimse.NewCMoveRequest(level, moveDestination, dataDS)
 	}
+	// Preserve the SOP Class UID the peer actually sent.
+	req.SetAffectedSOPClassUID(sopClassUID)
 	if err := req.SetMessageID(messageID); err != nil {
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}

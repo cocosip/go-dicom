@@ -150,6 +150,11 @@ func NewNActionResponse(
 	actionReply *dataset.Dataset,
 ) *NActionResponse {
 	s = resolveStatus(s)
+	// PS3.7: the Action Reply data set is only present on Success/Warning, never
+	// on failure/cancel.
+	if !s.IsSuccess() && !s.IsWarning() {
+		actionReply = nil
+	}
 	command := createNOperationResponseCommand(
 		uint16(CommandNActionRSP),
 		messageIDBeingRespondedTo,

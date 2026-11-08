@@ -149,11 +149,9 @@ func (a *AAssociateAC) validateForEncode() error {
 	if a.ProtocolVersion&0x0001 == 0 {
 		return fmt.Errorf("A-ASSOCIATE-AC protocol version 0x%04X does not support version 1", a.ProtocolVersion)
 	}
-	// PS3.8 Table 9-17: these Reserved fields echo the requestor's Called/Calling
-	// AE Titles, which are already validated on the request path.
-	if err := validateAETitles(a.CalledAETitle, a.CallingAETitle); err != nil {
-		return err
-	}
+	// PS3.8 Table 9-17: the Called/Calling AE Title fields of an A-ASSOCIATE-AC are
+	// Reserved and "shall not be tested when received", so they are not AE-validated
+	// here; writeString pads/truncates them to the fixed 16-byte width safely.
 	if err := validateApplicationContext(a.ApplicationContext); err != nil {
 		return fmt.Errorf("A-ASSOCIATE-AC: %w", err)
 	}
@@ -434,6 +432,10 @@ func (a *AAssociateAC) ValidateStructure() error {
 	if a == nil {
 		return fmt.Errorf("A-ASSOCIATE-AC is nil")
 	}
+	// PS3.8 9.3.3: a receiver shall only test that protocol-version bit 0 is set.
+	if a.ProtocolVersion&0x0001 == 0 {
+		return fmt.Errorf("A-ASSOCIATE-AC protocol version 0x%04X does not support version 1", a.ProtocolVersion)
+	}
 	if a.applicationContextCount != 0 && a.applicationContextCount != 1 {
 		return fmt.Errorf("A-ASSOCIATE-AC must contain exactly one application context item, got %d", a.applicationContextCount)
 	}
@@ -517,7 +519,7 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 
 			switch itemType {
 			case ItemTypeTransferSyntax:
-				pc.TransferSyntax = string(itemData)
+				pc.TransferSyntax = trimUIDPadding(string(itemData))
 			}
 		}
 	}
@@ -558,7 +560,7 @@ func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, err
 			maximumLengthSeen = true
 
 		case ItemTypeImplementationClassUID:
-			ui.ImplementationClassUID = string(itemData)
+			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
 
 		case ItemTypeImplementationVersionName:
 			ui.ImplementationVersionName = string(itemData)

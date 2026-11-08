@@ -155,6 +155,13 @@ func writeItem(w io.Writer, itemType byte, data []byte) error {
 	return nil
 }
 
+// trimUIDPadding removes trailing NUL/space padding that a peer may append to an
+// odd-length UID value (PS3.5 UID padding is a single NUL). Decoding must trim it
+// so exact string comparisons against the local UID registry keep working.
+func trimUIDPadding(s string) string {
+	return strings.TrimRight(s, "\x00 ")
+}
+
 // writeString writes a string, padding with spaces to 16 bytes (DICOM AE Title length).
 func writeString(s string) []byte {
 	const length = 16

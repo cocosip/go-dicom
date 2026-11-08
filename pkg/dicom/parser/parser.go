@@ -696,10 +696,15 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 		if p.maxElementSize > 0 && length > p.maxElementSize {
 			return nil, fmt.Errorf("element size %d exceeds maximum %d for tag %s", length, p.maxElementSize, t)
 		}
+		// Hard ceiling prevents an unbounded make() when WithMaxElementSize was
+		// disabled (0 == unlimited) but a malformed length was declared.
+		if length > maxHardElementSize {
+			return nil, fmt.Errorf("element %s value length %d exceeds hard limit %d", t, length, maxHardElementSize)
+		}
 
-		// Read value data
-		data := make([]byte, length)
-		if _, err := io.ReadFull(p.reader, data); err != nil {
+		// Read value data (without pre-allocating the declared length up front).
+		data, err := p.readValueData(length)
+		if err != nil {
 			return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
 		}
 
@@ -983,6 +988,23 @@ func isEncapsulatedPixelDataTag(t *tag.Tag) bool {
 	return t.Group() == 0x7FE0 && (t.Element() == 0x0010 || t.Element() == 0x0008 || t.Element() == 0x0009)
 }
 
+// readValueData reads exactly length bytes without pre-allocating the declared
+// length up front, so a malformed (or merely over-stated) length cannot force a
+// huge allocation before the data — or an EOF — is actually read.
+func (p *parseContext) readValueData(length uint32) ([]byte, error) {
+	if length == 0 {
+		return []byte{}, nil
+	}
+	data, err := io.ReadAll(io.LimitReader(p.reader, int64(length)))
+	if err != nil {
+		return nil, err
+	}
+	if uint32(len(data)) != length {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return data, nil
+}
+
 // readElementData handles reading element data based on size and read options.
 // This is a common helper to avoid code duplication between readElement and readElementWithTag.
 func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buffer.ByteBuffer, error) {
@@ -992,66 +1014,37 @@ func (p *parseContext) readElementData(t *tag.Tag, _ *vr.VR, length uint32) (buf
 	if length == 0xFFFFFFFF {
 		return nil, fmt.Errorf("element %s has undefined length, expected sequence or fragment handling", t)
 	}
-	// Hard ceiling prevents an unbounded make() even when the caller disabled
+	// Hard ceiling prevents an unbounded allocation even when the caller disabled
 	// WithMaxElementSize (a declared length can otherwise reach 0xFFFFFFFF).
 	if length > maxHardElementSize {
 		return nil, fmt.Errorf("element %s value length %d exceeds hard limit %d", t, length, maxHardElementSize)
 	}
 
-	// Handle large objects based on ReadOption
-	isLarge := length > p.largeObjectSize
-
-	if isLarge {
+	if length > p.largeObjectSize {
 		switch p.readOption {
 		case SkipLargeTags:
-			// Skip the data entirely by discarding it
+			// Skip the data entirely by discarding it.
 			if _, err := io.CopyN(io.Discard, p.reader, int64(length)); err != nil {
 				return nil, fmt.Errorf("failed to skip large tag %s: %w", t, err)
 			}
-			// Return an empty buffer
 			return buffer.NewMemory([]byte{}), nil
 
-		case ReadLargeOnDemand:
-			// Implement lazy loading if possible
-			buf, err := p.createLazyBuffer(length)
-			if err != nil {
-				// If lazy loading not possible, fall back to reading all
-				data := make([]byte, length)
-				if _, err := io.ReadFull(p.reader, data); err != nil {
-					return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
-				}
-				buf = buffer.NewMemory(data)
-			}
-			return buf, nil
-
-		case ReadAll:
-			// Force eager loading even for large elements; never create lazy buffers.
-			data := make([]byte, length)
-			if _, err := io.ReadFull(p.reader, data); err != nil {
-				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
-			}
-			return buffer.NewMemory(data), nil
-
-		case ReadDefault:
-			buf, err := p.createLazyBuffer(length)
-			if err == nil {
+		case ReadLargeOnDemand, ReadDefault:
+			// Lazy load when possible; fall through to eager loading below when the
+			// source is not seekable (e.g. a deflated stream).
+			if buf, err := p.createLazyBuffer(length); err == nil {
 				return buf, nil
 			}
 
-			data := make([]byte, length)
-			if _, err := io.ReadFull(p.reader, data); err != nil {
-				return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
-			}
-			return buffer.NewMemory(data), nil
+		case ReadAll:
+			// Force eager loading even for large elements; never create lazy buffers.
 		}
 	}
 
-	// Read value data normally for non-large elements
-	data := make([]byte, length)
-	if _, err := io.ReadFull(p.reader, data); err != nil {
+	data, err := p.readValueData(length)
+	if err != nil {
 		return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
 	}
-
 	return buffer.NewMemory(data), nil
 }
 
@@ -1866,6 +1859,9 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 		if p.maxElementSize > 0 && itemLength > p.maxElementSize {
 			return nil, fmt.Errorf("fragment item length %d exceeds maximum %d", itemLength, p.maxElementSize)
 		}
+		if itemLength > maxHardElementSize {
+			return nil, fmt.Errorf("fragment item length %d exceeds hard limit %d", itemLength, maxHardElementSize)
+		}
 
 		if isFirstItem {
 			// The first item is the Basic Offset Table and must be materialized
@@ -1916,6 +1912,9 @@ func (p *parseContext) readFragmentSequence(t *tag.Tag, vrValue *vr.VR) (element
 }
 
 func (p *parseContext) readFragmentItemBuffer(itemLength uint32) (buffer.ByteBuffer, error) {
+	if itemLength > maxHardElementSize {
+		return nil, fmt.Errorf("fragment item length %d exceeds hard limit %d", itemLength, maxHardElementSize)
+	}
 	if (p.readOption == ReadLargeOnDemand || p.readOption == ReadDefault) && itemLength > p.largeObjectSize {
 		fragBuf, err := p.createLazyBuffer(itemLength)
 		if err == nil {
@@ -1927,8 +1926,8 @@ func (p *parseContext) readFragmentItemBuffer(itemLength uint32) (buffer.ByteBuf
 		// just loaded eagerly instead of on-demand.
 	}
 
-	itemData := make([]byte, itemLength)
-	if _, err := io.ReadFull(p.reader, itemData); err != nil {
+	itemData, err := p.readValueData(itemLength)
+	if err != nil {
 		return nil, fmt.Errorf("failed to read fragment item data: %w", err)
 	}
 	return buffer.NewMemory(itemData), nil

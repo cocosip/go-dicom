@@ -67,7 +67,9 @@ func TestAAssociateACValidateStructureRequiresPresentationContext(t *testing.T) 
 }
 
 // TestAAssociateACEncodeRejectsMissingMandatoryFields verifies the encode-side
-// checks required by PS3.8 Table 9-17 (mandatory items and AE titles).
+// checks required by PS3.8 Table 9-17. The Called/Calling AE Title fields are
+// Reserved in an A-ASSOCIATE-AC (not tested on receipt), so they are not part of
+// these mandatory-field checks.
 func TestAAssociateACEncodeRejectsMissingMandatoryFields(t *testing.T) {
 	validContexts := []PresentationContextAC{{
 		ID:             1,
@@ -79,8 +81,6 @@ func TestAAssociateACEncodeRejectsMissingMandatoryFields(t *testing.T) {
 		name   string
 		mutate func(*AAssociateAC)
 	}{
-		{"empty called AE title", func(ac *AAssociateAC) { ac.CalledAETitle = "" }},
-		{"all-space calling AE title", func(ac *AAssociateAC) { ac.CallingAETitle = "   " }},
 		{"empty application context", func(ac *AAssociateAC) { ac.ApplicationContext = "" }},
 		{"unsupported application context", func(ac *AAssociateAC) { ac.ApplicationContext = testUnsupportedAppContext }},
 		{"nil user information", func(ac *AAssociateAC) { ac.UserInformation = nil }},

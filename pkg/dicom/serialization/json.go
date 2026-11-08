@@ -6,6 +6,7 @@ package serialization
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -650,6 +651,30 @@ func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
 	return nil
 }
 
+// littleEndianBinary returns data normalized to little-endian, as DICOM JSON/XML
+// binary values require. Word-based VRs from a big-endian dataset are byte-swapped
+// per value unit; byte VRs and little-endian values are returned unchanged.
+func littleEndianBinary(elem element.Element, data []byte) []byte {
+	order, known := element.NumericByteOrder(elem)
+	if !known || order != binary.BigEndian {
+		return data
+	}
+	unit := 1
+	if v := elem.ValueRepresentation(); v != nil {
+		unit = v.UnitSize()
+	}
+	if unit <= 1 || len(data) < unit {
+		return data
+	}
+	out := append([]byte(nil), data...)
+	for i := 0; i+unit <= len(out); i += unit {
+		for j := 0; j < unit/2; j++ {
+			out[i+j], out[i+unit-1-j] = out[i+unit-1-j], out[i+j]
+		}
+	}
+	return out
+}
+
 // writeOther writes binary data (OB, OW, etc.) as InlineBinary (Base64) or BulkDataURI
 func (w *jsonWriter) writeOther(elem element.Element) error {
 	buf := elem.Buffer()
@@ -666,7 +691,7 @@ func (w *jsonWriter) writeOther(elem element.Element) error {
 	}
 
 	// Otherwise, write as InlineBinary (Base64)
-	data := buf.Data()
+	data := littleEndianBinary(elem, buf.Data())
 	if len(data) == 0 {
 		return nil
 	}

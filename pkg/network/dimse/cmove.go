@@ -103,6 +103,12 @@ func (r *CMoveRequest) Priority() uint16 {
 	return r.priority
 }
 
+// SetAffectedSOPClassUID overwrites the affected SOP Class UID in the command set
+// so a rebuilt request echoes the UID the peer actually sent.
+func (r *CMoveRequest) SetAffectedSOPClassUID(uid string) {
+	_ = r.command.AddOrUpdate(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{uid}))
+}
+
 // SetPriority sets the priority of the request.
 func (r *CMoveRequest) SetPriority(priority uint16) {
 	r.priority = priority

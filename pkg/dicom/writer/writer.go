@@ -573,18 +573,20 @@ func containsExtendedBytes(data []byte) bool {
 }
 
 func validatePixelDataTransferSyntax(ds *dataset.Dataset, ts *transfer.Syntax) error {
-	pixelData, exists := ds.Get(tag.PixelData)
-	if !exists {
-		return nil
-	}
+	for _, pixelTag := range []*tag.Tag{tag.PixelData, tag.FloatPixelData, tag.DoubleFloatPixelData} {
+		pixelData, exists := ds.Get(pixelTag)
+		if !exists {
+			continue
+		}
 
-	encapsulated := false
-	switch pixelData.(type) {
-	case *element.FragmentSequence, *element.OtherByteFragment, *element.OtherWordFragment:
-		encapsulated = true
-	}
-	if encapsulated != ts.IsEncapsulated() {
-		return fmt.Errorf("pixel data representation is incompatible with transfer syntax %s", ts.UID().String())
+		encapsulated := false
+		switch pixelData.(type) {
+		case *element.FragmentSequence, *element.OtherByteFragment, *element.OtherWordFragment:
+			encapsulated = true
+		}
+		if encapsulated != ts.IsEncapsulated() {
+			return fmt.Errorf("pixel data representation for tag %s is incompatible with transfer syntax %s", pixelTag, ts.UID().String())
+		}
 	}
 	return nil
 }

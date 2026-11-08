@@ -62,8 +62,13 @@ func imageOverlays(ds *dataset.Dataset, pixelData *pixeldata.Data) []*DicomOverl
 			case *element.OtherWord:
 				overlay.Data = append([]byte(nil), value.GetData()...)
 			}
-		} else if bitsAllocated, err := ds.GetUInt16(tag.New(group, 0x0100), 0); err == nil && pixelData != nil && bitsAllocated == pixelData.Info.BitsAllocated {
-			if bitPosition, err := ds.GetUInt16(tag.New(group, 0x0102), 0); err == nil && bitPosition < bitsAllocated {
+		} else if overlayBits, err := ds.GetUInt16(tag.New(group, 0x0100), 0); err == nil && pixelData != nil &&
+			(overlayBits == 1 || overlayBits == pixelData.Info.BitsAllocated) {
+			// Embedded overlay: a 1-bit overlay taken from the stored pixel values.
+			// Overlay Bits Allocated is 1 per PS3.6, but some encoders set it to the
+			// pixel bit depth and pack the overlay into the unused high bits, so
+			// accept both and bound the bit position by the pixel word width.
+			if bitPosition, err := ds.GetUInt16(tag.New(group, 0x0102), 0); err == nil && bitPosition < pixelData.Info.BitsAllocated {
 				overlay.BitPosition = int(bitPosition)
 				overlay.Data = extractEmbeddedOverlay(pixelData, overlay)
 			}

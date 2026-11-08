@@ -249,7 +249,7 @@ func ConvertToRGBWithBytesPerSample(data []byte, width, height int, photometric 
 		return result, nil
 
 	default:
-		return data, nil
+		return nil, fmt.Errorf("unsupported photometric interpretation %q for RGB conversion", photometric.Value)
 	}
 }
 

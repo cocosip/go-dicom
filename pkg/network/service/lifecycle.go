@@ -178,16 +178,12 @@ func (s *Service) GracefulRelease(ctx context.Context) error {
 		return s.Close()
 	}
 
-	// Send A-RELEASE-RQ. Acquiring sendPause guarantees no DIMSE message is being
-	// written concurrently, so the release cannot truncate a multi-PDU message
-	// (PS3.8 requires release only after outstanding operations complete). The
-	// acquisition respects ctx so a stalled peer cannot block shutdown forever.
-	if err := s.acquireSendPause(ctx); err != nil {
-		_ = s.Abort(ctx, 0, 0)
-		return fmt.Errorf("timed out waiting for in-flight send to finish: %w", err)
-	}
+	// Send A-RELEASE-RQ. SendReleaseRequest acquires sendPause internally, so no
+	// DIMSE message is being written concurrently and the release cannot truncate
+	// a multi-PDU message (PS3.8 requires release only after outstanding
+	// operations complete). The acquisition respects ctx so a stalled peer cannot
+	// block shutdown forever.
 	err := s.SendReleaseRequest(ctx)
-	s.sendPause.Unlock()
 	if err != nil {
 		// If send fails, abort
 		_ = s.Abort(ctx, 0, 0)

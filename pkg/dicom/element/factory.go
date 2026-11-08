@@ -250,6 +250,9 @@ func canonicalReflectValue(valueRepresentation *vr.VR, rv reflect.Value) (string
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return strconv.FormatUint(rv.Uint(), 10), nil
 	case reflect.Float32, reflect.Float64:
+		if valueRepresentation.Code() == vr.CodeDS {
+			return formatDecimalString(rv.Float()), nil
+		}
 		return strconv.FormatFloat(rv.Float(), 'f', -1, rv.Type().Bits()), nil
 	default:
 		return canonicalValue(valueRepresentation, rv.Interface())
@@ -323,6 +326,9 @@ func canonicalValue(valueRepresentation *vr.VR, value any) (string, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return strconv.FormatUint(rv.Uint(), 10), nil
 	case reflect.Float32, reflect.Float64:
+		if valueRepresentation.Code() == vr.CodeDS {
+			return formatDecimalString(rv.Float()), nil
+		}
 		return strconv.FormatFloat(rv.Float(), 'f', -1, rv.Type().Bits()), nil
 	default:
 		if stringer, ok := value.(fmt.Stringer); ok && !isBinaryVR(valueRepresentation) {

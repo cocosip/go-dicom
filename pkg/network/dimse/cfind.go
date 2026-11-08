@@ -112,6 +112,12 @@ func NewCFindRequestStudyRoot(level QueryRetrieveLevel, query *dataset.Dataset) 
 	return newCFindRequestWithSOPClassUID(level, query, sopClassUIDStudyRootFind)
 }
 
+// SetAffectedSOPClassUID overwrites the affected SOP Class UID in the command set
+// so a rebuilt request echoes the UID the peer actually sent.
+func (r *CFindRequest) SetAffectedSOPClassUID(uid string) {
+	_ = r.command.AddOrUpdate(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{uid}))
+}
+
 // SetPriority sets the priority of the request.
 func (r *CFindRequest) SetPriority(priority uint16) {
 	r.priority = priority

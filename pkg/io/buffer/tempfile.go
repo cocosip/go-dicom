@@ -139,14 +139,10 @@ func (t *TempFileBuffer) GetByteRange(offset, count uint32, output []byte) error
 		return fmt.Errorf("failed to seek to position %d: %w", offset, err)
 	}
 
-	// Read the requested number of bytes
-	n, err := t.file.Read(output[:int(count)])
-	if err != nil && err != io.EOF {
+	// Read the requested number of bytes. A single Read on a regular file may
+	// legally return fewer bytes, so read until the buffer is full.
+	if _, err := io.ReadFull(t.file, output[:int(count)]); err != nil {
 		return fmt.Errorf("failed to read from temporary file: %w", err)
-	}
-
-	if uint32(n) != count { //nolint:gosec // bytes read check
-		return fmt.Errorf("read %d bytes, expected %d", n, count)
 	}
 
 	return nil

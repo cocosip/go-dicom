@@ -376,7 +376,12 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 	if s.config.keepConnectionOnPeerRelease {
 		// Compatibility mode: reply with A-RELEASE-RP but leave the association
 		// usable (state stays AssociationAccepted on the live socket).
-		if err := s.writeReleaseResponse(ctx); err != nil {
+		if err := s.acquireSendPause(ctx); err != nil {
+			return fmt.Errorf("failed to wait for in-flight send: %w", err)
+		}
+		err := s.writeReleaseResponse(ctx)
+		s.sendPause.Unlock()
+		if err != nil {
 			return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
 		}
 		s.emitAssociationObservation(ctx, observability.EventAssociationReleased, observability.DirectionOutbound, observability.OutcomeSuccess, nil)

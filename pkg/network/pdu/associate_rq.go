@@ -577,9 +577,9 @@ func (a *AAssociateRQ) decodePresentationContext(data []byte, handler DecodeWarn
 
 		switch itemType {
 		case ItemTypeAbstractSyntax:
-			pc.AbstractSyntax = string(itemData)
+			pc.AbstractSyntax = trimUIDPadding(string(itemData))
 		case ItemTypeTransferSyntax:
-			pc.TransferSyntaxes = append(pc.TransferSyntaxes, string(itemData))
+			pc.TransferSyntaxes = append(pc.TransferSyntaxes, trimUIDPadding(string(itemData)))
 		default:
 			reportDecodeWarning(handler, DecodeWarningUnknownPresentationContextSubItem, itemType)
 		}
@@ -618,7 +618,7 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 			ui.MaximumLength = binary.BigEndian.Uint32(itemData)
 
 		case ItemTypeImplementationClassUID:
-			ui.ImplementationClassUID = string(itemData)
+			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
 
 		case ItemTypeImplementationVersionName:
 			ui.ImplementationVersionName = string(itemData)
@@ -807,9 +807,16 @@ func decodeRoleSelection(data []byte) (*SCPSCURoleSelection, error) {
 	if err := binary.Read(r, binary.BigEndian, &scpRole); err != nil {
 		return nil, err
 	}
+	// PS3.7 D.3.3.4: SCU/SCP role values are 0 (non-support) or 1 (support) only.
+	if scuRole > 1 {
+		return nil, fmt.Errorf("invalid SCU role %d (must be 0 or 1)", scuRole)
+	}
+	if scpRole > 1 {
+		return nil, fmt.Errorf("invalid SCP role %d (must be 0 or 1)", scpRole)
+	}
 
 	return &SCPSCURoleSelection{
-		SOPClassUID: string(uidBytes),
+		SOPClassUID: trimUIDPadding(string(uidBytes)),
 		SCURole:     scuRole,
 		SCPRole:     scpRole,
 	}, nil
@@ -842,7 +849,7 @@ func decodeExtendedNegotiation(data []byte) (*ExtendedNegotiation, error) {
 	}
 
 	return &ExtendedNegotiation{
-		SOPClassUID:         string(uidBytes),
+		SOPClassUID:         trimUIDPadding(string(uidBytes)),
 		ServiceClassAppInfo: appInfo,
 	}, nil
 }

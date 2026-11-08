@@ -35,9 +35,9 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 	// Build VOI LUT using shared lut package to avoid duplicated window math.
 	voiLUT := lut.CreateVOILUT(lut.VOILUTFunctionLinear, center, width)
 
-	// Precalculate within valid input range for faster mapping.
-	// Cap at 16-bit range (65536 entries) to prevent excessive memory allocation
-	// when BitsStored is very large (e.g., 32-bit).
+	// Precalculate within the valid input range for faster mapping, but only when
+	// the range fits a table: clamping a larger range would mis-map the upper part
+	// (e.g. BitsStored > 16), so fall back to direct transform in that case.
 	var minInput, maxInput int
 	if pd.Info.PixelRepresentation == pixel.SignedPixels {
 		maxInput = (1 << (pd.Info.BitsStored - 1)) - 1
@@ -46,10 +46,11 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 		minInput = 0
 		maxInput = (1 << pd.Info.BitsStored) - 1
 	}
-	if maxInput-minInput > 65536 {
-		maxInput = minInput + 65536
+	usePrecalc := maxInput-minInput <= 65536
+	var precalc *lut.PrecalculatedLUT
+	if usePrecalc {
+		precalc = lut.NewPrecalculatedLUT(voiLUT, minInput, maxInput)
 	}
-	precalc := lut.NewPrecalculatedLUT(voiLUT, minInput, maxInput)
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
 	padMin, padMax, _ := pixelPaddingRange(pd.Info)
@@ -79,9 +80,10 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 				modalityValue = modality.Transform(modalityValue)
 			}
 			mapped := float64(0)
-			if modality != nil {
-				// The precomputed table is indexed in stored-value space; a
-				// rescale can shift or reverse that domain, so transform directly.
+			if modality != nil || !usePrecalc {
+				// The precomputed table is indexed in stored-value space; a rescale
+				// can shift or reverse that domain, so transform directly. Likewise,
+				// skip the table when the stored range is too large to precalculate.
 				mapped = voiLUT.Transform(modalityValue)
 			} else {
 				mapped = precalc.Transform(modalityValue)

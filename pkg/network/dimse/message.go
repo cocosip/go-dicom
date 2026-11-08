@@ -120,17 +120,15 @@ func (m *BaseMessage) CommandField() uint16 {
 
 // MessageID returns the message ID.
 func (m *BaseMessage) MessageID() uint16 {
-	// Return cached value if available
-	if m.messageID != 0 {
+	// Read straight from the command set (no lazy cache): caching would write to
+	// shared state here, racing with concurrent readers of the same message object.
+	if m.command == nil {
 		return m.messageID
 	}
-
-	// Otherwise read from command dataset
-	if m.command == nil {
-		return 0
+	value, err := m.command.GetUInt16(tag.MessageID, 0)
+	if err != nil {
+		return m.messageID
 	}
-	value, _ := m.command.GetUInt16(tag.MessageID, 0)
-	m.messageID = value
 	return value
 }
 

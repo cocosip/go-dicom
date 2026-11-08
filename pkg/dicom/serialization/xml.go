@@ -143,7 +143,7 @@ func (w *xmlWriter) writeBinaryValue(elem element.Element) error {
 		return nil
 	}
 
-	data := buf.Data()
+	data := littleEndianBinary(elem, buf.Data())
 	encoded := base64.StdEncoding.EncodeToString(data)
 
 	w.indent++

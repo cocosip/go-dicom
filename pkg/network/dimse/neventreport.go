@@ -119,6 +119,11 @@ func NewNEventReportResponse(
 	eventReply *dataset.Dataset,
 ) *NEventReportResponse {
 	s = resolveStatus(s)
+	// PS3.7: the Event Reply data set is only present on Success/Warning, never on
+	// failure/cancel.
+	if !s.IsSuccess() && !s.IsWarning() {
+		eventReply = nil
+	}
 	command := createNOperationResponseCommand(
 		uint16(CommandNEventReportRSP),
 		messageIDBeingRespondedTo,

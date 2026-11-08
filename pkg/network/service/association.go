@@ -209,6 +209,14 @@ func (s *Service) SendReleaseRequest(ctx context.Context) error {
 		return fmt.Errorf("cannot send A-RELEASE-RQ in state %s", currentState)
 	}
 
+	// Serialize against any in-flight DIMSE message so the release request cannot
+	// be injected between two P-DATA-TF PDUs of the same message (PS3.8 requires
+	// release only after outstanding operations complete).
+	if err := s.acquireSendPause(ctx); err != nil {
+		return fmt.Errorf("failed to wait for in-flight send: %w", err)
+	}
+	defer s.sendPause.Unlock()
+
 	// Create A-RELEASE-RQ PDU
 	releaseRQ := &pdu.AReleaseRQ{}
 
@@ -258,6 +266,14 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 	default:
 		return fmt.Errorf("cannot send A-RELEASE-RP in state %s", currentState)
 	}
+
+	// Serialize with any in-flight DIMSE message and keep the send paused until the
+	// state reaches Closed, so no P-DATA-TF is emitted after the A-RELEASE-RP on the
+	// wire (PS3.8).
+	if err := s.acquireSendPause(ctx); err != nil {
+		return fmt.Errorf("failed to wait for in-flight send: %w", err)
+	}
+	defer s.sendPause.Unlock()
 
 	if err := s.writeReleaseResponse(ctx); err != nil {
 		return err

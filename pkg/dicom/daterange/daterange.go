@@ -15,6 +15,8 @@ package daterange
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -352,26 +354,76 @@ func ParseDateTimeRange(s string) (*DateTimeRange, error) {
 	return NewDateTimeRange(minVal, maxVal), nil
 }
 
-// parseDicomDateTime parses a DICOM datetime string (DT format).
+// parseDicomDateTime parses a DICOM datetime string (DT format), honouring an
+// optional fractional-second part (1-6 digits) and an optional &ZZXX timezone
+// offset such as "+0800". A missing offset is treated as UTC.
 func parseDicomDateTime(s string) (time.Time, error) {
-	formats := []string{
-		"20060102150405.000000-0700",
-		"20060102150405.000000",
-		"20060102150405",
-		"200601021504",
-		"2006010215",
-		"20060102",
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, fmt.Errorf("%w: empty value", ErrInvalidDateTimeFormat)
 	}
 
-	for _, format := range formats {
-		if len(s) >= len(format) {
-			if t, err := time.Parse(format, s[:len(format)]); err == nil {
-				return t, nil
-			}
+	loc := time.UTC
+	if i := strings.IndexAny(s, "+-"); i > 0 {
+		off := s[i:]
+		s = s[:i]
+		if len(off) != 5 {
+			return time.Time{}, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
 		}
+		sign := 1
+		switch off[0] {
+		case '-':
+			sign = -1
+		case '+':
+		default:
+			return time.Time{}, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
+		}
+		hh, err1 := strconv.Atoi(off[1:3])
+		mm, err2 := strconv.Atoi(off[3:5])
+		if err1 != nil || err2 != nil || hh > 23 || mm > 59 {
+			return time.Time{}, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
+		}
+		loc = time.FixedZone("", sign*(hh*3600+mm*60))
 	}
 
-	return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateTimeFormat, s)
+	frac := ""
+	if dot := strings.IndexByte(s, '.'); dot >= 0 {
+		frac = s[dot+1:]
+		s = s[:dot]
+	}
+
+	layouts := map[int]string{
+		4:  "2006",
+		6:  "200601",
+		8:  "20060102",
+		10: "2006010215",
+		12: "200601021504",
+		14: "20060102150405",
+	}
+	layout, ok := layouts[len(s)]
+	if !ok {
+		return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateTimeFormat, s)
+	}
+	t, err := time.ParseInLocation(layout, s, loc)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateTimeFormat, s)
+	}
+
+	if frac != "" {
+		if len(frac) > 9 {
+			frac = frac[:9]
+		}
+		ns, err := strconv.Atoi(frac)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("%w: invalid fraction %q", ErrInvalidDateTimeFormat, frac)
+		}
+		for i := len(frac); i < 9; i++ {
+			ns *= 10
+		}
+		t = t.Add(time.Duration(ns))
+	}
+
+	return t, nil
 }
 
 // String returns the DICOM datetime range string representation (DT format).
