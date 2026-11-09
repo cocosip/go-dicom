@@ -222,10 +222,15 @@ func NewBaseResponse(command *dataset.Dataset, data *dataset.Dataset) *BaseRespo
 }
 
 // Status returns the status of the response.
+//
+// A missing (0000,0900) Status is a malformed response. PS3.7 Annex C has no
+// "unknown" class; classify it as Failure so callers do not treat it as a
+// non-failure, non-success response (0xFFFF is unassigned, so LookupStatus
+// yields a generic Failure).
 func (r *BaseResponse) Status() *status.Status {
 	code, err := r.GetCommandUInt16(tag.Status)
 	if err != nil {
-		return status.NewStatus(0xFFFF, "Unknown", "Status not found")
+		return status.LookupStatus(0xFFFF)
 	}
 	return status.LookupStatus(code)
 }

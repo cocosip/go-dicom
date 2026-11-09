@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
@@ -35,11 +36,25 @@ func (s *Service) handleReceivedMessage(ctx context.Context, msg dimse.Message) 
 func (s *Service) handleResponse(resp dimse.Response) error {
 	msgID := resp.MessageIDBeingRespondedTo()
 
+	isPending := false
+	if progress, ok := resp.(interface{ IsPending() bool }); ok {
+		isPending = progress.IsPending()
+	}
+
 	s.pendingRequestsMu.Lock()
 	pending, exists := s.pendingRequests[msgID]
 	if exists {
-		if progress, ok := resp.(interface{ IsPending() bool }); ok && progress.IsPending() {
+		if isPending {
 			s.resetPendingRequestTimeoutLocked(msgID, pending)
+		} else {
+			// The final response completes the operation: stop the idle timer so
+			// it cannot fire (and send C-CANCEL or a timeout error) while the
+			// progress goroutine is still blocked delivering the final event.
+			// Bumping the version makes an already-fired expiration a no-op.
+			if pending.timeoutTimer != nil {
+				pending.timeoutTimer.Stop()
+			}
+			pending.timeoutVersion++
 		}
 	}
 	s.pendingRequestsMu.Unlock()
@@ -48,11 +63,6 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 		// The request may have timed out or been cancelled locally. Late or
 		// duplicate responses should not abort the whole association.
 		return nil
-	}
-
-	isPending := false
-	if progress, ok := resp.(interface{ IsPending() bool }); ok {
-		isPending = progress.IsPending()
 	}
 	if !isPending && !pending.finalDelivered.CompareAndSwap(false, true) {
 		// A second final response for the same Message ID is a protocol
@@ -126,7 +136,10 @@ func (s *Service) cancelActiveOperation(messageID uint16) bool {
 	if exists {
 		op.cancel()
 		op.lifecycle.finish(s.ctx, observability.EventRequestCancelled, observability.OutcomeCancelled, context.Canceled)
-		s.unregisterInboundRequest(messageID, op.lifecycle)
+		// Keep the inbound registration until the final Cancel response is sent:
+		// per PS3.7 the canceled operation is still outstanding until then, and a
+		// peer that reuses the Message ID early must not be answered with the old
+		// handler's final response.
 	}
 	return exists
 }
@@ -202,6 +215,34 @@ func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 		if unregisterOperation != nil {
 			defer unregisterOperation()
 		}
+		// Isolate application handler panics. A peer can reach a handler with a
+		// crafted Data Set, and an unrecovered panic in this goroutine would
+		// terminate the whole process (taking every other association with it).
+		// The association is aborted so the peer cannot keep it in an
+		// inconsistent state, and the panic is reported as a request failure.
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+			panicErr := fmt.Errorf("panic in %s handler: %v", dimse.CommandField(req.CommandField()), recovered)
+			observability.EmitSlog(ctx, "network.service", observability.LogRecord{
+				Level:   observability.LevelError,
+				Message: panicErr.Error(),
+				Event: observability.Event{
+					Timestamp: time.Now(),
+					Kind:      observability.EventRequestFailed,
+					Direction: observability.DirectionInbound,
+					Outcome:   observability.OutcomeFailure,
+					Error:     panicErr,
+				},
+			})
+			lifecycle.finishError(ctx, panicErr)
+			if !isCancel {
+				s.unregisterInboundRequest(req.MessageID(), lifecycle)
+			}
+			_ = s.abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, panicErr, false)
+		}()
 		if !isCancel {
 			releasePerformed, err := s.acquirePerformedOperation(operationCtx)
 			if err != nil {

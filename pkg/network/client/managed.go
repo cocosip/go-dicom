@@ -7,9 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/cocosip/go-dicom/pkg/network/service"
 )
 
 var (
@@ -284,25 +287,10 @@ func (c *ManagedClient) sendBatch(
 	maximumTimeouts := c.options.MaximumConsecutiveAssociationTimeouts
 	c.mu.Unlock()
 
-	var lowLevel *Client
-	consecutiveTimeouts := 0
-	for {
-		candidate, err := newManagedLowLevelClient(options, contexts)
-		if err != nil {
-			completeManagedJobs(jobs, err)
-			return err
-		}
-		err = candidate.Connect(ctx, host, port)
-		if err == nil {
-			lowLevel = candidate
-			break
-		}
-		_ = candidate.Close()
-		if !isAssociationTimeout(err) || consecutiveTimeouts+1 >= maximumTimeouts || c.isClosed() {
-			completeManagedJobs(jobs, err)
-			return err
-		}
-		consecutiveTimeouts++
+	lowLevel, err := c.connectManagedAssociation(ctx, host, port, options, contexts, maximumTimeouts)
+	if err != nil {
+		completeManagedJobs(jobs, err)
+		return err
 	}
 	if !c.setActive(lowLevel) {
 		completeManagedJobs(jobs, ErrManagedClientClosed)
@@ -314,18 +302,58 @@ func (c *ManagedClient) sendBatch(
 		_ = lowLevel.Close()
 	}()
 
+	pending := jobs
+	associationDead := false
 	executed := 0
 	for {
-		for index, queued := range jobs {
+		for len(pending) > 0 {
 			if c.isClosed() {
-				completeManagedJobs(jobs[index:], ErrManagedClientClosed)
+				completeManagedJobs(pending, ErrManagedClientClosed)
 				return ErrManagedClientClosed
 			}
+			if associationDead || !managedAssociationUsable(lowLevel) {
+				// The association died between jobs. Only jobs that were never
+				// attempted are carried over to a fresh association; a job whose
+				// Execute already returned keeps its original error because it
+				// may have executed on the peer.
+				associationDead = false
+				c.clearActive(lowLevel)
+				// The association is known dead, so a graceful release would
+				// only spend its own 5s budget; abort with a short bound.
+				abortCtx, abortCancel := context.WithTimeout(context.Background(), time.Second)
+				_ = lowLevel.Abort(abortCtx)
+				abortCancel()
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					completeManagedJobs(pending, ctxErr)
+					return ctxErr
+				}
+				reconnected, reconnectErr := c.connectManagedAssociation(
+					ctx, host, port, options, contexts, maximumTimeouts,
+				)
+				if reconnectErr != nil {
+					completeManagedJobs(pending, reconnectErr)
+					return reconnectErr
+				}
+				lowLevel = reconnected
+				if !c.setActive(lowLevel) {
+					completeManagedJobs(pending, ErrManagedClientClosed)
+					_ = lowLevel.Close()
+					return ErrManagedClientClosed
+				}
+				// MaximumRequestsPerAssociation applies per association.
+				executed = 0
+			}
+			queued := pending[0]
+			pending = pending[1:]
 			err := queued.job.Execute(ctx, lowLevel)
 			queued.job.Complete(err)
 			executed++
+			// A connection-class error means the association is unusable even
+			// if its close notification has not been observed yet.
+			if isManagedConnectionError(err) {
+				associationDead = true
+			}
 		}
-		jobs = nil
 
 		next, ok := c.waitForCompatibleJob(ctx, contexts, executed)
 		if !ok {
@@ -337,8 +365,69 @@ func (c *ManagedClient) sendBatch(
 			}
 			return nil
 		}
-		jobs = []managedJob{next}
+		pending = []managedJob{next}
 	}
+}
+
+// connectManagedAssociation connects a fresh low-level client, retrying only
+// association timeouts under the configured MaximumConsecutiveAssociationTimeouts
+// policy. host/port are captured by the caller; the retry budget restarts for
+// each new association.
+func (c *ManagedClient) connectManagedAssociation(
+	ctx context.Context,
+	host string,
+	port int,
+	options []Option,
+	contexts []PresentationContextSpec,
+	maximumTimeouts int,
+) (*Client, error) {
+	consecutiveTimeouts := 0
+	for {
+		candidate, err := newManagedLowLevelClient(options, contexts)
+		if err != nil {
+			return nil, err
+		}
+		err = candidate.Connect(ctx, host, port)
+		if err == nil {
+			return candidate, nil
+		}
+		_ = candidate.Close()
+		if !isAssociationTimeout(err) || consecutiveTimeouts+1 >= maximumTimeouts || c.isClosed() {
+			return nil, err
+		}
+		consecutiveTimeouts++
+	}
+}
+
+// managedAssociationUsable reports whether a low-level client can still carry
+// jobs. It checks the service close state as well as the client flag because
+// the lifecycle notification that clears IsConnected is delivered
+// asynchronously after the service has already stopped.
+func managedAssociationUsable(lowLevel *Client) bool {
+	if lowLevel == nil || !lowLevel.IsConnected() {
+		return false
+	}
+	svc, err := lowLevel.activeService()
+	return err == nil && !svc.IsClosed()
+}
+
+// isManagedConnectionError reports whether a job error means the association is
+// unusable. Caller-driven context errors are excluded: they cancel the jobs but
+// are not evidence that the association died.
+func isManagedConnectionError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if errors.Is(err, ErrClientNotConnected) ||
+		errors.Is(err, ErrClientClosing) ||
+		errors.Is(err, service.ErrServiceClosed) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrClosedPipe) {
+		return true
+	}
+	var opErr *net.OpError
+	return errors.As(err, &opErr)
 }
 
 func newManagedLowLevelClient(options []Option, contexts []PresentationContextSpec) (*Client, error) {

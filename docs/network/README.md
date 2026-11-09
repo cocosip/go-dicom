@@ -32,6 +32,7 @@ This guide is the single, consolidated reference for go-dicom's networking layer
   - [Message Structure](#message-structure)
   - [Automatic MessageID Management](#automatic-messageid-management)
   - [Creating Request Messages](#creating-request-messages)
+  - [Outbound Validation](#outbound-validation)
   - [Creating Response Messages](#creating-response-messages)
   - [Checking Response Status](#checking-response-status)
   - [Response Handling](#response-handling)
@@ -72,15 +73,23 @@ The DICOM network protocol is based on TCP/IP, using the Association mechanism f
   - N-* operations (N-EVENT-REPORT, N-GET, N-SET, N-ACTION, N-CREATE, N-DELETE)
 - ✅ **SCU client**: high-level API supporting synchronous and asynchronous operations
 - ✅ **SCP server**: handler mode with support for custom business logic
-- ✅ **TLS support**: secure connections
+- ✅ **TLS support**: secure connections (the SNI/verification name defaults to the dial address when not set)
 - ✅ **Client lifecycle concurrency control**: `Connect`, `Close`, `IsConnected`, and
   `GetAssociation` can be called concurrently; configuration and Presentation Contexts can only be modified before the first connection
+- ✅ **Robust against conformant-but-minimal peers**: optional Type U(=) response
+  parameters may be absent, unrequested role selections are ignored (PS3.7 D.3.3.4),
+  and PDU decoding validates User Identity sub-items and trims UID padding
+- ✅ **Failure containment**: handler panics are recovered per request, graceful
+  close is bounded by the caller's context, timed-out/cancelled progressive
+  operations send C-CANCEL, and the server rejects over-limit connections with
+  A-ASSOCIATE-RJ instead of leaving them hanging
 
 ### Test Coverage
 
-- **401 unit tests**, all passing
-- Includes normal, error, and concurrency scenarios
-- Code coverage > 85%
+- **647 unit test functions** across the network packages, all passing
+- Includes normal, error, concurrency, and race-detector scenarios
+- Statement coverage per package is roughly 73–89%
+  (`go test ./pkg/network/... -cover`); `client` and `service` are the lowest
 
 ## Architecture / Package Structure
 
@@ -199,15 +208,30 @@ input while queued, so callers may safely reuse or change their source Dataset
 after constructing the Job. `Close` rejects future Jobs, completes queued Jobs,
 and aborts an active association.
 
+`Send` drains queued Jobs in FIFO association batches. If the association dies
+between Jobs, the remaining **not yet attempted** Jobs continue on a freshly
+negotiated association; a Job whose execution already returned an error keeps
+that error because it may have been processed by the peer (no implicit retry).
+Death is detected from the client/service state and from connection-class job
+errors (`ErrClientNotConnected`, `ErrClientClosing`, `service.ErrServiceClosed`,
+`net.ErrClosed`, `io.EOF`, `io.ErrClosedPipe`, `*net.OpError`); a cancelled or
+timed-out context is a caller decision, never a reconnect trigger.
+Association-timeout connect retries remain bounded by
+`WithMaximumConsecutiveAssociationTimeouts`.
+
 Progressive C-FIND, C-MOVE, and C-GET operations propagate request timeout,
 transport, and association-close errors. Their callbacks send C-CANCEL when
 they return `false` and wait for the final response so the Association remains
-usable. Cancelling the caller context triggers one bounded best-effort
-C-CANCEL and still returns the original context error. Managed Jobs inherit
-the same behavior. Low-level `Service.SendCFind`, `SendCMove`, and `SendCGet`
-calls return a single ordered `ResponseEvent` stream: each event contains either
-a DIMSE response or the one terminal error. The stream never closes silently
-before a final response or terminal error.
+usable. Cancelling the caller context, or letting `WithRequestTimeout` expire,
+makes the **service layer** send one bounded best-effort C-CANCEL for those
+three operations; the client wrapper does not send a second one. Resources
+(pending request and asynchronous-operation slot) are released before the
+terminal event is delivered. Low-level `Service.SendCFind`, `SendCMove`, and
+`SendCGet` calls return a single ordered `ResponseEvent` stream: each event
+contains either a DIMSE response or the one terminal error. The stream never
+closes silently before a final response or terminal error, and callers must keep
+draining it until it closes even after cancelling the context. Managed Jobs
+inherit the same behavior.
 
 ### Creating a Client
 
@@ -290,7 +314,14 @@ objects and does not modify any process-level state.
 
 ### Requesting SCU/SCP Roles and Factory Methods
 
-A plain `AddPresentationContext` does not declare roles (default: requesting side SCU, accepting side SCP). For C-GET to receive C-STORE sent back by the SCP, you must declare the **SCP role** for the Storage SOP Class:
+A plain `AddPresentationContext` does not declare roles (default: requesting side SCU, accepting side SCP). For C-GET to receive C-STORE sent back by the SCP, you must declare the **SCP role** for the Storage SOP Class.
+
+Role responses are applied defensively: a role selection item for a SOP Class
+this AE did not propose is ignored (PS3.7 D.3.3.4: "The Association-requester
+shall ignore the response if it has not proposed the role"), and a role the
+acceptor granted beyond the proposal is clamped to the proposed value. Neither
+case closes the association; only an invalid role value (> 1) is treated as a
+protocol error.
 
 ```go
 // Single: explicit role
@@ -384,6 +415,13 @@ same time, the release collision is resolved per PS3.8: the association-requesto
 answers first, and the association-acceptor waits for the peer's confirmation
 before sending its own A-RELEASE-RP. An A-RELEASE-RP that was never requested is
 treated as an abnormal condition and aborts the association (A-ABORT, AA-8).
+
+`Close` is bounded: it gives the release handshake a 5-second context and does
+not wait for the service's handler-drain timeout (60 seconds by default) once
+that context expires. The connection is closed in every case, so an unresponsive
+peer or a long-running inbound handler cannot block the caller indefinitely.
+When the peer sends A-ABORT, the association is reported as `StateAborted` (not
+`StateClosed`), and `CloseError()` records the received A-ABORT.
 
 ### DIMSE Operations
 
@@ -697,8 +735,8 @@ srv := server.New(
 | `WithPort(port)` | int | 104 | Listening port |
 | `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length this AE can receive (per direction) |
 | `WithMaxMessageSize(size)` | uint32 | 512 MiB | Bound for a reassembled inbound DIMSE message (0=unlimited) |
-| `WithMaxConnections(max)` | int | 0 | Maximum concurrent connections (0=unlimited) |
-| `WithAcceptTimeout(timeout)` | time.Duration | 0 | Single Accept timeout (0=obey only the Server context) |
+| `WithMaxConnections(max)` | int | 0 | Maximum concurrent connections (0=unlimited); over-limit connections are rejected with A-ASSOCIATE-RJ(rejected-transient, local-limit-exceeded) |
+| `WithAcceptTimeout(timeout)` | time.Duration | 0 | Single Accept polling deadline (0=obey only the Server context); expiry is silent and persistent accept errors back off up to 1s |
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association negotiation timeout |
 | `WithRequestTimeout(timeout)` | time.Duration | 30s | Response idle timeout for DIMSE requests actively initiated by the Server |
 | `WithTransportReadTimeout(timeout)` | time.Duration | 0 | Single PDU read timeout (0=disabled) |
@@ -709,7 +747,24 @@ srv := server.New(
 
 ### DIMSE Handlers
 
-Handlers are registered per operation with `srv.SetCEchoHandler`, `srv.SetCStoreHandler`, `srv.SetCFindHandler`, `srv.SetCMoveHandler`, and `srv.SetCGetHandler`. The C-ECHO, C-STORE, and C-FIND handlers are shown in the complete programs in [Server Examples](#server-examples). The C-MOVE and C-GET handlers are:
+Handlers are registered per operation with `srv.SetCEchoHandler`, `srv.SetCStoreHandler`, `srv.SetCFindHandler`, `srv.SetCMoveHandler`, and `srv.SetCGetHandler`. The C-ECHO, C-STORE, and C-FIND handlers are shown in the complete programs in [Server Examples](#server-examples).
+
+Handlers run in their own goroutine per inbound request. A panic inside a
+handler is recovered and isolated: it is logged as a request failure with its
+stack trace, the request lifecycle is completed with an error, and the affected
+association is aborted with A-ABORT (service-provider, not-specified). A remote
+peer therefore cannot crash the whole process by driving a handler into a
+panic; other associations keep running. Handlers must still return promptly or
+honor cancellation, because shutdown waits for them.
+
+For C-FIND, C-MOVE, and C-GET, a peer C-CANCEL cancels the context the handler
+received, but the inbound request registration is kept until the final
+response has been sent. A handler that observes the cancellation may still
+return a final response (or a failure reason); it is encoded against the
+original MessageID. The registration is released only on the final response or
+service shutdown, never on C-CANCEL alone.
+
+The C-MOVE and C-GET handlers are:
 
 #### C-MOVE Handler
 
@@ -1038,6 +1093,12 @@ type Message interface {
 }
 ```
 
+Outbound encoding always writes a correct Command Group Length (0000,0000), even
+when the supplied command set has no such element (for example a message rebuilt
+from scratch): the encoder reserves the element, encodes once, and patches the
+length from the actual byte count. The value excludes the group-length element
+itself (PS3.7 7.1).
+
 ### Automatic MessageID Management
 
 In DICOM network communication, every request needs a unique MessageID. Managing MessageID manually is error-prone:
@@ -1142,6 +1203,22 @@ req := dimse.NewCGetRequestPatientRoot(level, identifier)
 req := dimse.NewCGetRequestStudyRoot(level, identifier)
 ```
 
+### Outbound Validation
+
+Every outgoing request passes `dimse.ValidateRequestForSend` before it is
+encoded. The validator rejects an empty value for a mandatory identifier:
+C-STORE Affected SOP Class/Instance UID; C-FIND, C-GET, and C-MOVE Affected SOP
+Class UID; C-MOVE Move Destination; N-GET/N-SET/N-DELETE/N-ACTION requested SOP
+Class and Instance UID; N-CREATE Affected SOP Class UID (the instance UID may be
+empty so the SCP can assign it); N-EVENT-REPORT Affected SOP Class/Instance UID
+and Event Type ID presence. C-ECHO and C-CANCEL always pass. A present but
+zero-length element is treated as missing, so no zero-length Type-1 element is
+ever written to the wire. The validator covers the built-in request types; a
+custom `dimse.Request` implementation is not introspected. Inbound C-STORE-RQ
+also rejects a command `AffectedSOPClassUID`/`AffectedSOPInstanceUID` that is
+present but empty, while a missing command element still falls back to the Data
+Set value for lenient peers.
+
 ### Creating Response Messages
 
 ```go
@@ -1169,6 +1246,13 @@ resp := dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID()
 resp := dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
 ```
 
+`Affected SOP Class UID` / `Affected SOP Instance UID` are Type U(=) in
+C-STORE-RSP and `Affected SOP Class UID` is Type U(=) in C-FIND-RSP. The
+constructors therefore omit those command elements when the UID argument is
+empty, which allows a conformant minimal response (`Status` +
+`MessageIDBeingRespondedTo` only). On the receive side, the service tolerates
+their absence instead of aborting the association.
+
 ### Checking Response Status
 
 ```go
@@ -1187,6 +1271,10 @@ if status.IsSuccess() {
 // Get the status code
 statusCode := resp.StatusCode()  // uint16
 ```
+
+A response without a Status (0000,0900) element is malformed. `Status()` reports
+it as a generic Failure (0xFFFF) so `IsFailure()` is true; it never returns a
+value whose predicates are all false.
 
 ### Response Handling
 
@@ -1290,12 +1378,31 @@ type Association struct {
     CallingAE            string
     ApplicationContext   string
     PresentationContexts []*PresentationContext
-    MaxPDULength         uint32
+    MaxPDULength         uint32 // peer's receive limit
+    LocalMaxPDULength    uint32 // local receive limit, used when building an RQ
     ImplementationClassUID    string
     ImplementationVersionName string
+    LocalImplementationClassUID    string
+    LocalImplementationVersionName string
     // ...
 }
 ```
+
+`ToAAssociateRQ` always advertises the local AE's implementation identity and
+`LocalMaxPDULength`; it never echoes the peer's values back into an outgoing RQ.
+`NewAssociation` initializes the `Local*` fields, so only callers that construct
+an `Association` without it need to set them explicitly before converting.
+
+PDU decoding is defensive: decoding into a reused `AAssociateRQ`/`AAssociateAC`
+resets the receiver first, Application Context UIDs are trimmed of trailing NUL
+or space padding, and User Identity sub-items are validated against PS3.7
+Table D.3-14 (identity type 1-5, a single sub-item, a secondary field only for
+username/password, no trailing bytes). A username/password sub-item with an
+empty passcode is accepted: the standard only forbids a non-empty secondary
+field for the other types. The encoder applies the same rules before writing an
+A-ASSOCIATE-RQ, and both `FromAAssociateRQ` and `ToAAssociateRQ` copy the
+identity slices and drop an invalid identity, so a hand-built PDU or a locally
+constructed identity cannot bypass the check.
 
 ### Presentation Context
 
@@ -1344,6 +1451,12 @@ if err := c.AddPresentationContext(
 }
 err := c.Connect(ctx, "pacs.hospital.com", 11112)
 ```
+
+`ServerName` may be omitted: when the TLS configuration has no explicit
+`ServerName` and `InsecureSkipVerify` is false, the transport derives it from the
+dial address host (an IP literal is used verbatim and checked against the
+certificate's IP SANs). An explicitly set `ServerName` always wins, and it is
+never derived when verification is disabled.
 
 #### Server using TLS
 
@@ -1457,6 +1570,21 @@ Configuration and Presentation Contexts can only be added before the first
 `WithRequestTimeout` is a single DIMSE response idle timeout and does not
 disconnect because the association is idle. `WithTransportReadTimeout` and
 `WithTransportWriteTimeout` each constrain only a single underlying PDU I/O.
+When a C-FIND, C-MOVE, or C-GET request times out (`RequestTimeoutError`) or its
+context is cancelled, the service sends exactly one best-effort C-CANCEL (bounded
+by one second, and deduplicated when the timer and the cancellation race) so the
+peer stops producing responses this side would discard; a C-ECHO
+or N-Service request times out without C-CANCEL because the operation does not
+support it. The terminal error is delivered after the pending request and
+asynchronous-operation slot are released, and the returned event stream must be
+drained until it closes.
+
+Graceful shutdown (`Client.Close`, `Service.GracefulRelease`) is bounded by the
+caller's context: the context covers both the A-RELEASE-RP wait and the drain of
+in-flight request handlers. If it expires, the service closes the connection and
+returns a timeout error instead of waiting for the default 60-second handler
+shutdown budget. `Server.Shutdown(ctx)` likewise honors its context, while
+`Server.Close` terminates connections immediately.
 
 Client and Server use the same timeout boundaries: `WithAssociationTimeout`
 constrains only association negotiation; the Server's `WithAcceptTimeout`
@@ -1656,6 +1784,21 @@ srv := server.New(
     server.WithTransportReadTimeout(2*time.Minute), // Limit a single PDU read / connection idle
 )
 ```
+
+Connections that arrive while `WithMaxConnections` is exhausted are still
+accepted: the server reads their A-ASSOCIATE-RQ and answers with
+A-ASSOCIATE-RJ (result 2 rejected-transient, source 3
+service-provider-presentation, reason 2 local-limit-exceeded) instead of leaving
+the peer hanging, and they are never counted as active. Rejection is still
+resource-bounded: at most `WithMaxConnections` reject negotiations run at once,
+further connections are closed without reading their request, and each
+rejection wait is capped at 30 seconds (or `WithAssociationTimeout` when that is
+smaller), so a connection flood cannot spawn unbounded goroutines. A rejected
+connection also emits its matching connection-closed event. Graceful
+`Shutdown` closes connections that are still negotiating (including rejects)
+before waiting, so it never waits for that negotiation bound. An expired
+`WithAcceptTimeout` is treated as an idle poll and produces no `accept_failed`
+error record; other persistent accept errors back off from 5 ms up to 1 second.
 
 ## Next Steps
 

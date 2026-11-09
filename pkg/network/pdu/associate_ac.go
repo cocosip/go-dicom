@@ -364,6 +364,10 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 		return fmt.Errorf("invalid A-ASSOCIATE-AC data length: %d (minimum 68 bytes)", len(data))
 	}
 
+	// A decoded PDU carries parsed state only, so reset it before parsing to
+	// keep two decodes on the same receiver independent.
+	*a = AAssociateAC{}
+
 	// Protocol Version (2 bytes)
 	a.ProtocolVersion = binary.BigEndian.Uint16(data[0:2])
 
@@ -396,7 +400,9 @@ func (a *AAssociateAC) Decode(pdu *RawPDU) error {
 		switch itemType {
 		case ItemTypeApplicationContext:
 			applicationContextCount++
-			a.ApplicationContext = string(itemData)
+			// UIDs are padded with a trailing NUL and some peers use spaces;
+			// trim both before comparing against the DICOM Application Context.
+			a.ApplicationContext = trimUIDPadding(string(itemData))
 
 		case ItemTypePresentationContextAC:
 			// Bound the count while decoding: the association PDU is read with a

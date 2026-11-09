@@ -182,3 +182,37 @@ func TestDecodeDIMSEMessage_PreservesBinaryVRType(t *testing.T) {
 		t.Fatalf("decoded element type = %T, want *element.OtherWord", el)
 	}
 }
+
+func TestEncodeDIMSEMessageComputesGroupLengthWithoutExistingElement(t *testing.T) {
+	command := dataset.New()
+	if err := command.Add(element.NewUnsignedShort(tag.CommandField, []uint16{uint16(dimse.CommandCEchoRQ)})); err != nil {
+		t.Fatalf("failed to add CommandField: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.MessageID, []uint16{5})); err != nil {
+		t.Fatalf("failed to add MessageID: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.CommandDataSetType, []uint16{0x0101})); err != nil {
+		t.Fatalf("failed to add CommandDataSetType: %v", err)
+	}
+
+	request := dimse.NewBaseRequest(command, nil)
+	commandBytes, dataBytes, err := EncodeDIMSEMessage(request, transfer.ImplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("EncodeDIMSEMessage() error = %v", err)
+	}
+	if len(dataBytes) != 0 {
+		t.Fatalf("data set bytes = %d, want 0", len(dataBytes))
+	}
+
+	decoded, _, err := DecodeDIMSEMessage(commandBytes, nil, transfer.ImplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("DecodeDIMSEMessage() error = %v", err)
+	}
+	groupLength, err := decoded.GetUInt32(tag.CommandGroupLength, 0)
+	if err != nil {
+		t.Fatalf("GetUInt32(CommandGroupLength) error = %v", err)
+	}
+	if got, want := int(groupLength), len(commandBytes)-12; got != want {
+		t.Fatalf("CommandGroupLength = %d, want %d (encoded %d bytes)", got, want, len(commandBytes))
+	}
+}

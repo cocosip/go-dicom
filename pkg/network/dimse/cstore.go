@@ -27,15 +27,22 @@ type CStoreRequest struct {
 // NewCStoreRequest creates a new C-STORE-RQ message from a DICOM dataset.
 // The MessageID will be automatically assigned by the Association/Client when sending.
 func NewCStoreRequest(dicomData *dataset.Dataset) (*CStoreRequest, error) {
-	// Extract required fields from the dataset
+	// Extract required fields from the dataset. GetString reports ok=true for a
+	// present but zero-length element, so check the value as well.
 	sopClassUID, ok := dicomData.GetString(tag.SOPClassUID)
 	if !ok {
 		return nil, fmt.Errorf("SOPClassUID not found in dataset")
+	}
+	if sopClassUID == "" {
+		return nil, fmt.Errorf("SOPClassUID is empty in dataset")
 	}
 
 	sopInstanceUID, ok := dicomData.GetString(tag.SOPInstanceUID)
 	if !ok {
 		return nil, fmt.Errorf("SOPInstanceUID not found in dataset")
+	}
+	if sopInstanceUID == "" {
+		return nil, fmt.Errorf("SOPInstanceUID is empty in dataset")
 	}
 
 	// Create command dataset with MessageID=0 (unassigned)
@@ -135,9 +142,15 @@ func NewCStoreResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopCl
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCStoreRSP), 0)
 
-	// Set affected SOP Class UID and Instance UID
-	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
-	_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+	// Affected SOP Class UID and Instance UID are Type U (=) in C-STORE-RSP
+	// (PS3.7 Table 9.3-3): only write them when they carry a value so a
+	// conformant minimal response leaves the elements out.
+	if sopClassUID != "" {
+		_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	}
+	if sopInstanceUID != "" {
+		_ = command.Add(element.NewString(tag.AffectedSOPInstanceUID, vr.UI, []string{sopInstanceUID}))
+	}
 
 	// MessageIDBeingRespondedTo
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))

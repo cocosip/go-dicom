@@ -182,10 +182,35 @@ func (a *AAssociateRQ) validateForEncode() error {
 	if err := validateImplementationIdentification(a.UserInformation, "A-ASSOCIATE-RQ"); err != nil {
 		return err
 	}
+	if err := validateUserIdentityForEncode(a.UserInformation.UserIdentity, "A-ASSOCIATE-RQ"); err != nil {
+		return err
+	}
 	if len(a.PresentationContexts) == 0 {
 		return fmt.Errorf("A-ASSOCIATE-RQ must contain at least one presentation context")
 	}
 	return validatePresentationContexts(a.PresentationContexts)
+}
+
+// validateUserIdentityForEncode applies the PS3.7 Table D.3-14 shape rules to a
+// User Identity sub-item before it is encoded, so locally built identities that
+// a conformant receiver would reject never reach the wire.
+func validateUserIdentityForEncode(identity *UserIdentityNegotiation, owner string) error {
+	if identity == nil {
+		return nil
+	}
+	if identity.UserIdentityType < 1 || identity.UserIdentityType > 5 {
+		return fmt.Errorf("%s: unsupported user identity type %d", owner, identity.UserIdentityType)
+	}
+	if identity.PositiveResponseRequested > 1 {
+		return fmt.Errorf("%s: invalid positive response requested value %d", owner, identity.PositiveResponseRequested)
+	}
+	// The secondary field carries the passcode for Username/Password and shall
+	// be non-zero only for that type (Table D.3-14); a type-2 sub-item with an
+	// empty passcode is still valid.
+	if identity.UserIdentityType != 2 && len(identity.SecondaryField) != 0 {
+		return fmt.Errorf("%s: user identity type %d must not carry a secondary field", owner, identity.UserIdentityType)
+	}
+	return nil
 }
 
 // Encode encodes the A-ASSOCIATE-RQ into a RawPDU.
@@ -404,6 +429,10 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 		return fmt.Errorf("invalid PDU type: expected 0x01, got 0x%02X", pdu.Type)
 	}
 
+	// A decoded PDU carries parsed state only, so reset it before parsing to
+	// keep two decodes on the same receiver independent.
+	*a = AAssociateRQ{}
+
 	r := bytes.NewReader(pdu.Data)
 
 	// Read fixed fields (68 bytes total)
@@ -440,7 +469,9 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 		switch itemType {
 		case ItemTypeApplicationContext:
 			applicationContextCount++
-			a.ApplicationContext = string(data)
+			// UIDs are padded with a trailing NUL and some peers use spaces;
+			// trim both before comparing against the DICOM Application Context.
+			a.ApplicationContext = trimUIDPadding(string(data))
 
 		case ItemTypePresentationContextRQ:
 			// Bound the count while decoding: the association PDU is read with a
@@ -608,6 +639,7 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 	}
 	maximumLengthSeen := false
 	implementationClassUIDSeen := false
+	userIdentitySeen := false
 	seenRoleSelections := make(map[string]struct{})
 
 	r := bytes.NewReader(data)
@@ -682,6 +714,11 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 			ui.CommonExtendedNegotiations = append(ui.CommonExtendedNegotiations, *negotiation)
 
 		case ItemTypeUserIdentityNegotiation:
+			// PS3.7 D.3.3.4: at most one User Identity Sub-Item.
+			if userIdentitySeen {
+				return nil, fmt.Errorf("duplicate user identity sub-item in user information")
+			}
+			userIdentitySeen = true
 			identity, err := decodeUserIdentity(itemData)
 			if err != nil {
 				return nil, fmt.Errorf("decoding user identity: %w", err)
@@ -882,7 +919,8 @@ func decodeExtendedNegotiation(data []byte) (*ExtendedNegotiation, error) {
 	}, nil
 }
 
-// decodeUserIdentity decodes a user identity negotiation sub-item.
+// decodeUserIdentity decodes a user identity negotiation sub-item and validates
+// it against PS3.7 D.3.3.7 / Table D.3-14.
 func decodeUserIdentity(data []byte) (*UserIdentityNegotiation, error) {
 	if len(data) < 6 {
 		return nil, fmt.Errorf("user identity data too short")
@@ -896,10 +934,20 @@ func decodeUserIdentity(data []byte) (*UserIdentityNegotiation, error) {
 	if err := binary.Read(r, binary.BigEndian, &identity.UserIdentityType); err != nil {
 		return nil, err
 	}
+	switch identity.UserIdentityType {
+	case 1, 2, 3, 4, 5:
+	default:
+		return nil, fmt.Errorf("unsupported user identity type %d", identity.UserIdentityType)
+	}
 
 	// Positive Response Requested
 	if err := binary.Read(r, binary.BigEndian, &identity.PositiveResponseRequested); err != nil {
 		return nil, err
+	}
+	// PS3.7 Table D.3-14: the only defined values are 0 (not requested) and
+	// 1 (requested); every other value is reserved.
+	if identity.PositiveResponseRequested > 1 {
+		return nil, fmt.Errorf("invalid positive response requested value %d", identity.PositiveResponseRequested)
 	}
 
 	// Primary Field Length
@@ -926,6 +974,16 @@ func decodeUserIdentity(data []byte) (*UserIdentityNegotiation, error) {
 		if _, err := io.ReadFull(r, identity.SecondaryField); err != nil {
 			return nil, err
 		}
+	}
+	if r.Len() != 0 {
+		return nil, fmt.Errorf("user identity has %d trailing bytes", r.Len())
+	}
+
+	// PS3.7 Table D.3-14: the Secondary Field carries the passcode for
+	// Username/Password and shall be non-zero only for that type. A type-2
+	// sub-item with an empty passcode is not forbidden by the standard.
+	if identity.UserIdentityType != 2 && len(identity.SecondaryField) != 0 {
+		return nil, fmt.Errorf("user identity type %d must not carry a secondary field", identity.UserIdentityType)
 	}
 
 	return identity, nil
@@ -961,4 +1019,3 @@ func (u *UserInformation) String() string {
 	return fmt.Sprintf("UserInformation[MaxPDU=%d, Implementation=%s, Version=%s]",
 		u.MaximumLength, u.ImplementationClassUID, u.ImplementationVersionName)
 }
-

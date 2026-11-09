@@ -302,7 +302,10 @@ func TestToAAssociateACBindsAcceptedRoleToPresentationContext(t *testing.T) {
 	}
 }
 
-func TestApplyAAssociateACRejectsRoleNotRequested(t *testing.T) {
+// TestApplyAAssociateACClampsOverGrantedRole verifies PS3.7 D.3.3.4: an
+// acceptor may grant at most the proposed roles, so a role above the request is
+// clamped instead of aborting the association.
+func TestApplyAAssociateACClampsOverGrantedRole(t *testing.T) {
 	const storageSOPClassUID = "1.2.840.10008.5.1.4.1.1.2"
 	rq := pdu.NewAAssociateRQ()
 	rq.PresentationContexts = []pdu.PresentationContextRQ{{
@@ -328,9 +331,159 @@ func TestApplyAAssociateACRejectsRoleNotRequested(t *testing.T) {
 	}}
 
 	registry := transfer.NewRegistry()
-	err := ApplyAAssociateAC(FromAAssociateRQ(rq, registry), ac, registry)
-	if err == nil || !strings.Contains(err.Error(), "unrequested SCP role") {
-		t.Fatalf("ApplyAAssociateAC error = %v, want unrequested SCP role error", err)
+	assoc := FromAAssociateRQ(rq, registry)
+	if err := ApplyAAssociateAC(assoc, ac, registry); err != nil {
+		t.Fatalf("ApplyAAssociateAC error = %v", err)
+	}
+	if !assoc.IsEstablished {
+		t.Fatal("association was not established after clamping the role")
+	}
+	if len(assoc.RoleSelections) != 1 {
+		t.Fatalf("role selections = %#v, want one clamped entry", assoc.RoleSelections)
+	}
+	if got := assoc.RoleSelections[0]; got.SCURole != 1 || got.SCPRole != 0 {
+		t.Fatalf("accepted role = %#v, want SCU=1 SCP=0", got)
+	}
+	pc := assoc.FindPresentationContextByID(1)
+	if pc == nil || pc.AcceptedRole == nil || pc.AcceptedRole.SCPRole != 0 {
+		t.Fatalf("presentation context accepted role = %#v, want SCP=0", pc.AcceptedRole)
+	}
+}
+
+// TestApplyAAssociateACIgnoresRoleForUnproposedSOPClass verifies PS3.7
+// D.3.3.4: the requestor ignores an accepted role selection for a SOP Class it
+// never proposed, rather than rejecting the association.
+func TestApplyAAssociateACIgnoresRoleForUnproposedSOPClass(t *testing.T) {
+	rq, ac := newAsyncNegotiationPDUs()
+	ac.UserInformation.SCPSCURoleSelections = []pdu.SCPSCURoleSelection{{
+		SOPClassUID: "1.2.840.10008.5.1.4.1.1.4",
+		SCURole:     1,
+		SCPRole:     1,
+	}}
+
+	registry := transfer.NewRegistry()
+	assoc := FromAAssociateRQ(rq, registry)
+	if err := ApplyAAssociateAC(assoc, ac, registry); err != nil {
+		t.Fatalf("ApplyAAssociateAC error = %v", err)
+	}
+	if !assoc.IsEstablished {
+		t.Fatal("association was not established after ignoring the unproposed role")
+	}
+	if len(assoc.RoleSelections) != 0 {
+		t.Fatalf("role selections = %#v, want none", assoc.RoleSelections)
+	}
+}
+
+func TestToAAssociateRQUsesLocalIdentityAndReceiveLimit(t *testing.T) {
+	assoc := NewAssociation("SCU", "SCP")
+	// Peer-identifying values must never be echoed into the local RQ.
+	assoc.MaxPDULength = 32768
+	assoc.ImplementationClassUID = "1.2.3.4"
+	assoc.ImplementationVersionName = "PEER"
+	assoc.LocalImplementationClassUID = "1.2.3.4.5.6"
+	assoc.LocalImplementationVersionName = "LOCAL"
+	assoc.LocalMaxPDULength = 65536
+
+	rq := ToAAssociateRQ(assoc)
+	ui := rq.UserInformation
+	if ui.MaximumLength != 65536 {
+		t.Fatalf("MaximumLength = %d, want local 65536", ui.MaximumLength)
+	}
+	if ui.ImplementationClassUID != "1.2.3.4.5.6" {
+		t.Fatalf("ImplementationClassUID = %q, want local UID", ui.ImplementationClassUID)
+	}
+	if ui.ImplementationVersionName != "LOCAL" {
+		t.Fatalf("ImplementationVersionName = %q, want local version", ui.ImplementationVersionName)
+	}
+
+	// A fresh Association keeps its own default limit even when only the peer's
+	// limit is known.
+	defaults := NewAssociation("SCU", "SCP")
+	defaults.MaxPDULength = 32768
+	if got := ToAAssociateRQ(defaults).UserInformation.MaximumLength; got != 16384 {
+		t.Fatalf("MaximumLength = %d, want local default 16384", got)
+	}
+}
+
+func TestFromAAssociateRQDoesNotAliasPDU(t *testing.T) {
+	rq := pdu.NewAAssociateRQ()
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID:               1,
+		AbstractSyntax:   testStorageSOPClassUID,
+		TransferSyntaxes: []string{testExplicitVRLittleEndianUID},
+	}}
+	rq.UserInformation.SCPSCURoleSelections = []pdu.SCPSCURoleSelection{{
+		SOPClassUID: testStorageSOPClassUID,
+		SCURole:     1,
+		SCPRole:     1,
+	}}
+	rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
+		UserIdentityType:          1,
+		PositiveResponseRequested: 1,
+		PrimaryField:              []byte("alice"),
+	}
+
+	assoc := FromAAssociateRQ(rq, transfer.NewRegistry())
+	if assoc.UserIdentity == nil {
+		t.Fatal("valid user identity was not copied")
+	}
+
+	rq.PresentationContexts[0].AbstractSyntax = "9.9"
+	rq.PresentationContexts[0].TransferSyntaxes[0] = "9.9"
+	rq.UserInformation.SCPSCURoleSelections[0].SCURole = 0
+	rq.UserInformation.UserIdentity.PrimaryField[0] = 'X'
+
+	if assoc.PresentationContexts[0].AbstractSyntax != testStorageSOPClassUID {
+		t.Fatalf("abstract syntax aliases the PDU: %q", assoc.PresentationContexts[0].AbstractSyntax)
+	}
+	if got := assoc.PresentationContexts[0].ProposedTransferSyntaxes[0].UID().UID(); got != testExplicitVRLittleEndianUID {
+		t.Fatalf("transfer syntax aliases the PDU: %q", got)
+	}
+	if assoc.RequestedRoleSelections[0].SCURole != 1 {
+		t.Fatalf("role selection aliases the PDU: %#v", assoc.RequestedRoleSelections[0])
+	}
+	if got := string(assoc.UserIdentity.PrimaryField); got != "alice" {
+		t.Fatalf("user identity aliases the PDU: %q", got)
+	}
+}
+
+// TestFromAAssociateRQDropsInvalidUserIdentity documents the defensive check:
+// the PDU decoder rejects an invalid identity, and a hand-built PDU that still
+// carries one does not leak it into the Association.
+func TestFromAAssociateRQDropsInvalidUserIdentity(t *testing.T) {
+	rq := pdu.NewAAssociateRQ()
+	// Reserved identity type 0 is not a valid Table D.3-14 value.
+	rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
+		UserIdentityType: 0,
+		PrimaryField:     []byte("alice"),
+	}
+
+	assoc := FromAAssociateRQ(rq, transfer.NewRegistry())
+	if assoc.UserIdentity != nil {
+		t.Fatalf("invalid user identity was copied: %#v", assoc.UserIdentity)
+	}
+}
+
+// TestToAAssociateRQCopiesIdentityAndDropsInvalid verifies the outbound RQ does
+// not alias the Association's identity slices and never writes an invalid
+// identity (PS3.7 Table D.3-14).
+func TestToAAssociateRQCopiesIdentityAndDropsInvalid(t *testing.T) {
+	assoc := NewAssociation("SCU", "SCP")
+	// Username/password without a passcode is valid under Table D.3-14.
+	assoc.UserIdentity = NewUserIdentity(UserIdentityTypeUsernamePassword, []byte("alice"), nil, true)
+
+	rq := ToAAssociateRQ(assoc)
+	if rq.UserInformation.UserIdentity == nil {
+		t.Fatal("ToAAssociateRQ() dropped a valid user identity")
+	}
+	rq.UserInformation.UserIdentity.PrimaryField[0] = 'X'
+	if got := string(assoc.UserIdentity.PrimaryField); got != "alice" {
+		t.Fatalf("ToAAssociateRQ() aliases the identity slices: %q", got)
+	}
+
+	assoc.UserIdentity = NewUserIdentity(0, []byte("alice"), nil, false)
+	if rq := ToAAssociateRQ(assoc); rq.UserInformation.UserIdentity != nil {
+		t.Fatal("ToAAssociateRQ() copied an invalid user identity")
 	}
 }
 

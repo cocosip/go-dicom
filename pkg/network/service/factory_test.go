@@ -218,3 +218,93 @@ func TestCreateCMoveRequestPreservesAffectedSOPClassUID(t *testing.T) {
 		t.Fatalf("AffectedSOPClassUID = %q, want %q", req.AffectedSOPClassUID(), patientRootMove)
 	}
 }
+
+func TestCreateCStoreRequestRejectsEmptyCommandUIDs(t *testing.T) {
+	data := dataset.New()
+	if err := data.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID})); err != nil {
+		t.Fatalf("failed to add SOPClassUID: %v", err)
+	}
+	if err := data.Add(element.NewString(tag.SOPInstanceUID, vr.UI, []string{"1.2.3.4"})); err != nil {
+		t.Fatalf("failed to add SOPInstanceUID: %v", err)
+	}
+
+	command := dataset.New()
+	if err := command.Add(element.NewUnsignedShort(tag.CommandField, []uint16{uint16(dimse.CommandCStoreRQ)})); err != nil {
+		t.Fatalf("failed to add CommandField: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.MessageID, []uint16{1})); err != nil {
+		t.Fatalf("failed to add MessageID: %v", err)
+	}
+	// Present-but-empty Type 1 identifier: the dataset fallback must not hide it.
+	if err := command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{""})); err != nil {
+		t.Fatalf("failed to add AffectedSOPClassUID: %v", err)
+	}
+
+	if _, err := createCStoreRequest(command, data); err == nil {
+		t.Fatal("createCStoreRequest() accepted a present-but-empty AffectedSOPClassUID")
+	}
+}
+
+func TestCreateCStoreResponseToleratesMissingOptionalUIDs(t *testing.T) {
+	command := dataset.New()
+	if err := command.Add(element.NewUnsignedShort(tag.CommandField, []uint16{uint16(dimse.CommandCStoreRSP)})); err != nil {
+		t.Fatalf("failed to add CommandField: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{7})); err != nil {
+		t.Fatalf("failed to add MessageIDBeingRespondedTo: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.Status, []uint16{status.Success.Code})); err != nil {
+		t.Fatalf("failed to add Status: %v", err)
+	}
+
+	resp, err := createCStoreResponse(command)
+	if err != nil {
+		t.Fatalf("createCStoreResponse() error = %v, want nil for a minimal C-STORE-RSP", err)
+	}
+	if resp.MessageIDBeingRespondedTo() != 7 {
+		t.Fatalf("MessageIDBeingRespondedTo = %d, want 7", resp.MessageIDBeingRespondedTo())
+	}
+	if resp.AffectedSOPClassUID() != "" || resp.AffectedSOPInstanceUID() != "" {
+		t.Fatalf("optional UIDs = %q/%q, want empty", resp.AffectedSOPClassUID(), resp.AffectedSOPInstanceUID())
+	}
+}
+
+func TestCreateCFindResponseToleratesMissingAffectedSOPClassUID(t *testing.T) {
+	command := dataset.New()
+	if err := command.Add(element.NewUnsignedShort(tag.CommandField, []uint16{uint16(dimse.CommandCFindRSP)})); err != nil {
+		t.Fatalf("failed to add CommandField: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{9})); err != nil {
+		t.Fatalf("failed to add MessageIDBeingRespondedTo: %v", err)
+	}
+	if err := command.Add(element.NewUnsignedShort(tag.Status, []uint16{status.Success.Code})); err != nil {
+		t.Fatalf("failed to add Status: %v", err)
+	}
+
+	resp, err := createCFindResponse(command, nil)
+	if err != nil {
+		t.Fatalf("createCFindResponse() error = %v, want nil for a minimal C-FIND-RSP", err)
+	}
+	if resp.AffectedSOPClassUID() != "" {
+		t.Fatalf("AffectedSOPClassUID = %q, want empty", resp.AffectedSOPClassUID())
+	}
+}
+
+func TestCreateMessageFromDatasetsRejectsEmptyRequiredString(t *testing.T) {
+	command := dimse.CreateCommandDataset(uint16(dimse.CommandCFindRQ), 3)
+	if err := command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{""})); err != nil {
+		t.Fatalf("failed to add empty AffectedSOPClassUID: %v", err)
+	}
+	identifier := dataset.New()
+	if err := identifier.Add(element.NewString(tag.QueryRetrieveLevel, vr.CS, []string{string(dimse.QueryRetrieveLevelStudy)})); err != nil {
+		t.Fatalf("failed to add QueryRetrieveLevel: %v", err)
+	}
+
+	_, err := createMessageFromDatasets(command, identifier)
+	if err == nil {
+		t.Fatal("expected a present-but-empty AffectedSOPClassUID to be rejected")
+	}
+	if !strings.Contains(err.Error(), "AffectedSOPClassUID is empty") {
+		t.Fatalf("error = %v, want empty AffectedSOPClassUID error", err)
+	}
+}

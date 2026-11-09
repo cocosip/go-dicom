@@ -5,6 +5,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -125,6 +126,12 @@ func requiredString(commandDS *dataset.Dataset, fieldName string, fieldTag *tag.
 	if !ok {
 		return "", fmt.Errorf("%s not found", fieldName)
 	}
+	// A present but zero-length element is still a missing required value: it
+	// must not be accepted (and echoed back) as if it were negotiated.
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("%s is empty", fieldName)
+	}
 	return value, nil
 }
 
@@ -238,11 +245,19 @@ func createCStoreRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CStoreReque
 		return nil, fmt.Errorf("failed to set MessageID: %w", err)
 	}
 	// The command set is authoritative for the identifiers (PS3.7 9.1.1.1);
-	// the dataset is only the payload.
-	if uid, ok := commandDS.GetString(tag.AffectedSOPClassUID); ok && uid != "" {
+	// the dataset is only the payload. A missing command element falls back to
+	// the dataset value for lenient peers, but a present-but-empty element is
+	// always invalid.
+	if uid, ok := commandDS.GetString(tag.AffectedSOPClassUID); ok {
+		if strings.TrimSpace(uid) == "" {
+			return nil, fmt.Errorf("AffectedSOPClassUID is empty")
+		}
 		req.SetAffectedSOPClassUID(uid)
 	}
-	if uid, ok := commandDS.GetString(tag.AffectedSOPInstanceUID); ok && uid != "" {
+	if uid, ok := commandDS.GetString(tag.AffectedSOPInstanceUID); ok {
+		if strings.TrimSpace(uid) == "" {
+			return nil, fmt.Errorf("AffectedSOPInstanceUID is empty")
+		}
 		req.SetAffectedSOPInstanceUID(uid)
 	}
 	if aet, originatorID, ok := moveOriginatorFromCommand(commandDS); ok {
@@ -272,17 +287,11 @@ func createCStoreResponse(commandDS *dataset.Dataset) (*dimse.CStoreResponse, er
 		return nil, fmt.Errorf("failed to get Status: %w", err)
 	}
 
-	// Get AffectedSOPClassUID
-	sopClassUID, ok := commandDS.GetString(tag.AffectedSOPClassUID)
-	if !ok {
-		return nil, fmt.Errorf("AffectedSOPClassUID not found")
-	}
-
-	// Get AffectedSOPInstanceUID
-	sopInstanceUID, ok := commandDS.GetString(tag.AffectedSOPInstanceUID)
-	if !ok {
-		return nil, fmt.Errorf("AffectedSOPInstanceUID not found")
-	}
+	// Affected SOP Class/Instance UID are optional in C-STORE-RSP (PS3.7
+	// 9.1.1.1.3/9.1.1.1.4: "may be included in the response"). A conformant
+	// peer may omit them, so a missing element is not a protocol violation.
+	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
+	sopInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
 	return dimse.NewCStoreResponse(messageID, status.LookupStatus(statusCode), sopClassUID, sopInstanceUID), nil
 }
@@ -515,11 +524,9 @@ func createCFindResponse(commandDS, dataDS *dataset.Dataset) (*dimse.CFindRespon
 		return nil, fmt.Errorf("failed to get Status: %w", err)
 	}
 
-	// Get AffectedSOPClassUID
-	sopClassUID, ok := commandDS.GetString(tag.AffectedSOPClassUID)
-	if !ok {
-		return nil, fmt.Errorf("AffectedSOPClassUID not found")
-	}
+	// Affected SOP Class UID is optional in C-FIND-RSP (PS3.7 9.1.2.1.3:
+	// "may be included in the response"). A conformant peer may omit it.
+	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
 	// dataDS is the identifier (may be nil for final response)
 	return dimse.NewCFindResponse(messageID, status.LookupStatus(statusCode), sopClassUID, dataDS), nil

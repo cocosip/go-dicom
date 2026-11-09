@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -625,4 +626,58 @@ func TestRun_MultipleCallsNotAllowed(t *testing.T) {
 	// Close should stop all
 	_ = service.Close()
 	service.WaitForClose()
+}
+
+func TestGracefulReleaseHonorsContextWhileHandlerDrains(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = serverConn.Close() }()
+
+	service := NewService(clientConn, nil)
+	defer func() { _ = service.Close() }()
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	if err := service.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	// Simulate an in-flight request handler that does not return promptly. The
+	// shutdown finalizer waits for it, so only the caller's context can bound
+	// GracefulRelease.
+	if !service.beginRequest() {
+		t.Fatal("beginRequest() = false")
+	}
+	handlerRelease := make(chan struct{})
+	go func() {
+		defer service.requestWg.Done()
+		<-handlerRelease
+	}()
+	defer close(handlerRelease)
+
+	go func() {
+		raw, err := transport.ReadPDU(serverConn, time.Second)
+		if err != nil || raw.Type != pdu.TypeAReleaseRQ {
+			return
+		}
+		rp, err := pdu.NewAReleaseRP().Encode()
+		if err != nil {
+			return
+		}
+		_ = transport.WritePDU(serverConn, time.Second, rp)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	err := service.GracefulRelease(ctx)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("GracefulRelease() = nil, want timeout while the handler drains")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("GracefulRelease() error = %v, want context.DeadlineExceeded", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("GracefulRelease() took %v, want it bounded by the context", elapsed)
+	}
 }

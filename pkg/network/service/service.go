@@ -144,6 +144,9 @@ type pendingRequest struct {
 	// caller, so a duplicate/late final response is dropped instead of blocking
 	// the receive loop on a full response channel.
 	finalDelivered atomic.Bool
+	// cancelSent makes the best-effort C-CANCEL idempotent when the response
+	// timeout and a context cancellation race each other.
+	cancelSent sync.Once
 }
 
 // activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.
@@ -593,8 +596,13 @@ func (s *Service) initiateClose(targetState State, recordErr error) error {
 		s.cancel()
 		close(s.closeCh)
 
+		// Do not overwrite a terminal state that was already reached: a peer
+		// A-ABORT must leave the association Aborted, not silently report Closed
+		// when the recv loop unwinds and calls initiateClose(StateClosed, ...).
 		s.stateMu.Lock()
-		s.state = targetState
+		if !s.state.IsTerminal() {
+			s.state = targetState
+		}
 		s.stateMu.Unlock()
 
 		terminalErr := recordErr

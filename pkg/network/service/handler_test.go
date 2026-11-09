@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -978,5 +979,97 @@ func TestHandleCCancelRequest_CancelsActiveCGetHandler(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for C-GET handler to finish")
+	}
+}
+
+func TestHandleRequestRecoversHandlerPanicAndAbortsAssociation(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer func() { _ = service.Close() }()
+	defer cancel()
+
+	service.SetHandlers(&Handlers{
+		CEchoHandler: func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+			panic("handler exploded")
+		},
+	})
+	req := dimse.NewCEchoRequest()
+	if err := req.SetMessageID(41); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	if err := service.handleRequest(ctx, req); err != nil {
+		t.Fatalf("handleRequest() error = %v", err)
+	}
+
+	select {
+	case <-service.closeCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("service did not close after a handler panic")
+	}
+	if state := service.GetState(); state != StateAborted {
+		t.Fatalf("state = %s, want %s", state, StateAborted)
+	}
+	err := service.CloseError()
+	if err == nil || !strings.Contains(err.Error(), "panic in C-ECHO") {
+		t.Fatalf("CloseError() = %v, want panic error", err)
+	}
+}
+
+// TestCCancelKeepsInboundRegistrationUntilFinalResponse verifies that C-CANCEL
+// only cancels the handler context; the registration survives until the final
+// response is observed on the send path. The mock send loop does not call the
+// observer, so the final-response step is exercised explicitly.
+func TestCCancelKeepsInboundRegistrationUntilFinalResponse(t *testing.T) {
+	service, ctx, cancel := setupTestService(t)
+	defer func() { _ = service.Close() }()
+	defer cancel()
+
+	req := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	if err := req.SetMessageID(88); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	lifecycle, err := service.registerInboundRequest(req)
+	if err != nil {
+		t.Fatalf("registerInboundRequest() error = %v", err)
+	}
+
+	handlerStarted := make(chan struct{})
+	handlerCompleted := make(chan struct{})
+	go func() {
+		defer close(handlerCompleted)
+		_ = service.handleCFindRequest(ctx, req, &Handlers{
+			CFindHandler: func(handlerCtx context.Context, _ CFindOperation) error {
+				close(handlerStarted)
+				<-handlerCtx.Done()
+				return handlerCtx.Err()
+			},
+		})
+	}()
+	select {
+	case <-handlerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("C-FIND handler did not start")
+	}
+
+	if err := service.handleCCancelRequest(dimse.NewCCancelRequest(req.MessageID())); err != nil {
+		t.Fatalf("handleCCancelRequest() error = %v", err)
+	}
+	if service.inboundRequest(req.MessageID()) == nil {
+		t.Fatal("C-CANCEL removed the inbound registration before the final response was sent")
+	}
+
+	select {
+	case <-handlerCompleted:
+	case <-time.After(time.Second):
+		t.Fatal("C-FIND handler did not finish after C-CANCEL")
+	}
+
+	// A real send loop reports the final response through the observer, which
+	// releases the registration.
+	service.observeSentMessage(
+		dimse.NewCFindResponseFromRequest(req, status.Cancel, nil),
+		lifecycle,
+		nil)
+	if service.inboundRequest(req.MessageID()) != nil {
+		t.Fatal("final response did not release the inbound registration")
 	}
 }

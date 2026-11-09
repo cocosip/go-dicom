@@ -68,9 +68,11 @@ func (r *CGetRequest) Priority() uint16 {
 	return r.priority
 }
 
-// SetAffectedSOPClassUID overwrites the affected SOP Class UID in the command set
-// so a rebuilt request echoes the UID the peer actually sent.
+// SetAffectedSOPClassUID overwrites the affected SOP Class UID in the cached
+// field and in the command set so a rebuilt request echoes the UID the peer
+// actually sent.
 func (r *CGetRequest) SetAffectedSOPClassUID(uid string) {
+	r.affectedSOPClassUID = uid
 	_ = r.command.AddOrUpdate(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{uid}))
 }
 

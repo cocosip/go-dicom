@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -322,6 +323,126 @@ func TestManagedSendRetriesAssociationTimeoutBeforeExecutingJob(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("server did not report association attempts")
+	}
+}
+
+// TestManagedSendReconnectsAfterAssociationDiesBeforePendingJobs verifies that
+// a dead association is replaced before the not-yet-attempted jobs run: the job
+// whose C-ECHO killed the first association keeps its error (it may have been
+// executed on the peer), while later jobs complete on a fresh association.
+func TestManagedSendReconnectsAfterAssociationDiesBeforePendingJobs(t *testing.T) {
+	host, port, accepts, closeServer := startManagedReconnectServer(t)
+	defer closeServer()
+
+	managed := NewManaged(WithAssociationLingerTimeout(0))
+	results := make(chan error, 3)
+	for index := 0; index < 3; index++ {
+		if err := managed.Add(NewCEchoJob(func(err error) { results <- err })); err != nil {
+			t.Fatalf("Add(%d) error = %v", index, err)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := managed.Send(ctx, host, port); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	select {
+	case first := <-results:
+		if first == nil {
+			t.Fatal("first job error = nil, want the dead association error")
+		}
+	case <-ctx.Done():
+		t.Fatal("first job was not completed")
+	}
+	for index := 1; index < 3; index++ {
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Fatalf("job %d error = %v, want success after reconnect", index, err)
+			}
+		case <-ctx.Done():
+			t.Fatalf("job %d was not completed", index)
+		}
+	}
+	if got := accepts.Load(); got < 2 {
+		t.Fatalf("accept count = %d, want at least 2 associations", got)
+	}
+}
+
+// startManagedReconnectServer serves C-ECHO normally except on the first
+// association, whose handler closes the connection without answering.
+func startManagedReconnectServer(t *testing.T) (string, int, *atomic.Int32, func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	var accepts atomic.Int32
+	var handlers sync.WaitGroup
+	var connsMu sync.Mutex
+	var conns []net.Conn
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			firstAssociation := accepts.Add(1) == 1
+			connsMu.Lock()
+			conns = append(conns, conn)
+			connsMu.Unlock()
+			handlers.Add(1)
+			go func(conn net.Conn, first bool) {
+				defer handlers.Done()
+				options := []service.Option{
+					service.WithAssociationNegotiator(service.FuncAssociationNegotiator(
+						func(ctx context.Context, assoc *association.Association, responder service.AssociationResponder) error {
+							for _, presentationContext := range assoc.PresentationContexts {
+								presentationContext.Accept(presentationContext.ProposedTransferSyntaxes[0])
+							}
+							return responder.SendAccept(ctx, assoc)
+						},
+					)),
+				}
+				if first {
+					options = append(options, service.WithCEchoHandler(
+						func(context.Context, *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+							_ = conn.Close()
+							return nil, errors.New("first association closed without answering")
+						},
+					))
+				} else {
+					options = append(options, service.WithCEchoHandler(
+						func(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoResponse, error) {
+							return dimse.NewCEchoResponseSuccess(req.MessageID()), nil
+						},
+					))
+				}
+				svc := service.NewService(conn, nil, options...)
+				defer func() { _ = svc.Close() }()
+				if _, serviceErr := svc.ReceiveAssociationRequest(context.Background()); serviceErr != nil {
+					return
+				}
+				if serviceErr := svc.Start(); serviceErr != nil {
+					return
+				}
+				svc.WaitForClose()
+			}(conn, firstAssociation)
+		}
+	}()
+	address := listener.Addr().(*net.TCPAddr)
+	return address.IP.String(), address.Port, &accepts, func() {
+		_ = listener.Close()
+		<-stopped
+		connsMu.Lock()
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
+		connsMu.Unlock()
+		handlers.Wait()
 	}
 }
 

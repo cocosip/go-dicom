@@ -100,6 +100,14 @@ func (s *Service) sendMessage(req *sendRequest) error {
 		default:
 		}
 	}
+	// Reject requests with missing required values before they reach the wire;
+	// an empty SOP Class/Instance UID or AE title would otherwise be encoded as
+	// a zero-length Type-1 element the peer has to reject.
+	if request, ok := req.message.(dimse.Request); ok {
+		if err := dimse.ValidateRequestForSend(request); err != nil {
+			return err
+		}
+	}
 	// Get association
 	assoc := s.GetAssociation()
 	if assoc == nil {

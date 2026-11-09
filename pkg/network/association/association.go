@@ -55,6 +55,12 @@ type Association struct {
 	LocalImplementationClassUID    string
 	LocalImplementationVersionName string
 
+	// LocalMaxPDULength is the local AE's own receive limit, written into an
+	// A-ASSOCIATE-RQ built from this Association. MaxPDULength is the peer's
+	// limit. NewAssociation defaults it to 16384; zero means unlimited
+	// (PS3.7 D.3.3.1) and is never replaced by the peer's limit.
+	LocalMaxPDULength uint32
+
 	// Presentation Contexts
 	PresentationContexts []*PresentationContext
 
@@ -88,6 +94,7 @@ func NewAssociation(callingAE, calledAE string) *Association {
 		CalledAE:                  calledAE,
 		ProtocolVersion:           0x0001,
 		MaxPDULength:              16384, // 16KB default
+		LocalMaxPDULength:         16384, // 16KB default
 		ImplementationClassUID:    DefaultImplementationClassUID,
 		ImplementationVersionName: DefaultImplementationVersionName,
 		PresentationContexts:      make([]*PresentationContext, 0),
@@ -759,11 +766,13 @@ func (u *UserIdentity) Validate() error {
 	if u.Type < UserIdentityTypeUsername || u.Type > UserIdentityTypeJWT {
 		return fmt.Errorf("unsupported user identity type %d", u.Type)
 	}
+	// PS3.7 Table D.3-14: the secondary field carries the passcode for
+	// username/password and shall be non-zero only for that type. An empty
+	// passcode for type 2 is not forbidden by the standard.
 	if u.Type != UserIdentityTypeUsernamePassword && len(u.SecondaryField) != 0 {
 		return fmt.Errorf("secondary user identity field is only valid for username and password")
 	}
 	return nil
-
 }
 
 // Clone returns a defensive copy of the identity fields and server response.
@@ -801,6 +810,7 @@ func NewAsynchronousOperationsWindow(maxInvoked, maxPerformed uint16) *Asynchron
 // This is typically used by an SCP (server) after receiving a connection request from an SCU (client).
 // The returned Association will have all presentation contexts in "Proposed" state (Result=255).
 // The server should then negotiate these contexts (accept/reject) before sending A-ASSOCIATE-AC.
+// An invalid User Identity sub-item is not copied into the returned Association.
 func FromAAssociateRQ(rq *pdu.AAssociateRQ, registry *transfer.Registry) *Association {
 	assoc := NewAssociation(rq.CallingAETitle, rq.CalledAETitle)
 	assoc.ProtocolVersion = rq.ProtocolVersion
@@ -844,13 +854,19 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ, registry *transfer.Registry) *Associ
 			))
 		}
 
-		// User identity
+		// User identity. Copy the fields so the Association does not alias the
+		// PDU, and drop an identity that is not valid per PS3.7 Table D.3-14
+		// (the PDU decoder already rejects one, but a hand-built PDU can still
+		// carry it).
 		if rq.UserInformation.UserIdentity != nil {
-			assoc.UserIdentity = &UserIdentity{
+			identity := &UserIdentity{
 				Type:                      rq.UserInformation.UserIdentity.UserIdentityType,
 				PositiveResponseRequested: rq.UserInformation.UserIdentity.PositiveResponseRequested != 0,
-				PrimaryField:              rq.UserInformation.UserIdentity.PrimaryField,
-				SecondaryField:            rq.UserInformation.UserIdentity.SecondaryField,
+				PrimaryField:              append([]byte(nil), rq.UserInformation.UserIdentity.PrimaryField...),
+				SecondaryField:            append([]byte(nil), rq.UserInformation.UserIdentity.SecondaryField...),
+			}
+			if err := identity.Validate(); err == nil {
+				assoc.UserIdentity = identity
 			}
 		}
 	}
@@ -924,8 +940,10 @@ func applyAcceptedPresentationContexts(assoc *Association, ac *pdu.AAssociateAC,
 	return nil
 }
 
-// applyAcceptedRoleSelections applies the accepted SCP/SCU role selections,
-// rejecting any value above the proposal (PS3.7 D.3.3.4.1).
+// applyAcceptedRoleSelections applies the accepted SCP/SCU role selections.
+// PS3.7 D.3.3.4: the requestor ignores role selections for SOP Classes it did
+// not propose, and an acceptor may not grant more than was requested, so
+// over-granted roles are clamped to the proposed values.
 func applyAcceptedRoleSelections(assoc *Association, ac *pdu.AAssociateAC) error {
 	assoc.RoleSelections = assoc.RoleSelections[:0]
 	for _, pc := range assoc.PresentationContexts {
@@ -937,15 +955,17 @@ func applyAcceptedRoleSelections(assoc *Association, ac *pdu.AAssociateAC) error
 		}
 		requested := findRoleSelection(assoc.RequestedRoleSelections, accepted.SOPClassUID)
 		if requested == nil {
-			return fmt.Errorf("A-ASSOCIATE-AC returned role selection for unrequested SOP Class %s", accepted.SOPClassUID)
+			continue
 		}
-		if accepted.SCURole > requested.SCURole {
-			return fmt.Errorf("A-ASSOCIATE-AC accepted an unrequested SCU role for SOP Class %s", accepted.SOPClassUID)
+		scuRole := accepted.SCURole
+		if scuRole > requested.SCURole {
+			scuRole = requested.SCURole
 		}
-		if accepted.SCPRole > requested.SCPRole {
-			return fmt.Errorf("A-ASSOCIATE-AC accepted an unrequested SCP role for SOP Class %s", accepted.SOPClassUID)
+		scpRole := accepted.SCPRole
+		if scpRole > requested.SCPRole {
+			scpRole = requested.SCPRole
 		}
-		role := &RoleSelection{SOPClassUID: accepted.SOPClassUID, SCURole: accepted.SCURole, SCPRole: accepted.SCPRole}
+		role := &RoleSelection{SOPClassUID: accepted.SOPClassUID, SCURole: scuRole, SCPRole: scpRole}
 		assoc.RoleSelections = append(assoc.RoleSelections, role)
 		for _, pc := range assoc.PresentationContexts {
 			if pc.AbstractSyntax == accepted.SOPClassUID {
@@ -1288,11 +1308,22 @@ func ToAAssociateRQ(assoc *Association) *pdu.AAssociateRQ {
 		})
 	}
 
-	// Set user information
+	// Set user information. The RQ must identify the local AE and advertise the
+	// local receive limit, never echo the peer's values back (PS3.7 D.3.3.1,
+	// D.3.3.2.2).
+	implementationClassUID := assoc.LocalImplementationClassUID
+	if implementationClassUID == "" {
+		implementationClassUID = DefaultImplementationClassUID
+	}
+	implementationVersionName := assoc.LocalImplementationVersionName
+	if implementationVersionName == "" {
+		implementationVersionName = DefaultImplementationVersionName
+	}
+	localMaxPDULength := assoc.LocalMaxPDULength
 	rq.UserInformation = &pdu.UserInformation{
-		MaximumLength:             assoc.MaxPDULength,
-		ImplementationClassUID:    assoc.ImplementationClassUID,
-		ImplementationVersionName: assoc.ImplementationVersionName,
+		MaximumLength:             localMaxPDULength,
+		ImplementationClassUID:    implementationClassUID,
+		ImplementationVersionName: implementationVersionName,
 	}
 
 	// Asynchronous operations
@@ -1335,18 +1366,21 @@ func ToAAssociateRQ(assoc *Association) *pdu.AAssociateRQ {
 		}
 	}
 
-	// User identity
+	// User identity. Copy the slices and drop an identity the peer would
+	// reject (PS3.7 Table D.3-14), matching FromAAssociateRQ.
 	if assoc.UserIdentity != nil {
-		rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
-			UserIdentityType: assoc.UserIdentity.Type,
-			PositiveResponseRequested: func() byte {
-				if assoc.UserIdentity.PositiveResponseRequested {
-					return 1
-				}
-				return 0
-			}(),
-			PrimaryField:   assoc.UserIdentity.PrimaryField,
-			SecondaryField: assoc.UserIdentity.SecondaryField,
+		if err := assoc.UserIdentity.Validate(); err == nil {
+			rq.UserInformation.UserIdentity = &pdu.UserIdentityNegotiation{
+				UserIdentityType: assoc.UserIdentity.Type,
+				PositiveResponseRequested: func() byte {
+					if assoc.UserIdentity.PositiveResponseRequested {
+						return 1
+					}
+					return 0
+				}(),
+				PrimaryField:   append([]byte(nil), assoc.UserIdentity.PrimaryField...),
+				SecondaryField: append([]byte(nil), assoc.UserIdentity.SecondaryField...),
+			}
 		}
 	}
 

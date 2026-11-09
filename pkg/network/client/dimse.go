@@ -322,7 +322,7 @@ func consumeCFindEvents(
 		select {
 		case event, ok := <-eventCh:
 			if !ok {
-				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+				if contextErr := eventContextError(ctx); contextErr != nil {
 					return contextErr
 				}
 				if cancelRequested {
@@ -334,7 +334,7 @@ func consumeCFindEvents(
 				return fmt.Errorf("C-FIND event contains both response and error")
 			}
 			if event.Err != nil {
-				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+				if contextErr := eventContextError(ctx); contextErr != nil {
 					return contextErr
 				}
 				return event.Err
@@ -346,7 +346,7 @@ func consumeCFindEvents(
 			if !response.IsPending() {
 				return cFindFinalStatusError(response.StatusCode(), cancelRequested)
 			}
-			if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+			if contextErr := eventContextError(ctx); contextErr != nil {
 				return contextErr
 			}
 			if !cancelRequested && response.HasIdentifier() {
@@ -362,7 +362,7 @@ func consumeCFindEvents(
 			if final, finalErr := bufferedCFindFinal(eventCh, cancelRequested); final {
 				return finalErr
 			}
-			return eventContextError(ctx, cancelRequest, cancelRequested)
+			return eventContextError(ctx)
 		}
 	}
 }
@@ -718,7 +718,7 @@ func consumeSubOperationEvents[T subOperationResponse](
 		select {
 		case event, ok := <-eventCh:
 			if !ok {
-				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+				if contextErr := eventContextError(ctx); contextErr != nil {
 					return contextErr
 				}
 				if cancelRequested {
@@ -730,7 +730,7 @@ func consumeSubOperationEvents[T subOperationResponse](
 				return fmt.Errorf("%s event contains both response and error", operation)
 			}
 			if event.Err != nil {
-				if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+				if contextErr := eventContextError(ctx); contextErr != nil {
 					return contextErr
 				}
 				return event.Err
@@ -742,7 +742,7 @@ func consumeSubOperationEvents[T subOperationResponse](
 			if !response.IsPending() {
 				return finalStatus(response.StatusCode(), cancelRequested)
 			}
-			if contextErr := eventContextError(ctx, cancelRequest, cancelRequested); contextErr != nil {
+			if contextErr := eventContextError(ctx); contextErr != nil {
 				return contextErr
 			}
 			if !cancelRequested && callback != nil && response.HasSubOperationCounts() {
@@ -762,7 +762,7 @@ func consumeSubOperationEvents[T subOperationResponse](
 			if final, finalErr := bufferedSubOperationFinal(operation, eventCh, cancelRequested, finalStatus); final {
 				return finalErr
 			}
-			return eventContextError(ctx, cancelRequest, cancelRequested)
+			return eventContextError(ctx)
 		}
 	}
 }
@@ -796,13 +796,12 @@ func sendCGet(ctx context.Context, svc *service.Service, req *dimse.CGetRequest)
 	return svc.SendCGet(ctx, req)
 }
 
-func eventContextError(ctx context.Context, cancelRequest func() error, cancelSent bool) error {
-	err := ctx.Err()
-	if err == nil {
-		return nil
-	}
-	if !cancelSent {
-		_ = cancelRequest()
-	}
-	return err
+// eventContextError reports the context error for a multi-response operation.
+// Cancelling ctx (or letting its deadline expire) is handled by the service
+// layer, which sends C-CANCEL for the pending request; the client wrapper must
+// not send a second one here. The wrapper sends C-CANCEL only when a result
+// callback returns false (the caller stopped early), which the consume loops
+// handle explicitly.
+func eventContextError(ctx context.Context) error {
+	return ctx.Err()
 }

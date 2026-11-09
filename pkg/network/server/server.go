@@ -81,6 +81,12 @@ type Server struct {
 	// many connections that never complete negotiation.
 	inflightConnections int
 
+	// rejectSlots bounds concurrent over-limit reject negotiations. Without it a
+	// connection flood could spawn unbounded goroutines while each waits for an
+	// A-ASSOCIATE-RQ (up to rejectNegotiationTimeout). Nil when MaxConnections is
+	// unlimited, in which case the reject path is never taken.
+	rejectSlots chan struct{}
+
 	// Service options to apply to each connection
 	serviceOptions []service.Option
 	optionsMu      sync.RWMutex
@@ -357,13 +363,17 @@ func New(opts ...Option) *Server {
 		opt(config)
 	}
 
-	return &Server{
+	srv := &Server{
 		config:             config,
 		connections:        make(map[string]*serverConnection),
 		pendingConnections: make(map[string]net.Conn),
 		serviceOptions:     make([]service.Option, 0),
 		listenFn:           defaultListenerFactory,
 	}
+	if config.MaxConnections > 0 {
+		srv.rejectSlots = make(chan struct{}, config.MaxConnections)
+	}
+	return srv
 }
 
 // serverConnection represents an active client connection.
@@ -528,6 +538,26 @@ func (s *Server) releaseConnectionSlot() {
 	s.connectionsMu.Unlock()
 }
 
+// tryAcquireRejectSlot reserves one of the bounded over-limit reject
+// negotiations. It reports false when that bound is reached, in which case the
+// caller must drop the new connection instead of spawning another goroutine.
+func (s *Server) tryAcquireRejectSlot() bool {
+	if s.rejectSlots == nil {
+		return false
+	}
+	select {
+	case s.rejectSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// releaseRejectSlot returns a slot reserved by tryAcquireRejectSlot.
+func (s *Server) releaseRejectSlot() {
+	<-s.rejectSlots
+}
+
 // connectionLimitReached reports whether MaxConnections currently applies.
 func (s *Server) connectionLimitReached() bool {
 	s.connectionsMu.RLock()
@@ -616,21 +646,20 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	return err
 }
 
+// Accept-loop backoff bounds. A persistent accept error (for example the
+// listener out of file descriptors) must not spin the loop at full speed.
+const (
+	initialAcceptBackoff = 5 * time.Millisecond
+	maxAcceptBackoff     = time.Second
+)
+
 func (s *Server) acceptLoop(ctx context.Context, listener serverListener) error {
+	backoff := time.Duration(0)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-		}
-
-		if s.connectionLimitReached() {
-			select {
-			case <-time.After(100 * time.Millisecond):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-			continue
 		}
 
 		acceptCtx, cancelAccept := s.acceptContext(ctx)
@@ -641,23 +670,50 @@ func (s *Server) acceptLoop(ctx context.Context, listener serverListener) error 
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				s.emitServerError(ctx, "accept_failed", err)
+			}
+			// A per-accept timeout is a polling deadline, not a listener
+			// failure: loop again without reporting an error or backing off.
+			if errors.Is(err, context.DeadlineExceeded) {
 				continue
 			}
+			s.emitServerError(ctx, "accept_failed", err)
+			if backoff == 0 {
+				backoff = initialAcceptBackoff
+			} else {
+				backoff *= 2
+				if backoff > maxAcceptBackoff {
+					backoff = maxAcceptBackoff
+				}
+			}
+			if !waitAcceptBackoff(ctx, backoff) {
+				return ctx.Err()
+			}
+			continue
 		}
+		backoff = 0
 		if err := ctx.Err(); err != nil {
 			_ = conn.Close()
 			return err
 		}
-		// Reserve the slot before serving the connection so connections that
-		// never finish negotiating still count against MaxConnections.
-		if !s.acquireConnectionSlot() {
-			_ = conn.Close()
-			continue
-		}
 
+		// Always accept and serve. handleConnection reserves a slot when one is
+		// available; over-limit connections are accepted, read their
+		// A-ASSOCIATE-RQ, rejected with A-ASSOCIATE-RJ, and never registered.
 		s.wg.Add(1)
 		go s.handleConnection(conn)
+	}
+}
+
+// waitAcceptBackoff sleeps for delay or until ctx is cancelled. It reports
+// false when the context ended.
+func waitAcceptBackoff(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
@@ -673,6 +729,16 @@ func (s *Server) associationContext() (context.Context, context.CancelFunc) {
 		return s.ctx, func() {}
 	}
 	return context.WithTimeout(s.ctx, s.config.AssociationTimeout)
+}
+
+// rejectNegotiationContext bounds how long an over-limit connection may wait for
+// its A-ASSOCIATE-RQ: min(AssociationTimeout when enabled, rejectNegotiationTimeout).
+func (s *Server) rejectNegotiationContext(parent context.Context) (context.Context, context.CancelFunc) {
+	timeout := rejectNegotiationTimeout
+	if configured := s.config.AssociationTimeout; configured > 0 && configured < timeout {
+		timeout = configured
+	}
+	return context.WithTimeout(parent, timeout)
 }
 
 // Shutdown gracefully shuts down the server.
@@ -695,6 +761,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+
+	// Connections still negotiating (including over-limit rejects) are not
+	// established associations and their reads are not interruptible by the
+	// context alone; close them so Shutdown does not wait for the negotiation
+	// bound of a silent peer.
+	s.closePendingConnections()
 
 	done := make(chan struct{})
 	go func() {
@@ -786,10 +858,61 @@ func (s *Server) stopAccepting() (<-chan struct{}, error) {
 	return acceptDone, nil
 }
 
-// handleConnection handles a single client connection.
+// rejectNegotiationTimeout bounds a connection rejected because MaxConnections
+// is exhausted while it waits for its A-ASSOCIATE-RQ. Accepted connections keep
+// using AssociationTimeout, which may be disabled; a rejected, silent peer must
+// never be able to pin a goroutine indefinitely. It is a variable so tests can
+// shorten the rejection bound without shrinking the accepted path's timeout.
+var rejectNegotiationTimeout = 30 * time.Second
+
+// connectionLimitNegotiator rejects an A-ASSOCIATE-RQ because the server-wide
+// connection limit has been reached. It is installed after the caller's
+// negotiator so the rejection wins.
+//
+// PS3.8 Table 9-21 places local-limit-exceeded under result=rejected-transient,
+// source=service-provider-presentation, reason=local-limit-exceeded (2, 3, 2).
+type connectionLimitNegotiator struct{}
+
+func (connectionLimitNegotiator) OnAssociationRequest(
+	ctx context.Context,
+	_ *association.Association,
+	responder service.AssociationResponder,
+) error {
+	return responder.SendReject(
+		ctx,
+		pdu.ResultRejectedTransient,
+		pdu.SourceServiceProviderPresentation,
+		pdu.ReasonServiceProviderPresentationLocalLimitExceeded,
+	)
+}
+
+// handleConnection handles a single client connection. It reserves a
+// MaxConnections slot before negotiating so connections that never complete
+// negotiation still count against the limit; when no slot is available the
+// connection is accepted but rejected with A-ASSOCIATE-RJ after its request is
+// read, and it never becomes an active connection.
 func (s *Server) handleConnection(conn net.Conn) {
+	slotReserved := s.acquireConnectionSlot()
+	if !slotReserved {
+		// MaxConnections is exhausted: reject the association with an RJ, but
+		// bound how many reject negotiations run at once so a connection flood
+		// cannot spawn unbounded goroutines. Beyond the bound the connection is
+		// dropped without reading its A-ASSOCIATE-RQ.
+		if !s.tryAcquireRejectSlot() {
+			_ = conn.Close()
+			s.wg.Done()
+			return
+		}
+		defer s.releaseRejectSlot()
+	}
+	s.serveConnection(conn, slotReserved)
+}
+
+func (s *Server) serveConnection(conn net.Conn, slotReserved bool) {
 	defer s.wg.Done()
-	defer s.releaseConnectionSlot()
+	if slotReserved {
+		defer s.releaseConnectionSlot()
+	}
 	defer func() { _ = conn.Close() }()
 
 	// Create connection ID
@@ -800,6 +923,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Close() can terminate a peer that stalls before A-ASSOCIATE-RQ completes.
 	s.trackPendingConnection(connID, conn)
 	defer s.untrackPendingConnection(connID)
+	if s.ctx != nil && s.ctx.Err() != nil {
+		// Shutdown started while this connection was still being set up; do not
+		// add a new negotiation wait after pending connections were closed.
+		return
+	}
 
 	// Build service options from server configuration.
 	svcOpts := s.serviceOptionsForConnection(observationConnectionID)
@@ -809,8 +937,22 @@ func (s *Server) handleConnection(conn net.Conn) {
 	svcOpts = append(svcOpts, s.serviceOptions...)
 	s.optionsMu.RUnlock()
 
+	if !slotReserved {
+		// Appended last so it overrides any user negotiator: the request is
+		// still read (the peer gets a timely, conformant rejection instead of
+		// a hung TCP connection) but the association is never accepted.
+		svcOpts = append(svcOpts, service.WithAssociationNegotiator(connectionLimitNegotiator{}))
+	}
+
 	// Create service with all options
 	svc := service.NewService(conn, nil, svcOpts...)
+	if !slotReserved {
+		// The service emitted its opened event in NewService; close it so the
+		// rejected connection also emits closed and user lifecycle callbacks see
+		// a balanced pair. It was never started, so Close does not wait for
+		// handlers.
+		defer func() { _ = svc.Close() }()
+	}
 
 	// Receive A-ASSOCIATE-RQ and handle negotiation
 	// The service will call the AssociationNegotiator callback (if set by user), which will:
@@ -819,8 +961,17 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// - Set the association on the service if accepted
 	// If no negotiator is set, the service uses DefaultAssociationNegotiator which accepts
 	// all presentation contexts with their first proposed transfer syntax.
-	// The association phase is limited by AssociationTimeout; 0 means no limit.
-	assocCtx, assocCancel := s.associationContext()
+	// Accepted connections are limited by AssociationTimeout; 0 means no limit.
+	// A connection that will be rejected because MaxConnections is exhausted is
+	// additionally bounded so a silent peer cannot hold the reject goroutine
+	// forever when AssociationTimeout is disabled.
+	var assocCtx context.Context
+	var assocCancel context.CancelFunc
+	if slotReserved {
+		assocCtx, assocCancel = s.associationContext()
+	} else {
+		assocCtx, assocCancel = s.rejectNegotiationContext(s.ctx)
+	}
 	defer assocCancel()
 
 	_, err := svc.ReceiveAssociationRequest(assocCtx)
@@ -838,8 +989,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Get the negotiated association from the service
 	// (it was set by the responder.SendAccept call in the negotiator)
 	assoc := svc.GetAssociation()
-	if assoc == nil {
-		// This shouldn't happen if ReceiveAssociationRequest succeeded
+	if assoc == nil || !slotReserved {
+		// The reject negotiator must never accept, so a nil association (or a
+		// stray acceptance without a slot) is never registered as active.
 		return
 	}
 
@@ -875,6 +1027,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// The service will handle incoming DIMSE requests automatically
 	// and call the registered handlers
 	<-svc.Context().Done()
+}
+
+// closePendingConnections terminates raw connections still in the association
+// negotiation phase. They are not established associations and have no graceful
+// release path, so shutdown and Close can drop them immediately.
+func (s *Server) closePendingConnections() {
+	s.connectionsMu.RLock()
+	pending := make([]net.Conn, 0, len(s.pendingConnections))
+	for _, conn := range s.pendingConnections {
+		pending = append(pending, conn)
+	}
+	s.connectionsMu.RUnlock()
+	for _, conn := range pending {
+		_ = conn.Close()
+	}
 }
 
 // trackPendingConnection records a raw connection that is still negotiating the

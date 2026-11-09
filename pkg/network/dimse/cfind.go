@@ -112,9 +112,11 @@ func NewCFindRequestStudyRoot(level QueryRetrieveLevel, query *dataset.Dataset) 
 	return newCFindRequestWithSOPClassUID(level, query, sopClassUIDStudyRootFind)
 }
 
-// SetAffectedSOPClassUID overwrites the affected SOP Class UID in the command set
-// so a rebuilt request echoes the UID the peer actually sent.
+// SetAffectedSOPClassUID overwrites the affected SOP Class UID in the cached
+// field and in the command set so a rebuilt request echoes the UID the peer
+// actually sent (String uses the cache, AffectedSOPClassUID reads the command set).
 func (r *CFindRequest) SetAffectedSOPClassUID(uid string) {
+	r.affectedSOPClassUID = uid
 	_ = r.command.AddOrUpdate(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{uid}))
 }
 
@@ -154,8 +156,11 @@ func NewCFindResponse(messageIDBeingRespondedTo uint16, s *status.Status, sopCla
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCFindRSP), 0)
 
-	// Set affected SOP Class UID
-	_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	// Affected SOP Class UID is Type U (=) in C-FIND-RSP (PS3.7 Table 9.3-5):
+	// only write it when it carries a value.
+	if sopClassUID != "" {
+		_ = command.Add(element.NewString(tag.AffectedSOPClassUID, vr.UI, []string{sopClassUID}))
+	}
 
 	// MessageIDBeingRespondedTo
 	_ = command.Add(element.NewUnsignedShort(tag.MessageIDBeingRespondedTo, []uint16{messageIDBeingRespondedTo}))

@@ -137,6 +137,7 @@ func DialTLS(ctx context.Context, network, address string, opts ...DialOption) (
 	} else if tlsConfig.MinVersion == 0 {
 		tlsConfig.MinVersion = tls.VersionTLS12
 	}
+	applyDefaultServerName(tlsConfig, address)
 
 	// Wrap the connection with TLS
 	tlsConn := tls.Client(rawConn, tlsConfig)
@@ -147,6 +148,21 @@ func DialTLS(ctx context.Context, network, address string, opts ...DialOption) (
 	}
 
 	return tlsConn, nil
+}
+
+// applyDefaultServerName fills config.ServerName from the dial address host when
+// the caller did not set one and certificate verification is enabled. An
+// explicit ServerName always wins. IP literal hosts are used verbatim; crypto/tls
+// then verifies them against the certificate's IP SANs.
+func applyDefaultServerName(config *tls.Config, address string) {
+	if config.ServerName != "" || config.InsecureSkipVerify {
+		return
+	}
+	host, _, err := net.SplitHostPort(address)
+	if err != nil || host == "" {
+		return
+	}
+	config.ServerName = host
 }
 
 func cloneTLSConfig(config *tls.Config) *tls.Config {

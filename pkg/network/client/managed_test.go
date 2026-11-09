@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
+	"github.com/cocosip/go-dicom/pkg/network/service"
 )
 
 const (
@@ -433,6 +435,29 @@ func TestNewCGetJobIncludesStorageSCPRoleContexts(t *testing.T) {
 func TestNewCGetJobRejectsEmptyStorageUID(t *testing.T) {
 	if _, err := NewCGetJob(dimse.QueryRetrieveLevelStudy, dataset.New(), nil, nil, ""); err == nil {
 		t.Fatal("NewCGetJob() error = nil, want empty storage UID error")
+	}
+}
+
+func TestManagedConnectionErrorClassification(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"caller cancelled", context.Canceled, false},
+		{"caller deadline", context.DeadlineExceeded, false},
+		{"status failure", errors.New("C-FIND failed with status"), false},
+		{"service closed", fmt.Errorf("failed to send C-ECHO: %w", service.ErrServiceClosed), true},
+		{"not connected", ErrClientNotConnected, true},
+		{"eof", fmt.Errorf("recv loop error: %w", io.EOF), true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isManagedConnectionError(test.err); got != test.want {
+				t.Fatalf("isManagedConnectionError(%v) = %v, want %v", test.err, got, test.want)
+			}
+		})
 	}
 }
 

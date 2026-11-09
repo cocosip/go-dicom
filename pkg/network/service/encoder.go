@@ -68,6 +68,14 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 		return nil, nil, fmt.Errorf("failed to update CommandDataSetType: %w", err)
 	}
 
+	// Ensure the CommandGroupLength element exists before measuring: hand-built
+	// command sets (NewBaseRequest) may omit it, and the writer only preserves
+	// an existing element. Length is the encoded size minus this fixed 12-byte
+	// element.
+	if err := commandDS.AddOrUpdate(element.NewUnsignedLong(tag.CommandGroupLength, []uint32{0})); err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize CommandGroupLength: %w", err)
+	}
+
 	// Encode once to calculate the bytes following CommandGroupLength, then
 	// encode again with the correct value.
 	tempBuf := &bytes.Buffer{}
@@ -77,7 +85,11 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 		writer.WithKeepGroupLengths()); err != nil {
 		return nil, nil, fmt.Errorf("failed to encode command dataset for length calculation: %w", err)
 	}
-	commandGroupLength := uint32(len(tempBuf.Bytes()) - 12) // #nosec G115 -- command datasets include this 12-byte element
+	encodedLength := len(tempBuf.Bytes())
+	if encodedLength < 12 {
+		return nil, nil, fmt.Errorf("encoded command dataset is too short: %d bytes", encodedLength)
+	}
+	commandGroupLength := uint32(encodedLength - 12) // #nosec G115 -- bounded by the encoded buffer length
 	if err := commandDS.AddOrUpdate(element.NewUnsignedLong(tag.CommandGroupLength, []uint32{commandGroupLength})); err != nil {
 		return nil, nil, fmt.Errorf("failed to update CommandGroupLength: %w", err)
 	}

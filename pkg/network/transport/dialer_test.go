@@ -185,6 +185,89 @@ func TestDialTLS_HandshakeFailure(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultServerName(t *testing.T) {
+	const hostPort = "pacs.example.com:11112"
+	tests := []struct {
+		name    string
+		address string
+		config  *tls.Config
+		want    string
+	}{
+		{
+			name: "derives host from address", address: hostPort,
+			config: &tls.Config{}, want: "pacs.example.com",
+		},
+		{
+			name: "keeps ip literal", address: "127.0.0.1:104",
+			config: &tls.Config{}, want: "127.0.0.1",
+		},
+		{
+			name: "explicit server name wins", address: hostPort,
+			config: &tls.Config{ServerName: "override.example.com"}, want: "override.example.com",
+		},
+		{
+			name: "insecure skip verify leaves name empty", address: hostPort,
+			config: &tls.Config{InsecureSkipVerify: true}, want: "",
+		},
+		{
+			name: "address without port leaves name empty", address: "pacs.example.com",
+			config: &tls.Config{}, want: "",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			applyDefaultServerName(test.config, test.address)
+			if test.config.ServerName != test.want {
+				t.Fatalf("ServerName = %q, want %q", test.config.ServerName, test.want)
+			}
+		})
+	}
+}
+
+// TestDialTLS_DerivesServerNameFromAddress verifies the end-to-end behavior:
+// without an explicit ServerName, DialTLS uses the address host and crypto/tls
+// verifies it against the certificate IP SAN.
+func TestDialTLS_DerivesServerNameFromAddress(t *testing.T) {
+	cert, err := generateTestCertificate()
+	if err != nil {
+		t.Fatalf("Failed to generate test certificate: %v", err)
+	}
+
+	serverConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start test server: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		tlsConn := tls.Server(conn, serverConfig)
+		defer func() { _ = tlsConn.Close() }()
+		_ = tlsConn.Handshake()
+	}()
+
+	parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+	rootPool := x509.NewCertPool()
+	rootPool.AddCert(parsedCert)
+	clientConfig := &tls.Config{RootCAs: rootPool, MinVersion: tls.VersionTLS12}
+
+	conn, err := DialTLS(context.Background(), "tcp", listener.Addr().String(), WithTLSConfig(clientConfig))
+	if err != nil {
+		t.Fatalf("DialTLS() error = %v, want the address host to be used as ServerName", err)
+	}
+	defer func() { _ = conn.Close() }()
+}
+
 func TestDial_WithKeepAlive(t *testing.T) {
 	// Start a test TCP server
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

@@ -157,8 +157,10 @@ func (s *Service) abort(ctx context.Context, source, reason byte, recordErr erro
 // GracefulRelease attempts a graceful release of the DICOM association.
 // It sends an A-RELEASE-RQ and waits for A-RELEASE-RP, then closes the service.
 //
-// The provided context controls how long to wait for the peer's A-RELEASE-RP.
-// If the wait is canceled or times out, the service closes and returns an error.
+// The provided context bounds the whole shutdown: if it expires while waiting
+// for the peer's A-RELEASE-RP or for in-flight request handlers to drain, the
+// service is closed immediately and an error is returned. This keeps callers
+// such as Client.Close from blocking for the full handler shutdown timeout.
 //
 // This is a convenience method for proper DICOM association termination.
 //
@@ -174,8 +176,10 @@ func (s *Service) GracefulRelease(ctx context.Context) error {
 	// Check if we're in a state that allows release
 	state := s.GetState()
 	if !state.CanSendDIMSE() {
-		// Already closed or in invalid state
-		return s.Close()
+		// Already closed (or closing): trigger shutdown without waiting for the
+		// finalizer past the caller's budget.
+		_ = s.initiateClose(StateClosed, nil)
+		return s.awaitShutdown(ctx, "waiting for handler shutdown")
 	}
 
 	// Send A-RELEASE-RQ. SendReleaseRequest acquires sendPause internally, so no
@@ -185,21 +189,38 @@ func (s *Service) GracefulRelease(ctx context.Context) error {
 	// block shutdown forever.
 	err := s.SendReleaseRequest(ctx)
 	if err != nil {
-		// If send fails, abort
-		_ = s.Abort(ctx, 0, 0)
+		// If send fails, abort without waiting for the handler drain: the send
+		// already failed, so blocking here would defeat the bounded contract.
+		_ = s.abort(ctx, 0, 0, nil, false)
 		return fmt.Errorf("failed to send release request: %w", err)
 	}
 
 	select {
 	case <-s.releaseCh:
-		s.waitForShutdown()
-		return s.shutdownError()
+		return s.awaitShutdown(ctx, "waiting for handler shutdown")
 	case <-s.closeCh:
-		s.waitForShutdown()
+		return s.awaitShutdown(ctx, "waiting for handler shutdown")
+	case <-ctx.Done():
+		// Trigger shutdown without waiting for the finalizer: the caller's
+		// budget is exhausted, so keep the same bounded-latency contract as
+		// awaitShutdown. Close() would block for up to handlerShutdownTimeout.
+		_ = s.initiateClose(StateClosed, nil)
+		return fmt.Errorf("timed out waiting for A-RELEASE-RP: %w", ctx.Err())
+	}
+}
+
+// awaitShutdown waits for the shutdown finalizer, but never past ctx: when the
+// context expires the service is closed and the wait is abandoned so callers
+// with a bounded shutdown budget (e.g. Client.Close) return promptly.
+func (s *Service) awaitShutdown(ctx context.Context, operation string) error {
+	select {
+	case <-s.shutdownCh:
 		return s.shutdownError()
 	case <-ctx.Done():
-		_ = s.Close()
-		return fmt.Errorf("timed out waiting for A-RELEASE-RP: %w", ctx.Err())
+		// Trigger shutdown without waiting for the finalizer (Close would block
+		// for up to handlerShutdownTimeout and defeat the bounded wait).
+		_ = s.initiateClose(StateClosed, nil)
+		return fmt.Errorf("timed out %s: %w", operation, ctx.Err())
 	}
 }
 

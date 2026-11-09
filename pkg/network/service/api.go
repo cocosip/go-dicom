@@ -6,6 +6,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -308,6 +309,10 @@ func (s *Service) expirePendingRequest(messageID uint16, pending *pendingRequest
 	close(pending.cancelCh)
 	s.pendingRequestsMu.Unlock()
 
+	// Ask the peer to stop streaming: without C-CANCEL the SCP keeps working on
+	// an operation whose responses this side now drops as late responses.
+	s.cancelPendingRequest(pending, messageID)
+
 	err := &RequestTimeoutError{
 		MessageID: messageID,
 		Command:   dimse.CommandField(pending.request.CommandField()),
@@ -315,6 +320,35 @@ func (s *Service) expirePendingRequest(messageID uint16, pending *pendingRequest
 	}
 	pending.lifecycle.finishError(context.Background(), err)
 	pending.doneCh <- err
+}
+
+// sendBestEffortCCancel sends a C-CANCEL-RQ for a C-FIND/C-MOVE/C-GET request
+// that is being abandoned locally (context cancellation or response timeout).
+// The operation is already finished from this side's point of view, so every
+// error is ignored and the send is bounded by a short timeout.
+func (s *Service) sendBestEffortCCancel(messageID uint16, presentationContextID byte) {
+	if presentationContextID == 0 || !s.GetState().CanSendDIMSE() {
+		return
+	}
+	cancel := dimse.NewCCancelRequest(messageID)
+	cancel.SetPresentationContextID(presentationContextID)
+	ctx, cancelCtx := context.WithTimeout(context.Background(), time.Second)
+	defer cancelCtx()
+	_ = s.Send(ctx, cancel)
+}
+
+// cancelPendingRequest sends at most one best-effort C-CANCEL when a progressive
+// request is abandoned. The response timeout and a context cancellation can
+// race, so the per-request cancelSent guard keeps the wire behavior single.
+func (s *Service) cancelPendingRequest(pending *pendingRequest, messageID uint16) {
+	if !isCancellableRequest(pending.request) {
+		return
+	}
+	pending.cancelSent.Do(func() {
+		presentationContextID := pending.request.PresentationContextID()
+		// Asynchronous: a stalled transport must not delay the terminal event.
+		go s.sendBestEffortCCancel(messageID, presentationContextID)
+	})
 }
 
 // sendSimpleRequest is a generic helper for sending simple request-response DIMSE operations (C-ECHO, C-STORE).
@@ -410,6 +444,11 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 	}
 
 	if err := s.Send(ctx, req); err != nil {
+		// A cancelled send may still have put the request on the wire (the
+		// write itself is not context-interruptible), so tell the peer once.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			s.cancelPendingRequest(pending, msgID)
+		}
 		pending.lifecycle.finishContext(ctx, err)
 		s.unregisterPendingRequest(msgID)
 		release()
@@ -429,7 +468,14 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 		defer cleanup()
 		sendError := func(err error) {
 			cleanup()
+			// The terminal event is always delivered, even after the caller
+			// cancels: callers must drain the channel until it closes. Resources
+			// (pending request and async slot) are released first, so blocking
+			// here only delays the terminal event, not other operations.
 			eventCh <- ResponseEvent[Resp]{Err: err}
+		}
+		cancelPeer := func() {
+			s.cancelPendingRequest(pending, msgID)
 		}
 		for {
 			select {
@@ -450,6 +496,9 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 				select {
 				case eventCh <- ResponseEvent[Resp]{Response: resp}:
 				case <-ctx.Done():
+					if !final {
+						cancelPeer()
+					}
 					pending.lifecycle.finishContext(ctx, ctx.Err())
 					sendError(ctx.Err())
 					return
@@ -463,6 +512,7 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 					return
 				}
 			case <-ctx.Done():
+				cancelPeer()
 				pending.lifecycle.finishContext(ctx, ctx.Err())
 				sendError(ctx.Err())
 				return
@@ -485,6 +535,13 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 // Returns a channel that will receive ordered response events. Each event contains
 // either a pending/final response or a terminal error. The channel closes after a
 // final response or terminal error.
+//
+// The caller must keep draining the channel until it closes, including after
+// cancelling the context: the progress goroutine releases the pending request
+// and async slot first, but it delivers the terminal event on the same channel
+// and blocks until the channel has room. Cleanup does not wait for that
+// delivery, but abandoning the channel leaks the progress goroutine once the
+// buffer is full.
 //
 // The request's MessageID will be automatically assigned if not already set.
 //

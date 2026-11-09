@@ -14,6 +14,9 @@ DIMSE (DICOM Message Service Element) is the core message layer of DICOM network
 - ✅ Automatic MessageID management
 - ✅ Priority support
 - ✅ Status code handling
+- ✅ Outbound required-field validation (`ValidateRequestForSend`)
+- ✅ Optional response parameters (Type U(=)) are omitted when empty and tolerated when absent
+- ✅ Missing Status element is classified as Failure instead of an all-false status
 
 ## Automatic MessageID Management
 
@@ -251,6 +254,52 @@ if finalResp.IsSuccess() {
     println("Query completed")
 }
 ```
+
+### Optional response UIDs
+
+`Affected SOP Class UID` and `Affected SOP Instance UID` are Type U(=) in
+C-STORE-RSP, and `Affected SOP Class UID` is Type U(=) in C-FIND-RSP (PS3.7
+9.1.1.1.3/9.1.1.1.4, 9.1.2.1.3). The constructors write the element only when
+the argument is non-empty:
+
+```go
+// Minimal C-STORE-RSP (Status + MessageIDBeingRespondedTo only)
+resp := dimse.NewCStoreResponse(requestMessageID, status.Success, "", "")
+resp := dimse.NewCFindResponse(requestMessageID, status.Success, "", nil)
+
+// With the optional UIDs, as before
+resp := dimse.NewCStoreResponse(requestMessageID, status.Success, sopClassUID, sopInstanceUID)
+```
+
+`NewCStoreResponseFromRequest` / `NewCFindResponseFromRequest` propagate the
+request's UIDs, so absence round-trips. The service accepts responses that omit
+these optional elements instead of aborting the association.
+
+### Required-field validation
+
+`ValidateRequestForSend(req)` is called by the service before encoding a request.
+It rejects an empty value for every mandatory identifier (C-STORE SOP
+Class/Instance, C-FIND/C-GET SOP Class, C-MOVE SOP Class and destination, N-GET/
+N-SET/N-DELETE/N-ACTION requested Class/Instance, N-CREATE Class, N-EVENT-REPORT
+Class/Instance plus Event Type ID presence). C-ECHO and C-CANCEL always pass, and
+the N-CREATE instance UID may be empty so the SCP can assign it.
+
+`NewCStoreRequest` additionally rejects a dataset whose `SOPClassUID` or
+`SOPInstanceUID` element exists but is zero-length. The validator switches on
+the built-in request types; a custom `Request` implementation is not
+introspected and is sent as-is.
+
+### Unknown status
+
+`BaseResponse.Status()` reports a response that lacks the Status element
+(0000,0900) as a generic Failure (`status.LookupStatus(0xFFFF)`), so
+`IsFailure()` is true. Predicates never all return false.
+
+### SetAffectedSOPClassUID
+
+For C-FIND, C-GET, and C-MOVE requests, `SetAffectedSOPClassUID` updates both the
+command element and the cached field, so `AffectedSOPClassUID()` and `String()`
+return the new UID after a request is rebuilt from an inbound command set.
 
 ## Advanced Features
 

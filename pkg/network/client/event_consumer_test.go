@@ -164,7 +164,11 @@ func TestConsumeCGetEventsReturnsTerminalAssociationClose(t *testing.T) {
 	}
 }
 
-func TestConsumeCMoveEventsContextCancellationSendsOneCancel(t *testing.T) {
+// TestConsumeCMoveEventsContextCancellationLeavesCancelToService verifies the
+// wrapper does not duplicate the C-CANCEL the service layer sends for a request
+// abandoned because ctx was cancelled; only the callback-stopped-early path
+// (covered above) makes the wrapper send one.
+func TestConsumeCMoveEventsContextCancellationLeavesCancelToService(t *testing.T) {
 	events := make(chan service.ResponseEvent[*dimse.CMoveResponse])
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -177,8 +181,8 @@ func TestConsumeCMoveEventsContextCancellationSendsOneCancel(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("consumeCMoveEvents() error = %v, want context.Canceled", err)
 	}
-	if cancels != 1 {
-		t.Fatalf("C-CANCEL count = %d, want 1", cancels)
+	if cancels != 0 {
+		t.Fatalf("C-CANCEL count = %d, want 0 for a context cancellation", cancels)
 	}
 }
 

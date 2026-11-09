@@ -166,9 +166,12 @@ func TestServerShutdownWaitsForAcceptLoopBeforeConnectionWait(t *testing.T) {
 	}
 }
 
-func TestServerAcceptTimeoutRearmsListener(t *testing.T) {
-	timedOut := make(chan struct{}, 1)
-	if err := logging.Configure(logging.Config{Handler: acceptTimeoutHandler{timedOut: timedOut}}); err != nil {
+// TestServerAcceptTimeoutKeepsAcceptingWithoutErrorReport verifies that an idle
+// AcceptTimeout is treated as a poll deadline, not a listener failure: the
+// server keeps accepting and no accept_failed record is emitted.
+func TestServerAcceptTimeoutKeepsAcceptingWithoutErrorReport(t *testing.T) {
+	reported := make(chan struct{}, 1)
+	if err := logging.Configure(logging.Config{Handler: acceptTimeoutHandler{reported: reported}}); err != nil {
 		t.Fatalf("Configure() error = %v", err)
 	}
 	t.Cleanup(logging.Disable)
@@ -181,12 +184,13 @@ func TestServerAcceptTimeoutRearmsListener(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe(ctx) }()
 
+	// Several accept timeouts must pass without any accept_failed report.
 	select {
-	case <-timedOut:
-	case <-time.After(time.Second):
+	case <-reported:
 		cancel()
 		<-done
-		t.Fatal("AcceptTimeout did not expire an idle accept")
+		t.Fatal("accept timeout emitted an accept_failed record")
+	case <-time.After(100 * time.Millisecond):
 	}
 
 	if !server.IsRunning() {
@@ -201,7 +205,7 @@ func TestServerAcceptTimeoutRearmsListener(t *testing.T) {
 }
 
 type acceptTimeoutHandler struct {
-	timedOut chan<- struct{}
+	reported chan<- struct{}
 }
 
 func (acceptTimeoutHandler) Enabled(context.Context, slog.Level) bool { return true }
@@ -209,7 +213,7 @@ func (acceptTimeoutHandler) Enabled(context.Context, slog.Level) bool { return t
 func (h acceptTimeoutHandler) Handle(_ context.Context, record slog.Record) error {
 	if record.Message == "accept_failed" {
 		select {
-		case h.timedOut <- struct{}{}:
+		case h.reported <- struct{}{}:
 		default:
 		}
 	}
