@@ -16,13 +16,13 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
-// Default implementation identification values used when the local AE does not
-// configure its own. They identify the go-dicom implementation in the
-// A-ASSOCIATE-RQ / A-ASSOCIATE-AC User Information item (PS3.7 D.3.3.2).
-const (
-	DefaultImplementationClassUID    = pdu.DefaultImplementationClassUID
-	DefaultImplementationVersionName = pdu.DefaultImplementationVersionName
-)
+// DefaultImplementationClassUID identifies the go-dicom implementation in the
+// A-ASSOCIATE-RQ / A-ASSOCIATE-AC User Information item (PS3.7 D.3.3.2) when
+// the local AE does not configure its own.
+const DefaultImplementationClassUID = pdu.DefaultImplementationClassUID
+
+// DefaultImplementationVersionName is derived from the go-dicom build version.
+var DefaultImplementationVersionName = pdu.DefaultImplementationVersionName
 
 // Association represents a DICOM association between two Application Entities.
 // This is a pure data structure that describes the negotiated parameters of an association.

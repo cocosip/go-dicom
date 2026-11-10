@@ -266,7 +266,7 @@ c := client.New(
 | `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | Single PDU write timeout |
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association negotiation timeout |
 | `WithImplementationClassUID(uid)` | string | "1.2.826.0.1.3680043.8.498.1" | Implementation class UID |
-| `WithImplementationVersionName(name)` | string | "go-dicom-1.0" | Implementation version name |
+| `WithImplementationVersionName(name)` | string | Derived from the go-dicom module version, e.g. "GO_DICOM_0_9_0" | Implementation version name (at most 16 characters) |
 | `WithTransferSyntaxRegistry(registry)` | `*transfer.Registry` | Independent standard catalog view | Explicitly inject a custom Transfer Syntax; standard and unknown syntaxes can still be parsed when not registered |
 
 ### Adding Presentation Contexts

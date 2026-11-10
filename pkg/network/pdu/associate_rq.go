@@ -17,12 +17,13 @@ import (
 
 const applicationContextUID = "1.2.840.10008.3.1.1.1"
 
-const (
-	// DefaultImplementationClassUID identifies the go-dicom implementation.
-	DefaultImplementationClassUID = uid.GoDicomImplementationClassUID
-	// DefaultImplementationVersionName identifies the go-dicom implementation version.
-	DefaultImplementationVersionName = uid.GoDicomImplementationVersionName
-)
+// DefaultImplementationClassUID identifies the go-dicom implementation.
+const DefaultImplementationClassUID = uid.GoDicomImplementationClassUID
+
+// DefaultImplementationVersionName identifies the go-dicom implementation
+// version. It is derived at init time from the go-dicom module version in the
+// binary's build information (e.g. "GO_DICOM_0_9_0").
+var DefaultImplementationVersionName = uid.GoDicomImplementationVersionName
 
 const maximumPresentationContexts = 128
 
