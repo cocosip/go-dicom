@@ -90,19 +90,8 @@ func TestFilmBoxFolderRoundTrip(t *testing.T) {
 	for index, instanceUID := range []string{"2.25.312", "2.25.313"} {
 		imageBox := NewImageBox(instanceUID, false)
 		imageBox.ImageBoxPosition = uint16(index + 1)
-		imageItem := dataset.New()
-		for _, imageElement := range []element.Element{
-			element.NewUnsignedShort(tag.Rows, []uint16{1}),
-			element.NewUnsignedShort(tag.Columns, []uint16{2}),
-			element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
-			element.NewString(tag.PhotometricInterpretation, vr.CS, []string{testPhotometricMonochrome2}),
-			element.NewOtherByte(tag.PixelData, []byte{byte(index + 1), byte(index + 2)}),
-		} {
-			if err := imageItem.Add(imageElement); err != nil {
-				t.Fatalf("image item Add() error = %v", err)
-			}
-		}
-		if err := imageBox.SetImageSequence(imageItem); err != nil {
+		if err := imageBox.SetImageSequence(
+			newTestImageItem(t, 1, 2, []byte{byte(index + 1), byte(index + 2)})); err != nil {
 			t.Fatalf("SetImageSequence() error = %v", err)
 		}
 		filmBox.AddImageBox(imageBox)
@@ -178,6 +167,7 @@ func TestFilmBoxSaveRemovesStaleManagedImageFiles(t *testing.T) {
 	for index, instanceUID := range []string{"2.25.316", "2.25.317"} {
 		imageBox := NewImageBox(instanceUID, false)
 		imageBox.ImageBoxPosition = uint16(index + 1)
+		attachTestImage(t, imageBox)
 		filmBox.AddImageBox(imageBox)
 	}
 	if err := filmBox.Save(folder); err != nil {
@@ -228,7 +218,9 @@ func TestFilmBoxSaveDoesNotRemoveStaleFilesWhenCurrentWriteFails(t *testing.T) {
 	}
 
 	filmBox := NewFilmBox("2.25.318", testStandardOneByOne)
-	filmBox.AddImageBox(NewImageBox("2.25.319", false))
+	imageBox := NewImageBox("2.25.319", false)
+	attachTestImage(t, imageBox)
+	filmBox.AddImageBox(imageBox)
 	if err := filmBox.Save(folder); err == nil {
 		t.Fatal("FilmBox.Save() succeeded with a directory at the current Image Box path")
 	}
@@ -263,7 +255,9 @@ func TestFilmBoxFolderPersistenceErrors(t *testing.T) {
 		session := NewFilmSession(basicFilmSessionSOPClassUID, "2.25.321", false)
 		filmBox := NewFilmBox("2.25.322", testStandardOneByOne)
 		session.AddFilmBox(filmBox)
-		filmBox.AddImageBox(NewImageBox("2.25.323", false))
+		imageBox := NewImageBox("2.25.323", false)
+		attachTestImage(t, imageBox)
+		filmBox.AddImageBox(imageBox)
 		if err := filmBox.Save(folder); err != nil {
 			t.Fatalf("FilmBox.Save() error = %v", err)
 		}
@@ -281,8 +275,46 @@ func TestFilmBoxFolderPersistenceErrors(t *testing.T) {
 		if err := os.WriteFile(path, []byte("file"), 0o600); err != nil {
 			t.Fatalf("os.WriteFile() error = %v", err)
 		}
-		if err := NewFilmBox("2.25.324", testStandardOneByOne).Save(path); err == nil {
+		conflicting := NewFilmBox("2.25.324", testStandardOneByOne)
+		NewFilmSession(basicFilmSessionSOPClassUID, "2.25.325", false).AddFilmBox(conflicting)
+		if err := conflicting.Save(path); err == nil {
 			t.Fatal("FilmBox.Save() accepted a file as its target folder")
+		}
+	})
+}
+
+// TestFilmBoxSaveRequiresFilmSessionAndImageAttributes verifies the two Type 1
+// requirements PS3.3 Table C.13-2 and C.13-4 impose on a stored Film Box.
+func TestFilmBoxSaveRequiresFilmSessionAndImageAttributes(t *testing.T) {
+	t.Run("missing Film Session", func(t *testing.T) {
+		filmBox := NewFilmBox("2.25.330", testStandardOneByOne)
+		if err := filmBox.Save(filepath.Join(t.TempDir(), "box")); err == nil {
+			t.Fatal("FilmBox.Save() accepted a Film Box without a Film Session reference")
+		}
+	})
+
+	t.Run("incomplete image item", func(t *testing.T) {
+		folder := filepath.Join(t.TempDir(), "box")
+		filmBox := NewFilmBox("2.25.331", testStandardOneByOne)
+		NewFilmSession(basicFilmSessionSOPClassUID, "2.25.332", false).AddFilmBox(filmBox)
+		imageBox := NewImageBox("2.25.333", false)
+		incomplete := dataset.New()
+		for _, imageElement := range []element.Element{
+			element.NewUnsignedShort(tag.Rows, []uint16{1}),
+			element.NewUnsignedShort(tag.Columns, []uint16{1}),
+			element.NewString(tag.PhotometricInterpretation, vr.CS, []string{testPhotometricMonochrome2}),
+			element.NewOtherByte(tag.PixelData, []byte{0}),
+		} {
+			if err := incomplete.Add(imageElement); err != nil {
+				t.Fatalf("image item Add() error = %v", err)
+			}
+		}
+		if err := imageBox.SetImageSequence(incomplete); err != nil {
+			t.Fatalf("SetImageSequence() error = %v", err)
+		}
+		filmBox.AddImageBox(imageBox)
+		if err := filmBox.Save(folder); err == nil {
+			t.Fatal("FilmBox.Save() accepted an image item without the Image Pixel Macro attributes")
 		}
 	})
 }

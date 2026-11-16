@@ -57,6 +57,17 @@ const (
 	MaxPDUDataLength uint32 = 100 * 1024 * 1024
 )
 
+// advertisedMaximumLength maps a configured Maximum Length to the value written
+// into the Maximum Length sub-item. PS3.8 Table D.1-1 defines 0 as "no
+// maximum", but the receive path enforces MaxPDUDataLength, so an unlimited
+// local value advertises the cap that is actually honoured instead of 0.
+func advertisedMaximumLength(configured uint32) uint32 {
+	if configured == 0 {
+		return MaxPDUDataLength
+	}
+	return configured
+}
+
 // pduDataChunkSize is the allocation/read granularity used for large PDU
 // payloads. Payloads up to this size are read in a single allocation; larger
 // payloads grow in chunks so a peer that declares a huge PDU length but sends

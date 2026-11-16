@@ -46,6 +46,17 @@ func (ds *Dataset) SetSpecificCharacterSet(values ...string) error {
 				return fmt.Errorf("specific character set %q cannot be combined with extensions", value)
 			}
 		}
+		// PS3.3 C.12.1.1: Value 1 is the replacement character repertoire and
+		// must be a single-byte character set; the multi-byte sets can only be
+		// used as code extensions.
+		if isMultiByteOnlyCharacterSet(nonEmpty[0]) {
+			return fmt.Errorf("specific character set %q cannot be value 1 when code extensions are used", nonEmpty[0])
+		}
+		for _, value := range nonEmpty[1:] {
+			if !strings.HasPrefix(value, "ISO 2022 ") {
+				return fmt.Errorf("specific character set %q cannot follow value 1; only ISO 2022 code extensions may", value)
+			}
+		}
 	}
 
 	return ds.AddOrUpdate(element.NewString(tag.SpecificCharacterSet, vr.CS, normalized))
@@ -60,8 +71,14 @@ func (ds *Dataset) EnsureUTF8CharacterSet() error {
 	if ds == nil || !ds.needsUTF8() {
 		return nil
 	}
-	if declared := ds.SpecificCharacterSet(); len(declared) == 1 && declared[0] == "ISO_IR 192" {
-		return nil
+	if declared := ds.SpecificCharacterSet(); len(declared) > 0 {
+		if len(declared) == 1 && declared[0] == "ISO_IR 192" {
+			return nil
+		}
+		// Re-labeling would reinterpret every value that is still encoded with
+		// the declared character set (PS3.5 6.1.2.2), so the caller has to
+		// resolve the mixed encoding instead.
+		return fmt.Errorf("dataset declares Specific Character Set %v but holds values encoded as UTF-8; convert those values or declare ISO_IR 192", declared)
 	}
 	return ds.SetSpecificCharacterSet("ISO_IR 192")
 }
@@ -98,6 +115,17 @@ func (ds *Dataset) needsUTF8Visited(visited map[*Dataset]struct{}) bool {
 func isSingleValueCharacterSet(value string) bool {
 	switch value {
 	case "ISO_IR 192", "GB18030", "GBK":
+		return true
+	default:
+		return false
+	}
+}
+
+// isMultiByteOnlyCharacterSet reports the code extension sets that cannot be
+// used as Value 1 of Specific Character Set (PS3.3 C.12.1.1).
+func isMultiByteOnlyCharacterSet(value string) bool {
+	switch value {
+	case "ISO 2022 IR 87", "ISO 2022 IR 149", "ISO 2022 IR 58", "ISO 2022 IR 159":
 		return true
 	default:
 		return false

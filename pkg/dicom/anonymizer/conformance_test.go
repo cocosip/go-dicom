@@ -822,19 +822,19 @@ func TestPatientIdentityRemovedReflectsRetainedAttributes(t *testing.T) {
 		{
 			name:         "empty profile retains patient name",
 			profile:      NewSecurityProfile(0),
-			wantRemoved:  "NO",
+			wantRemoved:  testPatientRemovedYes,
 			wantRetained: []*tag.Tag{tag.PatientName},
 		},
 		{
 			name:         "minimal profile retains institution",
 			profile:      NewMinimalProfile(),
-			wantRemoved:  "NO",
+			wantRemoved:  testPatientRemovedYes,
 			wantRetained: []*tag.Tag{tag.InstitutionName},
 		},
 		{
-			name:         "retain patient characteristics reports no",
+			name:         "retain patient characteristics keeps declaring identity removal",
 			profile:      NewSecurityProfile(BasicProfile | RetainPatientChars),
-			wantRemoved:  "NO",
+			wantRemoved:  testPatientRemovedYes,
 			wantRetained: []*tag.Tag{tag.PatientSex},
 		},
 		{

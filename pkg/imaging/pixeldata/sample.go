@@ -126,26 +126,26 @@ func swapPixelDataBytes(data []byte, info *Info) []byte {
 	if info == nil {
 		return data
 	}
-	bytesPerSample := info.BytesAllocated()
-	if bytesPerSample == 1 {
+	// OB is an unordered byte stream (PS3.5 6.2): there is no word structure to
+	// convert. OW is a stream of 16-bit words regardless of the native sample
+	// width those words represent.
+	if info.VRCode == "OB" {
 		return data
 	}
 	out := make([]byte, len(data))
 	copy(out, data)
-	switch bytesPerSample {
-	case 4:
+	if info.BytesAllocated() == 4 {
 		// A 32-bit sample occupies two OW words; swapping must reverse the whole
 		// sample so its numeric value is preserved across byte orders.
 		for offset := 0; offset+3 < len(out); offset += 4 {
 			out[offset], out[offset+3] = out[offset+3], out[offset]
 			out[offset+1], out[offset+2] = out[offset+2], out[offset+1]
 		}
-	default:
-		// DICOM OW values are sequences of 16-bit words, regardless of the
-		// native sample width represented by those words.
-		for offset := 0; offset+1 < len(out); offset += 2 {
-			out[offset], out[offset+1] = out[offset+1], out[offset]
-		}
+		return out
+	}
+	// 1, 2 and 3 byte samples all live in OW words, so every word is swapped.
+	for offset := 0; offset+1 < len(out); offset += 2 {
+		out[offset], out[offset+1] = out[offset+1], out[offset]
 	}
 	return out
 }
@@ -156,7 +156,12 @@ func swapPixelDataBytes(data []byte, info *Info) []byte {
 // big-endian pixel words (for example GE's private syntax), so Endian alone is
 // not sufficient here.
 func pixelDataNeedsByteSwap(info *Info) bool {
-	if info == nil || info.BytesAllocated() == 1 {
+	if info == nil {
+		return false
+	}
+	// OB Pixel Data is transferred as a byte stream and has no byte order to
+	// convert, whatever Bits Allocated says (PS3.5 8.1.1).
+	if info.VRCode == "OB" {
 		return false
 	}
 	syntax, err := transfer.Parse(info.TransferSyntaxUID)

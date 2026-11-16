@@ -958,6 +958,12 @@ func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Paramete
 		PixelPaddingValue:         pd.Info.PixelPaddingValue,
 		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
 	}
+	// A native codec writes uncompressed samples, whose VR follows PS3.5 8.1.1
+	// (OB for 1- and 8-bit, OW for wider samples); the writer needs that to
+	// byte-swap the value correctly.
+	if !newInfo.Encapsulated {
+		newInfo.VRCode = nativePixelDataVR(newInfo)
+	}
 
 	newPD, err := New(newInfo)
 	if err != nil {
@@ -1195,16 +1201,21 @@ func FromDatasetWithOptions(ds *dataset.Dataset, options ...ReadOption) (*Data, 
 		}
 	}
 
-	// Pixel padding (optional)
+	// Pixel padding (optional). PS3.3 C.7.5.1.1.2 only defines Pixel Padding
+	// Value and Pixel Padding Range Limit for single-sample images.
 	var paddingVal *int32
-	if pv, err := dicomlut.ShortValue(ds, tag.PixelPaddingValue); err == nil {
-		value := int32(pv)
-		paddingVal = &value
+	if samplesPerPixel == 1 {
+		if pv, err := dicomlut.ShortValue(ds, tag.PixelPaddingValue); err == nil {
+			value := int32(pv)
+			paddingVal = &value
+		}
 	}
 	var paddingRange *int32
-	if pr, err := dicomlut.ShortValue(ds, tag.PixelPaddingRangeLimit); err == nil {
-		value := int32(pr)
-		paddingRange = &value
+	if samplesPerPixel == 1 {
+		if pr, err := dicomlut.ShortValue(ds, tag.PixelPaddingRangeLimit); err == nil {
+			value := int32(pr)
+			paddingRange = &value
+		}
 	}
 
 	// Create pixel data info
@@ -1417,6 +1428,11 @@ func ConvertPaletteToRGBWithVRMode(ds *dataset.Dataset, pd *Data, mode LUTVRMode
 	pd.Info.BitsAllocated = 8
 	pd.Info.BitsStored = 8
 	pd.Info.HighBit = 7
+	// The padding value indexed palette entries, not the RGB samples that
+	// replaced them, and PS3.3 C.7.5.1.1.2 allows pixel padding only for
+	// single-sample images.
+	pd.Info.PixelPaddingValue = nil
+	pd.Info.PixelPaddingRangeLimit = nil
 
 	return nil
 }

@@ -348,6 +348,12 @@ func ValidateLO(content string) error {
 		return newValidationError("LO", content, "value exceeds maximum length of 64 characters")
 	}
 
+	// PS3.5 6.1.2.3: 05/12 is the multi-value separator for LO, so a value
+	// itself cannot contain it.
+	if strings.ContainsRune(content, '\\') {
+		return newValidationError("LO", content, "value contains the multi-value separator")
+	}
+
 	// LO uses specific character set, control characters not allowed except ESC
 	for _, r := range content {
 		if unicode.IsControl(r) && r != '\x1B' { // ESC is allowed
@@ -388,6 +394,12 @@ func ValidateSH(content string) error {
 	// 16 characters maximum
 	if utf8.RuneCountInString(content) > 16 {
 		return newValidationError("SH", content, "value exceeds maximum length of 16 characters")
+	}
+
+	// PS3.5 6.1.2.3: 05/12 is the multi-value separator for SH, so a value
+	// itself cannot contain it.
+	if strings.ContainsRune(content, '\\') {
+		return newValidationError("SH", content, "value contains the multi-value separator")
 	}
 
 	// SH uses specific character set, control characters not allowed except ESC

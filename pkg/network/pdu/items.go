@@ -176,6 +176,18 @@ func writeString(s string) []byte {
 	return result
 }
 
+// writeAETitleField writes the 16-byte AE Title field of an A-ASSOCIATE-AC.
+// PS3.8 Table 9-17 makes this field Reserved and requires it to carry the value
+// received in the A-ASSOCIATE-RQ, so a captured 16-byte field is echoed
+// verbatim; an absent raw field falls back to the space-padded title.
+func writeAETitleField(w io.Writer, title string, raw []byte) {
+	if len(raw) == 16 {
+		_, _ = w.Write(raw)
+		return
+	}
+	_, _ = w.Write(writeString(title))
+}
+
 // validateAETitles validates the Called and Calling AE Titles before encoding.
 // PS3.8 Table 9-11 requires 16 characters with leading/trailing spaces
 // non-significant and explicitly forbids the all-space value ("no Application

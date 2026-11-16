@@ -6,6 +6,7 @@ package client
 const (
 	testImplementationClassUID    = "1.2.3.4.5"
 	testCTImageStorageUID         = "1.2.840.10008.5.1.4.1.1.2"
+	testMRImageStorageUID         = "1.2.840.10008.5.1.4.1.1.4"
 	testExplicitVRLittleEndianUID = "1.2.840.10008.1.2.1"
 	testImplicitVRLittleEndianUID = "1.2.840.10008.1.2"
 	testSOPInstanceUID            = "1.2.3.4.5.6.7.8.9"

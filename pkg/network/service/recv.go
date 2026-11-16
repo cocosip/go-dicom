@@ -65,7 +65,9 @@ func (s *Service) recvLoop(ctx context.Context) error {
 					// PS3.8 9.3.8: unrecognized PDU -> A-ABORT(unrecognized-PDU).
 					_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderUnrecognizedPDU)
 				case errors.Is(err, transport.ErrPDULengthExceeded):
-					_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+					// PS3.8 Table 9-26: a PDU length outside the negotiated
+					// maximum is an invalid PDU parameter value.
+					_ = s.Abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderInvalidPDUParam)
 				}
 				return fmt.Errorf("failed to read PDU: %w", err)
 			}

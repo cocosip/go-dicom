@@ -228,3 +228,60 @@ func encodeBigEndianUint64s(values ...uint64) []byte {
 	}
 	return data
 }
+
+// TestPixelDataSplitsFramesAtEndOfStreamMarker verifies PS3.5 A.4: an empty
+// Basic Offset Table is allowed, so frames that span several fragments must be
+// recovered from the codestream's end-of-stream marker.
+func TestPixelDataSplitsFramesAtEndOfStreamMarker(t *testing.T) {
+	first := []byte{0xff, 0xd8, 0x01, 0x02, 0xff, 0xd9}
+	second := []byte{0xff, 0xd8, 0x03, 0x04, 0xff, 0xd9}
+
+	pixelData := openTestPixelDataWithFragments(t, transfer.JPEGBaseline8Bit, nil,
+		first[:2], first[2:], second[:5], second[5:])
+
+	frames, err := pixelData.Frames(2)
+	if err != nil {
+		t.Fatalf("Frames() error = %v", err)
+	}
+	if len(frames) != 2 {
+		t.Fatalf("Frames() returned %d frames, want 2", len(frames))
+	}
+	for index, want := range [][]byte{first, second} {
+		if !bytes.Equal(frames[index], want) {
+			t.Fatalf("Frames()[%d] = %x, want %x", index, frames[index], want)
+		}
+	}
+}
+
+// TestPixelDataWithoutOffsetsStillRejectsNonCodestreamSyntax keeps the
+// indeterminate-boundaries error for syntaxes whose frames have no common end
+// marker.
+func TestPixelDataWithoutOffsetsStillRejectsNonCodestreamSyntax(t *testing.T) {
+	pixelData := openTestPixelDataWithFragments(t, transfer.RLELossless, nil,
+		[]byte{1, 2}, []byte{3, 4}, []byte{5, 6}, []byte{7, 8})
+
+	if _, err := pixelData.Frames(2); err == nil ||
+		!strings.Contains(err.Error(), "cannot determine frame boundaries") {
+		t.Fatalf("Frames() error = %v, want indeterminate-boundaries error", err)
+	}
+}
+
+func openTestPixelDataWithFragments(
+	t *testing.T, syntax *transfer.Syntax, basic []uint32, fragmentData ...[]byte,
+) *PixelData {
+	t.Helper()
+	ds := dataset.NewWithTransferSyntax(syntax)
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	fragments.SetOffsetTable(basic)
+	for _, data := range fragmentData {
+		fragments.AddFragment(buffer.NewMemory(data))
+	}
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+	pixelData, err := OpenDataset(ds)
+	if err != nil {
+		t.Fatalf("OpenDataset() error = %v", err)
+	}
+	return pixelData
+}

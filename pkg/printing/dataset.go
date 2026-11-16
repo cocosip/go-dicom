@@ -269,11 +269,17 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 		{tag.EmptyImageDensity, string(fb.EmptyImageDensity), vr.CS},
 		{tag.ConfigurationInformation, fb.ConfigurationInformation, vr.ST},
 		{tag.AnnotationDisplayFormatID, fb.AnnotationDisplayFormatID, vr.CS},
-		{tag.SmoothingType, fb.SmoothingType, vr.CS},
 		{tag.RequestedResolutionID, fb.RequestedResolutionID, vr.CS},
 	}
 	for _, value := range values {
 		if err := addString(ds, value.tag, value.value, value.vr); err != nil {
+			return nil, err
+		}
+	}
+	// Smoothing Type is only valid for Magnification Type = CUBIC (PS3.3 Table
+	// C.13-3); sending it with any other magnification type is non-conformant.
+	if fb.MagnificationType == MagnificationCubic {
+		if err := addString(ds, tag.SmoothingType, fb.SmoothingType, vr.CS); err != nil {
 			return nil, err
 		}
 	}
@@ -289,10 +295,7 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 	if err := addElement(ds, element.NewUnsignedShort(tag.ReflectedAmbientLight, []uint16{fb.ReflectedAmbientLight})); err != nil {
 		return nil, err
 	}
-	sessionReference := fb.ReferencedFilmSession
-	if fb.filmSession != nil {
-		sessionReference = SOPReference{SOPClassUID: fb.filmSession.SOPClassUID, SOPInstanceUID: fb.filmSession.SOPInstanceUID}
-	}
+	sessionReference := fb.sessionReference()
 	if sessionReference != (SOPReference{}) {
 		if err := addReferenceSequence(ds, tag.ReferencedFilmSessionSequence, []SOPReference{sessionReference}); err != nil {
 			return nil, err
@@ -319,6 +322,15 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 		}
 	}
 	return ds, nil
+}
+
+// sessionReference returns the Film Session this Film Box belongs to, preferring
+// the attached session over an explicitly stored reference.
+func (fb *FilmBox) sessionReference() SOPReference {
+	if fb.filmSession != nil {
+		return SOPReference{SOPClassUID: fb.filmSession.SOPClassUID, SOPInstanceUID: fb.filmSession.SOPInstanceUID}
+	}
+	return fb.ReferencedFilmSession
 }
 
 // presentationLUTReference returns the Presentation LUT this Film Box
@@ -437,11 +449,17 @@ func (ib *ImageBox) ToDataset() (*dataset.Dataset, error) {
 		{tag.SOPInstanceUID, ib.SOPInstanceUID, vr.UI},
 		{tag.Polarity, string(ib.Polarity), vr.CS},
 		{tag.MagnificationType, string(ib.MagnificationType), vr.CS},
-		{tag.SmoothingType, ib.SmoothingType, vr.CS},
 		{tag.RequestedDecimateCropBehavior, ib.RequestedDecimateCropBehavior, vr.CS},
 	}
 	for _, value := range values {
 		if err := addString(ds, value.tag, value.value, value.vr); err != nil {
+			return nil, err
+		}
+	}
+	// Smoothing Type is only valid for Magnification Type = CUBIC (PS3.3 Table
+	// C.13-3), and the image box inherits the film box's magnification type.
+	if ib.GetEffectiveMagnificationType() == MagnificationCubic {
+		if err := addString(ds, tag.SmoothingType, ib.SmoothingType, vr.CS); err != nil {
 			return nil, err
 		}
 	}

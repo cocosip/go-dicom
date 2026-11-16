@@ -192,6 +192,11 @@ var (
 	ErrClientClosing = errors.New("client is closing")
 	// ErrClientNotConnected indicates that no usable association is established.
 	ErrClientNotConnected = errors.New("client not connected")
+	// ErrNoAcceptedPresentationContext reports a well-formed A-ASSOCIATE-AC
+	// (PS3.8 Table 9-17) that rejected every proposed presentation context.
+	// The association is established but unusable, so Connect releases it
+	// normally and returns this error.
+	ErrNoAcceptedPresentationContext = errors.New("no presentation context was accepted")
 )
 
 // WithEventObserver sets the network lifecycle event observer.
@@ -834,26 +839,25 @@ func (c *Client) buildAssociateRQ() *pdu.AAssociateRQ {
 	return rq
 }
 
-// validateAssociateAC validates the A-ASSOCIATE-AC response.
-// Returns an error if no presentation contexts were accepted.
+// validateAssociateAC validates the A-ASSOCIATE-AC response. PS3.8 Table 9-17
+// requires one or more presentation context items; an AC that rejects every one
+// of them is well-formed and is handled after the association is built.
 func (c *Client) validateAssociateAC(ac *pdu.AAssociateAC) error {
 	if len(ac.PresentationContexts) == 0 {
 		return fmt.Errorf("no presentation contexts in A-ASSOCIATE-AC")
 	}
+	return nil
+}
 
-	// Check if at least one context was accepted
-	acceptedCount := 0
-	for _, pc := range ac.PresentationContexts {
-		if pc.Result == pdu.ResultAcceptance {
-			acceptedCount++
+// hasAcceptedPresentationContext reports whether the acceptor left at least one
+// presentation context usable.
+func hasAcceptedPresentationContext(assoc *association.Association) bool {
+	for _, pc := range assoc.PresentationContexts {
+		if pc.IsAccepted() {
+			return true
 		}
 	}
-
-	if acceptedCount == 0 {
-		return fmt.Errorf("all presentation contexts were rejected")
-	}
-
-	return nil
+	return false
 }
 
 func (c *Client) buildAcceptedAssociation(rq *pdu.AAssociateRQ, ac *pdu.AAssociateAC) (*association.Association, error) {
@@ -1014,6 +1018,14 @@ func (c *Client) negotiateAssociation(ctx context.Context) error {
 	c.assoc = acceptedAssociation
 	c.mu.Unlock()
 
+	// PS3.8 Table 9-17: an AC that rejects every proposed presentation context
+	// is a well-formed acceptance, so Table 9-10 (Sta8) establishes the
+	// association. It carries nothing usable, so Connect releases it normally
+	// and reports the condition instead of aborting a valid association.
+	if !hasAcceptedPresentationContext(acceptedAssociation) {
+		return fmt.Errorf("%w: all presentation contexts were rejected", ErrNoAcceptedPresentationContext)
+	}
+
 	return nil
 }
 
@@ -1065,6 +1077,9 @@ func (c *Client) Connect(ctx context.Context, host string, port int) error {
 
 	// Step 2-3: Negotiate association
 	if err := c.negotiateAssociation(attemptCtx); err != nil {
+		if errors.Is(err, ErrNoAcceptedPresentationContext) {
+			err = c.releaseAssociationWithoutContexts(attemptCtx, err)
+		}
 		return fail(err)
 	}
 
@@ -1088,6 +1103,24 @@ func (c *Client) Connect(ctx context.Context, host string, port int) error {
 	c.mu.Unlock()
 	close(done)
 	return nil
+}
+
+// releaseAssociationWithoutContexts performs a normal A-RELEASE-RQ/RP exchange
+// for an association that was established without any usable presentation
+// context, so the acceptor's state machine stays consistent (PS3.8 Table 9-10,
+// Sta8), and returns cause.
+func (c *Client) releaseAssociationWithoutContexts(ctx context.Context, cause error) error {
+	c.mu.Lock()
+	svc := c.service
+	c.mu.Unlock()
+	// The receive loop must be running for the A-RELEASE-RP to be observed.
+	if svc == nil || svc.Start() != nil {
+		return cause
+	}
+	releaseCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_ = svc.GracefulRelease(releaseCtx)
+	return cause
 }
 
 func (c *Client) finishConnectingAttempt(done chan struct{}) {

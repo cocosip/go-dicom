@@ -178,11 +178,17 @@ func (w *jsonWriter) writeElement(elem element.Element) error {
 
 // writeValueByVR writes the element value based on its VR type
 func (w *jsonWriter) writeValueByVR(elem element.Element) error {
-	// A lazy BulkDataURI buffer takes precedence for every VR: the reference
-	// must survive serialization (PS3.18 F.2.2), even when the data has been
-	// loaded into memory.
+	// A lazy BulkDataURI buffer takes precedence for the VRs that PS3.18 F.2.2
+	// allows to reference bulk data, so the reference survives serialization
+	// even when the data has been loaded into memory.
 	if buf := elem.Buffer(); buf != nil {
 		if bulk, ok := buf.(*buffer.BulkDataURIByteBuffer); ok && bulk.BulkDataURI() != "" {
+			// The reader enforces the same list, so emitting a reference for a
+			// PN/UI/CS value would produce JSON this package cannot read back.
+			if !bulkDataURIVRs(elem.ValueRepresentation().Code()) {
+				return fmt.Errorf("BulkDataURI is not allowed for VR %s (PS3.18 F.2.2)",
+					elem.ValueRepresentation().Code())
+			}
 			w.buf.WriteString(`,"BulkDataURI":`)
 			encoded, err := json.Marshal(bulk.BulkDataURI())
 			if err != nil {
@@ -337,7 +343,13 @@ func (w *jsonWriter) writeFloat64Array(elem element.Element) error {
 	return nil
 }
 
-// writeFloat32 writes a single float32 value
+// writeFloat32 writes a single float32 value.
+//
+// Deviation: PS3.18 Table F.2.3-1 types FL as a JSON Number, but RFC 8259
+// numbers cannot represent NaN or Infinity, and Annex F defines no alternative
+// encoding (F.2.5 "null" denotes an empty value, not a non-finite one). The
+// quoted strings "NaN"/"Infinity"/"-Infinity" are therefore a documented
+// deviation; they round-trip through parseFloat32.
 func (w *jsonWriter) writeFloat32(val float32) {
 	if math.IsNaN(float64(val)) {
 		w.buf.WriteString(`"NaN"`)
@@ -350,7 +362,8 @@ func (w *jsonWriter) writeFloat32(val float32) {
 	}
 }
 
-// writeFloat64 writes a single float64 value
+// writeFloat64 writes a single float64 value. It shares the non-finite encoding
+// and documented deviation from PS3.18 Table F.2.3-1 described in writeFloat32.
 func (w *jsonWriter) writeFloat64(val float64) {
 	if math.IsNaN(val) {
 		w.buf.WriteString(`"NaN"`)
@@ -708,9 +721,21 @@ func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
 }
 
 // littleEndianBinary returns data normalized to little-endian, as DICOM JSON/XML
-// binary values require. Word-based VRs from a big-endian dataset are byte-swapped
-// per value unit; byte VRs and little-endian values are returned unchanged.
+// binary values require. Word/float based "Other" VRs (OD, OF, OL, OV, OW) from a
+// big-endian dataset are byte-swapped per value unit; little-endian values are
+// returned unchanged.
+//
+// OB and UN are byte strings with no byte order semantics (PS3.5 6.2), so their
+// bytes are emitted unchanged: PS3.18 F.2.7 defines InlineBinary as the base64
+// encoding of the PS3.5-encoded Value Field, and reordering those bytes would
+// corrupt them.
 func littleEndianBinary(elem element.Element, data []byte) []byte {
+	if v := elem.ValueRepresentation(); v != nil {
+		switch v.Code() {
+		case vr.CodeOB, vr.CodeUN:
+			return data
+		}
+	}
 	order, known := element.NumericByteOrder(elem)
 	if !known || order != binary.BigEndian {
 		return data

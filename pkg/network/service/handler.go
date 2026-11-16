@@ -609,6 +609,10 @@ func (s *Service) handleNEventReportRequest(ctx context.Context, req *dimse.NEve
 		resp = dimse.NewNEventReportResponse(req.MessageID(), status.NEventReportFailureProcessingFailure,
 			req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), req.EventTypeID(), nil)
 	}
+	// A response shall travel on the presentation context of its request
+	// (PS3.7 9.3); the abstract-syntax fallback may pick another context when
+	// the same SOP Class was negotiated more than once.
+	resp.SetPresentationContextID(req.PresentationContextID())
 	return s.Send(ctx, resp)
 }
 
@@ -626,6 +630,7 @@ func (s *Service) handleNGetRequest(ctx context.Context, req *dimse.NGetRequest,
 		resp = dimse.NewNGetResponse(req.MessageID(), status.NGetFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
 	}
+	resp.SetPresentationContextID(req.PresentationContextID())
 	return s.Send(ctx, resp)
 }
 
@@ -643,6 +648,7 @@ func (s *Service) handleNSetRequest(ctx context.Context, req *dimse.NSetRequest,
 		resp = dimse.NewNSetResponse(req.MessageID(), status.NSetFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), nil)
 	}
+	resp.SetPresentationContextID(req.PresentationContextID())
 	return s.Send(ctx, resp)
 }
 
@@ -660,6 +666,7 @@ func (s *Service) handleNActionRequest(ctx context.Context, req *dimse.NActionRe
 		resp = dimse.NewNActionResponse(req.MessageID(), status.NActionFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID(), req.ActionTypeID(), nil)
 	}
+	resp.SetPresentationContextID(req.PresentationContextID())
 	return s.Send(ctx, resp)
 }
 
@@ -677,6 +684,7 @@ func (s *Service) handleNCreateRequest(ctx context.Context, req *dimse.NCreateRe
 		resp = dimse.NewNCreateResponse(req.MessageID(), status.NCreateFailureProcessingFailure,
 			req.AffectedSOPClassUID(), req.AffectedSOPInstanceUID(), nil)
 	}
+	resp.SetPresentationContextID(req.PresentationContextID())
 	return s.Send(ctx, resp)
 }
 
@@ -694,6 +702,7 @@ func (s *Service) handleNDeleteRequest(ctx context.Context, req *dimse.NDeleteRe
 		resp = dimse.NewNDeleteResponse(req.MessageID(), status.NDeleteFailureProcessingFailure,
 			req.RequestedSOPClassUID(), req.RequestedSOPInstanceUID())
 	}
+	resp.SetPresentationContextID(req.PresentationContextID())
 	return s.Send(ctx, resp)
 }
 

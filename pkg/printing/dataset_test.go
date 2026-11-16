@@ -117,7 +117,9 @@ func TestFilmBoxDatasetRoundTripsStandardAttributesAndReferences(t *testing.T) {
 	session := NewFilmSession("", "2.25.120", false)
 	box := NewFilmBox("2.25.121", testStandardTwoByOne)
 	box.AnnotationDisplayFormatID = "ANNOTATION_1"
-	box.SmoothingType = "SMOOTH_1"
+	// Smoothing Type is only valid for Magnification Type CUBIC (PS3.3 C.13-3).
+	box.MagnificationType = MagnificationCubic
+	box.SmoothingType = testSmoothingType
 	box.Illumination = 2000
 	box.ReflectedAmbientLight = 10
 	box.RequestedResolutionID = "HIGH"
@@ -139,7 +141,7 @@ func TestFilmBoxDatasetRoundTripsStandardAttributesAndReferences(t *testing.T) {
 	}
 	for target, want := range map[*tag.Tag]string{
 		tag.AnnotationDisplayFormatID: "ANNOTATION_1",
-		tag.SmoothingType:             "SMOOTH_1",
+		tag.SmoothingType:             testSmoothingType,
 		tag.RequestedResolutionID:     "HIGH",
 	} {
 		if got, ok := ds.GetString(target); !ok || got != want {
@@ -262,7 +264,7 @@ func TestImageBoxDatasetRoundTrip(t *testing.T) {
 	want := NewImageBox("2.25.103", true)
 	want.ImageBoxPosition = 4
 	want.Polarity = PolarityReverse
-	want.MagnificationType = MagnificationBilinear
+	want.MagnificationType = MagnificationCubic
 	want.SmoothingType = "SMOOTH_2"
 	want.RequestedImageSize = "120.5"
 	want.SetImageData([]byte{1, 2, 3, 4})
@@ -779,5 +781,29 @@ func assertReferenceSequence(t *testing.T, ds *dataset.Dataset, sequenceTag *tag
 		if !classOK || !instanceOK || classUID != reference.SOPClassUID || instanceUID != reference.SOPInstanceUID {
 			t.Errorf("%s item %d = %q/%q, want %q/%q", sequenceTag, index, classUID, instanceUID, reference.SOPClassUID, reference.SOPInstanceUID)
 		}
+	}
+}
+
+// TestSmoothingTypeRequiresCubicMagnification verifies PS3.3 Table C.13-3:
+// Smoothing Type is only valid when Magnification Type is CUBIC.
+func TestSmoothingTypeRequiresCubicMagnification(t *testing.T) {
+	box := NewFilmBox("2.25.140", testStandardOneByOne)
+	box.MagnificationType = MagnificationBilinear
+	box.SmoothingType = testSmoothingType
+	ds, err := box.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if _, ok := ds.Get(tag.SmoothingType); ok {
+		t.Error("Film Box sent Smoothing Type with Magnification Type BILINEAR")
+	}
+
+	box.MagnificationType = MagnificationCubic
+	ds, err = box.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if got, ok := ds.GetString(tag.SmoothingType); !ok || got != testSmoothingType {
+		t.Errorf("Film Box dropped Smoothing Type with Magnification Type CUBIC: %q, %v", got, ok)
 	}
 }

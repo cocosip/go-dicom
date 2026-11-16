@@ -40,6 +40,35 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 	_ = ds.AddOrUpdate(element.NewString(tag.SOPClassUID, vr.UI, []string{uid.ComprehensiveSRStorage.UID()}))
 	_ = ds.AddOrUpdate(element.NewString(tag.SOPInstanceUID, vr.UI, []string{uid.GenerateDerivedFromUUID().UID()}))
 
+	now := time.Now()
+	// A standalone report is a self-contained instance, so it also gets its own
+	// Study and Series Instance UIDs (PS3.3 Table A.35.1-1 requires the Patient,
+	// Study, SR Document Series and General Equipment modules). Callers that
+	// attach the report to an existing study must use
+	// NewStructuredReportFromDataset and set these attributes themselves.
+	for _, item := range []element.Element{
+		// Patient Module Type 2 attributes: present, may be empty.
+		element.NewPersonName(tag.PatientName, []string{""}),
+		element.NewString(tag.PatientID, vr.LO, []string{""}),
+		element.NewString(tag.PatientBirthDate, vr.DA, []string{""}),
+		element.NewString(tag.PatientSex, vr.CS, []string{""}),
+		// Study Module: Study Instance UID is Type 1, the rest are Type 2.
+		element.NewString(tag.StudyInstanceUID, vr.UI, []string{uid.GenerateDerivedFromUUID().UID()}),
+		element.NewDateFromTime(tag.StudyDate, []time.Time{now}),
+		element.NewTimeFromTime(tag.StudyTime, []time.Time{now}),
+		element.NewPersonName(tag.ReferringPhysicianName, []string{""}),
+		element.NewString(tag.StudyID, vr.SH, []string{""}),
+		element.NewString(tag.AccessionNumber, vr.SH, []string{""}),
+		// SR Document Series Module: Modality and Series Instance UID are Type 1.
+		element.NewString(tag.Modality, vr.CS, []string{"SR"}),
+		element.NewString(tag.SeriesInstanceUID, vr.UI, []string{uid.GenerateDerivedFromUUID().UID()}),
+		element.NewString(tag.SeriesNumber, vr.IS, []string{"1"}),
+		// General Equipment Module Type 2 attribute.
+		element.NewString(tag.Manufacturer, vr.LO, []string{""}),
+	} {
+		_ = ds.AddOrUpdate(item)
+	}
+
 	// Set concept name code sequence
 	if err := setConceptNameCode(ds, rootCode); err != nil {
 		return nil, err
@@ -52,7 +81,6 @@ func NewStructuredReport(rootCode *CodeItem, items ...*ContentItem) (*Structured
 	_ = ds.AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(ContinuitySeparate)}))
 
 	// SR Document General Module Type 1 attributes (PS3.3 C.17.2, Table C.17-2).
-	now := time.Now()
 	for _, item := range []element.Element{
 		element.NewString(tag.InstanceNumber, vr.IS, []string{"1"}),
 		element.NewString(tag.CompletionFlag, vr.CS, []string{"PARTIAL"}),

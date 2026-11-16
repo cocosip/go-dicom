@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"math"
 	"os"
@@ -652,9 +653,15 @@ func synchronizeFileMetaSOPUIDs(fileMetaInfo, ds *dataset.Dataset) error {
 			hasMediaStorageInstanceUID && mediaStorageInstanceUID != "" {
 			return nil
 		}
+		if hasMediaStorageClassUID && mediaStorageClassUID == uid.MediaStorageDirectoryStorage.UID() {
+			// PS3.10 8.6: the File-set UID is carried only in the File Meta
+			// Information as the Media Storage SOP Instance UID, so it cannot be
+			// synthesized here without changing the File-set identity.
+			return fmt.Errorf("DICOMDIR File Meta Information is missing MediaStorageSOPInstanceUID (0002,0003); the File-set UID must be supplied with writer.WithFileMetaInfo")
+		}
 	}
 	if !hasSOPClassUID || sopClassUID == "" {
-		return fmt.Errorf("dataset is missing SOPClassUID required for Part 10 File Meta Information")
+		return fmt.Errorf("dataset is missing SOPClassUID required for Part 10 File Meta Information (use writer.WithFileMetaInfo when rewriting a parsed file)")
 	}
 	if !hasSOPInstanceUID || sopInstanceUID == "" {
 		return fmt.Errorf("dataset is missing SOPInstanceUID required for Part 10 File Meta Information")
@@ -662,11 +669,12 @@ func synchronizeFileMetaSOPUIDs(fileMetaInfo, ds *dataset.Dataset) error {
 
 	for _, item := range []struct {
 		metaTag    *tag.Tag
+		datasetTag *tag.Tag
 		datasetUID string
 		name       string
 	}{
-		{tag.MediaStorageSOPClassUID, sopClassUID, "MediaStorageSOPClassUID"},
-		{tag.MediaStorageSOPInstanceUID, sopInstanceUID, "MediaStorageSOPInstanceUID"},
+		{tag.MediaStorageSOPClassUID, tag.SOPClassUID, sopClassUID, "MediaStorageSOPClassUID"},
+		{tag.MediaStorageSOPInstanceUID, tag.SOPInstanceUID, sopInstanceUID, "MediaStorageSOPInstanceUID"},
 	} {
 		if metaUID, exists := fileMetaInfo.GetString(item.metaTag); exists {
 			if metaUID != item.datasetUID {
@@ -677,14 +685,39 @@ func synchronizeFileMetaSOPUIDs(fileMetaInfo, ds *dataset.Dataset) error {
 		if _, exists := fileMetaInfo.Get(item.metaTag); exists {
 			return fmt.Errorf("file meta information contains invalid %s", item.name)
 		}
-		if err := fileMetaInfo.Add(element.NewString(item.metaTag, vr.UI, []string{item.datasetUID})); err != nil {
-			return fmt.Errorf("failed to set %s in file meta information: %w", item.name, err)
+		if err := addMediaStorageUID(ds, fileMetaInfo, item.datasetTag, item.metaTag, item.datasetUID, item.name); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
+// addMediaStorageUID adds one Media Storage UID to the File Meta Information.
+// When the dataset already holds the value its own bytes are copied instead of
+// being re-validated, so a dataset read from a non-conformant source (PS3.5 9.1
+// forbids leading zeros in UID components) survives a read-modify-write cycle.
+func addMediaStorageUID(ds, fileMetaInfo *dataset.Dataset, datasetTag, metaTag *tag.Tag, value, name string) error {
+	if source, ok := ds.Get(datasetTag); ok && source.Buffer() != nil {
+		previous := fileMetaInfo.AutoValidate()
+		fileMetaInfo.SetAutoValidate(false)
+		err := fileMetaInfo.Add(element.NewStringFromBuffer(metaTag, vr.UI, source.Buffer(), nil))
+		fileMetaInfo.SetAutoValidate(previous)
+		if err != nil {
+			return fmt.Errorf("failed to set %s in file meta information: %w", name, err)
+		}
+		return nil
+	}
+	if err := fileMetaInfo.Add(element.NewString(metaTag, vr.UI, []string{value})); err != nil {
+		return fmt.Errorf("failed to set %s in file meta information: %w", name, err)
+	}
+	return nil
+}
+
 // WriteFile writes a DICOM dataset to a file.
+//
+// The dataset is encoded into a temporary file next to path and renamed into
+// place only after the write succeeds, so a validation error or a short write
+// cannot truncate or destroy a file that already exists at path.
 //
 // Basic usage:
 //
@@ -702,12 +735,39 @@ func WriteFile(path string, ds *dataset.Dataset, opts ...WriteOption) error {
 	// We only permit creating regular files (no device names, etc.).
 	// Users may still pass any absolute or relative path; we just canonicalize.
 
-	file, err := os.Create(cleanPath)
+	file, err := createSiblingTempFile(cleanPath)
 	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
+		return fmt.Errorf("failed to create temporary file for %s: %w", cleanPath, err)
 	}
+	tempPath := file.Name()
 
-	return writeAndClose(file, ds, opts...)
+	if err := writeAndClose(file, ds, opts...); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+	if err := os.Rename(tempPath, cleanPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("failed to replace %s: %w", cleanPath, err)
+	}
+	return nil
+}
+
+// createSiblingTempFile creates an empty file next to path with the mode a
+// plain os.Create would use (0666 masked by the process umask).
+func createSiblingTempFile(path string) (*os.File, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		name := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), time.Now().UnixNano()+int64(attempt))
+		file, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		if err == nil {
+			return file, nil
+		}
+		lastErr = err
+		if !errors.Is(err, fs.ErrExist) {
+			break
+		}
+	}
+	return nil, lastErr
 }
 
 func writeAndClose(file io.WriteCloser, ds *dataset.Dataset, opts ...WriteOption) error {

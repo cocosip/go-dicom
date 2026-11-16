@@ -4,7 +4,10 @@
 package serialization
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -515,5 +518,109 @@ func TestBulkDataUriByteBuffer_SimulatedLazyLoad(t *testing.T) {
 		if b != expected[i] {
 			t.Errorf("GetByteRange() output[%d] = %d, want %d", i, b, expected[i])
 		}
+	}
+}
+
+// TestToJSON_RejectsBulkDataURIForNonBulkVR verifies PS3.18 F.2.2: only the VRs
+// that permit bulk data may carry a BulkDataURI.
+func TestToJSON_RejectsBulkDataURIForNonBulkVR(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewStringFromBuffer(tag.PatientName, vr.PN, buffer.NewBulkDataURI(testBulkDataURI), nil)); err != nil {
+		t.Fatalf("add element: %v", err)
+	}
+	if _, err := ToJSON(ds); err == nil {
+		t.Fatal("ToJSON() accepted BulkDataURI for VR PN")
+	}
+}
+
+// TestFromJSON_RejectsValueForBinaryVR verifies PS3.18 F.2.2: binary VRs carry
+// InlineBinary or BulkDataURI, never a "Value" array.
+func TestFromJSON_RejectsValueForBinaryVR(t *testing.T) {
+	for _, code := range []string{"OB", "OD", "OF", "OL", "OV", "OW", "UN"} {
+		t.Run(code, func(t *testing.T) {
+			input := []byte(`{"7FE00010":{"vr":"` + code + `","Value":["AAECAw=="]}}`)
+			_, err := FromJSON(input)
+			if err == nil {
+				t.Fatalf("FromJSON() accepted Value for VR %s", code)
+			}
+			if want := "value not supported for VR " + code; !strings.Contains(err.Error(), want) {
+				t.Fatalf("FromJSON() error = %v, want substring %q", err, want)
+			}
+		})
+	}
+}
+
+// TestToJSON_NormalizesWordBinaryToLittleEndian verifies that word-based binary
+// VRs are canonicalized to little endian, while the opaque OB/UN byte strings
+// are emitted unchanged (PS3.5 6.2; PS3.18 F.2.7).
+func TestToJSON_NormalizesWordBinaryToLittleEndian(t *testing.T) {
+	raw := []byte{0x01, 0x02, 0x03, 0x04}
+	owTag := tag.New(0x7FE0, 0x0010)
+	obTag := tag.New(0x0009, 0x1001)
+	unTag := tag.New(0x0009, 0x1002)
+
+	ds := dataset.New()
+	elements := []element.Element{
+		element.NewOtherWordFromBuffer(owTag, buffer.NewMemory(raw)),
+		element.NewOtherByteFromBuffer(obTag, buffer.NewMemory(raw)),
+		element.NewUnknownFromBuffer(unTag, buffer.NewMemory(raw)),
+	}
+	for _, elem := range elements {
+		element.SetByteOrder(elem, binary.BigEndian)
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	jsonData, err := ToJSON(ds)
+	if err != nil {
+		t.Fatalf("ToJSON() error = %v", err)
+	}
+	var got map[string]map[string]any
+	if err := json.Unmarshal(jsonData, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	unchanged := base64.StdEncoding.EncodeToString(raw)
+	want := map[string]string{
+		"7FE00010": base64.StdEncoding.EncodeToString([]byte{0x02, 0x01, 0x04, 0x03}),
+		"00091001": unchanged,
+		"00091002": unchanged,
+	}
+	for key, encoded := range want {
+		if got[key]["InlineBinary"] != encoded {
+			t.Errorf("%s InlineBinary = %v, want %s", key, got[key]["InlineBinary"], encoded)
+		}
+	}
+}
+
+// TestToJSON_NonFiniteFloatsUseStringForm pins the documented deviation from
+// PS3.18 Table F.2.3-1: FL/FD are JSON Numbers there, but JSON numbers cannot
+// express NaN or Infinity, so the quoted strings are preserved instead.
+func TestToJSON_NonFiniteFloatsUseStringForm(t *testing.T) {
+	flTag := tag.New(0x0009, 0x1003)
+	fdTag := tag.New(0x0009, 0x1004)
+
+	ds := dataset.New()
+	if err := ds.Add(element.NewFloat(flTag, []float32{float32(math.NaN()), float32(math.Inf(1))})); err != nil {
+		t.Fatalf("add FL: %v", err)
+	}
+	if err := ds.Add(element.NewDouble(fdTag, []float64{math.Inf(-1)})); err != nil {
+		t.Fatalf("add FD: %v", err)
+	}
+
+	jsonData, err := ToJSON(ds)
+	if err != nil {
+		t.Fatalf("ToJSON() error = %v", err)
+	}
+	var got map[string]map[string]any
+	if err := json.Unmarshal(jsonData, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if !reflect.DeepEqual(got["00091003"]["Value"], []any{"NaN", "Infinity"}) {
+		t.Errorf("FL Value = %#v, want [NaN Infinity]", got["00091003"]["Value"])
+	}
+	if !reflect.DeepEqual(got["00091004"]["Value"], []any{"-Infinity"}) {
+		t.Errorf("FD Value = %#v, want [-Infinity]", got["00091004"]["Value"])
 	}
 }

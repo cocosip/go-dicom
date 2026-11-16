@@ -295,7 +295,7 @@ func underlyingString(elem Element) *String {
 
 func newCanonicalString(targetTag *tag.Tag, targetVR *vr.VR, values []string, encodings []encoding.Encoding) (*String, error) {
 	joined := strings.Join(values, "\\")
-	data, err := charset.EncodeString(joined, encodings)
+	data, err := charset.EncodeValueSet(joined, targetVR.Code(), encodings)
 	if err != nil {
 		return nil, err
 	}

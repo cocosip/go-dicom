@@ -500,8 +500,8 @@ func TestSecurityProfileOverrideActionKeepsPatientID(t *testing.T) {
 	if got, _ := ds.GetString(tag.SOPInstanceUID); got != sopInstanceUID {
 		t.Errorf("SOPInstanceUID = %q, want original value", got)
 	}
-	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != "NO" {
-		t.Errorf("PatientIdentityRemoved = %q, want NO", got)
+	if got, _ := ds.GetString(tag.PatientIdentityRemoved); got != "YES" {
+		t.Errorf("PatientIdentityRemoved = %q, want YES", got)
 	}
 	if got, _ := ds.GetString(tag.DeidentificationMethod); !strings.Contains(got, tag.PatientID.String()) {
 		t.Errorf("DeidentificationMethod = %q, want retained PatientID override", got)

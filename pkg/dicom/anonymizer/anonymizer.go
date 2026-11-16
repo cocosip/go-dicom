@@ -435,22 +435,19 @@ func (a *Anonymizer) anonymizeSequence(elem element.Element, hasAction bool, act
 }
 
 func addDeidentificationDeclaration(ds *dataset.Dataset, state *anonymizationState) error {
-	identityRemoved := "YES"
+	// PS3.15 E.1.1 item 6: Patient Identity Removed shall be set to YES for a
+	// de-identifier, whether or not an Option authorized retaining an attribute;
+	// what was retained is described by De-identification Method instead.
 	methods := []string{"go-dicom profile-based de-identification"}
-	if len(state.retained) > 0 {
-		identityRemoved = "NO"
-		retained := make([]string, 0, len(state.retained))
-		for _, retainedTag := range state.retained {
-			retained = append(retained, retainedTag.String())
-		}
-		sort.Strings(retained)
-		methods = make([]string, 0, len(retained)+1)
-		for _, retainedTag := range retained {
-			methods = append(methods, "go-dicom retained attribute: "+retainedTag)
-		}
-		methods = append(methods, "go-dicom profile-based de-identification")
+	retained := make([]string, 0, len(state.retained))
+	for _, retainedTag := range state.retained {
+		retained = append(retained, retainedTag.String())
 	}
-	if err := ds.AddOrUpdate(element.NewString(tag.PatientIdentityRemoved, vr.CS, []string{identityRemoved})); err != nil {
+	sort.Strings(retained)
+	for _, retainedTag := range retained {
+		methods = append(methods, "go-dicom retained attribute: "+retainedTag)
+	}
+	if err := ds.AddOrUpdate(element.NewString(tag.PatientIdentityRemoved, vr.CS, []string{"YES"})); err != nil {
 		return fmt.Errorf("failed to set Patient Identity Removed: %w", err)
 	}
 	if err := ds.AddOrUpdate(element.NewString(tag.DeidentificationMethod, vr.LO, methods)); err != nil {

@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **dicom/uid**: derive `ImplementationVersionName` from the module version instead of a fixed string.
 - **dicom/serialization**: JSON no longer panics on fragment sequences; deferred file and lazy read failures for binary, string, and numeric values are reported as errors instead of being serialized as empty values in both JSON and XML.
 - **network/association**: `HasTransferSyntax` skips nil proposed transfer syntaxes, fixing a panic in SCP-priority negotiation.
+- **dicom/charset**: decode the ISO 2022 IR 13 katakana designation DICOM actually specifies (`ESC ) I`, PS3.5 6.1.2.5.3) and emit it when the IR 13 code extension is used, instead of only accepting the non-standard `ESC ( I` and writing raw JIS X 0201 bytes.
+- **network/service**: DIMSE-N responses now carry the presentation context ID of the request they answer (PS3.7 9.3), so a response no longer lands on a different context when the same SOP Class was negotiated more than once.
+- **dicom/serialization**: `ToJSON` rejects `BulkDataURI` for VRs that PS3.18 F.2.2 does not allow to reference bulk data, matching what the reader already enforced.
+- **printing**: Smoothing Type is only sent when the effective Magnification Type is CUBIC (PS3.3 Table C.13-3).
+- **imaging**: an overlay without Number of Frames in Overlay or Image Frame Origin is applied to every frame of a multi-frame image (PS3.3 C.9.2.1.4) instead of only the first.
+- **imaging**: the softcopy Presentation LUT accepts 8- and 9-bit descriptors (PS3.3 C.11.6.1.1); the 10-16 limit now applies only to the hardcopy LUT (PS3.3 C.11.4.1).
 
 ## [v0.9.0] - 2026-11-09
 

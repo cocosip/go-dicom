@@ -393,3 +393,18 @@ func TestValidateSTCountsCharactersNotBytes(t *testing.T) {
 		t.Fatal("ValidateST(1025 runes) = nil, want error")
 	}
 }
+
+// TestValidateLOSHRejectValueSeparator verifies PS3.5 6.1.2.3: 05/12 is the
+// multi-value separator for SH and LO, so a single value cannot contain it.
+func TestValidateLOSHRejectValueSeparator(t *testing.T) {
+	for name, validate := range map[string]func(string) error{"SH": vr.ValidateSH, "LO": vr.ValidateLO} {
+		t.Run(name, func(t *testing.T) {
+			if err := validate(`A\B`); err == nil {
+				t.Fatalf("Validate%s() accepted a value containing the multi-value separator", name)
+			}
+			if err := validate("A B"); err != nil {
+				t.Fatalf("Validate%s() rejected a valid value: %v", name, err)
+			}
+		})
+	}
+}

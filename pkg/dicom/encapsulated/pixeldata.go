@@ -8,11 +8,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/io/buffer"
 )
 
 type offsetSource uint8
@@ -35,6 +38,9 @@ type PixelData struct {
 	element  element.Element
 	sequence *element.FragmentSequence
 	offsets  frameOffsets
+	// syntax is the Transfer Syntax of the dataset the fragments came from; it
+	// identifies the codestream when frame boundaries are implicit.
+	syntax *transfer.Syntax
 }
 
 // OpenDataset opens encapsulated Pixel Data without changing its original VR
@@ -62,7 +68,7 @@ func OpenDataset(ds *dataset.Dataset) (*PixelData, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PixelData{element: pixelDataElement, sequence: sequence, offsets: offsets}, nil
+	return &PixelData{element: pixelDataElement, sequence: sequence, offsets: offsets, syntax: ds.InternalTransferSyntax()}, nil
 }
 
 // ValueRepresentation returns the original Pixel Data VR.
@@ -135,7 +141,7 @@ func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
 	}
 
 	if p.offsets.source == noOffsets {
-		return rangesWithoutOffsets(len(fragments), frameCount)
+		return rangesWithoutOffsets(fragments, frameCount, p.syntax)
 	}
 	if frameCount < 1 {
 		frameCount = len(p.offsets.offsets)
@@ -209,18 +215,21 @@ func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
 	return ranges, nil
 }
 
-func rangesWithoutOffsets(fragmentCount, frameCount int) ([]fragmentRange, error) {
+func rangesWithoutOffsets(fragments []buffer.ByteBuffer, frameCount int, syntax *transfer.Syntax) ([]fragmentRange, error) {
 	if frameCount < 1 {
-		frameCount = fragmentCount
+		frameCount = len(fragments)
 	}
 	if frameCount == 1 {
-		return []fragmentRange{{start: 0, end: fragmentCount}}, nil
+		return []fragmentRange{{start: 0, end: len(fragments)}}, nil
 	}
-	if frameCount != fragmentCount {
+	if frameCount != len(fragments) {
+		if ranges, ok := rangesFromFrameEndMarkers(fragments, frameCount, syntax); ok {
+			return ranges, nil
+		}
 		return nil, fmt.Errorf(
 			"cannot determine frame boundaries without BOT or EOT: %d frames use %d fragments",
 			frameCount,
-			fragmentCount,
+			len(fragments),
 		)
 	}
 	ranges := make([]fragmentRange, frameCount)
@@ -228,6 +237,59 @@ func rangesWithoutOffsets(fragmentCount, frameCount int) ([]fragmentRange, error
 		ranges[i] = fragmentRange{start: i, end: i + 1}
 	}
 	return ranges, nil
+}
+
+// rangesFromFrameEndMarkers splits fragments into frames at the end-of-stream
+// marker of the compressed bit stream. PS3.5 A.4 allows an empty Basic Offset
+// Table, so a sender may leave the frame boundaries implicit; codestreams in
+// the JPEG transfer syntax family all terminate with FF D9, which cannot occur
+// unescaped inside them, so the marker identifies the frame boundaries.
+func rangesFromFrameEndMarkers(fragments []buffer.ByteBuffer, frameCount int, syntax *transfer.Syntax) ([]fragmentRange, bool) {
+	if !usesFrameEndMarker(syntax) {
+		return nil, false
+	}
+	ranges := make([]fragmentRange, 0, frameCount)
+	start := 0
+	previousEndedWithMarkerPrefix := false
+	for index, fragment := range fragments {
+		size := fragment.Size()
+		data := make([]byte, size)
+		if size == 0 || fragment.GetByteRange(0, size, data) != nil {
+			return nil, false
+		}
+		marker := previousEndedWithMarkerPrefix && data[0] == frameEndMarker[1]
+		for position := 0; position+1 < len(data); position++ {
+			if data[position] == frameEndMarker[0] && data[position+1] == frameEndMarker[1] {
+				marker = true
+			}
+		}
+		previousEndedWithMarkerPrefix = data[len(data)-1] == frameEndMarker[0]
+		if marker {
+			ranges = append(ranges, fragmentRange{start: start, end: index + 1})
+			start = index + 1
+		}
+	}
+	if len(ranges) != frameCount {
+		return nil, false
+	}
+	if start != len(fragments) {
+		// Trailing fragments after the last marker complete the last frame.
+		ranges[len(ranges)-1].end = len(fragments)
+	}
+	return ranges, true
+}
+
+// frameEndMarker is the end-of-stream marker of the JPEG and JPEG 2000
+// codestreams (JPEG EOI, JPEG 2000 EOC).
+var frameEndMarker = [2]byte{0xff, 0xd9}
+
+// usesFrameEndMarker reports whether the transfer syntax carries a codestream
+// that ends with FF D9.
+func usesFrameEndMarker(syntax *transfer.Syntax) bool {
+	if syntax == nil {
+		return false
+	}
+	return strings.HasPrefix(syntax.UID().UID(), "1.2.840.10008.1.2.4.")
 }
 
 func (p *PixelData) assembleFrame(frameRange fragmentRange, frameIndex int) ([]byte, error) {

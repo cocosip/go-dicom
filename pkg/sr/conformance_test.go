@@ -261,8 +261,13 @@ func TestNumericContentItemWithQualifier(t *testing.T) {
 		t.Fatal("Validate() accepted a NUM item without a measured value or qualifier")
 	}
 
-	if err := item.Dataset().AddOrUpdate(dataset.NewSequence(tag.MeasuredValueSequence)); err != nil {
-		t.Fatalf("add empty measured value sequence: %v", err)
+	// Measured Value Sequence is Type 2, so it is already present and empty.
+	sequence, err := item.Dataset().GetSequence(tag.MeasuredValueSequence)
+	if err != nil {
+		t.Fatalf("Measured Value Sequence missing: %v", err)
+	}
+	if sequence.Count() != 0 {
+		t.Fatalf("Measured Value Sequence items = %d, want 0", sequence.Count())
 	}
 	if err := item.Validate(); err == nil || !strings.Contains(err.Error(), "qualifier") {
 		t.Fatalf("Validate() error = %v, want a qualifier requirement", err)

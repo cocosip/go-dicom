@@ -45,6 +45,14 @@ type AAssociateAC struct {
 	UserInformation         *UserInformation
 	applicationContextCount int
 	userInformationCount    int
+
+	// CalledAETitleRaw and CallingAETitleRaw, when 16 bytes long, are written
+	// verbatim into the Reserved AE Title fields. PS3.8 Table 9-17 requires the
+	// value received in the A-ASSOCIATE-RQ, so an acceptor copies
+	// AAssociateRQ.CalledAETitleRaw/CallingAETitleRaw here; otherwise the
+	// trimmed titles are space-padded as usual.
+	CalledAETitleRaw  []byte
+	CallingAETitleRaw []byte
 }
 
 // PresentationContextAC represents an accepted presentation context in A-ASSOCIATE-AC.
@@ -188,10 +196,10 @@ func (a *AAssociateAC) Encode() (*RawPDU, error) {
 	buf.Write([]byte{0x00, 0x00})
 
 	// Called AE Title (16 bytes, space-padded)
-	buf.Write(writeString(a.CalledAETitle))
+	writeAETitleField(&buf, a.CalledAETitle, a.CalledAETitleRaw)
 
 	// Calling AE Title (16 bytes, space-padded)
-	buf.Write(writeString(a.CallingAETitle))
+	writeAETitleField(&buf, a.CallingAETitle, a.CallingAETitleRaw)
 
 	// Reserved (32 bytes)
 	buf.Write(make([]byte, 32))
@@ -259,7 +267,7 @@ func (a *AAssociateAC) encodeUserInformation() ([]byte, error) {
 
 	// Maximum Length Sub-item (always present)
 	maxLenData := make([]byte, 4)
-	binary.BigEndian.PutUint32(maxLenData, ui.MaximumLength)
+	binary.BigEndian.PutUint32(maxLenData, advertisedMaximumLength(ui.MaximumLength))
 	if err := writeItem(&buf, ItemTypeMaximumLength, maxLenData); err != nil {
 		return nil, fmt.Errorf("encoding maximum length: %w", err)
 	}

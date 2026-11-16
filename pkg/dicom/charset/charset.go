@@ -42,9 +42,76 @@ type Info struct {
 type dicomISO2022Encoding struct {
 	encoding.Encoding
 	designation []byte
+	// validate rejects byte sequences the DICOM character set does not define,
+	// so the encoder falls back instead of writing characters outside the
+	// repertoire.
+	validate func([]byte) error
 }
 
-type dicomIR13Encoding struct{ encoding.Encoding }
+// dicomIR13Encoding wraps JIS X 0201. designation is set only for the ISO 2022
+// extension, which must emit ESC 02/09 04/09 (G1 katakana) before the value
+// (PS3.5 6.1.2.5.3); the plain ISO_IR 13 charset carries no escape sequence.
+type dicomIR13Encoding struct {
+	encoding.Encoding
+	designation []byte
+}
+
+// validatedSingleByteEncoding applies the repertoire restriction of an 8-bit
+// code table that has no ISO 2022 designation.
+type validatedSingleByteEncoding struct {
+	encoding.Encoding
+	validate func([]byte) error
+}
+
+func (e *dicomISO2022Encoding) validateEncoded(data []byte) error {
+	if e.validate == nil {
+		return nil
+	}
+	return e.validate(data)
+}
+
+func (e *dicomIR13Encoding) validateEncoded(data []byte) error {
+	if !validIR13Bytes(data) {
+		return fmt.Errorf("ISO_IR 13 cannot encode characters outside JIS X 0201")
+	}
+	return nil
+}
+
+func (e *validatedSingleByteEncoding) validateEncoded(data []byte) error {
+	return e.validate(data)
+}
+
+// validTIS620Bytes rejects the positions that TIS 620-2533 leaves undefined:
+// charmap.Windows874 assigns graphic characters in 0x80-0x9F, which TIS 620
+// does not (PS3.3 C.12.1.1.3 maps ISO_IR 166 to TIS 620-2533).
+func validTIS620Bytes(data []byte) error {
+	for _, value := range data {
+		if value >= 0x80 && value <= 0x9f {
+			return fmt.Errorf("ISO_IR 166 (TIS 620-2533) has no character at byte %#02x", value)
+		}
+	}
+	return nil
+}
+
+// validGB2312Bytes rejects the GBK positions that GB 2312 does not define
+// (PS3.3 C.12.1.1.5 maps ISO 2022 IR 58 to GB 2312); GBK is used as the
+// underlying codec because it is code point backward compatible.
+func validGB2312Bytes(data []byte) error {
+	for index := 0; index < len(data); index++ {
+		lead := data[index]
+		if lead < 0x80 {
+			continue
+		}
+		if lead < 0xa1 || lead > 0xf7 {
+			return fmt.Errorf("ISO 2022 IR 58 (GB 2312) has no character at byte %#02x", lead)
+		}
+		index++
+		if index >= len(data) || data[index] < 0xa1 || data[index] > 0xfe {
+			return fmt.Errorf("ISO 2022 IR 58 (GB 2312) has no character with lead byte %#02x", lead)
+		}
+	}
+	return nil
+}
 
 const iso2022ASCII = "ascii"
 const iso2022IR13 = "ir13"
@@ -62,7 +129,7 @@ var knownCharsets = map[string]*Info{
 	"ISO_IR 126": {"Greek", charmap.ISO8859_7},
 	"ISO_IR 138": {"Hebrew", charmap.ISO8859_8},
 	"ISO_IR 148": {"Latin-5 (Turkish)", charmap.ISO8859_9},
-	"ISO_IR 166": {"Thai", charmap.Windows874},
+	"ISO_IR 166": {"Thai (TIS 620-2533)", &validatedSingleByteEncoding{Encoding: charmap.Windows874, validate: validTIS620Bytes}},
 
 	// Japanese
 	"ISO_IR 13": {"Japanese (JIS X 0201)", &dicomIR13Encoding{Encoding: japanese.ShiftJIS}},
@@ -88,12 +155,12 @@ var knownCharsets = map[string]*Info{
 	"ISO 2022 IR 126": {"Greek Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_7, designation: []byte{0x1b, '-', 'F'}}},
 	"ISO 2022 IR 138": {"Hebrew Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_8, designation: []byte{0x1b, '-', 'H'}}},
 	"ISO 2022 IR 148": {"Latin-5 Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_9, designation: []byte{0x1b, '-', 'M'}}},
-	"ISO 2022 IR 13":  {"Japanese Extended", &dicomIR13Encoding{Encoding: japanese.ShiftJIS}},
+	"ISO 2022 IR 13":  {"Japanese Extended", &dicomIR13Encoding{Encoding: japanese.ShiftJIS, designation: []byte{0x1b, ')', 'I'}}},
 	"ISO 2022 IR 87":  {"Japanese (ISO-2022-JP)", japanese.ISO2022JP},
 	"ISO 2022 IR 149": {"Korean Extended", &dicomISO2022Encoding{Encoding: korean.EUCKR, designation: []byte{0x1b, '$', ')', 'C'}}},
-	"ISO 2022 IR 58":  {"Chinese Simplified (GB2312)", &dicomISO2022Encoding{Encoding: simplifiedchinese.GBK, designation: []byte{0x1b, '$', ')', 'A'}}},
+	"ISO 2022 IR 58":  {"Chinese Simplified (GB 2312)", &dicomISO2022Encoding{Encoding: simplifiedchinese.GBK, designation: []byte{0x1b, '$', ')', 'A'}, validate: validGB2312Bytes}},
 	"ISO 2022 IR 159": {"Japanese (JIS X 0212)", unsupportedCharset{name: "ISO 2022 IR 159"}},
-	"ISO 2022 IR 166": {"Thai Extended", &dicomISO2022Encoding{Encoding: charmap.Windows874, designation: []byte{0x1b, '-', 'T'}}},
+	"ISO 2022 IR 166": {"Thai Extended (TIS 620-2533)", &dicomISO2022Encoding{Encoding: charmap.Windows874, designation: []byte{0x1b, '-', 'T'}, validate: validTIS620Bytes}},
 }
 
 // GetEncoding returns the encoding for a given DICOM Specific Character Set value.
@@ -212,6 +279,18 @@ func decodeString(data []byte, encodings []encoding.Encoding, strict bool) (stri
 			return string(decoded), nil
 		}
 		return string(data), nil
+	}
+	if ir13, isIR13 := enc.(*dicomIR13Encoding); isIR13 && len(ir13.designation) == 0 && !validIR13Bytes(data) {
+		// PS3.3 C.12.1.1.1 defines ISO_IR 13 as the single-byte JIS X 0201 code
+		// table; the Shift_JIS multi-byte bytes accepted here are not part of
+		// it. Decode them leniently, but report the deviation.
+		logging.Emit(context.Background(), logging.Record{
+			Level:     slog.LevelWarn,
+			Component: "dicom.charset",
+			Event:     "ir13_multibyte_bytes",
+			Message:   "ISO_IR 13 value contains bytes outside JIS X 0201; decoding leniently as Shift_JIS",
+			Attrs:     []slog.Attr{slog.Int("byte_count", len(data))},
+		})
 	}
 	decoded, err := enc.NewDecoder().Bytes(data)
 	if err != nil {
@@ -393,9 +472,14 @@ func parseISO2022Escape(data []byte) (kind string, sequence []byte, consumed int
 		case 'B', 'J', 'H':
 			return iso2022ASCII, nil, 3, true
 		case 'I':
-			// ESC ( I: JIS X 0201 katakana (half-width), part of ISO 2022 IR 13.
+			// Tolerated spelling of the IR 13 katakana designation.
 			return kindIR13Katakana, append([]byte(nil), data[:3]...), 3, true
 		}
+	}
+	if len(data) >= 3 && data[0] == 0x1b && data[1] == ')' && data[2] == 'I' {
+		// ESC ) I: JIS X 0201 katakana (half-width) in G1, the designation
+		// DICOM requires for ISO 2022 IR 13 (PS3.5 6.1.2.5.3).
+		return kindIR13Katakana, append([]byte(nil), data[:3]...), 3, true
 	}
 	if len(data) >= 3 && data[0] == 0x1b && (data[1] == '-' || data[1] == '.') {
 		if _, exists := iso2022SingleByte[data[2]]; exists {
@@ -420,26 +504,81 @@ func parseISO2022Escape(data []byte) (kind string, sequence []byte, consumed int
 
 // EncodeString encodes a string using the specified encodings.
 // It will try each encoding in order until one succeeds.
+//
+// The string is treated as a multi-valued text attribute: the value separator
+// (5CH) is encoded as a boundary between values, per PS3.5 6.1.2.5.3.
 func EncodeString(s string, encodings []encoding.Encoding) ([]byte, error) {
+	return EncodeValueSet(s, "", encodings)
+}
+
+// EncodeValueSet encodes the Value Field of one textual Data Element.
+//
+// PS3.5 6.1.2.5.3 requires the character set of Specific Character Set Value 1
+// (or the DICOM default repertoire) to be active at the beginning of every
+// value and name component, to be restored before the value separator (5CH)
+// and, for PN, before the name component and component group delimiters (5EH,
+// 3DH), and requires an explicit designation before the first use of an
+// extension character set in each of those. Every such segment is therefore
+// encoded on its own, with the first encoding that can represent it.
+//
+// vrCode is the two-letter VR code of the Data Element. ST, LT, UT and UR are
+// single-valued and may contain 05/12 as text, so they are never split.
+func EncodeValueSet(s, vrCode string, encodings []encoding.Encoding) ([]byte, error) {
 	if len(encodings) == 0 {
 		encodings = []encoding.Encoding{Default}
 	}
-
-	// Try the first encoding
-	encoded, err := encodeWithEncoding(s, encodings[0])
-	if err == nil {
-		return encoded, nil
+	delimiters := textValueDelimiters(vrCode)
+	if delimiters == "" {
+		return encodeSegment(s, encodings)
 	}
 
-	// If first encoding failed, try others
-	for _, enc := range encodings[1:] {
-		encoded, err := encodeWithEncoding(s, enc)
+	var result []byte
+	rest := s
+	for {
+		index := strings.IndexAny(rest, delimiters)
+		segment := rest
+		if index >= 0 {
+			segment = rest[:index]
+		}
+		encoded, err := encodeSegment(segment, encodings)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, encoded...)
+		if index < 0 {
+			return result, nil
+		}
+		result = append(result, rest[index])
+		rest = rest[index+1:]
+	}
+}
+
+// textValueDelimiters returns the characters that separate the segments of a
+// text attribute which must each start in the Value 1 character set.
+func textValueDelimiters(vrCode string) string {
+	switch vrCode {
+	case vrCodePersonName:
+		return "\\^="
+	case "ST", "LT", "UT", "UR":
+		return ""
+	default:
+		return "\\"
+	}
+}
+
+const vrCodePersonName = "PN"
+
+// encodeSegment encodes one value, name component or component group.
+func encodeSegment(segment string, encodings []encoding.Encoding) ([]byte, error) {
+	var lastErr error
+	for _, enc := range encodings {
+		encoded, err := encodeWithEncoding(segment, enc)
 		if err == nil {
 			return encoded, nil
 		}
+		lastErr = err
 	}
-
-	return nil, fmt.Errorf("could not encode string with given encodings")
+	return nil, fmt.Errorf("could not encode string with given encodings: %w", lastErr)
 }
 
 func encodeWithEncoding(s string, enc encoding.Encoding) ([]byte, error) {
@@ -456,16 +595,35 @@ func encodeWithEncoding(s string, enc encoding.Encoding) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := enc.(*dicomIR13Encoding); ok && !validIR13Bytes([]byte(encoded)) {
-		return nil, fmt.Errorf("ISO_IR 13 cannot encode characters outside JIS X 0201")
+	if checker, ok := enc.(interface{ validateEncoded([]byte) error }); ok {
+		if err := checker.validateEncoded([]byte(encoded)); err != nil {
+			return nil, err
+		}
 	}
-	if dicom, ok := enc.(*dicomISO2022Encoding); ok {
-		result := append([]byte(nil), dicom.designation...)
-		result = append(result, []byte(encoded)...)
-		result = append(result, 0x1b, '(', 'B')
-		return result, nil
+	designation, reset := designationAndReset(enc)
+	if len(designation) == 0 {
+		return []byte(encoded), nil
 	}
-	return []byte(encoded), nil
+	result := make([]byte, 0, len(designation)+len(encoded)+len(reset))
+	result = append(result, designation...)
+	result = append(result, encoded...)
+	return append(result, reset...), nil
+}
+
+// designationAndReset returns the ISO 2022 escape sequence that invokes the
+// character set and the sequence that restores the default repertoire.
+func designationAndReset(enc encoding.Encoding) ([]byte, []byte) {
+	switch typed := enc.(type) {
+	case *dicomIR13Encoding:
+		if len(typed.designation) == 0 {
+			return nil, nil
+		}
+		return typed.designation, []byte{0x1b, '(', 'B'}
+	case *dicomISO2022Encoding:
+		return typed.designation, []byte{0x1b, '(', 'B'}
+	default:
+		return nil, nil
+	}
 }
 
 func validIR13Bytes(data []byte) bool {

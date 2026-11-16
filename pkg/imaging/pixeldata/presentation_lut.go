@@ -73,8 +73,11 @@ func presentationSequenceLUT(ds *dataset.Dataset, mode LUTVRMode) (lut.LUT, erro
 	if err != nil {
 		return nil, fmt.Errorf("read Presentation LUT descriptor: %w", err)
 	}
-	if mode == LUTStandard && (descriptor.BitsPerEntry < 10 || descriptor.BitsPerEntry > 16) {
-		return nil, fmt.Errorf("read Presentation LUT descriptor: bits per entry must be 10 through 16, got %d", descriptor.BitsPerEntry)
+	// PS3.3 C.11.6.1.1 (softcopy): the third value shall be 8 through 16. The
+	// hardcopy Presentation LUT (PS3.3 C.11.4.1) is the stricter 10-16 case and
+	// is validated by pkg/printing.
+	if mode == LUTStandard && (descriptor.BitsPerEntry < 8 || descriptor.BitsPerEntry > 16) {
+		return nil, fmt.Errorf("read Presentation LUT descriptor: bits per entry must be 8 through 16, got %d", descriptor.BitsPerEntry)
 	}
 	var values []uint16
 	if mode == LUTStandard {

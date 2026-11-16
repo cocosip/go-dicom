@@ -456,6 +456,8 @@ func TestISO2022SingleByteRoundTrip(t *testing.T) {
 		{"ISO 2022 IR 138", "שלום", []byte{0x1b, '-', 'H'}},
 		{"ISO 2022 IR 148", "Şeker", []byte{0x1b, '-', 'M'}},
 		{"ISO 2022 IR 166", "สวัสดี", []byte{0x1b, '-', 'T'}},
+		// PS3.5 6.1.2.5.3 designates JIS X 0201 katakana in G1 (ESC ) I), not G0.
+		{"ISO 2022 IR 13", "ｱｲｳ", []byte{0x1b, ')', 'I'}},
 	}
 
 	for _, tt := range tests {

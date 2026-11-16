@@ -180,7 +180,7 @@ func TestAddPresentationContext(t *testing.T) {
 	}
 
 	// Add third context
-	if err := client.AddPresentationContext("1.2.840.10008.5.1.4.1.1.4", // MR Image Storage
+	if err := client.AddPresentationContext(testMRImageStorageUID, // MR Image Storage
 		"1.2.840.10008.1.2.1", // Explicit VR Little Endian
 	); err != nil {
 		t.Fatalf("AddPresentationContext() error = %v", err)
@@ -593,7 +593,7 @@ func TestHandleServiceClosedOnlyClearsCurrentSession(t *testing.T) {
 func TestAddStoragePresentationContextsRequestsSCPRole(t *testing.T) {
 	client := New()
 	if err := client.AddStoragePresentationContexts(
-		[]string{testCTImageStorageUID, "1.2.840.10008.5.1.4.1.1.4"},
+		[]string{testCTImageStorageUID, testMRImageStorageUID},
 		testExplicitVRLittleEndianUID,
 	); err != nil {
 		t.Fatalf("AddStoragePresentationContexts() error = %v", err)
@@ -698,5 +698,112 @@ func TestStoragePresentationContextSpecs(t *testing.T) {
 	explicit := StoragePresentationContextSpecsFor([]string{testCTImageStorageUID}, testImplicitVRLittleEndianUID)
 	if len(explicit) != 1 || explicit[0].AbstractSyntax != testCTImageStorageUID || !explicit[0].SCPRole {
 		t.Fatalf("StoragePresentationContextSpecsFor() = %#v", explicit)
+	}
+}
+
+// TestConnectAllPresentationContextsRejectedReleasesWithoutAbort verifies that an
+// A-ASSOCIATE-AC which rejects every proposed presentation context is not treated
+// as an invalid acceptance: PS3.8 Table 9-17 makes such an AC well-formed, so the
+// association is established, released normally, and the requestor reports
+// ErrNoAcceptedPresentationContext without sending any A-ABORT.
+func TestConnectAllPresentationContextsRejectedReleasesWithoutAbort(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	nextPDUType := make(chan byte, 1)
+	serverErr := make(chan error, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			serverErr <- acceptErr
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		request := &pdu.RawPDU{}
+		if readErr := request.Read(conn); readErr != nil {
+			serverErr <- readErr
+			return
+		}
+		rq := &pdu.AAssociateRQ{}
+		if decodeErr := rq.Decode(request); decodeErr != nil {
+			serverErr <- decodeErr
+			return
+		}
+
+		// Accept the association but reject every context with result 1..4
+		// (PS3.8 Table 9-18).
+		ac := pdu.NewAAssociateAC()
+		for i, pc := range rq.PresentationContexts {
+			ac.PresentationContexts = append(ac.PresentationContexts, pdu.PresentationContextAC{
+				ID:     pc.ID,
+				Result: byte(i + 1),
+			})
+		}
+		response, encodeErr := ac.Encode()
+		if encodeErr != nil {
+			serverErr <- encodeErr
+			return
+		}
+		if writeErr := response.Write(conn); writeErr != nil {
+			serverErr <- writeErr
+			return
+		}
+
+		// The requestor must release the established association instead of
+		// aborting it.
+		release := &pdu.RawPDU{}
+		if readErr := release.Read(conn); readErr != nil {
+			serverErr <- readErr
+			return
+		}
+		nextPDUType <- release.Type
+		if release.Type == pdu.TypeAReleaseRQ {
+			releaseRP, rpErr := (&pdu.AReleaseRP{}).Encode()
+			if rpErr != nil {
+				serverErr <- rpErr
+				return
+			}
+			_ = releaseRP.Write(conn)
+		}
+	}()
+
+	client := New(WithCallingAE("MY_SCU"), WithCalledAE("REMOTE_SCP"))
+	for _, abstractSyntax := range []string{
+		verificationSOPClassUID,
+		testCTImageStorageUID,
+		testMRImageStorageUID,
+		"1.2.840.10008.5.1.4.1.1.6.1",
+	} {
+		if err := client.AddPresentationContext(abstractSyntax, "1.2.840.10008.1.2"); err != nil {
+			t.Fatalf("AddPresentationContext(%s) error = %v", abstractSyntax, err)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	port := listener.Addr().(*net.TCPAddr).Port
+	err = client.Connect(ctx, "127.0.0.1", port)
+	if !errors.Is(err, ErrNoAcceptedPresentationContext) {
+		t.Fatalf("Connect() error = %v, want ErrNoAcceptedPresentationContext", err)
+	}
+	select {
+	case got := <-nextPDUType:
+		if got == pdu.TypeAAbort {
+			t.Fatal("client sent A-ABORT for a well-formed A-ASSOCIATE-AC")
+		}
+		if got != pdu.TypeAReleaseRQ {
+			t.Fatalf("client PDU after A-ASSOCIATE-AC = 0x%02X, want A-RELEASE-RQ (0x%02X)", got, pdu.TypeAReleaseRQ)
+		}
+	case serverErr := <-serverErr:
+		t.Fatalf("server side error = %v", serverErr)
+	case <-ctx.Done():
+		t.Fatal("client did not release the unusable association")
+	}
+	if client.IsConnected() {
+		t.Fatal("client still reports a connection after the released association")
 	}
 }

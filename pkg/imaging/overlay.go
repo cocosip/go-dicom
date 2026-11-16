@@ -74,6 +74,11 @@ type DicomOverlayData struct {
 	// ImageFrameOrigin is the frame origin for multi-frame images
 	ImageFrameOrigin int
 
+	// MultiFrameOverlay reports whether Number of Frames in Overlay (60xx,0015)
+	// or Image Frame Origin (60xx,0051) was present. When neither is present the
+	// overlay applies to every frame (PS3.3 C.9.2.1.4).
+	MultiFrameOverlay bool
+
 	// Data is the raw overlay data (bit-packed)
 	Data []byte
 }

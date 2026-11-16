@@ -32,6 +32,12 @@ type Association struct {
 	CallingAE string // Calling Application Entity Title
 	CalledAE  string // Called Application Entity Title
 
+	// calledAETitleRaw and callingAETitleRaw retain the 16-byte AE Title fields
+	// exactly as received, so an A-ASSOCIATE-AC can echo them unchanged
+	// (PS3.8 Table 9-17).
+	calledAETitleRaw  []byte
+	callingAETitleRaw []byte
+
 	// Remote endpoint (for informational purposes)
 	RemoteHost string
 	RemotePort int
@@ -828,6 +834,8 @@ func NewAsynchronousOperationsWindow(maxInvoked, maxPerformed uint16) *Asynchron
 func FromAAssociateRQ(rq *pdu.AAssociateRQ, registry *transfer.Registry) *Association {
 	assoc := NewAssociation(rq.CallingAETitle, rq.CalledAETitle)
 	assoc.ProtocolVersion = rq.ProtocolVersion
+	assoc.calledAETitleRaw = append([]byte(nil), rq.CalledAETitleRaw...)
+	assoc.callingAETitleRaw = append([]byte(nil), rq.CallingAETitleRaw...)
 
 	// Set user information
 	if rq.UserInformation != nil {
@@ -1199,6 +1207,8 @@ func ToAAssociateACWithMaxPDULength(assoc *Association, maxPDULength uint32) *pd
 	ac := pdu.NewAAssociateAC()
 	ac.CallingAETitle = assoc.CallingAE
 	ac.CalledAETitle = assoc.CalledAE
+	ac.CallingAETitleRaw = append([]byte(nil), assoc.callingAETitleRaw...)
+	ac.CalledAETitleRaw = append([]byte(nil), assoc.calledAETitleRaw...)
 	ac.ProtocolVersion = assoc.ProtocolVersion
 
 	implementationClassUID := assoc.LocalImplementationClassUID

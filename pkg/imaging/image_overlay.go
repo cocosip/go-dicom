@@ -50,9 +50,11 @@ func imageOverlays(ds *dataset.Dataset, pixelData *pixeldata.Data) []*DicomOverl
 			if count, err := strconv.Atoi(strings.TrimSpace(frames)); err == nil && count > 0 {
 				overlay.NumberOfFrames = count
 			}
+			overlay.MultiFrameOverlay = true
 		}
 		if origin, err := ds.GetUInt16(tag.New(group, 0x0051), 0); err == nil && origin > 0 {
 			overlay.ImageFrameOrigin = int(origin)
+			overlay.MultiFrameOverlay = true
 		}
 
 		if dataElement, ok := ds.Get(tag.New(group, 0x3000)); ok {
@@ -144,6 +146,11 @@ func (img *DicomImage) applyOverlays(source image.Image, frame int) image.Image 
 	draw.Draw(destination, destination.Bounds(), source, source.Bounds().Min, draw.Src)
 	for _, overlay := range overlays {
 		overlayFrame := frame + 1 - overlay.ImageFrameOrigin
+		if !overlay.MultiFrameOverlay {
+			// A single-frame overlay without Number of Frames in Overlay or
+			// Image Frame Origin applies to every frame (PS3.3 C.9.2.1.4).
+			overlayFrame = 0
+		}
 		if overlayFrame < 0 || overlayFrame >= overlay.NumberOfFrames {
 			continue
 		}

@@ -484,3 +484,32 @@ func TestApplyOverlaysBlendsAlpha(t *testing.T) {
 		})
 	}
 }
+
+// TestApplyOverlaysSingleFrameOverlayCoversEveryFrame verifies PS3.3 C.9.2.1.4:
+// an overlay without Number of Frames in Overlay or Image Frame Origin applies
+// to all frames of a multi-frame image.
+func TestApplyOverlaysSingleFrameOverlayCoversEveryFrame(t *testing.T) {
+	overlay := NewDicomOverlayData(0x6000)
+	overlay.Rows = 2
+	overlay.Columns = 2
+	overlay.OriginRow = 1
+	overlay.OriginColumn = 1
+	overlay.ImageFrameOrigin = 1
+	if err := overlay.PackData([]byte{255, 0, 0, 0}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+	source := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img := &DicomImage{
+		showOverlays: true,
+		overlays:     []*DicomOverlayData{overlay},
+		overlayColor: colorconv.NewColor32(255, 255, 0, 0),
+	}
+
+	want := color.NRGBA{R: 255, A: 255}
+	for _, frame := range []int{0, 1, 7} {
+		result := img.applyOverlays(source, frame)
+		if got := color.NRGBAModel.Convert(result.At(0, 0)).(color.NRGBA); got != want {
+			t.Errorf("frame %d marked pixel = %#v, want %#v", frame, got, want)
+		}
+	}
+}

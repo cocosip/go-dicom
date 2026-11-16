@@ -60,6 +60,11 @@ func (fb *FilmBox) Save(folder string) error {
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		return fmt.Errorf("printing: create FilmBox folder %q: %w", folder, err)
 	}
+	// PS3.3 Table C.13-2 makes the Referenced Film Session Sequence Type 1, so a
+	// Film Box cannot be stored without the session it belongs to.
+	if fb.sessionReference() == (SOPReference{}) {
+		return fmt.Errorf("printing: Film Box has no Film Session; attach it to a FilmSession before saving")
+	}
 
 	filmBoxDataset, err := fb.ToDataset()
 	if err != nil {
@@ -77,6 +82,12 @@ func (fb *FilmBox) Save(folder string) error {
 	for index, imageBox := range fb.BasicImageBoxes {
 		if imageBox == nil {
 			return fmt.Errorf("printing: save Image Box %d: nil ImageBox", index+1)
+		}
+		// The Preformatted Grayscale/Color Image Sequence item carries the Image
+		// Pixel Macro (PS3.3 Table C.13-4), so an incomplete image item must not
+		// reach the file.
+		if err := imageBox.ValidateImageAttributes(); err != nil {
+			return fmt.Errorf("printing: save Image Box %d: %w", index+1, err)
 		}
 		imageDataset, err := imageBox.ToDataset()
 		if err != nil {

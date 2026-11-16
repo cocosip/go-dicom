@@ -1234,6 +1234,11 @@ func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 	if isPrivateCreatorTag(t) {
 		return vr.LO, nil
 	}
+	// PS3.5 A.1: a Group Length element (gggg,0000) always has Value
+	// Representation UL, which the dictionary does not list per group.
+	if t.Element() == 0x0000 {
+		return vr.UL, nil
+	}
 	// PS3.5 A.1 fixes the VR of Pixel Data, Overlay Data and Waveform Data to
 	// OW in Implicit VR Little Endian. The dictionary lists OB first for these
 	// elements, so taking its first VR would misreport them as OB.

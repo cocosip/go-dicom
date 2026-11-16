@@ -70,7 +70,14 @@ func (r *jsonReader) readDataset(data []byte) (*dataset.Dataset, error) {
 	}
 
 	if err := ds.EnsureUTF8CharacterSet(); err != nil {
-		return nil, fmt.Errorf("set Specific Character Set: %w", err)
+		// Text values in the JSON model are Unicode (PS3.18 F.2.3), and the reader
+		// stores them as ASCII or UTF-8 bytes. A Specific Character Set the
+		// document declared therefore cannot describe them, so replace the
+		// declaration instead of reinterpreting the values.
+		ds.Remove(tag.SpecificCharacterSet)
+		if err := ds.EnsureUTF8CharacterSet(); err != nil {
+			return nil, fmt.Errorf("set Specific Character Set: %w", err)
+		}
 	}
 
 	if r.config.autoValidate {
@@ -152,6 +159,12 @@ func (r *jsonReader) readElement(t tag.Tag, data json.RawMessage) (element.Eleme
 func (r *jsonReader) readValue(t *tag.Tag, vrObj *vr.VR, data json.RawMessage) (element.Element, error) {
 	vrCode := vrObj.Code()
 
+	// PS3.18 F.2.2 allows "Value" only for VRs other than OB, OD, OF, OL, OV,
+	// OW and UN; those binary VRs shall use InlineBinary or BulkDataURI.
+	if binaryValueVR(vrCode) {
+		return nil, fmt.Errorf("value not supported for VR %s: use InlineBinary or BulkDataURI", vrCode)
+	}
+
 	switch vrCode {
 	case vr.CodeSQ:
 		return r.readSequence(t, data)
@@ -180,6 +193,17 @@ func (r *jsonReader) readValue(t *tag.Tag, vrObj *vr.VR, data json.RawMessage) (
 	default:
 		// String types
 		return r.readStringArray(t, vrObj, data)
+	}
+}
+
+// binaryValueVR lists the VRs whose Value Field is binary and that therefore
+// cannot be encoded in a JSON "Value" array (PS3.18 F.2.2).
+func binaryValueVR(code string) bool {
+	switch code {
+	case vr.CodeOB, vr.CodeOD, vr.CodeOF, vr.CodeOL, vr.CodeOV, vr.CodeOW, vr.CodeUN:
+		return true
+	default:
+		return false
 	}
 }
 

@@ -64,8 +64,15 @@ func NewContentItemText(code *CodeItem, relationship Relationship, text string) 
 	return &ContentItem{dataset: ds}, nil
 }
 
-// NewContentItemCode creates a code content item
+// NewContentItemCode creates a code content item.
+//
+// Concept Code Sequence (0040,A168) is Type 1 for a CODE Content Item
+// (PS3.3 Table C.18.2-1), so a nil value is rejected instead of producing an
+// item without a value.
 func NewContentItemCode(code *CodeItem, relationship Relationship, value *CodeItem) (*ContentItem, error) {
+	if value == nil || value.Dataset() == nil {
+		return nil, NewError("code value is nil: Concept Code Sequence is Type 1 for a CODE content item")
+	}
 	ds := dataset.New()
 
 	// Set concept name code sequence
@@ -80,15 +87,19 @@ func NewContentItemCode(code *CodeItem, relationship Relationship, value *CodeIt
 	_ = ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
 
 	// Set concept code sequence (0040,A168) VR=SQ
-	if value != nil {
-		seq := dataset.NewSequenceWithItems(tag.ConceptCodeSequence, []*dataset.Dataset{value.Dataset()})
-		_ = ds.AddOrUpdate(seq)
-	}
+	seq := dataset.NewSequenceWithItems(tag.ConceptCodeSequence, []*dataset.Dataset{value.Dataset()})
+	_ = ds.AddOrUpdate(seq)
 
 	return &ContentItem{dataset: ds}, nil
 }
 
-// NewContentItemNumeric creates a numeric content item
+// NewContentItemNumeric creates a numeric content item.
+//
+// Measured Value Sequence (0040,A300) is Type 2 for a NUM Content Item
+// (PS3.3 Table C.18.1-1): it is always emitted. A nil value yields an empty
+// sequence, the legal "no value" form; the item only validates once a Numeric
+// Value Qualifier Code Sequence explains the missing value (see
+// SetNumericQualifier).
 func NewContentItemNumeric(code *CodeItem, relationship Relationship, value *MeasuredValue) (*ContentItem, error) {
 	ds := dataset.New()
 
@@ -104,10 +115,11 @@ func NewContentItemNumeric(code *CodeItem, relationship Relationship, value *Mea
 	_ = ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(relationship)}))
 
 	// Set measured value sequence (0040,A300) VR=SQ
-	if value != nil {
-		seq := dataset.NewSequenceWithItems(tag.MeasuredValueSequence, []*dataset.Dataset{value.Dataset()})
-		_ = ds.AddOrUpdate(seq)
+	measured := dataset.NewSequence(tag.MeasuredValueSequence)
+	if value != nil && value.Dataset() != nil {
+		measured = dataset.NewSequenceWithItems(tag.MeasuredValueSequence, []*dataset.Dataset{value.Dataset()})
 	}
+	_ = ds.AddOrUpdate(measured)
 
 	return &ContentItem{dataset: ds}, nil
 }

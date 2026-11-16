@@ -60,8 +60,13 @@ func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.E
 	// Join values with backslash separator
 	joined := strings.Join(values, "\\")
 
-	// Encode to bytes
-	encoded, err := charset.EncodeString(joined, []encoding.Encoding{enc})
+	// Encode to bytes. PS3.5 6.1.2.5.3 keeps the Value 1 character set active
+	// around the value and name component delimiters, so the encoder needs the VR.
+	vrCode := ""
+	if v != nil {
+		vrCode = v.Code()
+	}
+	encoded, err := charset.EncodeValueSet(joined, vrCode, []encoding.Encoding{enc})
 	var data []byte
 	var encodeErr error
 	if err != nil {

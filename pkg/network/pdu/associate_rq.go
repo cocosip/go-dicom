@@ -47,6 +47,13 @@ type AAssociateRQ struct {
 	UserInformation         *UserInformation        // User information
 	applicationContextCount int
 	userInformationCount    int
+
+	// CalledAETitleRaw and CallingAETitleRaw hold the 16-byte AE Title fields
+	// exactly as received. PS3.8 Table 9-17 makes the same fields Reserved in
+	// A-ASSOCIATE-AC and requires the received value there, so Decode keeps the
+	// raw field apart from the trimmed accessors used by association logic.
+	CalledAETitleRaw  []byte
+	CallingAETitleRaw []byte
 }
 
 // DecodeWarningCode identifies a forward-compatible association decode warning.
@@ -305,7 +312,7 @@ func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) e
 
 	// Maximum Length Sub-item
 	maxLenData := make([]byte, 4)
-	binary.BigEndian.PutUint32(maxLenData, ui.MaximumLength)
+	binary.BigEndian.PutUint32(maxLenData, advertisedMaximumLength(ui.MaximumLength))
 	if err := writeItem(&buf, ItemTypeMaximumLength, maxLenData); err != nil {
 		return fmt.Errorf("writing maximum length: %w", err)
 	}
@@ -449,9 +456,11 @@ func (a *AAssociateRQ) decode(pdu *RawPDU, handler DecodeWarningHandler) error {
 
 	// Called AE Title (bytes 4-19)
 	a.CalledAETitle = trimAETitleSpaces(string(fixedFields[4:20]))
+	a.CalledAETitleRaw = append([]byte(nil), fixedFields[4:20]...)
 
 	// Calling AE Title (bytes 20-35)
 	a.CallingAETitle = trimAETitleSpaces(string(fixedFields[20:36]))
+	a.CallingAETitleRaw = append([]byte(nil), fixedFields[20:36]...)
 
 	// Reserved (bytes 36-67) - ignored
 

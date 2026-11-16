@@ -148,6 +148,52 @@ func TestSwapPixelDataBytesReversesThirtyTwoBitSamples(t *testing.T) {
 	}
 }
 
+// TestSwapPixelDataBytesSwapsWordsRegardlessOfBitDepth verifies PS3.5 6.2: OW is
+// a stream of 16-bit words even when the samples inside them are 8-bit.
+func TestSwapPixelDataBytesSwapsWordsRegardlessOfBitDepth(t *testing.T) {
+	info := grayscaleSampleInfo(8, 8, 7, pixel.UnsignedPixels)
+	info.VRCode = "OW"
+	got := swapPixelDataBytes([]byte{0x01, 0x02, 0x03, 0x04}, &info)
+	want := []byte{0x02, 0x01, 0x04, 0x03}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("swapPixelDataBytes() = %x, want %x", got, want)
+	}
+}
+
+// TestSwapPixelDataBytesLeavesOBUnchanged verifies PS3.5 6.2: OB has no word
+// structure, so its bytes are transferred unchanged.
+func TestSwapPixelDataBytesLeavesOBUnchanged(t *testing.T) {
+	info := grayscaleSampleInfo(16, 16, 15, pixel.UnsignedPixels)
+	info.VRCode = "OB"
+	data := []byte{0x01, 0x02, 0x03, 0x04}
+	if got := swapPixelDataBytes(data, &info); !bytes.Equal(got, data) {
+		t.Fatalf("swapPixelDataBytes() = %x, want the unchanged OB bytes %x", got, data)
+	}
+}
+
+// TestNewFromBytesNormalizesEightBitOWBigEndian verifies that an 8-bit sample
+// stream stored in OW under a big endian transfer syntax ends up in sample
+// order, not in file word order.
+func TestNewFromBytesNormalizesEightBitOWBigEndian(t *testing.T) {
+	info := grayscaleSampleInfo(8, 8, 7, pixel.UnsignedPixels)
+	info.VRCode = "OW"
+	info.Width, info.Height = 4, 1
+	info.TransferSyntaxUID = transfer.ExplicitVRBigEndian.UID().UID()
+
+	pixels, err := NewFromBytes(&info, []byte{0x02, 0x01, 0x04, 0x03})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	want := []byte{0x01, 0x02, 0x03, 0x04}
+	got, err := pixels.Frame(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("Frame(0) error = %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("Frame(0) = %x, want %x", got, want)
+	}
+}
+
 func TestDataSampleSupportsInterleavedAndPlanarSamples(t *testing.T) {
 	for _, test := range []struct {
 		name   string

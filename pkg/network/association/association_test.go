@@ -476,3 +476,51 @@ func TestPresentationContextString(t *testing.T) {
 		t.Errorf("String() = %q, want %q", got, want)
 	}
 }
+
+// TestToAAssociateACEchoesReceivedAETitleBytes verifies PS3.8 Table 9-17: the
+// Called/Calling AE Title fields of an A-ASSOCIATE-AC are Reserved and shall be
+// sent with the exact value received in the A-ASSOCIATE-RQ, padding spaces
+// included, while the association API keeps the trimmed titles.
+func TestToAAssociateACEchoesReceivedAETitleBytes(t *testing.T) {
+	rq := pdu.NewAAssociateRQ()
+	rq.CalledAETitle = " CALLED_AE "
+	rq.CallingAETitle = "  CALLING_AE  "
+	rq.PresentationContexts = []pdu.PresentationContextRQ{{
+		ID:               1,
+		AbstractSyntax:   testStorageSOPClassUID,
+		TransferSyntaxes: []string{transfer.ImplicitVRLittleEndian.UID().UID()},
+	}}
+	rawRQ, err := rq.Encode()
+	if err != nil {
+		t.Fatalf("AAssociateRQ.Encode() error = %v", err)
+	}
+	wantCalled := append([]byte(nil), rawRQ.Data[4:20]...)
+	wantCalling := append([]byte(nil), rawRQ.Data[20:36]...)
+
+	decodedRQ := &pdu.AAssociateRQ{}
+	if err := decodedRQ.Decode(rawRQ); err != nil {
+		t.Fatalf("AAssociateRQ.Decode() error = %v", err)
+	}
+	if decodedRQ.CalledAETitle != "CALLED_AE" || decodedRQ.CallingAETitle != "CALLING_AE" {
+		t.Fatalf("trimmed AE titles = %q/%q, want CALLED_AE/CALLING_AE",
+			decodedRQ.CalledAETitle, decodedRQ.CallingAETitle)
+	}
+
+	assoc := FromAAssociateRQ(decodedRQ, nil)
+	if len(assoc.PresentationContexts) != 1 {
+		t.Fatalf("presentation contexts = %d, want 1", len(assoc.PresentationContexts))
+	}
+	assoc.PresentationContexts[0].Accept(assoc.PresentationContexts[0].ProposedTransferSyntaxes[0])
+
+	ac := ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
+	rawAC, err := ac.Encode()
+	if err != nil {
+		t.Fatalf("AAssociateAC.Encode() error = %v", err)
+	}
+	if !bytes.Equal(rawAC.Data[4:20], wantCalled) {
+		t.Fatalf("A-ASSOCIATE-AC Called AE Title = % X, want % X", rawAC.Data[4:20], wantCalled)
+	}
+	if !bytes.Equal(rawAC.Data[20:36], wantCalling) {
+		t.Fatalf("A-ASSOCIATE-AC Calling AE Title = % X, want % X", rawAC.Data[20:36], wantCalling)
+	}
+}

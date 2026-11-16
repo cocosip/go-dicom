@@ -2912,3 +2912,88 @@ func TestFromDataset_TransferSyntax(t *testing.T) {
 		})
 	}
 }
+
+// TestPresentationLUTStandardAccepts8BitEntries verifies PS3.3 C.11.6.1.1: the
+// softcopy Presentation LUT descriptor may declare 8 through 16 bits per entry.
+func TestPresentationLUTStandardAccepts8BitEntries(t *testing.T) {
+	for _, bitsPerEntry := range []uint16{8, 9, 16} {
+		t.Run(fmt.Sprintf("bits_%d", bitsPerEntry), func(t *testing.T) {
+			ds := dataset.New()
+			lutItem := dataset.New()
+			_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{2, 0, bitsPerEntry}))
+			_ = lutItem.Add(element.NewOtherWord(tag.LUTData, []byte{0x00, 0x00, 0xFF, 0x00}))
+			_ = ds.Add(dataset.NewSequenceWithItems(tag.PresentationLUTSequence, []*dataset.Dataset{lutItem}))
+
+			if _, present, err := PresentationLUTWithVRMode(ds, LUTStandard); err != nil || !present {
+				t.Fatalf("PresentationLUTWithVRMode() = %v, %v; want a LUT for bitsPerEntry=%d", present, err, bitsPerEntry)
+			}
+		})
+	}
+}
+
+// TestFromDatasetIgnoresPixelPaddingForMultiSampleImages verifies PS3.3
+// C.7.5.1.1.2: Pixel Padding Value only applies to single-sample images.
+func TestFromDatasetIgnoresPixelPaddingForMultiSampleImages(t *testing.T) {
+	ds, err := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{3}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewUnsignedShort(tag.PlanarConfiguration, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.RGBPhotometric.Value}),
+		element.NewUnsignedShort(tag.PixelPaddingValue, []uint16{0}),
+		element.NewUnsignedShort(tag.PixelPaddingRangeLimit, []uint16{0}),
+		element.NewOtherByte(tag.PixelData, []byte{0, 0, 0}),
+	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
+
+	pd, err := FromDataset(ds)
+	if err != nil {
+		t.Fatalf("FromDataset() error = %v", err)
+	}
+	if pd.Info.PixelPaddingValue != nil || pd.Info.PixelPaddingRangeLimit != nil {
+		t.Fatalf("multi-sample image kept pixel padding: value=%v range=%v",
+			pd.Info.PixelPaddingValue, pd.Info.PixelPaddingRangeLimit)
+	}
+}
+
+// TestConvertPaletteToRGBClearsPixelPadding verifies that the padding indices of
+// a PALETTE COLOR image do not survive the conversion to RGB samples.
+func TestConvertPaletteToRGBClearsPixelPadding(t *testing.T) {
+	padding := int32(0)
+	info := Info{
+		Width: 2, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.PaletteColor,
+		TransferSyntaxUID:         transfer.ExplicitVRLittleEndian.UID().UID(),
+		PixelPaddingValue:         &padding,
+	}
+	pd, err := NewFromBytes(&info, []byte{0, 1})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	ds, err := dataset.NewWithElements([]element.Element{
+		element.NewUnsignedShort(tag.RedPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.GreenPaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewUnsignedShort(tag.BluePaletteColorLookupTableDescriptor, []uint16{2, 0, 8}),
+		element.NewOtherWord(tag.RedPaletteColorLookupTableData, []byte{0, 255}),
+		element.NewOtherWord(tag.GreenPaletteColorLookupTableData, []byte{0, 0}),
+		element.NewOtherWord(tag.BluePaletteColorLookupTableData, []byte{0, 0}),
+	})
+	if err != nil {
+		t.Fatalf("NewWithElements() error = %v", err)
+	}
+	if err := ConvertPaletteToRGB(ds, pd); err != nil {
+		t.Fatalf("ConvertPaletteToRGB() error = %v", err)
+	}
+	if pd.Info.PixelPaddingValue != nil || pd.Info.PixelPaddingRangeLimit != nil {
+		t.Fatalf("converted RGB image kept pixel padding: value=%v range=%v",
+			pd.Info.PixelPaddingValue, pd.Info.PixelPaddingRangeLimit)
+	}
+}

@@ -1073,3 +1073,28 @@ func TestCCancelKeepsInboundRegistrationUntilFinalResponse(t *testing.T) {
 		t.Fatal("final response did not release the inbound registration")
 	}
 }
+
+// TestNResponseUsesRequestPresentationContextID verifies that DIMSE-N responses
+// are sent on the presentation context their request arrived on (PS3.7 9.3);
+// without it the send path falls back to an abstract-syntax lookup that may
+// select a different context.
+func TestNResponseUsesRequestPresentationContextID(t *testing.T) {
+	service, ctx, cancel, sent := setupCapturingTestService(t)
+	defer func() { _ = service.Close() }()
+	defer cancel()
+
+	const presentationContextID byte = 7
+	req := dimse.NewNGetRequest("1.2.840.10008.5.1.1.1", "2.25.401", nil)
+	req.SetPresentationContextID(presentationContextID)
+
+	if err := service.handleNGetRequest(ctx, req, nil); err != nil {
+		t.Fatalf("handleNGetRequest() error = %v", err)
+	}
+	response, ok := (<-sent).(dimse.Response)
+	if !ok {
+		t.Fatal("sent message is not a DIMSE response")
+	}
+	if got := response.PresentationContextID(); got != presentationContextID {
+		t.Fatalf("response PresentationContextID = %d, want %d", got, presentationContextID)
+	}
+}
