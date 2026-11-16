@@ -15,12 +15,18 @@ concurrency:
 
 jobs:
   test:
-    name: Test
+    name: Test (${{ matrix.os }}, Go ${{ matrix.go }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        # 1.26.x is the minimum declared in go.mod; test it once so the floor
+        # cannot silently rot while CI only exercises the newest toolchain.
         os: [ubuntu-latest, windows-latest, macos-latest]
+        go: ['1.27']
+        include:
+          - os: ubuntu-latest
+            go: '1.26.x'
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -28,7 +34,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27'
+          go-version: ${{ matrix.go }}
           cache: true
 
       - name: Download dependencies
@@ -42,11 +48,11 @@ jobs:
         run: go test -v -race ${{ matrix.os == 'ubuntu-latest' && '-coverprofile=coverage.txt -covermode=atomic' || '' }} ./cmd/... ./examples/... ./pkg/... ./tools/...
 
       - name: Build
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27'
         run: go build -v ./...
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27'
         uses: codecov/codecov-action@v7
         with:
           files: ./coverage.txt
