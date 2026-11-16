@@ -21,7 +21,7 @@ func TestNewProfileFromReaderAcceptsGeneralReader(t *testing.T) {
 		t.Fatalf("NewProfileFromReader() error = %v", err)
 	}
 
-	action, found := profile.FindAction(mustParseTag("(0010,0010)"))
+	action, found := profile.FindAction(mustParseTag(testPatientNameTag))
 	if !found || action != ActionZ {
 		t.Fatalf("Patient Name action = %v, found = %v, want Z, true", action, found)
 	}
@@ -43,7 +43,7 @@ func TestLoadProfileFromFileMatchesReader(t *testing.T) {
 		t.Fatalf("NewProfileFromReader() error = %v", err)
 	}
 
-	for _, tagString := range []string{"(0010,0010)", "(0008,0018)"} {
+	for _, tagString := range []string{testPatientNameTag, testSOPInstanceUIDTag} {
 		tagValue := mustParseTag(tagString)
 		fileAction, fileFound := fromFile.FindAction(tagValue)
 		readerAction, readerFound := fromReader.FindAction(tagValue)
@@ -51,6 +51,63 @@ func TestLoadProfileFromFileMatchesReader(t *testing.T) {
 			t.Fatalf("rule %s differs: file = (%v, %v), reader = (%v, %v)",
 				tagString, fileAction, fileFound, readerAction, readerFound)
 		}
+	}
+}
+
+func TestDefaultProfileIndexesExactRowsAndKeepsWildcards(t *testing.T) {
+	profile := NewSecurityProfile(BasicProfile)
+
+	// Exact rows, including rows that used to be duplicated in the CSV, must
+	// resolve through the tag index to the same action as before.
+	for _, tt := range []struct {
+		tag    string
+		action SecurityProfileAction
+	}{
+		{"(0008,0050)", ActionZ},
+		{testSOPInstanceUIDTag, ActionU},
+		{"(0008,0080)", ActionD},
+		{testPatientNameTag, ActionZ},
+		{"(0018,1400)", ActionD},
+		{"(0040,A730)", ActionD},
+		{"(0008,1010)", ActionD},
+		{"(0038,0020)", ActionX},
+		{"(300A,00C3)", ActionX},
+		{"(4000,0010)", ActionX},
+	} {
+		action, found := profile.FindAction(mustParseTag(tt.tag))
+		if !found || action != tt.action {
+			t.Errorf("%s action = %v, found = %v, want %v, true", tt.tag, action, found, tt.action)
+		}
+	}
+
+	// Wildcard rows still match through the compiled regex list.
+	for _, tagString := range []string{"(0019,0010)", "(5000,0005)", "(6000,4000)", "(6000,3000)"} {
+		action, found := profile.FindAction(mustParseTag(tagString))
+		if !found || action != ActionX {
+			t.Errorf("wildcard %s action = %v, found = %v, want X, true", tagString, action, found)
+		}
+	}
+
+	// Exact rows are indexed, not compiled into the scanned regex list.
+	if len(profile.rules) >= len(profile.exactRules) {
+		t.Errorf("rules = %d regexes, exactRules = %d entries; exact rows are not indexed",
+			len(profile.rules), len(profile.exactRules))
+	}
+}
+
+func TestDefaultProfileHasNoDuplicateRows(t *testing.T) {
+	seen := make(map[string]int)
+	for index, line := range strings.Split(defaultProfileCSV, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		pattern := strings.TrimSpace(strings.SplitN(line, ";", 2)[0])
+		if first, ok := seen[pattern]; ok {
+			t.Errorf("default profile row %d repeats pattern %q from row %d", index+1, pattern, first)
+			continue
+		}
+		seen[pattern] = index + 1
 	}
 }
 
@@ -74,7 +131,7 @@ func TestNewProfileFromReaderAppliesOptionsLikeDefaultProfile(t *testing.T) {
 			}
 			fromDefault := NewSecurityProfile(tt.options)
 
-			tagValue := mustParseTag("(0008,0018)")
+			tagValue := mustParseTag(testSOPInstanceUIDTag)
 			readerAction, readerFound := fromReader.FindAction(tagValue)
 			defaultAction, defaultFound := fromDefault.FindAction(tagValue)
 			if !readerFound || readerAction != tt.want {
@@ -113,7 +170,7 @@ func TestNewProfileFromReaderMapsEveryOptionColumn(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewProfileFromReader() error = %v", err)
 			}
-			action, found := profile.FindAction(mustParseTag("(0010,0010)"))
+			action, found := profile.FindAction(mustParseTag(testPatientNameTag))
 			if !found || action != tt.want {
 				t.Fatalf("action = %v, found = %v, want %v, true", action, found, tt.want)
 			}
@@ -138,7 +195,7 @@ func TestNewProfileFromReaderUsesStructurePreservingCompositeAction(t *testing.T
 			if err != nil {
 				t.Fatalf("NewProfileFromReader() error = %v", err)
 			}
-			action, found := profile.FindAction(mustParseTag("(0010,0010)"))
+			action, found := profile.FindAction(mustParseTag(testPatientNameTag))
 			if !found || action != tt.want {
 				t.Fatalf("action = %v, found = %v, want %v, true", action, found, tt.want)
 			}
@@ -161,7 +218,7 @@ func TestNewRetainUIDsProfile(t *testing.T) {
 	}
 
 	// Check that SOP Instance UID is kept
-	action, found := profile.FindAction(mustParseTag("(0008,0018)"))
+	action, found := profile.FindAction(mustParseTag(testSOPInstanceUIDTag))
 	if !found {
 		t.Error("SOP Instance UID rule not found")
 	}
@@ -276,7 +333,7 @@ func TestNewMinimalProfile(t *testing.T) {
 	}
 
 	// Check that Patient's Name is zeroed
-	action, found := profile.FindAction(mustParseTag("(0010,0010)"))
+	action, found := profile.FindAction(mustParseTag(testPatientNameTag))
 	if !found {
 		t.Error("Patient's Name rule not found")
 	}
@@ -302,7 +359,7 @@ func TestNewResearchProfile(t *testing.T) {
 	}
 
 	// Check that Patient's Name is zeroed
-	action, found := profile.FindAction(mustParseTag("(0010,0010)"))
+	action, found := profile.FindAction(mustParseTag(testPatientNameTag))
 	if !found {
 		t.Error("Patient's Name rule not found")
 	}
@@ -320,7 +377,7 @@ func TestNewResearchProfile(t *testing.T) {
 	}
 
 	// Check that SOP Instance UID is kept
-	action, found = profile.FindAction(mustParseTag("(0008,0018)"))
+	action, found = profile.FindAction(mustParseTag(testSOPInstanceUIDTag))
 	if !found {
 		t.Error("SOP Instance UID rule not found")
 	}
@@ -356,12 +413,12 @@ func TestNewProfileFromReader(t *testing.T) {
 		tag      string
 		expected SecurityProfileAction
 	}{
-		{"(0010,0010)", ActionZ}, // Patient's Name
-		{"(0010,0020)", ActionZ}, // Patient ID
-		{"(0008,0018)", ActionK}, // SOP Instance UID
-		{"(0020,000D)", ActionK}, // Study Instance UID
-		{"(0010,0030)", ActionX}, // Patient's Birth Date
-		{"(0010,0040)", ActionC}, // Patient's Sex
+		{testPatientNameTag, ActionZ},    // Patient's Name
+		{"(0010,0020)", ActionZ},         // Patient ID
+		{testSOPInstanceUIDTag, ActionK}, // SOP Instance UID
+		{"(0020,000D)", ActionK},         // Study Instance UID
+		{"(0010,0030)", ActionX},         // Patient's Birth Date
+		{"(0010,0040)", ActionC},         // Patient's Sex
 	}
 
 	for _, tt := range tests {

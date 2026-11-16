@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
+
+	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
 // AdditionalSecurityProfiles provides additional pre-defined security profiles
@@ -30,12 +31,14 @@ func NewRetainInstitutionProfile() *SecurityProfile {
 	profile := NewSecurityProfile(BasicProfile | RetainInstitutionIdent)
 
 	// Override institution-related tags to keep them
-	profile.rules = append([]profileRule{
-		{mustCompile("(?i)" + `0008,0080`), ActionK}, // Institution Name
-		{mustCompile("(?i)" + `0008,0081`), ActionK}, // Institution Address
-		{mustCompile("(?i)" + `0008,0082`), ActionK}, // Institution Code Sequence
-		{mustCompile("(?i)" + `0008,1040`), ActionK}, // Institutional Department Name
-	}, profile.rules...)
+	for _, t := range []*tag.Tag{
+		tag.InstitutionName,
+		tag.InstitutionAddress,
+		tag.InstitutionCodeSequence,
+		tag.InstitutionalDepartmentName,
+	} {
+		profile.OverrideAction(t, ActionK)
+	}
 
 	return profile
 }
@@ -50,29 +53,31 @@ func NewRetainDatesProfile() *SecurityProfile {
 	profile := NewSecurityProfile(BasicProfile | RetainLongFullDates)
 
 	// Override date-related tags to keep them
-	profile.rules = append([]profileRule{
-		{mustCompile("(?i)" + `0008,0012`), ActionK}, // Instance Creation Date
-		{mustCompile("(?i)" + `0008,0013`), ActionK}, // Instance Creation Time
-		{mustCompile("(?i)" + `0008,0020`), ActionK}, // Study Date
-		{mustCompile("(?i)" + `0008,0021`), ActionK}, // Series Date
-		{mustCompile("(?i)" + `0008,0022`), ActionK}, // Acquisition Date
-		{mustCompile("(?i)" + `0008,0023`), ActionK}, // Content Date
-		{mustCompile("(?i)" + `0008,0030`), ActionK}, // Study Time
-		{mustCompile("(?i)" + `0008,0031`), ActionK}, // Series Time
-		{mustCompile("(?i)" + `0008,0032`), ActionK}, // Acquisition Time
-		{mustCompile("(?i)" + `0008,0033`), ActionK}, // Content Time
-		{mustCompile("(?i)" + `0010,0030`), ActionK}, // Patient's Birth Date
-		{mustCompile("(?i)" + `0010,0032`), ActionK}, // Patient's Birth Time
-		{mustCompile("(?i)" + `0010,0033`), ActionK}, // Patient's Birth Date in Alternative Calendar
-		{mustCompile("(?i)" + `0040,0002`), ActionK}, // Study Entry Date
-		{mustCompile("(?i)" + `0040,0003`), ActionK}, // Study Entry Time
-		{mustCompile("(?i)" + `0040,0004`), ActionK}, // Study End Date
-		{mustCompile("(?i)" + `0040,0005`), ActionK}, // Study End Time
-		{mustCompile("(?i)" + `0040,0244`), ActionK}, // Scheduled Procedure Step Start Date
-		{mustCompile("(?i)" + `0040,0245`), ActionK}, // Scheduled Procedure Step Start Time
-		{mustCompile("(?i)" + `0040,0250`), ActionK}, // Scheduled Procedure Step End Date
-		{mustCompile("(?i)" + `0040,0251`), ActionK}, // Scheduled Procedure Step End Time
-	}, profile.rules...)
+	for _, t := range []*tag.Tag{
+		tag.InstanceCreationDate,
+		tag.InstanceCreationTime,
+		tag.StudyDate,
+		tag.SeriesDate,
+		tag.AcquisitionDate,
+		tag.ContentDate,
+		tag.StudyTime,
+		tag.SeriesTime,
+		tag.AcquisitionTime,
+		tag.ContentTime,
+		tag.PatientBirthDate,
+		tag.PatientBirthTime,
+		tag.PatientBirthDateInAlternativeCalendar,
+		tag.New(0x0040, 0x0002),
+		tag.New(0x0040, 0x0003),
+		tag.New(0x0040, 0x0004),
+		tag.New(0x0040, 0x0005),
+		tag.ScheduledProcedureStepStartDate,
+		tag.ScheduledProcedureStepStartTime,
+		tag.ScheduledProcedureStepEndDate,
+		tag.ScheduledProcedureStepEndTime,
+	} {
+		profile.OverrideAction(t, ActionK)
+	}
 
 	return profile
 }
@@ -315,16 +320,6 @@ func NewResearchProfile() *SecurityProfile {
 	profile.loadDefaultProfile(BasicProfile | RetainUIDs | RetainLongFullDates)
 
 	return profile
-}
-
-// mustCompile compiles a regex pattern or panics if invalid.
-// Used for static profile rules that are known to be valid.
-func mustCompile(pattern string) *regexp.Regexp {
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		panic(err)
-	}
-	return re
 }
 
 // NewProfileFromReader creates a custom security profile from reader.

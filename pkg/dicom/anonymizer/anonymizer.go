@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -89,9 +90,13 @@ func (a SecurityProfileAction) String() string {
 
 // SecurityProfile represents a mapping from tag patterns to anonymization actions
 type SecurityProfile struct {
+	// rules holds the wildcard patterns only; exact tag rows are indexed in
+	// exactRules so a lookup does not scan every row of the default profile.
 	rules          []profileRule
+	exactRules     map[uint32]exactRule
 	exactOverrides map[uint32]SecurityProfileAction
 	options        SecurityProfileOptions
+	nextOrder      int
 	PatientName    string // Optional replacement patient name
 	PatientID      string // Optional replacement patient ID
 }
@@ -99,6 +104,12 @@ type SecurityProfile struct {
 type profileRule struct {
 	pattern *regexp.Regexp
 	action  SecurityProfileAction
+	order   int // insertion order, so an earlier rule still wins
+}
+
+type exactRule struct {
+	action SecurityProfileAction
+	order  int
 }
 
 // NewSecurityProfile creates a new security profile with the specified options
@@ -112,8 +123,21 @@ func NewSecurityProfile(options SecurityProfileOptions) *SecurityProfile {
 }
 
 // AddRule adds a custom rule to the profile
-// The pattern is case-insensitive
+// The pattern is case-insensitive. Exact tag patterns such as "0010,0010" are
+// stored in a tag index; only wildcard patterns are compiled into regexes.
 func (sp *SecurityProfile) AddRule(pattern string, action SecurityProfileAction) error {
+	order := sp.nextOrder
+	sp.nextOrder++
+	if key, ok := exactTagKey(pattern); ok {
+		if sp.exactRules == nil {
+			sp.exactRules = make(map[uint32]exactRule)
+		}
+		// Preserve insertion-order precedence: an earlier rule wins.
+		if _, exists := sp.exactRules[key]; !exists {
+			sp.exactRules[key] = exactRule{action: action, order: order}
+		}
+		return nil
+	}
 	re, err := regexp.Compile("(?i)" + pattern)
 	if err != nil {
 		return fmt.Errorf("invalid pattern %q: %w", pattern, err)
@@ -121,8 +145,27 @@ func (sp *SecurityProfile) AddRule(pattern string, action SecurityProfileAction)
 	sp.rules = append(sp.rules, profileRule{
 		pattern: re,
 		action:  action,
+		order:   order,
 	})
 	return nil
+}
+
+// exactTagKey reports whether pattern is a literal "GGGG,EEEE" tag row and
+// returns it as a tag key. Wildcard rows contain regex metacharacters and are
+// not literal tags.
+func exactTagKey(pattern string) (uint32, bool) {
+	if len(pattern) != 9 || pattern[4] != ',' {
+		return 0, false
+	}
+	group, err := strconv.ParseUint(pattern[:4], 16, 16)
+	if err != nil {
+		return 0, false
+	}
+	elem, err := strconv.ParseUint(pattern[5:], 16, 16)
+	if err != nil {
+		return 0, false
+	}
+	return uint32(group)<<16 | uint32(elem), true
 }
 
 // OverrideAction applies action to an exact tag before all profile rules.
@@ -134,10 +177,6 @@ func (sp *SecurityProfile) OverrideAction(t *tag.Tag, action SecurityProfileActi
 		sp.exactOverrides = make(map[uint32]SecurityProfileAction)
 	}
 	sp.exactOverrides[t.ToUint32()] = action
-	tagStr := t.String()
-	tagStr = tagStr[1 : len(tagStr)-1]
-	pattern := regexp.MustCompile("(?i)^" + regexp.QuoteMeta(tagStr) + "$")
-	sp.rules = append([]profileRule{{pattern: pattern, action: action}}, sp.rules...)
 }
 
 func (sp *SecurityProfile) exactOverrideAction(t *tag.Tag) (SecurityProfileAction, bool) {
@@ -148,18 +187,45 @@ func (sp *SecurityProfile) exactOverrideAction(t *tag.Tag) (SecurityProfileActio
 	return action, ok
 }
 
-// FindAction finds the action for a given tag
+// exactRuleAction returns the action of an exact-tag profile row.
+func (sp *SecurityProfile) exactRuleAction(t *tag.Tag) (SecurityProfileAction, bool) {
+	if sp == nil {
+		return 0, false
+	}
+	rule, ok := sp.exactRules[t.ToUint32()]
+	return rule.action, ok
+}
+
+// FindAction finds the action for a given tag. Overrides are checked first,
+// then the exact-tag index, and only wildcard rows require a regex match.
 func (sp *SecurityProfile) FindAction(t *tag.Tag) (SecurityProfileAction, bool) {
+	if sp == nil {
+		return 0, false
+	}
+	key := t.ToUint32()
+	if action, ok := sp.exactOverrides[key]; ok {
+		return action, true
+	}
+	exact, hasExact := sp.exactRules[key]
+	if len(sp.rules) == 0 {
+		return exact.action, hasExact
+	}
+
 	tagStr := t.String() // Format: (GGGG,EEEE)
 	// Remove parentheses for matching
 	tagStr = tagStr[1 : len(tagStr)-1] // "GGGG,EEEE"
 
 	for _, rule := range sp.rules {
 		if rule.pattern.MatchString(tagStr) {
+			// Rules keep insertion order, so an earlier exact row still wins
+			// over a wildcard row added later.
+			if hasExact && exact.order < rule.order {
+				return exact.action, true
+			}
 			return rule.action, true
 		}
 	}
-	return 0, false
+	return exact.action, hasExact
 }
 
 // Anonymizer performs anonymization actions on DICOM datasets
@@ -502,18 +568,26 @@ func (a *Anonymizer) applyAction(ds *dataset.Dataset, elem element.Element, acti
 
 // resolveAction combines the profile rule with the RetainSafePrivate option.
 func (a *Anonymizer) resolveAction(t *tag.Tag, elem element.Element) (SecurityProfileAction, bool) {
-	action, hasAction := a.Profile.FindAction(t)
+	// An explicit caller override is documented to precede all profile rules,
+	// including the private-tag handling below.
+	if action, ok := a.Profile.exactOverrideAction(t); ok {
+		return action, true
+	}
 	// PS3.15 E.3.10 Retain Safe Private: keep the Private Creator and private
 	// attributes whose VR is numeric/binary (cannot carry free-text identity).
 	// Textual private attributes are removed. A full 0008,0300/0008,0303 SAFE
 	// list is not available, so this is a conservative, documented restriction.
+	// An exact profile row is more specific than this VR-based rule and wins.
 	if a.Profile.options&RetainSafePrivate != 0 && isPrivateTag(t) {
+		if action, ok := a.Profile.exactRuleAction(t); ok {
+			return action, true
+		}
 		if isPrivateCreatorTag(t) || isSafePrivateVR(elem.ValueRepresentation()) {
 			return ActionK, true
 		}
 		return ActionX, true
 	}
-	return action, hasAction
+	return a.Profile.FindAction(t)
 }
 
 // isSafePrivateVR reports whether a private attribute's VR is one that cannot

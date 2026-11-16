@@ -758,7 +758,7 @@ func TestAnonymizerRetainSafePrivateKeepsCreatorRemovesData(t *testing.T) {
 	ds := dataset.New()
 	creatorTag := tag.New(0x0009, 0x0010)
 	dataTag := tag.New(0x0009, 0x1001)
-	if err := ds.Add(element.NewString(creatorTag, vr.LO, []string{"ACME"})); err != nil {
+	if err := ds.Add(element.NewString(creatorTag, vr.LO, []string{testPrivateCreatorName})); err != nil {
 		t.Fatal(err)
 	}
 	if err := ds.Add(element.NewString(dataTag, vr.LO, []string{"secret"})); err != nil {
@@ -768,11 +768,59 @@ func TestAnonymizerRetainSafePrivateKeepsCreatorRemovesData(t *testing.T) {
 	if err := anon.AnonymizeInPlace(ds); err != nil {
 		t.Fatalf("AnonymizeInPlace() error = %v", err)
 	}
-	if got, ok := ds.GetString(creatorTag); !ok || got != "ACME" {
-		t.Fatalf("Private Creator = %q,%v; want kept ACME", got, ok)
+	if got, ok := ds.GetString(creatorTag); !ok || got != testPrivateCreatorName {
+		t.Fatalf("Private Creator = %q,%v; want kept value", got, ok)
 	}
 	if ds.Contains(dataTag) {
 		t.Fatal("unsafe private data element was not removed")
+	}
+}
+
+func TestAnonymizerOverrideActionBeatsRetainSafePrivate(t *testing.T) {
+	ds := dataset.New()
+	creatorTag := tag.New(0x0009, 0x0010)
+	numericTag := tag.New(0x0009, 0x1001)
+	if err := ds.Add(element.NewString(creatorTag, vr.LO, []string{testPrivateCreatorName})); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewUnsignedShort(numericTag, []uint16{7})); err != nil {
+		t.Fatal(err)
+	}
+
+	profile := NewSecurityProfile(BasicProfile | RetainSafePrivate)
+	// A private numeric VR would be kept by Retain Safe Private, but the
+	// documented precedence puts an explicit caller override first.
+	profile.OverrideAction(numericTag, ActionX)
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	if ds.Contains(numericTag) {
+		t.Fatal("override ActionX did not remove the private numeric element")
+	}
+	if got, ok := ds.GetString(creatorTag); !ok || got != testPrivateCreatorName {
+		t.Fatalf("Private Creator = %q,%v; want kept value", got, ok)
+	}
+}
+
+func TestAnonymizerExactProfileRuleBeatsRetainSafePrivate(t *testing.T) {
+	ds := dataset.New()
+	dataTag := tag.New(0x0009, 0x1001)
+	if err := ds.Add(element.NewString(dataTag, vr.LO, []string{"secret"})); err != nil {
+		t.Fatal(err)
+	}
+
+	profile := &SecurityProfile{options: BasicProfile | RetainSafePrivate}
+	if err := profile.AddRule("0009,1001", ActionD); err != nil {
+		t.Fatalf("AddRule() error = %v", err)
+	}
+
+	if err := NewAnonymizer(profile).AnonymizeInPlace(ds); err != nil {
+		t.Fatalf("AnonymizeInPlace() error = %v", err)
+	}
+	// The exact profile row wins over the option's textual-private removal.
+	if got, ok := ds.GetString(dataTag); !ok || got != anonymizedString {
+		t.Fatalf("private data = %q,%v; want %q from ActionD", got, ok, anonymizedString)
 	}
 }
 
