@@ -269,23 +269,38 @@ func (fmi *FileMetaInformation) SetPrivateInformation(data []byte) error {
 	return fmi.dataset.AddOrUpdate(element.NewOtherByte(tag.PrivateInformation, data))
 }
 
-// Validate checks if the FileMetaInformation contains all required elements.
+// Validate checks the File Meta Information against the PS3.10 Type 1 rules the
+// writer enforces. Required elements must not only exist, but also carry a
+// non-empty value; an empty required value is rejected by the writer, so
+// validation must reject it too.
 func (fmi *FileMetaInformation) Validate() error {
-	// Check required elements
-	if _, ok := fmi.Version(); !ok {
-		return fmt.Errorf("missing required FileMetaInformationVersion")
+	version, ok := fmi.Version()
+	if !ok || len(version) == 0 {
+		return fmt.Errorf("missing required non-empty FileMetaInformationVersion")
 	}
-	if _, ok := fmi.MediaStorageSOPClassUID(); !ok {
-		return fmt.Errorf("missing required MediaStorageSOPClassUID")
+
+	requiredString := func(name string, get func() (string, bool)) error {
+		value, exists := get()
+		if !exists {
+			return fmt.Errorf("missing required %s", name)
+		}
+		if value == "" {
+			return fmt.Errorf("empty required %s", name)
+		}
+		return nil
 	}
-	if _, ok := fmi.MediaStorageSOPInstanceUID(); !ok {
-		return fmt.Errorf("missing required MediaStorageSOPInstanceUID")
-	}
-	if _, ok := fmi.TransferSyntaxUID(); !ok {
-		return fmt.Errorf("missing required TransferSyntaxUID")
-	}
-	if _, ok := fmi.ImplementationClassUID(); !ok {
-		return fmt.Errorf("missing required ImplementationClassUID")
+	for _, item := range []struct {
+		name string
+		get  func() (string, bool)
+	}{
+		{"MediaStorageSOPClassUID", fmi.MediaStorageSOPClassUID},
+		{"MediaStorageSOPInstanceUID", fmi.MediaStorageSOPInstanceUID},
+		{"TransferSyntaxUID", fmi.TransferSyntaxUID},
+		{"ImplementationClassUID", fmi.ImplementationClassUID},
+	} {
+		if err := requiredString(item.name, item.get); err != nil {
+			return err
+		}
 	}
 
 	// Validate that all tags are in group 0x0002

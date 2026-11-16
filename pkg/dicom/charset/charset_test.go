@@ -439,3 +439,44 @@ func TestISO2022IR159ReportsUnsupported(t *testing.T) {
 		t.Fatal("IR 159 decoder should report an explicit unsupported error")
 	}
 }
+
+func TestISO2022SingleByteRoundTrip(t *testing.T) {
+	tests := []struct {
+		charset string
+		text    string
+		escape  []byte
+	}{
+		{"ISO 2022 IR 100", "Grüße", []byte{0x1b, '-', 'A'}},
+		{"ISO 2022 IR 101", "Łódź", []byte{0x1b, '-', 'B'}},
+		{"ISO 2022 IR 109", "Ĝardeno", []byte{0x1b, '-', 'C'}},
+		{"ISO 2022 IR 110", "Ąžuolas", []byte{0x1b, '-', 'D'}},
+		{"ISO 2022 IR 144", "Привет", []byte{0x1b, '-', 'L'}},
+		{"ISO 2022 IR 127", "مرحبا", []byte{0x1b, '-', 'G'}},
+		{"ISO 2022 IR 126", "Ελλάδα", []byte{0x1b, '-', 'F'}},
+		{"ISO 2022 IR 138", "שלום", []byte{0x1b, '-', 'H'}},
+		{"ISO 2022 IR 148", "Şeker", []byte{0x1b, '-', 'M'}},
+		{"ISO 2022 IR 166", "สวัสดี", []byte{0x1b, '-', 'T'}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.charset, func(t *testing.T) {
+			// PS3.5 requires the default repertoire to be declared first and the
+			// extension second.
+			encodings := charset.GetEncodings([]string{"ISO 2022 IR 6", tt.charset})
+			encoded, err := charset.EncodeString(tt.text, encodings)
+			if err != nil {
+				t.Fatalf("EncodeString(%q) error = %v", tt.text, err)
+			}
+			if len(encoded) < 3 || !bytes.Equal(encoded[:3], tt.escape) {
+				t.Fatalf("EncodeString(%q) prefix = %x, want ISO 2022 designation %x", tt.text, encoded, tt.escape)
+			}
+			decoded, err := charset.DecodeString(encoded, encodings)
+			if err != nil {
+				t.Fatalf("DecodeString(%x) error = %v", encoded, err)
+			}
+			if decoded != tt.text {
+				t.Fatalf("DecodeString(EncodeString(%q)) = %q", tt.text, decoded)
+			}
+		})
+	}
+}

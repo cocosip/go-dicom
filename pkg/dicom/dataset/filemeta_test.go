@@ -198,6 +198,59 @@ func TestFileMetaInformationValidate(t *testing.T) {
 	}
 }
 
+func TestFileMetaInformationValidateRejectsEmptyRequiredValues(t *testing.T) {
+	newValidFMI := func() *FileMetaInformation {
+		fmi := NewDefaultFileMetaInformation()
+		_ = fmi.SetMediaStorageSOPClassUID(testSOPClassUID)
+		_ = fmi.SetMediaStorageSOPInstanceUID(testMediaStorageSOPInstanceUID)
+		_ = fmi.SetTransferSyntaxUID(transfer.ExplicitVRLittleEndian.UID().UID())
+		return fmi
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*FileMetaInformation)
+	}{
+		{"empty FileMetaInformationVersion", func(fmi *FileMetaInformation) {
+			_ = fmi.SetVersion(nil)
+		}},
+		{"empty MediaStorageSOPClassUID", func(fmi *FileMetaInformation) {
+			_ = fmi.SetMediaStorageSOPClassUID("")
+		}},
+		{"empty MediaStorageSOPInstanceUID", func(fmi *FileMetaInformation) {
+			_ = fmi.SetMediaStorageSOPInstanceUID("")
+		}},
+		{"empty TransferSyntaxUID", func(fmi *FileMetaInformation) {
+			_ = fmi.SetTransferSyntaxUID("")
+		}},
+		{"empty ImplementationClassUID", func(fmi *FileMetaInformation) {
+			_ = fmi.SetImplementationClassUID("")
+		}},
+		{"missing MediaStorageSOPClassUID", func(fmi *FileMetaInformation) {
+			fmi.dataset.Remove(tag.MediaStorageSOPClassUID)
+		}},
+		{"missing MediaStorageSOPInstanceUID", func(fmi *FileMetaInformation) {
+			fmi.dataset.Remove(tag.MediaStorageSOPInstanceUID)
+		}},
+		{"missing TransferSyntaxUID", func(fmi *FileMetaInformation) {
+			fmi.dataset.Remove(tag.TransferSyntaxUID)
+		}},
+		{"missing ImplementationClassUID", func(fmi *FileMetaInformation) {
+			fmi.dataset.Remove(tag.ImplementationClassUID)
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fmi := newValidFMI()
+			tt.mutate(fmi)
+			if err := fmi.Validate(); err == nil {
+				t.Fatal("Validate() accepted invalid FileMetaInformation")
+			}
+		})
+	}
+}
+
 func TestNewFileMetaInformationFromMainDataset(t *testing.T) {
 	// Create main dataset
 	ds := New()

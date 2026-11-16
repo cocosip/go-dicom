@@ -203,7 +203,28 @@ func (r *jsonReader) readStringArray(t *tag.Tag, vr *vr.VR, data json.RawMessage
 		values[i] = str
 	}
 
-	return element.NewString(t, vr, values), nil
+	return newTextElement(t, vr, values), nil
+}
+
+// newTextElement builds the concrete element type the parser and element
+// factory use for a text VR. Without this, the same DICOM value would be a
+// *element.String when deserialized from JSON/XML but a typed wrapper (for
+// example *element.Date for DA) when read from a file.
+func newTextElement(t *tag.Tag, valueRepresentation *vr.VR, values []string) element.Element {
+	switch valueRepresentation.Code() {
+	case vr.CodeDA:
+		return element.NewDate(t, values)
+	case vr.CodeTM:
+		return element.NewTime(t, values)
+	case vr.CodeDT:
+		return element.NewDateTime(t, values)
+	case vr.CodeDS:
+		return element.NewDecimalString(t, values)
+	case vr.CodeIS:
+		return element.NewIntegerString(t, values)
+	default:
+		return element.NewString(t, valueRepresentation, values)
+	}
 }
 
 // readNumericStringArray reads IS or DS arrays
@@ -235,7 +256,7 @@ func (r *jsonReader) readNumericStringArray(t *tag.Tag, vrObj *vr.VR, data json.
 		values[i] = str
 	}
 
-	return element.NewString(t, vrObj, values), nil
+	return newTextElement(t, vrObj, values), nil
 }
 
 // readFloat32Array reads a float32 array (FL)

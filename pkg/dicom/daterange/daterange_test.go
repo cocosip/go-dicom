@@ -19,6 +19,8 @@ const (
 	testRangeStartDate    = "20240101"
 	testRangeEndDate      = "20241231"
 	testInvalidRangeInput = "invalid"
+	testOpenEndedDateTime = "20240101080000-"
+	testTimeFraction      = "120000.5"
 )
 
 func TestDateRange_Parse(t *testing.T) {
@@ -286,7 +288,7 @@ func TestDateTimeRange_Parse(t *testing.T) {
 		},
 		{
 			name:  testOpenEndedName,
-			input: "20240101080000-",
+			input: testOpenEndedDateTime,
 		},
 		{
 			name:  testOpenStartedName,
@@ -317,7 +319,7 @@ func TestFindRangeDash(t *testing.T) {
 		want  int
 	}{
 		{"20240101080000-20241231170000", 14},
-		{"20240101080000-", 14},
+		{testOpenEndedDateTime, 14},
 		{"-20241231170000", 0},
 		{"20240115120000", -1},
 		{"", -1},
@@ -427,7 +429,7 @@ func TestParseTimeRangeFractionalSeconds(t *testing.T) {
 		input string
 		want  time.Duration
 	}{
-		{"120000.5", 500 * time.Millisecond},
+		{testTimeFraction, 500 * time.Millisecond},
 		{"120000.05", 50 * time.Millisecond},
 		{"120000.123", 123 * time.Millisecond},
 		{"120000.1234", 123400 * time.Microsecond},
@@ -457,5 +459,105 @@ func TestParseTimeRangeDoesNotTreatBoundsAsTimezone(t *testing.T) {
 	}
 	if r.Minimum.Hour() != 10 || r.Maximum.Hour() != 18 {
 		t.Fatalf("range = %v..%v, want 10:00..18:00", r.Minimum, r.Maximum)
+	}
+}
+
+func TestTimeRangeStringRoundTrip(t *testing.T) {
+	values := []string{
+		"120000",
+		testTimeFraction,
+		"120000.123456",
+		"080000.5-170000.25",
+		"080000-170000",
+	}
+	for _, input := range values {
+		t.Run(input, func(t *testing.T) {
+			r, err := ParseTimeRange(input)
+			if err != nil {
+				t.Fatalf("ParseTimeRange(%q) error = %v", input, err)
+			}
+			formatted := r.String()
+			again, err := ParseTimeRange(formatted)
+			if err != nil {
+				t.Fatalf("ParseTimeRange(%q) error = %v", formatted, err)
+			}
+			if !again.Minimum.Equal(r.Minimum) {
+				t.Errorf("minimum after round trip = %v, want %v (String() = %q)", again.Minimum, r.Minimum, formatted)
+			}
+			if !again.Maximum.Equal(r.Maximum) {
+				t.Errorf("maximum after round trip = %v, want %v (String() = %q)", again.Maximum, r.Maximum, formatted)
+			}
+		})
+	}
+}
+
+func TestDateTimeRangeStringRoundTrip(t *testing.T) {
+	values := []string{
+		"20240115120000",
+		"20240115120000.5",
+		"20240115120000.123456",
+		"20240115120000+0800",
+		"20240115120000.123456+0800",
+		"20240115120000.5-0500",
+		"20240101080000.5+0800-20241231170000-0500",
+		testOpenEndedDateTime,
+	}
+	for _, input := range values {
+		t.Run(input, func(t *testing.T) {
+			r, err := ParseDateTimeRange(input)
+			if err != nil {
+				t.Fatalf("ParseDateTimeRange(%q) error = %v", input, err)
+			}
+			formatted := r.String()
+			again, err := ParseDateTimeRange(formatted)
+			if err != nil {
+				t.Fatalf("ParseDateTimeRange(%q) error = %v", formatted, err)
+			}
+			if !again.Minimum.Equal(r.Minimum) {
+				t.Errorf("minimum after round trip = %v, want %v (String() = %q)", again.Minimum, r.Minimum, formatted)
+			}
+			if !again.Maximum.Equal(r.Maximum) {
+				t.Errorf("maximum after round trip = %v, want %v (String() = %q)", again.Maximum, r.Maximum, formatted)
+			}
+		})
+	}
+}
+
+func TestDateTimeRangeStringOmitsAbsentComponents(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"20240115120000", "20240115120000-20240115120000"},
+		{"20240115120000.5", "20240115120000.5-20240115120000.5"},
+		{"20240115120000.123456+0800", "20240115120000.123456+0800-20240115120000.123456+0800"},
+		{"20240115120000-0500", "20240115120000-0500-20240115120000-0500"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, err := ParseDateTimeRange(tt.input)
+			if err != nil {
+				t.Fatalf("ParseDateTimeRange(%q) error = %v", tt.input, err)
+			}
+			if got := r.String(); got != tt.want {
+				t.Errorf("String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTimeRangeStringEmitsFraction(t *testing.T) {
+	for input, want := range map[string]string{
+		"120000":         "120000-120000",
+		testTimeFraction: testTimeFraction + "-" + testTimeFraction,
+		"120000.12345":   "120000.12345-120000.12345",
+	} {
+		r, err := ParseTimeRange(input)
+		if err != nil {
+			t.Fatalf("ParseTimeRange(%q) error = %v", input, err)
+		}
+		if got := r.String(); got != want {
+			t.Errorf("ParseTimeRange(%q).String() = %q, want %q", input, got, want)
+		}
 	}
 }

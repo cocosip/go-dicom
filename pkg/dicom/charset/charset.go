@@ -21,10 +21,10 @@ import (
 	"golang.org/x/text/encoding/unicode"
 )
 
+// asciiEncoding marks the DICOM default repertoire so the encode/decode
+// helpers can enforce its 7-bit restriction; the embedded encoding.Encoding
+// supplies decoder and encoder construction unchanged.
 type asciiEncoding struct{ encoding.Encoding }
-
-func (a *asciiEncoding) NewDecoder() *encoding.Decoder { return a.Encoding.NewDecoder() }
-func (a *asciiEncoding) NewEncoder() *encoding.Encoder { return a.Encoding.NewEncoder() }
 
 // Default is the DICOM default repertoire (ISO-IR 6 / 7-bit ASCII).
 // The underlying x/text map is used for ASCII-compatible decoding, while the
@@ -79,21 +79,21 @@ var knownCharsets = map[string]*Info{
 
 	// ISO 2022 Extended character sets (simplified handling)
 	"ISO 2022 IR 6":   {"ASCII", Default},
-	"ISO 2022 IR 100": {"Latin-1 Extended", charmap.ISO8859_1},
-	"ISO 2022 IR 101": {"Latin-2 Extended", charmap.ISO8859_2},
-	"ISO 2022 IR 109": {"Latin-3 Extended", charmap.ISO8859_3},
-	"ISO 2022 IR 110": {"Latin-4 Extended", charmap.ISO8859_4},
-	"ISO 2022 IR 144": {"Cyrillic Extended", charmap.ISO8859_5},
-	"ISO 2022 IR 127": {"Arabic Extended", charmap.ISO8859_6},
-	"ISO 2022 IR 126": {"Greek Extended", charmap.ISO8859_7},
-	"ISO 2022 IR 138": {"Hebrew Extended", charmap.ISO8859_8},
-	"ISO 2022 IR 148": {"Latin-5 Extended", charmap.ISO8859_9},
+	"ISO 2022 IR 100": {"Latin-1 Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_1, designation: []byte{0x1b, '-', 'A'}}},
+	"ISO 2022 IR 101": {"Latin-2 Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_2, designation: []byte{0x1b, '-', 'B'}}},
+	"ISO 2022 IR 109": {"Latin-3 Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_3, designation: []byte{0x1b, '-', 'C'}}},
+	"ISO 2022 IR 110": {"Latin-4 Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_4, designation: []byte{0x1b, '-', 'D'}}},
+	"ISO 2022 IR 144": {"Cyrillic Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_5, designation: []byte{0x1b, '-', 'L'}}},
+	"ISO 2022 IR 127": {"Arabic Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_6, designation: []byte{0x1b, '-', 'G'}}},
+	"ISO 2022 IR 126": {"Greek Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_7, designation: []byte{0x1b, '-', 'F'}}},
+	"ISO 2022 IR 138": {"Hebrew Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_8, designation: []byte{0x1b, '-', 'H'}}},
+	"ISO 2022 IR 148": {"Latin-5 Extended", &dicomISO2022Encoding{Encoding: charmap.ISO8859_9, designation: []byte{0x1b, '-', 'M'}}},
 	"ISO 2022 IR 13":  {"Japanese Extended", &dicomIR13Encoding{Encoding: japanese.ShiftJIS}},
 	"ISO 2022 IR 87":  {"Japanese (ISO-2022-JP)", japanese.ISO2022JP},
 	"ISO 2022 IR 149": {"Korean Extended", &dicomISO2022Encoding{Encoding: korean.EUCKR, designation: []byte{0x1b, '$', ')', 'C'}}},
 	"ISO 2022 IR 58":  {"Chinese Simplified (GB2312)", &dicomISO2022Encoding{Encoding: simplifiedchinese.GBK, designation: []byte{0x1b, '$', ')', 'A'}}},
 	"ISO 2022 IR 159": {"Japanese (JIS X 0212)", unsupportedCharset{name: "ISO 2022 IR 159"}},
-	"ISO 2022 IR 166": {"Thai Extended", charmap.Windows874},
+	"ISO 2022 IR 166": {"Thai Extended", &dicomISO2022Encoding{Encoding: charmap.Windows874, designation: []byte{0x1b, '-', 'T'}}},
 }
 
 // GetEncoding returns the encoding for a given DICOM Specific Character Set value.
@@ -337,6 +337,12 @@ func iso2022EscapeDeclared(kind string, sequence []byte, encodings []encoding.En
 			if enc == singleEnc {
 				return true
 			}
+			// An ISO 2022 extension wraps the character-map encoding and carries
+			// the escape designation that produces the bytes being decoded.
+			if dicom, ok := enc.(*dicomISO2022Encoding); ok &&
+				dicom.Encoding == singleEnc && bytes.Equal(dicom.designation, sequence) {
+				return true
+			}
 		}
 		return false
 	}
@@ -363,17 +369,19 @@ func iso2022EscapeDeclared(kind string, sequence []byte, encodings []encoding.En
 }
 
 // iso2022SingleByte holds the G1/G2 single-byte designations used by ISO 2022
-// escape sequences of the form ESC - F / ESC . F (PS3.5 6.1.2.5.3).
+// escape sequences of the form ESC - F / ESC . F (PS3.5 6.1.2.5.3 and
+// Annex A). The designations are fixed by the standard; e.g. ESC - 47 is
+// ISO-IR 127 (Arabic), not ISO-IR 138 (Hebrew).
 var iso2022SingleByte = map[byte]encoding.Encoding{
 	'A': charmap.ISO8859_1,
 	'B': charmap.ISO8859_2,
 	'C': charmap.ISO8859_3,
 	'D': charmap.ISO8859_4,
 	'L': charmap.ISO8859_5,
-	'M': charmap.ISO8859_6,
+	'G': charmap.ISO8859_6,
 	'F': charmap.ISO8859_7,
-	'G': charmap.ISO8859_8,
-	'H': charmap.ISO8859_9,
+	'H': charmap.ISO8859_8,
+	'M': charmap.ISO8859_9,
 	'T': charmap.Windows874,
 }
 

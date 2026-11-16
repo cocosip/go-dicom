@@ -300,10 +300,10 @@ func (tr *TimeRange) String() string {
 	maxStr := ""
 
 	if !tr.Minimum.IsZero() {
-		minStr = tr.Minimum.Format("150405")
+		minStr = formatDicomTime(tr.Minimum)
 	}
 	if !tr.Maximum.IsZero() {
-		maxStr = tr.Maximum.Format("150405")
+		maxStr = formatDicomTime(tr.Maximum)
 	}
 
 	if minStr == "" && maxStr == "" {
@@ -311,6 +311,50 @@ func (tr *TimeRange) String() string {
 	}
 
 	return minStr + "-" + maxStr
+}
+
+// formatDicomTime formats a time as PS3.5 TM: HHMMSS[.FFFFFF]. The fractional
+// seconds component is emitted only when the value has one (up to six digits).
+func formatDicomTime(t time.Time) string {
+	return t.Format("150405") + formatDicomFraction(t)
+}
+
+// formatDicomFraction returns the fractional-seconds suffix for a time,
+// truncated to the six digits PS3.5 Table 6.2-1 permits. Trailing zeros are
+// dropped, so "120000.5" round-trips as "120000.5" and not "120000.500000".
+func formatDicomFraction(t time.Time) string {
+	nanoseconds := t.Nanosecond()
+	if nanoseconds == 0 {
+		return ""
+	}
+	microseconds := nanoseconds / 1000
+	if microseconds == 0 {
+		// PS3.5 permits at most six fractional digits, so a sub-microsecond
+		// value cannot be represented; omit it rather than emit a bare ".".
+		return ""
+	}
+	return "." + strings.TrimRight(fmt.Sprintf("%06d", microseconds), "0")
+}
+
+// formatDicomUTCOffset returns the &ZZXX suffix for a time, or an empty string
+// when the time is in UTC. PS3.5 Table 6.2-1 forbids the "-0000" offset, so
+// sub-minute offsets (which DICOM cannot express) are rounded to the nearest
+// minute instead.
+func formatDicomUTCOffset(t time.Time) string {
+	_, offset := t.Zone()
+	sign := byte('+')
+	if offset < 0 {
+		sign = '-'
+		offset = -offset
+	}
+	minutes := (offset + 30) / 60
+	if minutes == 0 {
+		return ""
+	}
+	if minutes > 14*60 {
+		minutes = 14 * 60
+	}
+	return fmt.Sprintf("%c%02d%02d", sign, minutes/60, minutes%60)
 }
 
 // Contains checks if the given time is within the range.
@@ -450,10 +494,10 @@ func (dtr *DateTimeRange) String() string {
 	maxStr := ""
 
 	if !dtr.Minimum.IsZero() {
-		minStr = dtr.Minimum.Format("20060102150405")
+		minStr = formatDicomDateTime(dtr.Minimum)
 	}
 	if !dtr.Maximum.IsZero() {
-		maxStr = dtr.Maximum.Format("20060102150405")
+		maxStr = formatDicomDateTime(dtr.Maximum)
 	}
 
 	if minStr == "" && maxStr == "" {
@@ -461,6 +505,14 @@ func (dtr *DateTimeRange) String() string {
 	}
 
 	return minStr + "-" + maxStr
+}
+
+// formatDicomDateTime formats a datetime as PS3.5 DT:
+// YYYYMMDDHHMMSS[.FFFFFF][&ZZXX]. The fractional seconds and UTC offset are
+// emitted only when the value has them, so a parse/format/parse cycle keeps the
+// same instant.
+func formatDicomDateTime(t time.Time) string {
+	return t.Format("20060102150405") + formatDicomFraction(t) + formatDicomUTCOffset(t)
 }
 
 // Contains checks if the given datetime is within the range.

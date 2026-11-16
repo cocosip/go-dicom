@@ -1127,7 +1127,7 @@ func (r *xmlReader) readStringElement(t *tag.Tag, vrCode *vr.VR, values []xmlVal
 		if len(strValues) == 0 {
 			strValues = append(strValues, "")
 		}
-		result = element.NewString(t, vrCode, strValues)
+		result = newTextElement(t, vrCode, strValues)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("parse XML values for VR %s: %w", vrCode.Code(), err)
