@@ -130,7 +130,7 @@ dicom_to_image.exe -input xray.dcm -window-center 2048 -window-width 4096
 
 ### Convert Multi-Frame DICOM to Series of Images
 
-```bash
+```cmd
 # Extract all frames from a multi-frame DICOM
 for /L %i in (0,1,10) do dicom_to_image.exe -input multiframe.dcm -frame %i -output frame_%i.png
 ```

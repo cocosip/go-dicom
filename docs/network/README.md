@@ -86,7 +86,7 @@ The DICOM network protocol is based on TCP/IP, using the Association mechanism f
 
 ### Test Coverage
 
-- **647 unit test functions** across the network packages, all passing
+- **Over 600 unit test functions** across the network packages, all passing
 - Includes normal, error, concurrency, and race-detector scenarios
 - Statement coverage per package is roughly 73–89%
   (`go test ./pkg/network/... -cover`); `client` and `service` are the lowest
@@ -1389,7 +1389,6 @@ go test -v ./pkg/network/dimse -run TestMessageIDGenerator
 type Association struct {
     CalledAE             string
     CallingAE            string
-    ApplicationContext   string
     PresentationContexts []*PresentationContext
     MaxPDULength         uint32 // peer's receive limit
     LocalMaxPDULength    uint32 // local receive limit, used when building an RQ
@@ -1421,10 +1420,11 @@ constructed identity cannot bypass the check.
 
 ```go
 type PresentationContext struct {
-    ID             byte
-    AbstractSyntax string
-    TransferSyntax string
-    Result         byte
+    ID                       byte
+    AbstractSyntax           string
+    ProposedTransferSyntaxes []*transfer.Syntax // proposed (A-ASSOCIATE-RQ)
+    AcceptedTransferSyntax   *transfer.Syntax   // accepted (A-ASSOCIATE-AC)
+    Result                   byte
 }
 
 // Find a Presentation Context

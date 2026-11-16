@@ -19,7 +19,7 @@ This document contains performance benchmark results for the go-dicom library. B
 - **CPU**: Intel(R) Core(TM) Ultra 9 185H
 - **OS**: Windows
 - **Architecture**: amd64
-- **Go Version**: go1.21+
+- **Go Version**: go1.26 (see `go.mod`)
 
 ## Dataset Operations
 

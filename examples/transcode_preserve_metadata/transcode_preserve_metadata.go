@@ -14,6 +14,7 @@ import (
 	"github.com/cocosip/go-dicom/examples/internal/examplepath"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/imaging/codec"
 )
@@ -59,10 +60,12 @@ func main() {
 	fmt.Printf("Original Dataset: %d elements (%d private)\n", origDatasetCount, origPrivateCount)
 	fmt.Printf("Original FileMetaInformation: %d elements\n", origFMICount)
 
-	// Step 2: Define output transfer syntax
-	// For this example, we'll just use the same transfer syntax
-	// In a real scenario, you'd transcode to a different format (e.g., JPEG)
-	outputTS := result.TransferSyntax
+	// Step 2: Define output transfer syntax. Native (uncompressed) transcoding
+	// only needs a byte-order/VR change, so pick the opposite little-endian VR.
+	outputTS := transfer.ImplicitVRLittleEndian
+	if result.TransferSyntax.UID().UID() == transfer.ImplicitVRLittleEndian.UID().UID() {
+		outputTS = transfer.ExplicitVRLittleEndian
+	}
 	fmt.Printf("\nOutput Transfer Syntax: %s\n", outputTS.UID())
 
 	// Step 3: Create transcoder and transcode with metadata preservation
@@ -151,5 +154,9 @@ func main() {
 	}
 
 	fmt.Println("\n=== Transcoding Complete ===")
-	fmt.Println("All metadata has been successfully preserved!")
+	if newDatasetCount == origDatasetCount && newPrivateCount == origPrivateCount && newFMICount == origFMICount {
+		fmt.Println("All metadata has been successfully preserved!")
+	} else {
+		fmt.Println("Metadata preservation failed; see ❌ items above.")
+	}
 }

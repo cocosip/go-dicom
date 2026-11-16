@@ -50,7 +50,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
 - [x] **Core DICOM data types**
   - [x] Tag (5356 standard tags + private tag support)
   - [x] VR (35 value representations with validation)
-  - [x] VM (15 value multiplicities)
+  - [x] VM (16 value multiplicities)
   - [x] Element (string, numeric, binary, date, person name types)
   - [x] Dataset & Sequence (full support with lazy loading)
   - [x] Dictionary (tag/keyword lookup with global default instance)
@@ -1041,7 +1041,7 @@ func main() {
         entry := dict.Default().Lookup(tag)
         tagName := "Unknown"
         if entry != nil {
-            tagName = entry.Name
+            tagName = entry.Name()
         }
 
         fmt.Printf("(%04X,%04X) %s [%s]: ",

@@ -30,7 +30,7 @@ type ByteBuffer interface {
 	// GetByteRange copies a subset of the data into the provided output buffer.
 	// offset is the starting position in the buffer (0-based).
 	// count is the number of bytes to copy.
-	// output must have capacity >= count.
+	// output must have length >= count.
 	GetByteRange(offset, count uint32, output []byte) error
 
 	// WriteTo writes the buffer contents to the provided writer.
