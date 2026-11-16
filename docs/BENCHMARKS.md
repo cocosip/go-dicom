@@ -1,6 +1,6 @@
 # Go-DICOM Performance Benchmarks
 
-Historical snapshot collected: 2025-01-10
+Historical snapshot (collection date not recorded)
 
 > The tables below are a historical measurement snapshot, not a current performance baseline. Benchmark results vary by commit, Go version, CPU, operating system, and DICOM workload. For a pull request, download the `benchmark-results` CI artifact; for local work, run the commands in [Running Benchmarks](#running-benchmarks).
 
@@ -111,12 +111,9 @@ This document contains performance benchmark results for the go-dicom library. B
 
 ## Imaging Operations
 
-| Benchmark | ns/op | B/op | allocs/op |
-|-----------|-------|------|-----------|
-| InterleavedToPlanar24 | ~varies | ~varies | ~varies |
-| YBRFullToRGB | ~varies | ~varies | ~varies |
-
-*(See `pkg/imaging/colorconv` and `pkg/io/buffer` for detailed imaging and buffer benchmarks)*
+Imaging benchmarks live in `pkg/imaging/colorconv` and `pkg/io/buffer`; run them
+with the commands in [Running Benchmarks](#running-benchmarks) instead of relying
+on this snapshot.
 
 ## Performance Summary
 
@@ -128,7 +125,7 @@ This document contains performance benchmark results for the go-dicom library. B
 5. **Buffer Pooling**: bytes.Buffer pool reduces allocations by 100% for temporary buffers
 6. **Large Buffer Pooling**: 5.7x performance improvement for ≥512KB allocations
 
-### Recent Optimizations (Stage 12.1)
+### Recent Optimizations
 1. **Writer Buffer Pooling**: Implemented sync.Pool for temporary bytes.Buffer instances
    - Reduced allocations by 2 per write operation
    - 100% allocation reduction for temporary buffers
@@ -169,10 +166,6 @@ To generate memory profile:
 go test -bench='.' -memprofile=mem.prof ./pkg/dicom/dataset
 go tool pprof mem.prof
 ```
-
-## Comparison with fo-dicom
-
-*(To be added: Performance comparison with the original C# fo-dicom library)*
 
 ## Notes
 

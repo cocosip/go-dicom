@@ -300,7 +300,7 @@ results, err := c.CFind(ctx, dimse.QueryRetrieveLevelStudy, query)
 
 // 4. Debug: print the query conditions
 for _, elem := range query.Elements() {
-    log.Printf("Query: %s = %v\n", elem.Tag(), elem.Value())
+    log.Printf("Query: %s = %s\n", elem.Tag(), elem.String())
 }
 ```
 
@@ -549,7 +549,7 @@ log.Printf("  Message ID:       %d\n", req.MessageID())
 // Print Dataset contents
 ds := req.DataDataset()
 for _, elem := range ds.Elements() {
-    log.Printf("  %s: %v\n", elem.Tag(), elem.Value())
+    log.Printf("  %s: %s\n", elem.Tag(), elem.String())
 }
 ```
 
@@ -633,7 +633,7 @@ For comparison testing:
 | 0xA700 | Out of resources | Insufficient server resources | Reduce concurrency or add server resources |
 | 0xA900 | Dataset does not match SOP Class | Dataset does not match the SOP Class | Check required fields |
 | 0xC000 | Cannot understand | Cannot understand the request | Check the request format |
-| 0xC001 | Unrecognized operation | Unsupported operation | Check the SOP Class |
+| 0x0211 | Unrecognized operation | Unsupported operation | Check the SOP Class |
 
 ---
 

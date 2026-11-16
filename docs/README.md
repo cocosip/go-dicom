@@ -36,7 +36,7 @@ Key packages keep a README with package-specific details:
 
 ## Examples
 
-Runnable examples live under [`examples/`](../examples/). Most example
+Runnable examples live under [`examples/`](../examples/). Some example
 directories include their own README.
 
 ## Other

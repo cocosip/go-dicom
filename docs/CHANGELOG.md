@@ -186,12 +186,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **dicom**: make dataset snapshots and transforms fully independent
 - centralize shared test fixtures and refresh CI lint action
 
-### Changed
-- **imaging**: add shared spatial foundations
-- **dicom**: centralize dataset walking across validation and writing
-- **dicom**: make dataset snapshots and transforms fully independent
-- centralize shared test fixtures and refresh CI lint action
-
 ### Documentation
 - **docs**: add fo-dicom capability gap analysis reference
 - **core**: add CORE-001 recursive validation design
@@ -226,9 +220,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **parser**: ignore zero trailing padding after datasets
 
 ## [v0.6.0] - 2026-07-22
-
-### Changed
-- **imaging**: remove built-in RLE codec support
 
 ### Changed
 - **imaging**: remove built-in RLE codec support
@@ -274,10 +265,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **network**: centralize PDU writes and tighten PDV fragmentation edge handling
 - extract shared string constants across tests and protocol helpers
 
-### Changed
-- **network**: centralize PDU writes and tighten PDV fragmentation edge handling
-- extract shared string constants across tests and protocol helpers
-
 ### Documentation
 - simplify agent guidance documentation
 
@@ -308,10 +295,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Performance
 - **imaging**: add lazy fragment loading for single-frame decode
-
-### Changed
-- rename swapPixelDataBytes and document lazy-load fallback
-- **imaging/codec**: consolidate StripTrailingPadding and fix framesFromFragments
 
 ### Changed
 - rename swapPixelDataBytes and document lazy-load fallback
@@ -358,11 +341,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **examples**: improve code quality in QR examples
 - **network**: inline createCCancelRequest and remove unused function
 
-### Changed
-- **parser**: improve DICOM format detection and parsing logic
-- **examples**: improve code quality in QR examples
-- **network**: inline createCCancelRequest and remove unused function
-
 ### Tests
 - **parser**: add benchmark tests for sequence parsing
 
@@ -377,9 +355,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **cstore_scp**: add AE title validation support
-
-### Changed
-- **examples**: add package documentation and improve code formatting
 
 ### Changed
 - **examples**: add package documentation and improve code formatting
@@ -405,9 +380,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - **dicom**: add compile-time interface checks for Element implementations
 
-### Changed
-- **dicom**: add compile-time interface checks for Element implementations
-
 ## [v0.1.6] - 2025-12-25
 
 ### Added
@@ -416,10 +388,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **imaging**: correct VR selection for encapsulated DICOM formats
-
-### Changed
-- **examples**: remove trailing newline from transcode example
-- **imaging**: rename types package to imagetypes and update VM documentation
 
 ### Changed
 - **examples**: remove trailing newline from transcode example
@@ -492,12 +460,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **imaging**: improve photometric interpretation constants and pixel data handling
 - **dicom**: implement dictif interface compliance for dictionary and tag packages
 - **codec**: update go-dicom-codec dependency and improve frame count parsing
-
-### Changed
-- **tag**: replace manual suffix removal with strings.TrimSuffix
-- **tests**: improve test structure and reduce duplication
-- **imaging**: move Color32 type to imaging/types package
-- **imaging**: move LUT interfaces and types to shared package
 
 ### Changed
 - **tag**: replace manual suffix removal with strings.TrimSuffix

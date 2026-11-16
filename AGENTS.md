@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 `go-dicom` is a Go module for DICOM parsing, writing, imaging, networking, and anonymization.
 
-- `pkg/` contains the library code by domain (`pkg/dicom`, `pkg/imaging`, `pkg/network`, `pkg/io`, `pkg/printing`, `pkg/sr`).
+- `pkg/` contains the library code by domain (`pkg/dicom`, `pkg/imaging`, `pkg/network`, `pkg/io`, `pkg/printing`, `pkg/sr`, `pkg/media`, `pkg/logging`).
 - `cmd/` contains CLI tools such as `dicominfo`, `dicomdump`, and `dicom2json`.
 - `examples/` holds runnable samples.
 - `test-data/` stores sample DICOM files used by tests and manual checks.

@@ -30,13 +30,8 @@ This guide is the single, consolidated reference for go-dicom's networking layer
   - [Server Examples](#server-examples)
 - [DIMSE Messages](#dimse-messages)
   - [Message Structure](#message-structure)
-  - [Automatic MessageID Management](#automatic-messageid-management)
-  - [Creating Request Messages](#creating-request-messages)
+  - [MessageID, Requests, Responses, and Priorities](#messageid-requests-responses-and-priorities)
   - [Outbound Validation](#outbound-validation)
-  - [Creating Response Messages](#creating-response-messages)
-  - [Checking Response Status](#checking-response-status)
-  - [Response Handling](#response-handling)
-  - [Priority, Move Originator, and Resetting the Counter](#priority-move-originator-and-resetting-the-counter)
 - [Association Management](#association-management)
 - [Advanced Features](#advanced-features)
   - [TLS Encrypted Connections](#tls-encrypted-connections)
@@ -491,6 +486,23 @@ err := c.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST_AE", identifier,
             remaining, completed, failed, warning)
         return true  // continue receiving progress updates
     })
+```
+
+**Partial retrieval is reported as a warning, not a success.** PS3.7 Annex C
+separates Success, Warning and Failure, so when the final C-MOVE/C-GET response
+is `0xB000` ("sub-operations complete, one or more failures") `CMove`/`CGet`
+return a `*client.StatusError` whose `Status.IsWarning()` is true, and the final
+sub-operation counts are delivered to the callback. A caller that accepts
+partial results classifies the outcome instead of ignoring it:
+
+```go
+err := c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier, onProgress)
+var statusErr *client.StatusError
+if errors.As(err, &statusErr) && statusErr.Status.IsWarning() {
+    // Partial success: some sub-operations failed; the counts came via onProgress.
+} else if err != nil {
+    return err
+}
 ```
 
 **C-GET (retrieve - Push mode):** C-GET sends images directly to this client over the same association. Both of the following must be satisfied, otherwise the SCP cannot send anything back and you only get 0xB000: (1) set a C-STORE handler to receive the images sent back; (2) before connecting, declare the SCP role for every Storage SOP Class that may be sent back (`AddStoragePresentationContexts` automatically requests the SCP role). See [C-GET Must Negotiate the Storage SCP Role First](#c-get-must-negotiate-the-storage-scp-role-first) for both session-style and queue-style forms.
@@ -1112,108 +1124,18 @@ from scratch): the encoder reserves the element, encodes once, and patches the
 length from the actual byte count. The value excludes the group-length element
 itself (PS3.7 7.1).
 
-### Automatic MessageID Management
+### MessageID, Requests, Responses, and Priorities
 
-In DICOM network communication, every request needs a unique MessageID. Managing MessageID manually is error-prone:
+Automatic MessageID management, request and response construction, status
+checking, response handling, priority, Move Originator, and resetting the
+MessageID counter are documented once in
+[`pkg/network/dimse/README.md`](../../pkg/network/dimse/README.md).
 
-```go
-// ❌ Not recommended: manual MessageID management
-msgID := 1
-req1 := dimse.NewCEchoRequest()
-_ = req1.SetMessageID(uint16(msgID))
-msgID++
-req2, _ := dimse.NewCStoreRequest(dataset)
-_ = req2.SetMessageID(uint16(msgID))
-msgID++
-// ... easy to forget to increment or to duplicate
-```
+Run the DIMSE tests with:
 
-Use `MessageIDGenerator` to manage MessageIDs automatically:
-
-```go
-// ✅ Recommended: use MessageIDGenerator
-idGen := dimse.NewMessageIDGenerator()
-
-// Create requests without a MessageID; the generator assigns one before sending.
-req1 := dimse.NewCEchoRequest()
-req2, _ := dimse.NewCStoreRequest(dataset)
-req3 := dimse.NewCFindRequestPatientRoot(level, query)
-
-// Assign a MessageID automatically before sending
-idGen.AssignMessageID(req1)  // MessageID = 1
-idGen.AssignMessageID(req2)  // MessageID = 2
-idGen.AssignMessageID(req3)  // MessageID = 3
-```
-
-Features:
-
-1. **Thread-safe**: can be called concurrently
-2. **Auto-increment**: starts at 1, range 1-65535
-3. **Skips 0 automatically**: MessageID=0 means unassigned
-4. **Keeps existing values**: does not overwrite an existing MessageID
-5. **Supports reset**: the counter can be reset on a new connection
-
-In real applications, MessageIDGenerator should be managed by the Client or Association:
-
-```go
-type Client struct {
-    messageIDGen *dimse.MessageIDGenerator
-    // ... other fields
-}
-
-func NewClient() *Client {
-    return &Client{
-        messageIDGen: dimse.NewMessageIDGenerator(),
-    }
-}
-
-func (c *Client) Send(msg dimse.Message) error {
-    // Assign the MessageID automatically
-    _, err := c.messageIDGen.AssignMessageID(msg)
-    if err != nil {
-        return err
-    }
-
-    // Send the message
-    // ...
-    return nil
-}
-
-// User code
-func main() {
-    client := NewClient()
-
-    // No need to worry about MessageID!
-    req := dimse.NewCEchoRequest()
-    client.Send(req)
-}
-```
-
-### Creating Request Messages
-
-```go
-import "github.com/cocosip/go-dicom/pkg/network/dimse"
-
-// C-ECHO
-req := dimse.NewCEchoRequest()
-
-// C-STORE
-req, err := dimse.NewCStoreRequest(dataset)
-
-// C-FIND
-req := dimse.NewCFindRequest(level, query)
-req := dimse.NewCFindRequestPatientRoot(level, query)
-req := dimse.NewCFindRequestStudyRoot(level, query)
-
-// C-MOVE
-req := dimse.NewCMoveRequest(level, destination, identifier)
-req := dimse.NewCMoveRequestPatientRoot(level, destination, identifier)
-req := dimse.NewCMoveRequestStudyRoot(level, destination, identifier)
-
-// C-GET
-req := dimse.NewCGetRequest(level, identifier)
-req := dimse.NewCGetRequestPatientRoot(level, identifier)
-req := dimse.NewCGetRequestStudyRoot(level, identifier)
+```bash
+go test ./pkg/network/dimse
+go test -v ./pkg/network/dimse -run TestMessageIDGenerator
 ```
 
 ### Outbound Validation
@@ -1231,155 +1153,6 @@ custom `dimse.Request` implementation is not introspected. Inbound C-STORE-RQ
 also rejects a command `AffectedSOPClassUID`/`AffectedSOPInstanceUID` that is
 present but empty, while a missing command element still falls back to the Data
 Set value for lenient peers.
-
-### Creating Response Messages
-
-```go
-import "github.com/cocosip/go-dicom/pkg/network/status"
-
-// Create a response from a request. The status argument is *status.Status.
-echoResp := dimse.NewCEchoResponseFromRequest(req, status.Success)
-storeResp := dimse.NewCStoreResponseFromRequest(req, status.Success)
-findResp := dimse.NewCFindResponseFromRequest(req, status.CFindPending, identifier)
-moveResp := dimse.NewCMoveResponseFromRequest(req, status.CMovePending)
-getResp := dimse.NewCGetResponseFromRequest(req, status.CGetPending)
-```
-
-```go
-// Pending response (the constructors take the request's MessageID and SOP Class UID)
-resp := dimse.NewCFindResponsePending(req.MessageID(), req.AffectedSOPClassUID(), identifier)
-resp := dimse.NewCMoveResponsePending(
-    req.MessageID(), req.AffectedSOPClassUID(), remaining, completed, failed, warning)
-resp := dimse.NewCGetResponsePending(
-    req.MessageID(), req.AffectedSOPClassUID(), remaining, completed, failed, warning)
-
-// Success response
-resp := dimse.NewCFindResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
-resp := dimse.NewCMoveResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
-resp := dimse.NewCGetResponseSuccess(req.MessageID(), req.AffectedSOPClassUID())
-```
-
-`Affected SOP Class UID` / `Affected SOP Instance UID` are Type U(=) in
-C-STORE-RSP and `Affected SOP Class UID` is Type U(=) in C-FIND-RSP. The
-constructors therefore omit those command elements when the UID argument is
-empty, which allows a conformant minimal response (`Status` +
-`MessageIDBeingRespondedTo` only). On the receive side, the service tolerates
-their absence instead of aborting the association.
-
-### Checking Response Status
-
-```go
-status := resp.Status()
-
-if status.IsSuccess() {
-    // Success (0x0000)
-} else if status.IsPending() {
-    // Pending (0xFF00)
-} else if status.IsWarning() {
-    // Warning (0x0001, 0x0107, 0x0116, 0xB000-0xBFFF)
-} else if status.IsFailure() {
-    // Failure (0xA700, 0xA900, 0xC000-0xCFFF)
-}
-
-// Get the status code
-statusCode := resp.StatusCode()  // uint16
-```
-
-A response without a Status (0000,0900) element is malformed. `Status()` reports
-it as a generic Failure (0xFFFF) so `IsFailure()` is true; it never returns a
-value whose predicates are all false.
-
-### Response Handling
-
-```go
-// C-ECHO response
-resp := dimse.NewCEchoResponseSuccess(requestMessageID)
-
-if resp.IsSuccess() {
-    println("Echo successful")
-}
-```
-
-```go
-// C-STORE response
-resp := dimse.NewCStoreResponseSuccess(
-    requestMessageID,
-    sopClassUID,
-    sopInstanceUID,
-)
-
-if resp.IsSuccess() {
-    println("Store successful")
-}
-```
-
-```go
-// C-FIND response
-// Pending response (contains query results)
-resp := dimse.NewCFindResponsePending(
-    requestMessageID,
-    sopClassUID,
-    identifier,
-)
-
-if resp.IsPending() {
-    // Handle the query results
-    if resp.HasIdentifier() {
-        data := resp.DataDataset()
-        // ... process the data
-    }
-}
-
-// Final response (query complete)
-finalResp := dimse.NewCFindResponseSuccess(requestMessageID, sopClassUID)
-if finalResp.IsSuccess() {
-    println("Query completed")
-}
-```
-
-### Priority, Move Originator, and Resetting the Counter
-
-```go
-import "github.com/cocosip/go-dicom/pkg/network/dimse"
-
-dimse.PriorityLow     // 0x0002
-dimse.PriorityMedium  // 0x0000 (default)
-dimse.PriorityHigh    // 0x0001
-```
-
-```go
-// Priority
-req, _ := dimse.NewCStoreRequest(dataset)
-req.SetPriority(uint16(dimse.PriorityHigh))    // High priority
-req.SetPriority(uint16(dimse.PriorityMedium))  // Medium priority (default)
-req.SetPriority(uint16(dimse.PriorityLow))     // Low priority
-```
-
-```go
-// Move Originator (C-MOVE sub-operations)
-req, _ := dimse.NewCStoreRequest(dataset)
-_ = req.SetMoveOriginator("MOVE_SCU", 999)
-```
-
-```go
-// Reset the MessageID counter
-idGen := dimse.NewMessageIDGenerator()
-
-// After using it for a while...
-idGen.Next()  // 1
-idGen.Next()  // 2
-
-// A new connection starts; reset the counter
-idGen.Reset()
-idGen.Next()  // 1 (starts over)
-```
-
-Run the DIMSE tests with:
-
-```bash
-go test ./pkg/network/dimse
-go test -v ./pkg/network/dimse -run TestMessageIDGenerator
-```
 
 ## Association Management
 
@@ -1561,7 +1334,7 @@ if err := c.CEcho(ctx); err != nil {
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
 
-err := client.CEcho(ctx)
+err := c.CEcho(ctx)
 
 // Context cancellation
 ctx, cancel := context.WithCancel(context.Background())
@@ -1665,7 +1438,10 @@ status.CStoreErrorCannotUnderstand     // 0xC000
 Check status:
 
 ```go
-resp, err := c.SendCEcho(ctx, req)
+// Operations that return a status response (C-STORE, C-FIND, C-MOVE, C-GET,
+// C-ECHO via Service.SendCEcho) expose it through resp.Status(). The Client's
+// convenience methods such as Client.CEcho return only an error.
+resp, err := c.CStore(ctx, ds)
 if err != nil {
     return err
 }
@@ -1714,7 +1490,7 @@ if err := c.CEcho(ctx); err != nil {
 ### Status Code Errors
 
 ```go
-resp, err := c.SendCEcho(ctx, req)
+resp, err := c.CStore(ctx, ds)
 if err != nil {
     return err
 }

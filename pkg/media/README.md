@@ -61,7 +61,7 @@ Icon generation is opt-in and structurally decoupled from this package:
 ```go
 directory, err := media.NewDirectory(
     media.WithImageIcons(true),
-    media.WithIconGenerator(imaging.NewDirectoryIconGenerator()),
+    media.WithIconGenerator(imaging.NewDirectoryIconGenerator(codec.GlobalRegistry())),
 )
 ```
 
