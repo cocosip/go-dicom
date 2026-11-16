@@ -190,9 +190,6 @@ func (r *ReadSeeker) block(index int64) ([]byte, error) {
 }
 
 func (r *ReadSeeker) evictCache() {
-	if r.maxCachedBlocks < 0 {
-		return
-	}
 	for len(r.cacheOrder) > r.maxCachedBlocks {
 		oldest := r.cacheOrder[0]
 		copy(r.cacheOrder, r.cacheOrder[1:])

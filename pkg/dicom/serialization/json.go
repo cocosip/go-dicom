@@ -735,18 +735,8 @@ func littleEndianBinary(elem element.Element, data []byte) []byte {
 func (w *jsonWriter) writeOther(elem element.Element) error {
 	buf := elem.Buffer()
 
-	// Check if this is a BulkDataUri buffer
-	if bulkDataBuf, ok := buf.(*buffer.BulkDataURIByteBuffer); ok {
-		encodedURI, err := json.Marshal(bulkDataBuf.BulkDataURI())
-		if err != nil {
-			return fmt.Errorf("marshal BulkDataURI: %w", err)
-		}
-		w.buf.WriteString(`,"BulkDataURI":`)
-		w.buf.Write(encodedURI)
-		return nil
-	}
-
-	// Otherwise, write as InlineBinary (Base64)
+	// BulkDataURI buffers are intercepted by writeValueByVR before this point,
+	// so anything reaching here is written as InlineBinary (Base64).
 	data, err := readBufferData(buf)
 	if err != nil {
 		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
