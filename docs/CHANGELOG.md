@@ -16,11 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **dicom/dataset**: `AddElements` and `AddOrUpdateElements` validate the whole batch before inserting it instead of deep-cloning the entire dataset twice.
 - **imaging**: `DicomImage` keeps its pixel data in an atomic pointer, so `DecodeIfNeeded` no longer races with readers such as `Width` or `RenderFrame`.
-- **network/service**: a message whose explicit presentation context ID is not part of the association is rejected instead of being silently sent on a different context (PS3.7 9.3).
+- **network/service**: a message whose explicit presentation context ID is not part of the association is rejected instead of being silently sent on a different context (PS3.7 9.3). The check applies to responses; requests carrying a stale ID still resolve by abstract syntax.
+- **imaging**: `RenderFrame` uses one pixel-data snapshot per frame, so frame bytes and rendering metadata cannot come from different sides of a concurrent decode.
+- **imaging**: signed 1-bit images get a `-0.5/1` fallback window instead of clipping both stored values (`-1` and `0`) to black.
+- **imaging**: `DecodeIfNeeded` serializes concurrent calls, so a compressed source is decoded once and a second caller observes the decoded result.
+- **dicom/dataset**: document that `AddElements`/`AddOrUpdateElements` take ownership of elements and that `Merge` shares sequence items (updating their inherited text encodings).
 
 ### Fixed
 
 - **dicom/uid**: derive `ImplementationVersionName` from the module version instead of a fixed string.
+- **dicom/serialization**: JSON no longer panics on fragment sequences; deferred file and lazy read failures for binary, string, and numeric values are reported as errors instead of being serialized as empty values in both JSON and XML.
+- **network/association**: `HasTransferSyntax` skips nil proposed transfer syntaxes, fixing a panic in SCP-priority negotiation.
 
 ## [v0.9.0] - 2026-11-09
 

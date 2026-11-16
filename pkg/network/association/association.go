@@ -407,6 +407,9 @@ func (pc *PresentationContext) AcceptTransferSyntaxes(scpPriority bool, accepted
 // in its proposed transfer syntaxes.
 func (pc *PresentationContext) HasTransferSyntax(ts *transfer.Syntax) bool {
 	for _, proposedTS := range pc.ProposedTransferSyntaxes {
+		if proposedTS == nil {
+			continue
+		}
 		if proposedTS.UID().UID() == ts.UID().UID() {
 			return true
 		}

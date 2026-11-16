@@ -210,16 +210,42 @@ func TestSendMessageRejectsExplicitUnacceptedPresentationContext(t *testing.T) {
 }
 
 func TestSendMessageRejectsUnknownExplicitPresentationContext(t *testing.T) {
+	// A response must use the presentation context of its request, so an unknown
+	// explicit ID is an error rather than an invitation to switch contexts.
 	assoc := createTestAssociation()
 
 	service := acceptedService(t, &recordingConn{}, assoc, WithAssociationRequestor(true))
 	t.Cleanup(func() { _ = service.Close() })
-	req := dimse.NewCEchoRequest()
-	req.SetPresentationContextID(99)
+	resp := dimse.NewCEchoResponseSuccess(1)
+	resp.SetPresentationContextID(99)
 
-	err := service.sendMessage(&sendRequest{message: req, resultCh: make(chan error, 1)})
+	err := service.sendMessage(&sendRequest{message: resp, resultCh: make(chan error, 1)})
 	if err == nil || !strings.Contains(err.Error(), "not part of the association") {
 		t.Fatalf("sendMessage() error = %v, want unknown presentation context error", err)
+	}
+}
+
+func TestSendMessageRequestFallsBackFromStalePresentationContextID(t *testing.T) {
+	// A request object reused on a second association can carry the context ID
+	// negotiated by the first one. Requests may still resolve by abstract
+	// syntax; only responses are pinned to the request's context (PS3.7 9.3).
+	assoc := association.NewAssociation("TEST-SCU", "TEST-SCP")
+	pc := association.NewPresentationContext(3, uid.Verification.UID(), transfer.ExplicitVRLittleEndian)
+	pc.Accept(transfer.ExplicitVRLittleEndian)
+	if err := assoc.AddPresentationContext(pc); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
+
+	service := acceptedService(t, &recordingConn{}, assoc, WithAssociationRequestor(true))
+	t.Cleanup(func() { _ = service.Close() })
+	req := dimse.NewCEchoRequest()
+	req.SetPresentationContextID(1)
+
+	if err := service.sendMessage(&sendRequest{message: req, resultCh: make(chan error, 1)}); err != nil {
+		t.Fatalf("sendMessage() error = %v, want abstract-syntax fallback", err)
+	}
+	if got, want := req.PresentationContextID(), uint8(3); got != want {
+		t.Fatalf("PresentationContextID() = %d, want negotiated ID %d", got, want)
 	}
 }
 

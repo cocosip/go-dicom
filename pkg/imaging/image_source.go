@@ -58,6 +58,9 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 		pd := image.pixelData.Load()
 		if pd.Info.PhotometricInterpretation != nil &&
 			pd.Info.PhotometricInterpretation.Value == pixel.PaletteColor.Value {
+			// ConvertPaletteToRGBWithVRMode rewrites pd in place. This is safe
+			// because construction is single-goroutine: the image is not
+			// published to other goroutines until this function returns.
 			if err := pixeldata.ConvertPaletteToRGBWithVRMode(image.dataset, pd, config.lutVRMode); err != nil {
 				return nil, fmt.Errorf("palette conversion failed: %w", err)
 			}

@@ -1917,7 +1917,7 @@ func main() {
     //   op.MoveDestination()  string  (destination AE title)
     //   op.Identifier()       *dataset.Dataset
     //   op.SendPending(remaining, completed, failed, warning uint16) error
-    //   op.SendSuccess() / op.SendWarning() / op.SendFailure(code) error
+    //   op.SendSuccess() / op.SendWarning() / op.SendFailure(*status.Status) error
     srv.SetCMoveHandler(func(ctx context.Context, op service.CMoveOperation) error {
         destination := op.MoveDestination()
         log.Printf("C-MOVE to %s level=%s", destination, op.QueryLevel())
@@ -1967,7 +1967,7 @@ func main() {
 | `SendPending(remaining, completed, failed, warning uint16) error` | 0xFF00 | Progress update after each sub-operation |
 | `SendSuccess() error` | 0x0000 | All sub-operations completed successfully |
 | `SendWarning() error` | 0xB000 | Completed but some sub-operations failed |
-| `SendFailure(code uint16) error` | custom | Fatal failure (e.g. 0xA801 = Move Destination Unknown) |
+| `SendFailure(s *status.Status) error` | custom | Fatal failure (e.g. `status.LookupStatus(0xA801)` = Move Destination Unknown) |
 
 ### Image Processing and Rendering
 

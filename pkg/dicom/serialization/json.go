@@ -72,22 +72,28 @@ type indexedStringValueProvider interface {
 	GetValue(int) string
 }
 
-func elementStringValues(elem element.Element) ([]string, bool) {
+func elementStringValues(elem element.Element) ([]string, bool, error) {
+	// Prefer the error-reporting form so a deferred buffer load failure or a
+	// stored encoding error is not serialized as an empty value.
+	if values, ok := elem.(interface{ GetValuesWithError() ([]string, error) }); ok {
+		decoded, err := values.GetValuesWithError()
+		return decoded, true, err
+	}
 	if values, ok := elem.(stringValuesProvider); ok {
-		return values.GetValues(), true
+		return values.GetValues(), true, nil
 	}
 	if values, ok := elem.(indexedStringValueProvider); ok {
 		count := values.Count()
 		if count <= 0 {
-			return nil, true
+			return nil, true, nil
 		}
 		out := make([]string, count)
 		for i := 0; i < count; i++ {
 			out[i] = values.GetValue(i)
 		}
-		return out, true
+		return out, true, nil
 	}
-	return nil, false
+	return nil, false, nil
 }
 
 // writeDataset writes a DICOM dataset as JSON
@@ -252,12 +258,11 @@ func (w *jsonWriter) writeKeywordAndName(elem element.Element) {
 
 // writeStringArray writes a string array value
 func (w *jsonWriter) writeStringArray(elem element.Element) error {
-	values, ok := elementStringValues(elem)
-	if !ok {
-		return nil
+	values, ok, err := elementStringValues(elem)
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
 	}
-
-	if len(values) == 0 {
+	if !ok || len(values) == 0 {
 		return nil
 	}
 
@@ -287,7 +292,10 @@ func (w *jsonWriter) writeFloat32Array(elem element.Element) error {
 	}
 
 	values, err := floatElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -311,7 +319,10 @@ func (w *jsonWriter) writeFloat64Array(elem element.Element) error {
 	}
 
 	values, err := doubleElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -361,7 +372,10 @@ func (w *jsonWriter) writeInt16Array(elem element.Element) error {
 	}
 
 	values, err := ssElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -385,7 +399,10 @@ func (w *jsonWriter) writeInt32Array(elem element.Element) error {
 	}
 
 	values, err := slElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -409,7 +426,10 @@ func (w *jsonWriter) writeInt64Array(elem element.Element) error {
 	}
 
 	values, err := svElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -435,7 +455,10 @@ func (w *jsonWriter) writeUint16Array(elem element.Element) error {
 	}
 
 	values, err := usElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -459,7 +482,10 @@ func (w *jsonWriter) writeUint32Array(elem element.Element) error {
 	}
 
 	values, err := ulElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -483,7 +509,10 @@ func (w *jsonWriter) writeUint64Array(elem element.Element) error {
 	}
 
 	values, err := uvElem.GetValues()
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	if len(values) == 0 {
 		return nil
 	}
 
@@ -502,12 +531,11 @@ func (w *jsonWriter) writeUint64Array(elem element.Element) error {
 
 // writeNumericStringArray writes an IS or DS (numeric string) array
 func (w *jsonWriter) writeNumericStringArray(elem element.Element, vrCode string) error {
-	values, ok := elementStringValues(elem)
-	if !ok {
-		return nil
+	values, ok, err := elementStringValues(elem)
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
 	}
-
-	if len(values) == 0 {
+	if !ok || len(values) == 0 {
 		return nil
 	}
 
@@ -624,8 +652,11 @@ func fixDecimalString(val string) string {
 func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
 	if atElem, ok := elem.(*element.AttributeTag); ok {
 		values, err := atElem.GetValues()
-		if err != nil || len(values) == 0 {
-			return err
+		if err != nil {
+			return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+		}
+		if len(values) == 0 {
+			return nil
 		}
 
 		w.buf.WriteString(`,"Value":[`)
@@ -645,11 +676,11 @@ func (w *jsonWriter) writeAttributeTag(elem element.Element) error {
 		return nil
 	}
 
-	values, ok := elementStringValues(elem)
-	if !ok {
-		return nil
+	values, ok, err := elementStringValues(elem)
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
 	}
-	if len(values) == 0 {
+	if !ok || len(values) == 0 {
 		return nil
 	}
 
@@ -735,12 +766,11 @@ func (w *jsonWriter) writeOther(elem element.Element) error {
 
 // writePersonName writes a PN (Person Name) value
 func (w *jsonWriter) writePersonName(elem element.Element) error {
-	values, ok := elementStringValues(elem)
-	if !ok {
-		return nil
+	values, ok, err := elementStringValues(elem)
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
 	}
-
-	if len(values) == 0 {
+	if !ok || len(values) == 0 {
 		return nil
 	}
 

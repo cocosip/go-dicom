@@ -409,6 +409,10 @@ func (ds *Dataset) ReplaceFrom(source *Dataset) error {
 // If overwrite is true, existing elements are replaced.
 // If overwrite is false, only new elements are added.
 // Validation happens before mutation so a failure leaves the Dataset unchanged.
+//
+// Merged elements are shared, not cloned, so sequence items in other may have
+// their inherited text-encoding context updated to this Dataset's character set.
+// Clone other first when it must stay isolated.
 func (ds *Dataset) Merge(other *Dataset, overwrite bool) error {
 	if ds == nil || other == nil {
 		return nil

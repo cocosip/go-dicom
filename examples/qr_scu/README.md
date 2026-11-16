@@ -9,7 +9,8 @@ Complete QR workflow:
 2. **C-FIND**: Query for studies, series, or images
 3. **C-GET** or **C-MOVE**: Retrieve DICOM instances
 
-For C-GET, the SCU acts as a temporary Storage SCP to receive C-STORE sub-operations from the QR SCP.
+For C-GET, the SCU registers a C-STORE handler and serves the Storage SCP role on
+the same association, so no separate Storage SCP is required.
 
 ## Usage
 
@@ -51,7 +52,7 @@ role; the example configures both automatically.
 Query and request C-MOVE to another AE:
 
 ```bash
-go run main.go -patient-name "DOE^*" -retrieve move -move-destination STORESCP
+go run main.go -patient-name "DOE^*" -retrieve move -move-destination QRDEST
 ```
 
 The example starts an embedded Storage SCP on `-store-port` and advertises it as

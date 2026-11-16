@@ -29,7 +29,7 @@ write a PNG instead.
 ### Specify Output File
 
 ```bash
-go run main.go -input input.dcm -output output.png
+go run main.go -input input.dcm -output output.png -format png
 ```
 
 ### Custom Windowing

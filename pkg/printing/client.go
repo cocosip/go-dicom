@@ -238,8 +238,8 @@ func imageBoxReferences(response *dimse.NCreateResponse, expected int) ([]SOPRef
 	return references, nil
 }
 
-// validatePrintHierarchy rejects nil Film Boxes and Image Boxes before
-// FilmSession.IsValid dereferences them.
+// validatePrintHierarchy rejects nil Film Boxes and Image Boxes with a
+// specific error before FilmSession.IsValid reports a generic invalid session.
 func validatePrintHierarchy(session *FilmSession) error {
 	for boxIndex, filmBox := range session.BasicFilmBoxes {
 		if filmBox == nil {
@@ -258,8 +258,8 @@ func validatePrintSession(session *FilmSession) error {
 	if session == nil {
 		return fmt.Errorf("printing: FilmSession is required")
 	}
-	// FilmSession.IsValid dereferences every Film Box and Image Box, so reject
-	// nil children with a specific error before it is called.
+	// FilmBox.IsValid and ImageBox.IsValid are nil-safe, so this only improves
+	// the error message; it does not prevent a panic.
 	if err := validatePrintHierarchy(session); err != nil {
 		return err
 	}

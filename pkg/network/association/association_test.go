@@ -315,6 +315,28 @@ func TestPresentationContext_AcceptTransferSyntaxesIgnoresNilSyntax(t *testing.T
 	}
 }
 
+func TestPresentationContext_AcceptTransferSyntaxesSkipsNilProposedInSCPPriority(t *testing.T) {
+	// SCP priority walks the proposed syntaxes through HasTransferSyntax, which
+	// must ignore nil entries instead of dereferencing them.
+	pc := NewPresentationContext(1, "1.2.840.10008.1.1", nil, transfer.ExplicitVRLittleEndian)
+	if !pc.AcceptTransferSyntaxes(true, transfer.ExplicitVRLittleEndian) {
+		t.Fatal("AcceptTransferSyntaxes did not skip the nil proposed syntax")
+	}
+	if !pc.IsAccepted() || pc.AcceptedTransferSyntax != transfer.ExplicitVRLittleEndian {
+		t.Fatalf("accepted transfer syntax = %v, want Explicit VR Little Endian", pc.AcceptedTransferSyntax)
+	}
+}
+
+func TestPresentationContext_HasTransferSyntaxSkipsNilProposed(t *testing.T) {
+	pc := NewPresentationContext(1, "1.2.840.10008.1.1", nil, transfer.ImplicitVRLittleEndian)
+	if !pc.HasTransferSyntax(transfer.ImplicitVRLittleEndian) {
+		t.Fatal("HasTransferSyntax() = false for a proposed syntax")
+	}
+	if pc.HasTransferSyntax(transfer.ExplicitVRLittleEndian) {
+		t.Fatal("HasTransferSyntax() = true for an unproposed syntax")
+	}
+}
+
 func TestNewUserIdentityUsername(t *testing.T) {
 	ui := NewUserIdentityUsername("testuser", true)
 

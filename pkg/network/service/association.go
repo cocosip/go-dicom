@@ -289,8 +289,9 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 }
 
 // writeReleaseResponse encodes and writes an A-RELEASE-RP without changing the
-// service state. It is used by SendReleaseResponse, which owns the state
-// transition to Closed.
+// service state. It is called by SendReleaseResponse, which owns the transition
+// to Closed, and by sendCollisionReleaseResponse, whose caller performs the
+// release-collision state transition separately (PS3.8 Table 9-8 AR-8).
 func (s *Service) writeReleaseResponse(ctx context.Context) error {
 	// Create A-RELEASE-RP PDU
 	releaseRP := &pdu.AReleaseRP{}

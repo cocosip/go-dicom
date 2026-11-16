@@ -100,21 +100,13 @@ This document contains performance benchmark results for the go-dicom library. B
 
 ## Buffer Pool Operations
 
-`GetBytesBuffer` and `BytesBufferNormal` are the remaining buffer benchmarks; the
-`Allocate*` rows measured an API that has since been removed.
-
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
-| AllocateSmallNormal | 0.17 | 0 | 0 |
-| AllocateMediumNormal | 0.20 | 0 | 0 |
-| AllocateLargeNormal | 61,029 | 524,288 | 1 |
 | GetBytesBuffer (pooled) | 10.81 | 0 | 0 |
 | BytesBufferNormal | 21.90 | 64 | 1 |
 
 **Key Insights:**
-- **Large buffer pooling** (≥512KB): 5.7x faster, 99.99% less memory allocated
 - **bytes.Buffer pooling**: 2x faster with 100% allocation reduction
-- Small buffer pooling is slower than direct allocation (Go compiler optimization)
 - Buffer pool most beneficial for temporary buffers and large allocations
 
 ## Imaging Operations

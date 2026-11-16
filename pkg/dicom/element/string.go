@@ -6,6 +6,7 @@ package element
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"unicode/utf8"
 
@@ -153,6 +154,11 @@ func (s *String) GetStringWithError() (string, error) {
 	}
 
 	data := s.buffer.Data()
+	if data == nil && s.buffer.Size() > 0 {
+		// ByteBuffer.Data cannot report a read failure; a non-empty buffer that
+		// yields no bytes means the underlying file or stream failed.
+		return "", fmt.Errorf("read string value: %w", io.ErrUnexpectedEOF)
+	}
 
 	decoded, err := charset.DecodeString(data, s.encodings)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+	"unsafe"
 
 	"github.com/cocosip/go-dicom/pkg/io/endian"
 )
@@ -257,12 +258,12 @@ func TestNativeEndian(t *testing.T) {
 		t.Errorf("Native() has invalid value: %v", native)
 	}
 
-	// Verify it matches the host byte order reported by encoding/binary.
-	// binary.LittleEndian always decodes {0x01, 0x00} as 1, so it cannot be used
-	// as an independent host-order probe.
-	buf := [2]byte{}
-	binary.NativeEndian.PutUint16(buf[:], 1)
-	isLittle := buf[0] == 1
+	// Verify it matches the host byte order observed through memory layout.
+	// binary.NativeEndian mirrors the production probe, so it cannot detect a
+	// regression to an always-Little probe.
+	var probe uint32 = 1
+	//nolint:gosec // the oracle must observe the host memory layout directly.
+	isLittle := *(*byte)(unsafe.Pointer(&probe)) == 1
 
 	if isLittle && native != endian.Little {
 		t.Error("Native() should be Little on little-endian machine")

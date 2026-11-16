@@ -207,15 +207,14 @@ func (w *xmlWriter) writeElementValue(elem element.Element, vrValue *vr.VR) erro
 
 // writeBinaryValue writes binary data as base64-encoded InlineBinary
 func (w *xmlWriter) writeBinaryValue(elem element.Element) error {
-	buf := elem.Buffer()
-	if buf == nil || buf.Size() == 0 {
-		return nil
-	}
-
-	raw, err := readBufferData(buf)
+	raw, err := readBufferData(elem.Buffer())
 	if err != nil {
 		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
 	}
+	if len(raw) == 0 {
+		return nil
+	}
+
 	data := littleEndianBinary(elem, raw)
 	encoded := base64.StdEncoding.EncodeToString(data)
 
@@ -316,14 +315,24 @@ func (w *xmlWriter) writeStringValues(elem element.Element) error {
 	// Get string values from element based on type
 	var values []string
 
-	// Try string element first
-	if strElem, ok := elem.(interface{ GetValue(int) string }); ok {
-		for i := 0; i < elem.Count(); i++ {
-			values = append(values, strElem.GetValue(i))
+	switch typed := elem.(type) {
+	case interface{ GetValuesWithError() ([]string, error) }:
+		decoded, err := typed.GetValuesWithError()
+		if err != nil {
+			return fmt.Errorf("write %s value: %w", elem.Tag(), err)
 		}
-	} else {
+		values = decoded
+	case interface{ GetValue(int) string }:
+		for i := 0; i < elem.Count(); i++ {
+			values = append(values, typed.GetValue(i))
+		}
+	default:
 		// For numeric elements, try type-specific GetValues methods
-		values = w.getNumericValuesAsStrings(elem)
+		numeric, err := w.getNumericValuesAsStrings(elem)
+		if err != nil {
+			return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+		}
+		values = numeric
 	}
 
 	// Write values. Every DICOM value is emitted with its 1-based number, even
@@ -345,99 +354,124 @@ func (w *xmlWriter) writeStringValues(elem element.Element) error {
 }
 
 // getNumericValuesAsStrings extracts numeric values and converts them to strings
-func (w *xmlWriter) getNumericValuesAsStrings(elem element.Element) []string {
-	var values []string
-
+func (w *xmlWriter) getNumericValuesAsStrings(elem element.Element) ([]string, error) {
 	// Try US (unsigned short)
 	if usElem, ok := elem.(interface{ GetValues() ([]uint16, error) }); ok {
-		if vals, err := usElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%d", v))
-			}
-			return values
+		vals, err := usElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%d", v)
+		}
+		return values, nil
 	}
 
 	// Try UL (unsigned long)
 	if ulElem, ok := elem.(interface{ GetValues() ([]uint32, error) }); ok {
-		if vals, err := ulElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%d", v))
-			}
-			return values
+		vals, err := ulElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%d", v)
+		}
+		return values, nil
 	}
 
 	// Try SS (signed short)
 	if ssElem, ok := elem.(interface{ GetValues() ([]int16, error) }); ok {
-		if vals, err := ssElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%d", v))
-			}
-			return values
+		vals, err := ssElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%d", v)
+		}
+		return values, nil
 	}
 
 	// Try SL (signed long)
 	if slElem, ok := elem.(interface{ GetValues() ([]int32, error) }); ok {
-		if vals, err := slElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%d", v))
-			}
-			return values
+		vals, err := slElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%d", v)
+		}
+		return values, nil
 	}
 
 	// Try FL (float)
 	if flElem, ok := elem.(interface{ GetValues() ([]float32, error) }); ok {
-		if vals, err := flElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%g", v))
-			}
-			return values
+		vals, err := flElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%g", v)
+		}
+		return values, nil
 	}
 
 	// Try FD (double)
 	if fdElem, ok := elem.(interface{ GetValues() ([]float64, error) }); ok {
-		if vals, err := fdElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%g", v))
-			}
-			return values
+		vals, err := fdElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%g", v)
+		}
+		return values, nil
 	}
 
 	// Try SV (signed very long)
 	if svElem, ok := elem.(interface{ GetValues() ([]int64, error) }); ok {
-		if vals, err := svElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%d", v))
-			}
-			return values
+		vals, err := svElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%d", v)
+		}
+		return values, nil
 	}
 
 	// Try UV (unsigned very long)
 	if uvElem, ok := elem.(interface{ GetValues() ([]uint64, error) }); ok {
-		if vals, err := uvElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, fmt.Sprintf("%d", v))
-			}
-			return values
+		vals, err := uvElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = fmt.Sprintf("%d", v)
+		}
+		return values, nil
 	}
 
 	if atElem, ok := elem.(*element.AttributeTag); ok {
-		if vals, err := atElem.GetValues(); err == nil {
-			for _, v := range vals {
-				values = append(values, v.Format("J"))
-			}
-			return values
+		vals, err := atElem.GetValues()
+		if err != nil {
+			return nil, err
 		}
+		values := make([]string, len(vals))
+		for i, v := range vals {
+			values[i] = v.Format("J")
+		}
+		return values, nil
 	}
 
-	return values
+	return nil, nil
 }
 
 // writeSequence writes a DICOM sequence as XML

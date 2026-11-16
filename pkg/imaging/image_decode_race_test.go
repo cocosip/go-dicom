@@ -75,6 +75,10 @@ func TestDicomImageDecodeIsSafeForConcurrentReaders(t *testing.T) {
 				_ = img.Width()
 				_ = img.Height()
 				_ = img.NumberOfFrames()
+				// Rendering and cloning read the pixel data snapshot; they must
+				// tolerate the swap happening underneath them.
+				_, _ = img.RenderFrameImage(0)
+				_ = img.Clone()
 			}
 		}
 	}()
@@ -86,4 +90,8 @@ func TestDicomImageDecodeIsSafeForConcurrentReaders(t *testing.T) {
 	}
 	close(readerStop)
 	<-readerDone
+
+	if img.pixelData.Load() == pd {
+		t.Fatal("DecodeIfNeeded did not publish new pixel data")
+	}
 }

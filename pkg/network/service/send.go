@@ -115,10 +115,11 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	}
 
 	// Find presentation context.
-	// For responses (or any message with an explicit presentation context ID set),
-	// use the stored ID directly — the DICOM standard requires that a response is
-	// sent on the same presentation context as its request.
-	// For outgoing requests, fall back to an abstract-syntax lookup.
+	// A response must be sent on the presentation context of its request
+	// (PS3.7 9.3), so an explicit ID that is not part of the association is an
+	// error instead of an invitation to switch contexts. Requests may carry a
+	// stale ID from a previous association, so they may still fall back to the
+	// abstract-syntax lookup; the resolved ID is written before sending.
 	message := req.message
 	var pc *association.PresentationContext
 	if req.message.CommandField() == uint16(dimse.CommandCStoreRQ) {
@@ -134,15 +135,12 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	}
 	if pc == nil {
 		if contextID := message.PresentationContextID(); contextID != 0 {
-			// A message that already carries a presentation context ID (a
-			// response, or a request the caller pinned) must use exactly that
-			// context. Silently switching to another context would answer on a
-			// different context than the request, which PS3.7 9.3 forbids.
 			pc = assoc.FindPresentationContextByID(contextID)
-			if pc == nil {
+			if pc == nil && dimse.CommandField(message.CommandField()).IsResponse() {
 				return fmt.Errorf("presentation context ID %d is not part of the association", contextID)
 			}
-		} else {
+		}
+		if pc == nil {
 			// Fall back: look up by SOP Class UID (abstract syntax).
 			sopClassUID, ok := message.CommandDataset().GetString(tag.AffectedSOPClassUID)
 			if !ok || sopClassUID == "" {

@@ -1522,16 +1522,7 @@ func (p *parseContext) readItemDataset(length uint32) (*dataset.Dataset, error) 
 		// allocating and copying the whole item payload.
 		err := p.withBoundedReader(length, func(lr *io.LimitedReader) error {
 			for lr.N > 0 {
-				itemTag, err := p.readTag()
-				if err != nil {
-					return err
-				}
-				if p.shouldStopBeforePixelData(itemTag) {
-					return errStopBeforePixelData
-				}
-
-				p.attachPrivateCreator(itemTag, privateCreators)
-				elem, err := p.readElementWithTag(itemTag)
+				elem, err := p.readElementWithPrivateCreators(privateCreators)
 				if err != nil {
 					return err
 				}

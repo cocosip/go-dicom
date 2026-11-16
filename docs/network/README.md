@@ -265,7 +265,7 @@ c := client.New(
 | `WithTransportReadTimeout(timeout)` | time.Duration | 0 | Single PDU read timeout; 0 allows an established association to stay idle |
 | `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | Single PDU write timeout |
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association negotiation timeout |
-| `WithImplementationClassUID(uid)` | string | "1.2.826.0.1.3680043.8.498.1" | Implementation class UID |
+| `WithImplementationClassUID(uid)` | string | uid.GoDicomImplementationClassUID ("1.2.826.0.1.3680043.10.854") | Implementation class UID |
 | `WithImplementationVersionName(name)` | string | Derived from the go-dicom module version, e.g. "GO_DICOM_0_9_0" | Implementation version name (at most 16 characters) |
 | `WithTransferSyntaxRegistry(registry)` | `*transfer.Registry` | Independent standard catalog view | Explicitly inject a custom Transfer Syntax; standard and unknown syntaxes can still be parsed when not registered |
 
@@ -740,7 +740,7 @@ srv := server.New(
 | `WithTransportReadTimeout(timeout)` | time.Duration | 0 | Single PDU read timeout (0=disabled) |
 | `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | Single PDU write timeout (0=disabled) |
 | `WithSupportedSOPClasses(uids...)` | ...string | nil (accept all) | SOP Classes this SCP implements; other abstract syntaxes are rejected during negotiation |
-| `WithAsynchronousOperations(maxInvoked, maxPerformed)` | uint16, uint16 | 0, 0 (unlimited) | Local SCP asynchronous operation window |
+| `WithAsynchronousOperations(maxInvoked, maxPerformed)` | uint16, uint16 | 1, 1 | Local SCP asynchronous operation window |
 | `WithTransferSyntaxRegistry(registry)` | `*transfer.Registry` | Standard catalog | Isolated registry used during association negotiation |
 | `WithTranscodeManager(manager)` | `*transcode.Manager` | Global codec registry | Manager passed to each network service |
 | `WithImplementationClassUID(uid)` | string | Shared go-dicom implementation identity | Implementation class UID |
@@ -999,11 +999,11 @@ func main() {
         filename := fmt.Sprintf("./received/%s.dcm", sopInstanceUID)
         if err := writer.WriteFile(filename, ds); err != nil {
             log.Printf("Failed to save image: %v\n", err)
-            return dimse.NewCStoreResponseFromRequest(req, 0xC000), nil // Failure
+            return dimse.NewCStoreResponseFromRequest(req, status.LookupStatus(0xC000)), nil // Failure
         }
 
         log.Printf("Image saved to %s\n", filename)
-        return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil // Success
+        return dimse.NewCStoreResponseFromRequest(req, status.Success), nil // Success
     })
 
     // Ensure the receive directory exists
@@ -1503,7 +1503,7 @@ srv.SetAssociationNegotiatorFunc(func(ctx context.Context, assoc *association.As
         return responder.SendReject(ctx,
             pdu.ResultRejectedPermanent,
             pdu.SourceServiceUser,
-            pdu.ReasonServiceUserCalledAETitleNotRecognized)
+            pdu.ReasonServiceUserCallingAETitleNotRecognized)
     }
 
     // Accept only specific SOP Classes

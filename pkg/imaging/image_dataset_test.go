@@ -75,6 +75,43 @@ func TestNewDicomImageFromParseResultRejectsNil(t *testing.T) {
 	}
 }
 
+func TestNewDicomImageFromDatasetRendersSignedOneBitPixels(t *testing.T) {
+	// Signed one-bit samples are two's complement: a set bit is -1 and a clear
+	// bit is 0. The default window must separate the two values; a 1/1 window
+	// would clip both to the minimum and render the image blank.
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	elements := []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{2}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{1}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{0}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{1}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewOtherByte(tag.PixelData, []byte{0b10}), // stored -1, 0
+	}
+	for _, elem := range elements {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+
+	dicomImage, err := NewDicomImageFromDataset(ds)
+	if err != nil {
+		t.Fatalf("NewDicomImageFromDataset() error = %v", err)
+	}
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage(0) error = %v", err)
+	}
+	for x, want := range []uint8{255, 0} {
+		if got := color.GrayModel.Convert(rendered.At(x, 0)).(color.Gray).Y; got != want {
+			t.Fatalf("pixel %d = %d, want %d", x, got, want)
+		}
+	}
+}
+
 func TestNewDicomImageFromDatasetRendersNativePixels(t *testing.T) {
 	ds := newNativeMonochromeDataset(t, 2, 1, []byte{0, 255})
 

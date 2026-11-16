@@ -92,6 +92,9 @@ func (ds *Dataset) valueContext() element.CanonicalValueContext {
 // existing VR and rejecting the whole operation on the first error. The batch
 // is validated before anything is inserted, so a failure leaves the Dataset
 // unchanged without first deep-cloning the whole Dataset.
+//
+// Like Add, the Dataset takes ownership of the supplied elements (they are not
+// cloned); do not mutate or share an element after adding it.
 func (ds *Dataset) AddElements(elements ...element.Element) error {
 	if ds == nil {
 		return fmt.Errorf("cannot add to nil Dataset")
@@ -124,7 +127,8 @@ func (ds *Dataset) AddElements(elements ...element.Element) error {
 
 // AddOrUpdateElements adds or replaces a collection of elements. The batch is
 // validated before anything is inserted, so a failure leaves the Dataset
-// unchanged without first deep-cloning the whole Dataset.
+// unchanged without first deep-cloning the whole Dataset. As with Add, the
+// Dataset takes ownership of the supplied elements.
 func (ds *Dataset) AddOrUpdateElements(elements ...element.Element) error {
 	if ds == nil {
 		return fmt.Errorf("cannot add to nil Dataset")
