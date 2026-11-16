@@ -5,11 +5,10 @@ package transcode
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log/slog"
 	"math"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -22,7 +21,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 	"github.com/cocosip/go-dicom/pkg/io/buffer"
-	"github.com/cocosip/go-dicom/pkg/io/endian"
 	"github.com/cocosip/go-dicom/pkg/logging"
 )
 
@@ -193,7 +191,7 @@ func (t *Transcoder) Transcode(ctx context.Context, ds *dataset.Dataset) (result
 			}
 			frameCount := 0
 			if ds != nil && ds.Contains(tag.PixelData) {
-				frameCount = frameCountFromDataset(ds)
+				frameCount = pixeldata.FrameCountFromDataset(ds)
 			}
 			attrs := []slog.Attr{
 				slog.String("input_transfer_syntax", t.inputSyntax.UID().UID()),
@@ -336,7 +334,7 @@ func (t *Transcoder) DecodeFrame(ctx context.Context, ds *dataset.Dataset, frame
 		return t.extractUncompressedFrame(ds, frameIndex)
 	}
 
-	frameCount := frameCountFromDataset(ds)
+	frameCount := pixeldata.FrameCountFromDataset(ds)
 	encapsulatedData, err := encapsulated.OpenDataset(ds)
 	if err != nil {
 		return nil, err
@@ -452,7 +450,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ctx context.Context, ds
 
 	if outputUsesWords {
 		convertedPixelData := element.NewOtherWord(tag.PixelData, convertedData)
-		element.SetByteOrder(convertedPixelData, t.outputSyntax.Endian().ByteOrder())
+		element.SetByteOrder(convertedPixelData, t.outputSyntax.PixelDataByteOrder())
 		if err := newDS.Add(convertedPixelData); err != nil {
 			return nil, fmt.Errorf("add converted pixel data: %w", err)
 		}
@@ -466,7 +464,7 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ctx context.Context, ds
 }
 
 func nativeWordsAreBigEndian(syntax *transfer.Syntax) bool {
-	return syntax.Endian() == endian.Big || syntax.SwapPixelData()
+	return syntax != nil && syntax.PixelDataByteOrder() == binary.BigEndian
 }
 
 // decode decompresses pixel data from a dataset using the high-level codec.Decode method.
@@ -488,7 +486,7 @@ func (t *Transcoder) decode(ctx context.Context, ds *dataset.Dataset, outputSynt
 	if err := t.validatePixelDataReadVR(ctx, ds, t.inputSyntax); err != nil {
 		return nil, err
 	}
-	frameCount := frameCountFromDataset(ds)
+	frameCount := pixeldata.FrameCountFromDataset(ds)
 	encapsulatedData, err := encapsulated.OpenDataset(ds)
 	if err != nil {
 		return nil, err
@@ -627,7 +625,7 @@ func (t *Transcoder) encode(ctx context.Context, ds *dataset.Dataset, outputTS *
 
 	// Determine frame count
 	// Note: NumberOfFrames has VR of IS (Integer String) per DICOM standard
-	frameCount := frameCountFromDataset(sourceDS)
+	frameCount := pixeldata.FrameCountFromDataset(sourceDS)
 
 	oldPixelData, err := newFrameData(frameInfo, false)
 	if err != nil {
@@ -853,18 +851,6 @@ func pixelDataSize(ctx context.Context, pixelData codec.FrameSource) (int, error
 	return total, nil
 }
 
-func frameCountFromDataset(ds *dataset.Dataset) int {
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
-		return int(nf)
-	}
-	if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
-		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
-			return parsed
-		}
-	}
-	return 1
-}
-
 // buildFragmentSequence creates a fragment sequence from per-frame compressed data,
 // populating the Basic Offset Table.
 //
@@ -1005,7 +991,7 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 	}
 
 	// Get frame count
-	frameCount := frameCountFromDataset(ds)
+	frameCount := pixeldata.FrameCountFromDataset(ds)
 
 	if frameIndex < 0 || frameIndex >= frameCount {
 		return nil, fmt.Errorf("frame index %d out of range (0-%d)",
@@ -1015,11 +1001,14 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 	// Extract pixel data
 	pixelDataElem, _ := ds.Get(tag.PixelData)
 	var pixelData []byte
+	var sourceOrder binary.ByteOrder
+	sourceOrderKnown := false
 	switch elem := pixelDataElem.(type) {
 	case *element.OtherByte:
 		pixelData = elem.GetData()
 	case *element.OtherWord:
 		pixelData = elem.GetData()
+		sourceOrder, sourceOrderKnown = element.NumericByteOrder(elem)
 	default:
 		return nil, fmt.Errorf("unexpected pixel data element type")
 	}
@@ -1041,7 +1030,37 @@ func (t *Transcoder) extractUncompressedFrame(ds *dataset.Dataset, frameIndex in
 		return nil, fmt.Errorf("frame data out of bounds")
 	}
 
-	return pixelData[offset : offset+frameSize], nil
+	// Always copy: the caller gets a frame it owns, like the encapsulated and
+	// codec paths, so mutating the returned slice cannot alter the dataset.
+	frame := append([]byte(nil), pixelData[offset:offset+frameSize]...)
+	if sourceOrderKnown && !isLittleEndian(sourceOrder) {
+		// Decoded frames are always little-endian, like those returned by the
+		// codec ports.
+		swapNativeSamples(frame, frameInfo.BitDepth.BytesAllocated())
+	}
+	return frame, nil
+}
+
+// isLittleEndian reports whether order encodes 0x0102 as 0x02, 0x01.
+func isLittleEndian(order binary.ByteOrder) bool {
+	probe := []byte{0x01, 0x02}
+	return order.Uint16(probe) == binary.LittleEndian.Uint16(probe)
+}
+
+// swapNativeSamples reverses the byte order of each sample in place. A 32-bit
+// sample spans two OW words and is reversed as a whole to preserve its value.
+func swapNativeSamples(data []byte, bytesPerSample int) {
+	switch bytesPerSample {
+	case 4:
+		for offset := 0; offset+3 < len(data); offset += 4 {
+			data[offset], data[offset+3] = data[offset+3], data[offset]
+			data[offset+1], data[offset+2] = data[offset+2], data[offset+1]
+		}
+	default:
+		for offset := 0; offset+1 < len(data); offset += 2 {
+			data[offset], data[offset+1] = data[offset+1], data[offset]
+		}
+	}
 }
 
 // nativeFrameBytes extracts one frame from native (uncompressed) Pixel Data.
@@ -1084,7 +1103,9 @@ func nativeFrameBytes(pixelData []byte, frameIndex, frameCount int, info codec.F
 	}
 	end := offset + frameSize
 	if end > len(pixelData) {
-		end = len(pixelData)
+		// A truncated final frame is malformed data, not a shorter frame: report
+		// it (like extractUncompressedFrame) instead of transcoding a partial frame.
+		return nil, fmt.Errorf("missing native pixel data for frame %d", frameIndex)
 	}
 	return append([]byte(nil), pixelData[offset:end]...), nil
 }

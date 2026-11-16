@@ -115,6 +115,9 @@ func (p *PixelData) Frame(frameCount, frameIndex int) ([]byte, error) {
 type fragmentRange struct {
 	start int
 	end   int
+	// length is the unpadded frame length declared by the Extended Offset
+	// Table Lengths; 0 means no authoritative length is available.
+	length uint64
 }
 
 func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
@@ -180,6 +183,7 @@ func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
 		if start >= end {
 			return nil, fmt.Errorf("frame %d derived from offset table is empty", frameIndex)
 		}
+		var frameLength uint64
 		if p.offsets.source == extendedOffsets {
 			length := p.offsets.lengths[frameIndex]
 			var payloadLength uint64
@@ -192,11 +196,15 @@ func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
 				}
 				payloadLength += fragmentLength
 			}
-			if length != payloadLength {
+			// A padded last fragment stores one byte more than the frame length.
+			paddedLastFragment := payloadLength == length+1 &&
+				uint64(fragments[end-1].Size())%2 == 0
+			if length == 0 || (length != payloadLength && !paddedLastFragment) {
 				return nil, fmt.Errorf("extended offset table length %d for frame %d does not match Fragment Items", length, frameIndex)
 			}
+			frameLength = length
 		}
-		ranges[frameIndex] = fragmentRange{start: start, end: end}
+		ranges[frameIndex] = fragmentRange{start: start, end: end, length: frameLength}
 	}
 	return ranges, nil
 }
@@ -238,6 +246,10 @@ func (p *PixelData) assembleFrame(frameRange fragmentRange, frameIndex int) ([]b
 	}
 	if len(frame) == 0 {
 		return nil, fmt.Errorf("frame %d is empty", frameIndex)
+	}
+	// Extended Offset Table Lengths exclude the fragment pad byte, so drop it.
+	if frameRange.length > 0 && frameRange.length < uint64(len(frame)) {
+		frame = frame[:frameRange.length]
 	}
 	return frame, nil
 }

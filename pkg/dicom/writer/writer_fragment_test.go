@@ -287,21 +287,59 @@ func TestWriteRejectsInvalidBasicOffsetTable(t *testing.T) {
 	}
 }
 
-func TestWriteRejectsEmptyFragmentItem(t *testing.T) {
-	ds := dataset.New()
-	addTestSOPUIDs(t, ds)
+func TestSetOffsetTableForFramesSkipsEmptyFragments(t *testing.T) {
+	obf := element.NewOtherByteFragment(tag.PixelData)
+	obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02, 0x03, 0x04}))
+	obf.AddFragment(buffer.NewMemory(nil))
+	obf.AddFragment(buffer.NewMemory([]byte{0x05, 0x06, 0x07, 0x08}))
+
+	if err := SetOffsetTableForFrames(obf.FragmentSequence, []int{0, 2}); err != nil {
+		t.Fatalf("SetOffsetTableForFrames error: %v", err)
+	}
+
+	// The empty middle fragment is not encoded, so the second frame starts
+	// after the first frame's 8-byte item header plus 4-byte value.
+	read := roundTripOtherByteFragment(t, obf)
+	if got := read.OffsetTable(); len(got) != 2 || got[0] != 0 || got[1] != 12 {
+		t.Errorf("OffsetTable = %v, want [0 12]", got)
+	}
+}
+
+// TestWriteSkipsEmptyFragmentItem verifies that zero-length fragments, which the
+// parser tolerates, are skipped on write instead of rejecting the dataset.
+func TestWriteSkipsEmptyFragmentItem(t *testing.T) {
 	obf := element.NewOtherByteFragment(tag.PixelData)
 	obf.AddFragment(buffer.NewMemory(nil))
+	obf.AddFragment(buffer.NewMemory([]byte{0x01, 0x02}))
+	obf.AddFragment(buffer.NewMemory(nil))
+	obf.AddFragment(buffer.NewMemory([]byte{0x03, 0x04}))
+
+	ds := dataset.New()
+	addTestSOPUIDs(t, ds)
 	if err := ds.Add(obf); err != nil {
 		t.Fatalf("Add(PixelData) error: %v", err)
 	}
 
-	err := Write(&bytes.Buffer{}, ds, WithTransferSyntax(transfer.JPEG2000Lossless))
-	if err == nil {
-		t.Fatal("Write() emitted a zero-length fragment item")
+	var buf bytes.Buffer
+	if err := Write(&buf, ds, WithTransferSyntax(transfer.JPEG2000Lossless)); err != nil {
+		t.Fatalf("Write() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "empty") {
-		t.Fatalf("Write() error = %v, want empty fragment error", err)
+
+	// Only the empty Basic Offset Table item may be a zero-length item.
+	zeroLengthItem := []byte{0xFE, 0xFF, 0x00, 0xE0, 0x00, 0x00, 0x00, 0x00}
+	if got := bytes.Count(buf.Bytes(), zeroLengthItem); got != 1 {
+		t.Fatalf("zero-length item headers = %d, want 1 (empty Basic Offset Table); empty fragments must be skipped", got)
+	}
+
+	read := roundTripOtherByteFragment(t, obf)
+	fragments := read.Fragments()
+	if len(fragments) != 2 {
+		t.Fatalf("round-tripped fragment count = %d, want 2", len(fragments))
+	}
+	for i, want := range [][]byte{{0x01, 0x02}, {0x03, 0x04}} {
+		if got := fragments[i].Data(); !bytes.Equal(got, want) {
+			t.Errorf("fragment %d = %x, want %x", i, got, want)
+		}
 	}
 }
 

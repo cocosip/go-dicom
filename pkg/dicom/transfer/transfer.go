@@ -5,6 +5,7 @@
 package transfer
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
@@ -194,6 +195,20 @@ func (ts *Syntax) Endian() endian.Endian {
 // SwapPixelData returns true if pixel data requires byte swapping.
 func (ts *Syntax) SwapPixelData() bool {
 	return ts.swapPixelData
+}
+
+// PixelDataByteOrder returns the byte order of native Pixel Data values encoded
+// with this transfer syntax.
+//
+// It is the dataset byte order for every standard syntax except GE's private
+// implicit VR syntax, which keeps the dataset little-endian while storing the
+// native pixel words big-endian (SwapPixelData). Parser, writer and transcoder
+// share this rule when recording or materialising Pixel Data byte order.
+func (ts *Syntax) PixelDataByteOrder() binary.ByteOrder {
+	if ts != nil && (ts.endian == endian.Big || ts.swapPixelData) {
+		return binary.BigEndian
+	}
+	return binary.LittleEndian
 }
 
 // String returns the name of the transfer syntax.

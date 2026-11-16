@@ -56,7 +56,8 @@ func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []i
 		return fmt.Errorf("frameStartIndexes contains out-of-range index")
 	}
 
-	// Compute encoded fragment item lengths to align offsets as written.
+	// Compute encoded fragment item lengths to align offsets as written. Empty
+	// fragments are skipped by the encoder, so they take no space in the stream.
 	encodedLens := make([]uint32, fragCount)
 	for i := 0; i < fragCount; i++ {
 		frag, err := fs.GetFragment(i)
@@ -64,6 +65,9 @@ func SetOffsetTableForFrames(fs *element.FragmentSequence, frameStartIndexes []i
 			return err
 		}
 		size := frag.Size()
+		if size == 0 {
+			continue
+		}
 		padded := size
 		if padded%2 != 0 {
 			padded++
@@ -318,6 +322,11 @@ func New(ts *transfer.Syntax, opts ...Option) *Writer {
 //   - Preamble (128 bytes) + DICM prefix (4 bytes) [default, can be disabled with WithoutPreamble()]
 //   - File Meta Information (Group 0002, always Explicit VR Little Endian)
 //   - Dataset (encoding depends on Transfer Syntax)
+//
+// Writing streams to w, so a returned error (for example a walker error from a
+// cyclic dataset) can leave a partial dataset on w. Callers that cannot tolerate
+// a partial file must write to a temporary file or buffer and discard it when
+// Write fails.
 func Write(w io.Writer, ds *dataset.Dataset, opts ...WriteOption) error {
 	return WriteContext(context.Background(), w, ds, opts...)
 }
@@ -857,9 +866,15 @@ func (w *Writer) writeDataset(ds *dataset.Dataset) error {
 	if ds == nil {
 		return nil
 	}
-	lengths, err := w.calculateWalkLengths(ds)
-	if err != nil {
-		return err
+	// The walk lengths are only consulted when a sequence or item is encoded
+	// with an explicit length; skip the extra full dataset walk otherwise.
+	var lengths *walkLengths
+	if w.explicitLengthSequences || w.explicitLengthSequenceItems {
+		var err error
+		lengths, err = w.calculateWalkLengths(ds)
+		if err != nil {
+			return err
+		}
 	}
 	return w.writeDatasetWithWalk(ds, lengths)
 }
@@ -885,7 +900,7 @@ func (w *Writer) writeElement(elem element.Element) error {
 	elemVR := elem.ValueRepresentation()
 	swapUnit := byteSwapUnit(elemVR)
 	sourceByteOrder, sourceByteOrderKnown := element.NumericByteOrder(elem)
-	needsByteSwap := sourceByteOrderKnown && swapUnit > 1 && !sameByteOrder(sourceByteOrder, w.byteOrder)
+	needsByteSwap := sourceByteOrderKnown && swapUnit > 1 && !sameByteOrder(sourceByteOrder, w.elementByteOrder(elem))
 	if swapUnit > 1 && valueLength%uint32(swapUnit) != 0 { //nolint:gosec // swap units are positive and at most 8
 		return fmt.Errorf("value length %d for tag %s and VR %s is not divisible by byte-swap unit %d",
 			valueLength, elem.Tag(), elemVR, swapUnit)
@@ -961,6 +976,16 @@ func byteSwapUnit(v *vr.VR) int {
 		return 0
 	}
 	return v.ByteSwap()
+}
+
+// elementByteOrder returns the byte order to materialize for elem. Native Pixel
+// Data can target an order different from the dataset when the transfer syntax
+// swaps pixel data (GE's private implicit VR big endian).
+func (w *Writer) elementByteOrder(elem element.Element) binary.ByteOrder {
+	if tag.PixelData.Equals(elem.Tag()) && w.transferSyntax != nil {
+		return w.transferSyntax.PixelDataByteOrder()
+	}
+	return w.byteOrder
 }
 
 func sameByteOrder(a, b binary.ByteOrder) bool {

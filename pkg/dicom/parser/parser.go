@@ -1685,15 +1685,19 @@ func (p *parseContext) consumeBounded(length uint32) {
 
 // createElement creates an element from tag, VR, and buffer.
 func (p *parseContext) createElement(t *tag.Tag, v *vr.VR, buf buffer.ByteBuffer) (element.Element, error) {
-	setOrder := func(elem element.Element) element.Element {
-		element.SetByteOrder(elem, p.byteOrder)
-		return elem
-	}
 	elem, err := element.NewElementFromBuffer(t, v, buf, p.textEncodings)
 	if err != nil {
 		return nil, err
 	}
-	return setOrder(elem), nil
+	// Native Pixel Data can use a byte order different from the dataset when
+	// the syntax swaps pixel data (GE private implicit VR big endian). Record
+	// the order of the buffered bytes so readers and the writer agree.
+	order := p.byteOrder
+	if tag.PixelData.Equals(t) && p.transferSyntax != nil {
+		order = p.transferSyntax.PixelDataByteOrder()
+	}
+	element.SetByteOrder(elem, order)
+	return elem, nil
 }
 
 // createLazyBuffer creates a lazy-loading buffer for large elements.

@@ -389,8 +389,6 @@ func TestBuildFragmentSequenceRebuildsOffsetsForEmittedLayout(t *testing.T) {
 			{0xAA, 0xBB, 0xCC},       // len=3 -> padded item payload 4
 			{0x11, 0x22, 0x33, 0x44}, // len=4
 		},
-		[]uint32{0, 999},
-		8,
 	)
 	if err != nil {
 		t.Fatalf("buildFragmentSequence() error = %v", err)
@@ -680,6 +678,81 @@ func TestData_MultiFrame(t *testing.T) {
 		if len(frame) != 64 {
 			t.Errorf("Frame %d size = %d, want 64", i, len(frame))
 		}
+	}
+}
+
+func TestDataEncodeKeepsFramesLittleEndianForBigEndianCodec(t *testing.T) {
+	tests := []struct {
+		name  string
+		codec codec.Codec
+		want  []byte
+	}{
+		{name: "big endian codec", codec: codec.NewExplicitVRBigEndianCodec(), want: []byte{0x01, 0x02}},
+		{name: "little endian codec", codec: codec.NewExplicitVRLittleEndianCodec(), want: []byte{0x02, 0x01}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := grayscaleSampleInfo(16, 16, 15, pixel.UnsignedPixels)
+			pd, err := NewFromBytes(&info, []byte{0x02, 0x01}) // sample 0x0102 little-endian
+			if err != nil {
+				t.Fatalf("NewFromBytes() error = %v", err)
+			}
+
+			encoded, err := pd.Encode(context.Background(), tt.codec, nil)
+			if err != nil {
+				t.Fatalf("Encode() error = %v", err)
+			}
+			// Data frames stay little-endian whatever the codec's syntax.
+			frame, err := encoded.Frame(context.Background(), 0)
+			if err != nil {
+				t.Fatalf("Frame() error = %v", err)
+			}
+			if !bytes.Equal(frame, []byte{0x02, 0x01}) {
+				t.Fatalf("encoded frame = %x, want little-endian 0201", frame)
+			}
+			// ToElement restores the codec's requested transfer syntax.
+			elem, err := encoded.ToElement()
+			if err != nil {
+				t.Fatalf("ToElement() error = %v", err)
+			}
+			if got := elem.Buffer().Data(); !bytes.Equal(got, tt.want) {
+				t.Fatalf("ToElement() bytes = %x, want %x", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDataBigEndianCodecEncodeDecodeRoundTripPreservesSamples(t *testing.T) {
+	info := grayscaleSampleInfo(16, 16, 15, pixel.UnsignedPixels)
+	pd, err := NewFromBytes(&info, []byte{0x02, 0x01}) // sample 0x0102 little-endian
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	bigEndianCodec := codec.NewExplicitVRBigEndianCodec()
+
+	encoded, err := pd.Encode(context.Background(), bigEndianCodec, nil)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	decoded, err := encoded.Decode(context.Background(), bigEndianCodec, nil)
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	got, err := decoded.Sample(0, 0, 0, 0)
+	if err != nil {
+		t.Fatalf("Sample() error = %v", err)
+	}
+	if got != 0x0102 {
+		t.Fatalf("Sample() = %#x, want 0x0102", got)
+	}
+	frame, err := decoded.Frame(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("Frame() error = %v", err)
+	}
+	if !bytes.Equal(frame, []byte{0x02, 0x01}) {
+		t.Fatalf("decoded frame = %x, want little-endian 0201", frame)
 	}
 }
 
@@ -1764,12 +1837,12 @@ func TestApplyVOILUTReadsEightBitEntriesFromWordData(t *testing.T) {
 				t.Fatalf("NewFromBytes() error = %v", err)
 			}
 
-			got, err := applyVOILUT(pd, ds, 0, 0, false)
+			got, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil)
 			if err != nil {
-				t.Fatalf("applyVOILUT() error = %v", err)
+				t.Fatalf("applyVOILUTWithModality() error = %v", err)
 			}
 			if want := []byte{10, 20, 30}; !bytes.Equal(got[0], want) {
-				t.Fatalf("applyVOILUT() = %v, want %v", got[0], want)
+				t.Fatalf("applyVOILUTWithModality() = %v, want %v", got[0], want)
 			}
 		})
 	}
@@ -1790,12 +1863,12 @@ func TestApplyVOILUTKeepsUnsignedFirstMappedValue(t *testing.T) {
 		t.Fatalf("NewFromBytes() error = %v", err)
 	}
 
-	got, err := applyVOILUT(pd, ds, 0, 0, false)
+	got, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil)
 	if err != nil {
-		t.Fatalf("applyVOILUT() error = %v", err)
+		t.Fatalf("applyVOILUTWithModality() error = %v", err)
 	}
 	if want := []byte{10, 20}; !bytes.Equal(got[0], want) {
-		t.Fatalf("applyVOILUT() = %v, want %v", got[0], want)
+		t.Fatalf("applyVOILUTWithModality() = %v, want %v", got[0], want)
 	}
 }
 
@@ -1814,8 +1887,8 @@ func TestApplyVOILUTRejectsShortData(t *testing.T) {
 		t.Fatalf("NewFromBytes() error = %v", err)
 	}
 
-	if _, err := applyVOILUT(pd, ds, 0, 0, false); err == nil {
-		t.Fatal("applyVOILUT() accepted LUT Data shorter than the descriptor")
+	if _, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil); err == nil {
+		t.Fatal("applyVOILUTWithModality() accepted LUT Data shorter than the descriptor")
 	}
 }
 
@@ -1939,8 +2012,8 @@ func TestApplyVOILUTRejectsInvalidBitsPerEntry(t *testing.T) {
 				t.Fatalf("NewFromBytes() error = %v", err)
 			}
 
-			if _, err := applyVOILUT(pd, ds, 0, 0, false); err == nil {
-				t.Fatalf("applyVOILUT() accepted bitsPerEntry=%d", bitsPerEntry)
+			if _, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil); err == nil {
+				t.Fatalf("applyVOILUTWithModality() accepted bitsPerEntry=%d", bitsPerEntry)
 			}
 		})
 	}

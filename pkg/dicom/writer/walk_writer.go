@@ -85,13 +85,16 @@ func (c *walkLengthCalculator) visit(event dataset.WalkEvent) (dataset.WalkActio
 		if err != nil {
 			return dataset.WalkContinue, err
 		}
-		content, err := uint32Length(frame.content, "sequence item", path)
-		if err != nil {
-			return dataset.WalkContinue, err
-		}
-		c.lengths.items[path] = content
 		total := uint64(8) + frame.content
-		if !c.writer.explicitLengthSequenceItems {
+		if c.writer.explicitLengthSequenceItems {
+			content, lengthErr := uint32Length(frame.content, "sequence item", path)
+			if lengthErr != nil {
+				return dataset.WalkContinue, lengthErr
+			}
+			c.lengths.items[path] = content
+		} else {
+			// Undefined-length items are delimited, not length-prefixed, so a
+			// content larger than 4 GiB is legal and must not be rejected.
 			total += 8
 		}
 		return dataset.WalkContinue, c.add(total)
@@ -104,13 +107,16 @@ func (c *walkLengthCalculator) visit(event dataset.WalkEvent) (dataset.WalkActio
 		if err != nil {
 			return dataset.WalkContinue, err
 		}
-		content, err := uint32Length(frame.content, "sequence", path)
-		if err != nil {
-			return dataset.WalkContinue, err
-		}
-		c.lengths.sequences[path] = content
 		total := uint64(c.writer.elementHeaderLength(vr.SQ)) + frame.content
-		if !c.writer.explicitLengthSequences {
+		if c.writer.explicitLengthSequences {
+			content, lengthErr := uint32Length(frame.content, "sequence", path)
+			if lengthErr != nil {
+				return dataset.WalkContinue, lengthErr
+			}
+			c.lengths.sequences[path] = content
+		} else {
+			// Undefined-length sequences are delimited, not length-prefixed, so
+			// a content larger than 4 GiB is legal and must not be rejected.
 			total += 8
 		}
 		return dataset.WalkContinue, c.add(total)
@@ -136,6 +142,11 @@ func (c *walkLengthCalculator) visit(event dataset.WalkEvent) (dataset.WalkActio
 			return dataset.WalkContinue, fmt.Errorf("fragment item buffer is nil")
 		}
 		length := uint64(event.Fragment.Size())
+		if length == 0 {
+			// The encoder skips empty fragment items (the parser tolerates
+			// them), so they contribute no bytes to the enclosing length.
+			return dataset.WalkContinue, nil
+		}
 		if length%2 != 0 {
 			length++
 		}
@@ -414,13 +425,17 @@ func validateBasicOffsetTable(offsets []uint32, fragments []buffer.ByteBuffer) e
 	next := 0
 	var fragmentOffset uint64
 	for _, fragment := range fragments {
-		if next < len(offsets) && uint64(offsets[next]) == fragmentOffset {
-			next++
-		}
 		if fragment == nil {
 			return fmt.Errorf("fragment item is nil")
 		}
 		fragmentLength := uint64(fragment.Size())
+		if fragmentLength == 0 {
+			// Empty fragments are not encoded, so they occupy no offset.
+			continue
+		}
+		if next < len(offsets) && uint64(offsets[next]) == fragmentOffset {
+			next++
+		}
 		if fragmentLength%2 != 0 {
 			fragmentLength++
 		}
@@ -442,9 +457,9 @@ func (w *Writer) writeFragmentItem(fragment buffer.ByteBuffer) error {
 	}
 	length := fragment.Size()
 	if length == 0 {
-		// PS3.5 A.4: every item containing an encoded Fragment shall be of an
-		// even number of bytes greater than or equal to two.
-		return fmt.Errorf("fragment item is empty; PS3.5 A.4 requires at least 2 bytes")
+		// The parser tolerates zero-length fragment items; skip them so a file
+		// the library can read can also be written back.
+		return nil
 	}
 	paddedLength := length
 	if length%2 != 0 {

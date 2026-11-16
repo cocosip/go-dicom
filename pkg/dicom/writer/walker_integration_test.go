@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -61,7 +62,7 @@ func TestWriteTreatsNilSequenceItemAsEmptyItem(t *testing.T) {
 	}
 }
 
-func TestWriteReturnsWalkerCycleErrorBeforeDatasetBytes(t *testing.T) {
+func TestWriteReturnsWalkerCycleError(t *testing.T) {
 	ds := dataset.New()
 	sequence := dataset.NewSequence(tag.ReferencedImageSequence)
 	if err := ds.Add(sequence); err != nil {
@@ -78,8 +79,12 @@ func TestWriteReturnsWalkerCycleErrorBeforeDatasetBytes(t *testing.T) {
 	if got := dataset.FormatPath(walkErr.Path); got != "(0008,1140)[0]" {
 		t.Fatalf("cycle path = %q, want (0008,1140)[0]", got)
 	}
-	if encoded.Len() != 0 {
-		t.Fatalf("wrote %d Dataset bytes before cycle detection", encoded.Len())
+	// The writer no longer pre-walks the dataset solely to compute explicit
+	// lengths (audit #13a), so a cycle is detected while the sequence is being
+	// encoded and bytes may already have reached the destination. Callers
+	// writing to a stream must discard the output when Write returns an error.
+	if encoded.Len() > 12 {
+		t.Fatalf("wrote %d Dataset bytes before cycle detection, want at most the sequence header", encoded.Len())
 	}
 }
 
@@ -108,5 +113,53 @@ func TestCalculateWalkLengthsForExplicitSequenceAndItem(t *testing.T) {
 	}
 	if got := lengths.sequences["(0008,1140)"]; got != 18 {
 		t.Fatalf("sequence content length = %d, want 18", got)
+	}
+}
+
+// TestCalculateWalkLengthsAllowsOver4GiBUndefinedLengthContainers verifies that
+// the 4 GiB explicit-length limit is only enforced when the container is
+// actually encoded with an explicit length. A sequence/item larger than 4 GiB is
+// legal when it uses undefined length plus delimiters.
+func TestCalculateWalkLengthsAllowsOver4GiBUndefinedLengthContainers(t *testing.T) {
+	path := dataset.FormatPath(dataset.Path{{Tag: tag.ReferencedImageSequence}})
+	eventPath := dataset.Path{{Tag: tag.ReferencedImageSequence}}
+	newCalculator := func(explicitSequences, explicitItems bool) *walkLengthCalculator {
+		return &walkLengthCalculator{
+			writer: &Writer{
+				isExplicitVR:                true,
+				explicitLengthSequences:     explicitSequences,
+				explicitLengthSequenceItems: explicitItems,
+			},
+			lengths: &walkLengths{sequences: map[string]uint32{}, items: map[string]uint32{}},
+			frames:  []lengthFrame{{kind: dataset.WalkInvalid}},
+			skipped: make(map[string]dataset.WalkEventKind),
+		}
+	}
+
+	tests := []struct {
+		name              string
+		kind              dataset.WalkEventKind
+		explicitSequences bool
+		explicitItems     bool
+		wantErr           bool
+	}{
+		{"undefined sequence length", dataset.WalkSequenceEnd, false, false, false},
+		{"explicit sequence length", dataset.WalkSequenceEnd, true, false, true},
+		{"undefined item length", dataset.WalkSequenceItemEnd, false, false, false},
+		{"explicit item length", dataset.WalkSequenceItemEnd, false, true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newCalculator(tt.explicitSequences, tt.explicitItems)
+			frameKind := dataset.WalkSequenceBegin
+			if tt.kind == dataset.WalkSequenceItemEnd {
+				frameKind = dataset.WalkSequenceItemBegin
+			}
+			c.frames = append(c.frames, lengthFrame{kind: frameKind, path: path, content: math.MaxUint32})
+			_, err := c.visit(dataset.WalkEvent{Kind: tt.kind, Path: eventPath})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("visit(%s) error = %v, wantErr %v", tt.kind, err, tt.wantErr)
+			}
+		})
 	}
 }

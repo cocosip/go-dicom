@@ -470,6 +470,130 @@ func TestTranscoderNativeThirtyTwoBitOWReversesSamples(t *testing.T) {
 	}
 }
 
+// newNativePixelDataset builds a 1x1 16-bit native Pixel Data dataset whose
+// buffered Pixel Data bytes are in order, as the parser records them.
+func newNativePixelDataset(t *testing.T, syntax *transfer.Syntax, pixelBytes []byte, order binary.ByteOrder) *dataset.Dataset {
+	t.Helper()
+	ds := dataset.NewWithTransferSyntax(syntax)
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{1}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+	pixelElement := element.NewOtherWord(tag.PixelData, append([]byte(nil), pixelBytes...))
+	element.SetByteOrder(pixelElement, order)
+	if err := ds.Add(pixelElement); err != nil {
+		t.Fatalf("Dataset.Add(PixelData) error = %v", err)
+	}
+	return ds
+}
+
+func nativePixelDataBytes(t *testing.T, ds *dataset.Dataset) []byte {
+	t.Helper()
+	elem, ok := ds.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("dataset has no Pixel Data")
+	}
+	word, ok := elem.(*element.OtherWord)
+	if !ok {
+		t.Fatalf("Pixel Data = %T, want *element.OtherWord", elem)
+	}
+	return word.GetData()
+}
+
+func TestTranscoderGEPrivateBigEndianToLittleEndian(t *testing.T) {
+	// GE's private syntax stores native pixel words big-endian while the
+	// dataset stays little-endian.
+	ds := newNativePixelDataset(t, transfer.GEPrivateImplicitVRBigEndian, []byte{0x12, 0x34}, binary.BigEndian)
+
+	result, err := newTestTranscoder(
+		t,
+		transfer.GEPrivateImplicitVRBigEndian,
+		transfer.ExplicitVRLittleEndian,
+	).Transcode(context.Background(), ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	if got := nativePixelDataBytes(t, result); !bytes.Equal(got, []byte{0x34, 0x12}) {
+		t.Fatalf("Pixel Data = % x, want little-endian 34 12", got)
+	}
+	order, known := element.NumericByteOrder(mustPixelElement(t, result))
+	if !known || order.Uint16([]byte{0x01, 0x02}) != binary.LittleEndian.Uint16([]byte{0x01, 0x02}) {
+		t.Fatalf("Pixel Data byte order = %T (known %v), want little-endian", order, known)
+	}
+	pd, err := pixeldata.FromDataset(result)
+	if err != nil {
+		t.Fatalf("FromDataset() error = %v", err)
+	}
+	if sample, err := pd.Sample(0, 0, 0, 0); err != nil || sample != 0x1234 {
+		t.Fatalf("Sample() = %#x, %v; want 0x1234", sample, err)
+	}
+}
+
+func TestTranscoderLittleEndianToGEPrivateBigEndian(t *testing.T) {
+	ds := newNativePixelDataset(t, transfer.ExplicitVRLittleEndian, []byte{0x34, 0x12}, binary.LittleEndian)
+
+	result, err := newTestTranscoder(
+		t,
+		transfer.ExplicitVRLittleEndian,
+		transfer.GEPrivateImplicitVRBigEndian,
+	).Transcode(context.Background(), ds)
+	if err != nil {
+		t.Fatalf("Transcode() error = %v", err)
+	}
+	if got := nativePixelDataBytes(t, result); !bytes.Equal(got, []byte{0x12, 0x34}) {
+		t.Fatalf("Pixel Data = % x, want big-endian 12 34", got)
+	}
+	order, known := element.NumericByteOrder(mustPixelElement(t, result))
+	if !known || order.Uint16([]byte{0x01, 0x02}) != binary.BigEndian.Uint16([]byte{0x01, 0x02}) {
+		t.Fatalf("Pixel Data byte order = %T (known %v), want big-endian", order, known)
+	}
+	pd, err := pixeldata.FromDataset(result)
+	if err != nil {
+		t.Fatalf("FromDataset() error = %v", err)
+	}
+	if sample, err := pd.Sample(0, 0, 0, 0); err != nil || sample != 0x1234 {
+		t.Fatalf("Sample() = %#x, %v; want 0x1234", sample, err)
+	}
+}
+
+func mustPixelElement(t *testing.T, ds *dataset.Dataset) element.Element {
+	t.Helper()
+	elem, ok := ds.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("dataset has no Pixel Data")
+	}
+	return elem
+}
+
+func TestDecodeFrameNormalizesBigEndianNativeFrame(t *testing.T) {
+	ds := newNativePixelDataset(t, transfer.ExplicitVRBigEndian, []byte{0x12, 0x34}, binary.BigEndian)
+
+	frame, err := newTestTranscoder(
+		t,
+		transfer.ExplicitVRBigEndian,
+		transfer.ExplicitVRLittleEndian,
+	).DecodeFrame(context.Background(), ds, 0)
+	if err != nil {
+		t.Fatalf("DecodeFrame() error = %v", err)
+	}
+	if want := []byte{0x34, 0x12}; !bytes.Equal(frame, want) {
+		t.Fatalf("DecodeFrame() = % x, want little-endian % x", frame, want)
+	}
+	if got := nativePixelDataBytes(t, ds); !bytes.Equal(got, []byte{0x12, 0x34}) {
+		t.Fatalf("DecodeFrame() mutated source Pixel Data to % x", got)
+	}
+}
+
 func TestTranscoderDefaultNormalizesNativeOBAboveEightBits(t *testing.T) {
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
 	for _, elem := range []element.Element{

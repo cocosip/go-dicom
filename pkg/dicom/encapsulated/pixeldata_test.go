@@ -156,6 +156,35 @@ func TestPixelDataExtendedOffsetLengthExcludesPadding(t *testing.T) {
 	}
 }
 
+func TestPixelDataExtendedOffsetTrimsStoredFragmentPad(t *testing.T) {
+	// A padded fragment item stores 4 bytes for a 3-byte frame; the Extended
+	// Offset Table Length records the unpadded 3 bytes (PS3.3 Table C.7-11a).
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTable, encodeUint64s(0))); err != nil {
+		t.Fatal(err)
+	}
+	if err := ds.Add(element.NewOtherVeryLong(tag.ExtendedOffsetTableLengths, encodeUint64s(3))); err != nil {
+		t.Fatal(err)
+	}
+	fragments := element.NewOtherByteFragment(tag.PixelData)
+	fragments.AddFragment(buffer.NewMemory([]byte{0xAA, 0xBB, 0xCC, 0x00}))
+	if err := ds.Add(fragments); err != nil {
+		t.Fatal(err)
+	}
+
+	pixelData, err := OpenDataset(ds)
+	if err != nil {
+		t.Fatalf("OpenDataset() error = %v", err)
+	}
+	frames, err := pixelData.Frames(1)
+	if err != nil {
+		t.Fatalf("Frames() error = %v (stored pad byte must be trimmed)", err)
+	}
+	if want := [][]byte{{0xAA, 0xBB, 0xCC}}; !reflect.DeepEqual(frames, want) {
+		t.Fatalf("Frames() = %v, want %v", frames, want)
+	}
+}
+
 func openTestPixelData(t *testing.T, basic []uint32, extended, lengths []uint64) *PixelData {
 	t.Helper()
 	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)

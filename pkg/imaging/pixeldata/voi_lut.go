@@ -167,13 +167,8 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor dicomlut.Desc
 	return dicomlut.ReadData(ds, dataTag, descriptor, byteOrder)
 }
 
-// applyVOILUT applies VOI LUT Sequence and maps its declared output range to 8-bit.
-//
-//nolint:unparam // Keep the legacy helper signature used by package-level tests and callers.
-func applyVOILUT(pd *Data, ds *dataset.Dataset, _, _ float64, ignorePadding bool) ([][]byte, error) {
-	return applyVOILUTWithModality(pd, ds, 0, 0, ignorePadding, nil)
-}
-
+// applyVOILUTWithModality applies the VOI LUT Sequence and maps its declared
+// output range to 8-bit, then through the modality LUT when one is supplied.
 func applyVOILUTWithModality(pd *Data, ds *dataset.Dataset, _, _ float64, ignorePadding bool, modality lut.LUT) ([][]byte, error) {
 	signed := pd != nil && pd.Info != nil && pd.Info.PixelRepresentation == pixel.SignedPixels
 	table, err := VOILUT(ds, signed)

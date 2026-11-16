@@ -688,7 +688,7 @@ func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ig
 		}
 		frameData := &Data{Info: pd.Info, frames: [][]byte{frame}}
 		var converted [][]byte
-		if voiSource := datasetContaining(functional, ds, tag.VOILUTSequence); voiSource != nil {
+		if voiSource := DatasetContaining(functional, ds, tag.VOILUTSequence); voiSource != nil {
 			converted, err = applyVOILUTWithModality(frameData, voiSource, center, width, ignorePadding, modality)
 		} else {
 			function := windowFunctionForDatasets(functional, ds)
@@ -705,7 +705,7 @@ func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ig
 // windowFunctionForDatasets reads VOI LUT Function (0028,1056) for the frame,
 // defaulting to LINEAR when absent or empty (PS3.3 C.11.2.1.3).
 func windowFunctionForDatasets(primary, fallback *dataset.Dataset) lut.VOILUTFunction {
-	source := datasetContaining(primary, fallback, tag.VOILUTFunction)
+	source := DatasetContaining(primary, fallback, tag.VOILUTFunction)
 	if source == nil {
 		return lut.VOILUTFunctionLinear
 	}
@@ -728,7 +728,7 @@ func modalityTransformForDatasets(primary, fallback *dataset.Dataset, pd *Data) 
 	// Select one precedence source for the complete modality transform. A
 	// Functional Group transform overrides top-level attributes instead of
 	// being combined with the other representation.
-	source := datasetContaining(
+	source := DatasetContaining(
 		primary,
 		nil,
 		tag.ModalityLUTSequence,
@@ -736,7 +736,7 @@ func modalityTransformForDatasets(primary, fallback *dataset.Dataset, pd *Data) 
 		tag.RescaleIntercept,
 	)
 	if source == nil {
-		source = datasetContaining(
+		source = DatasetContaining(
 			fallback,
 			nil,
 			tag.ModalityLUTSequence,
@@ -793,7 +793,11 @@ func modalityTransformForDatasets(primary, fallback *dataset.Dataset, pd *Data) 
 	return lut.NewModalityRescaleLUT(slope, intercept, math.NaN(), math.NaN()), nil
 }
 
-func datasetContaining(primary, fallback *dataset.Dataset, tags ...*tag.Tag) *dataset.Dataset {
+// DatasetContaining returns the first of primary and fallback that contains any
+// of tags, preferring primary. It returns nil when neither dataset has any of
+// the tags; this is the module-wide rule for preferring the functional-group
+// (per-frame) dataset over the top-level one.
+func DatasetContaining(primary, fallback *dataset.Dataset, tags ...*tag.Tag) *dataset.Dataset {
 	for _, ds := range []*dataset.Dataset{primary, fallback} {
 		if ds == nil {
 			continue
@@ -822,7 +826,7 @@ func (pd *Data) ToElement() (element.Element, error) {
 
 	// Encapsulated pixel data is always encoded as OB per DICOM Part 5.
 	if pd.Info.Encapsulated {
-		return buildFragmentSequence(pd.frames, pd.basicOffsetTable, pd.Info.BitsAllocated)
+		return buildFragmentSequence(pd.frames)
 	}
 
 	// Uncompressed: concatenate frames, repacking 1-bit samples into the
@@ -921,6 +925,7 @@ func (pd *Data) SetFrameInfo(info codec.FrameInfo) error {
 }
 
 // Encode encodes the pixel data using the specified codec and returns a new Data.
+// Retained frames are always little-endian (see ToElement).
 func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Parameters) (*Data, error) {
 	if pd == nil || pd.Info == nil {
 		return nil, fmt.Errorf("pixel data info is nil")
@@ -966,8 +971,25 @@ func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Paramete
 	if err := c.Encode(ctx, pd, newPD, ownedParams); err != nil {
 		return nil, fmt.Errorf("failed to encode pixel data: %w", err)
 	}
+	normalizeNativeFrameByteOrder(newPD, c.TransferSyntax())
 
 	return newPD, nil
+}
+
+// normalizeNativeFrameByteOrder restores the internal little-endian frame order
+// after a native codec wrote frames in its transfer syntax's pixel-data byte
+// order (a big-endian native codec). Encapsulated frames are opaque and must
+// stay untouched: the decoder already yields little-endian native samples.
+func normalizeNativeFrameByteOrder(pd *Data, syntax *transfer.Syntax) {
+	if pd == nil || pd.Info == nil || pd.Info.Encapsulated || syntax == nil || syntax.IsEncapsulated() {
+		return
+	}
+	if syntax.PixelDataByteOrder() != binary.BigEndian {
+		return
+	}
+	for index, frame := range pd.frames {
+		pd.frames[index] = swapPixelDataBytes(frame, pd.Info)
+	}
 }
 
 // nativeSafePhotometric replaces an encapsulated-only photometric
@@ -989,6 +1011,7 @@ func nativeSafePhotometric(pi *pixel.PhotometricInterpretation, samplesPerPixel 
 }
 
 // Decode decodes the pixel data using the specified codec and returns a new Data.
+// Decoded frames are always little-endian.
 func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Parameters) (*Data, error) {
 	if pd == nil || pd.Info == nil {
 		return nil, fmt.Errorf("pixel data info is nil")
@@ -1038,6 +1061,7 @@ func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Paramete
 	if err := c.Decode(ctx, pd, newPD, ownedParams); err != nil {
 		return nil, fmt.Errorf("failed to decode pixel data: %w", err)
 	}
+	normalizeNativeFrameByteOrder(newPD, c.TransferSyntax())
 
 	return newPD, nil
 }
@@ -1124,7 +1148,7 @@ func FromDatasetWithOptions(ds *dataset.Dataset, options ...ReadOption) (*Data, 
 
 	pixelRepr := ds.TryGetUInt16(tag.PixelRepresentation, 0)
 
-	numberOfFrames := frameCountFromDataset(ds)
+	numberOfFrames := FrameCountFromDataset(ds)
 
 	planarConfig := ds.TryGetUInt16(tag.PlanarConfiguration, 0)
 
@@ -1753,10 +1777,10 @@ func stripFramePadding(frames [][]byte) {
 	}
 }
 
-// buildFragmentSequence creates an OB fragment sequence from per-frame compressed data,
-// populating the Basic Offset Table for multi-frame images.
-// If an existing BOT is provided and matches frames length, it is used; otherwise BOT is rebuilt.
-func buildFragmentSequence(frames [][]byte, _ []uint32, _ uint16) (element.Element, error) {
+// buildFragmentSequence creates an OB fragment sequence with one fragment per
+// frame. The Basic Offset Table is always rebuilt for that emitted layout;
+// offsets stored in a source BOT describe a different fragment layout.
+func buildFragmentSequence(frames [][]byte) (element.Element, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frame data provided for fragment sequence")
 	}
@@ -1790,10 +1814,10 @@ func buildFragmentSequence(frames [][]byte, _ []uint32, _ uint16) (element.Eleme
 	return obf, nil
 }
 
-func frameCountFromDataset(ds *dataset.Dataset) int {
-	if nf, err := ds.GetInt32(tag.NumberOfFrames, 0); err == nil && nf > 0 {
-		return int(nf)
-	}
+// FrameCountFromDataset returns the Number of Frames declared by ds, or 1 when
+// the attribute is absent or invalid. Number of Frames has VR IS, so it is read
+// through the integer-string accessor.
+func FrameCountFromDataset(ds *dataset.Dataset) int {
 	if nfStr, ok := ds.GetString(tag.NumberOfFrames); ok {
 		if parsed, err := strconv.Atoi(strings.TrimSpace(nfStr)); err == nil && parsed > 0 {
 			return parsed
