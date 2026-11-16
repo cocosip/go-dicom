@@ -154,12 +154,15 @@ func (p *PresentationLUT) IsValid() bool {
 	return true
 }
 
-// TransformValue applies the LUT transformation to an input value
+// TransformValue applies the LUT transformation to an input value.
+//
+// A print Presentation LUT shape is IDENTITY or LIN OD only (PS3.3 C.11.4,
+// Table C.11-4); the softcopy INVERSE value is not permitted here. Transforming
+// such a misconfigured LUT would also be wrong for data narrower than 16 bits
+// (a 16-bit complement maps 0 to 65535 instead of the 8-bit 255), so the input
+// is passed through unchanged and IsValid reports the configuration error.
 func (p *PresentationLUT) TransformValue(inputValue uint16) uint16 {
 	if len(p.LUTData) == 0 || len(p.LUTDescriptor) != 3 {
-		if p.PresentationLUTShape == PresentationLUTShapeInverse {
-			return ^inputValue
-		}
 		return inputValue
 	}
 

@@ -217,11 +217,13 @@ func TestPresentationLUT_InverseShapeIsNotValidForPrint(t *testing.T) {
 	if lut.IsValid() {
 		t.Fatal("INVERSE Presentation LUT shape must not be valid for print")
 	}
-	if got := lut.TransformValue(0); got != ^uint16(0) {
-		t.Fatalf("INVERSE transform of zero = %d, want %d", got, ^uint16(0))
-	}
-	if got := lut.TransformValue(^uint16(0)); got != 0 {
-		t.Fatalf("INVERSE transform of max = %d, want 0", got)
+	// The shape is still detectable through IsValid, but an invalid LUT must
+	// not silently complement its input (16-bit complement of 0 is 65535, not
+	// the 255 an 8-bit print would need).
+	for _, value := range []uint16{0, 100, ^uint16(0)} {
+		if got := lut.TransformValue(value); got != value {
+			t.Fatalf("INVERSE transform of %d = %d, want identity output %d", value, got, value)
+		}
 	}
 }
 

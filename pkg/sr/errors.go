@@ -39,12 +39,6 @@ func WrapError(message string, err error) error {
 
 // Common errors
 var (
-	// ErrInvalidValueType indicates an invalid value type for the operation
-	ErrInvalidValueType = NewError("invalid value type for operation")
-
-	// ErrInvalidRelationship indicates an invalid relationship type
-	ErrInvalidRelationship = NewError("invalid relationship type")
-
 	// ErrEmptySequence indicates an empty sequence where data was expected
 	ErrEmptySequence = NewError("empty sequence, no items found")
 
