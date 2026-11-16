@@ -73,10 +73,11 @@ func (c *CompositeByteBuffer) Data() []byte {
 	for _, buf := range c.buffers {
 		bufSize := buf.Size()
 		child := buf.Data()
-		// A child that fails to read returns nil; returning nil here (rather
-		// than a zero-filled span that looks like real data) lets callers detect
-		// the failure, consistent with the other buffer implementations.
-		if child == nil && bufSize != 0 {
+		// A child that fails to read returns nil or a short slice; returning nil
+		// here (rather than a zero-filled span that looks like real data) lets
+		// callers detect the failure, consistent with the other buffer
+		// implementations.
+		if len(child) != int(bufSize) {
 			return nil
 		}
 		copy(data[offset:offset+bufSize], child)

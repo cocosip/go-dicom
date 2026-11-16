@@ -141,6 +141,9 @@ func (e *EndianByteBuffer) WriteTo(w io.Writer) (int64, error) {
 		if err != nil {
 			return totalWritten, err
 		}
+		if n != len(chunk) {
+			return totalWritten, io.ErrShortWrite
+		}
 
 		offset += chunkSize
 		remaining -= chunkSize

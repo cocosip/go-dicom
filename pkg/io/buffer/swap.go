@@ -162,6 +162,9 @@ func (s *SwapByteBuffer) WriteTo(w io.Writer) (int64, error) {
 		if err != nil {
 			return totalWritten, fmt.Errorf("failed to write chunk: %w", err)
 		}
+		if n != int(toRead) {
+			return totalWritten, io.ErrShortWrite
+		}
 
 		offset += toRead
 		remaining -= toRead
