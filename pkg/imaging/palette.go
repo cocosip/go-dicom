@@ -61,12 +61,6 @@ func NewPaletteColorLUTWithAlpha(descriptorRed, descriptorAlpha []uint16, red, g
 	return newPaletteColorLUT(descriptorRed, descriptorAlpha, red, green, blue, alpha, PaletteColorLUTOptions{})
 }
 
-// NewPaletteColorLUTWithAlphaAndOptions creates an alpha-capable palette color
-// LUT with an explicit byte order and first-mapped-value interpretation.
-func NewPaletteColorLUTWithAlphaAndOptions(descriptorRed, descriptorAlpha []uint16, red, green, blue, alpha []byte, options PaletteColorLUTOptions) (*PaletteColorLUT, error) {
-	return newPaletteColorLUT(descriptorRed, descriptorAlpha, red, green, blue, alpha, options)
-}
-
 func newPaletteColorLUT(descriptorRed, descriptorAlpha []uint16, red, green, blue, alpha []byte, options PaletteColorLUTOptions) (*PaletteColorLUT, error) {
 	byteOrder := options.ByteOrder
 	if byteOrder == nil {

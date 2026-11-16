@@ -159,7 +159,13 @@ func (img *DicomImage) applyOverlays(source image.Image, frame int) image.Image 
 				x := overlay.OriginColumn - 1 + column
 				y := overlay.OriginRow - 1 + row
 				if image.Pt(x, y).In(destination.Bounds()) {
-					destination.Set(x, y, color.NRGBA{R: overlayColor.R, G: overlayColor.G, B: overlayColor.B, A: overlayColor.A})
+					base := color.NRGBAModel.Convert(destination.At(x, y)).(color.NRGBA)
+					destination.Set(x, y, color.NRGBA{
+						R: compositeOverlayChannel(base.R, overlayColor.R, overlayColor.A),
+						G: compositeOverlayChannel(base.G, overlayColor.G, overlayColor.A),
+						B: compositeOverlayChannel(base.B, overlayColor.B, overlayColor.A),
+						A: compositeOverlayChannel(base.A, 255, overlayColor.A),
+					})
 				}
 			}
 		}

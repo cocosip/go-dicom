@@ -9,17 +9,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 )
 
-// clampToByte clamps an integer to 0-255.
-func clampToByte(v int) byte {
-	if v < 0 {
-		return 0
-	}
-	if v > 255 {
-		return 255
-	}
-	return byte(v)
-}
-
 // OutputLUT maps grayscale values to RGB or pseudo-color values.
 //
 // This is used for:
@@ -42,24 +31,6 @@ func NewOutputLUT(colorMap [256]colorconv.Color32) *OutputLUT {
 	return &OutputLUT{
 		colorMap: colorMap,
 	}
-}
-
-// NewOutputLUTFromValues builds an OutputLUT from a slice of uint16 values and first mapped index.
-// Values are clamped to 8-bit.
-func NewOutputLUTFromValues(first float64, values []uint16) *OutputLUT {
-	var colorMap [256]colorconv.Color32
-	for i := 0; i < 256; i++ {
-		idx := int(first) + i
-		if idx < 0 {
-			idx = 0
-		}
-		if idx >= len(values) {
-			idx = len(values) - 1
-		}
-		v := clampToByte(int(values[idx]))
-		colorMap[i] = colorconv.Color32{A: 255, R: v, G: v, B: v}
-	}
-	return &OutputLUT{colorMap: colorMap}
 }
 
 // NewGrayscaleOutputLUT creates a standard grayscale Output LUT.

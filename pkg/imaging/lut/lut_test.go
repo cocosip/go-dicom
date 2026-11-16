@@ -300,6 +300,51 @@ func TestPrecalculatedLUTInitializesFromValidSource(t *testing.T) {
 	}
 }
 
+func TestPrecalculatedLUTReusesTableUntilVOIWindowChanges(t *testing.T) {
+	source := &countingVOILUT{VOILinearLUT: NewVOILinearLUT(128, 256)}
+	precalculated := NewPrecalculatedLUT(source, 0, 255)
+
+	const tableSize = 256
+	if source.transforms != tableSize {
+		t.Fatalf("initial table used %d transforms, want %d", source.transforms, tableSize)
+	}
+
+	precalculated.Recalculate()
+	if source.transforms != tableSize {
+		t.Fatalf("Recalculate rebuilt a valid table: %d transforms, want %d", source.transforms, tableSize)
+	}
+	if !precalculated.IsValid() {
+		t.Fatal("precalculated LUT with a valid VOI source should be valid")
+	}
+
+	source.SetWindow(64, 128)
+	if precalculated.IsValid() {
+		t.Fatal("VOI window change should invalidate the precalculated LUT")
+	}
+	precalculated.Recalculate()
+	if source.transforms != 2*tableSize {
+		t.Fatalf("window change should rebuild the table: %d transforms, want %d", source.transforms, 2*tableSize)
+	}
+	if !precalculated.IsValid() {
+		t.Fatal("Recalculate should restore validity")
+	}
+	want := int(math.Round(source.VOILinearLUT.Transform(128)))
+	if got := int(precalculated.Transform(128)); got != want {
+		t.Fatalf("Transform(128) after window change = %d, want %d", got, want)
+	}
+}
+
+// countingVOILUT counts the transforms PrecalculatedLUT performs on its source.
+type countingVOILUT struct {
+	*VOILinearLUT
+	transforms int
+}
+
+func (c *countingVOILUT) Transform(input float64) float64 {
+	c.transforms++
+	return c.VOILinearLUT.Transform(input)
+}
+
 func TestCompositeLUT_AddNil(t *testing.T) {
 	composite := NewCompositeLUT()
 	composite.Add(nil)

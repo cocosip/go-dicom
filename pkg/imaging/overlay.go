@@ -195,45 +195,64 @@ func (o *DicomOverlayData) GetFrame(frameIndex int) ([]byte, error) {
 	return frame, nil
 }
 
-// ApplyToImage applies the overlay to an image
-// imageData: RGB or grayscale image data
-// overlayColor: color to use for overlay (ARGB format)
-// Returns: modified image data with overlay applied
+// ApplyToImage composites the first overlay frame (index 0) onto imageData.
+//
+// imageData holds one byte per pixel sample: interleaved RGB when
+// samplesPerPixel is 3, a single gray sample when it is 1. The image is one
+// frame, so only overlay frame 0 is used; select any other overlay frame with
+// GetFrame before compositing.
+//
+// overlayColor is blended over each marked pixel with straight-alpha
+// semantics: alpha 0 leaves the pixel unchanged and alpha 255 replaces it.
 func (o *DicomOverlayData) ApplyToImage(imageData []byte, width, height int, samplesPerPixel int, overlayColor colorconv.Color32) ([]byte, error) {
 	if width != o.Columns || height != o.Rows {
 		return nil, fmt.Errorf("image dimensions (%dx%d) don't match overlay dimensions (%dx%d)",
 			width, height, o.Columns, o.Rows)
 	}
 
-	unpacked := o.UnpackData()
-	if unpacked == nil {
-		return nil, fmt.Errorf("failed to unpack overlay data")
+	unpacked, err := o.GetFrame(0)
+	if err != nil {
+		return nil, err
 	}
 
 	result := make([]byte, len(imageData))
 	copy(result, imageData)
 
 	// Apply overlay with blending
-	for i := 0; i < width*height; i++ {
-		if unpacked[i] != 0 {
-			switch samplesPerPixel {
-			case 1:
-				// Grayscale: blend with gray value
-				gray := (uint16(overlayColor.R) + uint16(overlayColor.G) + uint16(overlayColor.B)) / 3
-				result[i] = uint8(gray) // #nosec G115 -- gray value within uint8 range after division
-			case 3:
-				// RGB: apply overlay color with alpha blending
-				alpha := float64(overlayColor.A) / 255.0
-				idx := i * 3
+	for i, marked := range unpacked {
+		if marked == 0 {
+			continue
+		}
+		switch samplesPerPixel {
+		case 1:
+			// Grayscale: blend with the average of the overlay color channels.
+			gray := uint8((uint16(overlayColor.R) + uint16(overlayColor.G) + uint16(overlayColor.B)) / 3)
+			result[i] = compositeOverlayChannel(result[i], gray, overlayColor.A)
+		case 3:
+			// RGB: apply overlay color with alpha blending
+			idx := i * 3
 
-				result[idx] = uint8(float64(result[idx])*(1-alpha) + float64(overlayColor.R)*alpha)
-				result[idx+1] = uint8(float64(result[idx+1])*(1-alpha) + float64(overlayColor.G)*alpha)
-				result[idx+2] = uint8(float64(result[idx+2])*(1-alpha) + float64(overlayColor.B)*alpha)
-			}
+			result[idx] = compositeOverlayChannel(result[idx], overlayColor.R, overlayColor.A)
+			result[idx+1] = compositeOverlayChannel(result[idx+1], overlayColor.G, overlayColor.A)
+			result[idx+2] = compositeOverlayChannel(result[idx+2], overlayColor.B, overlayColor.A)
 		}
 	}
 
 	return result, nil
+}
+
+// compositeOverlayChannel blends overlay into base with straight-alpha
+// semantics: alpha 0 keeps base and alpha 255 replaces it. It is the single
+// compositing implementation shared by ApplyToImage and DicomImage overlays.
+func compositeOverlayChannel(base, overlay, alpha uint8) uint8 {
+	if alpha == 0 {
+		return base
+	}
+	if alpha == 255 {
+		return overlay
+	}
+	inverse := 255 - uint32(alpha)
+	return uint8((uint32(base)*inverse + uint32(overlay)*uint32(alpha) + 127) / 255)
 }
 
 // OverlayGroupNumbers returns all valid overlay group numbers (0x6000, 0x6002, ..., 0x60FE)

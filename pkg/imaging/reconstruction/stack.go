@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
 )
 
@@ -159,34 +160,27 @@ func (slice *Slice) Render8Bit(center, width float64, invalid byte) ([]byte, err
 	if width < 1 || math.IsNaN(center) || math.IsNaN(width) || math.IsInf(center, 0) || math.IsInf(width, 0) {
 		return nil, fmt.Errorf("window center and width must be finite and width at least one")
 	}
+	window := lut.NewVOILinearLUT(center, width)
 	output := make([]byte, len(slice.Values))
 	for index, value := range slice.Values {
 		if !slice.Valid[index] {
 			output[index] = invalid
 			continue
 		}
-		output[index] = window8(value, center, width)
+		output[index] = windowByte(window.Transform(value))
 	}
 	return output, nil
 }
 
-func window8(value, center, width float64) byte {
-	if width == 1 {
-		if value > center-0.5 {
-			return 255
-		}
+// windowByte rounds a window-transformed sample to the 8-bit display range.
+func windowByte(value float64) byte {
+	if value <= 0 {
 		return 0
 	}
-	lower := center - 0.5 - (width-1)/2
-	upper := center - 0.5 + (width-1)/2
-	if value <= lower {
-		return 0
-	}
-	if value >= upper {
+	if value >= 255 {
 		return 255
 	}
-	mapped := ((value-(center-0.5))/(width-1) + 0.5) * 255
-	return byte(math.Round(mapped))
+	return byte(math.Round(value))
 }
 
 func boundedInclusiveCount(extent, spacing float64) int {

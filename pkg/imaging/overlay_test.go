@@ -5,6 +5,8 @@ package imaging
 
 import (
 	"encoding/binary"
+	"image"
+	"image/color"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -359,5 +361,126 @@ func TestOverlayGroupNumbers(t *testing.T) {
 		if g%2 != 0 {
 			t.Errorf("Group[%d]=0x%X is odd", i, g)
 		}
+	}
+}
+
+func TestDicomOverlayData_ApplyToImageAlpha(t *testing.T) {
+	overlay := NewDicomOverlayData(0x6000)
+	overlay.Rows = 2
+	overlay.Columns = 2
+	if err := overlay.PackData([]byte{255, 0, 0, 0}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+
+	gray := []byte{100, 100, 100, 100}
+	for _, test := range []struct {
+		name string
+		rgb  colorconv.Color32
+		want uint8
+	}{
+		{name: "transparent gray", rgb: colorconv.NewColor32(0, 200, 0, 0), want: 100},
+		{name: "opaque gray", rgb: colorconv.NewColor32(255, 200, 0, 0), want: 66},
+	} {
+		t.Run("grayscale/"+test.name, func(t *testing.T) {
+			result, err := overlay.ApplyToImage(gray, 2, 2, 1, test.rgb)
+			if err != nil {
+				t.Fatalf("ApplyToImage() error = %v", err)
+			}
+			if result[0] != test.want {
+				t.Errorf("marked pixel = %d, want %d", result[0], test.want)
+			}
+			if result[1] != 100 {
+				t.Errorf("unmarked pixel = %d, want 100", result[1])
+			}
+		})
+	}
+
+	rgb := []byte{100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100}
+	for _, test := range []struct {
+		name string
+		rgb  colorconv.Color32
+		want [3]uint8
+	}{
+		{name: "transparent rgb", rgb: colorconv.NewColor32(0, 255, 0, 0), want: [3]uint8{100, 100, 100}},
+		{name: "opaque rgb", rgb: colorconv.NewColor32(255, 255, 0, 0), want: [3]uint8{255, 0, 0}},
+	} {
+		t.Run("rgb/"+test.name, func(t *testing.T) {
+			result, err := overlay.ApplyToImage(rgb, 2, 2, 3, test.rgb)
+			if err != nil {
+				t.Fatalf("ApplyToImage() error = %v", err)
+			}
+			if got := [3]uint8{result[0], result[1], result[2]}; got != test.want {
+				t.Errorf("marked pixel = %v, want %v", got, test.want)
+			}
+			if got := [3]uint8{result[3], result[4], result[5]}; got != [3]uint8{100, 100, 100} {
+				t.Errorf("unmarked pixel = %v, want [100 100 100]", got)
+			}
+		})
+	}
+}
+
+func TestDicomOverlayData_ApplyToImageUsesFirstFrame(t *testing.T) {
+	overlay := NewDicomOverlayData(0x6000)
+	overlay.Rows = 2
+	overlay.Columns = 2
+	overlay.NumberOfFrames = 2
+	// Only the second frame marks a pixel; the single image frame only sees
+	// overlay frame 0.
+	if err := overlay.PackData([]byte{0, 0, 0, 0, 255, 0, 0, 0}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+	gray := []byte{100, 100, 100, 100}
+	result, err := overlay.ApplyToImage(gray, 2, 2, 1, colorconv.NewColor32(255, 255, 255, 255))
+	if err != nil {
+		t.Fatalf("ApplyToImage() error = %v", err)
+	}
+	for index, value := range result {
+		if value != 100 {
+			t.Fatalf("pixel %d = %d, want 100 (frame 1 must not be composited)", index, value)
+		}
+	}
+}
+
+func TestApplyOverlaysBlendsAlpha(t *testing.T) {
+	overlay := NewDicomOverlayData(0x6000)
+	overlay.Rows = 2
+	overlay.Columns = 2
+	overlay.OriginRow = 1
+	overlay.OriginColumn = 1
+	overlay.ImageFrameOrigin = 1
+	if err := overlay.PackData([]byte{255, 0, 0, 0}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+	source := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	for index := 0; index < len(source.Pix); index += 4 {
+		source.Pix[index] = 100
+		source.Pix[index+1] = 100
+		source.Pix[index+2] = 100
+		source.Pix[index+3] = 255
+	}
+
+	for _, test := range []struct {
+		name string
+		rgb  colorconv.Color32
+		want color.NRGBA
+	}{
+		{name: "transparent overlay", rgb: colorconv.NewColor32(0, 255, 0, 0), want: color.NRGBA{R: 100, G: 100, B: 100, A: 255}},
+		{name: "opaque overlay", rgb: colorconv.NewColor32(255, 255, 0, 0), want: color.NRGBA{R: 255, A: 255}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			img := &DicomImage{
+				showOverlays: true,
+				overlays:     []*DicomOverlayData{overlay},
+				overlayColor: test.rgb,
+			}
+			result := img.applyOverlays(source, 0)
+			if got := color.NRGBAModel.Convert(result.At(0, 0)).(color.NRGBA); got != test.want {
+				t.Errorf("marked pixel = %#v, want %#v", got, test.want)
+			}
+			want := color.NRGBA{R: 100, G: 100, B: 100, A: 255}
+			if got := color.NRGBAModel.Convert(result.At(1, 0)).(color.NRGBA); got != want {
+				t.Errorf("unmarked pixel = %#v, want %#v", got, want)
+			}
+		})
 	}
 }

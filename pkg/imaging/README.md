@@ -35,8 +35,8 @@ files.
   matrix primitives
 - **transform**: Composable affine transforms and scale/rotate/flip/pan viewer
   state with best-fit placement
-- **interpolation**: Stride-aware scalar grids with nearest-neighbor and
-  bilinear sampling and resizing
+- **interpolation**: The nearest-neighbor / bilinear `Mode` shared by
+  rendering transforms and image sampling
 - **Histogram**: Integer-bin counting and explicit or percentage windows
 
 ## Geometry and Spatial Usage
@@ -137,23 +137,12 @@ scales return errors. The executable examples cover
 
 ### Interpolation
 
-`interpolation.Grid` is a read-only view over row-major `float64` samples.
-Stride is measured in values, not bytes, and can be larger than the image
-width. Sampling uses the same zero-based pixel-center convention as geometry:
-
-```go
-grid, err := interpolation.NewGrid(samples, width, height, stride)
-if err != nil {
-    return err
-}
-value, inside := grid.Bilinear(x, y)
-resized, err := grid.Resize(outputWidth, outputHeight, interpolation.ModeBilinear)
-```
-
-`Nearest` and `Bilinear` return `inside=false` for non-finite or out-of-bounds
-coordinates. `Resize` returns tightly packed output and aligns source and
-destination endpoints. See the stride-aware executable
-[`ExampleGrid.Resize`](interpolation/example_test.go).
+`interpolation.Mode` selects the sampling algorithm used by rendering
+transforms: `interpolation.ModeNearestNeighbor` (default) or
+`interpolation.ModeBilinear`. It is passed through
+`FrameRenderOptions.Interpolation` and by `render.ApplyAffine`; the samplers
+themselves live in [`render`](render/affine_graphics.go) and in the volume
+reconstruction package.
 
 ### Histogram Windows
 
@@ -424,16 +413,13 @@ Current test coverage:
 ## Future Work
 
 ### Short Term
-1. Build `reconstruction.ImageData` and volume validation on the completed
-   geometry and interpolation APIs
-2. Implement volume slice sorting and trilinear sampling for MPR
-3. Generate DICOM datasets from reformatted stacks
-
-### Medium Term
 1. Add further rendering performance benchmarks
 
-### Long Term
+### Medium Term
 1. GPU-accelerated processing
+
+### Long Term
+1. Additional lossy compression codecs
 
 ## References
 

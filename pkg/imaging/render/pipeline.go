@@ -33,9 +33,15 @@ type GrayscalePipeline struct {
 	presentationLUT lut.LUT
 	invertLUT       lut.LUT
 	compositeLUT    lut.LUT
-	windowWidth     float64
-	windowCenter    float64
-	invert          bool
+	// precalculated caches the stored-value table derived from compositeLUT.
+	// invalidate drops it whenever the pipeline LUT may have changed.
+	precalculated       *lut.PrecalculatedLUT
+	precalculatedSource lut.LUT
+	precalculatedBits   int
+	precalculatedSigned bool
+	windowWidth         float64
+	windowCenter        float64
+	invert              bool
 	// presentationInverse records that the presentation stage is a
 	// Presentation LUT Shape of INVERSE, which encodes display polarity.
 	presentationInverse bool
@@ -91,7 +97,7 @@ func (p *GrayscalePipeline) SetVOILUTFunction(function lut.VOILUTFunction) {
 	defer p.mu.Unlock()
 	if p.voiLUTFunction != function {
 		p.voiLUTFunction = function
-		p.compositeLUT = nil
+		p.invalidate()
 	}
 }
 
@@ -100,7 +106,7 @@ func (p *GrayscalePipeline) SetModalityLUT(modalityLUT lut.LUT) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.modalityLUT = modalityLUT
-	p.compositeLUT = nil
+	p.invalidate()
 }
 
 // SetVOILUT replaces windowing with an explicit VOI LUT Sequence pipeline.
@@ -109,7 +115,7 @@ func (p *GrayscalePipeline) SetVOILUT(voiLUT lut.LUT) {
 	defer p.mu.Unlock()
 	p.voiSequenceLUT = voiLUT
 	p.useVOILUT = voiLUT != nil
-	p.compositeLUT = nil
+	p.invalidate()
 }
 
 // SetPresentationLUT replaces the presentation stage applied after VOI.
@@ -121,7 +127,7 @@ func (p *GrayscalePipeline) SetPresentationLUT(presentationLUT lut.LUT) {
 	// carries the same display polarity as MONOCHROME1, so renderers must not
 	// apply that polarity a second time.
 	_, p.presentationInverse = presentationLUT.(*lut.InvertLUT)
-	p.compositeLUT = nil
+	p.invalidate()
 }
 
 // Inverts reports whether the pipeline output is already inverted, either by an
@@ -145,7 +151,7 @@ func (p *GrayscalePipeline) SetUseVOILUT(value bool) {
 	defer p.mu.Unlock()
 	if p.useVOILUT != value {
 		p.useVOILUT = value
-		p.compositeLUT = nil
+		p.invalidate()
 	}
 }
 
@@ -162,7 +168,7 @@ func (p *GrayscalePipeline) SetWindowWidth(width float64) {
 	defer p.mu.Unlock()
 	if p.windowWidth != width {
 		p.windowWidth = width
-		p.compositeLUT = nil
+		p.invalidate()
 	}
 }
 
@@ -179,7 +185,7 @@ func (p *GrayscalePipeline) SetWindowCenter(center float64) {
 	defer p.mu.Unlock()
 	if p.windowCenter != center {
 		p.windowCenter = center
-		p.compositeLUT = nil
+		p.invalidate()
 	}
 }
 
@@ -190,7 +196,7 @@ func (p *GrayscalePipeline) SetWindow(center, width float64) {
 	if p.windowCenter != center || p.windowWidth != width {
 		p.windowCenter = center
 		p.windowWidth = width
-		p.compositeLUT = nil
+		p.invalidate()
 	}
 }
 
@@ -207,7 +213,7 @@ func (p *GrayscalePipeline) SetInvert(invert bool) {
 	defer p.mu.Unlock()
 	if p.invert != invert {
 		p.invert = invert
-		p.compositeLUT = nil
+		p.invalidate()
 	}
 }
 
@@ -215,19 +221,62 @@ func (p *GrayscalePipeline) SetInvert(invert bool) {
 func (p *GrayscalePipeline) LUT() lut.LUT {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.lutLocked()
+}
 
+// PrecalculatedLUT returns a table-backed LUT over the stored value domain for
+// the current pipeline LUT, reusing the table until the pipeline LUT changes.
+// It returns nil for samples wider than 16 bits, where the table is too large.
+// Callers that mutate a constituent LUT supplied through a setter must call
+// ClearCache afterwards.
+func (p *GrayscalePipeline) PrecalculatedLUT(bitsStored int, isSigned bool) *lut.PrecalculatedLUT {
+	if bitsStored <= 0 || bitsStored > 16 {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	source := p.lutLocked()
+	if p.precalculated != nil && p.precalculatedSource == source &&
+		p.precalculatedBits == bitsStored && p.precalculatedSigned == isSigned &&
+		p.precalculated.IsValid() {
+		return p.precalculated
+	}
+	minValue, maxValue := 0, (1<<uint(bitsStored))-1
+	if isSigned {
+		half := 1 << uint(bitsStored-1)
+		minValue, maxValue = -half, half-1
+	}
+	table := lut.NewPrecalculatedLUT(source, minValue, maxValue)
+	p.precalculated = table
+	p.precalculatedSource = source
+	p.precalculatedBits = bitsStored
+	p.precalculatedSigned = isSigned
+	return table
+}
+
+// lutLocked returns the composite LUT, building it when absent. The caller
+// must hold p.mu.
+func (p *GrayscalePipeline) lutLocked() lut.LUT {
 	if p.compositeLUT == nil {
 		p.buildPipeline()
 	}
-
 	return p.compositeLUT
+}
+
+// invalidate drops cached values derived from the pipeline LUT. Every setter
+// that can change the LUT must call it; the cached table's source is this
+// composite LUT, and lut.IsValid detects direct mutation of a supplied LUT.
+func (p *GrayscalePipeline) invalidate() {
+	p.compositeLUT = nil
+	p.precalculated = nil
+	p.precalculatedSource = nil
 }
 
 // ClearCache clears the cached LUT
 func (p *GrayscalePipeline) ClearCache() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.compositeLUT = nil
+	p.invalidate()
 }
 
 func (p *GrayscalePipeline) buildPipeline() {

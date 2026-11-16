@@ -174,7 +174,7 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 	// off once the frame has at least that many pixels.
 	var precalc *lut.PrecalculatedLUT
 	if width*height >= 1<<uint(effectiveStored) {
-		precalc = newPrecalculatedLUT(pipelineLUT, effectiveStored, isSigned)
+		precalc = e.precalculatedLUT(effectiveStored, isSigned)
 	}
 
 	for y := 0; y < height; y++ {
@@ -220,7 +220,19 @@ func pipelineInverts(p Pipeline) bool {
 	return false
 }
 
-// newPrecalculatedLUT builds a table-backed LUT over the stored value domain.
+// precalculatedLUT returns a table-backed LUT over the stored value domain.
+// A GrayscalePipeline caches the table across frames and renders; other
+// pipelines get a one-shot table.
+func (e *ImageExporter) precalculatedLUT(bitsStored int, isSigned bool) *lut.PrecalculatedLUT {
+	if cache, ok := e.pipeline.(interface {
+		PrecalculatedLUT(bitsStored int, isSigned bool) *lut.PrecalculatedLUT
+	}); ok {
+		return cache.PrecalculatedLUT(bitsStored, isSigned)
+	}
+	return newPrecalculatedLUT(e.pipeline.LUT(), bitsStored, isSigned)
+}
+
+// newPrecalculatedLUT builds a one-shot table over the stored value domain.
 // It returns nil for very wide samples, where the table would be too large, so
 // the caller falls back to per-pixel transforms.
 func newPrecalculatedLUT(source lut.LUT, bitsStored int, isSigned bool) *lut.PrecalculatedLUT {

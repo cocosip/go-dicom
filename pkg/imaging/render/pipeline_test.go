@@ -204,14 +204,25 @@ func TestCompositeLUTIsValid(t *testing.T) {
 		t.Error("Expected composite to be valid when all components are valid")
 	}
 
-	// Create composite with VOI LUT (always returns false for IsValid to force recalculation)
+	// A VOI LUT is valid while no recalculation is pending, so a pipeline with
+	// one is valid until its window changes.
 	lut3 := lut.NewVOILinearLUT(128, 256)
 	composite2 := lut.NewCompositeLUT()
 	composite2.Add(lut1)
 	composite2.Add(lut3)
 
+	if !composite2.IsValid() {
+		t.Error("Expected composite with an up-to-date VOI LUT to be valid")
+	}
+
+	lut3.SetWindow(64, 128)
 	if composite2.IsValid() {
-		t.Error("Expected composite to be invalid when VOI LUT is included (VOI LUT always returns false)")
+		t.Error("Expected composite to be invalid after a VOI window change")
+	}
+
+	composite2.Recalculate()
+	if !composite2.IsValid() {
+		t.Error("Expected Recalculate to restore composite validity")
 	}
 }
 

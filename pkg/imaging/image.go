@@ -372,7 +372,7 @@ func (img *DicomImage) resolveGrayscaleTransforms(
 
 // applyExplicitWindow adopts an explicitly encoded Window Center/Width pair.
 func (t *grayscaleTransforms) applyExplicitWindow(fallback *dataset.Dataset, windowIndex int) error {
-	if datasetWithAnyTag(t.voiPrimary, fallback, tag.WindowCenter, tag.WindowWidth) == nil {
+	if pixeldata.DatasetContaining(t.voiPrimary, fallback, tag.WindowCenter, tag.WindowWidth) == nil {
 		return nil
 	}
 	center, width, err := imageWindowPairAt(t.voiPrimary, fallback, windowIndex)
@@ -436,7 +436,7 @@ func (img *DicomImage) configurePipelineLUTs(
 	if t.modalityLUT != nil {
 		pipeline.SetModalityLUT(t.modalityLUT)
 	}
-	if datasetWithAnyTag(t.voiPrimary, t.voiFallback, tag.VOILUTSequence) != nil {
+	if pixeldata.DatasetContaining(t.voiPrimary, t.voiFallback, tag.VOILUTSequence) != nil {
 		var voiLUT lut.LUT
 		var err error
 		if presentationStateApplied {
@@ -457,11 +457,11 @@ func (img *DicomImage) configurePipelineLUTs(
 	// Presentation LUT carried by the referenced image.
 	var presentationSource *dataset.Dataset
 	if presentationStateApplied {
-		presentationSource = datasetWithAnyTag(
+		presentationSource = pixeldata.DatasetContaining(
 			img.presentationState, nil, tag.PresentationLUTSequence, tag.PresentationLUTShape,
 		)
 	} else {
-		presentationSource = datasetWithAnyTag(
+		presentationSource = pixeldata.DatasetContaining(
 			nil, img.dataset, tag.PresentationLUTSequence, tag.PresentationLUTShape,
 		)
 	}
@@ -818,7 +818,7 @@ func (img *DicomImage) supplementalPaletteEligible(pd *pixeldata.Data) bool {
 	if !ok || strings.ToUpper(strings.TrimSpace(presentation)) != "COLOR" {
 		return false
 	}
-	return datasetWithAnyTag(img.dataset, nil,
+	return pixeldata.DatasetContaining(img.dataset, nil,
 		tag.RedPaletteColorLookupTableDescriptor,
 		tag.EnhancedPaletteColorLookupTableSequence,
 		tag.PaletteColorLookupTableSequence,

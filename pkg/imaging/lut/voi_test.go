@@ -309,10 +309,46 @@ func TestVOILUT_OutputRange(t *testing.T) {
 }
 
 func TestVOILUT_IsValid(t *testing.T) {
-	lut := NewVOILinearLUT(128.0, 256.0)
-
-	// VOI LUTs always return false for IsValid (always recalculate)
-	if lut.IsValid() {
-		t.Error("VOI LUT IsValid should return false (always recalculate)")
+	// IsValid means "no recalculation pending": a constructed window is valid,
+	// a window change invalidates it, and Recalculate restores validity.
+	windows := map[string]func(center, width float64) settableVOILUT{
+		"linear": func(center, width float64) settableVOILUT {
+			return NewVOILinearLUT(center, width)
+		},
+		"linear exact": func(center, width float64) settableVOILUT {
+			return NewVOILinearExactLUT(center, width)
+		},
+		"sigmoid": func(center, width float64) settableVOILUT {
+			return NewVOISigmoidLUT(center, width)
+		},
 	}
+	for name, newLUT := range windows {
+		t.Run(name, func(t *testing.T) {
+			voi := newLUT(128, 256)
+			if !voi.IsValid() {
+				t.Fatal("constructed VOI LUT should be valid")
+			}
+
+			voi.SetWindow(128, 256)
+			if !voi.IsValid() {
+				t.Error("setting the same window should not invalidate the LUT")
+			}
+
+			voi.SetWindow(64, 128)
+			if voi.IsValid() {
+				t.Error("window change should invalidate the LUT")
+			}
+
+			voi.Recalculate()
+			if !voi.IsValid() {
+				t.Error("Recalculate should restore validity")
+			}
+		})
+	}
+}
+
+// settableVOILUT is a VOI LUT whose window can be changed after construction.
+type settableVOILUT interface {
+	LUT
+	SetWindow(center, width float64)
 }

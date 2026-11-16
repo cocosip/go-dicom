@@ -8,6 +8,8 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/cocosip/go-dicom/pkg/imaging/lut"
 )
 
 func TestNewStackBuildsInclusiveLazyStandardPlanes(t *testing.T) {
@@ -149,5 +151,36 @@ func TestSliceMinMaxAndRender8BitHonorValidityMask(t *testing.T) {
 	}
 	if !reflect.DeepEqual(rendered, []byte{0, 128, 255, 7}) {
 		t.Fatalf("Render8Bit() = %v, want [0 128 255 7]", rendered)
+	}
+}
+
+func TestSliceRender8BitMatchesVOILinearLUT(t *testing.T) {
+	values := []float64{-1000, -1, 0, 0.5, 50, 127.5, 128, 200, 255, 1000, 4095}
+	valid := make([]bool, len(values))
+	for index := range valid {
+		valid[index] = true
+	}
+	windows := []struct{ center, width float64 }{
+		{-0.5, 1},
+		{0, 1},
+		{0, 2},
+		{50.5, 101},
+		{128, 256},
+		{2048, 4096},
+	}
+	for _, window := range windows {
+		slice := &Slice{Values: append([]float64(nil), values...), Valid: valid}
+		rendered, err := slice.Render8Bit(window.center, window.width, 0)
+		if err != nil {
+			t.Fatalf("Render8Bit(%v, %v) error = %v", window.center, window.width, err)
+		}
+		source := lut.NewVOILinearLUT(window.center, window.width)
+		for index, value := range values {
+			want := byte(math.Round(source.Transform(value)))
+			if rendered[index] != want {
+				t.Fatalf("Render8Bit(%v, %v)[%v] = %d, want VOILinearLUT value %d",
+					window.center, window.width, value, rendered[index], want)
+			}
+		}
 	}
 }

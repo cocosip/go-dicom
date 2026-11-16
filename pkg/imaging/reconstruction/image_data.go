@@ -18,6 +18,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 	"github.com/cocosip/go-dicom/pkg/imaging/geometry"
+	"github.com/cocosip/go-dicom/pkg/imaging/internal/dicomlut"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
@@ -446,9 +447,7 @@ func decodeFrame(ds *dataset.Dataset, source *pixeldata.Data, frame int, manager
 }
 
 func frameRescale(ds *dataset.Dataset, frame int) (float64, float64, error) {
-	values := dataset.New()
-	mergeFunctionalValues(values, ds, tag.SharedFunctionalGroupsSequence, 0)
-	mergeFunctionalValues(values, ds, tag.PerFrameFunctionalGroupsSequence, frame)
+	values := dicomlut.FunctionalGroupValues(ds, frame)
 	slope, err := decimalValue(values, ds, tag.RescaleSlope, 1)
 	if err != nil {
 		return 0, 0, err
@@ -513,21 +512,5 @@ func decimalStringValue(value element.Element) (float64, error) {
 		return strconv.ParseFloat(strings.TrimSpace(typed.GetValue(0)), 64)
 	default:
 		return 0, fmt.Errorf("element type is %T, want Decimal String", value)
-	}
-}
-
-func mergeFunctionalValues(target, source *dataset.Dataset, sequenceTag *tag.Tag, item int) {
-	sequence, err := source.GetSequence(sequenceTag)
-	if err != nil || item < 0 || item >= sequence.Count() || sequence.GetItem(item) == nil {
-		return
-	}
-	for _, value := range sequence.GetItem(item).Elements() {
-		nested, ok := value.(*dataset.Sequence)
-		if !ok || nested.Count() == 0 || nested.GetItem(0) == nil {
-			continue
-		}
-		for _, nestedValue := range nested.GetItem(0).Elements() {
-			_ = target.AddOrUpdate(nestedValue)
-		}
 	}
 }

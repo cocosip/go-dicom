@@ -5,8 +5,10 @@ package render
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image/color"
 	"image/png"
+	"math"
 	"testing"
 )
 
@@ -107,5 +109,56 @@ func TestImageExporterRenderRGBAImageARGB(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGrayscalePipelineCachesPrecalculatedLUT(t *testing.T) {
+	pipeline := NewGrayscalePipeline(1, 0, 128, 256, 0, 65535, false)
+	exporter := NewImageExporter(pipeline)
+
+	first := exporter.precalculatedLUT(16, false)
+	if first == nil {
+		t.Fatal("precalculatedLUT(16) = nil, want a table")
+	}
+	if got := exporter.precalculatedLUT(16, false); got != first {
+		t.Fatal("expected the pipeline to reuse the cached table")
+	}
+	if got := exporter.precalculatedLUT(8, false); got == first {
+		t.Fatal("a different stored-value domain must rebuild the table")
+	}
+
+	pipeline.SetWindow(64, 512)
+	afterWindow := exporter.precalculatedLUT(16, false)
+	if afterWindow == first {
+		t.Fatal("a window change must drop the cached table")
+	}
+	want := int(math.Round(pipeline.LUT().Transform(400)))
+	if got := int(afterWindow.Transform(400)); got != want {
+		t.Fatalf("cached table Transform(400) = %d, want %d", got, want)
+	}
+}
+
+func TestGrayscaleRenderingUsesCurrentWindowAfterCaching(t *testing.T) {
+	const size = 256 // 65536 pixels, enough to build the 16-bit table
+	pipeline := NewGrayscalePipeline(1, 0, 128, 256, 0, 65535, false)
+	exporter := NewImageExporter(pipeline)
+	pixelData := make([]byte, size*size*2)
+	binary.LittleEndian.PutUint16(pixelData, 400)
+
+	before, err := exporter.RenderGrayscaleImageWithBitDepth(
+		pixelData, size, size, 16, 16, 15, false, "MONOCHROME2",
+	)
+	if err != nil {
+		t.Fatalf("first RenderGrayscaleImageWithBitDepth() error = %v", err)
+	}
+	pipeline.SetWindow(512, 1024)
+	after, err := exporter.RenderGrayscaleImageWithBitDepth(
+		pixelData, size, size, 16, 16, 15, false, "MONOCHROME2",
+	)
+	if err != nil {
+		t.Fatalf("second RenderGrayscaleImageWithBitDepth() error = %v", err)
+	}
+	if before.GrayAt(0, 0).Y == after.GrayAt(0, 0).Y {
+		t.Fatalf("window change did not affect the rendered value %d", before.GrayAt(0, 0).Y)
 	}
 }

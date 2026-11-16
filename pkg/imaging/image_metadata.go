@@ -96,7 +96,7 @@ func softcopyItemReferencesFrame(item *dataset.Dataset, imageUID string, frame i
 func imageWindowPairAt(primary, fallback *dataset.Dataset, index int) (float64, float64, error) {
 	source := datasetWithCompletePair(primary, fallback, tag.WindowCenter, tag.WindowWidth)
 	if source == nil {
-		source = datasetWithAnyTag(primary, fallback, tag.WindowCenter, tag.WindowWidth)
+		source = pixeldata.DatasetContaining(primary, fallback, tag.WindowCenter, tag.WindowWidth)
 	}
 	if source == nil {
 		return 0, 0, fmt.Errorf("window center and width are missing")
@@ -129,20 +129,6 @@ func datasetWithCompletePair(primary, fallback *dataset.Dataset, first, second *
 	return nil
 }
 
-func datasetWithAnyTag(primary, fallback *dataset.Dataset, tags ...*tag.Tag) *dataset.Dataset {
-	for _, ds := range []*dataset.Dataset{primary, fallback} {
-		if ds == nil {
-			continue
-		}
-		for _, t := range tags {
-			if ds.Contains(t) {
-				return ds
-			}
-		}
-	}
-	return nil
-}
-
 func imageModalityTransform(primary, fallback *dataset.Dataset, pixelSigned bool, minInput, maxInput float64) (
 	modalityLUT lut.LUT,
 	slope float64,
@@ -164,7 +150,7 @@ func imageModalityTransformWithLUTMode(primary, fallback *dataset.Dataset, pixel
 	// Modality attributes are selected as one precedence group. A Functional
 	// Group value must override top-level values, including the other legal
 	// representation of the modality transform.
-	source := datasetWithAnyTag(
+	source := pixeldata.DatasetContaining(
 		primary,
 		nil,
 		tag.ModalityLUTSequence,
@@ -172,7 +158,7 @@ func imageModalityTransformWithLUTMode(primary, fallback *dataset.Dataset, pixel
 		tag.RescaleIntercept,
 	)
 	if source == nil {
-		source = datasetWithAnyTag(
+		source = pixeldata.DatasetContaining(
 			fallback,
 			nil,
 			tag.ModalityLUTSequence,

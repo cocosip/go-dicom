@@ -15,6 +15,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/vr"
+	"github.com/cocosip/go-dicom/pkg/imaging/internal/dicomlut"
 	"github.com/cocosip/go-dicom/pkg/imaging/math3d"
 )
 
@@ -93,7 +94,7 @@ func NewFrameGeometry(ds *dataset.Dataset, frame int) (*FrameGeometry, error) {
 		return nil, fmt.Errorf("read Rows: %w", nonNilError(err, "value must be positive"))
 	}
 
-	functional := functionalGroupValues(ds, frame)
+	functional := dicomlut.FunctionalGroupValues(ds, frame)
 	spacing, spacingFound, err := findSpacing(ds, functional)
 	if err != nil {
 		return nil, err
@@ -354,33 +355,6 @@ func geometryDecimalValues(value element.Element) ([]float64, error) {
 		return values, nil
 	default:
 		return nil, fmt.Errorf("element type is %T, want Decimal String", value)
-	}
-}
-
-func functionalGroupValues(ds *dataset.Dataset, frame int) *dataset.Dataset {
-	values := dataset.New()
-	mergeFunctionalGroup(values, ds, tag.SharedFunctionalGroupsSequence, 0)
-	mergeFunctionalGroup(values, ds, tag.PerFrameFunctionalGroupsSequence, frame)
-	return values
-}
-
-func mergeFunctionalGroup(values, source *dataset.Dataset, target *tag.Tag, itemIndex int) {
-	sequence, err := source.GetSequence(target)
-	if err != nil || itemIndex < 0 || itemIndex >= sequence.Count() {
-		return
-	}
-	item := sequence.GetItem(itemIndex)
-	if item == nil {
-		return
-	}
-	for _, value := range item.Elements() {
-		nested, ok := value.(*dataset.Sequence)
-		if !ok || nested.Count() == 0 || nested.GetItem(0) == nil {
-			continue
-		}
-		for _, nestedValue := range nested.GetItem(0).Elements() {
-			_ = values.AddOrUpdate(nestedValue)
-		}
 	}
 }
 

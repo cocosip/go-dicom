@@ -48,9 +48,18 @@ func (v *baseVOILUT) MaximumOutputValue() float64 {
 	return 255
 }
 
+// IsValid reports whether no recalculation is pending. Changing the window
+// (SetWindow/updateWindow) invalidates the LUT until Recalculate runs.
 func (v *baseVOILUT) IsValid() bool {
-	// Always recalculate for VOI LUTs
-	return false
+	return !v.needsRecalc
+}
+
+// initialize sets a window and marks the derived values as pending, so a VOI
+// LUT with a zero window still recalculates instead of reporting itself valid.
+func (v *baseVOILUT) initialize(center, width float64) {
+	v.windowCenter = center
+	v.windowWidth = width
+	v.needsRecalc = true
 }
 
 func (v *baseVOILUT) Recalculate() {
@@ -82,7 +91,7 @@ type VOILinearLUT struct {
 // NewVOILinearLUT creates a new linear VOI LUT
 func NewVOILinearLUT(windowCenter, windowWidth float64) *VOILinearLUT {
 	lut := &VOILinearLUT{}
-	lut.updateWindow(windowCenter, windowWidth)
+	lut.initialize(windowCenter, windowWidth)
 	lut.Recalculate()
 	return lut
 }
@@ -121,7 +130,7 @@ type VOILinearExactLUT struct {
 // NewVOILinearExactLUT creates a new exact linear VOI LUT
 func NewVOILinearExactLUT(windowCenter, windowWidth float64) *VOILinearExactLUT {
 	lut := &VOILinearExactLUT{}
-	lut.updateWindow(windowCenter, windowWidth)
+	lut.initialize(windowCenter, windowWidth)
 	lut.Recalculate()
 	return lut
 }
@@ -151,7 +160,7 @@ type VOISigmoidLUT struct {
 // NewVOISigmoidLUT creates a new sigmoid VOI LUT
 func NewVOISigmoidLUT(windowCenter, windowWidth float64) *VOISigmoidLUT {
 	lut := &VOISigmoidLUT{}
-	lut.updateWindow(windowCenter, windowWidth)
+	lut.initialize(windowCenter, windowWidth)
 	lut.Recalculate()
 	return lut
 }

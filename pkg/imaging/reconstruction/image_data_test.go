@@ -100,6 +100,40 @@ func TestNewImageDataReadsClassicGeometryAndModalityValues(t *testing.T) {
 	}
 }
 
+func TestFrameRescalePrefersFunctionalGroupValues(t *testing.T) {
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	mustAddElement(t, ds,
+		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{3}),
+		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{7}),
+	)
+	shared := dataset.New()
+	addFunctionalMacro(t, shared, tag.PixelValueTransformationSequence,
+		element.NewDecimalStringFromFloat(tag.RescaleSlope, []float64{2}),
+		element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{-100}),
+	)
+	frames := make([]*dataset.Dataset, 2)
+	for index, intercept := range []float64{-10, -20} {
+		frames[index] = dataset.New()
+		addFunctionalMacro(t, frames[index], tag.PixelValueTransformationSequence,
+			element.NewDecimalStringFromFloat(tag.RescaleIntercept, []float64{intercept}),
+		)
+	}
+	mustAddElement(t, ds,
+		dataset.NewSequenceWithItems(tag.SharedFunctionalGroupsSequence, []*dataset.Dataset{shared}),
+		dataset.NewSequenceWithItems(tag.PerFrameFunctionalGroupsSequence, frames),
+	)
+
+	for frame, wantIntercept := range []float64{-10, -20} {
+		slope, intercept, err := frameRescale(ds, frame)
+		if err != nil {
+			t.Fatalf("frameRescale(%d) error = %v", frame, err)
+		}
+		if slope != 2 || intercept != wantIntercept {
+			t.Fatalf("frameRescale(%d) = %v/%v, want 2/%v", frame, slope, intercept, wantIntercept)
+		}
+	}
+}
+
 func TestNewImageDataReadsParserStyleRescaleValues(t *testing.T) {
 	ds := testClassicImageDataset(t, uid.CTImageStorage.UID(), "1.2.3.11", 5, []uint16{1, 2, 3, 4})
 	mustAddElement(t, ds,

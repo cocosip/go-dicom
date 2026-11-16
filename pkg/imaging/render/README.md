@@ -233,8 +233,9 @@ func main() {
 
 ### LUT Design
 - **Modality LUT**: Always returns `IsValid() = true`
-- **VOI LUT**: Always returns `IsValid() = false` to force recalculation when window changes
+- **VOI LUT**: `IsValid()` reports whether no recalculation is pending; a window change marks it stale again
 - **Composite LUT**: Chains transformations efficiently
+- **Precalculated table**: `GrayscalePipeline.PrecalculatedLUT` caches the stored-value table across frames and drops it whenever the pipeline LUT changes
 
 ### Color Space Formulas
 
@@ -268,10 +269,11 @@ func main() {
 
 The package includes comprehensive unit tests:
 
-- **LUT Tests** (`lut_test.go`): 18 tests covering all LUT types
-- **Color Space Tests** (`colorspace_test.go`): 11 tests with round-trip validation
-- **Pipeline Tests** (`pipeline_test.go`): 11 tests including concurrency tests
-- **Coverage**: 100% of critical paths tested
+- **Pipeline Tests** (`pipeline_test.go`): grayscale pipeline, VOI/window updates, and concurrency
+- **Export Tests** (`export_test.go`): grayscale export and bit-depth conversion
+- **Affine Graphics Tests** (`affine_graphics_test.go`): overlay/supersampling geometry
+- **LUT Tests**: `pkg/imaging/lut`
+- **Color Space Tests**: `pkg/imaging/colorconv`
 
 Run tests:
 ```bash
