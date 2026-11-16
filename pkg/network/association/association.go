@@ -305,12 +305,18 @@ func NewPresentationContextFromUID(
 	abstractSyntaxUID *uid.UID,
 	transferSyntaxUIDs ...*uid.UID,
 ) (*PresentationContext, error) {
+	if abstractSyntaxUID == nil {
+		return nil, fmt.Errorf("abstract syntax UID is nil")
+	}
 	// Convert abstract syntax UID
 	abstractSyntax := abstractSyntaxUID.UID()
 
 	// Convert transfer syntax UIDs to TransferSyntax objects
 	transferSyntaxes := make([]*transfer.Syntax, len(transferSyntaxUIDs))
 	for i, tsUID := range transferSyntaxUIDs {
+		if tsUID == nil {
+			return nil, fmt.Errorf("transfer syntax UID at index %d is nil", i)
+		}
 		ts, err := lookupTransferSyntax(registry, tsUID)
 		if err != nil {
 			return nil, fmt.Errorf("unknown transfer syntax: %s: %w", tsUID.UID(), err)
@@ -1090,6 +1096,9 @@ func findRoleSelection(values []*RoleSelection, sopClassUID string) *RoleSelecti
 func FromAAssociateAC(ac *pdu.AAssociateAC, registry *transfer.Registry) *Association {
 	assoc := NewAssociation(ac.CallingAETitle, ac.CalledAETitle)
 	assoc.ProtocolVersion = ac.ProtocolVersion
+	// PS3.7 D.3.3.3: an omitted Asynchronous Operations Window means one
+	// operation in each direction; keep this consistent with ApplyAAssociateAC.
+	assoc.AsynchronousOperations = &AsynchronousOperationsWindow{MaxInvokedOperations: 1, MaxPerformedOperations: 1}
 
 	// Set user information
 	if ac.UserInformation != nil {

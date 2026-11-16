@@ -86,9 +86,24 @@ func elementsEquivalent(left, right element.Element) bool {
 		left.ValueRepresentation().Code() != right.ValueRepresentation().Code() || left.Count() != right.Count() {
 		return false
 	}
+	// Sequence and fragment-sequence containers report an empty (or nil)
+	// buffer, so byte comparison would wrongly treat any two of them as equal.
+	// Structural equality was already handled by DeepEqual above.
+	if isContainerElement(left) || isContainerElement(right) {
+		return false
+	}
 	leftBuffer, rightBuffer := left.Buffer(), right.Buffer()
 	if leftBuffer == nil || rightBuffer == nil {
 		return leftBuffer == nil && rightBuffer == nil
 	}
 	return bytes.Equal(leftBuffer.Data(), rightBuffer.Data())
+}
+
+func isContainerElement(e element.Element) bool {
+	switch e.(type) {
+	case *dataset.Sequence, *element.FragmentSequence:
+		return true
+	default:
+		return false
+	}
 }

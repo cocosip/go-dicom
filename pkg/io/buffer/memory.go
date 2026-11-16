@@ -73,5 +73,11 @@ func (m *MemoryByteBuffer) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	n, err := w.Write(m.data)
-	return int64(n), err
+	if err != nil {
+		return int64(n), err
+	}
+	if n != len(m.data) {
+		return int64(n), io.ErrShortWrite
+	}
+	return int64(n), nil
 }

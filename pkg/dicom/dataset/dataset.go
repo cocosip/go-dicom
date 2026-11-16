@@ -6,6 +6,7 @@ package dataset
 import (
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/daterange"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -35,6 +36,11 @@ type Dataset struct {
 	// It is invalidated on structural mutations (add/remove/clear/merge/filter).
 	sortedTags []uint32
 	cacheDirty bool
+
+	// cacheMu guards sortedTags/cacheDirty so that concurrent read-only callers
+	// (e.g. two goroutines calling Elements/Tags) do not race while lazily
+	// building the sorted-tag cache.
+	cacheMu sync.Mutex
 
 	// skipValidation is the inverse of AutoValidate so a zero-value Dataset
 	// retains the default automatic-validation behavior.
@@ -302,8 +308,9 @@ func (ds *Dataset) Tags() []*tag.Tag {
 	return tags
 }
 
-// Clone creates a deep copy of the dataset.
-// Note: Elements themselves are not cloned, only the dataset structure.
+// Clone returns a shallow copy of the dataset. The element map and metadata are
+// copied, but element values are shared with the original. Use DeepClone to
+// copy element values as well.
 func (ds *Dataset) Clone() *Dataset {
 	if ds == nil {
 		return New()
@@ -495,9 +502,17 @@ func (ds *Dataset) InternalTransferSyntax() *transfer.Syntax {
 // rather than modifying an existing one. However, this setter is provided for
 // scenarios where in-place modification is necessary (e.g., after cloning).
 func (ds *Dataset) SetInternalTransferSyntax(ts *transfer.Syntax) {
+	ds.setInternalTransferSyntax(ts, make(map[*Dataset]struct{}))
+}
+
+func (ds *Dataset) setInternalTransferSyntax(ts *transfer.Syntax, visited map[*Dataset]struct{}) {
 	if ds == nil {
 		return
 	}
+	if _, ok := visited[ds]; ok {
+		return
+	}
+	visited[ds] = struct{}{}
 	ds.internalTransferSyntax = ts
 
 	// Update transfer syntax for sequence items (following fo-dicom pattern)
@@ -506,7 +521,7 @@ func (ds *Dataset) SetInternalTransferSyntax(ts *transfer.Syntax) {
 			for i := 0; i < seq.Count(); i++ {
 				item := seq.GetItem(i)
 				if item != nil {
-					item.SetInternalTransferSyntax(ts)
+					item.setInternalTransferSyntax(ts, visited)
 				}
 			}
 		}
@@ -551,11 +566,15 @@ func (ds *Dataset) ensureItems() {
 }
 
 func (ds *Dataset) markDirty() {
+	ds.cacheMu.Lock()
 	ds.cacheDirty = true
 	ds.sortedTags = nil
+	ds.cacheMu.Unlock()
 }
 
 func (ds *Dataset) sortedTagValues() []uint32 {
+	ds.cacheMu.Lock()
+	defer ds.cacheMu.Unlock()
 	if !ds.cacheDirty && len(ds.sortedTags) == len(ds.items) {
 		return ds.sortedTags
 	}

@@ -1018,6 +1018,8 @@ func (s *Server) serveConnection(conn net.Conn, slotReserved bool) {
 
 	// Start service loops
 	if err := svc.Start(); err != nil {
+		s.emitServerError(s.ctx, "service_start_failed", err)
+		_ = svc.Close()
 		return
 	}
 

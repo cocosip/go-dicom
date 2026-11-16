@@ -226,7 +226,15 @@ func (p *PixelData) assembleFrame(frameRange fragmentRange, frameIndex int) ([]b
 	fragments := p.sequence.Fragments()
 	var frame []byte
 	for _, fragment := range fragments[frameRange.start:frameRange.end] {
-		frame = append(frame, fragment.Data()...)
+		size := fragment.Size()
+		if size == 0 {
+			continue
+		}
+		chunk := make([]byte, size)
+		if err := fragment.GetByteRange(0, size, chunk); err != nil {
+			return nil, fmt.Errorf("read frame %d fragment: %w", frameIndex, err)
+		}
+		frame = append(frame, chunk...)
 	}
 	if len(frame) == 0 {
 		return nil, fmt.Errorf("frame %d is empty", frameIndex)

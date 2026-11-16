@@ -18,7 +18,6 @@ const (
 	FilmDestinationMagazine FilmDestination = "MAGAZINE"
 	// FilmDestinationProcessor - film developed in processor
 	FilmDestinationProcessor FilmDestination = "PROCESSOR"
-	// FilmDestinationBin - film deposited in sorter bin (BIN_1, BIN_2, etc.)
 )
 
 // MediumType represents the type of medium for printing
@@ -314,6 +313,9 @@ func (fs *FilmSession) Clone() (*FilmSession, error) {
 
 // GetFilmBox returns the Film Box at the specified index
 func (fs *FilmSession) GetFilmBox(index int) *FilmBox {
+	if fs == nil {
+		return nil
+	}
 	if index >= 0 && index < len(fs.BasicFilmBoxes) {
 		return fs.BasicFilmBoxes[index]
 	}
@@ -322,6 +324,9 @@ func (fs *FilmSession) GetFilmBox(index int) *FilmBox {
 
 // GetPresentationLUT returns the Presentation LUT at the specified index
 func (fs *FilmSession) GetPresentationLUT(index int) *PresentationLUT {
+	if fs == nil {
+		return nil
+	}
 	if index >= 0 && index < len(fs.PresentationLUTs) {
 		return fs.PresentationLUTs[index]
 	}
@@ -330,16 +335,25 @@ func (fs *FilmSession) GetPresentationLUT(index int) *PresentationLUT {
 
 // FilmBoxCount returns the number of Film Boxes in the session
 func (fs *FilmSession) FilmBoxCount() int {
+	if fs == nil {
+		return 0
+	}
 	return len(fs.BasicFilmBoxes)
 }
 
 // PresentationLUTCount returns the number of Presentation LUTs in the session
 func (fs *FilmSession) PresentationLUTCount() int {
+	if fs == nil {
+		return 0
+	}
 	return len(fs.PresentationLUTs)
 }
 
 // IsValid checks if the Film Session configuration is valid
 func (fs *FilmSession) IsValid() bool {
+	if fs == nil {
+		return false
+	}
 	// Must have at least one Film Box
 	if len(fs.BasicFilmBoxes) == 0 {
 		return false

@@ -149,7 +149,12 @@ func (s *Service) abort(ctx context.Context, source, reason byte, recordErr erro
 	// (state is already Aborted from SendAbort)
 	err := s.initiateClose(StateAborted, recordErr)
 	if wait {
-		s.waitForShutdown()
+		// Honour the caller's context so a cancelled-derived Abort does not block
+		// for the full handler shutdown timeout.
+		select {
+		case <-s.shutdownCh:
+		case <-ctx.Done():
+		}
 	}
 	return err
 }

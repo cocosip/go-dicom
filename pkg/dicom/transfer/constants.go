@@ -585,7 +585,7 @@ func IsUncompressed(ts *Syntax) bool {
 
 // IsLosslessCompressed returns true if the transfer syntax uses lossless compression.
 func IsLosslessCompressed(ts *Syntax) bool {
-	return ts.IsEncapsulated() && !ts.IsLossy()
+	return (ts.IsEncapsulated() || ts.IsDeflate()) && !ts.IsLossy()
 }
 
 // IsLossyCompressed returns true if the transfer syntax uses lossy compression.

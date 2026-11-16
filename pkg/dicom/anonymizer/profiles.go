@@ -162,7 +162,10 @@ func NewMinimalProfile() *SecurityProfile {
 // NewResearchProfile creates a profile optimized for research use.
 // It retains more information while still protecting patient identity.
 func NewResearchProfile() *SecurityProfile {
-	profile := &SecurityProfile{rules: make([]profileRule, 0)}
+	profile := &SecurityProfile{
+		rules:   make([]profileRule, 0),
+		options: BasicProfile | RetainUIDs | RetainLongFullDates,
+	}
 
 	// Research-friendly rules
 	researchRules := []struct {

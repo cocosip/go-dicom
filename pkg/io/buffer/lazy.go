@@ -183,7 +183,13 @@ func (l *LazyByteBuffer) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	n, err := w.Write(data)
-	return int64(n), err
+	if err != nil {
+		return int64(n), err
+	}
+	if n != len(data) {
+		return int64(n), io.ErrShortWrite
+	}
+	return int64(n), nil
 }
 
 // IsLoaded returns true if the data has been loaded.

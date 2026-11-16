@@ -185,7 +185,7 @@ func inferPhysicalHierarchy(records []*Record) ([]*Record, error) {
 			}
 			study.addChild(record)
 			series = record
-		case RecordImage, RecordSRDocument, RecordPresentation:
+		case RecordImage, RecordSRDocument, RecordPresentation, RecordKeyObjectDoc:
 			if series == nil {
 				return nil, fmt.Errorf("%s record has no preceding SERIES record", record.recordType)
 			}

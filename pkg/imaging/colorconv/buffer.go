@@ -170,8 +170,8 @@ func ConvertYBRPartial422ToRGB(data []byte, width int) ([]byte, error) {
 		cr := float64(data[i+3])
 
 		r1 := 1.1644*(y1-16) + 1.5960*(cr-128)
-		g1 := 1.1644*(y1-16) - 0.3917*(cb-128) - 0.8130*(cr-128)
-		b1 := 1.1644*(y1-16) + 2.0173*(cb-128)
+		g1 := 1.1644*(y1-16) - 0.3918*(cb-128) - 0.8130*(cr-128)
+		b1 := 1.1644*(y1-16) + 2.0172*(cb-128)
 
 		newPixels[j+0] = clampByte(int(r1 + 0.5))
 		newPixels[j+1] = clampByte(int(g1 + 0.5))
@@ -184,8 +184,8 @@ func ConvertYBRPartial422ToRGB(data []byte, width int) ([]byte, error) {
 		}
 
 		r2 := 1.1644*(y2-16) + 1.5960*(cr-128)
-		g2 := 1.1644*(y2-16) - 0.3917*(cb-128) - 0.8130*(cr-128)
-		b2 := 1.1644*(y2-16) + 2.0173*(cb-128)
+		g2 := 1.1644*(y2-16) - 0.3918*(cb-128) - 0.8130*(cr-128)
+		b2 := 1.1644*(y2-16) + 2.0172*(cb-128)
 
 		newPixels[j+0] = clampByte(int(r2 + 0.5))
 		newPixels[j+1] = clampByte(int(g2 + 0.5))

@@ -475,54 +475,9 @@ func (dt *DateTime) IsRange() bool {
 	return findRangeDash(dtStr) != -1
 }
 
-// allASCIIDigits reports whether every byte is an ASCII digit.
-func allASCIIDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-// validZZXX reports whether d is a plausible 4-digit UTC offset (HHMM within
-// the PS3.5 range -1200..+1400).
-func validZZXX(d string) bool {
-	if len(d) != 4 {
-		return false
-	}
-	hh := int(d[0]-'0')*10 + int(d[1]-'0')
-	mm := int(d[2]-'0')*10 + int(d[3]-'0')
-	return mm < 60 && (hh < 14 || (hh == 14 && mm == 0))
-}
-
 // findRangeDash returns the index of the range-separating dash, or -1 if none.
-// Skips dashes that are part of a timezone offset (digit + '-' + exactly 4 digits,
-// no more digits after). This matches the logic in daterange.findRangeDash.
+// It delegates to daterange so element and daterange agree on how a trailing
+// UTC offset (e.g. "200601-0500") is distinguished from a range separator.
 func findRangeDash(s string) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '-' {
-			// A 4-digit year followed by a +/-ZZXX offset (e.g. "2007-0500") is
-			// a datetime, not a range.
-			if i == 4 && len(s) == 9 && allASCIIDigits(s[5:9]) && validZZXX(s[5:9]) {
-				continue
-			}
-			if i >= 8 && i+4 < len(s) {
-				isDigitBefore := s[i-1] >= '0' && s[i-1] <= '9'
-				isDigitsAfter := (s[i+1] >= '0' && s[i+1] <= '9') &&
-					(s[i+2] >= '0' && s[i+2] <= '9') &&
-					(s[i+3] >= '0' && s[i+3] <= '9') &&
-					(s[i+4] >= '0' && s[i+4] <= '9')
-				hasMoreDigits := i+5 < len(s) && (s[i+5] >= '0' && s[i+5] <= '9')
-				if isDigitBefore && isDigitsAfter && !hasMoreDigits {
-					continue
-				}
-			}
-			return i
-		}
-	}
-	return -1
+	return daterange.FindRangeDash(s)
 }

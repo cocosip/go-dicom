@@ -306,7 +306,6 @@ func stringImageAttribute(sequence *dataset.Dataset, attributeTag *tag.Tag) (str
 
 // SetImageData sets the image data for the Image Box
 func (ib *ImageBox) SetImageData(imageData []byte) {
-	ib.setLegacyImageData(imageData)
 	if ib.imageSequence != nil {
 		if len(imageData) == 0 {
 			ib.imageSequence.Remove(tag.PixelData)
@@ -315,9 +314,14 @@ func (ib *ImageBox) SetImageData(imageData []byte) {
 			if existing := ib.imageSequence.GetOrNil(tag.PixelData); existing != nil && existing.ValueRepresentation() == vr.OW {
 				pixelData = element.NewOtherWord(tag.PixelData, append([]byte(nil), imageData...))
 			}
-			_ = ib.imageSequence.AddOrUpdate(pixelData)
+			if err := ib.imageSequence.AddOrUpdate(pixelData); err != nil {
+				// Keep the legacy copy in sync with the sequence: if the sequence
+				// update fails, leave the legacy copy untouched.
+				return
+			}
 		}
 	}
+	ib.setLegacyImageData(imageData)
 }
 
 func (ib *ImageBox) setLegacyImageData(imageData []byte) {

@@ -101,7 +101,13 @@ func (b *BulkDataURIByteBuffer) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	n, err := w.Write(b.data)
-	return int64(n), err
+	if err != nil {
+		return int64(n), err
+	}
+	if n != len(b.data) {
+		return int64(n), io.ErrShortWrite
+	}
+	return int64(n), nil
 }
 
 // IsBulkDataURI returns true, indicating this buffer represents bulk data referenced by URI.

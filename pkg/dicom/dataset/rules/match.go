@@ -12,6 +12,7 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
+	"github.com/cocosip/go-dicom/pkg/dicom/vr"
 )
 
 // MatchRule evaluates one Dataset without mutating it.
@@ -102,6 +103,15 @@ func Empty(t *tag.Tag) (MatchRule, error) {
 		elem, exists := ds.Get(t)
 		if !exists || elem.Count() == 0 {
 			return true, nil
+		}
+		// Container and binary VRs have no canonical string form; a non-empty
+		// value of these types is not "empty".
+		if valueRepresentation := elem.ValueRepresentation(); valueRepresentation != nil {
+			switch valueRepresentation.Code() {
+			case vr.CodeSQ, vr.CodeOB, vr.CodeOW, vr.CodeOF, vr.CodeOD,
+				vr.CodeOL, vr.CodeOV, vr.CodeUN:
+				return false, nil
+			}
 		}
 		values, err := element.CanonicalStrings(elem)
 		if err != nil {

@@ -67,6 +67,17 @@ func (ds *Dataset) EnsureUTF8CharacterSet() error {
 }
 
 func (ds *Dataset) needsUTF8() bool {
+	return ds.needsUTF8Visited(make(map[*Dataset]struct{}))
+}
+
+func (ds *Dataset) needsUTF8Visited(visited map[*Dataset]struct{}) bool {
+	if ds == nil {
+		return false
+	}
+	if _, ok := visited[ds]; ok {
+		return false
+	}
+	visited[ds] = struct{}{}
 	for _, elem := range ds.Elements() {
 		if element.NeedsCharacterSet(elem) {
 			return true
@@ -76,7 +87,7 @@ func (ds *Dataset) needsUTF8() bool {
 			continue
 		}
 		for i := 0; i < sequence.Count(); i++ {
-			if item := sequence.GetItem(i); item != nil && item.needsUTF8() {
+			if item := sequence.GetItem(i); item != nil && item.needsUTF8Visited(visited) {
 				return true
 			}
 		}

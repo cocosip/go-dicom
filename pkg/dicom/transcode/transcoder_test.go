@@ -1324,6 +1324,7 @@ func (c *countingBuffer) Data() []byte {
 }
 
 func (c *countingBuffer) GetByteRange(offset, count uint32, output []byte) error {
+	c.dataCalls++
 	if offset > uint32(len(c.data)) || count > uint32(len(c.data))-offset {
 		return io.ErrUnexpectedEOF
 	}

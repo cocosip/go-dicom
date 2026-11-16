@@ -72,10 +72,14 @@ func (c *CompositeByteBuffer) Data() []byte {
 	offset := uint32(0)
 	for _, buf := range c.buffers {
 		bufSize := buf.Size()
-		// Advance by the declared size even if a child returns short data on an
-		// I/O error, so later buffers never overlap and the result length stays
-		// correct (a failed child's span is left zero-filled).
-		copy(data[offset:offset+bufSize], buf.Data())
+		child := buf.Data()
+		// A child that fails to read returns nil; returning nil here (rather
+		// than a zero-filled span that looks like real data) lets callers detect
+		// the failure, consistent with the other buffer implementations.
+		if child == nil && bufSize != 0 {
+			return nil
+		}
+		copy(data[offset:offset+bufSize], child)
 		offset += bufSize //nolint:gosec // buffer size within uint32 range
 	}
 	return data

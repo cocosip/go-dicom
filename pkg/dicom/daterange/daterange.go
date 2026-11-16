@@ -284,7 +284,7 @@ func parseDicomTime(s string) (time.Time, error) {
 	}
 
 	for _, format := range formats {
-		if len(normalized) >= len(format) {
+		if len(normalized) == len(format) {
 			if t, err := time.Parse(format, normalized[:len(format)]); err == nil {
 				return t, nil
 			}
@@ -518,6 +518,13 @@ func findRangeDash(s string) int {
 		return i
 	}
 	return -1
+}
+
+// FindRangeDash returns the index of the range-separating dash in a DT value,
+// or -1 when the value has no range separator. Dashes that introduce a trailing
+// UTC offset (e.g. "202401-0500") are ignored.
+func FindRangeDash(s string) int {
+	return findRangeDash(s)
 }
 
 // isUTCOffsetAt reports whether the dash at s[i] introduces a "-ZZXX" UTC

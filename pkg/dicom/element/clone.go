@@ -326,7 +326,14 @@ func cloneBuffer(source buffer.ByteBuffer) buffer.ByteBuffer {
 	if source == nil {
 		return nil
 	}
-	return buffer.NewMemory(append([]byte(nil), source.Data()...))
+	cloned, err := buffer.Clone(source)
+	if err != nil {
+		// DeepClone has no error channel (use DeepCloneChecked for strict
+		// detachment). Keep the original reference rather than silently
+		// producing an empty buffer when the value cannot be detached.
+		return source
+	}
+	return cloned
 }
 
 type snapshotElement struct {
