@@ -126,12 +126,31 @@ func TestProgressFinalStatusRules(t *testing.T) {
 	if err := cFindFinalStatusError(status.Cancel.Code, true); err != nil {
 		t.Fatalf("cancelled C-FIND final Cancel error = %v", err)
 	}
-	if err := cMoveFinalStatusError(status.CMoveWarningSubOperationsComplete.Code, false); err != nil {
-		t.Fatalf("C-MOVE warning error = %v", err)
+
+	// PS3.7 Annex C has distinct Success, Warning and Failure states, so a
+	// 0xB000 "sub-operations complete, one or more failures" final status must
+	// not look like a clean success. Callers that accept partial success
+	// classify it with Status.IsWarning().
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{"C-FIND", cFindFinalStatusError(status.AttributeListError.Code, false)},
+		{"C-MOVE", cMoveFinalStatusError(status.CMoveWarningSubOperationsComplete.Code, false)},
+		{"C-GET", cGetFinalStatusError(status.CGetWarningSubOperationsComplete.Code, false)},
+	} {
+		if tt.err == nil {
+			t.Fatalf("%s warning status error = nil, want a StatusError", tt.name)
+		}
+		var statusErr *StatusError
+		if !errors.As(tt.err, &statusErr) {
+			t.Fatalf("%s warning error = %T, want *StatusError", tt.name, tt.err)
+		}
+		if !statusErr.Status.IsWarning() {
+			t.Fatalf("%s warning error status = %s, want a warning state", tt.name, statusErr.Status)
+		}
 	}
-	if err := cGetFinalStatusError(status.CGetWarningSubOperationsComplete.Code, false); err != nil {
-		t.Fatalf("C-GET warning error = %v", err)
-	}
+
 	if err := cFindFinalStatusError(status.CFindFailedUnableToProcess.Code, false); err == nil {
 		t.Fatal("C-FIND failure status error = nil")
 	}

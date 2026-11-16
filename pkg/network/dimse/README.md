@@ -49,9 +49,9 @@ req2, _ := dimse.NewCStoreRequest(dataset)
 req3 := dimse.NewCFindRequestPatientRoot(level, query)
 
 // Assign a MessageID automatically before sending
-idGen.AssignMessageID(req1)  // MessageID = 1
-idGen.AssignMessageID(req2)  // MessageID = 2
-idGen.AssignMessageID(req3)  // MessageID = 3
+_, _ = idGen.AssignMessageID(req1)  // MessageID = 1
+_, _ = idGen.AssignMessageID(req2)  // MessageID = 2
+_, _ = idGen.AssignMessageID(req3)  // MessageID = 3
 ```
 
 ### Features

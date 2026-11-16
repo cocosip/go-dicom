@@ -4,11 +4,7 @@
 package transport
 
 import (
-	"encoding/binary"
-	"errors"
 	"fmt"
-	"io"
-	"math"
 	"net"
 	"time"
 
@@ -16,12 +12,12 @@ import (
 )
 
 // ErrPDULengthExceeded indicates that a peer sent a PDU larger than the active limit.
-var ErrPDULengthExceeded = errors.New("PDU length exceeds maximum")
+var ErrPDULengthExceeded = pdu.ErrPDULengthExceeded
 
 // ErrUnrecognizedPDUType indicates that a peer sent a PDU whose type byte is
 // not one of the seven DICOM Upper Layer PDU types. Callers can use errors.Is
 // to react by sending an A-ABORT with reason unrecognized-PDU (PS3.8 Table 9-26).
-var ErrUnrecognizedPDUType = errors.New("unrecognized PDU type")
+var ErrUnrecognizedPDUType = pdu.ErrUnrecognizedPDUType
 
 // ReadPDU reads a complete PDU from the connection with an optional timeout.
 //
@@ -61,45 +57,11 @@ func ReadPDUMaxLength(conn net.Conn, timeout time.Duration, maxLength uint32) (*
 		defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 	}
 
-	// Read PDU header (6 bytes)
-	// Format: [type:1][reserved:1][length:4]
-	var header [6]byte
-	if _, err := io.ReadFull(conn, header[:]); err != nil {
-		return nil, fmt.Errorf("failed to read PDU header: %w", err)
+	rawPDU := &pdu.RawPDU{}
+	if err := rawPDU.ReadMax(conn, maxLength); err != nil {
+		return nil, err
 	}
-
-	// Parse header
-	pduType := header[0]
-	// reserved := header[1]  // Reserved byte, not used
-	length := binary.BigEndian.Uint32(header[2:6])
-
-	// Validate PDU type before proceeding
-	if !isValidPDUType(pduType) {
-		return nil, fmt.Errorf("%w: 0x%02X", ErrUnrecognizedPDUType, pduType)
-	}
-
-	// Validate length before reading the PDU data.
-	limit := pdu.MaxPDUDataLength
-	if maxLength > 0 && maxLength < limit {
-		limit = maxLength
-	}
-	if length > limit {
-		return nil, fmt.Errorf("%w: %d exceeds maximum allowed %d", ErrPDULengthExceeded, length, limit)
-	}
-
-	// Read PDU data. The buffer grows incrementally, so a peer that declares a
-	// huge PDU but sends little or no data cannot force a large allocation.
-	data, err := pdu.ReadPDUData(conn, length)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read PDU data: %w", err)
-	}
-
-	return &pdu.RawPDU{
-		Type:     pduType,
-		Reserved: header[1],
-		Length:   length,
-		Data:     data,
-	}, nil
+	return rawPDU, nil
 }
 
 // WritePDU writes a complete PDU to the connection with an optional timeout.
@@ -127,56 +89,5 @@ func WritePDU(conn net.Conn, timeout time.Duration, p *pdu.RawPDU) error {
 		defer func() { _ = conn.SetWriteDeadline(time.Time{}) }()
 	}
 
-	// Encode PDU header
-	// Format: [type:1][reserved:1][length:4]
-	// Validate data length before converting to uint32
-	dataLen := len(p.Data)
-	if uint64(dataLen) > math.MaxUint32 {
-		return fmt.Errorf("PDU data length %d exceeds uint32 range", dataLen)
-	}
-	length := uint32(dataLen)
-	var header [6]byte
-	header[0] = p.Type // #nosec G602 -- fixed-size header array [6]byte
-	var reserved byte
-	header[1] = reserved // #nosec G602 -- fixed-size header array [6]byte
-	binary.BigEndian.PutUint32(header[2:6], length)
-
-	// Write header
-	if err := writeFull(conn, header[:]); err != nil {
-		return fmt.Errorf("failed to write PDU header: %w", err)
-	}
-
-	// Write data
-	if length > 0 {
-		if err := writeFull(conn, p.Data); err != nil {
-			return fmt.Errorf("failed to write PDU data: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func isValidPDUType(pduType byte) bool {
-	switch pduType {
-	case pdu.TypeAAssociateRQ, pdu.TypeAAssociateAC, pdu.TypeAAssociateRJ,
-		pdu.TypePDataTF, pdu.TypeAReleaseRQ, pdu.TypeAReleaseRP, pdu.TypeAAbort:
-		return true
-	default:
-		return false
-	}
-}
-
-func writeFull(conn net.Conn, data []byte) error {
-	for len(data) > 0 {
-		n, err := conn.Write(data)
-		if err != nil {
-			return err
-		}
-		if n <= 0 {
-			return io.ErrShortWrite
-		}
-		data = data[n:]
-	}
-
-	return nil
+	return p.Write(conn)
 }

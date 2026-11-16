@@ -129,15 +129,17 @@ func TestConsumeCFindEventsReturnsCancelSendFailure(t *testing.T) {
 	}
 }
 
-func TestConsumeCMoveEventsDeliversCountsAndAcceptsWarning(t *testing.T) {
+func TestConsumeCMoveEventsDeliversCountsAndReportsWarningStatus(t *testing.T) {
 	request := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST", dataset.New())
+	final := dimse.NewCMoveResponseFromRequest(request, status.CMoveWarningSubOperationsComplete)
+	// A conformant SCP reports the authoritative totals on the final response
+	// (PS3.4 C.4.2.2.1), so the last callback must show them.
+	final.SetSubOperationCounts(0, 2, 1, 4)
 	events := bufferedEvents(
 		service.ResponseEvent[*dimse.CMoveResponse]{
 			Response: dimse.NewCMoveResponsePending(1, request.AffectedSOPClassUID(), 3, 2, 1, 4),
 		},
-		service.ResponseEvent[*dimse.CMoveResponse]{
-			Response: dimse.NewCMoveResponseFromRequest(request, status.CMoveWarningSubOperationsComplete),
-		},
+		service.ResponseEvent[*dimse.CMoveResponse]{Response: final},
 	)
 
 	var got [4]uint16
@@ -145,11 +147,53 @@ func TestConsumeCMoveEventsDeliversCountsAndAcceptsWarning(t *testing.T) {
 		got = [4]uint16{remaining, completed, failed, warning}
 		return true
 	}, func() error { return nil })
-	if err != nil {
-		t.Fatalf("consumeCMoveEvents() error = %v", err)
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) || !statusErr.Status.IsWarning() {
+		t.Fatalf("consumeCMoveEvents() error = %v, want a warning StatusError", err)
 	}
-	if got != [4]uint16{3, 2, 1, 4} {
-		t.Fatalf("counts = %v, want [3 2 1 4]", got)
+	if got != [4]uint16{0, 2, 1, 4} {
+		t.Fatalf("counts = %v, want [0 2 1 4]", got)
+	}
+
+	// A clean success still returns no error.
+	success := dimse.NewCMoveResponseFromRequest(request, status.Success)
+	success.SetSubOperationCounts(0, 3, 0, 0)
+	successEvents := bufferedEvents(service.ResponseEvent[*dimse.CMoveResponse]{Response: success})
+	if err := consumeCMoveEvents(context.Background(), successEvents, nil, func() error { return nil }); err != nil {
+		t.Fatalf("consumeCMoveEvents() success error = %v, want nil", err)
+	}
+}
+
+// TestConsumeCMoveEventsReportsFinalSubOperationCounts verifies that the final
+// response's authoritative totals reach the callback and that a 0xB000 warning
+// final status is reported as a warning StatusError, not as clean success: a
+// caller that only tracks progress events must still see that sub-operations
+// failed.
+func TestConsumeCMoveEventsReportsFinalSubOperationCounts(t *testing.T) {
+	request := dimse.NewCMoveRequest(dimse.QueryRetrieveLevelStudy, "DEST", dataset.New())
+	final := dimse.NewCMoveResponseFromRequest(request, status.CMoveWarningSubOperationsComplete)
+	final.SetSubOperationCounts(0, 0, 2, 0)
+	events := bufferedEvents(service.ResponseEvent[*dimse.CMoveResponse]{Response: final})
+
+	var got [4]uint16
+	var calls int
+	err := consumeCMoveEvents(context.Background(), events, func(remaining, completed, failed, warning uint16) bool {
+		calls++
+		got = [4]uint16{remaining, completed, failed, warning}
+		return true
+	}, func() error { return nil })
+	if calls != 1 {
+		t.Fatalf("callback calls = %d, want 1 for the final response", calls)
+	}
+	if got != [4]uint16{0, 0, 2, 0} {
+		t.Fatalf("final counts = %v, want [0 0 2 0]", got)
+	}
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) || !statusErr.Status.IsWarning() {
+		t.Fatalf("consumeCMoveEvents() error = %v, want a warning StatusError", err)
+	}
+	if !strings.Contains(err.Error(), "completed with a warning status") {
+		t.Fatalf("error = %q, want warning wording", err.Error())
 	}
 }
 

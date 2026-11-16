@@ -6,11 +6,21 @@ package pdu
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net"
 )
+
+// ErrUnrecognizedPDUType indicates that a PDU type byte is not one of the
+// seven DICOM Upper Layer PDU types. Callers can use errors.Is to react by
+// sending an A-ABORT with reason unrecognized-PDU (PS3.8 Table 9-26).
+var ErrUnrecognizedPDUType = errors.New("unrecognized PDU type")
+
+// ErrPDULengthExceeded indicates that a PDU declares a payload larger than the
+// active limit.
+var ErrPDULengthExceeded = errors.New("PDU length exceeds maximum")
 
 // PDU type constants as defined in DICOM standard PS3.8
 const (
@@ -114,6 +124,14 @@ func (p *RawPDU) String() string {
 // The payload buffer grows incrementally, so a peer that declares a large PDU
 // but sends little or no data cannot force a large up-front allocation.
 func (p *RawPDU) Read(r io.Reader) error {
+	return p.ReadMax(r, 0)
+}
+
+// ReadMax reads a RawPDU from r while applying the caller's negotiated payload
+// limit. A zero maxLength keeps the transport safety cap but does not add a
+// negotiated limit. Payload data is read incrementally, so an announced length
+// that is never delivered holds at most about one chunk of memory.
+func (p *RawPDU) ReadMax(r io.Reader, maxLength uint32) error {
 	// Read 6-byte header
 	var header [6]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {
@@ -123,13 +141,19 @@ func (p *RawPDU) Read(r io.Reader) error {
 	p.Type = header[0]
 	p.Reserved = header[1]
 	p.Length = binary.BigEndian.Uint32(header[2:6])
-	if p.Length > MaxPDUDataLength {
-		return fmt.Errorf("PDU length %d exceeds maximum allowed %d", p.Length, MaxPDUDataLength)
-	}
 
 	// Validate PDU type
 	if !isValidPDUType(p.Type) {
-		return fmt.Errorf("invalid PDU type: 0x%02X", p.Type)
+		return fmt.Errorf("%w: 0x%02X", ErrUnrecognizedPDUType, p.Type)
+	}
+
+	// Validate length before reading the PDU data.
+	limit := MaxPDUDataLength
+	if maxLength > 0 && maxLength < limit {
+		limit = maxLength
+	}
+	if p.Length > limit {
+		return fmt.Errorf("%w: %d exceeds maximum allowed %d", ErrPDULengthExceeded, p.Length, limit)
 	}
 
 	// Read PDU data

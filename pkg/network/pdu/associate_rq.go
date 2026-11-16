@@ -640,6 +640,8 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 	}
 	maximumLengthSeen := false
 	implementationClassUIDSeen := false
+	implementationVersionNameSeen := false
+	asynchronousOperationsSeen := false
 	userIdentitySeen := false
 	seenRoleSelections := make(map[string]struct{})
 
@@ -676,9 +678,21 @@ func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningH
 			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
 
 		case ItemTypeImplementationVersionName:
+			// PS3.8 D.1.3: only one Implementation Version Name Sub-Item shall
+			// be present.
+			if implementationVersionNameSeen {
+				return nil, fmt.Errorf("duplicate implementation version name sub-item in user information")
+			}
+			implementationVersionNameSeen = true
 			ui.ImplementationVersionName = string(itemData)
 
 		case ItemTypeAsynchronousOperationsWindow:
+			// PS3.8 D.3.3.2: only one Asynchronous Operations Window Sub-Item
+			// shall be present.
+			if asynchronousOperationsSeen {
+				return nil, fmt.Errorf("duplicate asynchronous operations window sub-item in user information")
+			}
+			asynchronousOperationsSeen = true
 			if len(itemData) != 4 {
 				return nil, fmt.Errorf("invalid asynchronous operations window: %d bytes", len(itemData))
 			}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
 func TestNewAssociation(t *testing.T) {
@@ -158,6 +159,28 @@ func TestAssociation_ExtendedNegotiation(t *testing.T) {
 	notFound := assoc.FindExtendedNegotiation("1.2.3.4.5")
 	if notFound != nil {
 		t.Error("Expected nil for non-existing extended negotiation")
+	}
+}
+
+// TestToAAssociateACWithMaxPDULengthToleratesNilProposedTransferSyntax verifies
+// that a rejected presentation context whose first proposed transfer syntax is
+// nil still yields an AC (falling back to Implicit VR Little Endian) instead of
+// panicking; ToAAssociateRQ already guards the same field.
+func TestToAAssociateACWithMaxPDULengthToleratesNilProposedTransferSyntax(t *testing.T) {
+	assoc := NewAssociation("SCU", "SCP")
+	assoc.PresentationContexts = []*PresentationContext{{
+		ID:                       1,
+		AbstractSyntax:           testStorageSOPClassUID,
+		ProposedTransferSyntaxes: []*transfer.Syntax{nil},
+		Result:                   pdu.ResultRejectedPermanent,
+	}}
+
+	ac := ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
+	if len(ac.PresentationContexts) != 1 {
+		t.Fatalf("presentation contexts = %d, want 1", len(ac.PresentationContexts))
+	}
+	if got := ac.PresentationContexts[0].TransferSyntax; got != "1.2.840.10008.1.2" {
+		t.Fatalf("transfer syntax = %q, want Implicit VR Little Endian", got)
 	}
 }
 

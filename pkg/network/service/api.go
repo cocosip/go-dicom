@@ -468,11 +468,22 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 		defer cleanup()
 		sendError := func(err error) {
 			cleanup()
-			// The terminal event is always delivered, even after the caller
-			// cancels: callers must drain the channel until it closes. Resources
-			// (pending request and async slot) are released first, so blocking
-			// here only delays the terminal event, not other operations.
-			eventCh <- ResponseEvent[Resp]{Err: err}
+			// The terminal event is delivered whenever the channel has room,
+			// even after the caller cancels: callers must drain the channel
+			// until it closes. Delivery is deliberately not bounded by ctx, so
+			// a cancelled-but-draining caller still gets it, and never blocks
+			// past the service lifetime: once the service closes, a caller that
+			// stopped draining cannot leak this goroutine.
+			ev := ResponseEvent[Resp]{Err: err}
+			select {
+			case eventCh <- ev:
+				return
+			default:
+			}
+			select {
+			case eventCh <- ev:
+			case <-s.closeCh:
+			}
 		}
 		cancelPeer := func() {
 			s.cancelPendingRequest(pending, msgID)

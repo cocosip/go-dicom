@@ -40,8 +40,3 @@ func (r *CCancelRequest) MessageIDBeingRespondedTo() uint16 {
 func (r *CCancelRequest) CommandField() uint16 {
 	return uint16(CommandCCancelRQ)
 }
-
-// ExecuteMode returns the execution mode (always "" for cancel).
-func (r *CCancelRequest) ExecuteMode() string {
-	return ""
-}

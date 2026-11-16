@@ -993,6 +993,30 @@ func TestAAssociateRQDecodeRejectsDuplicateRoleSelections(t *testing.T) {
 	}
 }
 
+// TestAAssociateRQDecodeRejectsDuplicateUserInformationSubItems verifies that
+// the RQ decoder rejects duplicate Implementation Version Name and Asynchronous
+// Operations Window sub-items, matching the AC decoder and PS3.8 D.1.3/D.3.3.2.
+func TestAAssociateRQDecodeRejectsDuplicateUserInformationSubItems(t *testing.T) {
+	versionName := encodeTestItem(ItemTypeImplementationVersionName, []byte("GO-DICOM1"))
+	asyncOps := encodeTestItem(ItemTypeAsynchronousOperationsWindow, []byte{0, 1, 0, 1})
+
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"implementation version name", append(append([]byte{}, versionName...), versionName...)},
+		{"asynchronous operations window", append(append([]byte{}, asyncOps...), asyncOps...)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := &AAssociateRQ{}
+			if _, err := rq.decodeUserInformation(tt.data, nil); err == nil {
+				t.Fatalf("decodeUserInformation() accepted duplicate %s sub-items", tt.name)
+			}
+		})
+	}
+}
+
 func TestAAssociateRQDecodeAcceptsRoleSelectionsForDistinctSOPClasses(t *testing.T) {
 	data := append(
 		encodeRoleSelectionTestItem(t, testCTImageStorageUID, 1, 0),

@@ -103,6 +103,12 @@ func (s *Service) registerActiveOperation(parent context.Context, messageID uint
 		}
 	}
 	ctx, cancel := context.WithCancel(parent)
+	// Decorate before storing: a later registration for the same message ID
+	// returns the stored context, so it must already carry the operation ID the
+	// handlers use to correlate outbound sub-operations with this request.
+	if op := s.inboundRequest(messageID); op != nil {
+		ctx = withOperationID(ctx, op.operationID)
+	}
 	s.activeOperations[messageID] = &activeOperation{
 		token:     token,
 		ctx:       ctx,
@@ -110,9 +116,6 @@ func (s *Service) registerActiveOperation(parent context.Context, messageID uint
 		lifecycle: s.inboundRequest(messageID),
 	}
 	s.activeOperationsMu.Unlock()
-	if op := s.inboundRequest(messageID); op != nil {
-		ctx = withOperationID(ctx, op.operationID)
-	}
 
 	unregister := func() {
 		s.activeOperationsMu.Lock()
@@ -738,13 +741,6 @@ func (s *Service) SetAssociationNegotiator(negotiator AssociationNegotiator) {
 	s.associationNegotiator = negotiator
 }
 
-// GetAssociationNegotiator returns the current association negotiator.
-func (s *Service) GetAssociationNegotiator() AssociationNegotiator {
-	s.callbacksMu.RLock()
-	defer s.callbacksMu.RUnlock()
-	return s.associationNegotiator
-}
-
 // SetAssociationReleaseHandler sets the association release callback.
 // This is called when an A-RELEASE-RQ is received.
 //
@@ -758,13 +754,6 @@ func (s *Service) SetAssociationReleaseHandler(handler AssociationReleaseHandler
 	s.associationReleaseHandler = handler
 }
 
-// GetAssociationReleaseHandler returns the current association release handler.
-func (s *Service) GetAssociationReleaseHandler() AssociationReleaseHandler {
-	s.callbacksMu.RLock()
-	defer s.callbacksMu.RUnlock()
-	return s.associationReleaseHandler
-}
-
 // SetConnectionLifecycleHandler sets the connection lifecycle callbacks.
 // This is used to monitor connection events (abort, close).
 //
@@ -776,13 +765,6 @@ func (s *Service) SetConnectionLifecycleHandler(handler ConnectionLifecycleHandl
 	s.callbacksMu.Lock()
 	defer s.callbacksMu.Unlock()
 	s.connectionLifecycleHandler = handler
-}
-
-// GetConnectionLifecycleHandler returns the current connection lifecycle handler.
-func (s *Service) GetConnectionLifecycleHandler() ConnectionLifecycleHandler {
-	s.callbacksMu.RLock()
-	defer s.callbacksMu.RUnlock()
-	return s.connectionLifecycleHandler
 }
 
 // handleCCancelRequest handles a C-CANCEL-RQ request.

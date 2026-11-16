@@ -944,13 +944,11 @@ func (s *Server) serveConnection(conn net.Conn, slotReserved bool) {
 
 	// Create service with all options
 	svc := service.NewService(conn, nil, svcOpts...)
-	if !slotReserved {
-		// The service emitted its opened event in NewService; close it so the
-		// rejected connection also emits closed and user lifecycle callbacks see
-		// a balanced pair. It was never started, so Close does not wait for
-		// handlers.
-		defer func() { _ = svc.Close() }()
-	}
+	// The service emitted its opened event in NewService. Close it on every exit
+	// path (including a rejected association, where it was never started) so the
+	// closed event is always emitted and user lifecycle callbacks see a balanced
+	// pair. Close is idempotent, so the accepted path's own shutdown is unaffected.
+	defer func() { _ = svc.Close() }()
 
 	// Receive A-ASSOCIATE-RQ and handle negotiation
 	// The service will call the AssociationNegotiator callback (if set by user), which will:

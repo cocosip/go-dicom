@@ -20,13 +20,19 @@ const (
 	automaticCancelTimeout     = time.Second
 )
 
-// StatusError reports a non-success DIMSE response while preserving its DICOM status.
+// StatusError reports a completed request whose response status was not
+// Success. Use Status.IsSuccess/IsWarning/IsFailure/IsCancel to classify it: a
+// warning such as C-MOVE/C-GET 0xB000 means the operation finished but one or
+// more sub-operations failed.
 type StatusError struct {
 	Operation string
 	Status    *status.Status
 }
 
 func (e *StatusError) Error() string {
+	if e.Status != nil && e.Status.IsWarning() {
+		return fmt.Sprintf("%s completed with a warning status: %s", e.Operation, e.Status)
+	}
 	return fmt.Sprintf("%s failed with status: %s", e.Operation, e.Status)
 }
 
@@ -526,7 +532,12 @@ type CMoveCallback func(remaining, completed, failed, warning uint16) bool
 // The level parameter specifies the query/retrieve level (Patient, Study, Series, or Image).
 // The moveDestination specifies the AE title where instances should be moved to.
 // The identifier contains the matching keys that identify which instances to move.
-// The callback is called for each pending response with sub-operation counts.
+// The callback is called for each pending response with sub-operation counts,
+// and once more for the final response when it carries counts.
+// A final status other than Success is returned as an error: a Warning status
+// such as 0xB000 ("sub-operations complete, one or more failures") yields a
+// *StatusError whose Status.IsWarning() is true, so a caller can tell partial
+// success from a clean one.
 //
 // C-MOVE is typically used when the client wants instances sent to a third-party destination.
 // If you want instances sent directly to the requesting client, use CGet instead.
@@ -583,10 +594,13 @@ func consumeCMoveEvents(
 }
 
 func cMoveFinalStatusError(statusCode uint16, cancelRequested bool) error {
-	if statusCode == status.Success.Code || statusCode == status.CMoveWarningSubOperationsComplete.Code ||
-		cancelRequested && statusCode == status.Cancel.Code {
+	if statusCode == status.Success.Code || cancelRequested && statusCode == status.Cancel.Code {
 		return nil
 	}
+	// A warning final status (0xB000 "sub-operations complete, one or more
+	// failures") is not success: PS3.7 Annex C separates Success, Warning and
+	// Failure states, and callers must be able to see that some sub-operations
+	// failed. It is reported as a StatusError whose Status.IsWarning() is true.
 	return &StatusError{Operation: "C-MOVE", Status: status.LookupStatus(statusCode)}
 }
 
@@ -602,7 +616,12 @@ type CGetCallback func(remaining, completed, failed, warning uint16) bool
 //
 // The level parameter specifies the query/retrieve level (Patient, Study, Series, or Image).
 // The identifier contains the matching keys that identify which instances to retrieve.
-// The callback is called for each pending response with sub-operation counts.
+// The callback is called for each pending response with sub-operation counts,
+// and once more for the final response when it carries counts.
+// A final status other than Success is returned as an error: a Warning status
+// such as 0xB000 ("sub-operations complete, one or more failures") yields a
+// *StatusError whose Status.IsWarning() is true, so a caller can tell partial
+// success from a clean one.
 //
 // C-GET retrieves instances directly to the requesting client over the same association.
 // The client must have a C-STORE handler configured to receive the instances, and
@@ -686,10 +705,10 @@ func consumeCGetEvents(
 }
 
 func cGetFinalStatusError(statusCode uint16, cancelRequested bool) error {
-	if statusCode == status.Success.Code || statusCode == status.CGetWarningSubOperationsComplete.Code ||
-		cancelRequested && statusCode == status.Cancel.Code {
+	if statusCode == status.Success.Code || cancelRequested && statusCode == status.Cancel.Code {
 		return nil
 	}
+	// See cMoveFinalStatusError: 0xB000 is a Warning state, not Success.
 	return &StatusError{Operation: "C-GET", Status: status.LookupStatus(statusCode)}
 }
 
@@ -740,6 +759,20 @@ func consumeSubOperationEvents[T subOperationResponse](
 				return fmt.Errorf("%s event contains neither response nor error", operation)
 			}
 			if !response.IsPending() {
+				// The final response carries the authoritative sub-operation
+				// totals. Report them before returning so a 0xB000 warning
+				// (sub-operations completed with failures) cannot look like a
+				// clean success to a caller that only tracks progress events.
+				// The callback's return value is ignored here: the operation is
+				// already over, so it cannot request a cancel.
+				if callback != nil && response.HasSubOperationCounts() {
+					callback(
+						response.NumberOfRemainingSubOperations(),
+						response.NumberOfCompletedSubOperations(),
+						response.NumberOfFailedSubOperations(),
+						response.NumberOfWarningSubOperations(),
+					)
+				}
 				return finalStatus(response.StatusCode(), cancelRequested)
 			}
 			if contextErr := eventContextError(ctx); contextErr != nil {

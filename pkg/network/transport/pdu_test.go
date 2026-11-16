@@ -53,6 +53,38 @@ func TestReadWritePDU_Basic(t *testing.T) {
 	}
 }
 
+// TestWritePDU_PreservesReservedByte verifies that the transport write path
+// delegates framing to the pdu package: an encoded PDU with a non-zero Reserved
+// header byte must round-trip instead of having that byte replaced with zero.
+func TestWritePDU_PreservesReservedByte(t *testing.T) {
+	server, client := net.Pipe()
+	defer func() { _ = server.Close() }()
+	defer func() { _ = client.Close() }()
+
+	sent := &pdu.RawPDU{
+		Type:     pdu.TypePDataTF,
+		Reserved: 0x42,
+		Data:     []byte("reserved byte round-trip"),
+	}
+
+	go func() {
+		if err := WritePDU(client, time.Second, sent); err != nil {
+			t.Errorf("WritePDU failed: %v", err)
+		}
+	}()
+
+	received, err := ReadPDU(server, time.Second)
+	if err != nil {
+		t.Fatalf("ReadPDU failed: %v", err)
+	}
+	if received.Reserved != sent.Reserved {
+		t.Fatalf("Reserved = 0x%02X, want 0x%02X", received.Reserved, sent.Reserved)
+	}
+	if received.Type != sent.Type || !bytes.Equal(received.Data, sent.Data) {
+		t.Fatalf("received PDU = %#v, want type and data of %#v", received, sent)
+	}
+}
+
 func TestReadWritePDU_EmptyData(t *testing.T) {
 	server, client := net.Pipe()
 	defer func() { _ = server.Close() }()
@@ -251,6 +283,8 @@ func TestReadPDUMaxLengthRejectsBeforeReadingPayload(t *testing.T) {
 
 	if _, err := ReadPDUMaxLength(server, time.Second, 16); err == nil {
 		t.Fatal("ReadPDUMaxLength() error = nil, want negotiated maximum error")
+	} else if !errors.Is(err, ErrPDULengthExceeded) {
+		t.Fatalf("ReadPDUMaxLength() error = %v, want ErrPDULengthExceeded", err)
 	}
 }
 

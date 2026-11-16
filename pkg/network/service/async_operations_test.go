@@ -4,8 +4,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 
@@ -350,6 +352,55 @@ func TestSendCFindReleasesResourcesBeforeBlockedTerminalEvent(t *testing.T) {
 		}
 	}
 	assertSingleTerminalEvent(t, events, context.Canceled)
+}
+
+// TestSendCFindAbandonedEventChannelDoesNotLeakProducer verifies that the
+// progress-channel producer is bounded by the service lifetime: a caller that
+// stops draining its full event channel and then closes the service must not
+// leave the producer goroutine blocked on its terminal event forever. The
+// terminal event itself may be dropped in that case.
+func TestSendCFindAbandonedEventChannelDoesNotLeakProducer(t *testing.T) {
+	service := newAsyncOperationsTestService(t, 1)
+	drainSuccessfulSends(service)
+
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	events, err := service.SendCFind(context.Background(), request)
+	if err != nil {
+		t.Fatalf("SendCFind() error = %v", err)
+	}
+
+	// Fill the event buffer and never drain it, so the producer can no longer
+	// deliver its terminal event without blocking.
+	for range cap(events) {
+		response := dimse.NewCFindResponseFromRequest(request, status.CFindPending, dataset.New())
+		if err := service.handleResponse(response); err != nil {
+			t.Fatalf("pending handleResponse() error = %v", err)
+		}
+	}
+	waitForResponseEventBuffer(t, events, cap(events))
+	if !progressProducerRunning() {
+		t.Fatal("progress producer goroutine not found; the leak detector cannot observe it")
+	}
+
+	if err := service.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for progressProducerRunning() {
+		if time.Now().After(deadline) {
+			t.Fatal("progress producer goroutine still blocked after service close with an abandoned event channel")
+		}
+		runtime.Gosched()
+	}
+}
+
+// progressProducerRunning reports whether a goroutine started by
+// sendRequestWithProgress is still alive.
+func progressProducerRunning() bool {
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	return bytes.Contains(buf[:n], []byte("sendRequestWithProgress"))
 }
 
 func TestSendCFindReleasesResourcesBeforeBlockedFinalResponse(t *testing.T) {
