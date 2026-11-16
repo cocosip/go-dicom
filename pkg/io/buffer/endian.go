@@ -76,6 +76,11 @@ func (e *EndianByteBuffer) Size() uint32 {
 // Data returns the data with endian conversion applied.
 func (e *EndianByteBuffer) Data() []byte {
 	data := e.internal.Data()
+	if data == nil && e.internal.Size() > 0 {
+		// Propagate the internal read failure instead of reporting empty data,
+		// matching the File, Stream, and Range buffer convention.
+		return nil
+	}
 
 	// Make a copy and swap
 	result := make([]byte, len(data))

@@ -294,6 +294,27 @@ func TestPresentationContext_AcceptTransferSyntaxesNegotiatesNewContext(t *testi
 	}
 }
 
+func TestPresentationContext_AcceptTransferSyntaxesIgnoresNilSyntax(t *testing.T) {
+	// A nil proposed syntax must be skipped so the remaining proposed syntax
+	// can still be accepted in SCU-priority mode.
+	pc := NewPresentationContext(1, "1.2.840.10008.1.1", nil, transfer.ExplicitVRLittleEndian)
+	if !pc.AcceptTransferSyntaxes(false, transfer.ExplicitVRLittleEndian) {
+		t.Fatal("AcceptTransferSyntaxes did not skip the nil proposed syntax")
+	}
+	if !pc.IsAccepted() || pc.AcceptedTransferSyntax != transfer.ExplicitVRLittleEndian {
+		t.Fatalf("accepted transfer syntax = %v, want Explicit VR Little Endian", pc.AcceptedTransferSyntax)
+	}
+
+	// A nil accepted syntax can never match a proposed one.
+	other := NewPresentationContext(3, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian)
+	if other.AcceptTransferSyntaxes(false, nil, transfer.ImplicitVRLittleEndian) {
+		t.Fatal("AcceptTransferSyntaxes must not match a nil accepted transfer syntax")
+	}
+	if other.Result != ResultTransferSyntaxesNotSupported {
+		t.Fatalf("result = %d, want transfer-syntaxes-not-supported", other.Result)
+	}
+}
+
 func TestNewUserIdentityUsername(t *testing.T) {
 	ui := NewUserIdentityUsername("testuser", true)
 

@@ -781,4 +781,3 @@ func assertReferenceSequence(t *testing.T, ds *dataset.Dataset, sequenceTag *tag
 		}
 	}
 }
-

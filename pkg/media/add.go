@@ -122,20 +122,25 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 		patientKey = "\x00" + normalizePersonName(patientName)
 	}
 
-	patient, err := d.findOrCreate(nil, d.roots, RecordPatient, patientKey, file.Dataset)
+	diagnosticsMark := len(d.diagnostics)
+
+	patient, patientCreated, err := d.findOrCreate(nil, d.roots, RecordPatient, patientKey, file.Dataset)
 	if err != nil {
+		d.rollbackAdd(nil, nil, nil, false, false, false, diagnosticsMark)
 		return nil, err
 	}
-	if !containsRecord(d.roots, patient) {
+	if patientCreated {
 		d.roots = append(d.roots, patient)
 	}
 
-	study, err := d.findOrCreate(patient, patient.children, RecordStudy, studyUID, file.Dataset)
+	study, studyCreated, err := d.findOrCreate(patient, patient.children, RecordStudy, studyUID, file.Dataset)
 	if err != nil {
+		d.rollbackAdd(patient, nil, nil, patientCreated, false, false, diagnosticsMark)
 		return nil, err
 	}
-	series, err := d.findOrCreate(study, study.children, RecordSeries, seriesUID, file.Dataset)
+	series, seriesCreated, err := d.findOrCreate(study, study.children, RecordSeries, seriesUID, file.Dataset)
 	if err != nil {
+		d.rollbackAdd(patient, study, nil, patientCreated, studyCreated, false, diagnosticsMark)
 		return nil, err
 	}
 
@@ -149,21 +154,26 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 	// one Directory Record.
 	fileIDKey := fileID.key()
 	if _, exists := d.fileIDs[fileIDKey]; exists {
+		d.rollbackAdd(patient, study, series, patientCreated, studyCreated, seriesCreated, diagnosticsMark)
 		return nil, fmt.Errorf("file ID %q is already referenced by another directory record", fileID)
 	}
 
 	instanceType, err := instanceRecordType(refs.sopClassUID)
 	if err != nil {
+		d.rollbackAdd(patient, study, series, patientCreated, studyCreated, seriesCreated, diagnosticsMark)
 		return nil, err
 	}
 	instance, err := d.newRecord(instanceType, instanceUID, file.Dataset)
 	if err != nil {
+		d.rollbackAdd(patient, study, series, patientCreated, studyCreated, seriesCreated, diagnosticsMark)
 		return nil, err
 	}
 	if err := addInstanceReferenceElements(instance, file.Dataset, fileID, refs); err != nil {
+		d.rollbackAdd(patient, study, series, patientCreated, studyCreated, seriesCreated, diagnosticsMark)
 		return nil, err
 	}
 	if err := d.addInstanceIcon(file.Dataset, instance); err != nil {
+		d.rollbackAdd(patient, study, series, patientCreated, studyCreated, seriesCreated, diagnosticsMark)
 		return nil, err
 	}
 	series.addChild(instance)
@@ -229,20 +239,37 @@ func representativeIconFrame(ds *dataset.Dataset) int {
 	return frame
 }
 
-func (d *Directory) findOrCreate(parent *Record, records []*Record, recordType RecordType, key string, source *dataset.Dataset) (*Record, error) {
+func (d *Directory) findOrCreate(parent *Record, records []*Record, recordType RecordType, key string, source *dataset.Dataset) (*Record, bool, error) {
 	for _, record := range records {
 		if record.recordType == recordType && record.key == key {
-			return record, nil
+			return record, false, nil
 		}
 	}
 	record, err := d.newRecord(recordType, key, source)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if parent != nil {
 		parent.addChild(record)
 	}
-	return record, nil
+	return record, true, nil
+}
+
+// rollbackAdd detaches the records a failed AddFile created and discards the
+// diagnostics it appended, restoring the directory to its previous state.
+func (d *Directory) rollbackAdd(patient, study, series *Record, patientCreated, studyCreated, seriesCreated bool, diagnosticsMark int) {
+	if seriesCreated && study != nil {
+		study.children = removeRecord(study.children, series)
+	}
+	if studyCreated && patient != nil {
+		patient.children = removeRecord(patient.children, study)
+	}
+	if patientCreated {
+		d.roots = removeRecord(d.roots, patient)
+	}
+	if len(d.diagnostics) > diagnosticsMark {
+		d.diagnostics = d.diagnostics[:diagnosticsMark]
+	}
 }
 
 func (d *Directory) newRecord(recordType RecordType, key string, source *dataset.Dataset) (*Record, error) {
@@ -419,11 +446,11 @@ func requiredTagSet(recordType RecordType) map[uint32]bool {
 	return set
 }
 
-func containsRecord(records []*Record, target *Record) bool {
-	for _, record := range records {
+func removeRecord(records []*Record, target *Record) []*Record {
+	for index, record := range records {
 		if record == target {
-			return true
+			return append(records[:index], records[index+1:]...)
 		}
 	}
-	return false
+	return records
 }

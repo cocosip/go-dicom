@@ -257,9 +257,12 @@ func TestNativeEndian(t *testing.T) {
 		t.Errorf("Native() has invalid value: %v", native)
 	}
 
-	// Verify it matches Go's understanding
-	buf := [2]byte{0x01, 0x00}
-	isLittle := binary.LittleEndian.Uint16(buf[:]) == 1
+	// Verify it matches the host byte order reported by encoding/binary.
+	// binary.LittleEndian always decodes {0x01, 0x00} as 1, so it cannot be used
+	// as an independent host-order probe.
+	buf := [2]byte{}
+	binary.NativeEndian.PutUint16(buf[:], 1)
+	isLittle := buf[0] == 1
 
 	if isLittle && native != endian.Little {
 		t.Error("Native() should be Little on little-endian machine")

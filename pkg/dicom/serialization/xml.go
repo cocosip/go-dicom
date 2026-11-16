@@ -212,7 +212,11 @@ func (w *xmlWriter) writeBinaryValue(elem element.Element) error {
 		return nil
 	}
 
-	data := littleEndianBinary(elem, buf.Data())
+	raw, err := readBufferData(buf)
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	data := littleEndianBinary(elem, raw)
 	encoded := base64.StdEncoding.EncodeToString(data)
 
 	w.indent++
@@ -1108,4 +1112,3 @@ func parseXMLValues[T any](values []string, parse func(string) (T, error)) ([]T,
 	}
 	return parsed, nil
 }
-

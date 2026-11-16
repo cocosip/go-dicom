@@ -197,7 +197,7 @@ writer.WriteFile("modified.dcm", result.Dataset)
 
 ## Requirements
 
-- Go 1.21 or later
+- Go 1.26 or later
 - Valid DICOM dataset with required elements:
   - SOPClassUID (0008,0016)
   - SOPInstanceUID (0008,0018)

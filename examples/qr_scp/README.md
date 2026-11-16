@@ -6,8 +6,8 @@ This example demonstrates a complete DICOM Query/Retrieve Service Class Provider
 
 - **C-ECHO**: Verification service
 - **C-FIND**: Query for patients, studies, series, and images
-- **C-MOVE**: Request transfer of instances to another AE (simulated)
-- **C-GET**: Request direct retrieval of instances (simulated)
+- **C-MOVE**: Request transfer of instances to another AE (requires `-ae-routes`)
+- **C-GET**: Request direct retrieval of instances over the same association
 
 ## Usage
 
@@ -20,7 +20,7 @@ cd examples/qr_scp
 go run main.go
 ```
 
-This starts a server on port 11113 with 3 sample studies.
+This starts a server on port 11113 with 2 sample studies (3 instances).
 
 ### Load Real DICOM Files
 
@@ -40,6 +40,7 @@ The server will:
 
 - `-port int`: Port to listen on (default: 11113)
 - `-data-dir string`: Directory containing DICOM files to index
+- `-ae-routes string`: C-MOVE routing table, `AE1=host:port,AE2=host:port`
 - `-verbose`: Enable verbose logging
 
 ## Query Levels
@@ -73,6 +74,9 @@ When no `-data-dir` is specified, the server uses these sample records:
    - **Modality**: MR
    - **Instances**: 1 image
 
+Sample records have no source files, so they support C-FIND but not C-MOVE or
+C-GET. Start the server with `-data-dir` to retrieve real instances.
+
 ## Testing with QR SCU
 
 See the companion `qr_scu` example for a complete client that performs:
@@ -83,33 +87,34 @@ See the companion `qr_scu` example for a complete client that performs:
 Example test workflow:
 
 ```bash
-# Terminal 1: Start SCP
+# Terminal 1: Start SCP with files that retrieval can actually send
 cd examples/qr_scp
-go run main.go -verbose
+go run main.go -data-dir /path/to/dicom/files -verbose
 
-# Terminal 2: Run SCU query
+# Terminal 2: Run SCU query and C-GET
 cd examples/qr_scu
 go run main.go -patient-name "DOE^*" -retrieve get
+
+# Or C-MOVE: the SCP must know the destination AE/host:port
+go run main.go -patient-name "DOE^*" -retrieve move -move-destination QRDEST
+# (start qr_scp with -ae-routes QRDEST=<this host>:11114)
 ```
 
 ## Implementation Notes
 
 ### C-MOVE
-C-MOVE implementation requires:
-- Configuration mapping AE titles to host:port addresses
-- Client connection to the move destination AE
-- C-STORE sub-operations to send instances
-
-The current implementation simulates these operations and returns progress responses.
+C-MOVE requires a routing table that maps AE titles to `host:port` addresses,
+supplied with `-ae-routes` (for example `-ae-routes STORESCP=127.0.0.1:11112`).
+The handler connects to the destination, sends each matching instance with
+C-STORE, and reports progress through `op.SendPending`. An unknown destination
+returns `0xA801`; a connection or sub-operation failure is reported through the
+final warning/failure status.
 
 ### C-GET
-C-GET implementation requires:
-- Access to the association/service to send C-STORE sub-operations
-- Reading DICOM files from the indexed source paths
-- Sending instances back to the requestor
-
-The current implementation demonstrates the query matching and progress tracking,
-but C-STORE sending requires architectural enhancements to the handler API.
+C-GET sends each matching instance back over the requesting Association with
+`op.SendCStore`, so no separate destination address is needed. Instances are
+read from the paths captured while indexing `-data-dir`; records without a
+source file (the built-in sample data) cannot be retrieved.
 
 ## DICOM Standard References
 

@@ -84,11 +84,6 @@ type serviceConfig struct {
 	// Default: 100
 	sendQueueSize int
 
-	// keepConnectionOnPeerRelease is retained for source compatibility and has
-	// no effect. PS3.8 7.2.2 forbids any further P-DATA after the A-RELEASE-RP,
-	// so replying to a peer release always ends the association.
-	keepConnectionOnPeerRelease bool
-
 	// Lifecycle callbacks (optional)
 	associationNegotiator      AssociationNegotiator
 	associationReleaseHandler  AssociationReleaseHandler
@@ -264,10 +259,8 @@ func WithSendQueueSize(size int) Option {
 // association can never stay usable on the same connection.
 //
 // Deprecated: keeping the connection open after a release is not conformant.
-func WithKeepConnectionOnPeerRelease(keep bool) Option {
-	return func(c *serviceConfig) {
-		c.keepConnectionOnPeerRelease = keep
-	}
+func WithKeepConnectionOnPeerRelease(_ bool) Option {
+	return func(*serviceConfig) {}
 }
 
 // WithAssociationRequestor identifies whether the local AE initiated the

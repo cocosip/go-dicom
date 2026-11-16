@@ -149,7 +149,10 @@ func (mt *MaskedTag) formatElement() string {
 
 // IsMatch checks if the given tag matches this masked tag.
 func (mt *MaskedTag) IsMatch(tag *Tag) bool {
-	return mt.card == (tag.ToUint32() & mt.mask)
+	// Compare only the bits covered by the mask: a MaskedTag built with
+	// NewMaskedTagWithMask keeps the full tag in card, so the wildcarded bits
+	// must be ignored on both sides.
+	return (mt.card & mt.mask) == (tag.ToUint32() & mt.mask)
 }
 
 // ParseMaskedTag parses a masked tag from a string.
@@ -161,24 +164,23 @@ func (mt *MaskedTag) IsMatch(tag *Tag) bool {
 //
 // Wildcards are represented by 'x' in the hex digits.
 func ParseMaskedTag(s string) (*MaskedTag, error) {
+	// Trim surrounding whitespace first so whitespace-only input cannot slip
+	// past the length check and panic on the first byte access below.
+	s = strings.TrimSpace(s)
 	if len(s) < 8 {
 		return nil, fmt.Errorf("masked tag string too short: '%s' (expected at least 8 characters)", s)
 	}
 
-	// Remove spaces
-	s = strings.TrimSpace(s)
-
 	pos := 0
-
-	// Skip opening parenthesis if present
-	if s[pos] == '(' {
+	hasParentheses := s[pos] == '('
+	if hasParentheses {
 		pos++
 	}
 
 	// Find comma or assume 4 characters for group
 	idx := strings.IndexByte(s[pos:], ',')
 	if idx == -1 {
-		idx = 4
+		idx = pos + 4
 	} else {
 		idx = pos + idx
 	}
@@ -193,7 +195,21 @@ func ParseMaskedTag(s string) (*MaskedTag, error) {
 
 	// Extract element
 	element := s[pos:]
-	element = strings.TrimSuffix(element, ")")
+	if hasParentheses {
+		if !strings.HasSuffix(element, ")") {
+			return nil, fmt.Errorf("invalid masked tag format: '%s' (missing closing parenthesis)", s)
+		}
+		element = strings.TrimSuffix(element, ")")
+	}
+
+	// Both halves must be exactly four digits: a shorter part would parse but
+	// produce a mask shifted out of alignment with the tag bits it should cover.
+	if len(group) != 4 {
+		return nil, fmt.Errorf("invalid group number '%s': expected four hexadecimal or wildcard digits", group)
+	}
+	if len(element) != 4 {
+		return nil, fmt.Errorf("invalid element number '%s': expected four hexadecimal or wildcard digits", element)
+	}
 
 	return parseMaskedTagParts(group, element)
 }

@@ -128,12 +128,17 @@ func (v *VR) String() string {
 	return v.code
 }
 
-// PerformValidation controls whether VR validation is performed.
+// PerformValidation controls whether VR validation is performed by legacy
+// Element.Validate calls and by automatic Dataset mutation validation.
 // Set to false to disable validation (e.g., for performance or when reading non-compliant files).
 //
-// This switch is retained for legacy direct Element.Validate calls. New code
-// should use Dataset-level automatic validation control; Dataset validation
-// does not read this package-level switch.
+// New code should use Dataset.SetAutoValidate for per-Dataset control or
+// Dataset.Validate for explicit validation, which always runs. Dataset
+// automatic validation reads both that setting and this package-level switch.
+//
+// This is a plain process-wide variable, mirroring fo-dicom's internal static
+// DicomValidation.PerformValidation: set it during program initialization, not
+// while other goroutines parse or build datasets.
 var PerformValidation = true
 
 // Padding constants

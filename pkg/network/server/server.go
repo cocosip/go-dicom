@@ -25,8 +25,6 @@ import (
 	"github.com/cocosip/go-dicom/pkg/network/transport"
 )
 
-//var _ service.AssociationResponder = (*associationReleaseAdapter)(nil)
-
 // Server represents a DICOM SCP (Service Class Provider) server.
 // It listens for incoming DICOM connections and handles DIMSE requests.
 //

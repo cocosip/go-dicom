@@ -289,8 +289,8 @@ func (s *Service) SendReleaseResponse(ctx context.Context) error {
 }
 
 // writeReleaseResponse encodes and writes an A-RELEASE-RP without changing the
-// service state. It is used by SendReleaseResponse and by the compatibility
-// path that keeps the connection open after a peer release.
+// service state. It is used by SendReleaseResponse, which owns the state
+// transition to Closed.
 func (s *Service) writeReleaseResponse(ctx context.Context) error {
 	// Create A-RELEASE-RP PDU
 	releaseRP := &pdu.AReleaseRP{}

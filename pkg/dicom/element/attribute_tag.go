@@ -68,11 +68,8 @@ func (a *AttributeTag) GetValue(index int) (*tag.Tag, error) {
 		return nil, fmt.Errorf("index %d out of range [0, %d)", index, a.Count())
 	}
 
-	data := make([]byte, 4)
-	// Safe calculation for offset to avoid int->uint32 overflow flags.
-	// index is bounded by Count() which is derived from Length()/4, so this is safe.
-	offset := uint32(index) * 4 // #nosec G115 -- index validated above and by Count()
-	if err := a.buffer.GetByteRange(offset, 4, data); err != nil {
+	data, err := numericValue(a.buffer, 4*uint32(index), 4) // #nosec G115 -- index validated above and by Count()
+	if err != nil {
 		return nil, err
 	}
 

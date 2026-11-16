@@ -105,10 +105,10 @@ func createMessageFromDatasets(commandDS, dataDS *dataset.Dataset) (dimse.Messag
 }
 
 func validateMessageID(commandDS *dataset.Dataset, commandField dimse.CommandField) error {
+	// C-CANCEL-RQ is the one request that carries MessageIDBeingRespondedTo
+	// (PS3.7 9.3.5); every other request carries MessageID.
 	field := tag.MessageIDBeingRespondedTo
-	if commandField == dimse.CommandCCancelRQ {
-		field = tag.MessageIDBeingRespondedTo
-	} else if commandField.IsRequest() {
+	if commandField != dimse.CommandCCancelRQ && commandField.IsRequest() {
 		field = tag.MessageID
 	}
 	messageID, err := commandDS.GetUInt16(field, 0)
@@ -161,6 +161,24 @@ func optionalPriority(commandDS *dataset.Dataset) (uint16, error) {
 	return priority, nil
 }
 
+// responseCommandFields extracts the command fields shared by every DIMSE
+// response: the Message ID being responded to, the Status, and the optional
+// Affected SOP Class/Instance UIDs (PS3.7 9.1). Each response type passes the
+// subset it needs to its dimse constructor.
+func responseCommandFields(commandDS *dataset.Dataset) (messageID, statusCode uint16, sopClassUID, sopInstanceUID string, err error) {
+	messageID, err = commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	if err != nil {
+		return 0, 0, "", "", fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+	}
+	statusCode, err = commandDS.GetUInt16(tag.Status, 0)
+	if err != nil {
+		return 0, 0, "", "", fmt.Errorf("failed to get Status: %w", err)
+	}
+	sopClassUID, _ = commandDS.GetString(tag.AffectedSOPClassUID)
+	sopInstanceUID, _ = commandDS.GetString(tag.AffectedSOPInstanceUID)
+	return messageID, statusCode, sopClassUID, sopInstanceUID, nil
+}
+
 // copyOptionalCommandElements preserves the optional diagnostic command
 // elements that a rebuilt response would otherwise drop (PS3.7 Annex C).
 func copyOptionalCommandElements(src, dst *dataset.Dataset) {
@@ -204,16 +222,9 @@ func createCEchoRequest(commandDS *dataset.Dataset) (*dimse.CEchoRequest, error)
 
 // createCEchoResponse creates a C-ECHO-RSP from datasets.
 func createCEchoResponse(commandDS *dataset.Dataset) (*dimse.CEchoResponse, error) {
-	// Get MessageIDBeingRespondedTo
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, _, _, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
-	}
-
-	// Get Status
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
+		return nil, err
 	}
 	// A C-ECHO-RSP Status is normally Success (0000H), but a peer (including this
 	// library, whose handler emits ErrorProcessingFailure when the handler fails)
@@ -275,24 +286,13 @@ func createCStoreRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CStoreReque
 
 // createCStoreResponse creates a C-STORE-RSP from datasets.
 func createCStoreResponse(commandDS *dataset.Dataset) (*dimse.CStoreResponse, error) {
-	// Get MessageIDBeingRespondedTo
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, sopClassUID, sopInstanceUID, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
-
-	// Get Status
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
 	// Affected SOP Class/Instance UID are optional in C-STORE-RSP (PS3.7
 	// 9.1.1.1.3/9.1.1.1.4: "may be included in the response"). A conformant
 	// peer may omit them, so a missing element is not a protocol violation.
-	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	sopInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
-
 	return dimse.NewCStoreResponse(messageID, status.LookupStatus(statusCode), sopClassUID, sopInstanceUID), nil
 }
 
@@ -387,17 +387,10 @@ func createCGetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CGetRequest, 
 
 // createCGetResponse creates a C-GET-RSP from datasets.
 func createCGetResponse(commandDS *dataset.Dataset) (*dimse.CGetResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, sopClassUID, _, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
-
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
 	remaining, err := optionalUInt16(commandDS, tag.NumberOfRemainingSuboperations)
 	if err != nil {
@@ -473,17 +466,10 @@ func createCMoveRequest(commandDS, dataDS *dataset.Dataset) (*dimse.CMoveRequest
 
 // createCMoveResponse creates a C-MOVE-RSP from datasets.
 func createCMoveResponse(commandDS *dataset.Dataset) (*dimse.CMoveResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, sopClassUID, _, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
-
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
 
 	remaining, err := optionalUInt16(commandDS, tag.NumberOfRemainingSuboperations)
 	if err != nil {
@@ -512,22 +498,12 @@ func createCMoveResponse(commandDS *dataset.Dataset) (*dimse.CMoveResponse, erro
 
 // createCFindResponse creates a C-FIND-RSP from datasets.
 func createCFindResponse(commandDS, dataDS *dataset.Dataset) (*dimse.CFindResponse, error) {
-	// Get MessageIDBeingRespondedTo
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
-	}
-
-	// Get Status
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
 	// Affected SOP Class UID is optional in C-FIND-RSP (PS3.7 9.1.2.1.3:
 	// "may be included in the response"). A conformant peer may omit it.
-	sopClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-
+	messageID, statusCode, sopClassUID, _, err := responseCommandFields(commandDS)
+	if err != nil {
+		return nil, err
+	}
 	// dataDS is the identifier (may be nil for final response)
 	return dimse.NewCFindResponse(messageID, status.LookupStatus(statusCode), sopClassUID, dataDS), nil
 }
@@ -561,18 +537,11 @@ func createNEventReportRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NEven
 
 // createNEventReportResponse creates an N-EVENT-REPORT-RSP from datasets.
 func createNEventReportResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NEventReportResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
 
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 	eventTypeID, err := optionalUInt16(commandDS, tag.EventTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get EventTypeID: %w", err)
@@ -619,18 +588,10 @@ func createNGetRequest(commandDS *dataset.Dataset) (*dimse.NGetRequest, error) {
 
 // createNGetResponse creates an N-GET-RSP from datasets.
 func createNGetResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NGetResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
-
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
 	return dimse.NewNGetResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
 }
@@ -660,18 +621,10 @@ func createNSetRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NSetRequest, 
 
 // createNSetResponse creates an N-SET-RSP from datasets.
 func createNSetResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NSetResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
-
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
 	return dimse.NewNSetResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
 }
@@ -705,18 +658,11 @@ func createNActionRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NActionReq
 
 // createNActionResponse creates an N-ACTION-RSP from datasets.
 func createNActionResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NActionResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
 
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 	actionTypeID, err := optionalUInt16(commandDS, tag.ActionTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ActionTypeID: %w", err)
@@ -747,18 +693,10 @@ func createNCreateRequest(commandDS, dataDS *dataset.Dataset) (*dimse.NCreateReq
 
 // createNCreateResponse creates an N-CREATE-RSP from datasets.
 func createNCreateResponse(commandDS, dataDS *dataset.Dataset) (*dimse.NCreateResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
-
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
 	return dimse.NewNCreateResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID, dataDS), nil
 }
@@ -788,18 +726,10 @@ func createNDeleteRequest(commandDS *dataset.Dataset) (*dimse.NDeleteRequest, er
 
 // createNDeleteResponse creates an N-DELETE-RSP from datasets.
 func createNDeleteResponse(commandDS *dataset.Dataset) (*dimse.NDeleteResponse, error) {
-	messageID, err := commandDS.GetUInt16(tag.MessageIDBeingRespondedTo, 0)
+	messageID, statusCode, affectedSOPClassUID, affectedSOPInstanceUID, err := responseCommandFields(commandDS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MessageIDBeingRespondedTo: %w", err)
+		return nil, err
 	}
-
-	statusCode, err := commandDS.GetUInt16(tag.Status, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Status: %w", err)
-	}
-
-	affectedSOPClassUID, _ := commandDS.GetString(tag.AffectedSOPClassUID)
-	affectedSOPInstanceUID, _ := commandDS.GetString(tag.AffectedSOPInstanceUID)
 
 	return dimse.NewNDeleteResponse(messageID, status.LookupStatus(statusCode), affectedSOPClassUID, affectedSOPInstanceUID), nil
 }

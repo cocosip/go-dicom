@@ -215,6 +215,44 @@ func TestEvenLengthBuffer(t *testing.T) {
 	})
 }
 
+// TestWrappedBufferDataPropagatesReadFailure verifies that wrappers report an
+// internal I/O failure as nil data instead of fabricating an empty or
+// padding-only result.
+func TestWrappedBufferDataPropagatesReadFailure(t *testing.T) {
+	opposite := endian.Big
+	if endian.Native() == endian.Big {
+		opposite = endian.Little
+	}
+
+	t.Run("EndianByteBuffer", func(t *testing.T) {
+		closed, err := buffer.NewTempFile([]byte{1, 2, 3, 4})
+		if err != nil {
+			t.Fatalf("NewTempFile() error = %v", err)
+		}
+		if err := closed.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+		wrapped := buffer.NewEndian(closed, opposite, 2)
+		if got := wrapped.Data(); got != nil {
+			t.Fatalf("Data() = %v, want nil after an internal read failure", got)
+		}
+	})
+
+	t.Run("EvenLengthBuffer", func(t *testing.T) {
+		closed, err := buffer.NewTempFile([]byte{1, 2, 3})
+		if err != nil {
+			t.Fatalf("NewTempFile() error = %v", err)
+		}
+		if err := closed.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+		wrapped := buffer.NewEvenLength(closed)
+		if got := wrapped.Data(); got != nil {
+			t.Fatalf("Data() = %v, want nil after an internal read failure", got)
+		}
+	})
+}
+
 // TestRangeByteBuffer tests the range buffer
 func TestRangeByteBuffer(t *testing.T) {
 	// Create a buffer with data: "Hello, DICOM world!"

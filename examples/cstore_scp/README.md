@@ -9,7 +9,7 @@ This example demonstrates how to receive DICOM files from DICOM clients using th
 - Receive and store DICOM files
 - Support for multiple concurrent connections
 - Validate called/calling AE titles during association negotiation
-- Organize received files by AE title or study date
+- Organize received files by study date
 - Track server statistics
 - Graceful shutdown with a forced-connection fallback
 
@@ -57,7 +57,7 @@ This will organize files as: `/data/dicom/YYYY/MM/DD/sopinstance.dcm`
 | `-storage` | ./received_dicom | Directory to store received files |
 | `-max-conn` | 10 | Maximum concurrent connections (0 = unlimited) |
 | `-verbose` | false | Enable verbose logging |
-| `-organize-by-ae` | false | Organize files by calling AE title |
+| `-organize-by-ae` | false | Group files under a fixed `default_ae/` subdirectory (the C-STORE handler does not receive the association's calling AE) |
 | `-organize-by-date` | false | Organize files by study date (YYYY/MM/DD) |
 | `-called-ae` | (empty) | Expected called AE title (empty = disable validation) |
 | `-allow-calling-ae` | (empty) | Comma-separated calling AE whitelist (empty = allow all) |
@@ -106,7 +106,7 @@ Allowed SCUs:  NETPUSH,MODALITY_A
 Starting DICOM SCP server on port 11112...
 Press Ctrl+C to stop
 
-Accepted 4/4 presentation contexts from STORE_SCU
+Accepted 4/4 presentation contexts from NETPUSH
 
 C-STORE received:
   SOP Class:     1.2.840.10008.5.1.4.1.1.2
@@ -156,11 +156,14 @@ Server stopped.
 
 ### Organized by AE Title
 
+`-organize-by-ae` currently places all files under a fixed `default_ae/`
+subdirectory because the C-STORE handler is not given the association's calling
+AE title; see the comment in `generateFilePath`.
+
 ```
 ./received_dicom/
-├── MODALITY_1/
-│   └── 1.2.840.113619.2.55.3.12345.dcm
-└── MODALITY_2/
+└── default_ae/
+    ├── 1.2.840.113619.2.55.3.12345.dcm
     └── 1.2.840.113619.2.55.3.12346.dcm
 ```
 
@@ -255,7 +258,7 @@ sudo systemctl start dicom-scp
 
 ## Requirements
 
-- Go 1.21 or later
+- Go 1.26 or later
 - Write permissions to storage directory
 - Network access on listening port
 

@@ -171,6 +171,36 @@ func TestDatasetAddElementsIsAtomicOnFailure(t *testing.T) {
 	}
 }
 
+func TestDatasetAddElementsInsertsWholeBatch(t *testing.T) {
+	ds := dataset.New()
+	first := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+	second := element.NewString(tag.PatientID, vr.LO, []string{"12345"})
+	if err := ds.AddElements(first, second); err != nil {
+		t.Fatalf("AddElements() error = %v", err)
+	}
+	if !ds.Contains(tag.PatientName) || !ds.Contains(tag.PatientID) {
+		t.Fatalf("AddElements() did not insert the whole batch: %v", ds.Tags())
+	}
+}
+
+func TestDatasetAddOrUpdateElementsIsAtomicOnFailure(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"Old"})); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	valid := element.NewString(tag.PatientID, vr.LO, []string{"12345"})
+	invalid := element.NewDecimalString(tag.PatientName, []string{"1"})
+	if err := ds.AddOrUpdateElements(valid, invalid); err == nil {
+		t.Fatal("AddOrUpdateElements() error = nil, want VR mismatch error")
+	}
+	if ds.Contains(tag.PatientID) {
+		t.Fatal("AddOrUpdateElements() inserted an element despite the batch failing")
+	}
+	if got, _ := ds.GetString(tag.PatientName); got != "Old" {
+		t.Fatalf("AddOrUpdateElements() changed PatientName = %q, want Old", got)
+	}
+}
+
 func TestDatasetAddValueWithVRAcceptsRawByteArrays(t *testing.T) {
 	ds := dataset.New()
 	rawTag := tag.New(0x7777, 0x0010)

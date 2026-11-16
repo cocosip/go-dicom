@@ -55,8 +55,8 @@ go run main.go -file path/to/file.dcm -metadata
 |--------|---------|-------------|
 | `-host` | localhost | DICOM server hostname or IP address |
 | `-port` | 11112 | DICOM server port |
-| `-calling-ae` | STORE_SCU | Calling AE Title (your client) |
-| `-called-ae` | STORE_SCP | Called AE Title (remote server) |
+| `-calling-ae` | NETPUSH | Calling AE Title (your client) |
+| `-called-ae` | NETGATE | Called AE Title (remote server) |
 | `-file` | | Single DICOM file to send |
 | `-dir` | | Directory containing DICOM files |
 | `-timeout` | 30s | Operation timeout |
@@ -105,8 +105,8 @@ Additional SOP Classes can be added by modifying the `main.go` file and adding m
 
 ```
 === DICOM C-STORE SCU Example ===
-Calling AE: STORE_SCU
-Called AE:  STORE_SCP
+Calling AE: NETPUSH
+Called AE:  NETGATE
 Server:     localhost:11112
 
 Connecting to localhost:11112...
@@ -132,7 +132,7 @@ Failed:      0
 
 ## Requirements
 
-- Go 1.21 or later
+- Go 1.26 or later
 - Access to a DICOM SCP server (or use the companion `cstore_scp` example)
 
 ## Related Examples

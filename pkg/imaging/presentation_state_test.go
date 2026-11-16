@@ -339,6 +339,3 @@ func TestSoftcopyVOILUTAcceptsWideBitsPerEntry(t *testing.T) {
 		})
 	}
 }
-
-
-

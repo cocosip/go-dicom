@@ -97,6 +97,41 @@ func TestParseStopBeforePixelDataStopsInsideSequenceItem(t *testing.T) {
 	}
 }
 
+func TestParseStopBeforePixelDataStopsInsideDefinedLengthSequenceItem(t *testing.T) {
+	file := createMiniDICOM()
+	sequenceTag := tag.New(0x7776, 0x0010)
+
+	var itemValue bytes.Buffer
+	writeExplicitLongValueElement(&itemValue, tag.PixelData, "OB", bytes.Repeat([]byte{0xA5}, 1024))
+
+	writeTestTag(file, sequenceTag)
+	file.WriteString("SQ")
+	_ = binary.Write(file, binary.LittleEndian, uint16(0))
+	_ = binary.Write(file, binary.LittleEndian, uint32(8+itemValue.Len()))
+	writeTestTag(file, tag.New(0xFFFE, 0xE000))
+	_ = binary.Write(file, binary.LittleEndian, uint32(itemValue.Len()))
+	stopOffset := file.Len() + 4
+	file.Write(itemValue.Bytes())
+
+	reader := &byteCountingReadSeeker{Reader: bytes.NewReader(file.Bytes())}
+	result, err := Parse(reader, WithStopBeforePixelData())
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !result.IsPartial {
+		t.Fatal("IsPartial = false, want true")
+	}
+	if got := result.Dataset.TryGetString(tag.PatientName); got != testPatientName {
+		t.Fatalf("PatientName = %q, want %q", got, testPatientName)
+	}
+	if _, ok := result.Dataset.Get(sequenceTag); ok {
+		t.Fatalf("Dataset contains incomplete sequence %s", sequenceTag)
+	}
+	if reader.read != stopOffset {
+		t.Fatalf("bytes read = %d, want %d before nested pixel VR and value", reader.read, stopOffset)
+	}
+}
+
 func writeTestTag(buf *bytes.Buffer, value *tag.Tag) {
 	_ = binary.Write(buf, binary.LittleEndian, value.Group())
 	_ = binary.Write(buf, binary.LittleEndian, value.Element())

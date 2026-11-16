@@ -382,10 +382,15 @@ func (pc *PresentationContext) AcceptTransferSyntaxes(scpPriority bool, accepted
 			}
 		}
 	} else {
-		// SCU priority - iterate through proposed transfer syntaxes in order
+		// SCU priority - iterate through proposed transfer syntaxes in order.
+		// A nil entry cannot match a proposed syntax, so skip it instead of
+		// dereferencing it (the scpPriority branch above has the same guard).
 		for _, proposedTS := range pc.ProposedTransferSyntaxes {
+			if proposedTS == nil {
+				continue
+			}
 			for _, acceptedTS := range acceptedTransferSyntaxes {
-				if proposedTS.UID().UID() == acceptedTS.UID().UID() {
+				if acceptedTS != nil && proposedTS.UID().UID() == acceptedTS.UID().UID() {
 					pc.SetResult(ResultAcceptance, acceptedTS)
 					return true
 				}
@@ -808,7 +813,7 @@ func NewAsynchronousOperationsWindow(maxInvoked, maxPerformed uint16) *Asynchron
 
 // FromAAssociateRQ creates an Association from an A-ASSOCIATE-RQ PDU.
 // This is typically used by an SCP (server) after receiving a connection request from an SCU (client).
-// The returned Association will have all presentation contexts in "Proposed" state (Result=255).
+// The returned Association will have all presentation contexts in "Proposed" state (ResultNotNegotiated).
 // The server should then negotiate these contexts (accept/reject) before sending A-ASSOCIATE-AC.
 // An invalid User Identity sub-item is not copied into the returned Association.
 func FromAAssociateRQ(rq *pdu.AAssociateRQ, registry *transfer.Registry) *Association {
@@ -888,7 +893,7 @@ func FromAAssociateRQ(rq *pdu.AAssociateRQ, registry *transfer.Registry) *Associ
 			ID:                       pcRQ.ID,
 			AbstractSyntax:           pcRQ.AbstractSyntax,
 			ProposedTransferSyntaxes: transferSyntaxes,
-			Result:                   255, // Proposed (not yet negotiated)
+			Result:                   ResultNotNegotiated,
 		}
 
 		_ = assoc.AddPresentationContext(pc)

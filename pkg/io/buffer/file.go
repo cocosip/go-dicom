@@ -220,6 +220,12 @@ func (f *FileByteBuffer) WriteTo(w io.Writer) (int64, error) {
 		}
 	}
 
+	if totalWritten != int64(f.size) {
+		// The file shrank after the buffer was created, or the writer accepted
+		// fewer bytes than the buffer holds; a short copy is not success.
+		return totalWritten, fmt.Errorf("wrote %d of %d bytes: %w", totalWritten, f.size, io.ErrUnexpectedEOF)
+	}
+
 	return totalWritten, nil
 }
 

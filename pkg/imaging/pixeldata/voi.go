@@ -50,9 +50,11 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 		minInput = 0
 		maxInput = (1 << pd.Info.BitsStored) - 1
 	}
-	usePrecalc := maxInput-minInput <= 65536
+	// The table is indexed in stored-value space, but a modality LUT shifts or
+	// reverses that domain, so those callers transform directly. Only build the
+	// table when the loop below will actually use it.
 	var precalc *lut.PrecalculatedLUT
-	if usePrecalc {
+	if modality == nil && maxInput-minInput <= 65536 {
 		precalc = lut.NewPrecalculatedLUT(voiLUT, minInput, maxInput)
 	}
 
@@ -83,14 +85,11 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 			if modality != nil {
 				modalityValue = modality.Transform(modalityValue)
 			}
-			mapped := float64(0)
-			if modality != nil || !usePrecalc {
-				// The precomputed table is indexed in stored-value space; a rescale
-				// can shift or reverse that domain, so transform directly. Likewise,
-				// skip the table when the stored range is too large to precalculate.
-				mapped = voiLUT.Transform(modalityValue)
-			} else {
+			var mapped float64
+			if precalc != nil {
 				mapped = precalc.Transform(modalityValue)
+			} else {
+				mapped = voiLUT.Transform(modalityValue)
 			}
 			out[idx] = clampByte(int(mapped + 0.5))
 		}
@@ -130,10 +129,7 @@ func minMaxSamples(pd *Data, ignorePadding bool) (float64, float64, error) {
 			sampleCount = int(pd.Info.Width) * int(pd.Info.Height) * int(pd.Info.SamplesPerPixel)
 		}
 		for sampleIndex := 0; sampleIndex < sampleCount; sampleIndex++ {
-			off := sampleIndex * bytesPerSample
-			if pd.Info.BitsAllocated == 1 {
-				off = sampleIndex
-			}
+			off := sampleOffset(sampleIndex, pd.Info)
 			val, ok := decodePixelSampleLE(frame, off, pd.Info)
 			if !ok {
 				continue

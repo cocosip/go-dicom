@@ -89,32 +89,83 @@ func (ds *Dataset) valueContext() element.CanonicalValueContext {
 }
 
 // AddElements adds a collection of elements, preserving each element's
-// existing VR and rejecting the whole operation on the first error.
+// existing VR and rejecting the whole operation on the first error. The batch
+// is validated before anything is inserted, so a failure leaves the Dataset
+// unchanged without first deep-cloning the whole Dataset.
 func (ds *Dataset) AddElements(elements ...element.Element) error {
-	clone, err := ds.DeepCloneChecked()
-	if err != nil {
-		return err
+	if ds == nil {
+		return fmt.Errorf("cannot add to nil Dataset")
 	}
+	pending := make(map[uint32]struct{}, len(elements))
 	for _, elem := range elements {
-		if err := clone.Add(elem); err != nil {
-			return err
+		if elem == nil {
+			return fmt.Errorf("cannot add nil element")
+		}
+		if elem.Tag() == nil {
+			return validationError(ValidationStructural, nil, fmt.Errorf("element tag is nil"))
+		}
+		tagValue := elem.Tag().ToUint32()
+		if _, exists := ds.items[tagValue]; exists {
+			return fmt.Errorf("element with tag %s already exists", elem.Tag())
+		}
+		if _, duplicate := pending[tagValue]; duplicate {
+			return fmt.Errorf("element with tag %s already exists", elem.Tag())
+		}
+		pending[tagValue] = struct{}{}
+		if ds.validationEnabled() {
+			if err := validateElement(elem, nil); err != nil {
+				return err
+			}
 		}
 	}
-	return ds.ReplaceFrom(clone)
+	ds.insertValidated(elements)
+	return nil
 }
 
-// AddOrUpdateElements adds or replaces a collection of elements.
+// AddOrUpdateElements adds or replaces a collection of elements. The batch is
+// validated before anything is inserted, so a failure leaves the Dataset
+// unchanged without first deep-cloning the whole Dataset.
 func (ds *Dataset) AddOrUpdateElements(elements ...element.Element) error {
-	clone, err := ds.DeepCloneChecked()
-	if err != nil {
-		return err
+	if ds == nil {
+		return fmt.Errorf("cannot add to nil Dataset")
 	}
 	for _, elem := range elements {
-		if err := clone.AddOrUpdate(elem); err != nil {
-			return err
+		if elem == nil {
+			return fmt.Errorf("cannot add nil element")
+		}
+		if elem.Tag() == nil {
+			return validationError(ValidationStructural, nil, fmt.Errorf("element tag is nil"))
+		}
+		if ds.validationEnabled() {
+			if err := validateElement(elem, nil); err != nil {
+				return err
+			}
 		}
 	}
-	return ds.ReplaceFrom(clone)
+	ds.insertValidated(elements)
+	return nil
+}
+
+// insertValidated applies elements that already passed the checks Add and
+// AddOrUpdate perform before mutating the Dataset.
+func (ds *Dataset) insertValidated(elements []element.Element) {
+	if len(elements) == 0 {
+		return
+	}
+	ds.ensureItems()
+	refreshEncodings := false
+	for _, elem := range elements {
+		tagValue := elem.Tag().ToUint32()
+		ds.items[tagValue] = elem
+		ds.inheritElementContext(elem)
+		if tagValue == tag.SpecificCharacterSet.ToUint32() {
+			refreshEncodings = true
+		}
+	}
+	if refreshEncodings {
+		ds.refreshChildTextEncodings()
+	}
+	ds.markDirty()
 }
 
 func resolveValueVR(t *tag.Tag, value any) (*vr.VR, error) {

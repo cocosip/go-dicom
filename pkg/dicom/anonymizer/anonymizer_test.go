@@ -810,4 +810,3 @@ func TestAnonymizerRetainFullDatesKeepsValuesAndMarksUnmodified(t *testing.T) {
 		t.Fatalf("(0028,0303) = %q,%v, want UNMODIFIED", got, ok)
 	}
 }
-

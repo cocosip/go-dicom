@@ -39,10 +39,12 @@ go run main.go -patient-name "DOE^*" -retrieve get -output-dir ./my_dicom_files
 ```
 
 This will:
-1. Start a temporary Storage SCP on port 11114
-2. Send C-FIND query
-3. Send C-GET request for the first matching study
-4. Receive C-STORE sub-operations and save files to `./my_dicom_files/`
+1. Send a C-FIND query
+2. Send a C-GET request for the first matching study
+3. Receive C-STORE sub-operations over the same association and save files to `./my_dicom_files/`
+
+C-GET needs a C-STORE handler and Storage SOP Classes negotiated with the SCP
+role; the example configures both automatically.
 
 ### C-MOVE Retrieval
 
@@ -52,7 +54,9 @@ Query and request C-MOVE to another AE:
 go run main.go -patient-name "DOE^*" -retrieve move -move-destination STORESCP
 ```
 
-The QR SCP will send instances to the destination AE (requires that AE to be running and accepting connections).
+The example starts an embedded Storage SCP on `-store-port` and advertises it as
+the `-move-destination` AE. The QR SCP must map that AE to this host and port
+(for `qr_scp`, pass `-ae-routes QRDEST=host:11114`).
 
 ## Command-Line Flags
 
@@ -61,7 +65,7 @@ The QR SCP will send instances to the destination AE (requires that AE to be run
 - `-port int`: QR SCP port (default: 11113)
 - `-calling-ae string`: Calling AE Title (default: "QRSCU")
 - `-called-ae string`: Called AE Title (default: "QRSCP")
-- `-timeout duration`: Overall timeout (default: 60s)
+- `-timeout duration`: Overall timeout (default: 180s)
 
 ### Query Parameters
 - `-level string`: Query level - PATIENT, STUDY, SERIES, or IMAGE (default: "STUDY")
@@ -74,8 +78,8 @@ The QR SCP will send instances to the destination AE (requires that AE to be run
 - `-retrieve string`: Retrieve mode - `none`, `move`, or `get` (default: "none")
 - `-retrieve-study-uid string`: Specific StudyUID to retrieve (defaults to first C-FIND result)
 - `-move-destination string`: Destination AE for C-MOVE (default: "QRDEST")
-- `-output-dir string`: Directory to save received files for C-GET (default: "./received_qr")
-- `-scp-port int`: Local SCP port for receiving C-GET results (default: 11114)
+- `-output-dir string`: Directory to save received DICOM files (default: "./received_qr")
+- `-store-port int`: Local Storage SCP port advertised as the C-MOVE destination (default: 11114)
 
 ### Other
 - `-verbose`: Enable verbose logging
@@ -147,7 +151,6 @@ Called AE:       QRSCP
 Query Level:     STUDY
 Retrieve Mode:   get
 Output Dir:      ./received_qr
-Local SCP Port:  11114
 
 [Step 1/4] Performing C-ECHO verification...
 ✓ C-ECHO succeeded
@@ -159,11 +162,10 @@ C-FIND Results (STUDY level):
 [1] Patient=DOE^JOHN (P001) StudyDate=20260220 Modality=CT
     StudyInstanceUID:  1.2.840.113619.2.55.3.2831164357.781.170000001.1
 
-[Step 3/4] Starting local SCP on port 11114 to receive C-STORE...
-
-[Step 4/4] Performing C-GET...
+[Step 3/4] Performing C-GET...
   Target Study: 1.2.840.113619.2.55.3.2831164357.781.170000001.1
   Output Dir:   ./received_qr
+  (C-STORE sub-operations received on the same association)
   Progress: remaining=2 completed=0 failed=0 warning=0
   Progress: remaining=0 completed=2 failed=0 warning=0
 ✓ C-GET completed
@@ -179,21 +181,22 @@ C-FIND Results (STUDY level):
 
 When using `-retrieve get`, the SCU:
 
-1. Starts a temporary DICOM Storage SCP on `-scp-port`
-2. Sends C-GET request to the QR SCP
-3. QR SCP sends C-STORE sub-operations back to the SCU
-4. SCU receives and saves each instance to `-output-dir`
-5. SCU gives the temporary SCP five seconds to release active Associations, then closes any that remain
+1. Negotiates the Query/Retrieve SOP Class and the Storage SOP Classes with the SCP role
+2. Registers a C-STORE handler on the client
+3. Sends the C-GET request to the QR SCP
+4. Receives C-STORE sub-operations over the same association and saves each instance to `-output-dir`
 
 ### C-MOVE Workflow
 
 When using `-retrieve move`, the SCU:
 
-1. Sends C-MOVE request to the QR SCP
-2. QR SCP initiates C-STORE operations to the `-move-destination` AE
-3. The move destination (a separate Storage SCP) receives the instances
+1. Starts an embedded Storage SCP on `-store-port`
+2. Sends a C-MOVE request whose destination is the `-move-destination` AE
+3. The QR SCP resolves that AE through its own routing table and opens a separate Association for the C-STORE sub-operations
+4. The embedded Storage SCP receives the instances and saves them to `-output-dir`
 
-**Note**: C-MOVE requires that the destination AE is running and configured at the QR SCP.
+**Note**: C-MOVE requires the QR SCP to know the destination AE. For `qr_scp`,
+start it with `-ae-routes QRDEST=<this host>:11114`.
 
 ## DICOM Standard References
 

@@ -53,12 +53,17 @@ type Dataset struct {
 // AutoValidate reports the process-wide default validation switch used by
 // Dataset mutations. It is backed by vr.PerformValidation for compatibility
 // with existing callers that already control that package-level setting.
+//
+// Like fo-dicom's DicomValidation.PerformValidation, this is a process-wide
+// switch that is not synchronized: set it during initialization, before other
+// goroutines parse or build datasets.
 func AutoValidate() bool {
 	return vr.PerformValidation
 }
 
 // SetAutoValidate enables or disables automatic validation for Dataset
 // mutations process-wide. Explicit Dataset.Validate calls always validate.
+// It is not safe to toggle while other goroutines mutate datasets.
 func SetAutoValidate(enabled bool) {
 	vr.PerformValidation = enabled
 }
@@ -423,8 +428,18 @@ func (ds *Dataset) Merge(other *Dataset, overwrite bool) error {
 			}
 		}
 	}
+	mutatesCharacterSet := false
 	for _, elem := range candidates {
 		ds.items[elem.Tag().ToUint32()] = elem
+		if elem.Tag().ToUint32() == tag.SpecificCharacterSet.ToUint32() {
+			mutatesCharacterSet = true
+		}
+	}
+	if mutatesCharacterSet {
+		ds.refreshChildTextEncodings()
+	}
+	for _, elem := range candidates {
+		ds.inheritElementContext(elem)
 	}
 	if len(candidates) > 0 {
 		ds.markDirty()

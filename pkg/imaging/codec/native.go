@@ -101,7 +101,7 @@ func (c *NativeCodec) Encode(ctx context.Context, oldPixelData FrameSource, newP
 		}
 
 		var dstFrame []byte
-		if err := c.encodeFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
+		if err := c.convertFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
 			return fmt.Errorf("failed to encode frame %d: %w", i, err)
 		}
 
@@ -141,7 +141,7 @@ func (c *NativeCodec) Decode(ctx context.Context, oldPixelData FrameSource, newP
 		}
 
 		var dstFrame []byte
-		if err := c.decodeFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
+		if err := c.convertFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
 			return fmt.Errorf("failed to decode frame %d: %w", i, err)
 		}
 
@@ -153,8 +153,10 @@ func (c *NativeCodec) Decode(ctx context.Context, oldPixelData FrameSource, newP
 	return nil
 }
 
-// encodeFrame encodes a single frame (internal helper method).
-func (c *NativeCodec) encodeFrame(ctx context.Context, src []byte, dst *[]byte, info FrameInfo, params NativeParameters) error {
+// convertFrame copies one frame, applying word byte swapping when the codec's
+// transfer syntax requires it. Encoding and decoding share it because both
+// convert between native byte orders by reversing each multi-byte sample.
+func (c *NativeCodec) convertFrame(ctx context.Context, src []byte, dst *[]byte, info FrameInfo, params NativeParameters) error {
 	if len(src) == 0 {
 		return fmt.Errorf("source frame data must not be empty")
 	}
@@ -168,38 +170,6 @@ func (c *NativeCodec) encodeFrame(ctx context.Context, src []byte, dst *[]byte, 
 
 	// Multi-byte native Pixel Data uses OW and may need word byte swapping.
 	shouldSwap := c.isBigEndian
-	switch params.ByteSwap {
-	case ByteSwapDisabled:
-		shouldSwap = false
-	case ByteSwapEnabled:
-		shouldSwap = true
-	}
-
-	*dst = make([]byte, len(src))
-
-	if !shouldSwap {
-		// No swapping, just copy
-		return copyFrameInto(ctx, src, *dst)
-	}
-
-	return c.swapSampleBytes(ctx, src, *dst, bytesAllocated)
-}
-
-// decodeFrame decodes a single frame (internal helper method).
-func (c *NativeCodec) decodeFrame(ctx context.Context, src []byte, dst *[]byte, info FrameInfo, params NativeParameters) error {
-	if len(src) == 0 {
-		return fmt.Errorf("source frame data must not be empty")
-	}
-	// Bits Allocated selects whether native Pixel Data is byte- or word-based.
-	bytesAllocated := info.BitDepth.BytesAllocated()
-
-	// If single-byte samples, no swapping needed
-	if bytesAllocated == 1 {
-		return copyFrame(ctx, src, dst)
-	}
-
-	// Multi-byte native Pixel Data uses OW and may need word byte swapping.
-	shouldSwap := c.isBigEndian // Swap if source is big endian (convert to little endian)
 	switch params.ByteSwap {
 	case ByteSwapDisabled:
 		shouldSwap = false

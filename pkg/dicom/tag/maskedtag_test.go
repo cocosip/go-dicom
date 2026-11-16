@@ -196,6 +196,30 @@ func TestMaskedTagIsMatch(t *testing.T) {
 	}
 }
 
+// TestMaskedTagIsMatchWithExplicitMask covers masks passed directly to
+// NewMaskedTagWithMask, where the stored tag keeps bits outside the mask.
+func TestMaskedTagIsMatchWithExplicitMask(t *testing.T) {
+	mt := tag.NewMaskedTagWithMask(tag.New(0x0028, 0x0110), 0xFFFFFF00)
+	tests := []struct {
+		name      string
+		testTag   *tag.Tag
+		wantMatch bool
+	}{
+		{"same tag", tag.New(0x0028, 0x0110), true},
+		{"wildcarded low byte", tag.New(0x0028, 0x01FF), true},
+		{"group outside mask", tag.New(0x0029, 0x0110), false},
+		{"element high byte outside mask", tag.New(0x0028, 0x0210), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mt.IsMatch(tt.testTag); got != tt.wantMatch {
+				t.Errorf("IsMatch() = %v, want %v (mask=0x%08x, card=0x%08x, testCard=0x%08x)",
+					got, tt.wantMatch, mt.Mask(), mt.Card(), tt.testTag.ToUint32())
+			}
+		})
+	}
+}
+
 func TestParseMaskedTag(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -296,6 +320,30 @@ func TestParseMaskedTag(t *testing.T) {
 		{
 			"too short",
 			"0028",
+			0,
+			0,
+			0,
+			true,
+		},
+		{
+			"whitespace only",
+			"        ",
+			0,
+			0,
+			0,
+			true,
+		},
+		{
+			"missing closing parenthesis",
+			"(0028,0010",
+			0,
+			0,
+			0,
+			true,
+		},
+		{
+			"short element digits",
+			"(0028,10)",
 			0,
 			0,
 			0,

@@ -119,6 +119,15 @@ func (l *LazyByteBuffer) Data() []byte {
 	return data
 }
 
+// LoadError triggers the deferred load and returns its error.
+//
+// Data cannot report a load failure and returns nil data instead, so callers
+// that must not lose data silently (serializers, writers) use this first.
+func (l *LazyByteBuffer) LoadError() error {
+	_, err := l.load()
+	return err
+}
+
 // GetByteRange reads a range of bytes from the buffer.
 //
 // Parameters:

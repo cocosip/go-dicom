@@ -20,6 +20,8 @@ import (
 
 const testGB18030CharacterSet = "GB18030"
 
+const testChineseDescription = "中文描述"
+
 func TestAddValueUsesDatasetSpecificCharacterSet(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -150,10 +152,57 @@ func TestAddedSequenceItemInheritsDatasetSpecificCharacterSet(t *testing.T) {
 	if err := ds.Add(dataset.NewSequenceWithItems(tag.RequestAttributesSequence, []*dataset.Dataset{item})); err != nil {
 		t.Fatalf("Add(sequence) error = %v", err)
 	}
-	if err := item.AddValue(tag.StudyDescription, "中文描述"); err != nil {
+	if err := item.AddValue(tag.StudyDescription, testChineseDescription); err != nil {
 		t.Fatalf("item.AddValue() error = %v", err)
 	}
-	if got, ok := item.GetString(tag.StudyDescription); !ok || got != "中文描述" {
+	if got, ok := item.GetString(tag.StudyDescription); !ok || got != testChineseDescription {
+		t.Fatalf("GetString(StudyDescription) = %q, %v; want 中文描述, true", got, ok)
+	}
+}
+
+// TestMergedSequenceItemInheritsDatasetSpecificCharacterSet verifies that
+// Merge propagates the destination character set to merged sequence items, the
+// same way Add does.
+func TestMergedSequenceItemInheritsDatasetSpecificCharacterSet(t *testing.T) {
+	destination := dataset.New()
+	if err := destination.SetSpecificCharacterSet("ISO_IR 192"); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() error = %v", err)
+	}
+	source := dataset.New()
+	item := dataset.New()
+	if err := source.Add(dataset.NewSequenceWithItems(tag.RequestAttributesSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("source.Add(sequence) error = %v", err)
+	}
+	if err := destination.Merge(source, false); err != nil {
+		t.Fatalf("Merge() error = %v", err)
+	}
+	if err := item.AddValue(tag.StudyDescription, testChineseDescription); err != nil {
+		t.Fatalf("item.AddValue() error = %v", err)
+	}
+	if got, ok := item.GetString(tag.StudyDescription); !ok || got != testChineseDescription {
+		t.Fatalf("GetString(StudyDescription) = %q, %v; want 中文描述, true", got, ok)
+	}
+}
+
+// TestMergedSpecificCharacterSetRefreshesSequenceItems verifies that merging a
+// Specific Character Set element updates existing sequence items.
+func TestMergedSpecificCharacterSetRefreshesSequenceItems(t *testing.T) {
+	destination := dataset.New()
+	item := dataset.New()
+	if err := destination.Add(dataset.NewSequenceWithItems(tag.RequestAttributesSequence, []*dataset.Dataset{item})); err != nil {
+		t.Fatalf("destination.Add(sequence) error = %v", err)
+	}
+	source := dataset.New()
+	if err := source.SetSpecificCharacterSet("ISO_IR 192"); err != nil {
+		t.Fatalf("SetSpecificCharacterSet() error = %v", err)
+	}
+	if err := destination.Merge(source, false); err != nil {
+		t.Fatalf("Merge() error = %v", err)
+	}
+	if err := item.AddValue(tag.StudyDescription, testChineseDescription); err != nil {
+		t.Fatalf("item.AddValue() error = %v", err)
+	}
+	if got, ok := item.GetString(tag.StudyDescription); !ok || got != testChineseDescription {
 		t.Fatalf("GetString(StudyDescription) = %q, %v; want 中文描述, true", got, ok)
 	}
 }

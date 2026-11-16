@@ -55,9 +55,10 @@ func NewDicomImageFromDataset(ds *dataset.Dataset, options ...DicomImageOption) 
 		if err := image.DecodeIfNeeded(decoder, parameters); err != nil {
 			return nil, err
 		}
-		if image.pixelData.Info.PhotometricInterpretation != nil &&
-			image.pixelData.Info.PhotometricInterpretation.Value == pixel.PaletteColor.Value {
-			if err := pixeldata.ConvertPaletteToRGBWithVRMode(image.dataset, image.pixelData, config.lutVRMode); err != nil {
+		pd := image.pixelData.Load()
+		if pd.Info.PhotometricInterpretation != nil &&
+			pd.Info.PhotometricInterpretation.Value == pixel.PaletteColor.Value {
+			if err := pixeldata.ConvertPaletteToRGBWithVRMode(image.dataset, pd, config.lutVRMode); err != nil {
 				return nil, fmt.Errorf("palette conversion failed: %w", err)
 			}
 		}

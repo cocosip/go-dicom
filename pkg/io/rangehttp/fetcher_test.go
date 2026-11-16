@@ -263,4 +263,3 @@ func TestFetcherBoundsOversizedRangeProbeRead(t *testing.T) {
 		t.Fatalf("range probe read %d bytes, want at most expected length plus one", body.read)
 	}
 }
-

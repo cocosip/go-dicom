@@ -21,7 +21,7 @@ written in English; package-specific details live in each package's `README.md`.
 
 ## Package references
 
-Each package keeps a README with package-specific details:
+Key packages keep a README with package-specific details:
 
 - [pkg/network](../pkg/network/README.md)
 - [pkg/network/dimse](../pkg/network/dimse/README.md)

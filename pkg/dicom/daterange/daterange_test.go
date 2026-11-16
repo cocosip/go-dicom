@@ -422,6 +422,34 @@ func TestMustParseDateRange(t *testing.T) {
 	MustParseDateRange(testInvalidRangeInput)
 }
 
+func TestParseTimeRangeFractionalSeconds(t *testing.T) {
+	tests := []struct {
+		input string
+		want  time.Duration
+	}{
+		{"120000.5", 500 * time.Millisecond},
+		{"120000.05", 50 * time.Millisecond},
+		{"120000.123", 123 * time.Millisecond},
+		{"120000.1234", 123400 * time.Microsecond},
+		{"120000.123456", 123456 * time.Microsecond},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, err := ParseTimeRange(tt.input)
+			if err != nil {
+				t.Fatalf("ParseTimeRange(%q) error = %v", tt.input, err)
+			}
+			if r.Minimum.Hour() != 12 || r.Minimum.Minute() != 0 || r.Minimum.Second() != 0 {
+				t.Fatalf("Minimum = %v, want 12:00:00", r.Minimum)
+			}
+			if got := time.Duration(r.Minimum.Nanosecond()); got != tt.want {
+				t.Errorf("fractional seconds = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseTimeRangeDoesNotTreatBoundsAsTimezone(t *testing.T) {
 	r, err := ParseTimeRange("1000-1800")
 	if err != nil {

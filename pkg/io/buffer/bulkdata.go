@@ -42,23 +42,19 @@ func (b *BulkDataURIByteBuffer) IsMemory() bool {
 	return b.data != nil
 }
 
-// Size returns the size of the buffered data in bytes.
-// Returns an error if the data has not been set yet.
+// Size returns the size of the buffered data in bytes, or 0 when the data has
+// not been set yet. Callers should check IsMemory or BulkDataURI first.
 func (b *BulkDataURIByteBuffer) Size() uint32 {
 	if b.data == nil {
-		// In Go, we can't panic in a method that returns uint32 only
-		// So we return 0, but callers should check IsMemory() first
 		return 0
 	}
 	return uint32(len(b.data)) //nolint:gosec // DICOM buffer size within uint32 range
 }
 
-// Data returns the buffered data.
-// Returns an error if the data has not been set yet.
+// Data returns the buffered data, or an empty slice when the data has not been
+// set yet. Callers should check IsMemory or BulkDataURI first.
 func (b *BulkDataURIByteBuffer) Data() []byte {
 	if b.data == nil {
-		// Return empty slice instead of nil to avoid nil pointer errors
-		// Callers should check IsMemory() or BulkDataUri() first
 		return []byte{}
 	}
 	return b.data

@@ -2206,4 +2206,3 @@ func newNativeMonochromeDataset(t *testing.T, width, height uint16, pixels []byt
 	}
 	return ds
 }
-

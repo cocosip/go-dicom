@@ -108,7 +108,16 @@ func (volume *VolumeData) Cut(ctx context.Context, spec CutSpec, options CutOpti
 		Values: make([]float64, count),
 		Valid:  make([]bool, count),
 	}
-	errorsByIndex := make([]error, count)
+	// Record only the first failure per worker instead of one error slot per
+	// pixel; the lowest index across workers still wins, deterministically.
+	type workerFailure struct {
+		index int
+		err   error
+	}
+	failures := make([]workerFailure, workers)
+	for worker := range failures {
+		failures[worker].index = -1
+	}
 
 	var wait sync.WaitGroup
 	wait.Add(workers)
@@ -117,7 +126,7 @@ func (volume *VolumeData) Cut(ctx context.Context, spec CutSpec, options CutOpti
 			defer wait.Done()
 			for index := worker; index < count; index += workers {
 				if err := ctx.Err(); err != nil {
-					errorsByIndex[index] = err
+					failures[worker] = workerFailure{index: index, err: err}
 					return
 				}
 				row := index / normalized.Columns
@@ -131,7 +140,9 @@ func (volume *VolumeData) Cut(ctx context.Context, spec CutSpec, options CutOpti
 				)
 				value, valid, err := volume.Sample(point)
 				if err != nil {
-					errorsByIndex[index] = err
+					if failures[worker].index < 0 {
+						failures[worker] = workerFailure{index: index, err: err}
+					}
 					continue
 				}
 				slice.Values[index] = value
@@ -143,10 +154,14 @@ func (volume *VolumeData) Cut(ctx context.Context, spec CutSpec, options CutOpti
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for index, err := range errorsByIndex {
-		if err != nil {
-			return nil, fmt.Errorf("calculate output pixel %d: %w", index, err)
+	firstFailure := workerFailure{index: -1}
+	for _, failure := range failures {
+		if failure.index >= 0 && (firstFailure.index < 0 || failure.index < firstFailure.index) {
+			firstFailure = failure
 		}
+	}
+	if firstFailure.index >= 0 {
+		return nil, fmt.Errorf("calculate output pixel %d: %w", firstFailure.index, firstFailure.err)
 	}
 	return slice, nil
 }

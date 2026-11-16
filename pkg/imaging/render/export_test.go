@@ -36,6 +36,23 @@ func TestImageExporterRenderFrameSupportsRGBA(t *testing.T) {
 	}
 }
 
+func TestImageExporterRenderGrayscaleOneBitHonorsSignedRepresentation(t *testing.T) {
+	// Signed one-bit samples are two's complement: 0 and -1. With this window,
+	// -1 is the low end and 0 the high end of the display range.
+	pipeline := NewGrayscalePipeline(1, 0, -0.5, 1, -1, 0, false)
+	img, err := NewImageExporter(pipeline).RenderGrayscaleImageWithBitDepth(
+		[]byte{0b10}, 2, 1, 1, 1, 0, true, "MONOCHROME2",
+	)
+	if err != nil {
+		t.Fatalf("RenderGrayscaleImageWithBitDepth() error = %v", err)
+	}
+	for x, want := range []uint8{255, 0} {
+		if got := img.GrayAt(x, 0).Y; got != want {
+			t.Fatalf("pixel %d = %d, want %d", x, got, want)
+		}
+	}
+}
+
 func TestImageExporterRenderRGBImageSixteenBit(t *testing.T) {
 	// Little-endian 16-bit RGB: 0xFFFF, 0x8000, 0x0000 then 0x1234, 0x00FF, 0x0100.
 	data := []byte{

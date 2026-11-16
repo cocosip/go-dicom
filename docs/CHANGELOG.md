@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [Unreleased]
+
+### Added
+
+- **repo**: `.gitattributes` stores and checks out text files with LF, so Windows and Linux clones produce identical working trees and `gofmt -l` no longer flags every file.
+
+### Changed
+
+- **dicom/dataset**: `AddElements` and `AddOrUpdateElements` validate the whole batch before inserting it instead of deep-cloning the entire dataset twice.
+- **imaging**: `DicomImage` keeps its pixel data in an atomic pointer, so `DecodeIfNeeded` no longer races with readers such as `Width` or `RenderFrame`.
+- **network/service**: a message whose explicit presentation context ID is not part of the association is rejected instead of being silently sent on a different context (PS3.7 9.3).
+
+### Fixed
+
+- **dicom/uid**: derive `ImplementationVersionName` from the module version instead of a fixed string.
+
+## [v0.9.0] - 2026-11-09
+
+### Fixed
+
+- **network**: harden DIMSE validation, inbound request tracking, association negotiation, and graceful-shutdown edge cases.
+- **parsing, imaging, and anonymization**: correct DICOM conformance issues found in the successive audit passes, including malformed-input tolerance, element handling, character encoding, LUT/rendering, and anonymizer behavior.
+
 ## [v0.8.4] - 2026-11-07
 
 ### Added
@@ -79,9 +102,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - **packages**: consolidate ownership and registry boundaries
 
-### Changed
-- **packages**: consolidate ownership and registry boundaries
-
 ### Documentation
 - **api**: refresh dataset, pixel data, and DICOM examples
 
@@ -95,9 +115,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **lut**: align DICOM LUT parsing and presentation modes
 - enforce DICOM Pixel Data VR and LUT encoding rules
 - **imaging**: enforce LUT descriptor and data validation
-
-### Changed
-- **logging**: simplify structured log attribute initialization
 
 ### Changed
 - **logging**: simplify structured log attribute initialization

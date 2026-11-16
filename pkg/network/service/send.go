@@ -132,23 +132,30 @@ func (s *Service) sendMessage(req *sendRequest) error {
 			return err
 		}
 	}
-	if pc == nil && req.message.PresentationContextID() != 0 {
-		contextID := req.message.PresentationContextID()
-		pc = assoc.FindPresentationContextByID(contextID)
-	}
 	if pc == nil {
-		// Fall back: look up by SOP Class UID (abstract syntax).
-		sopClassUID, ok := req.message.CommandDataset().GetString(tag.AffectedSOPClassUID)
-		if !ok || sopClassUID == "" {
-			// Some messages use RequestedSOPClassUID instead (N-GET, N-SET, N-DELETE, N-ACTION)
-			sopClassUID, ok = req.message.CommandDataset().GetString(tag.RequestedSOPClassUID)
-			if !ok || sopClassUID == "" {
-				return fmt.Errorf("message has no SOP Class UID (neither AffectedSOPClassUID nor RequestedSOPClassUID)")
+		if contextID := message.PresentationContextID(); contextID != 0 {
+			// A message that already carries a presentation context ID (a
+			// response, or a request the caller pinned) must use exactly that
+			// context. Silently switching to another context would answer on a
+			// different context than the request, which PS3.7 9.3 forbids.
+			pc = assoc.FindPresentationContextByID(contextID)
+			if pc == nil {
+				return fmt.Errorf("presentation context ID %d is not part of the association", contextID)
 			}
-		}
-		pc = assoc.FindPresentationContextByAbstractSyntax(sopClassUID)
-		if pc == nil {
-			return fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
+		} else {
+			// Fall back: look up by SOP Class UID (abstract syntax).
+			sopClassUID, ok := message.CommandDataset().GetString(tag.AffectedSOPClassUID)
+			if !ok || sopClassUID == "" {
+				// Some messages use RequestedSOPClassUID instead (N-GET, N-SET, N-DELETE, N-ACTION)
+				sopClassUID, ok = message.CommandDataset().GetString(tag.RequestedSOPClassUID)
+				if !ok || sopClassUID == "" {
+					return fmt.Errorf("message has no SOP Class UID (neither AffectedSOPClassUID nor RequestedSOPClassUID)")
+				}
+			}
+			pc = assoc.FindPresentationContextByAbstractSyntax(sopClassUID)
+			if pc == nil {
+				return fmt.Errorf("no accepted presentation context found for SOP Class UID: %s", sopClassUID)
+			}
 		}
 	}
 	if !pc.IsAccepted() {

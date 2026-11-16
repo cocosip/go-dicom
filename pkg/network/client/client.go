@@ -1141,4 +1141,3 @@ func Dial(ctx context.Context, host string, port int, opts ...Option) (*Client, 
 
 	return c, nil
 }
-

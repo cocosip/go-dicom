@@ -17,13 +17,14 @@ This example demonstrates how to extract pixel data from DICOM files and convert
 
 ### Basic Usage
 
-Convert a DICOM file to PNG (uses auto-detected settings):
+Convert a DICOM file to JPEG (uses auto-detected settings):
 
 ```bash
 go run main.go -input sample.dcm
 ```
 
-This will create `sample.png` in the same directory.
+This will create `sample.jpg` in the same directory. Pass `-format png` to
+write a PNG instead.
 
 ### Specify Output File
 
@@ -75,12 +76,12 @@ go run main.go -input sample.dcm -invert
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `-input` | string | (required) | Input DICOM file path |
-| `-output` | string | auto | Output image file path (default: input filename with .png extension) |
+| `-output` | string | auto | Output image file path (default: input filename with .jpg or .png extension) |
 | `-window-center` | float64 | 0 | Window center for display (0 = use DICOM value or auto) |
 | `-window-width` | float64 | 0 | Window width for display (0 = use DICOM value or auto) |
 | `-invert` | bool | false | Invert grayscale (swap black/white) |
 | `-frame` | int | 0 | Frame number to extract (0-indexed, for multi-frame DICOM) |
-| `-format` | string | png | Output format: png or jpeg |
+| `-format` | string | jpeg | Output format: png or jpeg |
 | `-jpeg-quality` | int | 90 | JPEG quality (1-100, only for JPEG format) |
 
 ## Supported Image Types

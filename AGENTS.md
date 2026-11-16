@@ -24,6 +24,7 @@ For focused debugging, run a package or test name directly, for example `go test
 ## Coding Style & Naming Conventions
 
 - Use `gofmt` on all Go files; keep imports formatted by the toolchain.
+- Text files are checked out with LF via `.gitattributes`. In an existing clone created before that file existed, run `git add --renormalize .` once (and set `core.autocrlf=false`) so `gofmt -l` and line-oriented diffs match Linux.
 - Follow standard Go naming: short package names, exported identifiers in `CamelCase`, unexported identifiers in `camelCase`.
 - Keep package layout aligned with existing domain boundaries; avoid cross-package helpers unless broadly useful.
 - Prefer small, focused changes that preserve parser and transfer-syntax behavior.

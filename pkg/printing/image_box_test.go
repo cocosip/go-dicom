@@ -558,4 +558,3 @@ func TestImageBoxColorDatasetOmitsGrayscaleOnlyAttributes(t *testing.T) {
 		}
 	}
 }
-

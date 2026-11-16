@@ -654,4 +654,3 @@ func (r *jsonReader) createEmptyElement(t *tag.Tag, vrObj *vr.VR) (element.Eleme
 	}
 	return element.NewElementFromBuffer(t, vrObj, buffer.Empty, nil)
 }
-

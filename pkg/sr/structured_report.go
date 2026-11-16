@@ -241,5 +241,3 @@ func (sr *StructuredReport) writeOptions(options []writer.WriteOption) []writer.
 	)
 	return result
 }
-
-

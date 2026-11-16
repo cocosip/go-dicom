@@ -10,11 +10,10 @@ import (
 	"io"
 	"os"
 
+	"github.com/cocosip/go-dicom/cmd/internal/version"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 )
-
-const version = "0.1.0"
 
 func main() {
 	// Define flags
@@ -28,7 +27,7 @@ func main() {
 
 	// Show version
 	if *showVersion {
-		fmt.Printf("dicomdump version %s\n", version)
+		fmt.Printf("dicomdump version %s\n", version.String())
 		os.Exit(0)
 	}
 

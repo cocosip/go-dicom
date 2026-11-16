@@ -366,6 +366,9 @@ func (fb *FilmBox) FilmSession() *FilmSession {
 
 // IsValid checks if the Film Box configuration is valid
 func (fb *FilmBox) IsValid() bool {
+	if fb == nil {
+		return false
+	}
 	// Must have a valid Image Display Format
 	if fb.ImageDisplayFormat == "" {
 		return false

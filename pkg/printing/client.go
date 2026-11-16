@@ -238,9 +238,30 @@ func imageBoxReferences(response *dimse.NCreateResponse, expected int) ([]SOPRef
 	return references, nil
 }
 
+// validatePrintHierarchy rejects nil Film Boxes and Image Boxes before
+// FilmSession.IsValid dereferences them.
+func validatePrintHierarchy(session *FilmSession) error {
+	for boxIndex, filmBox := range session.BasicFilmBoxes {
+		if filmBox == nil {
+			return fmt.Errorf("printing: FilmBox at index %d is nil", boxIndex)
+		}
+		for imageIndex, imageBox := range filmBox.BasicImageBoxes {
+			if imageBox == nil {
+				return fmt.Errorf("printing: ImageBox at FilmBox %q index %d is nil", filmBox.SOPInstanceUID, imageIndex)
+			}
+		}
+	}
+	return nil
+}
+
 func validatePrintSession(session *FilmSession) error {
 	if session == nil {
 		return fmt.Errorf("printing: FilmSession is required")
+	}
+	// FilmSession.IsValid dereferences every Film Box and Image Box, so reject
+	// nil children with a specific error before it is called.
+	if err := validatePrintHierarchy(session); err != nil {
+		return err
 	}
 	if !session.IsValid() {
 		return fmt.Errorf("printing: FilmSession %q is not valid", session.SOPInstanceUID)
@@ -270,10 +291,7 @@ func validatePrintSession(session *FilmSession) error {
 			return err
 		}
 	}
-	for boxIndex, filmBox := range session.BasicFilmBoxes {
-		if filmBox == nil {
-			return fmt.Errorf("printing: FilmBox at index %d is nil", boxIndex)
-		}
+	for _, filmBox := range session.BasicFilmBoxes {
 		if err := registerUID("FilmBox", filmBox.SOPInstanceUID); err != nil {
 			return err
 		}
@@ -290,10 +308,7 @@ func validatePrintSession(session *FilmSession) error {
 			}
 		}
 		seenPositions := make(map[uint16]struct{}, len(filmBox.BasicImageBoxes))
-		for imageIndex, imageBox := range filmBox.BasicImageBoxes {
-			if imageBox == nil {
-				return fmt.Errorf("printing: ImageBox at FilmBox %q index %d is nil", filmBox.SOPInstanceUID, imageIndex)
-			}
+		for _, imageBox := range filmBox.BasicImageBoxes {
 			if int(imageBox.ImageBoxPosition) > len(filmBox.BasicImageBoxes) {
 				return fmt.Errorf("printing: FilmBox %q has Image Box position %d outside 1..%d",
 					filmBox.SOPInstanceUID, imageBox.ImageBoxPosition, len(filmBox.BasicImageBoxes))

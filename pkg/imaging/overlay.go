@@ -172,22 +172,25 @@ func (o *DicomOverlayData) GetFrame(frameIndex int) ([]byte, error) {
 	if frameIndex < 0 || frameIndex >= o.NumberOfFrames {
 		return nil, fmt.Errorf("frame index out of range: %d (total: %d)", frameIndex, o.NumberOfFrames)
 	}
-
-	unpacked := o.UnpackData()
-	if unpacked == nil {
+	if len(o.Data) == 0 {
 		return nil, fmt.Errorf("failed to unpack overlay data")
 	}
 
+	// Unpack only the requested frame; unpacking every frame here made a
+	// multi-frame render cost O(frames) per frame.
 	frameSize := o.Rows * o.Columns
-	start := frameIndex * frameSize
-	end := start + frameSize
-
-	if end > len(unpacked) {
-		return nil, fmt.Errorf("frame data out of range")
-	}
-
+	startBit := frameIndex * frameSize
 	frame := make([]byte, frameSize)
-	copy(frame, unpacked[start:end])
+	for index := 0; index < frameSize; index++ {
+		bitIndex := startBit + index
+		byteIndex := bitIndex / 8
+		if byteIndex >= len(o.Data) {
+			break
+		}
+		if (o.Data[byteIndex]>>uint(bitIndex%8))&0x01 != 0 {
+			frame[index] = 255
+		}
+	}
 
 	return frame, nil
 }

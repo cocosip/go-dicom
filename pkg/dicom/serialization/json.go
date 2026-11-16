@@ -716,7 +716,11 @@ func (w *jsonWriter) writeOther(elem element.Element) error {
 	}
 
 	// Otherwise, write as InlineBinary (Base64)
-	data := littleEndianBinary(elem, buf.Data())
+	data, err := readBufferData(buf)
+	if err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
+	data = littleEndianBinary(elem, data)
 	if len(data) == 0 {
 		return nil
 	}

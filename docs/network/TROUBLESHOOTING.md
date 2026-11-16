@@ -135,23 +135,35 @@ association rejected: called AE title not recognized
 ```go
 // 1. Confirm the server's AE Title
 c := client.New(
-    client.WithCalledAE("EXACT_SERVER_AE"),  // must match exactly
+    client.WithCalledAE("EXACT_SERVER_AE"), // must match exactly
 )
 
-// 2. Check the server configuration
-srv := server.New(
-    server.WithAETitle("MY_SCP"),
-    server.WithStrictAECheck(false),  // Disable strict checking (development environment)
-)
+// 2. The SCP decides which AE Titles it accepts in the association negotiator.
+srv := server.New()
+srv.SetAssociationNegotiatorFunc(
+    func(ctx context.Context, assoc *association.Association, responder service.AssociationResponder) error {
+        if assoc.CalledAE != "MY_SCP" {
+            return responder.SendReject(ctx,
+                pdu.ResultRejectedPermanent,
+                pdu.SourceServiceUser,
+                pdu.ReasonServiceUserCalledAETitleNotRecognized)
+        }
 
-// 3. Or configure the allowed Calling AE Titles
-srv := server.New(
-    server.WithAcceptedCallingAETitles([]string{
-        "SCU_1",
-        "SCU_2",
-        "WORKSTATION_*",  // Wildcards are supported
-    }),
-)
+        allowedCallingAEs := map[string]struct{}{"SCU_1": {}, "SCU_2": {}}
+        if _, ok := allowedCallingAEs[assoc.CallingAE]; !ok {
+            return responder.SendReject(ctx,
+                pdu.ResultRejectedPermanent,
+                pdu.SourceServiceUser,
+                pdu.ReasonServiceUserCallingAETitleNotRecognized)
+        }
+
+        for _, pc := range assoc.PresentationContexts {
+            if len(pc.ProposedTransferSyntaxes) > 0 {
+                pc.Accept(pc.ProposedTransferSyntaxes[0])
+            }
+        }
+        return responder.SendAccept(ctx, assoc)
+    })
 ```
 
 ### Problem: No Presentation Context accepted

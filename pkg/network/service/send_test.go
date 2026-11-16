@@ -209,6 +209,20 @@ func TestSendMessageRejectsExplicitUnacceptedPresentationContext(t *testing.T) {
 	}
 }
 
+func TestSendMessageRejectsUnknownExplicitPresentationContext(t *testing.T) {
+	assoc := createTestAssociation()
+
+	service := acceptedService(t, &recordingConn{}, assoc, WithAssociationRequestor(true))
+	t.Cleanup(func() { _ = service.Close() })
+	req := dimse.NewCEchoRequest()
+	req.SetPresentationContextID(99)
+
+	err := service.sendMessage(&sendRequest{message: req, resultCh: make(chan error, 1)})
+	if err == nil || !strings.Contains(err.Error(), "not part of the association") {
+		t.Fatalf("sendMessage() error = %v, want unknown presentation context error", err)
+	}
+}
+
 func TestSendMessageUsesNegotiatedRemoteMaxPDULength(t *testing.T) {
 	assoc := createTestAssociation()
 	assoc.MaxPDULength = 256

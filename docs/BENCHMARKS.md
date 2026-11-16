@@ -100,6 +100,9 @@ This document contains performance benchmark results for the go-dicom library. B
 
 ## Buffer Pool Operations
 
+`GetBytesBuffer` and `BytesBufferNormal` are the remaining buffer benchmarks; the
+`Allocate*` rows measured an API that has since been removed.
+
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
 | AllocateSmallNormal | 0.17 | 0 | 0 |
@@ -121,7 +124,7 @@ This document contains performance benchmark results for the go-dicom library. B
 | InterleavedToPlanar24 | ~varies | ~varies | ~varies |
 | YBRFullToRGB | ~varies | ~varies | ~varies |
 
-*(See pkg/imaging/converter_test.go for detailed imaging benchmarks)*
+*(See `pkg/imaging/colorconv` and `pkg/io/buffer` for detailed imaging and buffer benchmarks)*
 
 ## Performance Summary
 
@@ -184,4 +187,4 @@ go tool pprof mem.prof
 - Most microbenchmarks use synthetic data; parser benchmarks also use committed real DICOM fixtures.
 - Real-world performance varies based on DICOM file complexity and transfer syntax.
 - Transfer syntax and compression can significantly impact parser/writer performance
-- Network operations (when implemented) will have additional overhead
+- Network operations are not benchmarked here; they add transport overhead

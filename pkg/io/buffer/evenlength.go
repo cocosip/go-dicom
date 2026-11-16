@@ -56,6 +56,11 @@ func (e *EvenLengthBuffer) Size() uint32 {
 // Data returns the internal data with a padding byte added at the end.
 func (e *EvenLengthBuffer) Data() []byte {
 	internalData := e.internal.Data()
+	if internalData == nil {
+		// Only odd-length buffers are wrapped, so nil means the internal read
+		// failed; propagate it instead of returning padding-only data.
+		return nil
+	}
 	data := make([]byte, len(internalData)+1)
 	copy(data, internalData)
 	// Last byte is already zero from make()

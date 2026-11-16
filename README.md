@@ -171,7 +171,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
   - [x] Network transport abstraction (TCP/TLS)
   - [x] TLS support (secure DICOM connections)
   - [x] Concurrent DIMSE requests within the negotiated asynchronous operations window; Client Connect, Close, IsConnected, and GetAssociation lifecycle synchronization
-  - [x] 2000+ unit tests with >80% package statement coverage (run `go test -coverprofile=coverage.out ./pkg/...` to measure)
+  - [x] 2000+ test functions with per-package statement coverage from roughly 36% to 100% (run `go test -coverprofile=coverage.out ./pkg/...` to measure)
   - [x] Asynchronous Operations Window negotiation with request throttling
   - [x] Advanced role negotiation (SCP/SCU Role Selection)
   - [x] Extended negotiation items (SOP Class Extended Negotiation)
@@ -1725,9 +1725,9 @@ import (
     "github.com/cocosip/go-dicom/pkg/dicom/element"
     "github.com/cocosip/go-dicom/pkg/dicom/tag"
     "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/dicom/uid"
     "github.com/cocosip/go-dicom/pkg/network/client"
     "github.com/cocosip/go-dicom/pkg/network/dimse"
-    "github.com/cocosip/go-dicom/pkg/uid"
 )
 
 func main() {
@@ -1736,8 +1736,8 @@ func main() {
         client.WithCalledAE("QR-SCP"),
     )
     if err := c.AddPresentationContext(
-        uid.StudyRootQueryRetrieveInformationModelFind,
-        uid.ExplicitVRLittleEndian,
+        uid.StudyRootQueryRetrieveInformationModelFind.UID(),
+        uid.ExplicitVRLittleEndian.UID(),
     ); err != nil {
         log.Fatal(err)
     }
@@ -1759,7 +1759,7 @@ func main() {
         log.Fatalf("C-FIND: %v", err)
     }
     for _, resp := range responses {
-        log.Printf("Found study: %v", resp.DataDataset())
+        log.Printf("Found study: %v", resp)
     }
 }
 ```
@@ -1783,9 +1783,9 @@ import (
     "github.com/cocosip/go-dicom/pkg/dicom/element"
     "github.com/cocosip/go-dicom/pkg/dicom/tag"
     "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/dicom/uid"
     "github.com/cocosip/go-dicom/pkg/network/client"
     "github.com/cocosip/go-dicom/pkg/network/dimse"
-    "github.com/cocosip/go-dicom/pkg/uid"
 )
 
 func main() {
@@ -1794,8 +1794,8 @@ func main() {
         client.WithCalledAE("QR-SCP"),
     )
     if err := c.AddPresentationContext(
-        uid.StudyRootQueryRetrieveInformationModelMove,
-        uid.ExplicitVRLittleEndian,
+        uid.StudyRootQueryRetrieveInformationModelMove.UID(),
+        uid.ExplicitVRLittleEndian.UID(),
     ); err != nil {
         log.Fatal(err)
     }
@@ -1811,14 +1811,14 @@ func main() {
     _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.840.999.1"}))
 
     // "DEST-AE" must be known to the SCP (registered in its AE routing table)
-    responses, err := c.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST-AE", identifier)
-    if err != nil {
+    if err := c.CMove(ctx, dimse.QueryRetrieveLevelStudy, "DEST-AE", identifier,
+        func(remaining, completed, failed, warning uint16) bool {
+            log.Printf("C-MOVE progress: remaining=%d completed=%d failed=%d warning=%d",
+                remaining, completed, failed, warning)
+            return true // continue receiving progress updates
+        },
+    ); err != nil {
         log.Fatalf("C-MOVE: %v", err)
-    }
-    for _, resp := range responses {
-        log.Printf("C-MOVE progress: completed=%d failed=%d",
-            resp.NumberOfCompletedSubOperations(),
-            resp.NumberOfFailedSubOperations())
     }
 }
 ```
@@ -1836,26 +1836,35 @@ import (
     "github.com/cocosip/go-dicom/pkg/dicom/element"
     "github.com/cocosip/go-dicom/pkg/dicom/tag"
     "github.com/cocosip/go-dicom/pkg/dicom/vr"
+    "github.com/cocosip/go-dicom/pkg/dicom/uid"
     "github.com/cocosip/go-dicom/pkg/network/client"
     "github.com/cocosip/go-dicom/pkg/network/dimse"
-    "github.com/cocosip/go-dicom/pkg/uid"
+    "github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func main() {
+    // C-GET: the SCP sends C-STORE sub-operations back over the same
+    // association. The client must register a C-STORE handler and negotiate the
+    // SCP role for every Storage SOP Class it expects to receive.
     c := client.New(
         client.WithCallingAE("GO-SCU"),
         client.WithCalledAE("QR-SCP"),
+        client.WithCStoreHandler(func(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+            ds := req.DataDataset()
+            log.Printf("Received instance: %v", ds)
+            return dimse.NewCStoreResponseFromRequest(req, status.Success), nil
+        }),
     )
-    // Propose both C-GET and the storage SOP classes you expect to receive
     if err := c.AddPresentationContext(
-        uid.StudyRootQueryRetrieveInformationModelGet,
-        uid.ExplicitVRLittleEndian,
+        uid.StudyRootQueryRetrieveInformationModelGet.UID(),
+        uid.ExplicitVRLittleEndian.UID(),
     ); err != nil {
         log.Fatal(err)
     }
-    if err := c.AddPresentationContext(
-        uid.CTImageStorage,
-        uid.ExplicitVRLittleEndian,
+    // AddStoragePresentationContexts requests the SCP role automatically.
+    if err := c.AddStoragePresentationContexts(
+        []string{uid.CTImageStorage.UID()},
+        uid.ExplicitVRLittleEndian.UID(),
     ); err != nil {
         log.Fatal(err)
     }
@@ -1869,22 +1878,14 @@ func main() {
     identifier := dataset.New()
     _ = identifier.Add(element.NewString(tag.StudyInstanceUID, vr.UI, []string{"1.2.840.999.1"}))
 
-    // C-GET: SCP sends C-STORE sub-operations back over the same association.
-    // The client's CStoreHandler is called for each received instance.
-    c.SetCStoreHandler(func(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
-        ds := req.DataDataset()
-        log.Printf("Received instance: %v", ds)
-        return dimse.NewCStoreResponseFromRequest(req, 0x0000), nil
-    })
-
-    responses, err := c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier)
-    if err != nil {
+    if err := c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
+        func(remaining, completed, failed, warning uint16) bool {
+            log.Printf("C-GET progress: remaining=%d completed=%d failed=%d warning=%d",
+                remaining, completed, failed, warning)
+            return true // continue receiving progress updates
+        },
+    ); err != nil {
         log.Fatalf("C-GET: %v", err)
-    }
-    for _, resp := range responses {
-        log.Printf("C-GET progress: completed=%d failed=%d",
-            resp.NumberOfCompletedSubOperations(),
-            resp.NumberOfFailedSubOperations())
     }
 }
 ```
@@ -2075,17 +2076,22 @@ go-dicom/
 │   │   ├── charset/        # Character encoding (30+ charsets)
 │   │   ├── serialization/  # JSON/XML conversion
 │   │   ├── anonymizer/     # Anonymization profiles
-│   │   ├── endian/         # Byte order handling
-│   │   └── testutil/       # Test utilities
+│   │   ├── encapsulated/   # Encapsulated pixel data
+│   │   ├── transcode/      # Dataset-level transcoding
+│   │   ├── parseable/      # Parseable values
+│   │   └── daterange/      # DICOM date range matching
 │   ├── imaging/            # Image processing
 │   │   ├── codec/          # Image codecs (native, transcoder)
+│   │   ├── colorconv/      # YBR/RGB and planar layout conversion
 │   │   ├── geometry/       # DICOM frame geometry and localization
 │   │   ├── interpolation/  # Nearest-neighbor and bilinear sampling
 │   │   ├── lut/            # Lookup tables (Modality, VOI, Palette)
 │   │   ├── math3d/         # Geometry and matrix primitives
+│   │   ├── pixel/          # Pixel format value objects
+│   │   ├── pixeldata/      # Frame-aware pixel data access
 │   │   ├── render/         # Image rendering pipeline
-│   │   ├── transform/      # Affine and viewer spatial transforms
-│   │   └── reconstruction/ # Volume reconstruction, MPR, and derived images
+│   │   ├── reconstruction/ # Volume reconstruction, MPR, and derived images
+│   │   └── transform/      # Affine and viewer spatial transforms
 │   ├── media/              # DICOMDIR and filesystem media workflows
 │   │   └── scanner/        # Bounded metadata-only DICOM file scanning
 │   ├── network/            # DICOM networking
@@ -2100,17 +2106,30 @@ go-dicom/
 │   │   └── status/         # DIMSE status codes
 │   ├── sr/                 # Structured Reports
 │   ├── printing/           # DICOM printing
+│   ├── logging/            # Optional process-wide logger
 │   └── io/                 # I/O operations
-│       └── buffer/         # Byte buffer abstractions
+│       ├── buffer/         # Byte buffer abstractions
+│       ├── endian/         # Byte order handling
+│       ├── rangehttp/      # HTTP range-backed readers
+│       └── rangeio/        # Range-backed readers
 ├── cmd/                    # Command-line tools
 │   ├── dicominfo/          # Display DICOM file information
 │   ├── dicomdump/          # Dump DICOM file contents
 │   └── dicom2json/         # Convert DICOM to JSON
 ├── examples/               # Usage examples
-│   ├── read_dicom/         # Reading DICOM files
-│   ├── write_dicom/        # Writing DICOM files
+│   ├── anonymize/          # Anonymization
+│   ├── cstore_scp/         # C-STORE receiver (SCP)
+│   ├── cstore_scu/         # C-STORE sender (SCU)
+│   ├── dicom_to_image/     # Render frames to PNG/JPEG
+│   ├── dicomdir/           # Create a DICOMDIR
+│   ├── gen_samples/        # Generate sample DICOM files
 │   ├── json_conversion/    # JSON/XML serialization
-│   └── anonymize/          # Anonymization examples
+│   ├── qr_scp/             # Query/Retrieve SCP
+│   ├── qr_scu/             # Query/Retrieve SCU
+│   ├── read_dicom/         # Reading DICOM files
+│   ├── reconstruction/     # Volume reconstruction and MPR
+│   ├── transcode_preserve_metadata/ # Transcoding with metadata preservation
+│   └── write_dicom/        # Writing DICOM files
 ├── test-data/              # Test DICOM files
 ├── tools/                  # Code generation tools
 │   ├── data/2026b/         # Pinned fo-dicom dictionary XML inputs
@@ -2123,7 +2142,7 @@ go-dicom/
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.26 or later
 - golangci-lint (for linting)
 
 ### Building
@@ -2136,7 +2155,7 @@ go build ./...
 go test ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 # Run benchmarks
-go test -bench='.' -benchmem ./pkg/dicom/...
+go test -bench='.' -benchmem -run='^$' ./pkg/dicom/... ./pkg/io/... ./pkg/imaging/...
 ```
 
 ### Regenerating DICOM Data

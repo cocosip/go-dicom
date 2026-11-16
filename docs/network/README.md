@@ -14,7 +14,7 @@ This guide is the single, consolidated reference for go-dicom's networking layer
   - [Creating a Client](#creating-a-client)
   - [Client Configuration Options](#client-configuration-options)
   - [Adding Presentation Contexts](#adding-presentation-contexts)
-  - [Requesting SCU/SCP Roles and Factory Methods](#requesting-scuscpp-roles-and-factory-methods)
+  - [Requesting SCU/SCP Roles and Factory Methods](#requesting-scuscp-roles-and-factory-methods)
   - [C-GET Must Negotiate the Storage SCP Role First](#c-get-must-negotiate-the-storage-scp-role-first)
   - [Connecting and Closing](#connecting-and-closing)
   - [DIMSE Operations](#dimse-operations)
@@ -718,7 +718,6 @@ srv := server.New()
 
 // Using configuration options
 srv := server.New(
-    server.WithAETitle("MY_SCP"),
     server.WithPort(11112),
     server.WithMaxPDULength(16384),
     server.WithMaxConnections(50),
@@ -731,7 +730,6 @@ srv := server.New(
 
 | Option | Type | Default | Description |
 |------|------|--------|------|
-| `WithAETitle(ae)` | string | "GO_DICOM_SCP" | Local AE Title |
 | `WithPort(port)` | int | 104 | Listening port |
 | `WithMaxPDULength(length)` | uint32 | 16384 | Maximum PDU length this AE can receive (per direction) |
 | `WithMaxMessageSize(size)` | uint32 | 512 MiB | Bound for a reassembled inbound DIMSE message (0=unlimited) |
@@ -741,9 +739,18 @@ srv := server.New(
 | `WithRequestTimeout(timeout)` | time.Duration | 30s | Response idle timeout for DIMSE requests actively initiated by the Server |
 | `WithTransportReadTimeout(timeout)` | time.Duration | 0 | Single PDU read timeout (0=disabled) |
 | `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | Single PDU write timeout (0=disabled) |
-| `WithAcceptedCallingAETitles(aes)` | []string | nil | Allowed Calling AEs (nil=allow all) |
-| `WithStrictAECheck(strict)` | bool | false | Strict AE Title checking |
+| `WithSupportedSOPClasses(uids...)` | ...string | nil (accept all) | SOP Classes this SCP implements; other abstract syntaxes are rejected during negotiation |
+| `WithAsynchronousOperations(maxInvoked, maxPerformed)` | uint16, uint16 | 0, 0 (unlimited) | Local SCP asynchronous operation window |
+| `WithTransferSyntaxRegistry(registry)` | `*transfer.Registry` | Standard catalog | Isolated registry used during association negotiation |
+| `WithTranscodeManager(manager)` | `*transcode.Manager` | Global codec registry | Manager passed to each network service |
+| `WithImplementationClassUID(uid)` | string | Shared go-dicom implementation identity | Implementation class UID |
+| `WithImplementationVersionName(name)` | string | Derived from the module version | Implementation version name |
+| `WithEventObserver(observer)` / `WithMetricsObserver(observer)` | observability hooks | nil | Structured lifecycle events and metrics |
 | `WithTLSConfig(config)` | *tls.Config | nil | TLS configuration |
+
+The server has no AE Title option: accept or reject Calling/Called AE Titles in
+the association negotiator (`SetAssociationNegotiatorFunc`), as the
+[C-STORE SCP example](../../examples/cstore_scp) does.
 
 ### DIMSE Handlers
 
@@ -764,64 +771,73 @@ return a final response (or a failure reason); it is encoded against the
 original MessageID. The registration is released only on the final response or
 service shutdown, never on C-CANCEL alone.
 
-The C-MOVE and C-GET handlers are:
+The C-MOVE and C-GET handlers receive an operation object that streams progress
+responses and reports the final status:
 
 #### C-MOVE Handler
 
 ```go
-srv.SetCMoveHandler(func(ctx context.Context, req *dimse.CMoveRequest) ([]*dimse.CMoveResponse, error) {
-    identifier := req.DataDataset()
-    destination := req.MoveDestination()
+srv.SetCMoveHandler(func(ctx context.Context, op service.CMoveOperation) error {
+    images := findImages(op.Identifier())
 
-    log.Printf("C-MOVE to %s\n", destination)
-
-    // 1. Find matching images
-    images := findImages(identifier)
-
-    // 2. Create a connection to the destination
     destClient := client.New(
         client.WithCallingAE("MY_SCP"),
-        client.WithCalledAE(destination),
+        client.WithCalledAE(op.MoveDestination()),
     )
-    // ... add presentation contexts
-    destClient.Connect(ctx, getDestinationHost(destination), 104)
+    // ... add presentation contexts for the images
+    if err := destClient.Connect(ctx, getDestinationHost(op.MoveDestination()), 104); err != nil {
+        return op.SendFailure(status.CMoveRefusedOutOfResourcesSubOps)
+    }
     defer destClient.Close()
 
-    // 3. Send images
-    responses := make([]*dimse.CMoveResponse, 0)
     remaining := uint16(len(images))
     completed := uint16(0)
-
+    failed := uint16(0)
     for _, image := range images {
-        // Send a Pending response
         remaining--
-        resp := dimse.NewCMoveResponsePending(req, remaining, completed, 0, 0)
-        responses = append(responses, resp)
-
-        // Send the image to the destination
         if err := destClient.CStore(ctx, image); err != nil {
-            log.Printf("Failed to move image: %v\n", err)
-            continue
+            failed++
+        } else {
+            completed++
         }
-        completed++
+        if err := op.SendPending(remaining, completed, failed, 0); err != nil {
+            return err
+        }
     }
 
-    // Final success response
-    finalResp := dimse.NewCMoveResponseSuccess(req)
-    responses = append(responses, finalResp)
-
-    return responses, nil
+    if failed > 0 {
+        return op.SendWarning()
+    }
+    return op.SendSuccess()
 })
 ```
 
 #### C-GET Handler
 
 ```go
-srv.SetCGetHandler(func(ctx context.Context, req *dimse.CGetRequest) ([]*dimse.CGetResponse, error) {
-    // C-GET is like C-MOVE, but sends directly to the requester
-    // The implementation is similar to the C-MOVE Handler
-    // ...
-    return responses, nil
+srv.SetCGetHandler(func(ctx context.Context, op service.CGetOperation) error {
+    images := findImages(op.Identifier())
+
+    remaining := uint16(len(images))
+    completed := uint16(0)
+    failed := uint16(0)
+    for _, image := range images {
+        remaining--
+        resp, err := op.SendCStore(ctx, image)
+        if err != nil || !resp.Status().IsSuccess() {
+            failed++
+        } else {
+            completed++
+        }
+        if err := op.SendPending(remaining, completed, failed, 0); err != nil {
+            return err
+        }
+    }
+
+    if failed > 0 {
+        return op.SendWarning()
+    }
+    return op.SendSuccess()
 })
 ```
 
@@ -931,7 +947,6 @@ import (
 func main() {
     // Create the server
     srv := server.New(
-        server.WithAETitle("MY_SCP"),
         server.WithPort(11112),
         server.WithMaxPDULength(16384),
     )
@@ -969,7 +984,6 @@ import (
 
 func main() {
     srv := server.New(
-        server.WithAETitle("STORAGE_SCP"),
         server.WithPort(11112),
     )
 
@@ -1025,7 +1039,6 @@ import (
 
 func main() {
     srv := server.New(
-        server.WithAETitle("QUERY_SCP"),
         server.WithPort(11112),
     )
 
@@ -1475,7 +1488,6 @@ tlsConfig := &tls.Config{
 
 // Create the TLS server
 srv := server.New(
-    server.WithAETitle("SECURE_SCP"),
     server.WithPort(11112),
     server.WithTLSConfig(tlsConfig),
 )

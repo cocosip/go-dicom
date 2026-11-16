@@ -75,4 +75,3 @@ func TestMonochrome1WithoutPresentationLUTShapeStillInverts(t *testing.T) {
 		}
 	}
 }
-

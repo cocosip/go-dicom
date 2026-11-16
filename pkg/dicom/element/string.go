@@ -60,18 +60,13 @@ func NewStringWithEncoding(t *tag.Tag, v *vr.VR, values []string, enc encoding.E
 	joined := strings.Join(values, "\\")
 
 	// Encode to bytes
+	encoded, err := charset.EncodeString(joined, []encoding.Encoding{enc})
 	var data []byte
 	var encodeErr error
-	if enc != nil {
-		encoded, err := charset.EncodeString(joined, []encoding.Encoding{enc})
-		if err != nil {
-			encodeErr = fmt.Errorf("encode string using %T: %w", enc, err)
-			data = nil
-		} else {
-			data = encoded
-		}
+	if err != nil {
+		encodeErr = fmt.Errorf("encode string using %T: %w", enc, err)
 	} else {
-		data = []byte(joined)
+		data = encoded
 	}
 
 	// Remove trailing spaces (DICOM requirement)
@@ -295,10 +290,6 @@ func (s *String) Validate() error {
 }
 
 func (s *String) validateValue() error {
-	if _, err := s.GetStringWithError(); err != nil {
-		return fmt.Errorf("decode string for VR %s: %w", s.vr.Code(), err)
-	}
-
 	values, err := s.GetValuesWithError()
 	if err != nil {
 		return fmt.Errorf("decode values for VR %s: %w", s.vr.Code(), err)

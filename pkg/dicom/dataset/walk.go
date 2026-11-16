@@ -171,10 +171,12 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 				task.elements = make([]element.Element, len(tagValues))
 				task.tags = make([]*tag.Tag, len(tagValues))
 				for index, tagValue := range tagValues {
-					task.elements[index] = task.dataset.items[tagValue]
-					task.tags[index] = tag.New(uint16(tagValue>>16), uint16(tagValue))
-					if elem := task.elements[index]; !isNilElement(elem) && elem.Tag() != nil {
+					elem := task.dataset.items[tagValue]
+					task.elements[index] = elem
+					if !isNilElement(elem) && elem.Tag() != nil {
 						task.tags[index] = elem.Tag().Clone()
+					} else {
+						task.tags[index] = tag.FromUint32(tagValue)
 					}
 				}
 				task.initialized = true
@@ -197,7 +199,7 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 				items := append([]*Dataset(nil), sequence.GetItems()...)
 				stack = append(stack,
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkSequenceEnd, Path: containerPath, Element: sequence, Dataset: task.dataset}},
-					walkTask{kind: walkTaskSequenceItems, path: containerPath, sequence: sequence, items: items, initialized: true},
+					walkTask{kind: walkTaskSequenceItems, path: containerPath, sequence: sequence, items: items},
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkSequenceBegin, Path: containerPath, Element: sequence, Dataset: task.dataset}, canSkip: true},
 				)
 				continue
@@ -213,7 +215,7 @@ func Walk(ds *Dataset, visit VisitFunc) error {
 				fragmentItems := append([]buffer.ByteBuffer(nil), fragments.Fragments()...)
 				stack = append(stack,
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkFragmentEnd, Path: containerPath, Element: fragments, Dataset: task.dataset}},
-					walkTask{kind: walkTaskFragments, path: containerPath, dataset: task.dataset, fragmentSequence: fragments, fragments: fragmentItems, initialized: true},
+					walkTask{kind: walkTaskFragments, path: containerPath, dataset: task.dataset, fragmentSequence: fragments, fragments: fragmentItems},
 					walkTask{kind: walkTaskEvent, event: WalkEvent{Kind: WalkFragmentBegin, Path: containerPath, Element: fragments, Dataset: task.dataset}, canSkip: true},
 				)
 				continue

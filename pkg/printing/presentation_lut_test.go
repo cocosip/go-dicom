@@ -275,4 +275,3 @@ func TestPresentationLUT_TransformValue_Clamp(t *testing.T) {
 		t.Errorf("Value above range should clamp to last entry (300), got %d", result)
 	}
 }
-

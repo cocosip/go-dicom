@@ -28,9 +28,6 @@ type baseVOILUT struct {
 	windowWidth     float64
 	windowCenterMin float64 // windowCenter - 0.5
 	windowWidthMin  float64 // windowWidth - 1
-	windowWidthDiv2 float64 // (windowWidth - 1) / 2
-	windowStart     int
-	windowEnd       int
 	outputRange     float64
 	needsRecalc     bool
 }
@@ -60,9 +57,6 @@ func (v *baseVOILUT) Recalculate() {
 	if v.needsRecalc {
 		v.windowCenterMin = v.windowCenter - 0.5
 		v.windowWidthMin = v.windowWidth - 1
-		v.windowWidthDiv2 = v.windowWidthMin / 2
-		v.windowStart = int(v.windowCenterMin - v.windowWidthDiv2)
-		v.windowEnd = int(v.windowCenterMin + v.windowWidthDiv2)
 		v.outputRange = 255
 		v.needsRecalc = false
 	}

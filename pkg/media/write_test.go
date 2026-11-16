@@ -217,5 +217,3 @@ func (w *errorAfterWriter) Write(p []byte) (int, error) {
 	w.remaining -= len(p)
 	return len(p), nil
 }
-
-

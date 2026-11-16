@@ -93,8 +93,8 @@ func main() {
 		fmt.Printf("Series Instance UID: %s\n", seriesInstanceUID)
 	}
 
-	if seriesNumber, err := result.Dataset.GetInt32(tag.SeriesNumber, 0); err == nil {
-		fmt.Printf("Series Number: %d\n", seriesNumber)
+	if seriesNumber, ok := result.Dataset.GetString(tag.SeriesNumber); ok {
+		fmt.Printf("Series Number: %s\n", seriesNumber)
 	}
 
 	if seriesDescription, ok := result.Dataset.GetString(tag.SeriesDescription); ok {
@@ -119,8 +119,8 @@ func main() {
 		fmt.Printf("SOP Instance UID: %s\n", sopInstanceUID)
 	}
 
-	if instanceNumber, err := result.Dataset.GetInt32(tag.InstanceNumber, 0); err == nil {
-		fmt.Printf("Instance Number: %d\n", instanceNumber)
+	if instanceNumber, ok := result.Dataset.GetString(tag.InstanceNumber); ok {
+		fmt.Printf("Instance Number: %s\n", instanceNumber)
 	}
 
 	if imageType, ok := result.Dataset.GetString(tag.ImageType); ok {

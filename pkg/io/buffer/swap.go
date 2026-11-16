@@ -131,9 +131,13 @@ func (s *SwapByteBuffer) WriteTo(w io.Writer) (int64, error) {
 		return 0, nil
 	}
 
-	// Use 1MB chunks for efficiency
+	// Use 1MB chunks for efficiency, sized down for small buffers.
 	const chunkSize = 1024 * 1024
-	buffer := make([]byte, chunkSize)
+	bufSize := size
+	if bufSize > chunkSize {
+		bufSize = chunkSize
+	}
+	buffer := make([]byte, bufSize)
 	var totalWritten int64
 
 	offset := uint32(0)

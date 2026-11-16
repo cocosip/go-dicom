@@ -96,4 +96,3 @@ func formatGenerated(name string, source []byte) ([]byte, error) {
 	}
 	return formatted, nil
 }
-

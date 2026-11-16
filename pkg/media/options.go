@@ -80,5 +80,3 @@ func validateFileSetID(fileSetID string) error {
 	}
 	return nil
 }
-
-

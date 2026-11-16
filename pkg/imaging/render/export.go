@@ -138,6 +138,10 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 		invertOutput := photometric == "MONOCHROME1" && !pipelineInverts(e.pipeline)
 		for index := 0; index < width*height; index++ {
 			pixelValue := float64((pixelData[index/8] >> uint(index%8)) & 1)
+			// Signed one-bit samples are two's complement, so a set bit is -1.
+			if isSigned && pixelValue != 0 {
+				pixelValue = -1
+			}
 			grayValue := clampRenderByte(pipelineLUT.Transform(pixelValue))
 			if invertOutput {
 				grayValue = 255 - grayValue
@@ -166,11 +170,11 @@ func (e *ImageExporter) RenderGrayscaleImageWithBitDepth(
 	if effectiveStored <= 0 || effectiveStored > bitsAllocated {
 		effectiveStored = bitsAllocated
 	}
-	precalc := newPrecalculatedLUT(pipelineLUT, effectiveStored, isSigned)
-	// Building the table costs one transform per stored value; it only pays off
-	// once the frame has at least that many pixels.
-	if precalc != nil && width*height < 1<<uint(effectiveStored) {
-		precalc = nil
+	// Building the table costs one transform per stored value, so it only pays
+	// off once the frame has at least that many pixels.
+	var precalc *lut.PrecalculatedLUT
+	if width*height >= 1<<uint(effectiveStored) {
+		precalc = newPrecalculatedLUT(pipelineLUT, effectiveStored, isSigned)
 	}
 
 	for y := 0; y < height; y++ {
@@ -326,7 +330,7 @@ func (e *ImageExporter) RenderRGBImageWithBitDepth(
 		return nil, fmt.Errorf("RGB pixel data too short: got %d bytes, need %d", len(rgbData), required)
 	}
 
-	// colorconv.ConvertToRGBWithBytesPerSample always returns interleaved 8-bit RGB.
+	// colorconv.ConvertToRGBWithBitDepth always returns interleaved 8-bit RGB.
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for index := 0; index < width*height; index++ {
 		src := index * 3

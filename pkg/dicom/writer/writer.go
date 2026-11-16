@@ -102,7 +102,7 @@ var (
 		implementationClassUID    string
 		implementationVersionName string
 	}{
-		implementationClassUID:    uid.GoDicomImplementationClassUID, // Default Implementation Class UID
+		implementationClassUID:    uid.GoDicomImplementationClassUID,    // Default Implementation Class UID
 		implementationVersionName: uid.GoDicomImplementationVersionName, // Default Implementation Version Name
 	}
 )
@@ -1034,13 +1034,12 @@ func writeAll(w io.Writer, data []byte) error {
 
 // writeTag writes a DICOM tag (4 bytes).
 func (w *Writer) writeTag(t *tag.Tag) error {
-	if err := binary.Write(w.writer, w.byteOrder, t.Group()); err != nil {
-		return err
-	}
-	if err := binary.Write(w.writer, w.byteOrder, t.Element()); err != nil {
-		return err
-	}
-	return nil
+	// Encode into a stack buffer instead of using binary.Write, which allocates
+	// a scratch slice for every field; this runs once per element.
+	var buf [4]byte
+	w.byteOrder.PutUint16(buf[0:2], t.Group())
+	w.byteOrder.PutUint16(buf[2:4], t.Element())
+	return writeAll(w.writer, buf[:])
 }
 
 // writeVR writes the Value Representation (2 bytes).
@@ -1145,4 +1144,3 @@ func (c *byteCountingWriter) Write(p []byte) (int, error) {
 	c.n += int64(n)
 	return n, err
 }
-

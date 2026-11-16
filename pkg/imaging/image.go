@@ -14,6 +14,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -47,12 +48,18 @@ const (
 	transferSyntaxImplicitVRLittleEndian = "1.2.840.10008.1.2"
 )
 
-// DicomImage represents a DICOM image with rendering capabilities
+// DicomImage represents a DICOM image with rendering capabilities.
+//
+// The pixel data pointer is replaced atomically by DecodeIfNeeded, so readers
+// such as Width and RenderFrame may run while another goroutine decodes.
+// Other render settings (window, LUT selections, pipelines) are guarded by mu;
+// configure them from one goroutine and do not mutate a pipeline that another
+// goroutine is rendering.
 type DicomImage struct {
 	mu sync.RWMutex
 
-	// Pixel data
-	pixelData         *pixeldata.Data
+	// Pixel data; replaced atomically when decoded.
+	pixelData         atomic.Pointer[pixeldata.Data]
 	dataset           *dataset.Dataset
 	presentationState *dataset.Dataset
 
@@ -78,8 +85,7 @@ type DicomImage struct {
 
 // NewDicomImage creates a new DicomImage from pixel data.
 func NewDicomImage(pixelData *pixeldata.Data) *DicomImage {
-	return &DicomImage{
-		pixelData:               pixelData,
+	img := &DicomImage{
 		currentFrame:            0,
 		pipelines:               make(map[int]render.Pipeline),
 		scale:                   1.0,
@@ -89,26 +95,28 @@ func NewDicomImage(pixelData *pixeldata.Data) *DicomImage {
 		grayscaleColorMaps:      make(map[int][256]colorconv.Color32),
 		lutVRMode:               pixeldata.LUTCompatible,
 	}
+	img.pixelData.Store(pixelData)
+	return img
 }
 
 // Width returns the image width in pixels
 func (img *DicomImage) Width() uint16 {
-	return img.pixelData.Info.Width
+	return img.pixelData.Load().Info.Width
 }
 
 // Height returns the image height in pixels
 func (img *DicomImage) Height() uint16 {
-	return img.pixelData.Info.Height
+	return img.pixelData.Load().Info.Height
 }
 
 // NumberOfFrames returns the number of frames in the image
 func (img *DicomImage) NumberOfFrames() int {
-	return img.pixelData.Info.NumberOfFrames
+	return img.pixelData.Load().Info.NumberOfFrames
 }
 
 // IsGrayscale returns true if the image is grayscale
 func (img *DicomImage) IsGrayscale() bool {
-	pi := img.pixelData.Info.PhotometricInterpretation
+	pi := img.pixelData.Load().Info.PhotometricInterpretation
 	if pi == nil {
 		return true // Default to grayscale
 	}
@@ -183,13 +191,13 @@ func (img *DicomImage) GetOrCreatePipelineWithError(frame int) (render.Pipeline,
 }
 
 func (img *DicomImage) newFallbackPipeline() render.Pipeline {
-	if img.pixelData.Info.BitsStored == 0 {
+	if img.pixelData.Load().Info.BitsStored == 0 {
 		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false)
 	}
-	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, img.pixelData.Info.PixelRepresentation == pixel.SignedPixels)
+	minInput, maxInput := imageStoredValueRange(img.pixelData.Load().Info.BitsStored, img.pixelData.Load().Info.PixelRepresentation == pixel.SignedPixels)
 	windowCenter, windowWidth := 1.0, 1.0
-	if img.pixelData.Info.BitsStored != 1 {
-		windowCenter, windowWidth = img.pixelData.CalculateOptimalWindow()
+	if img.pixelData.Load().Info.BitsStored != 1 {
+		windowCenter, windowWidth = img.pixelData.Load().CalculateOptimalWindow()
 	}
 	return render.NewGrayscalePipeline(1, 0, windowCenter, windowWidth, minInput, maxInput, false)
 }
@@ -217,12 +225,12 @@ type grayscaleTransforms struct {
 }
 
 func (img *DicomImage) createGrayscalePipeline(frame int) (*render.GrayscalePipeline, error) {
-	if img.pixelData.Info.BitsStored == 0 {
+	if img.pixelData.Load().Info.BitsStored == 0 {
 		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false), nil
 	}
 
-	pixelSigned := img.pixelData.Info.PixelRepresentation == pixel.SignedPixels
-	minInput, maxInput := imageStoredValueRange(img.pixelData.Info.BitsStored, pixelSigned)
+	pixelSigned := img.pixelData.Load().Info.PixelRepresentation == pixel.SignedPixels
+	minInput, maxInput := imageStoredValueRange(img.pixelData.Load().Info.BitsStored, pixelSigned)
 	presentationStateApplied := img.presentationState != nil
 
 	transforms, err := img.resolveGrayscaleTransforms(frame, presentationStateApplied, pixelSigned, minInput, maxInput)
@@ -267,8 +275,10 @@ func (img *DicomImage) resolveGrayscaleTransforms(
 	// Without a Presentation State, fall back to a window derived from the
 	// actual pixel data. With one, PS3.4 N.2 replaces that heuristic: an absent
 	// VOI transformation is identity, so the image data must not be consulted.
-	if !presentationStateApplied && img.pixelData.Info.BitsStored != 1 {
-		transforms.windowCenter, transforms.windowWidth = img.pixelData.CalculateOptimalWindow()
+	// Dataset-backed images resolve their window from Dataset attributes below,
+	// so scanning the pixels here would only produce a discarded value.
+	if !presentationStateApplied && img.pixelData.Load().Info.BitsStored != 1 && img.dataset == nil {
+		transforms.windowCenter, transforms.windowWidth = img.pixelData.Load().CalculateOptimalWindow()
 	}
 
 	var functional *dataset.Dataset
@@ -333,7 +343,7 @@ func (img *DicomImage) resolveGrayscaleTransforms(
 	if img.dataset == nil {
 		return transforms, nil
 	}
-	if !transforms.hasExplicitWindow && !presentationStateApplied && img.pixelData.Info.BitsStored != 1 {
+	if !transforms.hasExplicitWindow && !presentationStateApplied && img.pixelData.Load().Info.BitsStored != 1 {
 		img.deriveWindowFromPixels(&transforms)
 	}
 	if presentationStateApplied && !transforms.hasExplicitWindow {
@@ -360,9 +370,14 @@ func (t *grayscaleTransforms) applyExplicitWindow(fallback *dataset.Dataset, win
 func (img *DicomImage) deriveWindowFromPixels(t *grayscaleTransforms) {
 	minimum, maximum, err := pixeldata.DatasetValueRange(img.dataset)
 	if err != nil {
-		minimum, maximum, err = img.pixelData.MinMax(true)
+		minimum, maximum, err = img.pixelData.Load().MinMax(true)
 	}
 	if err != nil {
+		// Neither the Dataset attributes nor MinMax supplied a range; fall back
+		// to the sampled pixel range used for images without a Dataset.
+		if img.pixelData.Load().Info.BitsStored != 1 {
+			t.windowCenter, t.windowWidth = img.pixelData.Load().CalculateOptimalWindow()
+		}
 		return
 	}
 	if t.modalityLUT != nil {
@@ -656,8 +671,8 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 				slog.Int("frame", frame),
 				slog.Int("width", int(img.Width())),
 				slog.Int("height", int(img.Height())),
-				slog.Int("samples_per_pixel", int(img.pixelData.Info.SamplesPerPixel)),
-				slog.Int("bits_allocated", int(img.pixelData.Info.BitsAllocated)),
+				slog.Int("samples_per_pixel", int(img.pixelData.Load().Info.SamplesPerPixel)),
+				slog.Int("bits_allocated", int(img.pixelData.Load().Info.BitsAllocated)),
 				slog.Duration("duration", time.Since(started)),
 			}
 			if err != nil {
@@ -675,7 +690,7 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 	if frame < 0 || frame >= img.NumberOfFrames() {
 		return nil, fmt.Errorf("frame index out of range: %d", frame)
 	}
-	frameData, err := img.pixelData.Frame(ctx, frame)
+	frameData, err := img.pixelData.Load().Frame(ctx, frame)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get frame data: %w", err)
 	}
@@ -684,23 +699,23 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 		return nil, fmt.Errorf("create rendering pipeline: %w", err)
 	}
 	exporter := render.NewImageExporter(pipeline)
-	switch img.pixelData.Info.SamplesPerPixel {
+	switch img.pixelData.Load().Info.SamplesPerPixel {
 	case 1:
 		photometric := pixel.Monochrome2.Value
 		// PS3.4 N.2: the referenced image's MONOCHROME1/MONOCHROME2 value is
 		// ignored when a Presentation State is applied, because the presentation
 		// transformations own display polarity.
-		if img.presentationState == nil && img.pixelData.Info.PhotometricInterpretation != nil {
-			photometric = img.pixelData.Info.PhotometricInterpretation.Value
+		if img.presentationState == nil && img.pixelData.Load().Info.PhotometricInterpretation != nil {
+			photometric = img.pixelData.Load().Info.PhotometricInterpretation.Value
 		}
 		rendered, err = exporter.RenderGrayscaleImageWithBitDepth(
 			frameData,
 			int(img.Width()),
 			int(img.Height()),
-			int(img.pixelData.Info.BitsAllocated),
-			int(img.pixelData.Info.BitsStored),
-			int(img.pixelData.Info.HighBit),
-			img.pixelData.Info.PixelRepresentation == pixel.SignedPixels,
+			int(img.pixelData.Load().Info.BitsAllocated),
+			int(img.pixelData.Load().Info.BitsStored),
+			int(img.pixelData.Load().Info.HighBit),
+			img.pixelData.Load().Info.PixelRepresentation == pixel.SignedPixels,
 			photometric,
 		)
 		if err == nil && img.supplementalPaletteEligible() {
@@ -708,39 +723,39 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 		}
 	case 3:
 		photometric := pixel.RGBPhotometric.Value
-		if img.pixelData.Info.PhotometricInterpretation != nil {
-			photometric = img.pixelData.Info.PhotometricInterpretation.Value
+		if img.pixelData.Load().Info.PhotometricInterpretation != nil {
+			photometric = img.pixelData.Load().Info.PhotometricInterpretation.Value
 		}
 		rendered, err = exporter.RenderRGBImageWithBitDepth(
 			frameData,
 			int(img.Width()),
 			int(img.Height()),
 			photometric,
-			int(img.pixelData.Info.PlanarConfiguration),
-			int(img.pixelData.Info.BitsAllocated),
-			int(img.pixelData.Info.BitsStored),
-			int(img.pixelData.Info.HighBit),
+			int(img.pixelData.Load().Info.PlanarConfiguration),
+			int(img.pixelData.Load().Info.BitsAllocated),
+			int(img.pixelData.Load().Info.BitsStored),
+			int(img.pixelData.Load().Info.HighBit),
 		)
 	case 4:
 		photometric := pixel.ARGBPhotometric.Value
-		if img.pixelData.Info.PhotometricInterpretation != nil {
-			photometric = img.pixelData.Info.PhotometricInterpretation.Value
+		if img.pixelData.Load().Info.PhotometricInterpretation != nil {
+			photometric = img.pixelData.Load().Info.PhotometricInterpretation.Value
 		}
 		// ARGB/RGBA with 4 samples are defined with 8-bit samples; rendering a
 		// wider allocation as 8-bit would emit silently wrong pixels.
-		if img.pixelData.Info.BitsAllocated != 8 {
+		if img.pixelData.Load().Info.BitsAllocated != 8 {
 			return nil, fmt.Errorf("unsupported BitsAllocated %d for %s: only 8-bit samples are supported",
-				img.pixelData.Info.BitsAllocated, photometric)
+				img.pixelData.Load().Info.BitsAllocated, photometric)
 		}
 		rendered, err = exporter.RenderRGBAImageWithConfig(
 			frameData,
 			int(img.Width()),
 			int(img.Height()),
 			photometric,
-			int(img.pixelData.Info.PlanarConfiguration),
+			int(img.pixelData.Load().Info.PlanarConfiguration),
 		)
 	default:
-		return nil, fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Info.SamplesPerPixel)
+		return nil, fmt.Errorf("unsupported samples per pixel: %d", img.pixelData.Load().Info.SamplesPerPixel)
 	}
 	if err != nil {
 		return nil, err
@@ -754,12 +769,12 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 }
 
 func (img *DicomImage) supplementalPaletteEligible() bool {
-	if img.dataset == nil || img.pixelData.Info.SamplesPerPixel != 1 {
+	if img.dataset == nil || img.pixelData.Load().Info.SamplesPerPixel != 1 {
 		return false
 	}
 	photometric := pixel.Monochrome2.Value
-	if img.pixelData.Info.PhotometricInterpretation != nil {
-		photometric = img.pixelData.Info.PhotometricInterpretation.Value
+	if img.pixelData.Load().Info.PhotometricInterpretation != nil {
+		photometric = img.pixelData.Load().Info.PhotometricInterpretation.Value
 	}
 	if photometric != pixel.Monochrome1.Value && photometric != pixel.Monochrome2.Value {
 		return false
@@ -788,7 +803,7 @@ func (img *DicomImage) applySupplementalPalette(grayscale image.Image, frame int
 		gray := color.GrayModel.Convert(grayscale.At(x, y)).(color.Gray)
 		result.SetNRGBA(x, y, color.NRGBA{R: gray.Y, G: gray.Y, B: gray.Y, A: 255})
 
-		value, sampleErr := img.pixelData.Sample(frame, x, y, 0)
+		value, sampleErr := img.pixelData.Load().Sample(frame, x, y, 0)
 		if sampleErr != nil {
 			return nil, sampleErr
 		}
@@ -817,7 +832,7 @@ func (img *DicomImage) scaleImage(source image.Image) image.Image {
 	destinationBounds := image.Rect(0, 0, width, height)
 	if _, ok := source.(*image.Gray); ok {
 		gray := image.NewGray(destinationBounds)
-		if img.pixelData.Info.BitsStored == 1 {
+		if img.pixelData.Load().Info.BitsStored == 1 {
 			golangdraw.NearestNeighbor.Scale(gray, destinationBounds, source, source.Bounds(), golangdraw.Src, nil)
 		} else {
 			golangdraw.BiLinear.Scale(gray, destinationBounds, source, source.Bounds(), golangdraw.Src, nil)
@@ -850,17 +865,17 @@ func (img *DicomImage) DecodeIfNeeded(c codec.Codec, params codec.Parameters) er
 // DecodeIfNeededContext decodes compressed pixel data and associates logging with ctx.
 func (img *DicomImage) DecodeIfNeededContext(ctx context.Context, c codec.Codec, params codec.Parameters) (err error) {
 	// Check if already uncompressed
-	if img.pixelData.Info.TransferSyntaxUID == transferSyntaxImplicitVRLittleEndian ||
-		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRLittleEndian ||
-		img.pixelData.Info.TransferSyntaxUID == transferSyntaxExplicitVRBigEndian {
+	if img.pixelData.Load().Info.TransferSyntaxUID == transferSyntaxImplicitVRLittleEndian ||
+		img.pixelData.Load().Info.TransferSyntaxUID == transferSyntaxExplicitVRLittleEndian ||
+		img.pixelData.Load().Info.TransferSyntaxUID == transferSyntaxExplicitVRBigEndian {
 		return nil // Already uncompressed
 	}
 	logDebug := logging.Enabled(ctx, slog.LevelDebug)
 	logError := logging.Enabled(ctx, slog.LevelError)
 	if logDebug || logError {
 		started := time.Now()
-		inputTransferSyntax := img.pixelData.Info.TransferSyntaxUID
-		frameCount := img.pixelData.Info.NumberOfFrames
+		inputTransferSyntax := img.pixelData.Load().Info.TransferSyntaxUID
+		frameCount := img.pixelData.Load().Info.NumberOfFrames
 		codecType := fmt.Sprintf("%T", c)
 		defer func() {
 			level := slog.LevelDebug
@@ -894,13 +909,13 @@ func (img *DicomImage) DecodeIfNeededContext(ctx context.Context, c codec.Codec,
 	}
 
 	// Decode
-	decoded, err := img.pixelData.Decode(ctx, c, params)
+	decoded, err := img.pixelData.Load().Decode(ctx, c, params)
 	if err != nil {
 		return fmt.Errorf("failed to decode pixel data: %w", err)
 	}
 
 	img.mu.Lock()
-	img.pixelData = decoded
+	img.pixelData.Store(decoded)
 	// Clear cached pipelines as pixel data has changed
 	img.pipelines = make(map[int]render.Pipeline)
 	img.mu.Unlock()
@@ -914,11 +929,10 @@ func (img *DicomImage) DecodeIfNeededContext(ctx context.Context, c codec.Codec,
 func (img *DicomImage) Clone() *DicomImage {
 	img.mu.RLock()
 
-	clonedPixelData := img.pixelData.Clone()
+	clonedPixelData := img.pixelData.Load().Clone()
 
 	// Create new image
 	cloned := &DicomImage{
-		pixelData:               clonedPixelData,
 		currentFrame:            img.currentFrame,
 		pipelines:               make(map[int]render.Pipeline),
 		scale:                   img.scale,
@@ -931,6 +945,7 @@ func (img *DicomImage) Clone() *DicomImage {
 		voiLUTIndex:             img.voiLUTIndex,
 		lutVRMode:               img.lutVRMode,
 	}
+	cloned.pixelData.Store(clonedPixelData)
 	if img.dataset != nil {
 		cloned.dataset = img.dataset.Clone()
 	}

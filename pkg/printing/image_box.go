@@ -373,6 +373,9 @@ func (ib *ImageBox) FilmBox() *FilmBox {
 
 // IsValid checks if the Image Box configuration is valid
 func (ib *ImageBox) IsValid() bool {
+	if ib == nil {
+		return false
+	}
 	// Must have a valid SOP Class UID
 	if ib.SOPClassUID == "" {
 		return false

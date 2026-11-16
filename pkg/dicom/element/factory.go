@@ -33,14 +33,11 @@ func NewElementFromBuffer(t *tag.Tag, valueRepresentation *vr.VR, buf buffer.Byt
 	text := func() Element {
 		return NewStringFromBufferWithEncodings(t, valueRepresentation, buf, encodings)
 	}
-	ordered := func(elem Element) Element {
-		return elem
-	}
 
 	switch valueRepresentation.Code() {
 	case vr.CodeAE, vr.CodeAS, vr.CodeCS, vr.CodeLO, vr.CodeLT, vr.CodeSH,
 		vr.CodeST, vr.CodeUC, vr.CodeUI, vr.CodeUR, vr.CodeUT:
-		return ordered(text()), nil
+		return text(), nil
 	case vr.CodeDA:
 		return NewDateFromBufferWithEncodings(t, buf, encodings), nil
 	case vr.CodeDS:
@@ -319,9 +316,6 @@ func canonicalValue(valueRepresentation *vr.VR, value any) (string, error) {
 	case reflect.Bool:
 		return strconv.FormatBool(rv.Bool()), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if valueRepresentation.Code() == vr.CodeDS {
-			return strconv.FormatInt(rv.Int(), 10), nil
-		}
 		return strconv.FormatInt(rv.Int(), 10), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return strconv.FormatUint(rv.Uint(), 10), nil

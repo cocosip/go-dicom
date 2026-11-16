@@ -25,8 +25,11 @@ const (
 )
 
 var native = func() Endian {
-	buf := [2]byte{0x01, 0x00}
-	if binary.LittleEndian.Uint16(buf[:]) == 1 {
+	// binary.LittleEndian decodes {0x01, 0x00} as 1 on every platform, so it
+	// cannot detect the host byte order. Encode 1 in the host byte order instead.
+	buf := [2]byte{}
+	binary.NativeEndian.PutUint16(buf[:], 1)
+	if buf[0] == 1 {
 		return Little
 	}
 	return Big

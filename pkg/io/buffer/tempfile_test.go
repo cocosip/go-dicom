@@ -405,4 +405,3 @@ func TestTempFileBuffer_CleanupOnError(t *testing.T) {
 	// Second close should not panic (may return error since file is already closed)
 	_ = tb.Close() // Ignore error as file is already closed
 }
-

@@ -248,8 +248,33 @@ func ParseTimeRange(s string) (*TimeRange, error) {
 	return NewTimeRange(minVal, maxVal), nil
 }
 
+// normalizeTimeFraction expands a fractional-seconds component of 1-6 digits
+// to the six-digit form expected by the TM layouts. DICOM permits any precision
+// from 1 to 6 digits (PS3.5 Table 6.2-1). Values without a valid fraction are
+// returned unchanged.
+func normalizeTimeFraction(value string) string {
+	dot := strings.IndexByte(value, '.')
+	if dot < 0 {
+		return value
+	}
+	end := dot + 1
+	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+		end++
+	}
+	digits := end - dot - 1
+	if digits < 1 || digits >= 6 {
+		return value
+	}
+	return value[:dot+1] + value[dot+1:end] + strings.Repeat("0", 6-digits) + value[end:]
+}
+
 // parseDicomTime parses a DICOM time string (TM format).
 func parseDicomTime(s string) (time.Time, error) {
+	// PS3.5 Table 6.2-1 permits 1 to 6 fractional-second digits, but the layouts
+	// below use the fixed six-digit form. Normalize the fraction first so e.g.
+	// "120000.5" is 12:00:00.5 instead of silently truncating the fraction.
+	normalized := normalizeTimeFraction(s)
+
 	formats := []string{
 		"150405.000000",
 		"150405.000",
@@ -259,8 +284,8 @@ func parseDicomTime(s string) (time.Time, error) {
 	}
 
 	for _, format := range formats {
-		if len(s) >= len(format) {
-			if t, err := time.Parse(format, s[:len(format)]); err == nil {
+		if len(normalized) >= len(format) {
+			if t, err := time.Parse(format, normalized[:len(format)]); err == nil {
 				return t, nil
 			}
 		}

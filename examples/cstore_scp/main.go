@@ -40,7 +40,7 @@ var (
 	storageDir     = flag.String("storage", "./received_dicom", "Directory to store received DICOM files")
 	maxConn        = flag.Int("max-conn", 10, "Maximum concurrent connections (0 = unlimited)")
 	verbose        = flag.Bool("verbose", false, "Enable verbose logging")
-	organizeByAE   = flag.Bool("organize-by-ae", false, "Organize files by calling AE title")
+	organizeByAE   = flag.Bool("organize-by-ae", false, "Group files under a fixed default_ae/ directory (the calling AE is not available to the C-STORE handler)")
 	organizeByDate = flag.Bool("organize-by-date", false, "Organize files by study date")
 	calledAE       = flag.String("called-ae", "", "Expected called AE title (empty = disable validation)")
 	allowCallingAE = flag.String("allow-calling-ae", "", "Comma-separated list of allowed calling AE titles (empty = allow all)")

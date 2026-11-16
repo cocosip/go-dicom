@@ -301,6 +301,27 @@ func TestFileByteBuffer_WriteTo(t *testing.T) {
 	}
 }
 
+func TestFileByteBuffer_WriteTo_TruncatedFile(t *testing.T) {
+	tmpFile := createTempFile(t, []byte{0, 1, 2, 3})
+
+	fb, err := buffer.NewFile(tmpFile, 0, 4)
+	if err != nil {
+		t.Fatalf("NewFile() unexpected error: %v", err)
+	}
+	if err := os.Truncate(tmpFile, 2); err != nil {
+		t.Fatalf("os.Truncate() error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	n, err := fb.WriteTo(&buf)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("WriteTo() error = %v, want io.ErrUnexpectedEOF", err)
+	}
+	if n != 2 {
+		t.Errorf("WriteTo() wrote %d bytes, want 2", n)
+	}
+}
+
 func TestFileByteBuffer_WriteTo_Empty(t *testing.T) {
 	testData := []byte{0, 1, 2, 3, 4, 5}
 	tmpFile := createTempFile(t, testData)

@@ -476,4 +476,3 @@ func TestRecordWritesZeroLengthType2Attributes(t *testing.T) {
 		}
 	}
 }
-
