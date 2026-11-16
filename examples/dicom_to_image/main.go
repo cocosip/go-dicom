@@ -37,28 +37,34 @@ var (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	flag.Parse()
 
 	// Validate input
 	if err := examplepath.RequireInputFile(*inputFile); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
+		return err
+	}
+
+	// Validate output format before doing any work.
+	exportFormat, extension, err := parseFormat(*format)
+	if err != nil {
+		return err
 	}
 
 	// Determine output file path
 	output := *outputFile
 	if output == "" {
-		ext := filepath.Ext(*inputFile)
-		baseName := strings.TrimSuffix(*inputFile, ext)
-		if *format == "jpeg" || *format == "jpg" {
-			output = baseName + ".jpg"
-		} else {
-			output = baseName + ".png"
-		}
+		baseName := strings.TrimSuffix(*inputFile, filepath.Ext(*inputFile))
+		output = baseName + extension
 	}
 	if err := examplepath.PrepareOutputFile(output); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
+		return err
 	}
 
 	fmt.Printf("=== DICOM to Image Converter ===\n")
@@ -71,27 +77,25 @@ func main() {
 	fmt.Println("Parsing DICOM file...")
 	result, err := parser.ParseFile(*inputFile)
 	if err != nil {
-		fmt.Printf("Failed to parse DICOM file: %v\n", err)
-		fmt.Println("\nPress Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("parse DICOM file: %w", err)
 	}
 
 	// Create DICOM image from dataset
 	fmt.Println("Extracting pixel data...")
 	pixelData, err := pixeldata.FromDataset(result.Dataset)
 	if err != nil {
-		fmt.Printf("Failed to extract pixel data: %v\n", err)
-		fmt.Println("\nPress Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("extract pixel data: %w", err)
 	}
 
 	// Create a Dataset-driven image so DICOM window, LUT, and overlay metadata is applied.
 	dicomImage, err := imaging.NewDicomImageFromParseResult(result)
 	if err != nil {
-		fmt.Printf("Failed to create DICOM image: %v\n", err)
-		return
+		return fmt.Errorf("create DICOM image: %w", err)
+	}
+
+	// Validate frame number before using it.
+	if *frame < 0 || *frame >= dicomImage.NumberOfFrames() {
+		return fmt.Errorf("frame %d out of range (0-%d)", *frame, dicomImage.NumberOfFrames()-1)
 	}
 
 	// Print image information
@@ -109,7 +113,10 @@ func main() {
 
 	// Print some pixel values for debugging
 	frameData, err := pixelData.Frame(context.Background(), *frame)
-	if err == nil && len(frameData) > 0 {
+	if err != nil {
+		return fmt.Errorf("read frame %d: %w", *frame, err)
+	}
+	if len(frameData) > 0 {
 		fmt.Printf("\nPixel data sample (first 10 bytes):\n  ")
 		for i := 0; i < 10 && i < len(frameData); i++ {
 			fmt.Printf("%02X ", frameData[i])
@@ -117,14 +124,6 @@ func main() {
 		fmt.Println()
 	}
 	fmt.Println()
-
-	// Validate frame number
-	if *frame < 0 || *frame >= dicomImage.NumberOfFrames() {
-		fmt.Printf("Error: Frame %d out of range (0-%d)\n", *frame, dicomImage.NumberOfFrames()-1)
-		fmt.Println("\nPress Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
-	}
 
 	// Apply window settings if provided by user
 	if *windowCenter != 0 || *windowWidth != 0 {
@@ -156,43 +155,30 @@ func main() {
 
 	// Create export options
 	exportOptions := &render.ExportOptions{
+		Format:      exportFormat,
 		JPEGQuality: *jpegQuality,
-	}
-
-	if *format == "jpeg" || *format == "jpg" {
-		exportOptions.Format = render.FormatJPEG
-		fmt.Println("Exporting as JPEG...")
-	} else {
-		exportOptions.Format = render.FormatPNG
-		fmt.Println("Exporting as PNG...")
 	}
 
 	// Create output file
 	outFile, err := os.Create(output)
 	if err != nil {
-		fmt.Printf("Failed to create output file: %v\n", err)
-		fmt.Println("\nPress Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("create output file %q: %w", output, err)
 	}
 	defer func() {
 		if err := outFile.Close(); err != nil {
-			fmt.Printf("Warning: failed to close output file: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to close output file: %v\n", err)
 		}
 	}()
 
 	// Render frame to file
 	fmt.Printf("Rendering frame %d...\n", *frame)
 	if err := dicomImage.RenderFrame(outFile, *frame, exportOptions); err != nil {
-		fmt.Printf("Failed to render image: %v\n", err)
-		fmt.Println("\nPress Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("render image: %w", err)
 	}
 
 	// Flush the file before checking
 	if err := outFile.Sync(); err != nil {
-		fmt.Printf("Warning: failed to sync file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: failed to sync file: %v\n", err)
 	}
 
 	fmt.Println("Render complete!")
@@ -201,9 +187,21 @@ func main() {
 	if info, err := os.Stat(output); err == nil {
 		fmt.Printf("Image saved to: %s (%d bytes)\n", output, info.Size())
 	} else {
-		fmt.Printf("Warning: file was created but stat failed: %v\n", err)
-		fmt.Printf("Expected location: %s\n", output)
+		fmt.Fprintf(os.Stderr, "Warning: file was created but stat failed: %v\n", err)
+		return fmt.Errorf("verify output file %q: %w", output, err)
 	}
-	fmt.Println("\nPress Enter to exit...")
-	_, _ = fmt.Scanln()
+	return nil
+}
+
+// parseFormat maps the -format flag to a render export format and file
+// extension. Matching is case-insensitive; any other value is an error.
+func parseFormat(raw string) (render.ExportFormat, string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "png":
+		return render.FormatPNG, ".png", nil
+	case "jpeg", "jpg":
+		return render.FormatJPEG, ".jpg", nil
+	default:
+		return 0, "", fmt.Errorf("invalid -format %q: expected png, jpeg, or jpg", raw)
+	}
 }

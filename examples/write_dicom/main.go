@@ -28,51 +28,51 @@ func main() {
 	ds := dataset.New()
 
 	// === Patient Information ===
-	_ = ds.AddValue(tag.PatientName, "Doe^John")
-	_ = ds.AddValue(tag.PatientID, "12345")
-	_ = ds.AddValue(tag.PatientBirthDate, "19800101")
-	_ = ds.AddValue(tag.PatientSex, "M")
-	_ = ds.AddValue(tag.PatientAge, "045Y")
+	mustAddValue(ds, tag.PatientName, "Doe^John")
+	mustAddValue(ds, tag.PatientID, "12345")
+	mustAddValue(ds, tag.PatientBirthDate, "19800101")
+	mustAddValue(ds, tag.PatientSex, "M")
+	mustAddValue(ds, tag.PatientAge, "045Y")
 
 	// === Study Information ===
-	_ = ds.AddValue(tag.StudyInstanceUID, "1.2.826.0.1.3680043.10.1142.1")
-	_ = ds.AddValue(tag.StudyDate, "20250101")
-	_ = ds.AddValue(tag.StudyTime, "120000")
-	_ = ds.AddValue(tag.StudyDescription, "Sample Study")
-	_ = ds.AddValue(tag.StudyID, "001")
-	_ = ds.AddValue(tag.AccessionNumber, "ACC001")
-	_ = ds.AddValue(tag.ReferringPhysicianName, "Smith^Jane")
+	mustAddValue(ds, tag.StudyInstanceUID, "1.2.826.0.1.3680043.10.1142.1")
+	mustAddValue(ds, tag.StudyDate, "20250101")
+	mustAddValue(ds, tag.StudyTime, "120000")
+	mustAddValue(ds, tag.StudyDescription, "Sample Study")
+	mustAddValue(ds, tag.StudyID, "001")
+	mustAddValue(ds, tag.AccessionNumber, "ACC001")
+	mustAddValue(ds, tag.ReferringPhysicianName, "Smith^Jane")
 
 	// === Series Information ===
-	_ = ds.AddValue(tag.SeriesInstanceUID, "1.2.826.0.1.3680043.10.1142.1.1")
-	_ = ds.AddValue(tag.SeriesNumber, uint16(1))
-	_ = ds.AddValue(tag.SeriesDescription, "CT Chest")
-	_ = ds.AddValue(tag.Modality, "CT")
-	_ = ds.AddValue(tag.SeriesDate, "20250101")
-	_ = ds.AddValue(tag.SeriesTime, "120000")
+	mustAddValue(ds, tag.SeriesInstanceUID, "1.2.826.0.1.3680043.10.1142.1.1")
+	mustAddValue(ds, tag.SeriesNumber, uint16(1))
+	mustAddValue(ds, tag.SeriesDescription, "CT Chest")
+	mustAddValue(ds, tag.Modality, "CT")
+	mustAddValue(ds, tag.SeriesDate, "20250101")
+	mustAddValue(ds, tag.SeriesTime, "120000")
 
 	// === Instance Information ===
 	// CT Image Storage SOP Class UID
-	_ = ds.AddValue(tag.SOPClassUID, "1.2.840.10008.5.1.4.1.1.2")
-	_ = ds.AddValue(tag.SOPInstanceUID, "1.2.826.0.1.3680043.10.1142.1.1.1")
-	_ = ds.AddValue(tag.InstanceNumber, uint16(1))
-	_ = ds.AddValue(tag.ContentDate, "20250101")
-	_ = ds.AddValue(tag.ContentTime, "120000")
+	mustAddValue(ds, tag.SOPClassUID, "1.2.840.10008.5.1.4.1.1.2")
+	mustAddValue(ds, tag.SOPInstanceUID, "1.2.826.0.1.3680043.10.1142.1.1.1")
+	mustAddValue(ds, tag.InstanceNumber, uint16(1))
+	mustAddValue(ds, tag.ContentDate, "20250101")
+	mustAddValue(ds, tag.ContentTime, "120000")
 
 	// === Image Information ===
-	_ = ds.AddValue(tag.ImageType, []string{"ORIGINAL", "PRIMARY", "AXIAL"})
+	mustAddValue(ds, tag.ImageType, []string{"ORIGINAL", "PRIMARY", "AXIAL"})
 
 	// Image dimensions - using a smaller size for demo (128x128)
 	rows := uint16(128)
 	columns := uint16(128)
-	_ = ds.AddValue(tag.Rows, rows)
-	_ = ds.AddValue(tag.Columns, columns)
-	_ = ds.AddValue(tag.BitsAllocated, uint16(16))
-	_ = ds.AddValue(tag.BitsStored, uint16(16))
-	_ = ds.AddValue(tag.HighBit, uint16(15))
-	_ = ds.AddValue(tag.PixelRepresentation, uint16(0)) // 0 = unsigned
-	_ = ds.AddValue(tag.SamplesPerPixel, uint16(1))
-	_ = ds.AddValue(tag.PhotometricInterpretation, "MONOCHROME2")
+	mustAddValue(ds, tag.Rows, rows)
+	mustAddValue(ds, tag.Columns, columns)
+	mustAddValue(ds, tag.BitsAllocated, uint16(16))
+	mustAddValue(ds, tag.BitsStored, uint16(16))
+	mustAddValue(ds, tag.HighBit, uint16(15))
+	mustAddValue(ds, tag.PixelRepresentation, uint16(0)) // 0 = unsigned
+	mustAddValue(ds, tag.SamplesPerPixel, uint16(1))
+	mustAddValue(ds, tag.PhotometricInterpretation, "MONOCHROME2")
 
 	// === Pixel Data ===
 	// Create sample pixel data (gradient pattern)
@@ -91,12 +91,14 @@ func main() {
 		pixelData[i*2+1] = byte((value >> 8) & 0xFF)
 	}
 
-	_ = ds.AddValueWithVR(tag.PixelData, vr.OW, pixelData)
+	if err := ds.AddValueWithVR(tag.PixelData, vr.OW, pixelData); err != nil {
+		log.Fatalf("Failed to add PixelData: %v", err)
+	}
 
 	// === Equipment Information ===
-	_ = ds.AddValue(tag.Manufacturer, "Sample Manufacturer")
-	_ = ds.AddValue(tag.ManufacturerModelName, "Sample Model")
-	_ = ds.AddValue(tag.SoftwareVersions, "1.0")
+	mustAddValue(ds, tag.Manufacturer, "Sample Manufacturer")
+	mustAddValue(ds, tag.ManufacturerModelName, "Sample Model")
+	mustAddValue(ds, tag.SoftwareVersions, "1.0")
 
 	// Write to file with explicit VR little endian
 	err := writer.WriteFile(*outputPath, ds,
@@ -112,4 +114,12 @@ func main() {
 	log.Println("  - Patient demographics")
 	log.Println("  - Study, Series, and Instance information")
 	log.Println("  - Image attributes and equipment information")
+}
+
+// mustAddValue adds a value and stops the program on the first rejected value,
+// so a validation failure cannot silently produce an incomplete file.
+func mustAddValue(ds *dataset.Dataset, t *tag.Tag, value any) {
+	if err := ds.AddValue(t, value); err != nil {
+		log.Fatalf("Failed to add %s: %v", t, err)
+	}
 }

@@ -9,59 +9,36 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cocosip/go-dicom/cmd/internal/version"
+	"github.com/cocosip/go-dicom/cmd/internal/cli"
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 )
 
+var verbose = flag.Bool("v", false, "Verbose output")
+
 func main() {
-	// Define flags
-	showVersion := flag.Bool("version", false, "Show version information")
-	showHelp := flag.Bool("help", false, "Show help information")
-	verbose := flag.Bool("v", false, "Verbose output")
+	os.Exit(cli.Command{
+		Name:    "dicominfo",
+		Usage:   "dicominfo [options] <dicom-file>",
+		MinArgs: 1,
+		MaxArgs: 1,
+	}.Run(run))
+}
 
-	flag.Parse()
-
-	// Show version
-	if *showVersion {
-		fmt.Printf("dicominfo version %s\n", version.String())
-		os.Exit(0)
-	}
-
-	// Show help
-	if *showHelp || flag.NArg() == 0 {
-		printUsage()
-		os.Exit(0)
-	}
-
+func run() error {
 	// Get input file
 	inputFile := flag.Arg(0)
 
 	// Parse DICOM file
 	result, err := parser.ParseFile(inputFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to parse DICOM file: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to parse DICOM file: %w", err)
 	}
 
 	// Print file information
 	printFileInfo(result, *verbose)
-}
-
-func printUsage() {
-	fmt.Println("Usage: dicominfo [options] <dicom-file>")
-	fmt.Println()
-	fmt.Println("Display information about a DICOM file")
-	fmt.Println()
-	fmt.Println("Options:")
-	fmt.Println("  -version    Show version information")
-	fmt.Println("  -help       Show this help message")
-	fmt.Println("  -v          Verbose output")
-	fmt.Println()
-	fmt.Println("Example:")
-	fmt.Println("  dicominfo image.dcm")
-	fmt.Println("  dicominfo -v image.dcm")
+	return nil
 }
 
 func printFileInfo(result *parser.ParseResult, verbose bool) {

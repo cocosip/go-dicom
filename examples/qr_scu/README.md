@@ -176,6 +176,11 @@ C-FIND Results (STUDY level):
 === Query/Retrieve workflow completed successfully ===
 ```
 
+A final `0xB000` response (`sub-operations complete, one or more failures`)
+is a DICOM *Warning*, not a success: `CMove`/`CGet` then return a
+`*client.StatusError` whose `Status.IsWarning()` is true and this example
+exits non-zero, printing the failed/warning sub-operation counts it received.
+
 ## Architecture Notes
 
 ### C-GET Workflow

@@ -24,7 +24,6 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
@@ -416,8 +415,10 @@ func generateFilePath(ds *dataset.Dataset, sopInstanceUID string) string {
 
 // saveDICOMFile saves a dataset to a DICOM file
 func saveDICOMFile(filePath string, ds *dataset.Dataset) error {
-	// Use Explicit VR Little Endian as default transfer syntax
-	if err := writer.WriteFile(filePath, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+	// No explicit transfer syntax: the writer uses the syntax recorded on the
+	// received dataset (ds.InternalTransferSyntax), so the stored file matches
+	// what was negotiated instead of always being Explicit VR Little Endian.
+	if err := writer.WriteFile(filePath, ds); err != nil {
 		return fmt.Errorf("failed to write dataset: %w", err)
 	}
 

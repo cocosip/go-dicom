@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -41,6 +42,9 @@ func runCommand(args []string, stdout io.Writer) error {
 	supplementPath := flags.String("supplement", "", "optional path to supplemental standard dictionary XML rows")
 	root := flags.String("root", "", "repository root receiving generated files")
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 	if *standardPath == "" || *privatePath == "" || *root == "" {

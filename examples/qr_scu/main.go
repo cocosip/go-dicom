@@ -24,7 +24,6 @@ import (
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
-	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
@@ -143,6 +142,9 @@ func main() {
 		// Allow any in-flight C-STORE sub-operations to finish before stopping.
 		time.Sleep(2 * time.Second)
 		stopSCP()
+		if receivedCount.Load() == 0 {
+			log.Fatal("C-MOVE completed but no DICOM instances were received")
+		}
 		fmt.Println("✓ C-MOVE completed")
 		fmt.Printf("✓ Received %d DICOM instance(s)\n", receivedCount.Load())
 	case retrieveModeGet:
@@ -152,6 +154,9 @@ func main() {
 		fmt.Println("  (C-STORE sub-operations received on the same association)")
 		if err := performCGet(ctx, targetStudyUID); err != nil {
 			log.Fatalf("C-GET failed: %v", err)
+		}
+		if receivedCount.Load() == 0 {
+			log.Fatal("C-GET completed but no DICOM instances were received")
 		}
 		fmt.Println("✓ C-GET completed")
 		fmt.Printf("\n✓ Received %d DICOM instance(s)\n", receivedCount.Load())
@@ -193,23 +198,22 @@ func startEmbeddedStoreSCP(parentCtx context.Context) (stop func(), err error) {
 
 	ctx, cancel := context.WithCancel(parentCtx)
 
-	ready := make(chan error, 1)
+	serveErr := make(chan error, 1)
 	go func() {
-		// Signal that the goroutine has started; the OS bind happens inside
-		// ListenAndServe, so we give it a short grace period.
-		ready <- nil
-		if serveErr := srv.ListenAndServe(ctx); serveErr != nil && ctx.Err() == nil {
-			log.Printf("Storage SCP error: %v", serveErr)
+		serveErrValue := srv.ListenAndServe(ctx)
+		if serveErrValue != nil && ctx.Err() == nil {
+			log.Printf("Storage SCP error: %v", serveErrValue)
 		}
+		serveErr <- serveErrValue
 	}()
 
-	if startErr := <-ready; startErr != nil {
+	// IsRunning only becomes true after the TCP listener is bound, so waiting
+	// for it (or for a bind error) keeps the caller from announcing a port that
+	// was never opened.
+	if startErr := waitForListener(ctx, srv, serveErr); startErr != nil {
 		cancel()
-		return nil, startErr
+		return nil, fmt.Errorf("listen on port %d: %w", *storePort, startErr)
 	}
-
-	// Brief pause so the TCP listener is fully bound before the caller proceeds.
-	time.Sleep(200 * time.Millisecond)
 
 	stop = func() {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -224,6 +228,29 @@ func startEmbeddedStoreSCP(parentCtx context.Context) (stop func(), err error) {
 	}
 
 	return stop, nil
+}
+
+func waitForListener(ctx context.Context, srv *server.Server, serveErr <-chan error) error {
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for !srv.IsRunning() {
+		select {
+		case err := <-serveErr:
+			if err == nil {
+				return fmt.Errorf("server stopped before it started listening")
+			}
+			return err
+		case <-ticker.C:
+		case <-deadline.C:
+			return fmt.Errorf("server did not start listening within 5s")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 // acceptAllContexts is an association negotiator that accepts every proposed
@@ -294,12 +321,30 @@ func performCMove(ctx context.Context, studyUID string) error {
 		return fmt.Errorf("build C-MOVE identifier: %w", err)
 	}
 
-	return c.CMove(ctx, dimse.QueryRetrieveLevelStudy, strings.TrimSpace(*moveDestination), identifier,
+	var failedSubOps, warningSubOps uint16
+	err := c.CMove(ctx, dimse.QueryRetrieveLevelStudy, strings.TrimSpace(*moveDestination), identifier,
 		func(remaining, completed, failed, warning uint16) bool {
+			// Counts are monotonic; keep the largest seen so a peer that omits the
+			// totals on the final response cannot mask earlier failures.
+			failedSubOps = max(failedSubOps, failed)
+			warningSubOps = max(warningSubOps, warning)
 			fmt.Printf("  Progress: remaining=%d completed=%d failed=%d warning=%d\n",
 				remaining, completed, failed, warning)
 			return true
 		})
+	if err != nil {
+		return err
+	}
+	// A 0xB000 "sub-operations complete with failures" final status already came
+	// back as a warning StatusError; keep checking the counts too so a peer that
+	// reports failures under a Success status cannot slip through.
+	if failedSubOps > 0 {
+		return fmt.Errorf("C-MOVE finished with %d failed and %d warning sub-operation(s)", failedSubOps, warningSubOps)
+	}
+	if warningSubOps > 0 {
+		log.Printf("C-MOVE reported %d warning sub-operation(s)", warningSubOps)
+	}
+	return nil
 }
 
 func performCGet(ctx context.Context, studyUID string) error {
@@ -322,12 +367,30 @@ func performCGet(ctx context.Context, studyUID string) error {
 		return fmt.Errorf("build C-GET identifier: %w", err)
 	}
 
-	return c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
+	var failedSubOps, warningSubOps uint16
+	err := c.CGet(ctx, dimse.QueryRetrieveLevelStudy, identifier,
 		func(remaining, completed, failed, warning uint16) bool {
+			// Counts are monotonic; keep the largest seen so a peer that omits the
+			// totals on the final response cannot mask earlier failures.
+			failedSubOps = max(failedSubOps, failed)
+			warningSubOps = max(warningSubOps, warning)
 			fmt.Printf("  Progress: remaining=%d completed=%d failed=%d warning=%d\n",
 				remaining, completed, failed, warning)
 			return true
 		})
+	if err != nil {
+		return err
+	}
+	// A 0xB000 "sub-operations complete with failures" final status already came
+	// back as a warning StatusError; keep checking the counts too so a peer that
+	// reports failures under a Success status cannot slip through.
+	if failedSubOps > 0 {
+		return fmt.Errorf("C-GET finished with %d failed and %d warning sub-operation(s)", failedSubOps, warningSubOps)
+	}
+	if warningSubOps > 0 {
+		log.Printf("C-GET reported %d warning sub-operation(s)", warningSubOps)
+	}
+	return nil
 }
 
 // handleCStoreSubOperation handles a C-STORE request sent by the SCP back over the
@@ -350,7 +413,9 @@ func handleCStoreSubOperation(_ context.Context, req *dimse.CStoreRequest) (*dim
 		log.Printf("Receiving C-STORE: SOP=%s", sopInstanceUID)
 	}
 
-	if err := writer.WriteFile(filePath, ds, writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian)); err != nil {
+	// No explicit transfer syntax: the writer uses the syntax recorded on the
+	// received dataset so a compressed C-STORE keeps its encapsulated encoding.
+	if err := writer.WriteFile(filePath, ds); err != nil {
 		log.Printf("Failed to write file: %v", err)
 		return dimse.NewCStoreResponseFromRequest(req, status.CStoreErrorCannotUnderstand), err
 	}

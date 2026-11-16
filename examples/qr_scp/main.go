@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -68,8 +69,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load query index: %v", err)
 	}
-	if len(records) == 0 {
+	if strings.TrimSpace(*dataDir) == "" {
 		records = sampleRecords()
+	} else if len(records) == 0 {
+		log.Fatalf("-data-dir %q contains no indexable DICOM files", *dataDir)
 	}
 
 	routes, err := parseAERoutes(*aeRoutes)
@@ -83,7 +86,7 @@ func main() {
 	fmt.Printf("Port:           %d\n", *port)
 	fmt.Printf("AE Title:       QRSCP\n")
 	fmt.Printf("Indexed Files:  %d\n", len(records))
-	if *dataDir == "" {
+	if strings.TrimSpace(*dataDir) == "" {
 		fmt.Printf("Data Directory: (using built-in sample data)\n")
 		fmt.Printf("                Note: Use -data-dir to load real DICOM files\n")
 	} else {
@@ -655,11 +658,14 @@ func parseAERoutes(raw string) (map[string]aeRoute, error) {
 		if lastColon < 0 {
 			return nil, fmt.Errorf("invalid address %q in entry %q: expected host:port", addr, entry)
 		}
-		host := addr[:lastColon]
+		host := strings.TrimSpace(addr[:lastColon])
 		portStr := addr[lastColon+1:]
+		if host == "" {
+			return nil, fmt.Errorf("invalid address %q in entry %q: host is empty", addr, entry)
+		}
 
-		var p int
-		if _, err := fmt.Sscanf(portStr, "%d", &p); err != nil || p <= 0 || p > 65535 {
+		p, err := strconv.Atoi(portStr)
+		if err != nil || p <= 0 || p > 65535 {
 			return nil, fmt.Errorf("invalid port %q in entry %q", portStr, entry)
 		}
 

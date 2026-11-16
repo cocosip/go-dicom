@@ -37,17 +37,19 @@ var (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Parse command-line flags
 	flag.Parse()
 
 	// Validate parameters
 	if !*verifyOnly && *dicomFile == "" && *dicomDir == "" {
-		fmt.Println("Error: Either -file or -dir must be specified")
-		fmt.Println("Usage:")
-		flag.PrintDefaults()
-		fmt.Println("\nPress Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("either -file or -dir must be specified")
 	}
 
 	// Create context with timeout
@@ -76,7 +78,7 @@ func main() {
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
 	); err != nil {
-		log.Fatalf("add Verification presentation context: %v", err)
+		return fmt.Errorf("add Verification presentation context: %w", err)
 	}
 
 	// CT Image Storage
@@ -86,7 +88,7 @@ func main() {
 		uid.ExplicitVRLittleEndian.UID(),
 		uid.JPEGLosslessSV1.UID(),
 	); err != nil {
-		log.Fatalf("add CT presentation context: %v", err)
+		return fmt.Errorf("add CT presentation context: %w", err)
 	}
 
 	// MR Image Storage
@@ -95,7 +97,7 @@ func main() {
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
 	); err != nil {
-		log.Fatalf("add MR presentation context: %v", err)
+		return fmt.Errorf("add MR presentation context: %w", err)
 	}
 
 	// Secondary Capture Image Storage (commonly used)
@@ -104,16 +106,13 @@ func main() {
 		uid.ImplicitVRLittleEndian.UID(),
 		uid.ExplicitVRLittleEndian.UID(),
 	); err != nil {
-		log.Fatalf("add Secondary Capture presentation context: %v", err)
+		return fmt.Errorf("add Secondary Capture presentation context: %w", err)
 	}
 
 	// Connect to server
 	fmt.Printf("Connecting to %s:%d...\n", *host, *port)
 	if err := c.Connect(ctx, *host, *port); err != nil {
-		fmt.Printf("Failed to connect: %v\n", err)
-		fmt.Println("Press Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("connect to %s:%d: %w", *host, *port, err)
 	}
 	defer func() {
 		if err := c.Close(); err != nil {
@@ -137,10 +136,7 @@ func main() {
 	// Perform C-ECHO to verify connection
 	fmt.Println("Performing C-ECHO verification...")
 	if err := c.CEcho(ctx); err != nil {
-		fmt.Printf("C-ECHO failed: %v\n", err)
-		fmt.Println("Press Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("C-ECHO failed: %w", err)
 	}
 	fmt.Println("C-ECHO successful!")
 	fmt.Println()
@@ -148,7 +144,7 @@ func main() {
 	// If verify-only mode, exit here
 	if *verifyOnly {
 		fmt.Println("Verification complete. Exiting.")
-		return
+		return nil
 	}
 
 	// Collect files to send
@@ -159,19 +155,13 @@ func main() {
 	if *dicomDir != "" {
 		files, err := findDICOMFiles(*dicomDir)
 		if err != nil {
-			fmt.Printf("Failed to scan directory: %v\n", err)
-			fmt.Println("Press Enter to exit...")
-			_, _ = fmt.Scanln()
-			return
+			return fmt.Errorf("scan directory %q: %w", *dicomDir, err)
 		}
 		filesToSend = append(filesToSend, files...)
 	}
 
 	if len(filesToSend) == 0 {
-		fmt.Println("No DICOM files to send.")
-		fmt.Println("Press Enter to exit...")
-		_, _ = fmt.Scanln()
-		return
+		return fmt.Errorf("no DICOM files found to send")
 	}
 
 	// Send files
@@ -183,7 +173,7 @@ func main() {
 		fmt.Printf("[%d/%d] Processing: %s\n", i+1, len(filesToSend), filepath.Base(filePath))
 
 		if err := sendDICOMFile(ctx, c, filePath); err != nil {
-			fmt.Printf("  ERROR: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  ERROR: %v\n", err)
 			failureCount++
 		} else {
 			fmt.Println("  SUCCESS")
@@ -197,8 +187,11 @@ func main() {
 	fmt.Printf("Total files: %d\n", len(filesToSend))
 	fmt.Printf("Successful:  %d\n", successCount)
 	fmt.Printf("Failed:      %d\n", failureCount)
-	fmt.Println("\nPress Enter to exit...")
-	_, _ = fmt.Scanln()
+
+	if failureCount > 0 {
+		return fmt.Errorf("%d of %d file(s) failed to send", failureCount, len(filesToSend))
+	}
+	return nil
 }
 
 // sendDICOMFile reads and sends a single DICOM file
