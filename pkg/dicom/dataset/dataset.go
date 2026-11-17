@@ -139,25 +139,14 @@ func (ds *Dataset) Add(elem element.Element) error {
 	if elem.Tag() == nil {
 		return validationError(ValidationStructural, nil, fmt.Errorf("element tag is nil"))
 	}
-	ds.ensureItems()
-
-	tagValue := elem.Tag().ToUint32()
-	if _, exists := ds.items[tagValue]; exists {
-		return fmt.Errorf("element with tag %s already exists", elem.Tag())
-	}
-	if ds.validationEnabled() {
-		if err := validateElement(elem, nil); err != nil {
-			return err
+	// Check for a duplicate before validation, so an existing tag is reported as
+	// such even when the new element would also fail validation.
+	if ds.items != nil {
+		if _, exists := ds.items[elem.Tag().ToUint32()]; exists {
+			return fmt.Errorf("element with tag %s already exists", elem.Tag())
 		}
 	}
-
-	ds.items[tagValue] = elem
-	ds.inheritElementContext(elem)
-	if tagValue == tag.SpecificCharacterSet.ToUint32() {
-		ds.refreshChildTextEncodings()
-	}
-	ds.markDirty()
-	return nil
+	return ds.AddOrUpdate(elem)
 }
 
 // AddOrUpdate adds an element to the dataset, or updates it if it already exists.

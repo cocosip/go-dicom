@@ -150,12 +150,6 @@ type Config struct {
 	// same association, so this handler must be set to receive the images.
 	CStoreHandler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)
 
-	// KeepConnectionOnPeerRelease is deprecated and has no effect.
-	//
-	// After answering a peer A-RELEASE-RQ with A-RELEASE-RP no further P-DATA may
-	// be sent, so the association is always closed (PS3.8 7.2.2).
-	KeepConnectionOnPeerRelease bool
-
 	// AsynchronousOperations requests the DIMSE asynchronous operations window.
 	AsynchronousOperations *association.AsynchronousOperationsWindow
 
@@ -320,19 +314,6 @@ func WithImplementationVersionName(name string) Option {
 func WithCStoreHandler(handler func(context.Context, *dimse.CStoreRequest) (*dimse.CStoreResponse, error)) Option {
 	return func(o *Config) {
 		o.CStoreHandler = handler
-	}
-}
-
-// WithKeepConnectionOnPeerRelease is deprecated and has no effect.
-//
-// After the client answers a peer A-RELEASE-RQ with A-RELEASE-RP it must not
-// send any further P-DATA, so the association and transport are always closed
-// (PS3.8 7.2.2).
-//
-// Deprecated: keeping the connection open after a release is not conformant.
-func WithKeepConnectionOnPeerRelease(keep bool) Option {
-	return func(o *Config) {
-		o.KeepConnectionOnPeerRelease = keep
 	}
 }
 
@@ -547,71 +528,27 @@ func (c *Client) activeService() (*service.Service, error) {
 // If the peer does not acknowledge the release in time, Close returns that
 // error after cleaning up the local connection state.
 func (c *Client) Close() error {
-	c.mu.Lock()
-	if c.state == clientConnecting {
-		cancel := c.connectCancel
-		conn := c.conn
-		done := c.transitionDone
-		c.state = clientClosing
-		c.connected = false
-		c.mu.Unlock()
-		if cancel != nil {
-			cancel()
-		}
-		if conn != nil {
-			_ = conn.Close()
-		}
-		if done != nil {
-			<-done
-		}
-		return nil
-	}
-	if c.state == clientClosing {
-		done := c.transitionDone
-		c.mu.Unlock()
-		if done != nil {
-			<-done
-		}
-		return nil
-	}
-	if !c.connected {
-		c.mu.Unlock()
-		return nil
-	}
-	svc := c.service
-	conn := c.conn
-	c.connected = false
-	c.service = nil
-	c.assoc = nil
-	c.conn = nil
-	c.state = clientClosing
-	c.transitionDone = make(chan struct{})
-	done := c.transitionDone
-	c.mu.Unlock()
-
-	// Try graceful release with a short timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	var err error
-	if svc != nil {
-		err = svc.GracefulRelease(ctx)
-		// Service layer closes the connection via GracefulRelease; avoid double close.
-		conn = nil
-	}
-
-	if conn != nil {
-		if closeErr := conn.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}
-
-	c.finishTransition(done)
-	return err
+	return c.teardown(ctx, func(ctx context.Context, svc *service.Service) error {
+		return svc.GracefulRelease(ctx)
+	})
 }
 
 // Abort aborts the association and closes the connection.
 func (c *Client) Abort(ctx context.Context) error {
+	return c.teardown(ctx, func(ctx context.Context, svc *service.Service) error {
+		// Source 0 = service-user (SCU initiated), reason 0 = not-specified.
+		return svc.Abort(ctx, 0, 0)
+	})
+}
+
+// teardown performs the state transitions shared by Close and Abort: it stops a
+// pending connect, waits for an in-flight transition, detaches the service and
+// connection, and finalizes the transition. finish runs the association
+// release/abort on the detached service; a nil service means the connection is
+// closed directly.
+func (c *Client) teardown(ctx context.Context, finish func(context.Context, *service.Service) error) error {
 	c.mu.Lock()
 	if c.state == clientConnecting {
 		cancel := c.connectCancel
@@ -656,10 +593,9 @@ func (c *Client) Abort(ctx context.Context) error {
 
 	var err error
 	if svc != nil {
-		// Source: 0 = service-user (SCU initiated)
-		// Reason: 0 = not-specified
-		err = svc.Abort(ctx, 0, 0)
-		// Service layer closes the connection via Abort; avoid double close.
+		err = finish(ctx, svc)
+		// The service layer closes the connection on release/abort; avoid a
+		// double close.
 		conn = nil
 	}
 

@@ -306,119 +306,14 @@ func (a *AAssociateRQ) encodePresentationContext(w io.Writer, pc *PresentationCo
 	return writeItem(w, ItemTypePresentationContextRQ, buf.Bytes())
 }
 
-// encodeUserInformation encodes the user information item.
+// encodeUserInformation encodes the user information item; the sub-items are
+// shared with A-ASSOCIATE-AC (see encodeUserInformationItems).
 func (a *AAssociateRQ) encodeUserInformation(w io.Writer, ui *UserInformation) error {
-	var buf bytes.Buffer
-
-	// Maximum Length Sub-item
-	maxLenData := make([]byte, 4)
-	binary.BigEndian.PutUint32(maxLenData, advertisedMaximumLength(ui.MaximumLength))
-	if err := writeItem(&buf, ItemTypeMaximumLength, maxLenData); err != nil {
-		return fmt.Errorf("writing maximum length: %w", err)
+	items, err := encodeUserInformationItems(ui, true)
+	if err != nil {
+		return err
 	}
-
-	// Implementation Class UID Sub-item
-	if ui.ImplementationClassUID != "" {
-		if err := writeItem(&buf, ItemTypeImplementationClassUID, []byte(ui.ImplementationClassUID)); err != nil {
-			return fmt.Errorf("writing implementation class UID: %w", err)
-		}
-	}
-
-	// Asynchronous Operations Window Sub-item (optional)
-	if ui.AsynchronousOperations != nil {
-		asyncData := make([]byte, 4)
-		binary.BigEndian.PutUint16(asyncData[0:2], ui.AsynchronousOperations.MaximumNumberOperationsInvoked)
-		binary.BigEndian.PutUint16(asyncData[2:4], ui.AsynchronousOperations.MaximumNumberOperationsPerformed)
-		if err := writeItem(&buf, ItemTypeAsynchronousOperationsWindow, asyncData); err != nil {
-			return fmt.Errorf("writing async operations: %w", err)
-		}
-	}
-
-	// SCP/SCU Role Selection Sub-items (optional)
-	for _, role := range ui.SCPSCURoleSelections {
-		var roleData bytes.Buffer
-		// SOP Class UID length (2 bytes)
-		if len(role.SOPClassUID) > int(math.MaxUint16) {
-			return fmt.Errorf("SOPClassUID length too large: %d", len(role.SOPClassUID))
-		}
-		_ = binary.Write(&roleData, binary.BigEndian, uint16(len(role.SOPClassUID))) // #nosec G115 -- bounded by check above
-		// SOP Class UID
-		roleData.WriteString(role.SOPClassUID)
-		// SCU Role (1 byte)
-		roleData.WriteByte(role.SCURole)
-		// SCP Role (1 byte)
-		roleData.WriteByte(role.SCPRole)
-
-		if err := writeItem(&buf, ItemTypeSCPSCURoleSelection, roleData.Bytes()); err != nil {
-			return fmt.Errorf("writing role selection: %w", err)
-		}
-	}
-
-	// Implementation Version Name Sub-item (optional). Written after 0x53/0x54 so
-	// the sub-items remain in ascending item-type order (PS3.8 9.3.2.3 warns
-	// that older applications may expect that order).
-	if ui.ImplementationVersionName != "" {
-		if err := writeItem(&buf, ItemTypeImplementationVersionName, []byte(ui.ImplementationVersionName)); err != nil {
-			return fmt.Errorf("writing implementation version name: %w", err)
-		}
-	}
-
-	// Extended Negotiation Sub-items (optional)
-	for _, ext := range ui.ExtendedNegotiations {
-		var extData bytes.Buffer
-		// SOP Class UID length (2 bytes)
-		if len(ext.SOPClassUID) > int(math.MaxUint16) {
-			return fmt.Errorf("ExtendedNegotiation SOPClassUID length too large: %d", len(ext.SOPClassUID))
-		}
-		_ = binary.Write(&extData, binary.BigEndian, uint16(len(ext.SOPClassUID))) // #nosec G115 -- bounded by check above
-		// SOP Class UID
-		extData.WriteString(ext.SOPClassUID)
-		// Service Class Application Information
-		extData.Write(ext.ServiceClassAppInfo)
-
-		if err := writeItem(&buf, ItemTypeExtendedNegotiation, extData.Bytes()); err != nil {
-			return fmt.Errorf("writing extended negotiation: %w", err)
-		}
-	}
-
-	// SOP Class Common Extended Negotiation Sub-items are valid only in RQ.
-	for _, negotiation := range ui.CommonExtendedNegotiations {
-		if err := encodeCommonExtendedNegotiation(&buf, negotiation); err != nil {
-			return fmt.Errorf("writing common extended negotiation: %w", err)
-		}
-	}
-
-	// User Identity Negotiation Sub-item (optional)
-	if ui.UserIdentity != nil {
-		var idData bytes.Buffer
-		// User Identity Type (1 byte)
-		idData.WriteByte(ui.UserIdentity.UserIdentityType)
-		// Positive Response Requested (1 byte)
-		idData.WriteByte(ui.UserIdentity.PositiveResponseRequested)
-		// Primary Field Length (2 bytes)
-		if len(ui.UserIdentity.PrimaryField) > int(math.MaxUint16) {
-			return fmt.Errorf("PrimaryField length too large: %d", len(ui.UserIdentity.PrimaryField))
-		}
-		_ = binary.Write(&idData, binary.BigEndian, uint16(len(ui.UserIdentity.PrimaryField))) // #nosec G115 -- bounded by check above
-		// Primary Field
-		idData.Write(ui.UserIdentity.PrimaryField)
-		// Secondary Field Length (2 bytes)
-		if len(ui.UserIdentity.SecondaryField) > int(math.MaxUint16) {
-			return fmt.Errorf("SecondaryField length too large: %d", len(ui.UserIdentity.SecondaryField))
-		}
-		_ = binary.Write(&idData, binary.BigEndian, uint16(len(ui.UserIdentity.SecondaryField))) // #nosec G115 -- bounded by check above
-		// Secondary Field (only if present)
-		if len(ui.UserIdentity.SecondaryField) > 0 {
-			idData.Write(ui.UserIdentity.SecondaryField)
-		}
-
-		if err := writeItem(&buf, ItemTypeUserIdentityNegotiation, idData.Bytes()); err != nil {
-			return fmt.Errorf("writing user identity: %w", err)
-		}
-	}
-
-	// Write the user information item
-	return writeItem(w, ItemTypeUserInformation, buf.Bytes())
+	return writeItem(w, ItemTypeUserInformation, items)
 }
 
 // Decode decodes an A-ASSOCIATE-RQ from a RawPDU.
@@ -640,124 +535,11 @@ func (a *AAssociateRQ) decodePresentationContext(data []byte, handler DecodeWarn
 	return pc, nil
 }
 
-// decodeUserInformation decodes the user information item.
+// decodeUserInformation decodes the user information item; the sub-items are
+// shared with A-ASSOCIATE-AC (see decodeUserInformationItems).
 func (a *AAssociateRQ) decodeUserInformation(data []byte, handler DecodeWarningHandler) (*UserInformation, error) {
-	ui := &UserInformation{
-		SCPSCURoleSelections:       []SCPSCURoleSelection{},
-		ExtendedNegotiations:       []ExtendedNegotiation{},
-		CommonExtendedNegotiations: []CommonExtendedNegotiation{},
-	}
-	maximumLengthSeen := false
-	implementationClassUIDSeen := false
-	implementationVersionNameSeen := false
-	asynchronousOperationsSeen := false
-	userIdentitySeen := false
-	seenRoleSelections := make(map[string]struct{})
-
-	r := bytes.NewReader(data)
-
-	// Read sub-items
-	for {
-		itemType, itemData, err := readItem(r)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, fmt.Errorf("reading user information sub-item: %w", err)
-		}
-
-		switch itemType {
-		case ItemTypeMaximumLength:
-			// PS3.8 D.1.1: only one Maximum Length Sub-Item shall be present.
-			if maximumLengthSeen {
-				return nil, fmt.Errorf("duplicate maximum length sub-item in user information")
-			}
-			if len(itemData) != 4 {
-				return nil, fmt.Errorf("invalid maximum length data: %d bytes", len(itemData))
-			}
-			maximumLengthSeen = true
-			ui.MaximumLength = binary.BigEndian.Uint32(itemData)
-
-		case ItemTypeImplementationClassUID:
-			// PS3.8 D.1.2: only one Implementation Class UID Sub-Item shall be present.
-			if implementationClassUIDSeen {
-				return nil, fmt.Errorf("duplicate implementation class UID sub-item in user information")
-			}
-			implementationClassUIDSeen = true
-			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
-
-		case ItemTypeImplementationVersionName:
-			// PS3.8 D.1.3: only one Implementation Version Name Sub-Item shall
-			// be present.
-			if implementationVersionNameSeen {
-				return nil, fmt.Errorf("duplicate implementation version name sub-item in user information")
-			}
-			implementationVersionNameSeen = true
-			ui.ImplementationVersionName = string(itemData)
-
-		case ItemTypeAsynchronousOperationsWindow:
-			// PS3.8 D.3.3.2: only one Asynchronous Operations Window Sub-Item
-			// shall be present.
-			if asynchronousOperationsSeen {
-				return nil, fmt.Errorf("duplicate asynchronous operations window sub-item in user information")
-			}
-			asynchronousOperationsSeen = true
-			if len(itemData) != 4 {
-				return nil, fmt.Errorf("invalid asynchronous operations window: %d bytes", len(itemData))
-			}
-			ui.AsynchronousOperations = &AsynchronousOperationsWindow{
-				MaximumNumberOperationsInvoked:   binary.BigEndian.Uint16(itemData[0:2]),
-				MaximumNumberOperationsPerformed: binary.BigEndian.Uint16(itemData[2:4]),
-			}
-
-		case ItemTypeSCPSCURoleSelection:
-			role, err := decodeRoleSelection(itemData)
-			if err != nil {
-				return nil, fmt.Errorf("decoding role selection: %w", err)
-			}
-			// PS3.7 D.3.3.4.1: at most one SCP/SCU Role Selection Sub-Item per
-			// SOP Class UID in the A-ASSOCIATE-RQ.
-			if _, duplicate := seenRoleSelections[role.SOPClassUID]; duplicate {
-				return nil, fmt.Errorf("duplicate SCP/SCU role selection sub-item for SOP Class %s", role.SOPClassUID)
-			}
-			seenRoleSelections[role.SOPClassUID] = struct{}{}
-			ui.SCPSCURoleSelections = append(ui.SCPSCURoleSelections, *role)
-
-		case ItemTypeExtendedNegotiation:
-			ext, err := decodeExtendedNegotiation(itemData)
-			if err != nil {
-				return nil, fmt.Errorf("decoding extended negotiation: %w", err)
-			}
-			ui.ExtendedNegotiations = append(ui.ExtendedNegotiations, *ext)
-
-		case ItemTypeCommonExtendedNegotiation:
-			negotiation, err := decodeCommonExtendedNegotiation(itemData)
-			if err != nil {
-				return nil, fmt.Errorf("decoding common extended negotiation: %w", err)
-			}
-			ui.CommonExtendedNegotiations = append(ui.CommonExtendedNegotiations, *negotiation)
-
-		case ItemTypeUserIdentityNegotiation:
-			// PS3.7 D.3.3.4: at most one User Identity Sub-Item.
-			if userIdentitySeen {
-				return nil, fmt.Errorf("duplicate user identity sub-item in user information")
-			}
-			userIdentitySeen = true
-			identity, err := decodeUserIdentity(itemData)
-			if err != nil {
-				return nil, fmt.Errorf("decoding user identity: %w", err)
-			}
-			ui.UserIdentity = identity
-
-		default:
-			reportDecodeWarning(handler, DecodeWarningUnknownUserInformationSubItem, itemType)
-		}
-	}
-
-	ui.hasMaximumLength = maximumLengthSeen
-	return ui, nil
+	return decodeUserInformationItems(data, true, handler)
 }
-
 func reportDecodeWarning(handler DecodeWarningHandler, code DecodeWarningCode, itemType byte) {
 	if handler != nil {
 		handler(DecodeWarning{Code: code, ItemType: itemType})

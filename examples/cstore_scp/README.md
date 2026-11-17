@@ -9,7 +9,7 @@ This example demonstrates how to receive DICOM files from DICOM clients using th
 - Receive and store DICOM files
 - Support for multiple concurrent connections
 - Validate called/calling AE titles during association negotiation
-- Organize received files by study date
+- Organize received files by study date or by calling AE title
 - Track server statistics
 - Graceful shutdown with a forced-connection fallback
 
@@ -49,6 +49,16 @@ go run main.go -organize-by-date -storage /data/dicom
 
 This will organize files as: `/data/dicom/YYYY/MM/DD/sopinstance.dcm`
 
+### Organize Files by Calling AE
+
+```bash
+go run main.go -organize-by-ae -storage /data/dicom
+```
+
+This will organize files as: `/data/dicom/NETPUSH/sopinstance.dcm`, one
+subdirectory per sending AE title. Both flags can be combined to nest the study
+date below the AE directory.
+
 ## Command Line Options
 
 | Option | Default | Description |
@@ -57,7 +67,7 @@ This will organize files as: `/data/dicom/YYYY/MM/DD/sopinstance.dcm`
 | `-storage` | ./received_dicom | Directory to store received files |
 | `-max-conn` | 10 | Maximum concurrent connections (0 = unlimited) |
 | `-verbose` | false | Enable verbose logging |
-| `-organize-by-ae` | false | Group files under a fixed `default_ae/` subdirectory (the C-STORE handler does not receive the association's calling AE) |
+| `-organize-by-ae` | false | Group files under a subdirectory named after the calling AE title (e.g. `NETPUSH/`) |
 | `-organize-by-date` | false | Organize files by study date (YYYY/MM/DD) |
 | `-called-ae` | (empty) | Expected called AE title (empty = disable validation) |
 | `-allow-calling-ae` | (empty) | Comma-separated calling AE whitelist (empty = allow all) |
@@ -156,15 +166,19 @@ Server stopped.
 
 ### Organized by AE Title
 
-`-organize-by-ae` currently places all files under a fixed `default_ae/`
-subdirectory because the C-STORE handler is not given the association's calling
-AE title; see the comment in `generateFilePath`.
+`-organize-by-ae` stores each sender's files under its calling AE title, which
+the handler reads from the association in the request context
+(`service.AssociationFromContext`). Characters outside `A-Z`, `a-z`, `0-9`, `-`
+and `_` are replaced with `_`, and an empty title maps to `unknown_ae`, so the
+AE title can never escape the storage directory.
 
 ```
 ./received_dicom/
-└── default_ae/
-    ├── 1.2.840.113619.2.55.3.12345.dcm
-    └── 1.2.840.113619.2.55.3.12346.dcm
+├── NETPUSH/
+│   ├── 1.2.840.113619.2.55.3.12345.dcm
+│   └── 1.2.840.113619.2.55.3.12346.dcm
+└── MODALITY_1/
+    └── 1.2.840.113619.2.55.3.12347.dcm
 ```
 
 ## Association Negotiation

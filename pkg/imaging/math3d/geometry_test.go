@@ -31,6 +31,55 @@ func TestVector3Operations(t *testing.T) {
 	}
 }
 
+func TestVector3Arithmetic(t *testing.T) {
+	a := Vector3{X: 1, Y: 2, Z: 3}
+	b := Vector3{X: 4, Y: 5, Z: 6}
+
+	if got := a.Add(b); got != (Vector3{X: 5, Y: 7, Z: 9}) {
+		t.Fatalf("Add() = %+v, want {5 7 9}", got)
+	}
+	if got := b.Sub(a); got != (Vector3{X: 3, Y: 3, Z: 3}) {
+		t.Fatalf("Sub() = %+v, want {3 3 3}", got)
+	}
+	if got := a.Scale(2); got != (Vector3{X: 2, Y: 4, Z: 6}) {
+		t.Fatalf("Scale() = %+v, want {2 4 6}", got)
+	}
+	if got := a.Dot(b); math.Abs(got-32) > testTolerance {
+		t.Fatalf("Dot() = %v, want 32", got)
+	}
+	if got := (Vector3{X: 3, Y: 4}).Distance(Point3{}); math.Abs(got-5) > testTolerance {
+		t.Fatalf("Distance() = %v, want 5", got)
+	}
+}
+
+func TestPoint3Arithmetic(t *testing.T) {
+	point := Point3{X: 1, Y: 2, Z: 3}
+	other := Point3{X: 4, Y: 6, Z: 8}
+
+	if got := point.Add(Vector3{X: 1, Y: -1, Z: 0}); !pointClose(got, Point3{X: 2, Y: 1, Z: 3}) {
+		t.Fatalf("Add() = %+v, want {2 1 3}", got)
+	}
+	if got := other.Sub(point); !vectorClose(got, Vector3{X: 3, Y: 4, Z: 5}) {
+		t.Fatalf("Sub() = %+v, want {3 4 5}", got)
+	}
+	if got := point.Dot(Vector3{X: 2, Y: 0, Z: 1}); math.Abs(got-5) > testTolerance {
+		t.Fatalf("Dot() = %v, want 5", got)
+	}
+	if got := point.Distance(Point3{X: 4, Y: 6, Z: 3}); math.Abs(got-5) > testTolerance {
+		t.Fatalf("Distance() = %v, want 5", got)
+	}
+}
+
+func TestBounds3Union(t *testing.T) {
+	union := (Bounds3{Min: Point3{X: 0, Y: 1, Z: 2}, Max: Point3{X: 3, Y: 4, Z: 5}}).
+		Union(Bounds3{Min: Point3{X: -1, Y: 2, Z: 1}, Max: Point3{X: 2, Y: 7, Z: 6}})
+
+	want := Bounds3{Min: Point3{X: -1, Y: 1, Z: 1}, Max: Point3{X: 3, Y: 7, Z: 6}}
+	if !pointClose(union.Min, want.Min) || !pointClose(union.Max, want.Max) {
+		t.Fatalf("Union() = %+v, want %+v", union, want)
+	}
+}
+
 func TestPlaneIntersectSegment(t *testing.T) {
 	plane, err := NewPlane(Vector3{Z: 1}, Point3{Z: 5})
 	if err != nil {

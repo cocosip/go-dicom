@@ -291,39 +291,15 @@ func mapThroughLUTWithModality(pd *Data, table lut.LUT, ignorePadding bool, moda
 		return nil, fmt.Errorf("unsupported BytesAllocated=%d for LUT mapping", bytesPerSample)
 	}
 
-	hasPadding := pd.Info.PixelPaddingValue != nil
-	padMin, padMax, _ := pixelPaddingRange(pd.Info)
-
-	result := make([][]byte, len(pd.frames))
-
-	for fi, frame := range pd.frames {
-		out := make([]byte, frameSampleCount(frame, pd.Info))
-
-		for idx := 0; idx < len(out); idx++ {
-			off := sampleOffset(idx, pd.Info)
-			if pd.Info.BitsAllocated != 1 && off+bytesPerSample > len(frame) {
-				break
-			}
-			val, ok := decodePixelSampleLE(frame, off, pd.Info)
-			if !ok {
-				continue
-			}
-
-			if ignorePadding && hasPadding && val >= padMin && val <= padMax {
-				out[idx] = 0
-				continue
-			}
-
-			modalityValue := float64(val)
-			if modality != nil {
-				modalityValue = modality.Transform(modalityValue)
-			}
-			mapped := table.Transform(modalityValue)
-			out[idx] = clampByte(int(mapped + 0.5))
-		}
-
-		result[fi] = out
+	transform := table
+	if modality != nil {
+		// The modality LUT maps stored values first, then the VOI/table chain
+		// scales them into the 0..255 output range (PS3.4 C.11.1).
+		composite := lut.NewCompositeLUT()
+		composite.Add(modality)
+		composite.Add(table)
+		transform = composite
 	}
 
-	return result, nil
+	return mapSamplesTo8bit(pd, transform, ignorePadding), nil
 }

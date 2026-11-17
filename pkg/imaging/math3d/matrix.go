@@ -34,6 +34,29 @@ func (m Matrix4) TransformPoint(point Point3) Point3 {
 	return Point3{X: x, Y: y, Z: z}
 }
 
+// Mul returns m * other: other is applied first, then m.
+func (m Matrix4) Mul(other Matrix4) Matrix4 {
+	var product Matrix4
+	for row := 0; row < 4; row++ {
+		for column := 0; column < 4; column++ {
+			product[row*4+column] = m[row*4]*other[column] +
+				m[row*4+1]*other[4+column] +
+				m[row*4+2]*other[8+column] +
+				m[row*4+3]*other[12+column]
+		}
+	}
+	return product
+}
+
+// TransformDirection applies the linear part of m to v, ignoring translation.
+func (m Matrix4) TransformDirection(v Vector3) Vector3 {
+	return Vector3{
+		X: m[0]*v.X + m[1]*v.Y + m[2]*v.Z,
+		Y: m[4]*v.X + m[5]*v.Y + m[6]*v.Z,
+		Z: m[8]*v.X + m[9]*v.Y + m[10]*v.Z,
+	}
+}
+
 // Inverse returns the matrix inverse using Gauss-Jordan elimination.
 func (m Matrix4) Inverse() (Matrix4, error) {
 	var augmented [4][8]float64

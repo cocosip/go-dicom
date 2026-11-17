@@ -79,7 +79,7 @@ func NewVolumeData(images []*ImageData, options ...VolumeOption) (*VolumeData, e
 	normal := first.geometry.DirectionNormal
 	for _, image := range filtered {
 		position := image.geometry.TopLeft
-		image.sortingPosition = dot3(position, normal)
+		image.sortingPosition = position.Dot(normal)
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
 		return filtered[i].sortingPosition < filtered[j].sortingPosition
@@ -106,7 +106,7 @@ func NewVolumeData(images []*ImageData, options ...VolumeOption) (*VolumeData, e
 
 	bounds := filtered[0].geometry.BoundingBox()
 	for _, image := range filtered[1:] {
-		bounds = unionBounds(bounds, image.geometry.BoundingBox())
+		bounds = bounds.Union(image.geometry.BoundingBox())
 	}
 	return &VolumeData{
 		images:           filtered,
@@ -252,17 +252,6 @@ func elementsEqual(left, right element.Element) bool {
 		return false
 	}
 	return bytes.Equal(left.Buffer().Data(), right.Buffer().Data())
-}
-
-func unionBounds(a, b math3d.Bounds3) math3d.Bounds3 {
-	return math3d.Bounds3{
-		Min: math3d.Point3{X: math.Min(a.Min.X, b.Min.X), Y: math.Min(a.Min.Y, b.Min.Y), Z: math.Min(a.Min.Z, b.Min.Z)},
-		Max: math3d.Point3{X: math.Max(a.Max.X, b.Max.X), Y: math.Max(a.Max.Y, b.Max.Y), Z: math.Max(a.Max.Z, b.Max.Z)},
-	}
-}
-
-func dot3(point math3d.Point3, vector math3d.Vector3) float64 {
-	return point.X*vector.X + point.Y*vector.Y + point.Z*vector.Z
 }
 
 func vectorClose(a, b math3d.Vector3) bool {

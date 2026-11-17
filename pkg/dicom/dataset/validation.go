@@ -96,9 +96,20 @@ func validateElement(elem element.Element, path Path) error {
 	if t == nil {
 		return validationError(ValidationStructural, path, fmt.Errorf("element tag is nil"))
 	}
-	wrapper := New()
-	wrapper.items[t.ToUint32()] = elem
-	return validateDataset(wrapper, path)
+	// Validate the element itself. Nested sequence items were validated when
+	// they were added to their own datasets, which is also what fo-dicom does
+	// (DicomItem.Validate validates one item); a full Walk here would re-walk
+	// the whole subtree for every single Add.
+	if _, ok := elem.(*Sequence); ok {
+		// A container is validated by walking it: Walk reports its item elements
+		// (WalkElement) and never re-enters the container element, so
+		// Element.ValidateValue (which re-validates the whole sequence) is not
+		// used here.
+		wrapper := New()
+		wrapper.items[t.ToUint32()] = elem
+		return validateDataset(wrapper, path)
+	}
+	return validateElementAtPath(elem, path)
 }
 
 func validateElementAtPath(elem element.Element, elementPath Path) error {

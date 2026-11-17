@@ -76,46 +76,20 @@ func (c *NativeCodec) DefaultParameters() Parameters {
 // Encode encodes pixel data from oldPixelData to newPixelData.
 // For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
 func (c *NativeCodec) Encode(ctx context.Context, oldPixelData FrameSource, newPixelData FrameSink, parameters Parameters) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if oldPixelData == nil || newPixelData == nil {
-		return fmt.Errorf("source and destination pixel data must not be nil")
-	}
-	params, err := nativeParameters(parameters)
-	if err != nil {
-		return err
-	}
-
-	frameInfo := oldPixelData.FrameInfo()
-	frameCount := oldPixelData.FrameCount()
-
-	// Process each frame
-	for i := 0; i < frameCount; i++ {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		srcFrame, err := oldPixelData.Frame(ctx, i)
-		if err != nil {
-			return fmt.Errorf("failed to get frame %d: %w", i, err)
-		}
-
-		var dstFrame []byte
-		if err := c.convertFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
-			return fmt.Errorf("failed to encode frame %d: %w", i, err)
-		}
-
-		if err := newPixelData.AddFrame(ctx, dstFrame); err != nil {
-			return fmt.Errorf("failed to add frame %d: %w", i, err)
-		}
-	}
-
-	return nil
+	return c.copyFrames(ctx, oldPixelData, newPixelData, parameters, "encode")
 }
 
 // Decode decodes pixel data from oldPixelData to newPixelData.
 // For native (uncompressed) codec, this is essentially a copy operation with potential byte swapping.
 func (c *NativeCodec) Decode(ctx context.Context, oldPixelData FrameSource, newPixelData FrameSink, parameters Parameters) error {
+	return c.copyFrames(ctx, oldPixelData, newPixelData, parameters, "decode")
+}
+
+// copyFrames copies every frame between two native pixel-data containers,
+// swapping bytes as the codec's transfer syntax requires. Encoding and decoding
+// are the same operation for an uncompressed codec; operation only names the
+// direction in error messages.
+func (c *NativeCodec) copyFrames(ctx context.Context, oldPixelData FrameSource, newPixelData FrameSink, parameters Parameters, operation string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -142,7 +116,7 @@ func (c *NativeCodec) Decode(ctx context.Context, oldPixelData FrameSource, newP
 
 		var dstFrame []byte
 		if err := c.convertFrame(ctx, srcFrame, &dstFrame, frameInfo, params); err != nil {
-			return fmt.Errorf("failed to decode frame %d: %w", i, err)
+			return fmt.Errorf("failed to %s frame %d: %w", operation, i, err)
 		}
 
 		if err := newPixelData.AddFrame(ctx, dstFrame); err != nil {

@@ -147,6 +147,13 @@ type pendingRequest struct {
 	// cancelSent makes the best-effort C-CANCEL idempotent when the response
 	// timeout and a context cancellation race each other.
 	cancelSent sync.Once
+	// queueMu guards the response hand-off queue. The receive loop must never
+	// block on a slow application, so responses queue here (unbounded, like
+	// fo-dicom's per-request channel) and a single drainer forwards them in
+	// order to responseCh.
+	queueMu  sync.Mutex
+	queue    []dimse.Response
+	draining bool
 }
 
 // activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.

@@ -303,7 +303,10 @@ func canonicalValue(valueRepresentation *vr.VR, value any) (string, error) {
 		return t.String(), nil
 	}
 	if t, ok := value.(tag.Tag); ok {
-		return (&t).String(), nil
+		if valueRepresentation.Code() != vr.CodeAT {
+			return "", fmt.Errorf("tag.Tag is only valid for VR AT")
+		}
+		return t.String(), nil
 	}
 
 	rv := reflect.ValueOf(value)

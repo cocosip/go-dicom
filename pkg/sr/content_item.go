@@ -126,9 +126,10 @@ func NewContentItemNumeric(code *CodeItem, relationship Relationship, value *Mea
 
 // NewContentItemContainer creates a container content item.
 //
-// A nil code creates a nested unheaded CONTAINER. PS3.3 C.17.3.2.2 allows
-// nested CONTAINER Content Items to omit the Concept Name Code Sequence; the
-// root CONTAINER and all non-container value types still require one.
+// A nil code creates a nested unheaded CONTAINER. PS3.3 Table C.17-5 makes the
+// Concept Name Code Sequence Type 1C: nested CONTAINER Content Items may omit
+// it; the root CONTAINER and the TEXT/NUM/CODE/DATE/TIME/DATETIME/UIDREF/TABLE/
+// PNAME value types still require one.
 func NewContentItemContainer(code *CodeItem, relationship Relationship, continuity Continuity, items ...*ContentItem) (*ContentItem, error) {
 	ds := dataset.New()
 

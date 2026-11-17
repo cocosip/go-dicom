@@ -44,7 +44,7 @@ func (volume *VolumeData) Sample(point math3d.Point3) (float64, bool, error) {
 	if volume == nil || len(volume.images) < 2 || len(volume.slicePositions) != len(volume.images) {
 		return 0, false, fmt.Errorf("volume is not initialized")
 	}
-	position := dot3(point, volume.normal)
+	position := point.Dot(volume.normal)
 	first := volume.slicePositions[0]
 	last := volume.slicePositions[len(volume.slicePositions)-1]
 	if position < first-volumeGeometryTolerance || position > last+volumeGeometryTolerance {
@@ -131,13 +131,9 @@ func (volume *VolumeData) Cut(ctx context.Context, spec CutSpec, options CutOpti
 				}
 				row := index / normalized.Columns
 				column := index % normalized.Columns
-				point := addPatientPoint(
-					normalized.TopLeft,
-					normalized.RowDirection,
-					float64(column)*normalized.PixelSpacingColumns,
-					normalized.ColumnDirection,
-					float64(row)*normalized.PixelSpacingRows,
-				)
+				point := normalized.TopLeft.
+					Add(normalized.RowDirection.Scale(float64(column) * normalized.PixelSpacingColumns)).
+					Add(normalized.ColumnDirection.Scale(float64(row) * normalized.PixelSpacingRows))
 				value, valid, err := volume.Sample(point)
 				if err != nil {
 					if failures[worker].index < 0 {
@@ -232,18 +228,10 @@ func normalizeCutSpec(spec CutSpec) (CutSpec, error) {
 	if err != nil {
 		return CutSpec{}, fmt.Errorf("cut column direction: %w", err)
 	}
-	if math.Abs(row.X*column.X+row.Y*column.Y+row.Z*column.Z) > volumeGeometryTolerance {
+	if math.Abs(row.Dot(column)) > volumeGeometryTolerance {
 		return CutSpec{}, fmt.Errorf("cut row and column directions must be perpendicular")
 	}
 	spec.RowDirection = row
 	spec.ColumnDirection = column
 	return spec, nil
-}
-
-func addPatientPoint(origin math3d.Point3, row math3d.Vector3, rowScale float64, column math3d.Vector3, columnScale float64) math3d.Point3 {
-	return math3d.Point3{
-		X: origin.X + row.X*rowScale + column.X*columnScale,
-		Y: origin.Y + row.Y*rowScale + column.Y*columnScale,
-		Z: origin.Z + row.Z*rowScale + column.Z*columnScale,
-	}
 }

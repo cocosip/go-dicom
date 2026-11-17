@@ -191,17 +191,10 @@ func TestCGetCStoreSubOperationCarriesParentOperationID(t *testing.T) {
 	if parentOperationID == 0 {
 		t.Fatalf("C-GET parent operation ID not found: %#v", clientEvents)
 	}
-	storeEvents := requestEvents(clientRecorder, dimse.CommandCStoreRQ)
-	if len(storeEvents) < 2 {
-		allEvents, _, _ := clientRecorder.snapshot()
-		serverEvents, _, _ := serverRecorder.snapshot()
-		for _, event := range serverEvents {
-			if event.Error != nil {
-				t.Logf("server event %s error: %v", event.Kind, event.Error)
-			}
-		}
-		t.Fatalf("C-STORE lifecycle events = %#v, all client events = %#v, all server events = %#v, want receive and complete", storeEvents, allEvents, serverEvents)
-	}
+	// The C-STORE completion is recorded after the client sends its response, so
+	// wait for it instead of sampling once: under load it can land a few
+	// milliseconds after the C-GET events above.
+	storeEvents := waitForRequestEventCount(t, clientRecorder, dimse.CommandCStoreRQ, 2)
 	if storeEvents[0].ParentOperationID != parentOperationID {
 		t.Fatalf("C-STORE parent operation ID = %d, want %d", storeEvents[0].ParentOperationID, parentOperationID)
 	}

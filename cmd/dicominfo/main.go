@@ -66,7 +66,7 @@ func printFileInfo(result *parser.ParseResult, verbose bool) {
 	// Statistics
 	fmt.Println()
 	fmt.Println("--- Statistics ---")
-	fmt.Printf("Total Elements: %d\n", len(result.Dataset.Elements()))
+	fmt.Printf("Total Elements: %d\n", result.Dataset.Count())
 	if result.IsPartial {
 		fmt.Println("Note: File was partially read (some large elements may be skipped)")
 	}
@@ -80,6 +80,10 @@ func formatFileFormat(format parser.FileFormat) string {
 		return "DICOM Part 10 (no preamble)"
 	case parser.FormatDICOM3NoFileMetaInfo:
 		return "DICOM Part 10 (no file meta info)"
+	case parser.FormatACRNEMA1:
+		return "ACR-NEMA 1.0"
+	case parser.FormatACRNEMA2:
+		return "ACR-NEMA 2.0"
 	default:
 		return "Unknown"
 	}

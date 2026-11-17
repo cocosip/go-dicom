@@ -39,7 +39,7 @@ var (
 	storageDir     = flag.String("storage", "./received_dicom", "Directory to store received DICOM files")
 	maxConn        = flag.Int("max-conn", 10, "Maximum concurrent connections (0 = unlimited)")
 	verbose        = flag.Bool("verbose", false, "Enable verbose logging")
-	organizeByAE   = flag.Bool("organize-by-ae", false, "Group files under a fixed default_ae/ directory (the calling AE is not available to the C-STORE handler)")
+	organizeByAE   = flag.Bool("organize-by-ae", false, "Group files under a subdirectory named after the calling AE title")
 	organizeByDate = flag.Bool("organize-by-date", false, "Organize files by study date")
 	calledAE       = flag.String("called-ae", "", "Expected called AE title (empty = disable validation)")
 	allowCallingAE = flag.String("allow-calling-ae", "", "Comma-separated list of allowed calling AE titles (empty = allow all)")
@@ -160,7 +160,7 @@ func handleCEcho(_ context.Context, req *dimse.CEchoRequest) (*dimse.CEchoRespon
 }
 
 // handleCStore handles C-STORE storage requests
-func handleCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
+func handleCStore(ctx context.Context, req *dimse.CStoreRequest) (*dimse.CStoreResponse, error) {
 	// Get the dataset
 	ds := req.DataDataset()
 	if ds == nil {
@@ -192,8 +192,16 @@ func handleCStore(_ context.Context, req *dimse.CStoreRequest) (*dimse.CStoreRes
 		log.Printf("  Modality:      %s", modality)
 	}
 
+	// The calling AE title identifies the SCU that sent this instance; the
+	// service exposes the negotiated association to handlers through the request
+	// context.
+	callingAE := ""
+	if assoc := service.AssociationFromContext(ctx); assoc != nil {
+		callingAE = normalizeAETitle(assoc.CallingAE)
+	}
+
 	// Determine file path
-	filePath := generateFilePath(ds, sopInstanceUID)
+	filePath := generateFilePath(ds, sopInstanceUID, callingAE)
 
 	// Create directory if needed
 	dir := filepath.Dir(filePath)
@@ -327,6 +335,31 @@ func normalizeAETitle(ae string) string {
 	return strings.TrimSpace(ae)
 }
 
+// sanitizeAEPathComponent turns a calling AE title into a single safe directory
+// name: letters, digits, '-' and '_' survive, every other character (including
+// path separators) becomes '_'. An empty title maps to "unknown_ae".
+func sanitizeAEPathComponent(ae string) string {
+	ae = strings.TrimSpace(ae)
+	if ae == "" {
+		return "unknown_ae"
+	}
+	var builder strings.Builder
+	for _, r := range ae {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			builder.WriteRune(r)
+		default:
+			builder.WriteByte('_')
+		}
+	}
+	name := builder.String()
+	// AE titles are 16 bytes at most (PS3.5 6.2); the sanitized form is ASCII.
+	if len(name) > 16 {
+		name = name[:16]
+	}
+	return name
+}
+
 func validateAETitle(ae string) error {
 	if ae == "" {
 		return fmt.Errorf("AE title cannot be empty")
@@ -384,15 +417,13 @@ func handleConnectionClosed(_ context.Context, err error) {
 	}
 }
 
-// generateFilePath generates a file path for storing the DICOM file
-func generateFilePath(ds *dataset.Dataset, sopInstanceUID string) string {
+// generateFilePath generates a file path for storing the DICOM file.
+func generateFilePath(ds *dataset.Dataset, sopInstanceUID, callingAE string) string {
 	basePath := *storageDir
 
 	// Organize by calling AE if requested
 	if *organizeByAE {
-		// Note: In a real handler, you'd get the calling AE from the association
-		// For now, we'll use a default subdirectory
-		basePath = filepath.Join(basePath, "default_ae")
+		basePath = filepath.Join(basePath, sanitizeAEPathComponent(callingAE))
 	}
 
 	// Organize by study date if requested

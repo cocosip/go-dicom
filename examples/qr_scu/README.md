@@ -69,7 +69,7 @@ the `-move-destination` AE. The QR SCP must map that AE to this host and port
 - `-timeout duration`: Overall timeout (default: 180s)
 
 ### Query Parameters
-- `-level string`: Query level - PATIENT, STUDY, SERIES, or IMAGE (default: "STUDY")
+- `-level string`: Query level - PATIENT, STUDY, SERIES, or IMAGE (default: "STUDY"). It only changes the C-FIND query: the retrieve below always requests the study of the first match (QueryRetrieveLevel=STUDY with that StudyInstanceUID)
 - `-patient-name string`: PatientName match key (supports wildcards)
 - `-patient-id string`: PatientID match key
 - `-study-date string`: StudyDate (YYYYMMDD or YYYYMMDD-YYYYMMDD for range)

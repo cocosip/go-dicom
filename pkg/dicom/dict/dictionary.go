@@ -4,7 +4,6 @@
 package dict
 
 import (
-	"sort"
 	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -195,24 +194,23 @@ func (d *Dictionary) LookupKeyword(keyword string) *tag.Tag {
 		d.mu.RUnlock()
 		return t
 	}
-
-	creators := make([]string, 0, len(d.privateDictionaries))
-	for creator := range d.privateDictionaries {
-		creators = append(creators, creator)
-	}
-	privateDictionaries := make(map[string]*Dictionary, len(d.privateDictionaries))
+	// Search the private dictionaries while holding the read lock: child
+	// dictionaries never lock their parent, so the lock order stays parent to
+	// child. Ambiguous keywords resolve to the lexicographically smallest
+	// private creator, which is the order the previous sorted copy produced.
+	var found *tag.Tag
+	var foundCreator string
 	for creator, privateDictionary := range d.privateDictionaries {
-		privateDictionaries[creator] = privateDictionary
-	}
-	d.mu.RUnlock()
-
-	sort.Strings(creators)
-	for _, creator := range creators {
-		if t := privateDictionaries[creator].LookupKeyword(keyword); t != nil {
-			return t
+		t := privateDictionary.LookupKeyword(keyword)
+		if t == nil {
+			continue
+		}
+		if found == nil || creator < foundCreator {
+			found, foundCreator = t, creator
 		}
 	}
-	return nil
+	d.mu.RUnlock()
+	return found
 }
 
 // PrivateCreator returns the private creator, or nil for public dictionaries.

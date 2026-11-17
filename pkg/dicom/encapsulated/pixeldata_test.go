@@ -266,6 +266,27 @@ func TestPixelDataWithoutOffsetsStillRejectsNonCodestreamSyntax(t *testing.T) {
 	}
 }
 
+// TestPixelDataToleratesZeroLengthFragments verifies that an empty fragment
+// item inside a frame contributes no bytes instead of failing the whole read.
+// The parser keeps such items and the writer skips them, so the frame reader
+// must tolerate them too (PS3.5 A.4 permits an empty Fragment Item Value).
+func TestPixelDataToleratesZeroLengthFragments(t *testing.T) {
+	pixelData := openTestPixelDataWithFragments(t, transfer.JPEGBaseline8Bit, []uint32{0},
+		[]byte{0xff, 0xd8, 0x01, 0x02}, []byte{}, []byte{0xff, 0xd9})
+
+	frames, err := pixelData.Frames(1)
+	if err != nil {
+		t.Fatalf("Frames() error = %v", err)
+	}
+	if len(frames) != 1 {
+		t.Fatalf("Frames() returned %d frames, want 1", len(frames))
+	}
+	want := []byte{0xff, 0xd8, 0x01, 0x02, 0xff, 0xd9}
+	if !bytes.Equal(frames[0], want) {
+		t.Fatalf("Frames()[0] = %x, want %x", frames[0], want)
+	}
+}
+
 func openTestPixelDataWithFragments(
 	t *testing.T, syntax *transfer.Syntax, basic []uint32, fragmentData ...[]byte,
 ) *PixelData {

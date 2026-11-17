@@ -182,7 +182,7 @@ func (p *PersonName) GetAllComponents() ([]*PersonNameComponents, error) {
 	return components, nil
 }
 
-// GetFormattedName returns a formatted name string (Given Middle Family, Prefix Suffix).
+// GetFormattedName returns a formatted name string (Prefix Given Middle Family, Suffix).
 func (p *PersonName) GetFormattedName(index int) (string, error) {
 	components, err := p.GetComponents(index)
 	if err != nil {

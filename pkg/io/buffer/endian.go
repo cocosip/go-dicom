@@ -97,6 +97,11 @@ func (e *EndianByteBuffer) GetByteRange(offset, count uint32, output []byte) err
 	if e.unitSize > 1 && offset%uint32(e.unitSize) != 0 {
 		return fmt.Errorf("offset %d is not a multiple of unit size %d", offset, e.unitSize)
 	}
+	// A partial trailing group cannot be swapped; returning it unswapped would
+	// mix byte orders in one read, so reject the range instead.
+	if e.unitSize > 1 && count%uint32(e.unitSize) != 0 {
+		return fmt.Errorf("count %d is not a multiple of unit size %d", count, e.unitSize)
+	}
 	if err := e.internal.GetByteRange(offset, count, output); err != nil {
 		return err
 	}

@@ -51,6 +51,51 @@ type Vector3 struct {
 	Z float64
 }
 
+// Add returns v + other.
+func (v Vector3) Add(other Vector3) Vector3 {
+	return Vector3{X: v.X + other.X, Y: v.Y + other.Y, Z: v.Z + other.Z}
+}
+
+// Sub returns v - other.
+func (v Vector3) Sub(other Vector3) Vector3 {
+	return Vector3{X: v.X - other.X, Y: v.Y - other.Y, Z: v.Z - other.Z}
+}
+
+// Scale returns v multiplied by factor.
+func (v Vector3) Scale(factor float64) Vector3 {
+	return Vector3{X: v.X * factor, Y: v.Y * factor, Z: v.Z * factor}
+}
+
+// Dot returns the dot product of v and other.
+func (v Vector3) Dot(other Vector3) float64 {
+	return v.X*other.X + v.Y*other.Y + v.Z*other.Z
+}
+
+// Distance returns the distance from v to point.
+func (v Vector3) Distance(point Point3) float64 {
+	return math.Sqrt((v.X-point.X)*(v.X-point.X) + (v.Y-point.Y)*(v.Y-point.Y) + (v.Z-point.Z)*(v.Z-point.Z))
+}
+
+// Distance returns the distance between p and other.
+func (p Point3) Distance(other Point3) float64 {
+	return p.Sub(other).Length()
+}
+
+// Add returns p translated by v.
+func (p Point3) Add(v Vector3) Point3 {
+	return Point3{X: p.X + v.X, Y: p.Y + v.Y, Z: p.Z + v.Z}
+}
+
+// Sub returns the vector pointing from other to p.
+func (p Point3) Sub(other Point3) Vector3 {
+	return Vector3{X: p.X - other.X, Y: p.Y - other.Y, Z: p.Z - other.Z}
+}
+
+// Dot returns the dot product of the position vector of p and v.
+func (p Point3) Dot(v Vector3) float64 {
+	return p.X*v.X + p.Y*v.Y + p.Z*v.Z
+}
+
 // Cross returns the cross product of v and other.
 func (v Vector3) Cross(other Vector3) Vector3 {
 	return Vector3{
@@ -149,6 +194,14 @@ func (p Plane) signedDistance(point Point3) float64 {
 type Bounds3 struct {
 	Min Point3
 	Max Point3
+}
+
+// Union returns the smallest box containing both b and other.
+func (b Bounds3) Union(other Bounds3) Bounds3 {
+	return Bounds3{
+		Min: Point3{X: math.Min(b.Min.X, other.Min.X), Y: math.Min(b.Min.Y, other.Min.Y), Z: math.Min(b.Min.Z, other.Min.Z)},
+		Max: Point3{X: math.Max(b.Max.X, other.Max.X), Y: math.Max(b.Max.Y, other.Max.Y), Z: math.Max(b.Max.Z, other.Max.Z)},
+	}
 }
 
 // BoundingBox returns the smallest axis-aligned box containing points.

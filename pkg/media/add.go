@@ -112,15 +112,9 @@ func (d *Directory) AddFile(file *parser.ParseResult, fileID FileID) (*Entry, er
 		return nil, err
 	}
 
-	patientID, _ := stringValue(file.Dataset, tag.PatientID)
-	patientName, _ := stringValue(file.Dataset, tag.PatientName)
 	// PS3.3 F.5.1: the Patient ID shall be unique within a File-set, so records
-	// are matched by Patient ID alone. Fall back to the name only when the
-	// (non-conformant) Patient ID is empty.
-	patientKey := patientID
-	if patientKey == "" {
-		patientKey = "\x00" + normalizePersonName(patientName)
-	}
+	// are matched by Patient ID alone.
+	patientKey := recordKey(RecordPatient, file.Dataset)
 
 	diagnosticsMark := len(d.diagnostics)
 
@@ -241,7 +235,9 @@ func representativeIconFrame(ds *dataset.Dataset) int {
 
 func (d *Directory) findOrCreate(parent *Record, records []*Record, recordType RecordType, key string, source *dataset.Dataset) (*Record, bool, error) {
 	for _, record := range records {
-		if record.recordType == recordType && record.key == key {
+		// An empty key means the record carries no attribute to merge on; never
+		// let two keyless records collide.
+		if key != "" && record.recordType == recordType && record.key == key {
 			return record, false, nil
 		}
 	}

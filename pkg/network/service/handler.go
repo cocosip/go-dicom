@@ -73,17 +73,63 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 
 	pending.lifecycle.response(s.ctx, resp)
 
-	// Send response to the waiting goroutine
-	select {
-	case pending.responseCh <- resp:
-		// Successfully delivered
-	case <-pending.cancelCh:
-		// Request was cancelled
-	case <-s.closeCh:
-		// Service is closing
-	}
+	// Hand the response to the delivery goroutine without blocking: handleResponse
+	// runs on the receive loop, and a slow application must not stall
+	// A-RELEASE-RQ, A-ABORT or responses on other presentation contexts.
+	pending.enqueueResponse(resp, s.closeCh)
 
 	return nil
+}
+
+// enqueueResponse queues a response for the per-request delivery goroutine and
+// starts that goroutine when it is not already draining. The queue is unbounded
+// (matching fo-dicom's unbounded per-request channel), so a slow consumer grows
+// memory instead of blocking the association.
+func (p *pendingRequest) enqueueResponse(resp dimse.Response, closeCh <-chan struct{}) {
+	p.queueMu.Lock()
+	p.queue = append(p.queue, resp)
+	if p.draining {
+		p.queueMu.Unlock()
+		return
+	}
+	p.draining = true
+	p.queueMu.Unlock()
+	go p.drainResponses(closeCh)
+}
+
+// drainResponses forwards queued responses to responseCh in request order. It
+// stops when the queue is empty, when the request is cancelled, or when the
+// service closes, dropping whatever is still queued.
+func (p *pendingRequest) drainResponses(closeCh <-chan struct{}) {
+	for {
+		p.queueMu.Lock()
+		if len(p.queue) == 0 {
+			p.draining = false
+			p.queueMu.Unlock()
+			return
+		}
+		resp := p.queue[0]
+		p.queue[0] = nil
+		p.queue = p.queue[1:]
+		p.queueMu.Unlock()
+
+		select {
+		case p.responseCh <- resp:
+		case <-p.cancelCh:
+			p.dropQueuedResponses()
+			return
+		case <-closeCh:
+			p.dropQueuedResponses()
+			return
+		}
+	}
+}
+
+func (p *pendingRequest) dropQueuedResponses() {
+	p.queueMu.Lock()
+	p.queue = nil
+	p.draining = false
+	p.queueMu.Unlock()
 }
 
 func (s *Service) registerActiveOperation(parent context.Context, messageID uint16) (context.Context, context.CancelFunc) {
@@ -157,6 +203,9 @@ func (s *Service) cancelActiveOperation(messageID uint16) bool {
 func (s *Service) handleRequest(ctx context.Context, req dimse.Request) error {
 	assoc := s.GetAssociation()
 	if assoc != nil {
+		// Handlers read the negotiated association from the context (calling AE,
+		// accepted presentation contexts), mirroring DicomService.Association.
+		ctx = withAssociation(ctx, assoc)
 		pc, err := presentationContextForRequest(assoc, req)
 		if err != nil {
 			return err

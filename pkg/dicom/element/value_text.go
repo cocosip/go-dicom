@@ -116,17 +116,10 @@ func CanonicalStrings(elem Element) ([]string, error) {
 }
 
 func canonicalStringValues(value *String) ([]string, error) {
-	complete, err := value.GetStringWithError()
-	if err != nil {
-		return nil, err
-	}
-	if complete == "" {
-		return nil, nil
-	}
-	if value.hasLiteralBackslash() {
-		return []string{complete}, nil
-	}
-	return strings.Split(complete, "\\"), nil
+	// Reuse the accessor so canonical values drop the insignificant trailing
+	// spaces that GetValues drops; otherwise the same element compares unequal
+	// depending on which accessor read it.
+	return value.GetValuesWithError()
 }
 
 // ReplaceCanonicalStrings constructs a VR-correct element from individual

@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/uid"
 )
@@ -258,107 +257,10 @@ func (a *AAssociateAC) Encode() (*RawPDU, error) {
 	return NewRawPDU(TypeAAssociateAC, buf.Bytes()), nil
 }
 
-// encodeUserInformation encodes the UserInformation structure.
-// This is shared between A-ASSOCIATE-RQ and A-ASSOCIATE-AC.
+// encodeUserInformation encodes the User Information item; the sub-items are
+// shared with A-ASSOCIATE-RQ (see encodeUserInformationItems).
 func (a *AAssociateAC) encodeUserInformation() ([]byte, error) {
-	var buf bytes.Buffer
-
-	ui := a.UserInformation
-
-	// Maximum Length Sub-item (always present)
-	maxLenData := make([]byte, 4)
-	binary.BigEndian.PutUint32(maxLenData, advertisedMaximumLength(ui.MaximumLength))
-	if err := writeItem(&buf, ItemTypeMaximumLength, maxLenData); err != nil {
-		return nil, fmt.Errorf("encoding maximum length: %w", err)
-	}
-
-	// Implementation Class UID Sub-item (always present)
-	if ui.ImplementationClassUID != "" {
-		implClassData := []byte(ui.ImplementationClassUID)
-		if err := writeItem(&buf, ItemTypeImplementationClassUID, implClassData); err != nil {
-			return nil, fmt.Errorf("encoding implementation class UID: %w", err)
-		}
-	}
-
-	// Asynchronous Operations Window Sub-item (optional)
-	if ui.AsynchronousOperations != nil {
-		asyncData := make([]byte, 4)
-		binary.BigEndian.PutUint16(asyncData[0:2], ui.AsynchronousOperations.MaximumNumberOperationsInvoked)
-		binary.BigEndian.PutUint16(asyncData[2:4], ui.AsynchronousOperations.MaximumNumberOperationsPerformed)
-		if err := writeItem(&buf, ItemTypeAsynchronousOperationsWindow, asyncData); err != nil {
-			return nil, fmt.Errorf("encoding async operations: %w", err)
-		}
-	}
-
-	// SCP/SCU Role Selection Sub-items (optional)
-	for _, role := range ui.SCPSCURoleSelections {
-		if len(role.SOPClassUID) > int(math.MaxUint16) {
-			return nil, fmt.Errorf("SOP Class UID length too large: %d", len(role.SOPClassUID))
-		}
-		var roleData bytes.Buffer
-		_ = binary.Write(&roleData, binary.BigEndian, uint16(len(role.SOPClassUID))) // #nosec G115 -- bounded above
-		roleData.WriteString(role.SOPClassUID)
-		roleData.WriteByte(role.SCURole)
-		roleData.WriteByte(role.SCPRole)
-		if err := writeItem(&buf, ItemTypeSCPSCURoleSelection, roleData.Bytes()); err != nil {
-			return nil, fmt.Errorf("encoding role selection: %w", err)
-		}
-	}
-
-	// Implementation Version Name Sub-item (optional). Written after 0x53/0x54 so
-	// the sub-items remain in ascending item-type order (PS3.8 9.3.2.3 warns
-	// that older applications may expect that order).
-	if ui.ImplementationVersionName != "" {
-		implVersionData := []byte(ui.ImplementationVersionName)
-		if err := writeItem(&buf, ItemTypeImplementationVersionName, implVersionData); err != nil {
-			return nil, fmt.Errorf("encoding implementation version name: %w", err)
-		}
-	}
-
-	// SOP Class Extended Negotiation Sub-items (optional)
-	for _, negotiation := range ui.ExtendedNegotiations {
-		if len(negotiation.SOPClassUID) > int(math.MaxUint16) {
-			return nil, fmt.Errorf("extended negotiation SOP Class UID length too large: %d", len(negotiation.SOPClassUID))
-		}
-		var negotiationData bytes.Buffer
-		_ = binary.Write(&negotiationData, binary.BigEndian, uint16(len(negotiation.SOPClassUID))) // #nosec G115 -- bounded above
-		negotiationData.WriteString(negotiation.SOPClassUID)
-		negotiationData.Write(negotiation.ServiceClassAppInfo)
-		if err := writeItem(&buf, ItemTypeExtendedNegotiation, negotiationData.Bytes()); err != nil {
-			return nil, fmt.Errorf("encoding extended negotiation: %w", err)
-		}
-	}
-
-	// User Identity Negotiation Response (optional).
-	response := ui.UserIdentityResponse
-	if response == nil && ui.UserIdentity != nil && ui.UserIdentity.PositiveResponseRequested == 1 {
-		// Preserve compatibility with callers that used the request structure to
-		// represent an AC response before UserIdentityResponse was available.
-		response = &UserIdentityNegotiationResponse{ServerResponse: ui.UserIdentity.PrimaryField}
-	}
-	if response != nil {
-		var uiBuf bytes.Buffer
-
-		// Server response length (2 bytes)
-		if len(response.ServerResponse) > int(math.MaxUint16) {
-			return nil, fmt.Errorf("user identity response length too large: %d", len(response.ServerResponse))
-		}
-		serverResponseLen := uint16(len(response.ServerResponse)) // #nosec G115 -- bounded by check above
-		if err := binary.Write(&uiBuf, binary.BigEndian, serverResponseLen); err != nil {
-			return nil, fmt.Errorf("encoding user identity response length: %w", err)
-		}
-
-		// Server response data
-		if serverResponseLen > 0 {
-			uiBuf.Write(response.ServerResponse)
-		}
-
-		if err := writeItem(&buf, ItemTypeUserIdentityNegotiationResponse, uiBuf.Bytes()); err != nil {
-			return nil, fmt.Errorf("encoding user identity response: %w", err)
-		}
-	}
-
-	return buf.Bytes(), nil
+	return encodeUserInformationItems(a.UserInformation, false)
 }
 
 // Decode decodes an A-ASSOCIATE-AC from a RawPDU.
@@ -564,113 +466,8 @@ func (a *AAssociateAC) decodePresentationContextAC(data []byte) (PresentationCon
 	return pc, nil
 }
 
-// decodeUserInformation decodes the User Information item.
+// decodeUserInformation decodes the User Information item; the sub-items are
+// shared with A-ASSOCIATE-RQ (see decodeUserInformationItems).
 func (a *AAssociateAC) decodeUserInformation(data []byte) (*UserInformation, error) {
-	ui := &UserInformation{}
-	maximumLengthSeen := false
-	implementationClassUIDSeen := false
-	implementationVersionNameSeen := false
-	asynchronousOperationsSeen := false
-	userIdentitySeen := false
-	seenRoleSelections := make(map[string]struct{})
-	reader := bytes.NewReader(data)
-
-	for {
-		itemType, itemData, err := readItem(reader)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, fmt.Errorf("reading user info sub-item: %w", err)
-		}
-
-		switch itemType {
-		case ItemTypeMaximumLength:
-			// PS3.8 D.1.1: only one Maximum Length Sub-Item shall be present.
-			if maximumLengthSeen {
-				return nil, fmt.Errorf("duplicate maximum length sub-item in user information")
-			}
-			if len(itemData) != 4 {
-				return nil, fmt.Errorf("invalid maximum length data: %d bytes", len(itemData))
-			}
-			ui.MaximumLength = binary.BigEndian.Uint32(itemData)
-			maximumLengthSeen = true
-
-		case ItemTypeImplementationClassUID:
-			// PS3.8 D.1.2: only one Implementation Class UID Sub-Item shall be present.
-			if implementationClassUIDSeen {
-				return nil, fmt.Errorf("duplicate implementation class UID sub-item in user information")
-			}
-			implementationClassUIDSeen = true
-			ui.ImplementationClassUID = trimUIDPadding(string(itemData))
-
-		case ItemTypeImplementationVersionName:
-			// PS3.8 D.1.3: only one Implementation Version Name Sub-Item.
-			if implementationVersionNameSeen {
-				return nil, fmt.Errorf("duplicate implementation version name sub-item in user information")
-			}
-			implementationVersionNameSeen = true
-			ui.ImplementationVersionName = string(itemData)
-
-		case ItemTypeAsynchronousOperationsWindow:
-			// PS3.8 D.1.4: only one Asynchronous Operations Window Sub-Item.
-			if asynchronousOperationsSeen {
-				return nil, fmt.Errorf("duplicate asynchronous operations window sub-item in user information")
-			}
-			asynchronousOperationsSeen = true
-			if len(itemData) != 4 {
-				return nil, fmt.Errorf("invalid asynchronous operations window: %d bytes", len(itemData))
-			}
-			ui.AsynchronousOperations = &AsynchronousOperationsWindow{
-				MaximumNumberOperationsInvoked:   binary.BigEndian.Uint16(itemData[0:2]),
-				MaximumNumberOperationsPerformed: binary.BigEndian.Uint16(itemData[2:4]),
-			}
-
-		case ItemTypeSCPSCURoleSelection:
-			role, err := decodeRoleSelection(itemData)
-			if err != nil {
-				return nil, fmt.Errorf("decoding role selection: %w", err)
-			}
-			// PS3.7 D.3.3.4/9.3.3.4: at most one SCP/SCU Role Selection
-			// Sub-Item per SOP Class UID in the A-ASSOCIATE-AC.
-			if _, duplicate := seenRoleSelections[role.SOPClassUID]; duplicate {
-				return nil, fmt.Errorf("duplicate SCP/SCU role selection sub-item for SOP Class %s", role.SOPClassUID)
-			}
-			seenRoleSelections[role.SOPClassUID] = struct{}{}
-			ui.SCPSCURoleSelections = append(ui.SCPSCURoleSelections, *role)
-
-		case ItemTypeExtendedNegotiation:
-			negotiation, err := decodeExtendedNegotiation(itemData)
-			if err != nil {
-				return nil, fmt.Errorf("decoding extended negotiation: %w", err)
-			}
-			ui.ExtendedNegotiations = append(ui.ExtendedNegotiations, *negotiation)
-
-		case ItemTypeUserIdentityNegotiationResponse:
-			// PS3.8 D.1.7: only one User Identity Sub-Item.
-			if userIdentitySeen {
-				return nil, fmt.Errorf("duplicate user identity sub-item in user information")
-			}
-			userIdentitySeen = true
-			// Server response to user identity
-			if len(itemData) < 2 {
-				return nil, fmt.Errorf("invalid user identity response: %d bytes", len(itemData))
-			}
-			serverResponseLen := binary.BigEndian.Uint16(itemData[0:2])
-			if len(itemData) != int(2+serverResponseLen) {
-				return nil, fmt.Errorf("invalid user identity response length")
-			}
-			serverResponse := make([]byte, int(serverResponseLen))
-			copy(serverResponse, itemData[2:])
-			ui.UserIdentityResponse = &UserIdentityNegotiationResponse{ServerResponse: serverResponse}
-			// Preserve the legacy decoded representation.
-			ui.UserIdentity = &UserIdentityNegotiation{
-				PositiveResponseRequested: 1, // Response was provided
-				PrimaryField:              serverResponse,
-			}
-		}
-	}
-
-	ui.hasMaximumLength = maximumLengthSeen
-	return ui, nil
+	return decodeUserInformationItems(data, false, nil)
 }

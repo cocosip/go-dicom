@@ -1209,7 +1209,9 @@ func ToAAssociateACWithMaxPDULength(assoc *Association, maxPDULength uint32) *pd
 	ac.CalledAETitle = assoc.CalledAE
 	ac.CallingAETitleRaw = append([]byte(nil), assoc.callingAETitleRaw...)
 	ac.CalledAETitleRaw = append([]byte(nil), assoc.calledAETitleRaw...)
-	ac.ProtocolVersion = assoc.ProtocolVersion
+	// PS3.8 Table 9-17: the AC states the protocol version the acceptor supports
+	// (only version 1 exists), not the value the requestor happened to send.
+	ac.ProtocolVersion = 0x0001
 
 	implementationClassUID := assoc.LocalImplementationClassUID
 	if implementationClassUID == "" {

@@ -248,11 +248,11 @@ func ParseTimeRange(s string) (*TimeRange, error) {
 	return NewTimeRange(minVal, maxVal), nil
 }
 
-// normalizeTimeFraction expands a fractional-seconds component of 1-6 digits
-// to the six-digit form expected by the TM layouts. DICOM permits any precision
-// from 1 to 6 digits (PS3.5 Table 6.2-1). Values without a valid fraction are
-// returned unchanged.
-func normalizeTimeFraction(value string) string {
+// NormalizeTimeFraction expands a fractional-seconds component of 1-6 digits
+// to the six-digit form expected by the time layouts. DICOM permits any
+// precision from 1 to 6 digits (PS3.5 Table 6.2-1). Values without a valid
+// fraction are returned unchanged.
+func NormalizeTimeFraction(value string) string {
 	dot := strings.IndexByte(value, '.')
 	if dot < 0 {
 		return value
@@ -273,7 +273,7 @@ func parseDicomTime(s string) (time.Time, error) {
 	// PS3.5 Table 6.2-1 permits 1 to 6 fractional-second digits, but the layouts
 	// below use the fixed six-digit form. Normalize the fraction first so e.g.
 	// "120000.5" is 12:00:00.5 instead of silently truncating the fraction.
-	normalized := normalizeTimeFraction(s)
+	normalized := NormalizeTimeFraction(s)
 
 	formats := []string{
 		"150405.000000",
@@ -442,7 +442,10 @@ func parseDicomDateTime(s string) (time.Time, error) {
 		}
 		hh, err1 := strconv.Atoi(off[1:3])
 		mm, err2 := strconv.Atoi(off[3:5])
-		if err1 != nil || err2 != nil || hh > 23 || mm > 59 {
+		// PS3.5 Table 6.2-1: the UTC offset range is -1200 to +1400, and -0000
+		// is not permitted. Keep this in step with vr.ValidateDT.
+		if err1 != nil || err2 != nil || off == "-0000" ||
+			hh > 14 || mm > 59 || (hh == 14 && mm != 0) || (sign < 0 && hh > 12) {
 			return time.Time{}, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
 		}
 		loc = time.FixedZone("", sign*(hh*3600+mm*60))

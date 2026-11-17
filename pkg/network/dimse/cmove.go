@@ -31,19 +31,10 @@ type CMoveRequest struct {
 // The moveDestination specifies the AE title where the instances should be moved to.
 // The MessageID will be automatically assigned by the Association/Client when sending.
 func NewCMoveRequest(level QueryRetrieveLevel, moveDestination string, identifier *dataset.Dataset) *CMoveRequest {
-	// Determine SOP Class UID based on query level
-	var sopClassUID string
-	switch level {
-	case QueryRetrieveLevelPatient:
-		// Patient Root Query/Retrieve Information Model - MOVE
-		sopClassUID = sopClassUIDPatientRootMove
-	case QueryRetrieveLevelStudy, QueryRetrieveLevelSeries, QueryRetrieveLevelImage:
-		// Study Root Query/Retrieve Information Model - MOVE
-		sopClassUID = sopClassUIDStudyRootMove
-	default:
-		// Default to Study Root
-		sopClassUID = sopClassUIDStudyRootMove
-	}
+	sopClassUID := sopClassUIDForLevel(level, [2]string{
+		sopClassUIDPatientRootMove, // Patient Root MOVE
+		sopClassUIDStudyRootMove,   // Study Root MOVE
+	})
 	return newCMoveRequestWithSOPClassUID(level, moveDestination, identifier, sopClassUID)
 }
 

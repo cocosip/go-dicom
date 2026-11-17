@@ -18,7 +18,7 @@ import (
 var (
 	maxDepth   = flag.Int("depth", -1, "Maximum depth for nested sequences (-1 for unlimited)")
 	showValues = flag.Bool("values", true, "Show element values")
-	compact    = flag.Bool("compact", false, "Compact output (one line per element)")
+	compact    = flag.Bool("compact", false, "Compact output (one element per line without length/keyword columns)")
 )
 
 func main() {

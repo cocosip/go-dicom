@@ -49,7 +49,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
 
 - [x] **Core DICOM data types**
   - [x] Tag (5356 standard tags + private tag support)
-  - [x] VR (35 value representations with validation)
+  - [x] VR (34 value representations with validation)
   - [x] VM (16 value multiplicities)
   - [x] Element (string, numeric, binary, date, person name types)
   - [x] Dataset & Sequence (full support with lazy loading)
@@ -2038,7 +2038,7 @@ go test -cover ./cmd/... ./examples/... ./pkg/... ./tools/...
 
 ✅ **Image Formats**
 - Single frame images
-- Multi-frame images (tested up to 100 frames)
+- Multi-frame images (verified up to 100 frames)
 - RGB color images (planar and interleaved)
 - Video DICOM (MPEG2)
 
@@ -2064,7 +2064,7 @@ go-dicom/
 ├── pkg/
 │   ├── dicom/              # Core DICOM types
 │   │   ├── tag/            # DICOM tags (5356 standard tags)
-│   │   ├── vr/             # Value representations (35 VRs)
+│   │   ├── vr/             # Value representations (34 VRs)
 │   │   ├── vm/             # Value multiplicities
 │   │   ├── element/        # DICOM elements (all VR types)
 │   │   ├── dataset/        # Dataset, sequences, file meta info

@@ -135,10 +135,13 @@ func (p *PixelData) frameRanges(frameCount int) ([]fragmentRange, error) {
 		return nil, fmt.Errorf("no fragments available")
 	}
 	for i, fragment := range fragments {
-		if fragment == nil || fragment.Size() == 0 {
-			return nil, fmt.Errorf("fragment %d is empty", i)
+		if fragment == nil {
+			return nil, fmt.Errorf("fragment %d is nil", i)
 		}
 	}
+	// Zero-length fragment items carry no data; the parser and writer tolerate
+	// them (PS3.5 A.4 permits empty fragment items), so they contribute no bytes
+	// to a frame instead of failing the whole read.
 
 	if p.offsets.source == noOffsets {
 		return rangesWithoutOffsets(fragments, frameCount, p.syntax)

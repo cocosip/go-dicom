@@ -414,7 +414,7 @@ func TestWriteReadVerifyFrameCount(t *testing.T) {
 	frameCounts := []int{1, 5, 10, 25, 50, 100}
 
 	for _, expectedFrames := range frameCounts {
-		t.Run(t.Name()+"_"+string(rune(expectedFrames))+"_frames", func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d_frames", expectedFrames), func(t *testing.T) {
 			// Create dataset
 			ds := dataset.New()
 
@@ -478,8 +478,8 @@ func TestWriteReadVerifyFrameCount(t *testing.T) {
 					t.Errorf("鉂?NumberOfFrames missing for %d frames", expectedFrames)
 				} else {
 					numFramesStr = strings.TrimSpace(numFramesStr)
-					if numFramesStr != string(rune(expectedFrames)) {
-						t.Logf("鉁?Frame count verified: %s frames (expected %d)", numFramesStr, expectedFrames)
+					if want := fmt.Sprintf("%d", expectedFrames); numFramesStr != want {
+						t.Errorf("NumberOfFrames = %q, want %q for %d frames", numFramesStr, want, expectedFrames)
 					}
 				}
 			}

@@ -204,11 +204,19 @@ func (r *qrRepository) handleCMove(ctx context.Context, op service.CMoveOperatio
 		client.WithConnectTimeout(10*time.Second),
 		client.WithRequestTimeout(60*time.Second),
 	)
+	// Propose one context per SOP Class: the client caps contexts at 128, and a
+	// per-instance proposal would exceed that for any study larger than 128.
+	proposedSOPClasses := make(map[string]struct{}, len(matched))
 	for _, rec := range matched {
-		if rec.SOPClassUID != "" {
-			if err := destClient.AddPresentationContext(rec.SOPClassUID, transferSyntaxes...); err != nil {
-				return op.SendFailure(status.CMoveRefusedOutOfResourcesSubOps)
-			}
+		if rec.SOPClassUID == "" {
+			continue
+		}
+		if _, ok := proposedSOPClasses[rec.SOPClassUID]; ok {
+			continue
+		}
+		proposedSOPClasses[rec.SOPClassUID] = struct{}{}
+		if err := destClient.AddPresentationContext(rec.SOPClassUID, transferSyntaxes...); err != nil {
+			return op.SendFailure(status.CMoveRefusedOutOfResourcesSubOps)
 		}
 	}
 	if err := destClient.Connect(ctx, route.host, route.port); err != nil {

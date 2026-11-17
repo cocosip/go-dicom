@@ -102,23 +102,36 @@ func (d *Directory) Write(output io.Writer, options ...WriteOption) error {
 	return nil
 }
 
-// Save creates or truncates path and writes the DICOMDIR.
+// Save creates or replaces path with the DICOMDIR. The directory is written to
+// a temporary file in the same directory and renamed on success, so a
+// validation or write failure leaves an existing DICOMDIR intact.
 func (d *Directory) Save(path string, options ...WriteOption) error {
 	cleanPath := filepath.Clean(path)
-	file, err := os.Create(cleanPath)
+	file, err := os.CreateTemp(filepath.Dir(cleanPath), filepath.Base(cleanPath)+".tmp*")
 	if err != nil {
 		return fmt.Errorf("create DICOMDIR %s: %w", cleanPath, err)
 	}
+	tempPath := file.Name()
+	removeTemp := func() { _ = os.Remove(tempPath) }
+
 	writeErr := d.Write(file, options...)
 	closeErr := file.Close()
-	if writeErr != nil && closeErr != nil {
+	if writeErr != nil {
+		removeTemp()
 		return errors.Join(writeErr, closeErr)
 	}
-	if writeErr != nil {
-		return writeErr
-	}
 	if closeErr != nil {
+		removeTemp()
 		return fmt.Errorf("close DICOMDIR %s: %w", cleanPath, closeErr)
+	}
+	// CreateTemp creates the file 0600; match the permissions os.Create used.
+	if err := os.Chmod(tempPath, 0o644); err != nil {
+		removeTemp()
+		return fmt.Errorf("set DICOMDIR permissions %s: %w", cleanPath, err)
+	}
+	if err := os.Rename(tempPath, cleanPath); err != nil {
+		removeTemp()
+		return fmt.Errorf("replace DICOMDIR %s: %w", cleanPath, err)
 	}
 	return nil
 }

@@ -39,24 +39,47 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 		return nil, fmt.Errorf("unsupported BytesAllocated=%d for windowing", bytesPerSample)
 	}
 
-	// Precalculate within the valid input range for faster mapping, but only when
-	// the range fits a table: clamping a larger range would mis-map the upper part
-	// (e.g. BitsStored > 16), so fall back to direct transform in that case.
-	var minInput, maxInput int
-	if pd.Info.PixelRepresentation == pixel.SignedPixels {
-		maxInput = (1 << (pd.Info.BitsStored - 1)) - 1
-		minInput = -maxInput - 1
+	// Build the mapping chain once: the modality LUT (if any) shifts the stored
+	// values, then the VOI LUT maps them to 0..255.
+	transform := lut.LUT(voiLUT)
+	if modality != nil {
+		composite := lut.NewCompositeLUT()
+		composite.Add(modality)
+		composite.Add(voiLUT)
+		transform = composite
+	} else if minimum, maximum, ok := storedValueTableRange(pd.Info); ok {
+		// Precalculate over the stored-value range for faster mapping, but only
+		// when the range fits a table: clamping a larger range would mis-map the
+		// upper part (e.g. BitsStored > 16).
+		transform = lut.NewPrecalculatedLUT(voiLUT, minimum, maximum)
+	}
+
+	return mapSamplesTo8bit(pd, transform, ignorePadding), nil
+}
+
+// storedValueTableRange returns the stored-value domain and reports whether it
+// is small enough to precalculate a lookup table. A modality LUT changes the
+// domain, so callers only use it when no modality LUT is applied.
+func storedValueTableRange(info *Info) (minimum, maximum int, ok bool) {
+	if info.BitsStored == 0 || info.BitsStored > 16 {
+		return 0, 0, false
+	}
+	if info.PixelRepresentation == pixel.SignedPixels {
+		maximum = (1 << (info.BitsStored - 1)) - 1
+		minimum = -maximum - 1
 	} else {
-		minInput = 0
-		maxInput = (1 << pd.Info.BitsStored) - 1
+		minimum = 0
+		maximum = (1 << info.BitsStored) - 1
 	}
-	// The table is indexed in stored-value space, but a modality LUT shifts or
-	// reverses that domain, so those callers transform directly. Only build the
-	// table when the loop below will actually use it.
-	var precalc *lut.PrecalculatedLUT
-	if modality == nil && maxInput-minInput <= 65536 {
-		precalc = lut.NewPrecalculatedLUT(voiLUT, minInput, maxInput)
-	}
+	return minimum, maximum, maximum-minimum <= 65536
+}
+
+// mapSamplesTo8bit maps every sample of every frame to 8 bits through transform.
+// Windowing and LUT-sequence mapping share this loop; the caller has already
+// validated the pixel data and assembled the transform chain, including any
+// output scaling.
+func mapSamplesTo8bit(pd *Data, transform lut.LUT, ignorePadding bool) [][]byte {
+	bytesPerSample := pd.Info.BytesAllocated()
 
 	hasPadding := pd.Info.PixelPaddingValue != nil
 	padMin, padMax, _ := pixelPaddingRange(pd.Info)
@@ -81,23 +104,13 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 				continue
 			}
 
-			modalityValue := float64(val)
-			if modality != nil {
-				modalityValue = modality.Transform(modalityValue)
-			}
-			var mapped float64
-			if precalc != nil {
-				mapped = precalc.Transform(modalityValue)
-			} else {
-				mapped = voiLUT.Transform(modalityValue)
-			}
-			out[idx] = clampByte(int(mapped + 0.5))
+			out[idx] = clampByte(int(transform.Transform(float64(val)) + 0.5))
 		}
 
 		result[fi] = out
 	}
 
-	return result, nil
+	return result
 }
 
 // minMaxSamples returns min/max sample values across frames, optionally ignoring padding.

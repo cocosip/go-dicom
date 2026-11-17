@@ -69,6 +69,16 @@ type Info struct {
 	PixelPaddingRangeLimit *int32
 }
 
+// clone returns a copy of info. Pointers are shared because the referenced
+// photometric interpretation and pixel padding values are immutable.
+func (info *Info) clone() *Info {
+	if info == nil {
+		return nil
+	}
+	clone := *info
+	return &clone
+}
+
 // BytesAllocated returns the number of bytes allocated per pixel sample.
 func (info *Info) BytesAllocated() int {
 	return int((info.BitsAllocated-1)/8 + 1)
@@ -524,7 +534,7 @@ func (pd *Data) ConvertMonochrome1ToMonochrome2() error {
 		return nil
 	}
 	for fi, frame := range pd.frames {
-		converted, err := colorconv.ConvertMono1ToMono2(frame, pd.Info.BitsStored, bytesPerSample, pd.Info.PixelRepresentation == pixel.SignedPixels)
+		converted, err := colorconv.ConvertMono1ToMono2(frame, pd.Info.BitsStored, pd.Info.HighBit, bytesPerSample, pd.Info.PixelRepresentation == pixel.SignedPixels)
 		if err != nil {
 			return fmt.Errorf("frame %d mono1->mono2 failed: %w", fi, err)
 		}
@@ -938,26 +948,10 @@ func (pd *Data) Encode(ctx context.Context, c codec.Codec, params codec.Paramete
 	}
 
 	// Create new pixel data info for encoded data
-	newInfo := &Info{
-		Width:                     pd.Info.Width,
-		Height:                    pd.Info.Height,
-		NumberOfFrames:            pd.Info.NumberOfFrames,
-		BitsAllocated:             pd.Info.BitsAllocated,
-		BitsStored:                pd.Info.BitsStored,
-		HighBit:                   pd.Info.HighBit,
-		SamplesPerPixel:           pd.Info.SamplesPerPixel,
-		PixelRepresentation:       pd.Info.PixelRepresentation,
-		PlanarConfiguration:       pd.Info.PlanarConfiguration,
-		PhotometricInterpretation: pd.Info.PhotometricInterpretation,
-		VRCode:                    "OB", // Encoded data typically uses OB
-		Encapsulated:              c.TransferSyntax().IsEncapsulated(),
-		TransferSyntaxUID:         c.TransferSyntax().UID().UID(),
-		IsLossy:                   pd.Info.IsLossy,
-		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
-		LossyCompressionRatio:     pd.Info.LossyCompressionRatio,
-		PixelPaddingValue:         pd.Info.PixelPaddingValue,
-		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
-	}
+	newInfo := pd.Info.clone()
+	newInfo.VRCode = "OB" // Encoded data typically uses OB
+	newInfo.Encapsulated = c.TransferSyntax().IsEncapsulated()
+	newInfo.TransferSyntaxUID = c.TransferSyntax().UID().UID()
 	// A native codec writes uncompressed samples, whose VR follows PS3.5 8.1.1
 	// (OB for 1- and 8-bit, OW for wider samples); the writer needs that to
 	// byte-swap the value correctly.
@@ -1032,27 +1026,11 @@ func (pd *Data) Decode(ctx context.Context, c codec.Codec, params codec.Paramete
 	// Create new pixel data info for decoded data. The decoded (native) data
 	// cannot carry an encapsulated-only photometric interpretation, so a
 	// native-safe placeholder is used; codecs may refine it via SetFrameInfo.
-	decodedPI := nativeSafePhotometric(pd.Info.PhotometricInterpretation, int(pd.Info.SamplesPerPixel))
-	newInfo := &Info{
-		Width:                     pd.Info.Width,
-		Height:                    pd.Info.Height,
-		NumberOfFrames:            pd.Info.NumberOfFrames,
-		BitsAllocated:             pd.Info.BitsAllocated,
-		BitsStored:                pd.Info.BitsStored,
-		HighBit:                   pd.Info.HighBit,
-		SamplesPerPixel:           pd.Info.SamplesPerPixel,
-		PixelRepresentation:       pd.Info.PixelRepresentation,
-		PlanarConfiguration:       pd.Info.PlanarConfiguration,
-		PhotometricInterpretation: decodedPI,
-		VRCode:                    "",
-		Encapsulated:              false, // Decoded data is not encapsulated
-		TransferSyntaxUID:         transfer.ExplicitVRLittleEndian.UID().UID(),
-		IsLossy:                   pd.Info.IsLossy,
-		LossyCompressionMethod:    pd.Info.LossyCompressionMethod,
-		LossyCompressionRatio:     pd.Info.LossyCompressionRatio,
-		PixelPaddingValue:         pd.Info.PixelPaddingValue,
-		PixelPaddingRangeLimit:    pd.Info.PixelPaddingRangeLimit,
-	}
+	newInfo := pd.Info.clone()
+	newInfo.PhotometricInterpretation = nativeSafePhotometric(pd.Info.PhotometricInterpretation, int(pd.Info.SamplesPerPixel))
+	newInfo.VRCode = ""
+	newInfo.Encapsulated = false // Decoded data is not encapsulated
+	newInfo.TransferSyntaxUID = transfer.ExplicitVRLittleEndian.UID().UID()
 	newInfo.VRCode = nativePixelDataVR(newInfo)
 
 	newPD, err := New(newInfo)

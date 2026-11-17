@@ -175,11 +175,11 @@ func NewFrameGeometryFromValues(
 	if err != nil {
 		return nil, fmt.Errorf("column direction: %w", err)
 	}
-	projection := dot(row, column)
+	projection := row.Dot(column)
 	if math.Abs(projection) > orthogonalityTolerance {
 		return nil, fmt.Errorf("row and column directions are not perpendicular")
 	}
-	column, err = subtractVector(column, scale(row, projection)).Normalize()
+	column, err = column.Sub(row.Scale(projection)).Normalize()
 	if err != nil {
 		return nil, fmt.Errorf("orthogonalize column direction: %w", err)
 	}
@@ -215,11 +215,9 @@ func (g *FrameGeometry) ImageToPatient(point math3d.Point2) (math3d.Point3, erro
 	if !g.HasGeometry() {
 		return math3d.Point3{}, fmt.Errorf("cannot transform an image point without geometry")
 	}
-	return addPoint(
-		g.TopLeft,
-		scale(g.DirectionRow, point.X*g.PixelSpacingColumns),
-		scale(g.DirectionColumn, point.Y*g.PixelSpacingRows),
-	), nil
+	return g.TopLeft.
+		Add(g.DirectionRow.Scale(point.X * g.PixelSpacingColumns)).
+		Add(g.DirectionColumn.Scale(point.Y * g.PixelSpacingRows)), nil
 }
 
 // PatientToImage projects a patient-space point onto the frame and returns a
@@ -228,17 +226,17 @@ func (g *FrameGeometry) PatientToImage(point math3d.Point3) (math3d.Point2, erro
 	if !g.HasGeometry() {
 		return math3d.Point2{}, fmt.Errorf("cannot transform a patient point without geometry")
 	}
-	delta := subtractPoint(point, g.TopLeft)
+	delta := point.Sub(g.TopLeft)
 	return math3d.Point2{
-		X: dot(delta, g.DirectionRow) / g.PixelSpacingColumns,
-		Y: dot(delta, g.DirectionColumn) / g.PixelSpacingRows,
+		X: delta.Dot(g.DirectionRow) / g.PixelSpacingColumns,
+		Y: delta.Dot(g.DirectionColumn) / g.PixelSpacingRows,
 	}, nil
 }
 
 func (g *FrameGeometry) updateCorners() {
-	g.TopRight = addPoint(g.TopLeft, scale(g.DirectionRow, float64(max(g.Columns-1, 0))*g.PixelSpacingColumns))
-	g.BottomLeft = addPoint(g.TopLeft, scale(g.DirectionColumn, float64(max(g.Rows-1, 0))*g.PixelSpacingRows))
-	g.BottomRight = addPoint(g.BottomLeft, subtractPoint(g.TopRight, g.TopLeft))
+	g.TopRight = g.TopLeft.Add(g.DirectionRow.Scale(float64(max(g.Columns-1, 0)) * g.PixelSpacingColumns))
+	g.BottomLeft = g.TopLeft.Add(g.DirectionColumn.Scale(float64(max(g.Rows-1, 0)) * g.PixelSpacingRows))
+	g.BottomRight = g.BottomLeft.Add(g.TopRight.Sub(g.TopLeft))
 }
 
 func validateFrameIndex(ds *dataset.Dataset, frame int) error {
@@ -379,31 +377,6 @@ func positiveFinite(value float64) bool {
 func finitePoint(point math3d.Point3) bool {
 	return !math.IsNaN(point.X) && !math.IsNaN(point.Y) && !math.IsNaN(point.Z) &&
 		!math.IsInf(point.X, 0) && !math.IsInf(point.Y, 0) && !math.IsInf(point.Z, 0)
-}
-
-func dot(a, b math3d.Vector3) float64 {
-	return a.X*b.X + a.Y*b.Y + a.Z*b.Z
-}
-
-func scale(vector math3d.Vector3, factor float64) math3d.Vector3 {
-	return math3d.Vector3{X: vector.X * factor, Y: vector.Y * factor, Z: vector.Z * factor}
-}
-
-func subtractVector(a, b math3d.Vector3) math3d.Vector3 {
-	return math3d.Vector3{X: a.X - b.X, Y: a.Y - b.Y, Z: a.Z - b.Z}
-}
-
-func addPoint(point math3d.Point3, vectors ...math3d.Vector3) math3d.Point3 {
-	for _, vector := range vectors {
-		point.X += vector.X
-		point.Y += vector.Y
-		point.Z += vector.Z
-	}
-	return point
-}
-
-func subtractPoint(a, b math3d.Point3) math3d.Vector3 {
-	return math3d.Vector3{X: a.X - b.X, Y: a.Y - b.Y, Z: a.Z - b.Z}
 }
 
 func nonNilError(err error, message string) error {

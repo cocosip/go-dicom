@@ -252,17 +252,6 @@ func WithSendQueueSize(size int) Option {
 	}
 }
 
-// WithKeepConnectionOnPeerRelease is deprecated and has no effect.
-//
-// After the local AE answers a peer A-RELEASE-RQ with A-RELEASE-RP it must not
-// send any further P-DATA and the transport is closed (PS3.8 7.2.2), so the
-// association can never stay usable on the same connection.
-//
-// Deprecated: keeping the connection open after a release is not conformant.
-func WithKeepConnectionOnPeerRelease(_ bool) Option {
-	return func(*serviceConfig) {}
-}
-
 // WithAssociationRequestor identifies whether the local AE initiated the
 // association. This controls the direction of negotiated SCU/SCP roles.
 func WithAssociationRequestor(requestor bool) Option {

@@ -426,8 +426,12 @@ func (t *Transcoder) transcodeUncompressedToUncompressed(ctx context.Context, ds
 		}
 	}
 
-	convertedData := append([]byte(nil), pixelData...)
+	// Only copy when the byte order actually changes; the output dataset shares
+	// non-pixel elements with the input, so sharing unchanged pixel data too
+	// keeps a full-size allocation out of every same-endian transcode.
+	convertedData := pixelData
 	if inputWordsAreBigEndian != outputWordsAreBigEndian {
+		convertedData = append([]byte(nil), pixelData...)
 		if bitsAllocated == 32 {
 			// A 32-bit sample spans two OW words; reverse the whole sample so its
 			// numeric value is preserved (PS3.5 byte-order semantics).

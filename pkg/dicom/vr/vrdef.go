@@ -94,6 +94,8 @@ var (
 		is16bitLength:   true,
 		isMultiValue:    true,
 		paddingValue:    padSpace,
+		// PS3.5 Table 6.2-1: 8 bytes fixed, 18 maximum in the context of PS3.4
+		// range matching. Validation allows ranges, so use the larger bound.
 		maximumLength:   18,
 		unitSize:        1,
 		byteSwap:        1,
@@ -126,7 +128,9 @@ var (
 		is16bitLength:   true,
 		isMultiValue:    true,
 		paddingValue:    padSpace,
-		maximumLength:   26,
+		// PS3.5 Table 6.2-1: 26 bytes for a single value, 54 in the context of
+		// PS3.4 range matching. Validation allows ranges, so use the larger bound.
+		maximumLength:   54,
 		unitSize:        1,
 		byteSwap:        1,
 		valueType:       reflect.TypeOf(""),
@@ -421,7 +425,9 @@ var (
 		is16bitLength:   true,
 		isMultiValue:    true,
 		paddingValue:    padSpace,
-		maximumLength:   14,
+		// PS3.5 Table 6.2-1: 16 bytes for a single value, 28 in the context of
+		// PS3.4 range matching. Validation allows ranges, so use the larger bound.
+		maximumLength:   28,
 		unitSize:        1,
 		byteSwap:        1,
 		valueType:       reflect.TypeOf(""),

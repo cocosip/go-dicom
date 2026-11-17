@@ -288,9 +288,11 @@ func validateContentItem(item *ContentItem, root bool, path string) error {
 	if err := validateConceptName(item.dataset); err != nil {
 		return validationPathError(path, err)
 	}
-	// PS3.3 C.17.3.2.2 (Concept Name Code Sequence): the attribute is required
-	// for the root item and for every non-container value type; nested unheaded
-	// CONTAINER items may omit it.
+	// PS3.3 Table C.17-5 (Concept Name Code Sequence): Type 1C. Required for
+	// TEXT, NUM, CODE, DATETIME, DATE, TIME, UIDREF, TABLE and PNAME values and
+	// for the root CONTAINER; for COMPOSITE, IMAGE, WAVEFORM, SCOORD/SCOORD3D
+	// and TCOORD it is required only when the Purpose of Reference is conveyed
+	// in the concept name, so its absence is tolerated there.
 	if !item.dataset.Contains(tag.ConceptNameCodeSequence) {
 		switch valueType {
 		case ValueTypeText, ValueTypeCode, ValueTypeNumeric, ValueTypePersonName,

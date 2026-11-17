@@ -84,9 +84,9 @@ func TestRecvLoopPeerReleaseClosesNormally(t *testing.T) {
 	}
 }
 
-func TestHandleReleaseRequestClosesConnectionEvenWithLegacyOption(t *testing.T) {
+func TestHandleReleaseRequestClosesConnection(t *testing.T) {
 	conn := &mockConn{}
-	service := NewService(conn, nil, WithKeepConnectionOnPeerRelease(true))
+	service := NewService(conn, nil)
 	if err := service.setState(StateAssociationAccepted); err != nil {
 		t.Fatalf("setState() error = %v", err)
 	}
@@ -94,8 +94,8 @@ func TestHandleReleaseRequestClosesConnectionEvenWithLegacyOption(t *testing.T) 
 	if err := service.handleReleaseRequest(context.Background()); err != nil {
 		t.Fatalf("handleReleaseRequest() error = %v", err)
 	}
-	// PS3.8 7.2.2: no P-DATA may follow the A-RELEASE-RP, so the deprecated
-	// compatibility option must not leave the association usable.
+	// PS3.8 7.2.2: no P-DATA may follow the A-RELEASE-RP, so the association must
+	// never stay usable after answering a peer release.
 	if !conn.closed {
 		t.Fatal("connection stayed open after peer release")
 	}

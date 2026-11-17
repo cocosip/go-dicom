@@ -31,7 +31,10 @@
 //   - TABLE: Tabulated values (row/column counts plus cell values)
 //
 // Nested CONTAINER items may omit the Concept Name Code Sequence; the root
-// CONTAINER and all non-container value types require one (PS3.3 C.17.3.2.2).
+// CONTAINER and the TEXT, NUM, CODE, DATE, TIME, DATETIME, UIDREF, TABLE and
+// PNAME value types require one (PS3.3 Table C.17-5, Type 1C). For COMPOSITE,
+// IMAGE, WAVEFORM, SCOORD and TCOORD it is only required when the Purpose of
+// Reference is conveyed in the concept name, so its absence is tolerated.
 //
 // **Relationship Types**:
 //   - CONTAINS: Parent-child containment

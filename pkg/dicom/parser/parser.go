@@ -1084,61 +1084,18 @@ func (p *parseContext) readElementWithPrivateCreators(privateCreators privateCre
 		return nil, errStopBeforePixelData
 	}
 	p.attachPrivateCreator(t, privateCreators)
-
-	// Read VR (Value Representation)
-	vrValue, err := p.readVR(t)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read VR for tag %s: %w", t, err)
-	}
-
-	// Read value length
-	length, err := p.readLength(vrValue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read length for tag %s: %w", t, err)
-	}
-
-	// Check max element size
-	if p.maxElementSize > 0 && length > p.maxElementSize && length != 0xFFFFFFFF {
-		return nil, fmt.Errorf("element size %d exceeds maximum %d for tag %s", length, p.maxElementSize, t)
-	}
-
-	// Handle special case: Sequence
-	if vrValue.Code() == vr.CodeSQ {
-		return p.readSequence(t, length)
-	}
-
-	// Handle special case: VR=UN with undefined length.
-	// PS3.5 6.2.2 requires the value to remain in Implicit VR Little Endian
-	// form regardless of the enclosing transfer syntax.
-	if vrValue.Code() == vr.CodeUN && length == 0xFFFFFFFF {
-		return p.readImplicitVRSequence(t, length)
-	}
-
-	// Handle special case: Fragment Sequence (encapsulated pixel data)
-	// Only Pixel Data uses undefined-length OB/OW encapsulation (PS3.5 §7.5).
-	if (vrValue.Code() == vr.CodeOB || vrValue.Code() == vr.CodeOW) && length == 0xFFFFFFFF && isEncapsulatedPixelDataTag(t) {
-		if p.readOption == SkipLargeTags {
-			if err := p.skipFragmentSequence(); err != nil {
-				return nil, err
-			}
-			return createEmptyFragmentSequence(t, vrValue)
-		}
-		return p.readFragmentSequence(t, vrValue)
-	}
-
-	// Read element data
-	buf, err := p.readElementData(t, vrValue, length)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create element based on VR
-	return p.createElement(t, vrValue, buf)
+	return p.readElementBody(t)
 }
 
 // readElementWithTag reads a single DICOM element when the tag is already known.
 // This is used when we've already read the tag (e.g., in readFileMetaInformation).
 func (p *parseContext) readElementWithTag(t *tag.Tag) (element.Element, error) {
+	return p.readElementBody(t)
+}
+
+// readElementBody reads the VR, the length and the value of an element whose
+// tag has already been read.
+func (p *parseContext) readElementBody(t *tag.Tag) (element.Element, error) {
 	// Read VR (Value Representation)
 	vrValue, err := p.readVR(t)
 	if err != nil {

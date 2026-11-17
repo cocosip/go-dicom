@@ -6,8 +6,8 @@ Historical snapshot (collection date not recorded)
 
 ## Benchmark Coverage
 
-- `pkg/dicom/...`: dataset, parser, writer, endian, UID, and committed real-DICOM fixture benchmarks.
-- `pkg/io/...`: buffer-pool and range-backed `ReadSeeker` cache/cross-block benchmarks.
+- `pkg/dicom/...`: dataset, parser, writer, UID, and committed real-DICOM fixture benchmarks.
+- `pkg/io/...`: byte-order helpers, buffer-pool, and range-backed `ReadSeeker` cache/cross-block benchmarks.
 - `pkg/imaging/...`: pixel layout and color-conversion benchmarks.
 
 The PR workflow runs all three package trees with `-run=^$` so benchmark results are not mixed with unit-test execution. The resulting `benchmark_results.txt` is uploaded as the `benchmark-results` artifact and retained for 90 days.
@@ -111,7 +111,7 @@ This document contains performance benchmark results for the go-dicom library. B
 
 ## Imaging Operations
 
-Imaging benchmarks live in `pkg/imaging/colorconv` and `pkg/io/buffer`; run them
+Imaging benchmarks live in `pkg/imaging/colorconv`, `reconstruction`, and `render`; run them
 with the commands in [Running Benchmarks](#running-benchmarks) instead of relying
 on this snapshot.
 
@@ -123,7 +123,6 @@ on this snapshot.
 3. **Efficient Endian**: Byte swapping operations are extremely fast
 4. **Linear Scaling**: Writer performance scales predictably with data size
 5. **Buffer Pooling**: bytes.Buffer pool reduces allocations by 100% for temporary buffers
-6. **Large Buffer Pooling**: 5.7x performance improvement for ≥512KB allocations
 
 ### Recent Optimizations
 1. **Writer Buffer Pooling**: Implemented sync.Pool for temporary bytes.Buffer instances

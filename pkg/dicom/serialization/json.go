@@ -291,56 +291,28 @@ func (w *jsonWriter) writeStringArray(elem element.Element) error {
 
 // writeFloat32Array writes a float32 array as JSON numbers
 func (w *jsonWriter) writeFloat32Array(elem element.Element) error {
-	// Type assert to *element.Float
 	floatElem, ok := elem.(*element.Float)
 	if !ok {
 		return nil
 	}
-
 	values, err := floatElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
-			w.buf.WriteString(",")
-		}
+	return writeNumberValues(w, elem, values, err, func(val float32) error {
 		w.writeFloat32(val)
-	}
-	w.buf.WriteString("]")
-	return nil
+		return nil
+	})
 }
 
 // writeFloat64Array writes a float64 array as JSON numbers
 func (w *jsonWriter) writeFloat64Array(elem element.Element) error {
-	// Type assert to *element.Double
 	doubleElem, ok := elem.(*element.Double)
 	if !ok {
 		return nil
 	}
-
 	values, err := doubleElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
-			w.buf.WriteString(",")
-		}
+	return writeNumberValues(w, elem, values, err, func(val float64) error {
 		w.writeFloat64(val)
-	}
-	w.buf.WriteString("]")
-	return nil
+		return nil
+	})
 }
 
 // writeFloat32 writes a single float32 value.
@@ -378,163 +350,96 @@ func (w *jsonWriter) writeFloat64(val float64) {
 
 // writeInt16Array writes an int16 array as JSON numbers
 func (w *jsonWriter) writeInt16Array(elem element.Element) error {
-	// Type assert to *element.SignedShort
 	ssElem, ok := elem.(*element.SignedShort)
 	if !ok {
 		return nil
 	}
-
 	values, err := ssElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
-			w.buf.WriteString(",")
-		}
+	return writeNumberValues(w, elem, values, err, func(val int16) error {
 		w.buf.WriteString(strconv.FormatInt(int64(val), 10))
-	}
-	w.buf.WriteString("]")
-	return nil
+		return nil
+	})
 }
 
 // writeInt32Array writes an int32 array as JSON numbers
 func (w *jsonWriter) writeInt32Array(elem element.Element) error {
-	// Type assert to *element.SignedLong
 	slElem, ok := elem.(*element.SignedLong)
 	if !ok {
 		return nil
 	}
-
 	values, err := slElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
-			w.buf.WriteString(",")
-		}
+	return writeNumberValues(w, elem, values, err, func(val int32) error {
 		w.buf.WriteString(strconv.FormatInt(int64(val), 10))
-	}
-	w.buf.WriteString("]")
-	return nil
+		return nil
+	})
 }
 
 // writeInt64Array writes an int64 array (SV) as JSON numbers or strings
 func (w *jsonWriter) writeInt64Array(elem element.Element) error {
-	// Type assert to *element.SignedVeryLong
 	svElem, ok := elem.(*element.SignedVeryLong)
 	if !ok {
 		return nil
 	}
-
 	values, err := svElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
-			w.buf.WriteString(",")
-		}
-		if err := w.writeNumberOrString(strconv.FormatInt(val, 10)); err != nil {
-			return err
-		}
-	}
-	w.buf.WriteString("]")
-	return nil
+	return writeNumberValues(w, elem, values, err, func(val int64) error {
+		return w.writeNumberOrString(strconv.FormatInt(val, 10))
+	})
 }
 
 // writeUint16Array writes a uint16 array as JSON numbers
 func (w *jsonWriter) writeUint16Array(elem element.Element) error {
-	// Type assert to *element.UnsignedShort
 	usElem, ok := elem.(*element.UnsignedShort)
 	if !ok {
 		return nil
 	}
-
 	values, err := usElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
-			w.buf.WriteString(",")
-		}
+	return writeNumberValues(w, elem, values, err, func(val uint16) error {
 		w.buf.WriteString(strconv.FormatUint(uint64(val), 10))
-	}
-	w.buf.WriteString("]")
-	return nil
+		return nil
+	})
 }
 
 // writeUint32Array writes a uint32 array as JSON numbers
 func (w *jsonWriter) writeUint32Array(elem element.Element) error {
-	// Type assert to *element.UnsignedLong
 	ulElem, ok := elem.(*element.UnsignedLong)
 	if !ok {
 		return nil
 	}
-
 	values, err := ulElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
-			w.buf.WriteString(",")
-		}
+	return writeNumberValues(w, elem, values, err, func(val uint32) error {
 		w.buf.WriteString(strconv.FormatUint(uint64(val), 10))
-	}
-	w.buf.WriteString("]")
-	return nil
+		return nil
+	})
 }
 
 // writeUint64Array writes a uint64 array (UV) as JSON numbers or strings
 func (w *jsonWriter) writeUint64Array(elem element.Element) error {
-	// Type assert to *element.UnsignedVeryLong
 	uvElem, ok := elem.(*element.UnsignedVeryLong)
 	if !ok {
 		return nil
 	}
-
 	values, err := uvElem.GetValues()
-	if err != nil {
-		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	return writeNumberValues(w, elem, values, err, func(val uint64) error {
+		return w.writeNumberOrString(strconv.FormatUint(val, 10))
+	})
+}
+
+// writeNumberValues writes a numeric array as `,"Value":[...]`, formatting each
+// value with format. All numeric VRs share this skeleton; only the value
+// formatting differs.
+func writeNumberValues[T any](w *jsonWriter, elem element.Element, values []T, getErr error, format func(T) error) error {
+	if getErr != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), getErr)
 	}
 	if len(values) == 0 {
 		return nil
 	}
-
 	w.buf.WriteString(`,"Value":[`)
-	for i, val := range values {
-		if i > 0 {
+	for index, value := range values {
+		if index > 0 {
 			w.buf.WriteString(",")
 		}
-		if err := w.writeNumberOrString(strconv.FormatUint(val, 10)); err != nil {
+		if err := format(value); err != nil {
 			return err
 		}
 	}

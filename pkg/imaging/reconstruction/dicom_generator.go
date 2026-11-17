@@ -370,5 +370,5 @@ func removeEnhancedAndStalePixelTags(output *dataset.Dataset) {
 
 func sliceLocation(spec CutSpec) float64 {
 	normal := spec.RowDirection.Cross(spec.ColumnDirection)
-	return dot3(spec.TopLeft, normal)
+	return spec.TopLeft.Dot(normal)
 }

@@ -64,10 +64,10 @@ func main() {
 	single := buildDataset("1.2.826.0.1.3680043.10.1142.1001.1", "1.2.826.0.1.3680043.10.1142.1001", "1.2.826.0.1.3680043.10.1142.1000", 2, 2, 1, singlePixels)
 	writeFile(filepath.Join(*outputDir, "sample-single-frame.dcm"), single)
 
-	// Multi-frame 2 frames, each 2x2: frame0 values 0..3, frame1 values 128..131
+	// Multi-frame 2 frames, each 2x2: frame 0 = 0,32,64,96; frame 1 = 128,144,160,176
 	multiPixels := []byte{
-		0x00, 0x20, 0x40, 0x60, // frame 1
-		0x80, 0x90, 0xA0, 0xB0, // frame 2
+		0x00, 0x20, 0x40, 0x60, // frame 0
+		0x80, 0x90, 0xA0, 0xB0, // frame 1
 	}
 	multi := buildDataset("1.2.826.0.1.3680043.10.1142.2001.1", "1.2.826.0.1.3680043.10.1142.2001", "1.2.826.0.1.3680043.10.1142.2000", 2, 2, 2, multiPixels)
 	writeFile(filepath.Join(*outputDir, "sample-multiframe.dcm"), multi)

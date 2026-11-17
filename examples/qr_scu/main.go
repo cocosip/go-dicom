@@ -39,7 +39,7 @@ var (
 	port             = flag.Int("port", 11113, "SCP port")
 	callingAE        = flag.String("calling-ae", "QRSCU", "Calling AE Title")
 	calledAE         = flag.String("called-ae", "QRSCP", "Called AE Title")
-	queryLevel       = flag.String("level", "STUDY", "Query level: PATIENT|STUDY|SERIES|IMAGE")
+	queryLevel       = flag.String("level", "STUDY", "C-FIND query level: PATIENT|STUDY|SERIES|IMAGE (retrieval always targets the study)")
 	patientName      = flag.String("patient-name", "", "Optional PatientName match key (supports wildcard, e.g. DOE^*)")
 	patientID        = flag.String("patient-id", "", "Optional PatientID match key")
 	studyDate        = flag.String("study-date", "", "Optional StudyDate (YYYYMMDD or range YYYYMMDD-YYYYMMDD)")

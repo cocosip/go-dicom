@@ -5,7 +5,6 @@ package element
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/daterange"
@@ -111,26 +110,6 @@ func (d *Date) GetDate(index int) (time.Time, error) {
 
 	// DICOM DA format: YYYYMMDD
 	return time.Parse("20060102", dateStr)
-}
-
-// normalizeFractionalSeconds expands a fractional-seconds component of 1-6
-// digits to the 6-digit form expected by the time layouts. DICOM permits any
-// precision from 1 to 6 digits. The value is returned unchanged when it has no
-// fractional component or one that is not 1-6 digits.
-func normalizeFractionalSeconds(value string) string {
-	dot := strings.IndexByte(value, '.')
-	if dot < 0 {
-		return value
-	}
-	end := dot + 1
-	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
-		end++
-	}
-	digits := end - dot - 1
-	if digits < 1 || digits > 6 {
-		return value
-	}
-	return value[:dot+1] + value[dot+1:end] + strings.Repeat("0", 6-digits) + value[end:]
 }
 
 // GetDates parses and returns all dates.
@@ -257,7 +236,7 @@ func (tm *Time) GetTime(index int) (time.Time, error) {
 
 	// Try different DICOM TM formats. Fractional seconds are accepted with 1 to
 	// 6 digits and normalized to the fixed 6-digit layout.
-	normalized := normalizeFractionalSeconds(timeStr)
+	normalized := daterange.NormalizeTimeFraction(timeStr)
 	formats := []string{
 		"150405.000000", // HHMMSS.FFFFFF (fraction normalized to 6 digits)
 		"150405",        // HHMMSS
@@ -406,7 +385,7 @@ func (dt *DateTime) GetDateTime(index int) (time.Time, error) {
 
 	// Try different DICOM DT formats. Fractional seconds are accepted with 1 to
 	// 6 digits and normalized to the fixed 6-digit layout.
-	normalized := normalizeFractionalSeconds(dtStr)
+	normalized := daterange.NormalizeTimeFraction(dtStr)
 	formats := []string{
 		"20060102150405.000000-0700", // YYYYMMDDHHMMSS.FFFFFF±ZZXX (PS3.5 Table 6.2-1)
 		"20060102150405-0700",        // YYYYMMDDHHMMSS±ZZXX
@@ -472,12 +451,5 @@ func (dt *DateTime) GetDateTimeRange() (*daterange.DateTimeRange, error) {
 // a timezone dash has exactly 4 digits after it; a range dash continues beyond.
 func (dt *DateTime) IsRange() bool {
 	dtStr := dt.str.GetString()
-	return findRangeDash(dtStr) != -1
-}
-
-// findRangeDash returns the index of the range-separating dash, or -1 if none.
-// It delegates to daterange so element and daterange agree on how a trailing
-// UTC offset (e.g. "200601-0500") is distinguished from a range separator.
-func findRangeDash(s string) int {
-	return daterange.FindRangeDash(s)
+	return daterange.FindRangeDash(dtStr) != -1
 }

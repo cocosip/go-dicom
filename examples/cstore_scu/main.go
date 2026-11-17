@@ -31,7 +31,7 @@ var (
 	calledAE      = flag.String("called-ae", "NETGATE", "Called AE Title (SCP)")
 	dicomFile     = flag.String("file", "", "Single DICOM file to send")
 	dicomDir      = flag.String("dir", "", "Directory containing DICOM files to send")
-	timeout       = flag.Duration("timeout", 30*time.Second, "Connection timeout")
+	timeout       = flag.Duration("timeout", 30*time.Second, "Connection and request timeout")
 	verifyOnly    = flag.Bool("verify", false, "Only verify connection with C-ECHO, don't send files")
 	printMetadata = flag.Bool("metadata", false, "Print DICOM file metadata before sending")
 )
@@ -52,9 +52,9 @@ func run() error {
 		return fmt.Errorf("either -file or -dir must be specified")
 	}
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
-	defer cancel()
+	// The per-connection and per-request timeouts come from -timeout; the run
+	// itself is not capped so that sending a directory is not cut short.
+	ctx := context.Background()
 
 	// Create DICOM client
 	fmt.Printf("=== DICOM C-STORE SCU Example ===\n")
@@ -67,7 +67,7 @@ func run() error {
 	c := client.New(
 		client.WithCallingAE(*callingAE),
 		client.WithCalledAE(*calledAE),
-		client.WithConnectTimeout(10*time.Second),
+		client.WithConnectTimeout(*timeout),
 		client.WithRequestTimeout(*timeout),
 	)
 

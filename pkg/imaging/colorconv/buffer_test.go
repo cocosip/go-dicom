@@ -126,17 +126,42 @@ func TestConvertMono1ToMono2RejectsInvalidStoredBitLayout(t *testing.T) {
 		name           string
 		data           []byte
 		bitsStored     uint16
+		highBit        uint16
 		bytesPerSample int
 	}{
-		{name: "zero stored bits", data: []byte{0}, bitsStored: 0, bytesPerSample: 1},
-		{name: "stored bits exceed allocation", data: []byte{0}, bitsStored: 9, bytesPerSample: 1},
-		{name: "partial sample", data: []byte{0}, bitsStored: 12, bytesPerSample: 2},
+		{name: "zero stored bits", data: []byte{0}, bitsStored: 0, highBit: 0, bytesPerSample: 1},
+		{name: "stored bits exceed allocation", data: []byte{0}, bitsStored: 9, highBit: 8, bytesPerSample: 1},
+		{name: "partial sample", data: []byte{0}, bitsStored: 12, highBit: 11, bytesPerSample: 2},
+		{name: "high bit above allocation", data: []byte{0}, bitsStored: 8, highBit: 12, bytesPerSample: 1},
+		{name: "high bit below stored bits", data: []byte{0}, bitsStored: 12, highBit: 5, bytesPerSample: 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := ConvertMono1ToMono2(test.data, test.bitsStored, test.bytesPerSample, false); err == nil {
+			if _, err := ConvertMono1ToMono2(test.data, test.bitsStored, test.highBit, test.bytesPerSample, false); err == nil {
 				t.Fatal("ConvertMono1ToMono2() accepted an invalid stored-bit layout")
 			}
 		})
+	}
+}
+
+// TestConvertMono1ToMono2HonorsHighBit verifies PS3.3 C.7.6.3: the stored value
+// occupies High Bit down to HighBit-BitsStored+1, so inversion must keep that
+// alignment instead of right-justifying the samples.
+func TestConvertMono1ToMono2HonorsHighBit(t *testing.T) {
+	// 12 stored bits left-justified in 16-bit words (HighBit 15).
+	rawValues := []uint16{0x0000, 0x7FF0, 0xFFF0} // stored 0, 2047, 4095
+	wantValues := []uint16{0xFFF0, 0x8000, 0x0000}
+	data := make([]byte, len(rawValues)*2)
+	for i, value := range rawValues {
+		binary.LittleEndian.PutUint16(data[i*2:], value)
+	}
+	got, err := ConvertMono1ToMono2(data, 12, 15, 2, false)
+	if err != nil {
+		t.Fatalf("ConvertMono1ToMono2() error = %v", err)
+	}
+	for i, want := range wantValues {
+		if value := binary.LittleEndian.Uint16(got[i*2:]); value != want {
+			t.Fatalf("sample %d = 0x%04X, want 0x%04X", i, value, want)
+		}
 	}
 }
 
@@ -149,7 +174,7 @@ func TestConvertMono1ToMono2Signed(t *testing.T) {
 	for i, value := range rawValues {
 		binary.LittleEndian.PutUint16(data[i*2:], value)
 	}
-	got, err := ConvertMono1ToMono2(data, 12, 2, true)
+	got, err := ConvertMono1ToMono2(data, 12, 11, 2, true)
 	if err != nil {
 		t.Fatalf("ConvertMono1ToMono2() error = %v", err)
 	}
@@ -163,7 +188,7 @@ func TestConvertMono1ToMono2Signed(t *testing.T) {
 func TestConvertMono1ToMono2SignedEightBit(t *testing.T) {
 	data := []byte{0x00, 0x7F, 0x80, 0xFF} // 0, 127, -128, -1
 	want := []byte{0xFF, 0x80, 0x7F, 0x00}
-	got, err := ConvertMono1ToMono2(data, 8, 1, true)
+	got, err := ConvertMono1ToMono2(data, 8, 7, 1, true)
 	if err != nil {
 		t.Fatalf("ConvertMono1ToMono2() error = %v", err)
 	}

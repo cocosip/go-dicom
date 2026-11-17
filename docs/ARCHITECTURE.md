@@ -50,7 +50,7 @@ pkg/network  pkg/printing  pkg/media  pkg/sr
 | `pkg/dicom/tag`, `vr`, `vm` | DICOM tags, value representations, value multiplicities |
 | `pkg/dicom/element`, `dataset` | Element types, datasets, sequences, and file meta information |
 | `pkg/dicom/parser`, `writer` | DICOM file reading and writing |
-| `pkg/dicom/dict`, `uid`, `transfer`, `charset` | Tag dictionary, standard UIDs, transfer syntaxes, character sets |
+| `pkg/dicom/dict`, `uid`, `transfer`, `charset`, `daterange` | Tag dictionary, standard UIDs, transfer syntaxes, character sets, date/time range matching |
 | `pkg/dicom/serialization`, `anonymizer` | JSON/XML serialization and de-identification profiles |
 | `pkg/dicom/encapsulated`, `transcode`, `parseable` | Encapsulated pixel data, dataset-level transcoding, parseable values |
 | `pkg/imaging/codec` | Image codec SPI and registry (native and external codecs) |

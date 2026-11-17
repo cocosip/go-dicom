@@ -158,7 +158,7 @@ dicom_to_image.exe -input sample.dcm -format jpeg -jpeg-quality 100 -output high
 - MONOCHROME1 images are automatically inverted (unless `-invert` is used to un-invert them)
 - Multi-frame DICOM files are supported - specify the frame index with `-frame`
 - Compressed DICOM files (JPEG, JPEG-LS, etc.) are not currently supported in this example
-- Press Enter to exit after completion or error
+- `-jpeg-quality` values outside 1-100 fall back to 90 in the `render` export path
 
 ## Troubleshooting
 

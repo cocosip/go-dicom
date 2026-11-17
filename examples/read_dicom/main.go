@@ -148,7 +148,7 @@ func main() {
 
 	// === Summary ===
 	fmt.Printf("\n=== Summary ===\n")
-	fmt.Printf("Total elements: %d\n", len(result.Dataset.Elements()))
+	fmt.Printf("Total elements: %d\n", result.Dataset.Count())
 }
 
 func inputPath(args []string) (string, error) {

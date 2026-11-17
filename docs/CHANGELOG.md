@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **repo**: `.gitattributes` stores and checks out text files with LF, so Windows and Linux clones produce identical working trees and `gofmt -l` no longer flags every file.
+- **network/service**: `AssociationFromContext` exposes the negotiated association to DIMSE handlers (calling/called AE, accepted presentation contexts), matching what fo-dicom offers as `DicomService.Association`. `examples/cstore_scp` uses it so `-organize-by-ae` files each sender under its real calling AE title.
+- **testing**: `test-data/interop/` keeps the binary fixtures from the fo-dicom interop run and `pkg/dicom/writer` locks the encoding byte-for-byte against them; no .NET code is part of the build or test suite.
+
+### Changed
+
+- **dicom/parser**: the two element readers (`readElementWithPrivateCreators`, `readElementWithTag`) share one `readElementBody`; the 48-line copy is gone.
+- **network/service**: a DIMSE command set is encoded once and its CommandGroupLength value is patched in place instead of encoding the whole set twice on every send.
+- **dicom/serialization**: the eight numeric JSON array writers share one generic implementation; only the per-VR value formatting remains.
+- **imaging/codec**: the native codec's `Encode` and `Decode` share one frame-copy loop (they differ only in the error verb).
+- **imaging/math3d**: vector/point arithmetic, matrix multiplication/direction transform and bounds union moved into `math3d`; `imaging/geometry`, `imaging/reconstruction` and `imaging/transform` use them instead of package-local copies.
+- **dicom/dataset**: `Add` delegates to `AddOrUpdate` after the duplicate-tag check; the three clone methods share their metadata prelude.
+- **dicom/daterange**: fractional-second normalization is exported as `NormalizeTimeFraction` and reused by `element`, which drops its identical copy.
+- **network/pdu**: the A-ASSOCIATE-RQ and A-ASSOCIATE-AC user-information sub-item codecs (`0x51`-`0x59`) are one implementation in `items.go` with a direction flag; only the direction-specific items and warnings remain per PDU. fo-dicom keeps the two PDU writers separate but shares the `DicomAssociation` model, so this merge is go-dicom's own.
+- **dicom/element**: `DeepClone` and `DeepCloneChecked` share one type switch; the checked variant differs only in how a value buffer that cannot be detached is reported.
+- **imaging/pixeldata**: windowing and VOI LUT-sequence mapping share one 8-bit mapping loop, and the precalculated-table range is built in one place.
 
 ### Changed
 
@@ -21,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **imaging**: signed 1-bit images get a `-0.5/1` fallback window instead of clipping both stored values (`-1` and `0`) to black.
 - **imaging**: `DecodeIfNeeded` serializes concurrent calls, so a compressed source is decoded once and a second caller observes the decoded result.
 - **dicom/dataset**: document that `AddElements`/`AddOrUpdateElements` take ownership of elements and that `Merge` shares sequence items (updating their inherited text encodings).
+- **dicom/vr**: the DA/TM/DT length limits now follow the PS3.5 Table 6.2-1 range-matching maxima (18/28/54), so a PS3.4 query key such as `20240101-20241231` validates instead of being rejected.
+- **dicom/dataset**: adding an element validates that element only instead of walking the whole subtree, matching `DicomItem.Validate` in fo-dicom.
+- **dicom/dict**: `LookupKeyword` searches the private dictionaries under the read lock instead of copying and sorting their creator names on every miss.
+- **network/service**: the receive loop hands responses to a per-request queue drained by a single goroutine, so a slow application grows that queue instead of blocking `A-RELEASE`, `A-ABORT` and other operations (the same trade-off as fo-dicom's unbounded per-request channel).
 
 ### Fixed
 
@@ -33,6 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **printing**: Smoothing Type is only sent when the effective Magnification Type is CUBIC (PS3.3 Table C.13-3).
 - **imaging**: an overlay without Number of Frames in Overlay or Image Frame Origin is applied to every frame of a multi-frame image (PS3.3 C.9.2.1.4) instead of only the first.
 - **imaging**: the softcopy Presentation LUT accepts 8- and 9-bit descriptors (PS3.3 C.11.6.1.1); the 10-16 limit now applies only to the hardcopy LUT (PS3.3 C.11.4.1).
+- **imaging**: `ConvertMono1ToMono2` honours High Bit, so a MONOCHROME1 image whose stored bits do not end at bit 0 is inverted in place instead of having its samples shifted, matching how the render pipeline extracts stored values (PS3.3 C.7.6.3).
+- **dicom/encapsulated**: a zero-length fragment item inside a frame no longer fails the read; it contributes no bytes, as the parser and writer already assumed (PS3.5 A.4).
+- **dicom/sr**: the Concept Name Code Sequence comments now state the PS3.3 Table C.17-5 Type 1C rule (required for TEXT/NUM/CODE/DATE/TIME/DATETIME/UIDREF/TABLE/PNAME and the root CONTAINER, conditional for the reference value types), which is what the validation already enforced.
+
+### Removed
+
+- **network/client, network/service**: `WithKeepConnectionOnPeerRelease` and `Config.KeepConnectionOnPeerRelease`. They had no effect: after answering a peer A-RELEASE-RQ with A-RELEASE-RP no P-DATA may be sent (PS3.8 7.2.2), so the association is always closed. fo-dicom removed the equivalent option instead of keeping a no-op.
 
 ## [v0.9.0] - 2026-11-09
 

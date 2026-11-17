@@ -54,5 +54,5 @@ func main() {
 	}
 
 	fmt.Printf("\n=== Converted back to Dataset ===\n")
-	fmt.Printf("Total elements: %d\n", len(ds.Elements()))
+	fmt.Printf("Total elements: %d\n", ds.Count())
 }

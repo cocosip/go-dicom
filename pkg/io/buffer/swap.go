@@ -104,6 +104,11 @@ func (s *SwapByteBuffer) GetByteRange(offset, count uint32, output []byte) error
 	if s.unitSize > 1 && offset%uint32(s.unitSize) != 0 {
 		return fmt.Errorf("offset %d is not a multiple of unit size %d", offset, s.unitSize)
 	}
+	// A partial trailing group cannot be swapped; returning it unswapped would
+	// mix byte orders in one read, so reject the range instead.
+	if s.unitSize > 1 && count%uint32(s.unitSize) != 0 {
+		return fmt.Errorf("count %d is not a multiple of unit size %d", count, s.unitSize)
+	}
 
 	// Get the bytes from the internal buffer
 	err := s.internal.GetByteRange(offset, count, output)
@@ -131,8 +136,10 @@ func (s *SwapByteBuffer) WriteTo(w io.Writer) (int64, error) {
 		return 0, nil
 	}
 
-	// Use 1MB chunks for efficiency, sized down for small buffers.
-	const chunkSize = 1024 * 1024
+	// Use 1MB chunks for efficiency, sized down for small buffers. Chunks must
+	// stay a multiple of unitSize so every chunk starts swap-aligned.
+	const maxChunkSize = 1024 * 1024
+	chunkSize := maxChunkSize - maxChunkSize%uint32(s.unitSize)
 	bufSize := size
 	if bufSize > chunkSize {
 		bufSize = chunkSize

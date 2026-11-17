@@ -151,20 +151,11 @@ func parseVM(s string) (*VM, error) {
 		return union, nil
 	}
 
-	// Split by "-", " ", or "or"
-	// Examples: "1-2", "1 or 2", "1-n", "2-2n"
+	// Split by "-" or " "
+	// Examples: "1-2", "1-n", "2-2n"
 	parts := strings.FieldsFunc(s, func(r rune) bool {
 		return r == '-' || r == ' '
 	})
-
-	// Remove "or" if present
-	filtered := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if strings.ToLower(part) != "or" {
-			filtered = append(filtered, part)
-		}
-	}
-	parts = filtered
 
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("empty VM string")

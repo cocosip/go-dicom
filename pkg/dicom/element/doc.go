@@ -26,11 +26,9 @@
 //
 //	// Create a string element
 //	elem := element.NewString(tag.PatientName, vr.PN, []string{"Doe^John"})
+//	name := elem.GetString()
 //
 //	// Create a numeric element
-//	elem := element.NewUnsignedShort(tag.PixelRows, []uint16{512})
-//
-//	// Access values with type safety
-//	name := elem.GetString(0)
-//	rows := elem.GetUInt16(0)
+//	rows := element.NewUnsignedShort(tag.Rows, []uint16{512})
+//	values := rows.GetValues()
 package element

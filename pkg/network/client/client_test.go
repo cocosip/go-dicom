@@ -98,7 +98,6 @@ func TestNewWithOptions(t *testing.T) {
 		WithAssociationTimeout(15*time.Second),
 		WithImplementationClassUID(testImplementationClassUID),
 		WithImplementationVersionName("TEST-1.0"),
-		WithKeepConnectionOnPeerRelease(true),
 	)
 
 	opts := client.GetConfig()
@@ -131,9 +130,6 @@ func TestNewWithOptions(t *testing.T) {
 	}
 	if opts.ImplementationVersionName != "TEST-1.0" {
 		t.Errorf("Expected ImplementationVersionName 'TEST-1.0', got '%s'", opts.ImplementationVersionName)
-	}
-	if !opts.KeepConnectionOnPeerRelease {
-		t.Error("Expected KeepConnectionOnPeerRelease to be true")
 	}
 }
 

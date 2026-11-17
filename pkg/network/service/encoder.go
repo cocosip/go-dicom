@@ -5,6 +5,7 @@ package service
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -76,24 +77,11 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 		return nil, nil, fmt.Errorf("failed to initialize CommandGroupLength: %w", err)
 	}
 
-	// Encode once to calculate the bytes following CommandGroupLength, then
-	// encode again with the correct value.
-	tempBuf := &bytes.Buffer{}
-	if err := writer.Write(tempBuf, commandDS,
-		writer.WithTransferSyntax(transfer.ImplicitVRLittleEndian),
-		writer.WithoutPreamble(),
-		writer.WithKeepGroupLengths()); err != nil {
-		return nil, nil, fmt.Errorf("failed to encode command dataset for length calculation: %w", err)
-	}
-	encodedLength := len(tempBuf.Bytes())
-	if encodedLength < 12 {
-		return nil, nil, fmt.Errorf("encoded command dataset is too short: %d bytes", encodedLength)
-	}
-	commandGroupLength := uint32(encodedLength - 12) // #nosec G115 -- bounded by the encoded buffer length
-	if err := commandDS.AddOrUpdate(element.NewUnsignedLong(tag.CommandGroupLength, []uint32{commandGroupLength})); err != nil {
-		return nil, nil, fmt.Errorf("failed to update CommandGroupLength: %w", err)
-	}
-
+	// Encode the command set once, then patch CommandGroupLength in place. The
+	// writer emits elements in ascending tag order, so (0000,0000) is the first
+	// element: tag (4 bytes) | UL length (4 bytes = 4) | value (4 bytes). Its
+	// value is the number of bytes that follow that fixed 12-byte element
+	// (PS3.7 6.3.1), which is exactly the rest of the encoded buffer.
 	commandBuf := &bytes.Buffer{}
 	if err := writer.Write(commandBuf, commandDS,
 		writer.WithTransferSyntax(transfer.ImplicitVRLittleEndian),
@@ -101,7 +89,14 @@ func EncodeDIMSEMessage(msg dimse.Message, transferSyntax *transfer.Syntax) (com
 		writer.WithKeepGroupLengths()); err != nil {
 		return nil, nil, fmt.Errorf("failed to encode command dataset: %w", err)
 	}
-	return commandBuf.Bytes(), datasetData, nil
+	commandData = commandBuf.Bytes()
+	if len(commandData) < 12 ||
+		binary.LittleEndian.Uint32(commandData[0:4]) != 0 ||
+		binary.LittleEndian.Uint32(commandData[4:8]) != 4 {
+		return nil, nil, fmt.Errorf("encoded command dataset does not start with CommandGroupLength")
+	}
+	binary.LittleEndian.PutUint32(commandData[8:12], uint32(len(commandData)-12)) // #nosec G115 -- bounded by the encoded buffer length
+	return commandData, datasetData, nil
 }
 
 // DecodeDIMSEMessage decodes raw command and data Dataset bytes. Command bytes

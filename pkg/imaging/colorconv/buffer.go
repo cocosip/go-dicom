@@ -65,18 +65,32 @@ func InterleavedToPlanar(data []byte, samplesPerPixel int, bytesPerSample int) (
 }
 
 // ConvertMono1ToMono2 inverts grayscale samples for MONOCHROME1 to MONOCHROME2.
-// Supports 8/16-bit, signed/unsigned.
-func ConvertMono1ToMono2(data []byte, bitsStored uint16, bytesPerSample int, signed bool) ([]byte, error) {
+// bitsStored and highBit describe the stored-value layout (PS3.3 C.7.6.3): the
+// value occupies bits HighBit down to HighBit-BitsStored+1, so the inversion
+// keeps that alignment instead of assuming right-justified samples. Supports
+// 8/16-bit, signed/unsigned.
+func ConvertMono1ToMono2(data []byte, bitsStored, highBit uint16, bytesPerSample int, signed bool) ([]byte, error) {
 	if bytesPerSample != 1 && bytesPerSample != 2 {
 		return nil, fmt.Errorf("unsupported BytesAllocated=%d for mono conversion", bytesPerSample)
 	}
-	if bitsStored == 0 || int(bitsStored) > bytesPerSample*8 {
+	bitsAllocated := uint16(bytesPerSample * 8) // #nosec G115 -- bytesPerSample is 1 or 2
+	if bitsStored == 0 || bitsStored > bitsAllocated {
 		return nil, fmt.Errorf("invalid BitsStored=%d for BytesAllocated=%d", bitsStored, bytesPerSample)
+	}
+	if highBit >= bitsAllocated || highBit+1 < bitsStored {
+		if highBit != 0 {
+			return nil, fmt.Errorf("invalid HighBit=%d for BitsStored=%d", highBit, bitsStored)
+		}
+		// High Bit is Type 1, but tolerate a missing value by treating the
+		// samples as right-justified, which is what such datasets mean.
+		highBit = bitsStored - 1
 	}
 	if len(data)%bytesPerSample != 0 {
 		return nil, fmt.Errorf("mono data length %d is not divisible by BytesAllocated=%d", len(data), bytesPerSample)
 	}
-	maxVal := uint32((1 << bitsStored) - 1)
+	// Distance between the least significant stored bit and bit 0.
+	alignShift := highBit + 1 - bitsStored
+	maxVal := uint32(1)<<bitsStored - 1
 	out := make([]byte, len(data))
 	for off := 0; off+bytesPerSample <= len(data); off += bytesPerSample {
 		var raw uint32
@@ -85,23 +99,24 @@ func ConvertMono1ToMono2(data []byte, bitsStored uint16, bytesPerSample int, sig
 		} else {
 			raw = uint32(binary.LittleEndian.Uint16(data[off:]))
 		}
-		// Only BitsStored bits carry the sample value; discard any padding bits.
-		raw &= maxVal
+		// Only the BitsStored bits ending at HighBit carry the sample value.
+		value := (raw >> alignShift) & maxVal
 
 		var inv uint32
 		if signed {
-			// Interpret the masked sample as a signed value, invert in the
-			// signed domain (new = -1 - value), then express it in raw stored
-			// bits so the result keeps the original bit layout.
-			value := int64(raw)
-			if raw&(uint32(1)<<(bitsStored-1)) != 0 {
-				value -= int64(uint32(1) << bitsStored)
+			// Interpret the sample as a signed value, invert in the signed
+			// domain (new = -1 - value), then express it in stored bits.
+			signedValue := int64(value)
+			if value&(uint32(1)<<(bitsStored-1)) != 0 {
+				signedValue -= int64(uint32(1) << bitsStored)
 			}
-			inv = uint32(-1-value) & maxVal
+			inv = uint32(-1-signedValue) & maxVal
 		} else {
-			inv = (maxVal - raw) & maxVal
+			inv = (maxVal - value) & maxVal
 		}
 
+		// Restore the original bit alignment.
+		inv <<= alignShift
 		if bytesPerSample == 1 {
 			out[off] = byte(inv)
 		} else {
@@ -213,11 +228,12 @@ func ConvertYBRICTToRGB(data []byte, bitsAllocated int) ([]byte, error) {
 	for i, j := 0, 0; i < len(data); i += 3 * bytesPerSample {
 		var y, cb, cr float64
 		if bytesPerSample == 1 {
-			y = float64(int8(data[i]))
+			// Luminance is unsigned; only the colour differences are signed.
+			y = float64(data[i])
 			cb = float64(int8(data[i+1]))
 			cr = float64(int8(data[i+2]))
 		} else {
-			y = float64(int16(binary.LittleEndian.Uint16(data[i:])))
+			y = float64(binary.LittleEndian.Uint16(data[i:]))
 			cb = float64(int16(binary.LittleEndian.Uint16(data[i+2:])))
 			cr = float64(int16(binary.LittleEndian.Uint16(data[i+4:])))
 		}
@@ -268,11 +284,12 @@ func ConvertYBRRCTToRGB(data []byte, bitsAllocated int) ([]byte, error) {
 	for i, j := 0, 0; i < len(data); i += 3 * bytesPerSample {
 		var y, cb, cr int32
 		if bytesPerSample == 1 {
-			y = int32(int8(data[i]))
+			// Luminance is unsigned; only the colour differences are signed.
+			y = int32(data[i])
 			cb = int32(int8(data[i+1]))
 			cr = int32(int8(data[i+2]))
 		} else {
-			y = int32(int16(binary.LittleEndian.Uint16(data[i:])))
+			y = int32(binary.LittleEndian.Uint16(data[i:]))
 			cb = int32(int16(binary.LittleEndian.Uint16(data[i+2:])))
 			cr = int32(int16(binary.LittleEndian.Uint16(data[i+4:])))
 		}

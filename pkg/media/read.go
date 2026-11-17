@@ -184,7 +184,9 @@ func recordsFromSequence(sequence *dataset.Sequence, positions map[*dataset.Data
 				return nil, nil, fmt.Errorf("normalize Record In-use Flag at offset %d: %w", offset, err)
 			}
 		}
-		records = append(records, newRecord(recordType, item, offset))
+		record := newRecord(recordType, item, offset)
+		record.key = recordKey(recordType, item)
+		records = append(records, record)
 		if !knownRecordType(recordType) {
 			diagnostics = append(diagnostics, Diagnostic{
 				Code:       DiagnosticUnknownRecordType,
