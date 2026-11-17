@@ -126,10 +126,13 @@ if err != nil {
 result, err := transcoder.Transcode(ctx, ds)
 ```
 
-The same transcoder also provides:
+The transcoder also offers:
 
 - `TranscodeWithMetadata` for Dataset plus File Meta Information.
 - `DecodeFrame` for one encapsulated frame.
+
+`Manager.NewTranscoder` additionally accepts these options:
+
 - `WithPixelDataReadMode` for standard validation or compatibility recovery.
 - `WithPixelDataWriteMode` for standard or compatibility output VR selection.
 - `WithStrictDICOMVR` as the compatibility entry point for the write mode.

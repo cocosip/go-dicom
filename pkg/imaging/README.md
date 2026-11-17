@@ -23,7 +23,7 @@ files.
   - YBR_FULL, YBR_FULL_422, YBR_PARTIAL_422, YBR_PARTIAL_420 (YCbCr variants)
   - YBR_ICT, YBR_RCT (JPEG 2000 color transforms)
 
-- **PixelConfiguration** (`pixel/config.go`): Pixel representation and planar configuration
+- **Representation / PlanarConfiguration** (`pixel/config.go`): Pixel representation and planar configuration
   - PixelRepresentation: Unsigned vs Signed integers
   - PlanarConfiguration: Interleaved vs Planar color data
 
@@ -211,7 +211,6 @@ The `pixeldata.Data` type provides the high-level DICOM pixel-data API:
 ```go
 import (
 	"context"
-	"github.com/cocosip/go-dicom/pkg/dicom/parser"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
 	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
@@ -406,7 +405,7 @@ go test ./pkg/imaging/... -cover
 Current test coverage:
 - ✅ ColorSpace: 100%
 - ✅ PhotometricInterpretation: 100%
-- ✅ PixelConfiguration: 100%
+- ✅ Representation / PlanarConfiguration: 100%
 - Pixel data metadata, frames, conversion, and codec contracts
 - ✅ Native Codec: 100%
 

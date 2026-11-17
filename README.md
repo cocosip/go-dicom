@@ -48,7 +48,7 @@ Package references: [network](pkg/network/README.md), [DIMSE](pkg/network/dimse/
 ### Included Capabilities
 
 - [x] **Core DICOM data types**
-  - [x] Tag (5356 standard tags + private tag support)
+  - [x] Tag (5352 standard tags + private tag support)
   - [x] VR (34 value representations with validation)
   - [x] VM (16 value multiplicities)
   - [x] Element (string, numeric, binary, date, person name types)
@@ -1124,7 +1124,7 @@ func main() {
         }
 
         // Check for nested sequences
-        if nestedSeq, exists := item.Get(tag.ContentSequence); exists {
+        if _, exists := item.Get(tag.ContentSequence); exists {
             fmt.Println("  [Contains nested Content Sequence]")
         }
     }
@@ -2063,7 +2063,7 @@ go-dicom/
 ├── docs/                   # Architecture, networking guide, changelog, benchmarks
 ├── pkg/
 │   ├── dicom/              # Core DICOM types
-│   │   ├── tag/            # DICOM tags (5356 standard tags)
+│   │   ├── tag/            # DICOM tags (5352 standard tags)
 │   │   ├── vr/             # Value representations (34 VRs)
 │   │   ├── vm/             # Value multiplicities
 │   │   ├── element/        # DICOM elements (all VR types)

@@ -18,7 +18,12 @@ This example demonstrates how to create and write DICOM files using the go-dicom
 go run main.go
 ```
 
-This will create `output.dcm` with sample patient and image data.
+This will create `output.dcm` with sample patient and image data. Use `-output`
+to choose a different path:
+
+```bash
+go run main.go -output custom.dcm
+```
 
 ## Advanced Options
 
@@ -41,7 +46,7 @@ You can customize the Implementation Class UID and Version Name that appear in t
 ```go
 err := writer.WriteFile("output.dcm", ds,
     writer.WithImplementationClassUID("1.2.840.12345.6.7.8"),
-    writer.WithImplementationVersionName("MYAPP_2.0"))
+    writer.WithImplementationVersionName("MYAPP"))
 ```
 
 This is useful for:
@@ -112,7 +117,7 @@ func main() {
     err := writer.WriteFile("custom_output.dcm", ds,
         writer.WithTransferSyntax(transfer.ExplicitVRLittleEndian),
         writer.WithImplementationClassUID("1.2.840.12345.1"),
-        writer.WithImplementationVersionName("MyApp_3.0.1"),
+        writer.WithImplementationVersionName("MYAPP"),
         writer.WithExplicitLengthSequences(true))
 
     if err != nil {

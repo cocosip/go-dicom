@@ -261,7 +261,7 @@ c := client.New(
 | `WithTransportWriteTimeout(timeout)` | time.Duration | 30s | Single PDU write timeout |
 | `WithAssociationTimeout(timeout)` | time.Duration | 10s | Association negotiation timeout |
 | `WithImplementationClassUID(uid)` | string | uid.GoDicomImplementationClassUID ("1.2.826.0.1.3680043.10.854") | Implementation class UID |
-| `WithImplementationVersionName(name)` | string | Derived from the go-dicom module version, e.g. "GO_DICOM_0_9_0" | Implementation version name (at most 16 characters) |
+| `WithImplementationVersionName(name)` | string | Derived from the go-dicom module version, e.g. "GO_DICOM" | Implementation version name (at most 16 characters) |
 | `WithTransferSyntaxRegistry(registry)` | `*transfer.Registry` | Independent standard catalog view | Explicitly inject a custom Transfer Syntax; standard and unknown syntaxes can still be parsed when not registered |
 
 ### Adding Presentation Contexts
@@ -427,7 +427,10 @@ All operations are available as synchronous methods on `client.Client`. Complete
 **C-STORE (storing images):** `c.CStore(ctx, result.Dataset)` stores a parsed dataset. Two additional forms:
 
 ```go
-import "github.com/cocosip/go-dicom/pkg/network/dimse"
+import (
+    "github.com/cocosip/go-dicom/pkg/dicom/dataset"
+    "github.com/cocosip/go-dicom/pkg/network/dimse"
+)
 
 // Store with priority
 if err := c.CStoreWithPriority(ctx, result.Dataset, dimse.PriorityHigh); err != nil {
@@ -960,7 +963,6 @@ import (
 
     "github.com/cocosip/go-dicom/pkg/network/dimse"
     "github.com/cocosip/go-dicom/pkg/network/server"
-    "github.com/cocosip/go-dicom/pkg/network/service"
     "github.com/cocosip/go-dicom/pkg/network/status"
 )
 
@@ -997,9 +999,11 @@ import (
     "log"
     "os"
 
+    "github.com/cocosip/go-dicom/pkg/dicom/tag"
     "github.com/cocosip/go-dicom/pkg/dicom/writer"
     "github.com/cocosip/go-dicom/pkg/network/dimse"
     "github.com/cocosip/go-dicom/pkg/network/server"
+    "github.com/cocosip/go-dicom/pkg/network/status"
 )
 
 func main() {
@@ -1117,12 +1121,13 @@ All DIMSE messages implement the `dimse.Message` interface:
 
 ```go
 type Message interface {
-    CommandField() uint16
-    MessageID() uint16
-    SetMessageID(id uint16)
     CommandDataset() *dataset.Dataset
     DataDataset() *dataset.Dataset
-    HasData() bool
+    PresentationContextID() byte
+    SetPresentationContextID(id byte)
+    CommandField() uint16
+    MessageID() uint16
+    String() string
 }
 ```
 
@@ -1448,8 +1453,14 @@ Check status:
 ```go
 // Operations that return a status response (C-STORE, C-FIND, C-MOVE, C-GET,
 // C-ECHO via Service.SendCEcho) expose it through resp.Status(). The Client's
-// convenience methods such as Client.CEcho return only an error.
-resp, err := c.CStore(ctx, ds)
+// convenience methods such as Client.CStore and Client.CEcho return only an
+// error; to inspect the status use the service layer, which returns the typed
+// response (svc is the *service.Service bound to the association).
+req, err := dimse.NewCStoreRequest(ds)
+if err != nil {
+    return err
+}
+resp, err := svc.SendCStore(ctx, req)
 if err != nil {
     return err
 }
@@ -1498,7 +1509,11 @@ if err := c.CEcho(ctx); err != nil {
 ### Status Code Errors
 
 ```go
-resp, err := c.CStore(ctx, ds)
+req, err := dimse.NewCStoreRequest(ds)
+if err != nil {
+    return err
+}
+resp, err := svc.SendCStore(ctx, req) // svc is the *service.Service bound to the association
 if err != nil {
     return err
 }

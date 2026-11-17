@@ -8,7 +8,7 @@ Historical snapshot (collection date not recorded)
 
 - `pkg/dicom/...`: dataset, parser, writer, UID, and committed real-DICOM fixture benchmarks.
 - `pkg/io/...`: byte-order helpers, buffer-pool, and range-backed `ReadSeeker` cache/cross-block benchmarks.
-- `pkg/imaging/...`: pixel layout and color-conversion benchmarks.
+- `pkg/imaging/...`: color-conversion, pixel-data windowing, volume reconstruction, and affine rendering benchmarks.
 
 The PR workflow runs all three package trees with `-run=^$` so benchmark results are not mixed with unit-test execution. The resulting `benchmark_results.txt` is uploaded as the `benchmark-results` artifact and retained for 90 days.
 
@@ -19,7 +19,7 @@ This document contains performance benchmark results for the go-dicom library. B
 - **CPU**: Intel(R) Core(TM) Ultra 9 185H
 - **OS**: Windows
 - **Architecture**: amd64
-- **Go Version**: go1.27 (see `go.mod`)
+- **Go Version**: go1.27.0 (see `go.mod`)
 
 ## Dataset Operations
 
@@ -112,7 +112,7 @@ This document contains performance benchmark results for the go-dicom library. B
 
 ## Imaging Operations
 
-Imaging benchmarks live in `pkg/imaging/colorconv`, `reconstruction`, and `render`; run them
+Imaging benchmarks live in `pkg/imaging/colorconv`, `pixeldata`, `reconstruction`, and `render`; run them
 with the commands in [Running Benchmarks](#running-benchmarks) instead of relying
 on this snapshot.
 
@@ -150,7 +150,7 @@ go test -bench='.' -benchmem ./pkg/dicom/dataset
 go test -bench='.' -benchmem ./pkg/dicom/parser
 go test -bench='.' -benchmem ./pkg/dicom/writer
 go test -bench='.' -benchmem ./pkg/io/rangeio
-go test -bench='.' -benchmem ./pkg/imaging
+go test -bench='.' -benchmem ./pkg/imaging/...
 ```
 
 To generate CPU profile:

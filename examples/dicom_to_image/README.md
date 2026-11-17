@@ -81,7 +81,7 @@ go run main.go -input sample.dcm -invert
 | `-window-width` | float64 | 0 | Window width for display (0 = use DICOM value or auto) |
 | `-invert` | bool | false | Invert grayscale (swap black/white) |
 | `-frame` | int | 0 | Frame number to extract (0-indexed, for multi-frame DICOM) |
-| `-format` | string | jpeg | Output format: png or jpeg |
+| `-format` | string | jpeg | Output format: png, jpeg, or jpg |
 | `-jpeg-quality` | int | 90 | JPEG quality (1-100, only for JPEG format) |
 
 ## Supported Image Types
@@ -132,7 +132,7 @@ dicom_to_image.exe -input xray.dcm -window-center 2048 -window-width 4096
 
 ```cmd
 # Extract all frames from a multi-frame DICOM
-for /L %i in (0,1,10) do dicom_to_image.exe -input multiframe.dcm -frame %i -output frame_%i.png
+for /L %i in (0,1,10) do dicom_to_image.exe -input multiframe.dcm -frame %i -format png -output frame_%i.png
 ```
 
 ### Convert to JPEG with Custom Quality

@@ -45,11 +45,11 @@ Applies window/level transformations for visualization.
 // Create LINEAR VOI LUT
 table := lut.NewVOILinearLUT(windowCenter, windowWidth)
 
-// Create using factory (auto-selects LINEAR_EXACT for width < 1.0)
-table := lut.CreateVOILUT(lut.VOILUTFunctionLinear, center, width)
-
 // Adjust window
 table.SetWindow(newCenter, newWidth)
+
+// Create using factory (auto-selects LINEAR_EXACT for width < 1.0)
+voiLUT := lut.CreateVOILUT(lut.VOILUTFunctionLinear, center, width)
 ```
 
 #### Composite LUT
@@ -158,7 +158,7 @@ err := exporter.ExportGrayscale(
 )
 
 // Export RGB image
-err := exporter.ExportRGB(
+err = exporter.ExportRGB(
     writer,
     pixelData,
     width, height,
@@ -168,7 +168,7 @@ err := exporter.ExportRGB(
 )
 
 // Convenience method
-err := exporter.RenderFrame(
+err = exporter.RenderFrame(
     writer,
     frameData,
     width, height,
@@ -187,7 +187,9 @@ err := exporter.RenderFrame(
 package main
 
 import (
+    "log"
     "os"
+
     "github.com/cocosip/go-dicom/pkg/imaging/render"
 )
 
@@ -201,7 +203,7 @@ func main() {
         -1024,  // min input
         3071,   // max input
         false,  // don't invert
-    }
+    )
 
     // 2. Adjust window for soft tissue
     pipeline.SetWindow(40, 400)
@@ -210,14 +212,20 @@ func main() {
     exporter := render.NewImageExporter(pipeline)
 
     // 4. Export to PNG
-    file, _ := os.Create("output.png")
+    file, err := os.Create("output.png")
+    if err != nil {
+        log.Fatal(err)
+    }
     defer file.Close()
 
     options := &render.ExportOptions{
         Format: render.FormatPNG,
     }
 
-    err := exporter.ExportGrayscale(
+    // 512x512 16-bit signed MONOCHROME2 frame data
+    pixelData := make([]byte, 512*512*2)
+
+    if err := exporter.ExportGrayscale(
         file,
         pixelData,
         512, 512,      // dimensions
@@ -225,7 +233,9 @@ func main() {
         true,          // signed
         "MONOCHROME2",
         options,
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -249,10 +259,10 @@ func main() {
 - Cb = -0.1482*R - 0.2910*G + 0.4392*B + 128
 - Cr = 0.4392*R - 0.3678*G - 0.0714*B + 128
 
-**YBR_ICT (Integer Color Transform - JPEG 2000)**:
-- Y = (R + 2*G + B) / 4
-- Cb = B - G
-- Cr = R - G
+**YBR_ICT (Irreversible Color Transform - JPEG 2000)**:
+- Y = 0.299*R + 0.587*G + 0.114*B
+- Cb = -0.1687*R - 0.3313*G + 0.5*B
+- Cr = 0.5*R - 0.4187*G - 0.0813*B
 
 **YBR_RCT (Reversible Color Transform - JPEG 2000 Lossless)**:
 - Y = ⌊(R + 2*G + B) / 4⌋

@@ -263,27 +263,40 @@ Element (interface)
 
 | File | Description | Lines |
 |------|------|------|
-| `doc.go` | package documentation | ~50 |
-| `element.go` | Element interface and base implementation | ~95 |
-| `string.go` | generic string type | ~165 |
-| `person_name.go` | person name type (PN) | ~135 |
-| `date.go` | date and time types (DA/TM/DT) | ~230 |
-| `numeric_string.go` | numeric string types (DS/IS) | ~235 |
-| `numeric.go` | numeric types (US/UL/SS/SL/FL/FD/SV/UV) | ~605 |
-| `attribute_tag.go` | attribute tag type (AT) | ~95 |
-| `binary.go` | binary types (OB/OW/OD/OF/OL/OV/UN) | ~275 |
-| `element_test.go` | interface tests | ~55 |
-| `string_test.go` | string tests | ~110 |
-| `date_test.go` | date and time tests | ~125 |
-| `numeric_string_test.go` | numeric string tests | ~150 |
-| `numeric_test.go` | numeric tests | ~370 |
-| `README.md` | documentation | ~280 |
-| **Total** |  | **~2,740 lines** |
+| `doc.go` | package documentation | 34 |
+| `element.go` | Element interface and base implementation | 189 |
+| `string.go` | generic string type | 325 |
+| `person_name.go` | person name type (PN) | 220 |
+| `date.go` | date and time types (DA/TM/DT) | 455 |
+| `numeric_string.go` | numeric string types (DS/IS) | 354 |
+| `numeric.go` | numeric types (US/UL/SS/SL/FL/FD/SV/UV) | 660 |
+| `attribute_tag.go` | attribute tag type (AT) | 99 |
+| `binary.go` | binary types (OB/OW/OD/OF/OL/OV/UN) | 264 |
+| `fragment.go` | encapsulated fragment sequence | 145 |
+| `format.go` | value formatting helpers | 128 |
+| `value_text.go` | text value conversions | 472 |
+| `factory.go` | element construction from values and buffers | 344 |
+| `clone.go` | deep clone helpers | 236 |
+| `clone_bulkdata_test.go` | bulk data clone tests | 33 |
+| `date_test.go` | date and time tests | 221 |
+| `element_test.go` | interface tests | 64 |
+| `factory_benchmark_test.go` | factory benchmarks | 72 |
+| `factory_test.go` | factory tests | 40 |
+| `format_test.go` | formatting tests | 78 |
+| `fragment_test.go` | fragment tests | 168 |
+| `numeric_string_test.go` | numeric string tests | 175 |
+| `numeric_test.go` | numeric tests | 201 |
+| `person_name_test.go` | person name tests | 63 |
+| `string_test.go` | string tests | 456 |
+| `test_constants_test.go` | shared test constants | 12 |
+| `value_text_test.go` | text value tests | 245 |
+| `README.md` | documentation | 375 |
+| **Total** |  | **6,128 lines** |
 
 ## Test coverage
 
-- **Test files**: 5
-- **Test functions**: 21
+- **Test files**: 13
+- **Test functions**: 55
 - **Test cases**: 70+ subtests
 - **Test coverage**: full coverage of main functionality
 - **Test pass rate**: 100% ✅

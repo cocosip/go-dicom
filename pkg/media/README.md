@@ -33,7 +33,7 @@ The reserved `DICOMDIR` name and File IDs already referenced by another record
 are rejected.
 
 Writing always uses Explicit VR Little Endian because PS3.10 §8.6 requires it for
-the DICOMDIR File; `media.WithTransferSyntax` rejects any other syntax. Reading
+the DICOMDIR File; `media.NewDirectory` rejects any other syntax. Reading
 still tolerates legacy Implicit VR Little Endian File-sets. `WithFileSetID` sets
 and validates File-set ID (0004,1130); the default is zero length.
 

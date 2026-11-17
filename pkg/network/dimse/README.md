@@ -180,7 +180,7 @@ func NewClient() *Client {
     }
 }
 
-func (c *Client) Send(msg dimse.Message) error {
+func (c *Client) Send(msg dimse.Request) error {
     // Assign the MessageID automatically
     _, err := c.messageIDGen.AssignMessageID(msg)
     if err != nil {
@@ -264,8 +264,9 @@ the argument is non-empty:
 
 ```go
 // Minimal C-STORE-RSP (Status + MessageIDBeingRespondedTo only)
-resp := dimse.NewCStoreResponse(requestMessageID, status.Success, "", "")
-resp := dimse.NewCFindResponse(requestMessageID, status.Success, "", nil)
+storeResp := dimse.NewCStoreResponse(requestMessageID, status.Success, "", "")
+// Minimal C-FIND-RSP (Status + MessageIDBeingRespondedTo only)
+findResp := dimse.NewCFindResponse(requestMessageID, status.Success, "", nil)
 
 // With the optional UIDs, as before
 resp := dimse.NewCStoreResponse(requestMessageID, status.Success, sopClassUID, sopInstanceUID)

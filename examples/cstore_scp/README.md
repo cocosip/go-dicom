@@ -111,7 +111,7 @@ Storage Dir:   ./received_dicom
 Max Conn:      10
 Verbose:       false
 Called AE:     NETGATE
-Allowed SCUs:  NETPUSH,MODALITY_A
+Allowed SCUs:  MODALITY_A,NETPUSH
 
 Starting DICOM SCP server on port 11112...
 Press Ctrl+C to stop

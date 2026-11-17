@@ -159,7 +159,7 @@ Output Dir:      ./received_qr
 [Step 2/4] Performing C-FIND query (level=STUDY)...
 ✓ C-FIND completed: found 1 result(s)
 
-C-FIND Results (STUDY level):
+C-FIND completed: 1 result(s) at STUDY level
 [1] Patient=DOE^JOHN (P001) StudyDate=20260220 Modality=CT
     StudyInstanceUID:  1.2.840.113619.2.55.3.2831164357.781.170000001.1
 

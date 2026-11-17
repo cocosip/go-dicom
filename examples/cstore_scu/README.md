@@ -112,6 +112,11 @@ Server:     localhost:11112
 Connecting to localhost:11112...
 Connected successfully!
 Association established with 4 presentation contexts
+Accepted Presentation Contexts:
+  ID 1: 1.2.840.10008.1.1 with Implicit VR Little Endian: Default Transfer Syntax for DICOM
+  ID 3: 1.2.840.10008.5.1.4.1.1.2 with Implicit VR Little Endian: Default Transfer Syntax for DICOM
+  ID 5: 1.2.840.10008.5.1.4.1.1.4 with Implicit VR Little Endian: Default Transfer Syntax for DICOM
+  ID 7: 1.2.840.10008.5.1.4.1.1.7 with Implicit VR Little Endian: Default Transfer Syntax for DICOM
 
 Performing C-ECHO verification...
 C-ECHO successful!
@@ -119,9 +124,6 @@ C-ECHO successful!
 Sending 1 file(s)...
 
 [1/1] Processing: image.dcm
-  SOP Class:    1.2.840.10008.5.1.4.1.1.2
-  SOP Instance: 1.2.840.113619.2.55.3.12345
-  Sent in:      125ms
   SUCCESS
 
 === Summary ===
@@ -153,5 +155,5 @@ The example handles common errors:
 ## Notes
 
 - Default port 11112 is used instead of standard DICOM port 104 (which requires root/admin privileges)
-- The example accepts the first transfer syntax proposed by the server for each SOP Class
+- For each SOP Class the example proposes several transfer syntaxes and sends with the one the server accepts
 - Files are validated during parsing, and only valid DICOM files will be sent

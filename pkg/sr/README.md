@@ -27,26 +27,21 @@ outside the current package scope.
 
 ## Create a report
 
-`NewStructuredReport` sets the Comprehensive SR SOP Class UID, a generated SOP
-Instance UID, and an (empty) Performed Procedure Code Sequence. A Part 10 file
-still needs the Study/Series module attributes, so set them before `Save`.
+`NewStructuredReport` produces a standalone, Part 10-ready report: it sets the
+SOP Common Module Type 1 attributes (Comprehensive SR Storage SOP Class and a
+generated SOP Instance UID), generates its own Study and Series Instance UIDs,
+sets Modality to `SR` plus the required Patient/Study/General Equipment Type 2
+attributes, and populates the SR Document General Module (Instance Number,
+Completion/Verification flags, Content Date/Time, and an empty Performed
+Procedure Code Sequence). To attach a report to an existing study instead,
+start from `NewStructuredReportFromDataset` and set the study/series attributes
+yourself.
 
 ```go
 root := sr.NewCodeItem("113704", "DCM", "SR Document")
 report, err := sr.NewStructuredReport(root)
 if err != nil {
     return err
-}
-
-// Study/Series module attributes required for a conformant Part 10 file.
-for _, elem := range []element.Element{
-    element.NewString(tag.StudyInstanceUID, vr.UI, []string{uid.GenerateDerivedFromUUID().UID()}),
-    element.NewString(tag.SeriesInstanceUID, vr.UI, []string{uid.GenerateDerivedFromUUID().UID()}),
-    element.NewString(tag.Modality, vr.CS, []string{"SR"}),
-} {
-    if err := report.Dataset().AddOrUpdate(elem); err != nil {
-        return err
-    }
 }
 
 finding := sr.NewCodeItem("121071", "DCM", "Finding")

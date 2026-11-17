@@ -395,8 +395,12 @@ c.Connect(ctx, host, port)
 defer c.Close()
 
 for _, file := range files {
-    ds, _ := parser.ParseFile(file)
-    c.CStore(ctx, ds)  // reuse the same connection
+    result, err := parser.ParseFile(file)
+    if err != nil {
+        log.Printf("Failed to parse %s: %v", file, err)
+        continue
+    }
+    c.CStore(ctx, result.Dataset) // reuse the same connection
 }
 ```
 
