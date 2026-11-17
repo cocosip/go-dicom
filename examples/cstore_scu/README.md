@@ -132,7 +132,7 @@ Failed:      0
 
 ## Requirements
 
-- Go 1.26 or later
+- Go 1.27 or later
 - Access to a DICOM SCP server (or use the companion `cstore_scp` example)
 
 ## Related Examples

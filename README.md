@@ -2142,7 +2142,7 @@ go-dicom/
 
 ### Prerequisites
 
-- Go 1.26 or later
+- Go 1.27 or later
 - golangci-lint (for linting)
 
 ### Building

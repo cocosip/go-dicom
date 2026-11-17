@@ -272,7 +272,7 @@ sudo systemctl start dicom-scp
 
 ## Requirements
 
-- Go 1.26 or later
+- Go 1.27 or later
 - Write permissions to storage directory
 - Network access on listening port
 

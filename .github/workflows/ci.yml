@@ -20,13 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 1.26.x is the minimum declared in go.mod; test it once so the floor
-        # cannot silently rot while CI only exercises the newest toolchain.
+        # 1.27 is the minimum declared in go.mod and the toolchain golangci-lint
+        # v2.14.0 requires, so every job tests that single supported version.
         os: [ubuntu-latest, windows-latest, macos-latest]
         go: ['1.27']
-        include:
-          - os: ubuntu-latest
-            go: '1.26.x'
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

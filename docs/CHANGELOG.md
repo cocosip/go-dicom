@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **network/pdu**: the A-ASSOCIATE-RQ and A-ASSOCIATE-AC user-information sub-item codecs (`0x51`-`0x59`) are one implementation in `items.go` with a direction flag; only the direction-specific items and warnings remain per PDU. fo-dicom keeps the two PDU writers separate but shares the `DicomAssociation` model, so this merge is go-dicom's own.
 - **dicom/element**: `DeepClone` and `DeepCloneChecked` share one type switch; the checked variant differs only in how a value buffer that cannot be detached is reported.
 - **imaging/pixeldata**: windowing and VOI LUT-sequence mapping share one 8-bit mapping loop, and the precalculated-table range is built in one place.
+- **ci**: every job runs Go 1.27 and `go.mod` declares it as the module minimum; the extra 1.26 floor job is gone, since golangci-lint v2.14.0 and the rest of the toolchain already require 1.27.
 
 ### Changed
 
