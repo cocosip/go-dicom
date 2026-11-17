@@ -77,6 +77,104 @@ func TestApplyAffineUsesExplicitViewportCoordinatesForCropping(t *testing.T) {
 	}
 }
 
+// genericImage routes every pixel read through the generic image.Image path, so
+// tests can compare the direct Pix fast paths against it.
+type genericImage struct{ image.Image }
+
+// TestApplyAffineFastSamplersMatchGenericPath verifies the direct Pix readers
+// produce exactly the same pixels as color.RGBAModel on image.Image.At.
+func TestApplyAffineFastSamplersMatchGenericPath(t *testing.T) {
+	images := []struct {
+		name   string
+		source image.Image
+	}{
+		{"Gray", gradientGray()},
+		{"Gray16", gradientGray16()},
+		{"RGBA", gradientRGBA()},
+		{"NRGBA", gradientNRGBA()},
+	}
+	matrices := []struct {
+		name   string
+		matrix transform.Affine2D
+	}{
+		{"rotate", transform.Rotate(90)},
+		{"scale", transform.Scale(1.5, 0.75)},
+	}
+	modes := []interpolation.Mode{interpolation.ModeNearestNeighbor, interpolation.ModeBilinear}
+	for _, imageCase := range images {
+		for _, matrixCase := range matrices {
+			for _, mode := range modes {
+				t.Run(imageCase.name+"/"+matrixCase.name, func(t *testing.T) {
+					fast, err := ApplyAffine(imageCase.source, matrixCase.matrix, image.Rectangle{}, mode, color.Black)
+					if err != nil {
+						t.Fatalf("ApplyAffine(fast) error = %v", err)
+					}
+					generic, err := ApplyAffine(genericImage{imageCase.source}, matrixCase.matrix, image.Rectangle{}, mode, color.Black)
+					if err != nil {
+						t.Fatalf("ApplyAffine(generic) error = %v", err)
+					}
+					if fast.Bounds() != generic.Bounds() {
+						t.Fatalf("bounds = %v, want %v", fast.Bounds(), generic.Bounds())
+					}
+					for y := fast.Bounds().Min.Y; y < fast.Bounds().Max.Y; y++ {
+						for x := fast.Bounds().Min.X; x < fast.Bounds().Max.X; x++ {
+							if got, want := fast.At(x, y), generic.At(x, y); got != want {
+								t.Fatalf("pixel (%d,%d) = %v, want %v", x, y, got, want)
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func gradientGray() *image.Gray {
+	img := image.NewGray(image.Rect(0, 0, 8, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			img.SetGray(x, y, color.Gray{Y: uint8(x*16 + y*3)})
+		}
+	}
+	return img
+}
+
+func gradientGray16() *image.Gray16 {
+	img := image.NewGray16(image.Rect(0, 0, 8, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			img.SetGray16(x, y, color.Gray16{Y: uint16(x*4096 + y*777)})
+		}
+	}
+	return img
+}
+
+func gradientRGBA() *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			alpha := uint8(64 + x*20)
+			img.SetRGBA(x, y, color.RGBA{R: alpha, G: alpha / 2, B: alpha / 3, A: alpha})
+		}
+	}
+	return img
+}
+
+func gradientNRGBA() *image.NRGBA {
+	img := image.NewNRGBA(image.Rect(0, 0, 8, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{
+				R: uint8(x * 30),
+				G: uint8(y * 30),
+				B: 128,
+				A: uint8(64 + x*20),
+			})
+		}
+	}
+	return img
+}
+
 func BenchmarkApplyAffine512Gray16(b *testing.B) {
 	source := image.NewGray16(image.Rect(0, 0, 512, 512))
 	matrix := transform.Rotate(90)

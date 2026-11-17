@@ -260,14 +260,14 @@ func TestDecodeStringRejectsUndeclaredISO2022Escape(t *testing.T) {
 }
 
 func TestDecodeStringPreservesBackslashByteInsideISO2022MultibyteCharacter(t *testing.T) {
-	encoded, err := charset.EncodeString("ソ", charset.GetEncodings([]string{"ISO 2022 IR 87"}))
+	encoded, err := charset.EncodeString("ソ", charset.GetEncodings([]string{testCharsetISO2022IR87}))
 	if err != nil {
 		t.Fatalf("EncodeString() error = %v", err)
 	}
 	// Add a DICOM value delimiter after the multibyte character. The 0x5c byte
 	// in ソ's JIS X 0208 representation must not be treated as that delimiter.
 	encoded = append(encoded, '\\', 'A')
-	decoded, err := charset.DecodeString(encoded, charset.GetEncodings([]string{"ISO 2022 IR 87"}))
+	decoded, err := charset.DecodeString(encoded, charset.GetEncodings([]string{testCharsetISO2022IR87}))
 	if err != nil {
 		t.Fatalf("DecodeString() error = %v", err)
 	}
@@ -422,7 +422,7 @@ func TestMultipleEncodings(t *testing.T) {
 }
 
 func TestDecodeISO2022SingleByteEscape(t *testing.T) {
-	enc := charset.GetEncoding("ISO 2022 IR 100")
+	enc := charset.GetEncoding(testCharsetISO2022IR100)
 	data := append([]byte{0x1b, '-', 'A'}, 0xE9) // ESC - A (Latin-1 G1) + é
 	got, err := charset.DecodeString(data, []encoding.Encoding{enc})
 	if err != nil {
@@ -446,7 +446,7 @@ func TestISO2022SingleByteRoundTrip(t *testing.T) {
 		text    string
 		escape  []byte
 	}{
-		{"ISO 2022 IR 100", "Grüße", []byte{0x1b, '-', 'A'}},
+		{testCharsetISO2022IR100, "Grüße", []byte{0x1b, '-', 'A'}},
 		{"ISO 2022 IR 101", "Łódź", []byte{0x1b, '-', 'B'}},
 		{"ISO 2022 IR 109", "Ĝardeno", []byte{0x1b, '-', 'C'}},
 		{"ISO 2022 IR 110", "Ąžuolas", []byte{0x1b, '-', 'D'}},
@@ -480,5 +480,39 @@ func TestISO2022SingleByteRoundTrip(t *testing.T) {
 				t.Fatalf("DecodeString(EncodeString(%q)) = %q", tt.text, decoded)
 			}
 		})
+	}
+}
+
+func TestDecodeISO2022InitialStateIsValueOne(t *testing.T) {
+	// Value 1 is "ISO 2022 IR 100" and the value starts with Latin-1 bytes
+	// before any escape sequence (PS3.5 6.1.2.5.3 makes Value 1 active at the
+	// beginning of the value).
+	encodings := charset.GetEncodings([]string{testCharsetISO2022IR100, testCharsetISO2022IR87})
+	data := []byte("M\xFCller")
+	data = append(data, 0x1b, '$', 'B')         // designate JIS X 0208 (IR 87)
+	data = append(data, 0x46, 0x7C, 0x4B, 0x5C) // 日本
+	data = append(data, 0x1b, '(', 'B')         // restore ASCII
+
+	got, err := charset.DecodeString(data, encodings)
+	if err != nil {
+		t.Fatalf("DecodeString() error = %v", err)
+	}
+	if want := "M\u00fcller\u65e5\u672c"; got != want {
+		t.Fatalf("DecodeString() = %q, want %q", got, want)
+	}
+}
+
+func TestDecodeISO2022ResetsToValueOneAfterNewline(t *testing.T) {
+	// After a line break, Value 1 is active again (PS3.5 6.1.2.5.3), so the
+	// Latin-1 byte 0xFC after the line feed is "ü" and not a Japanese byte.
+	encodings := charset.GetEncodings([]string{testCharsetISO2022IR100, testCharsetISO2022IR87})
+	data := []byte{0x1b, '$', 'B', 0x46, 0x7C, '\n', 0xFC}
+
+	got, err := charset.DecodeString(data, encodings)
+	if err != nil {
+		t.Fatalf("DecodeString() error = %v", err)
+	}
+	if want := "\u65e5\n\u00fc"; got != want {
+		t.Fatalf("DecodeString() = %q, want %q", got, want)
 	}
 }

@@ -59,10 +59,12 @@ const (
 
 // advertisedMaximumLength maps a configured Maximum Length to the value written
 // into the Maximum Length sub-item. PS3.8 Table D.1-1 defines 0 as "no
-// maximum", but the receive path enforces MaxPDUDataLength, so an unlimited
-// local value advertises the cap that is actually honoured instead of 0.
+// maximum", but the receive path (ReadMax) enforces MaxPDUDataLength, so the
+// advertised value is always the cap that is actually honoured: 0 and any
+// configured value above the cap both advertise the cap. Advertising more than
+// the enforced limit would let a conformant peer send PDUs this side aborts.
 func advertisedMaximumLength(configured uint32) uint32 {
-	if configured == 0 {
+	if configured == 0 || configured > MaxPDUDataLength {
 		return MaxPDUDataLength
 	}
 	return configured

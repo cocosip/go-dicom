@@ -624,3 +624,34 @@ func TestToJSON_NonFiniteFloatsUseStringForm(t *testing.T) {
 		t.Errorf("FD Value = %#v, want [-Infinity]", got["00091004"]["Value"])
 	}
 }
+
+func TestFromJSONRestoresPrivateCreators(t *testing.T) {
+	creator := tag.NewPrivateCreator("ACME 1.0")
+	ds := dataset.New()
+	_ = ds.Add(element.NewString(tag.SpecificCharacterSet, vr.CS, []string{testSpecificCharacterSetUTF8}))
+	_ = ds.Add(element.NewString(tag.NewWithPrivateCreator(0x0019, 0x0010, creator), vr.LO, []string{"ACME 1.0"}))
+	_ = ds.Add(element.NewString(tag.NewWithPrivateCreator(0x0019, 0x1001, creator), vr.LO, []string{"private value"}))
+	_ = ds.Add(element.NewString(tag.SOPClassUID, vr.UI, []string{"1.2.840.10008.5.1.4.1.1.2"}))
+
+	data, err := ToJSON(ds)
+	if err != nil {
+		t.Fatalf("ToJSON() error = %v", err)
+	}
+	back, err := FromJSON(data)
+	if err != nil {
+		t.Fatalf("FromJSON() error = %v", err)
+	}
+	elem, ok := back.Get(tag.New(0x0019, 0x1001))
+	if !ok {
+		t.Fatal("private element missing after FromJSON")
+	}
+	pc := elem.Tag().PrivateCreator()
+	if pc == nil || pc.Creator() != "ACME 1.0" {
+		t.Fatalf("private creator = %v, want ACME 1.0", pc)
+	}
+	// PS3.19 A.1.5 requires the privateCreator attribute in XML, which needs
+	// the creator to be attached to the tag.
+	if _, err := ToXML(back); err != nil {
+		t.Fatalf("ToXML() after FromJSON error = %v", err)
+	}
+}

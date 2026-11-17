@@ -807,3 +807,109 @@ func TestSmoothingTypeRequiresCubicMagnification(t *testing.T) {
 		t.Errorf("Film Box dropped Smoothing Type with Magnification Type CUBIC: %q, %v", got, ok)
 	}
 }
+
+// TestFilmBoxDatasetOmitsZeroDensityAttributes verifies that the printer-default
+// value 0 is expressed by omitting the element (PS3.3 C.13.3 only defines
+// clamping above/below the printer range, not a 0 default).
+func TestFilmBoxDatasetOmitsZeroDensityAttributes(t *testing.T) {
+	box := NewFilmBox("2.25.150", testStandardOneByOne)
+	ds, err := box.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	for _, target := range []*tag.Tag{tag.MaxDensity, tag.MinDensity, tag.Illumination, tag.ReflectedAmbientLight} {
+		if ds.Contains(target) {
+			t.Errorf("%s is present, want it omitted when the value is 0", target)
+		}
+	}
+
+	box.MaxDensity = 300
+	box.MinDensity = 10
+	box.Illumination = 2000
+	box.ReflectedAmbientLight = 10
+	ds, err = box.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	for target, want := range map[*tag.Tag]uint16{
+		tag.MaxDensity:            300,
+		tag.MinDensity:            10,
+		tag.Illumination:          2000,
+		tag.ReflectedAmbientLight: 10,
+	} {
+		got, err := ds.GetUInt16(target, 0)
+		if err != nil || got != want {
+			t.Errorf("%s = %d, %v; want %d", target, got, err, want)
+		}
+	}
+}
+
+// TestFilmSessionDatasetOmitsZeroMemoryAllocation verifies the retired Memory
+// Allocation element is only sent when the caller sets a value.
+func TestFilmSessionDatasetOmitsZeroMemoryAllocation(t *testing.T) {
+	session := NewFilmSession("", "2.25.151", false)
+	ds, err := session.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if ds.Contains(tag.MemoryAllocation) {
+		t.Error("Memory Allocation is present, want it omitted when 0")
+	}
+
+	session.MemoryAllocation = 4096
+	ds, err = session.ToDataset()
+	if err != nil {
+		t.Fatalf("ToDataset() error = %v", err)
+	}
+	if got, ok, err := optionalInteger(ds, tag.MemoryAllocation); err != nil || !ok || got != 4096 {
+		t.Errorf("Memory Allocation = %d, %v, %v; want 4096", got, ok, err)
+	}
+}
+
+// TestPrintDatasetsDeclareUTF8ForNonASCIIText verifies that datasets carrying
+// UTF-8 fallback bytes declare ISO_IR 192 (PS3.3 C.12.1.1.2, PS3.5 6.1.2).
+func TestPrintDatasetsDeclareUTF8ForNonASCIIText(t *testing.T) {
+	assertUTF8 := func(t *testing.T, label string, ds *dataset.Dataset) {
+		t.Helper()
+		declared := ds.SpecificCharacterSet()
+		if len(declared) != 1 || declared[0] != "ISO_IR 192" {
+			t.Errorf("%s Specific Character Set = %v, want [ISO_IR 192]", label, declared)
+		}
+	}
+	assertNoCharacterSet := func(t *testing.T, label string, ds *dataset.Dataset) {
+		t.Helper()
+		if ds.Contains(tag.SpecificCharacterSet) {
+			t.Errorf("%s declared a Specific Character Set for ASCII-only values: %v", label, ds.SpecificCharacterSet())
+		}
+	}
+
+	session := NewFilmSession("", "2.25.152", false)
+	session.FilmSessionLabel = "Röntgen"
+	ds, err := session.ToDataset()
+	if err != nil {
+		t.Fatalf("FilmSession.ToDataset() error = %v", err)
+	}
+	assertUTF8(t, "Film Session", ds)
+
+	asciiSession := NewFilmSession("", "2.25.153", false)
+	ds, err = asciiSession.ToDataset()
+	if err != nil {
+		t.Fatalf("FilmSession.ToDataset() error = %v", err)
+	}
+	assertNoCharacterSet(t, "ASCII Film Session", ds)
+
+	box := NewFilmBox("2.25.154", testStandardOneByOne)
+	box.ConfigurationInformation = "配置"
+	ds, err = box.ToDataset()
+	if err != nil {
+		t.Fatalf("FilmBox.ToDataset() error = %v", err)
+	}
+	assertUTF8(t, "Film Box", ds)
+
+	asciiBox := NewFilmBox("2.25.155", testStandardOneByOne)
+	ds, err = asciiBox.ToDataset()
+	if err != nil {
+		t.Fatalf("FilmBox.ToDataset() error = %v", err)
+	}
+	assertNoCharacterSet(t, "ASCII Film Box", ds)
+}

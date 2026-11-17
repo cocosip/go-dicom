@@ -165,17 +165,14 @@ func (s *String) GetStringWithError() (string, error) {
 		return "", fmt.Errorf("read string value: %w", io.ErrUnexpectedEOF)
 	}
 
-	decoded, err := charset.DecodeString(data, s.encodings)
+	// Remove DICOM padding before decoding (UI uses a trailing NUL byte, other
+	// VRs a trailing space) instead of converting the decoded string back to
+	// bytes just to trim it.
+	decoded, err := charset.DecodeString(bytes.TrimRight(data, "\x00 "), s.encodings)
 	if err != nil {
 		return "", err
 	}
-	strData := []byte(decoded)
-
-	// Remove trailing null bytes and spaces (DICOM padding)
-	// UI VR uses null byte (0x00) for padding, other VRs may use space
-	strData = bytes.TrimRight(strData, "\x00 ")
-
-	return string(strData), nil
+	return decoded, nil
 }
 
 // GetValue returns the value at the specified index.

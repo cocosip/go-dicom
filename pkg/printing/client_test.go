@@ -307,6 +307,26 @@ func TestClientPrintRejectsImageBoxCountMismatchBeforeNetworkOperations(t *testi
 	}
 }
 
+func TestClientPrintRejectsFilmBoxWithoutSessionReference(t *testing.T) {
+	session := printableSession(t)
+	detached := NewFilmBox("2.25.510", testStandardOneByOne)
+	imageBox := NewImageBox("2.25.511", false)
+	imageBox.ImageBoxPosition = 1
+	setCompleteGrayscaleImage(t, imageBox, []byte{1, 2, 3, 4})
+	detached.AddImageBox(imageBox)
+	// Append without FilmSession.AddFilmBox: the session reference stays zero.
+	session.BasicFilmBoxes = append(session.BasicFilmBoxes, detached)
+
+	service := newFakeDIMSEService()
+	err := NewClient(service).Print(context.Background(), session)
+	if err == nil || !strings.Contains(err.Error(), "not attached to Film Session") {
+		t.Fatalf("Print() error = %v, want unattached Film Box error", err)
+	}
+	if len(service.calls) != 0 {
+		t.Fatalf("call count = %d, want validation before network operations", len(service.calls))
+	}
+}
+
 func TestClientPrintDefersConfigurationDependentImageBoxCounts(t *testing.T) {
 	for _, displayFormat := range []string{slideImageDisplayFormat, "SUPERSLIDE", `CUSTOM\7`} {
 		t.Run(displayFormat, func(t *testing.T) {

@@ -743,7 +743,7 @@ func newCStorePixelDataset(t *testing.T, ts *transfer.Syntax, pixelData []byte) 
 		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{testMonochrome2}),
 		element.NewOtherWord(tag.PixelData, append([]byte(nil), pixelData...)),
 	} {
 		if err := ds.Add(elem); err != nil {
@@ -1042,5 +1042,136 @@ func TestSendLoop_ServiceClose(t *testing.T) {
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("sendLoop did not exit after service close")
+	}
+}
+
+// TestSendMessageStreamsCStoreDataset verifies the streamed C-STORE encoding is
+// byte-identical to the buffered encoding, fragments evenly, and marks exactly
+// one last data PDV (PS3.8 E.1/E.2).
+func TestSendMessageStreamsCStoreDataset(t *testing.T) {
+	assoc := createTestAssociation()
+	assoc.MaxPDULength = 4096
+
+	conn := &recordingConn{}
+	service := acceptedService(t, conn, assoc, WithAssociationRequestor(true))
+	t.Cleanup(func() { _ = service.Close() })
+
+	pixelData := make([]byte, 100000)
+	for i := range pixelData {
+		pixelData[i] = byte(i * 7)
+	}
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}),
+		element.NewString(tag.SOPInstanceUID, vr.UI, []string{testStudyInstanceUID}),
+		element.NewUnsignedShort(tag.Rows, []uint16{100}),
+		element.NewUnsignedShort(tag.Columns, []uint16{100}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{16}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{16}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{15}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{testMonochrome2}),
+		element.NewOtherWord(tag.PixelData, pixelData),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+	msg, err := dimse.NewCStoreRequest(ds)
+	if err != nil {
+		t.Fatalf("NewCStoreRequest() error = %v", err)
+	}
+	if err := msg.SetMessageID(5); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+
+	if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
+		t.Fatalf("sendMessage() error = %v", err)
+	}
+
+	wantCommand, wantDataset, err := EncodeDIMSEMessage(msg, transfer.ExplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("EncodeDIMSEMessage() error = %v", err)
+	}
+	gotCommand, gotDataset := recordedDIMSEData(t, conn)
+	if !bytes.Equal(gotCommand, wantCommand) {
+		t.Fatalf("command set = %d bytes, want %d identical bytes", len(gotCommand), len(wantCommand))
+	}
+	if !bytes.Equal(gotDataset, wantDataset) {
+		t.Fatalf("data set = %d bytes, want %d identical bytes", len(gotDataset), len(wantDataset))
+	}
+
+	var dataPDVs int
+	var lastDataPDVs int
+	for index, pdv := range readRecordedPDVs(t, conn) {
+		if pdv.IsCommand {
+			continue
+		}
+		dataPDVs++
+		if pdv.IsLastFragment {
+			lastDataPDVs++
+		}
+		if len(pdv.Data)%2 != 0 {
+			t.Fatalf("data PDV %d payload length = %d, want an even length", index, len(pdv.Data))
+		}
+	}
+	if dataPDVs < 20 {
+		t.Fatalf("data PDV count = %d, want many fragments", dataPDVs)
+	}
+	if lastDataPDVs != 1 {
+		t.Fatalf("last-fragment data PDV count = %d, want exactly one", lastDataPDVs)
+	}
+
+	_, sentDataset, err := DecodeDIMSEMessage(gotCommand, gotDataset, transfer.ExplicitVRLittleEndian)
+	if err != nil {
+		t.Fatalf("DecodeDIMSEMessage() error = %v", err)
+	}
+	sentPixelData, ok := sentDataset.Get(tag.PixelData)
+	if !ok {
+		t.Fatal("decoded data set has no PixelData")
+	}
+	if !bytes.Equal(sentPixelData.(*element.OtherWord).GetData(), pixelData) {
+		t.Fatal("decoded PixelData differs from the source")
+	}
+}
+
+// BenchmarkSendCStoreStreamed measures a 1 MiB C-STORE data set sent over an
+// in-memory connection, including the single copy into PDU fragments.
+func BenchmarkSendCStoreStreamed(b *testing.B) {
+	assoc := createTestAssociation()
+	assoc.MaxPDULength = 16384
+	conn := &recordingConn{}
+	service := NewService(conn, assoc, WithAssociationRequestor(true))
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		b.Fatalf("setState() error = %v", err)
+	}
+
+	pixelData := make([]byte, 1<<20)
+	ds := dataset.NewWithTransferSyntax(transfer.ExplicitVRLittleEndian)
+	for _, elem := range []element.Element{
+		element.NewString(tag.SOPClassUID, vr.UI, []string{testCTImageStorageUID}),
+		element.NewString(tag.SOPInstanceUID, vr.UI, []string{testStudyInstanceUID}),
+		element.NewOtherWord(tag.PixelData, pixelData),
+	} {
+		if err := ds.Add(elem); err != nil {
+			b.Fatalf("Dataset.Add(%s) error = %v", elem.Tag(), err)
+		}
+	}
+	msg, err := dimse.NewCStoreRequest(ds)
+	if err != nil {
+		b.Fatalf("NewCStoreRequest() error = %v", err)
+	}
+	if err := msg.SetMessageID(1); err != nil {
+		b.Fatalf("SetMessageID() error = %v", err)
+	}
+
+	b.SetBytes(1 << 20)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		conn.writes = conn.writes[:0]
+		if err := service.sendMessage(&sendRequest{message: msg, resultCh: make(chan error, 1)}); err != nil {
+			b.Fatalf("sendMessage() error = %v", err)
+		}
 	}
 }

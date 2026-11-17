@@ -203,7 +203,7 @@ func completeImageItem(t *testing.T, data []byte) *dataset.Dataset {
 		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
 		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
 		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
-		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{"MONOCHROME2"}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{testMonochrome2}),
 		element.NewOtherByte(tag.PixelData, data),
 	} {
 		if err := item.Add(e); err != nil {

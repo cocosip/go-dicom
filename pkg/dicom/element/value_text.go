@@ -122,6 +122,37 @@ func canonicalStringValues(value *String) ([]string, error) {
 	return value.GetValuesWithError()
 }
 
+// CanonicalString returns the element's canonical single-line value: its
+// canonical values joined by backslashes. It has the same acceptance rules as
+// CanonicalStrings but avoids building the intermediate value slice for the
+// common single-valued text element.
+func CanonicalString(elem Element) (string, error) {
+	if str := underlyingString(elem); str != nil {
+		value, err := str.GetStringWithError()
+		if err != nil {
+			return "", err
+		}
+		if value == "" {
+			return "", nil
+		}
+		// The accessor already removed the trailing padding of the complete
+		// value, so a single value needs no further trimming.
+		if str.hasLiteralBackslash() || !strings.Contains(value, "\\") {
+			return value, nil
+		}
+		values := strings.Split(value, "\\")
+		for index, item := range values {
+			values[index] = strings.TrimRight(item, " ")
+		}
+		return strings.Join(values, "\\"), nil
+	}
+	values, err := CanonicalStrings(elem)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(values, "\\"), nil
+}
+
 // ReplaceCanonicalStrings constructs a VR-correct element from individual
 // canonical values. A compatible prototype preserves text encodings and
 // numeric byte order.

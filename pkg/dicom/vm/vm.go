@@ -171,7 +171,7 @@ func parseVM(s string) (*VM, error) {
 		return &VM{
 			minimum:      val,
 			maximum:      val,
-			multiplicity: val,
+			multiplicity: 1,
 		}, nil
 	}
 
@@ -226,6 +226,17 @@ func parseVM(s string) (*VM, error) {
 func unionVM(a, b *VM) *VM {
 	if a == nil {
 		return b
+	}
+	if b == nil {
+		return a
+	}
+	// An exact count that the other alternative already accepts adds nothing,
+	// so its stride can be kept (e.g. "2-2n or 2" stays "2-2n").
+	if a.minimum == a.maximum && b.IsValid(a.minimum) {
+		return b
+	}
+	if b.minimum == b.maximum && a.IsValid(b.minimum) {
+		return a
 	}
 	union := &VM{
 		minimum:      min(a.minimum, b.minimum),

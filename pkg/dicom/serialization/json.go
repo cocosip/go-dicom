@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -509,18 +508,51 @@ func (w *jsonWriter) writeNumberOrString(val string) error {
 	return nil
 }
 
-// isValidJSONNumber checks if a string follows JSON number syntax.
+// isValidJSONNumber checks if a string follows JSON number syntax (RFC 8259
+// section 6): -?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?. Validating by hand
+// avoids allocating a decoder per DICOM value.
 func isValidJSONNumber(s string) bool {
-	if s == "" {
+	index := 0
+	if index < len(s) && s[index] == '-' {
+		index++
+	}
+	if index >= len(s) {
 		return false
 	}
-	decoder := json.NewDecoder(strings.NewReader(s))
-	decoder.UseNumber()
-	var n json.Number
-	if err := decoder.Decode(&n); err != nil {
+	switch {
+	case s[index] == '0':
+		index++
+	case s[index] >= '1' && s[index] <= '9':
+		for index < len(s) && s[index] >= '0' && s[index] <= '9' {
+			index++
+		}
+	default:
 		return false
 	}
-	return decoder.Decode(&struct{}{}) == io.EOF
+	if index < len(s) && s[index] == '.' {
+		index++
+		start := index
+		for index < len(s) && s[index] >= '0' && s[index] <= '9' {
+			index++
+		}
+		if index == start {
+			return false
+		}
+	}
+	if index < len(s) && (s[index] == 'e' || s[index] == 'E') {
+		index++
+		if index < len(s) && (s[index] == '+' || s[index] == '-') {
+			index++
+		}
+		start := index
+		for index < len(s) && s[index] >= '0' && s[index] <= '9' {
+			index++
+		}
+		if index == start {
+			return false
+		}
+	}
+	return index == len(s)
 }
 
 // fixDecimalString fixes a DICOM DS value to be a valid JSON number

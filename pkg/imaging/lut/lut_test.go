@@ -6,6 +6,7 @@ package lut
 import (
 	"math"
 	"testing"
+	"unsafe"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
 )
@@ -267,6 +268,27 @@ func TestPrecalculatedLUT(t *testing.T) {
 		if math.Abs(precalcResult-directResult) > 1.0 {
 			t.Errorf("Value %f: precalc=%f, direct=%f (diff too large)", val, precalcResult, directResult)
 		}
+	}
+}
+
+// TestPrecalculatedLUTStoresEightBitTable verifies that the table keeps one
+// byte per stored value: 64 KiB for a full 16-bit range instead of 512 KiB,
+// because every consumer clamps the output to the 8-bit display domain.
+func TestPrecalculatedLUTStoresEightBitTable(t *testing.T) {
+	precalc := NewPrecalculatedLUT(NewVOILinearLUT(32768, 65535), 0, 65535)
+
+	if got, want := precalc.TableSize(), 65536; got != want {
+		t.Fatalf("TableSize() = %d, want %d", got, want)
+	}
+	elementSize := unsafe.Sizeof(precalc.table[0])
+	if elementSize != 1 {
+		t.Fatalf("table element size = %d bytes, want 1", elementSize)
+	}
+	if tableBytes := uintptr(len(precalc.table)) * elementSize; tableBytes != 65536 {
+		t.Fatalf("table size = %d bytes, want 65536", tableBytes)
+	}
+	if got := precalc.Transform(65535); got != 255 {
+		t.Fatalf("Transform(65535) = %v, want 255", got)
 	}
 }
 

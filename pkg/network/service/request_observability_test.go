@@ -121,7 +121,7 @@ func TestOutboundRequestObservabilitySuccessAndInboundLifecycle(t *testing.T) {
 		t.Fatalf("response status = %v, want success", resp.Status())
 	}
 
-	clientEvents := requestEvents(clientRecorder, dimse.CommandCEchoRQ)
+	clientEvents := waitForRequestEventCount(t, clientRecorder, dimse.CommandCEchoRQ, 2)
 	wantClient := []observability.EventKind{observability.EventRequestSent, observability.EventRequestCompleted}
 	if got := eventKinds(clientEvents); !equalEventKinds(got, wantClient) {
 		t.Fatalf("client event kinds = %v, want %v", got, wantClient)
@@ -279,7 +279,7 @@ func TestOutboundRequestObservabilityPendingOrder(t *testing.T) {
 		}
 	}
 
-	events := requestEvents(clientRecorder, dimse.CommandCFindRQ)
+	events := waitForRequestEventCount(t, clientRecorder, dimse.CommandCFindRQ, 4)
 	want := []observability.EventKind{
 		observability.EventRequestSent,
 		observability.EventRequestPending,
@@ -328,7 +328,7 @@ func TestOutboundRequestObservabilityTimeout(t *testing.T) {
 		t.Fatalf("SendCEcho() error = %v, want deadline exceeded", err)
 	}
 
-	events := requestEvents(recorder, dimse.CommandCEchoRQ)
+	events := waitForRequestEventCount(t, recorder, dimse.CommandCEchoRQ, 2)
 	want := []observability.EventKind{observability.EventRequestSent, observability.EventRequestTimedOut}
 	if got := eventKinds(events); !equalEventKinds(got, want) {
 		t.Fatalf("event kinds = %v, want %v", got, want)
@@ -372,7 +372,7 @@ func TestOutboundRequestObservabilityLocalCancellation(t *testing.T) {
 		t.Fatalf("SendCEcho() error = %v, want context canceled", err)
 	}
 
-	events := requestEvents(recorder, dimse.CommandCEchoRQ)
+	events := waitForRequestEventCount(t, recorder, dimse.CommandCEchoRQ, 2)
 	want := []observability.EventKind{observability.EventRequestSent, observability.EventRequestCancelled}
 	if got := eventKinds(events); !equalEventKinds(got, want) {
 		t.Fatalf("event kinds = %v, want %v", got, want)
@@ -411,7 +411,7 @@ func TestInboundRequestObservabilityPeerCancellation(t *testing.T) {
 		}
 	}
 
-	events := requestEvents(serverRecorder, dimse.CommandCFindRQ)
+	events := waitForRequestEventCount(t, serverRecorder, dimse.CommandCFindRQ, 2)
 	want := []observability.EventKind{observability.EventRequestReceived, observability.EventRequestCancelled}
 	if got := eventKinds(events); !equalEventKinds(got, want) {
 		t.Fatalf("event kinds = %v, want %v", got, want)
@@ -419,14 +419,14 @@ func TestInboundRequestObservabilityPeerCancellation(t *testing.T) {
 	if events[1].Outcome != observability.OutcomeCancelled {
 		t.Fatalf("cancel event = %#v", events[1])
 	}
-	clientCancelEvents := requestEvents(clientRecorder, dimse.CommandCCancelRQ)
+	clientCancelEvents := waitForRequestEventCount(t, clientRecorder, dimse.CommandCCancelRQ, 2)
 	if got := eventKinds(clientCancelEvents); !equalEventKinds(got, []observability.EventKind{
 		observability.EventRequestSent,
 		observability.EventRequestCompleted,
 	}) {
 		t.Fatalf("client C-CANCEL event kinds = %v, want sent/completed", got)
 	}
-	serverCancelEvents := requestEvents(serverRecorder, dimse.CommandCCancelRQ)
+	serverCancelEvents := waitForRequestEventCount(t, serverRecorder, dimse.CommandCCancelRQ, 2)
 	if got := eventKinds(serverCancelEvents); !equalEventKinds(got, []observability.EventKind{
 		observability.EventRequestReceived,
 		observability.EventRequestCompleted,
@@ -486,7 +486,7 @@ func TestOutboundRequestObservabilityTransportFailure(t *testing.T) {
 		t.Fatal("SendCEcho() error = nil, want transport failure")
 	}
 
-	events := requestEvents(recorder, dimse.CommandCEchoRQ)
+	events := waitForRequestEventCount(t, recorder, dimse.CommandCEchoRQ, 1)
 	want := []observability.EventKind{observability.EventRequestFailed}
 	if got := eventKinds(events); !equalEventKinds(got, want) {
 		t.Fatalf("event kinds = %v, want %v", got, want)
@@ -501,16 +501,22 @@ func assertRequestErrorMetric(
 	outcome observability.Outcome,
 ) {
 	t.Helper()
-	_, metrics, _ := recorder.snapshot()
-	for _, metric := range metrics {
-		if metric.Kind == observability.MetricError &&
-			metric.Command == uint16(command) &&
-			metric.Outcome == outcome &&
-			metric.Value == 1 {
-			return
+	deadline := time.Now().Add(time.Second)
+	for {
+		_, metrics, _ := recorder.snapshot()
+		for _, metric := range metrics {
+			if metric.Kind == observability.MetricError &&
+				metric.Command == uint16(command) &&
+				metric.Outcome == outcome &&
+				metric.Value == 1 {
+				return
+			}
 		}
+		if time.Now().After(deadline) {
+			t.Fatalf("request error metric for %s/%s not found: %#v", command, outcome, metrics)
+		}
+		time.Sleep(time.Millisecond)
 	}
-	t.Fatalf("request error metric for %s/%s not found: %#v", command, outcome, metrics)
 }
 
 func equalEventKinds(left, right []observability.EventKind) bool {

@@ -760,6 +760,14 @@ srv := server.New(
 | `WithEventObserver(observer)` / `WithMetricsObserver(observer)` | observability hooks | nil | Structured lifecycle events and metrics |
 | `WithTLSConfig(config)` | *tls.Config | nil | TLS configuration |
 
+DIMSE request lifecycle records are delivered from a background drainer
+goroutine in the order the library produced them, so a slow hook delays its own
+telemetry instead of PDU processing; those records may arrive after the call
+that produced them has returned. Association, connection, and decode-warning
+records are delivered synchronously by the producing goroutine. Hooks must be
+safe for concurrent use and must not be used to sequence application work. A
+panicking hook is recovered and its record is dropped.
+
 The server has no AE Title option: accept or reject Calling/Called AE Titles in
 the association negotiator (`SetAssociationNegotiatorFunc`), as the
 [C-STORE SCP example](../../examples/cstore_scp) does.

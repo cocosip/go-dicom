@@ -43,7 +43,11 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 
 	s.pendingRequestsMu.Lock()
 	pending, exists := s.pendingRequests[msgID]
+	var expectedCommand uint16
+	var sentContextID byte
 	if exists {
+		expectedCommand = pending.expectedResponseCommand
+		sentContextID = pending.sentContextID
 		if isPending {
 			s.resetPendingRequestTimeoutLocked(msgID, pending)
 		} else {
@@ -64,6 +68,22 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 		// duplicate responses should not abort the whole association.
 		return nil
 	}
+
+	// PS3.7 9.3: a response is correlated to its request by Message ID, must
+	// answer that request's operation (request command | 0x8000) and must use
+	// the presentation context the request was sent on. A mismatch means the
+	// peer mixed up two operations; delivering it would hang the real request
+	// and misreport the other one, so fail the association instead.
+	if expectedCommand != 0 && resp.CommandField() != expectedCommand {
+		return fmt.Errorf("received %s (Command Field 0x%04X) for pending %s (Message ID %d), want Command Field 0x%04X",
+			dimse.CommandField(resp.CommandField()), resp.CommandField(),
+			dimse.CommandField(pending.request.CommandField()), msgID, expectedCommand)
+	}
+	if sentContextID != 0 && resp.PresentationContextID() != 0 && resp.PresentationContextID() != sentContextID {
+		return fmt.Errorf("received %s (Message ID %d) on presentation context %d, want %d",
+			dimse.CommandField(resp.CommandField()), msgID, resp.PresentationContextID(), sentContextID)
+	}
+
 	if !isPending && !pending.finalDelivered.CompareAndSwap(false, true) {
 		// A second final response for the same Message ID is a protocol
 		// violation. Drop it instead of blocking the receive loop on a full
@@ -76,25 +96,74 @@ func (s *Service) handleResponse(resp dimse.Response) error {
 	// Hand the response to the delivery goroutine without blocking: handleResponse
 	// runs on the receive loop, and a slow application must not stall
 	// A-RELEASE-RQ, A-ABORT or responses on other presentation contexts.
-	pending.enqueueResponse(resp, s.closeCh)
+	if !pending.enqueueResponse(resp, s.closeCh) {
+		s.failOverflowedRequest(msgID, pending)
+	}
 
 	return nil
 }
 
+// maxQueuedResponses bounds the per-request response queue. The receive loop
+// must never block on a slow application, but a peer streaming pending
+// responses without limit could otherwise grow the queue until memory is
+// exhausted; past this bound the affected request is failed and the association
+// stays usable.
+const maxQueuedResponses = 1024
+
 // enqueueResponse queues a response for the per-request delivery goroutine and
-// starts that goroutine when it is not already draining. The queue is unbounded
-// (matching fo-dicom's unbounded per-request channel), so a slow consumer grows
-// memory instead of blocking the association.
-func (p *pendingRequest) enqueueResponse(resp dimse.Response, closeCh <-chan struct{}) {
+// starts that goroutine when it is not already draining. It reports false when
+// the queue bound was reached or already exceeded, in which case the caller must
+// fail the request and the response is dropped.
+func (p *pendingRequest) enqueueResponse(resp dimse.Response, closeCh <-chan struct{}) bool {
 	p.queueMu.Lock()
+	if p.queueOverflowed || len(p.queue) >= maxQueuedResponses {
+		p.queueOverflowed = true
+		// Release the queued responses now; the caller fails the request and the
+		// drainer stops on cancelCh.
+		p.queue = nil
+		p.queueMu.Unlock()
+		return false
+	}
 	p.queue = append(p.queue, resp)
 	if p.draining {
 		p.queueMu.Unlock()
-		return
+		return true
 	}
 	p.draining = true
 	p.queueMu.Unlock()
 	go p.drainResponses(closeCh)
+	return true
+}
+
+// failOverflowedRequest fails one request whose response queue overflowed,
+// without aborting the association: a slow application of one operation must
+// not tear down operations on other presentation contexts. The caller receives
+// ErrResponseQueueOverflow through doneCh; a best-effort C-CANCEL tells the peer
+// to stop streaming.
+func (s *Service) failOverflowedRequest(messageID uint16, pending *pendingRequest) {
+	s.pendingRequestsMu.Lock()
+	current, exists := s.pendingRequests[messageID]
+	if !exists || current != pending {
+		s.pendingRequestsMu.Unlock()
+		return
+	}
+	delete(s.pendingRequests, messageID)
+	if pending.timeoutTimer != nil {
+		pending.timeoutTimer.Stop()
+	}
+	// Closing cancelCh stops the drainer and drops whatever it still holds. The
+	// map deletion above is the single-owner guard, so cancelCh is closed once.
+	close(pending.cancelCh)
+	s.pendingRequestsMu.Unlock()
+
+	s.cancelPendingRequest(pending, messageID)
+	pending.lifecycle.finishError(context.Background(), ErrResponseQueueOverflow)
+	select {
+	case pending.doneCh <- ErrResponseQueueOverflow:
+	default:
+		// Unreachable while the map guard above holds (buffer 1, one sender),
+		// and never blocks the receive loop if that invariant ever breaks.
+	}
 }
 
 // drainResponses forwards queued responses to responseCh in request order. It

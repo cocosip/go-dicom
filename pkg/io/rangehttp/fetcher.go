@@ -9,9 +9,19 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/io/rangeio"
 )
+
+// defaultTimeout bounds a single HTTP request so a peer that accepts the
+// connection and then stalls cannot block a range read forever. Callers that
+// need a different bound use WithTimeout; WithTimeout(0) disables the default.
+const defaultTimeout = 60 * time.Second
+
+// maxDrainBytes bounds how much of an error response body is read before it is
+// closed. Draining lets net/http reuse the connection instead of discarding it.
+const maxDrainBytes = 8 << 10
 
 type requestOption func(*http.Request)
 
@@ -24,6 +34,7 @@ type Fetcher struct {
 	url            string
 	headers        http.Header
 	requestOptions []requestOption
+	timeout        time.Duration
 
 	size         int64
 	etag         string
@@ -41,6 +52,7 @@ func NewFetcher(ctx context.Context, url string, opts ...Option) (*Fetcher, erro
 		client:  http.DefaultClient,
 		url:     url,
 		headers: make(http.Header),
+		timeout: defaultTimeout,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -92,6 +104,14 @@ func WithRequestOption(option func(*http.Request)) Option {
 	}
 }
 
+// WithTimeout sets the per-request timeout. The default is 60 seconds; a zero
+// or negative value leaves requests bounded only by their context.
+func WithTimeout(timeout time.Duration) Option {
+	return func(f *Fetcher) {
+		f.timeout = timeout
+	}
+}
+
 // Size returns the probed object size in bytes.
 func (f *Fetcher) Size() int64 {
 	return f.size
@@ -117,6 +137,9 @@ func (f *Fetcher) Fetch(ctx context.Context, req rangeio.FetchRequest) ([]byte, 
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	ctx, cancel := f.withTimeout(ctx)
+	defer cancel()
+
 	if req.Offset < 0 || req.Length < 0 {
 		return nil, fmt.Errorf("rangehttp: invalid range offset=%d length=%d", req.Offset, req.Length)
 	}
@@ -149,16 +172,38 @@ func (f *Fetcher) Fetch(ctx context.Context, req rangeio.FetchRequest) ([]byte, 
 	}()
 
 	if resp.StatusCode != http.StatusPartialContent {
+		drainBody(resp)
 		return nil, fmt.Errorf("rangehttp: expected 206 Partial Content, got %s", resp.Status)
 	}
 	if err := validateContentRange(resp.Header.Get("Content-Range"), req.Offset, end, f.size); err != nil {
+		drainBody(resp)
 		return nil, err
 	}
 
 	return readExpectedLength(resp.Body, req.Length)
 }
 
+// withTimeout derives a bounded context from ctx when a timeout is configured.
+func (f *Fetcher) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if f.timeout > 0 {
+		return context.WithTimeout(ctx, f.timeout)
+	}
+	return ctx, func() {}
+}
+
+// drainBody reads a bounded prefix of an error response so the connection can
+// be reused, then leaves the deferred Close to finish the job.
+func drainBody(resp *http.Response) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrainBytes))
+}
+
 func (f *Fetcher) probe(ctx context.Context) error {
+	ctx, cancel := f.withTimeout(ctx)
+	defer cancel()
+
 	if err := f.probeHEAD(ctx); err == nil {
 		return nil
 	}
@@ -179,6 +224,7 @@ func (f *Fetcher) probeHEAD(ctx context.Context) error {
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		drainBody(resp)
 		return fmt.Errorf("rangehttp: HEAD probe failed with %s", resp.Status)
 	}
 	size := resp.ContentLength
@@ -207,6 +253,7 @@ func (f *Fetcher) probeRangeGET(ctx context.Context) error {
 	}()
 
 	if resp.StatusCode != http.StatusPartialContent {
+		drainBody(resp)
 		return fmt.Errorf("rangehttp: range probe expected 206 Partial Content, got %s", resp.Status)
 	}
 	_, _, size, err := parseContentRange(resp.Header.Get("Content-Range"))

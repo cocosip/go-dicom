@@ -69,8 +69,8 @@ type FilmSession struct {
 	// FilmSessionLabel is a human readable label that identifies the film session
 	FilmSessionLabel string
 
-	// MemoryAllocation specifies the amount of memory allocated for the session
-	// Value in bytes
+	// MemoryAllocation specifies the retired Memory Allocation value.
+	// 0 (the default) omits the element; a non-zero value is still written.
 	MemoryAllocation int
 
 	// MediumType specifies the type of medium for printing

@@ -34,7 +34,7 @@ func TestParse(t *testing.T) {
 		{"multiplicity 2", testVMRange22N, 2, int(^uint(0) >> 1), 2, true, testVMRange22N, false},
 		{"multiplicity 3", testVMRange33N, 3, int(^uint(0) >> 1), 3, true, testVMRange33N, false},
 		{"fixed large", testVMRange199, 1, 99, 1, false, testVMRange199, false},
-		{"single digit", "4", 4, 4, 4, false, "4", false},
+		{"single digit", "4", 4, 4, 1, false, "4", false},
 		{"PS3.6 alternatives", "1-n or 1", 1, int(^uint(0) >> 1), 1, true, testVMRange1N, false},
 		{"alternatives widen range", "1-2 or 1-3", 1, 3, 1, false, "1-3", false},
 		{"alternatives preserve stride", "2-2n or 2", 2, int(^uint(0) >> 1), 2, true, testVMRange22N, false},

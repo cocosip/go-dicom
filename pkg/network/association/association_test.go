@@ -524,3 +524,42 @@ func TestToAAssociateACEchoesReceivedAETitleBytes(t *testing.T) {
 		t.Fatalf("A-ASSOCIATE-AC Calling AE Title = % X, want % X", rawAC.Data[20:36], wantCalling)
 	}
 }
+
+// TestToAAssociateACEncodesUnnegotiatedContextAsProviderRejection verifies that
+// a negotiator which leaves a proposed context untouched still yields an
+// encodable A-ASSOCIATE-AC: ResultNotNegotiated (0xFF) is a local sentinel and
+// PS3.8 Table 9-18 only allows result values 0..4.
+func TestToAAssociateACEncodesUnnegotiatedContextAsProviderRejection(t *testing.T) {
+	assoc := NewAssociation("REQUESTOR", "ACCEPTOR")
+	pc := NewPresentationContext(1, "1.2.840.10008.1.1", transfer.ExplicitVRLittleEndian)
+	if err := assoc.AddPresentationContext(pc); err != nil {
+		t.Fatalf("AddPresentationContext() error = %v", err)
+	}
+	if pc.Result != ResultNotNegotiated {
+		t.Fatalf("new context result = 0x%02X, want the un-negotiated sentinel", pc.Result)
+	}
+
+	ac := ToAAssociateACWithMaxPDULength(assoc, assoc.MaxPDULength)
+	if len(ac.PresentationContexts) != 1 {
+		t.Fatalf("presentation contexts = %d, want 1", len(ac.PresentationContexts))
+	}
+	if got := ac.PresentationContexts[0].Result; got != pdu.ResultNoReason {
+		t.Fatalf("AC presentation context result = 0x%02X, want provider rejection 0x%02X",
+			got, pdu.ResultNoReason)
+	}
+
+	rawAC, err := ac.Encode()
+	if err != nil {
+		t.Fatalf("AAssociateAC.Encode() error = %v", err)
+	}
+	decoded := &pdu.AAssociateAC{}
+	if err := decoded.Decode(rawAC); err != nil {
+		t.Fatalf("AAssociateAC.Decode() error = %v", err)
+	}
+	if len(decoded.PresentationContexts) != 1 {
+		t.Fatalf("decoded presentation contexts = %d, want 1", len(decoded.PresentationContexts))
+	}
+	if got := decoded.PresentationContexts[0].Result; got != pdu.ResultNoReason {
+		t.Fatalf("decoded result = 0x%02X, want provider rejection 0x%02X", got, pdu.ResultNoReason)
+	}
+}

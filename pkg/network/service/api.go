@@ -225,14 +225,30 @@ func (s *Service) registerPendingRequest(messageID uint16, request dimse.Request
 	}
 
 	pending := &pendingRequest{
-		request:    request,
-		responseCh: respCh,
-		doneCh:     make(chan error, 1),
-		cancelCh:   make(chan struct{}),
-		lifecycle:  newRequestLifecycle(s, observability.DirectionOutbound, request),
+		request:                 request,
+		responseCh:              respCh,
+		doneCh:                  make(chan error, 1),
+		cancelCh:                make(chan struct{}),
+		lifecycle:               newRequestLifecycle(s, observability.DirectionOutbound, request),
+		expectedResponseCommand: request.CommandField() | 0x8000,
 	}
 	s.pendingRequests[messageID] = pending
 	return pending, nil
+}
+
+// setPendingSentContextID records the presentation context the request was
+// actually written on, so handleResponse can reject a response that arrives on
+// another context (PS3.7 9.3). Send resolves the context, so this is only known
+// after it returns; a transport that does not run the send loop leaves it 0,
+// which disables the check.
+func (s *Service) setPendingSentContextID(messageID uint16, pending *pendingRequest, contextID byte) {
+	s.pendingRequestsMu.Lock()
+	defer s.pendingRequestsMu.Unlock()
+	current, exists := s.pendingRequests[messageID]
+	if !exists || current != pending {
+		return
+	}
+	pending.sentContextID = contextID
 }
 
 // unregisterPendingRequest removes a pending request.
@@ -382,6 +398,7 @@ func sendSimpleRequest[Req dimse.Request, Resp dimse.Response](
 		pending.lifecycle.finishContext(ctx, err)
 		return zero, err
 	}
+	s.setPendingSentContextID(msgID, pending, req.PresentationContextID())
 	s.armPendingRequestTimeout(ctx, msgID, pending)
 	select {
 	case respMsg := <-respCh:
@@ -454,6 +471,7 @@ func sendRequestWithProgress[Req dimse.Request, Resp pendingResponse](
 		release()
 		return nil, fmt.Errorf("%s: %w", errMsg, err)
 	}
+	s.setPendingSentContextID(msgID, pending, req.PresentationContextID())
 	s.armPendingRequestTimeout(ctx, msgID, pending)
 
 	go func() {

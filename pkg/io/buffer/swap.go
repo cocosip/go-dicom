@@ -22,6 +22,11 @@ type SwapByteBuffer struct {
 	unitSize int        // Number of bytes to swap as a unit (2, 4, etc.)
 }
 
+// maxSwapUnitSize bounds the swap unit so WriteTo's chunk size stays positive.
+// Chunks are rounded down to a multiple of unitSize; a unit larger than the
+// chunk target would make every chunk empty and never make progress.
+const maxSwapUnitSize = 1 << 20
+
 // NewSwap creates a new swap buffer that wraps another buffer.
 //
 // Parameters:
@@ -36,6 +41,9 @@ func NewSwap(buffer ByteBuffer, unitSize int) (*SwapByteBuffer, error) {
 
 	if unitSize < 1 {
 		return nil, fmt.Errorf("unitSize must be positive, got %d", unitSize)
+	}
+	if unitSize > maxSwapUnitSize {
+		return nil, fmt.Errorf("unitSize %d exceeds maximum supported size %d", unitSize, maxSwapUnitSize)
 	}
 
 	return &SwapByteBuffer{
@@ -155,6 +163,11 @@ func (s *SwapByteBuffer) WriteTo(w io.Writer) (int64, error) {
 		toRead := remaining
 		if toRead > chunkSize {
 			toRead = chunkSize
+		}
+		if toRead == 0 {
+			// Defensive: a zero-sized chunk would write nothing and leave
+			// offset/remaining unchanged, so the loop would never terminate.
+			return totalWritten, fmt.Errorf("swap chunk size is zero for unit size %d", s.unitSize)
 		}
 
 		// Read and swap the chunk

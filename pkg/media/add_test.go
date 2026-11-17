@@ -476,3 +476,31 @@ func TestRecordWritesZeroLengthType2Attributes(t *testing.T) {
 		}
 	}
 }
+
+// TestPresentationRecordWithoutInstanceNumberUsesType2 verifies PS3.3 F.5.23:
+// Instance Number is not a PRESENTATION record key, so an instance without it
+// is accepted and the record carries a zero-length Type 2 element instead.
+func TestPresentationRecordWithoutInstanceNumberUsesType2(t *testing.T) {
+	dir, err := NewDirectory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := testParseResult(t, testFileValues{
+		PatientID: testPatientID, PatientName: testPatientName, StudyUID: testStudyUID,
+		SeriesUID: testSeriesUID, SOPInstanceUID: testSOPInstanceUID,
+		SOPClass: uid.GrayscaleSoftcopyPresentationStateStorage,
+	})
+	res.Dataset.Remove(tag.InstanceNumber)
+
+	entry := addTestFile(t, dir, res, "DIR1/PRES001")
+	if got := entry.Instance.Type(); got != RecordPresentation {
+		t.Fatalf("instance record type = %s, want %s", got, RecordPresentation)
+	}
+	item, ok := entry.Instance.Dataset().Get(tag.InstanceNumber)
+	if !ok {
+		t.Fatal("Instance Number missing from PRESENTATION record; want a zero-length Type 2 element")
+	}
+	if item.Length() != 0 {
+		t.Fatalf("Instance Number length = %d, want 0", item.Length())
+	}
+}

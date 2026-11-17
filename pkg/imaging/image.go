@@ -73,6 +73,14 @@ type DicomImage struct {
 	// Rendering pipeline for each frame
 	pipelines map[int]render.Pipeline
 
+	// windowRange caches the pixel-value range deriveWindowFromPixels needs.
+	// The range spans every frame, so one scan serves all frame pipelines;
+	// DecodeIfNeeded drops it when the pixel data is replaced.
+	windowRange          [2]float64
+	windowRangeComputed  bool
+	windowRangeErr       error
+	windowRangeScanCount int // pixel scans performed; lets tests prove memoization
+
 	// Scaling factor
 	scale float64
 
@@ -105,22 +113,35 @@ func NewDicomImage(pixelData *pixeldata.Data) *DicomImage {
 
 // Width returns the image width in pixels
 func (img *DicomImage) Width() uint16 {
-	return img.pixelData.Load().Info.Width
+	if pd := img.pixelData.Load(); pd != nil && pd.Info != nil {
+		return pd.Info.Width
+	}
+	return 0
 }
 
 // Height returns the image height in pixels
 func (img *DicomImage) Height() uint16 {
-	return img.pixelData.Load().Info.Height
+	if pd := img.pixelData.Load(); pd != nil && pd.Info != nil {
+		return pd.Info.Height
+	}
+	return 0
 }
 
 // NumberOfFrames returns the number of frames in the image
 func (img *DicomImage) NumberOfFrames() int {
-	return img.pixelData.Load().Info.NumberOfFrames
+	if pd := img.pixelData.Load(); pd != nil && pd.Info != nil {
+		return pd.Info.NumberOfFrames
+	}
+	return 0
 }
 
 // IsGrayscale returns true if the image is grayscale
 func (img *DicomImage) IsGrayscale() bool {
-	pi := img.pixelData.Load().Info.PhotometricInterpretation
+	pd := img.pixelData.Load()
+	if pd == nil || pd.Info == nil {
+		return true
+	}
+	pi := pd.Info.PhotometricInterpretation
 	if pi == nil {
 		return true // Default to grayscale
 	}
@@ -163,8 +184,12 @@ func (img *DicomImage) SetScale(scale float64) {
 	img.scale = scale
 }
 
-// GetOrCreatePipeline returns the rendering pipeline for the specified frame
-// Creates a default pipeline if it doesn't exist
+// GetOrCreatePipeline returns the rendering pipeline for the specified frame.
+//
+// It creates a default pipeline when none exists and falls back to an identity
+// pipeline when the dataset's attributes cannot be validated, so it always
+// returns a usable pipeline. Dataset rendering uses
+// GetOrCreatePipelineWithError to surface malformed attributes instead.
 func (img *DicomImage) GetOrCreatePipeline(frame int) render.Pipeline {
 	pipeline, err := img.GetOrCreatePipelineWithError(frame)
 	if err == nil {
@@ -196,7 +221,9 @@ func (img *DicomImage) GetOrCreatePipelineWithError(frame int) (render.Pipeline,
 
 func (img *DicomImage) newFallbackPipeline() render.Pipeline {
 	pd := img.pixelData.Load()
-	if pd.Info.BitsStored == 0 {
+	// An image constructed without pixel data has no attributes to derive a
+	// window from; a neutral pipeline keeps the public setters usable.
+	if pd == nil || pd.Info == nil || pd.Info.BitsStored == 0 {
 		return render.NewGrayscalePipeline(1.0, 0, 256, 256, 0, 255, false)
 	}
 	pixelSigned := pd.Info.PixelRepresentation == pixel.SignedPixels
@@ -388,7 +415,7 @@ func (t *grayscaleTransforms) applyExplicitWindow(fallback *dataset.Dataset, win
 func (img *DicomImage) deriveWindowFromPixels(t *grayscaleTransforms) {
 	minimum, maximum, err := pixeldata.DatasetValueRange(img.dataset)
 	if err != nil {
-		minimum, maximum, err = img.pixelData.Load().MinMax(true)
+		minimum, maximum, err = img.windowRangeFromPixels()
 	}
 	if err != nil {
 		// Neither the Dataset attributes nor MinMax supplied a range; fall back
@@ -407,6 +434,24 @@ func (img *DicomImage) deriveWindowFromPixels(t *grayscaleTransforms) {
 	}
 	t.windowCenter = (minimum + maximum) / 2
 	t.windowWidth = math.Max(1, math.Abs(maximum-minimum))
+}
+
+// windowRangeFromPixels returns the cached MinMax range of the pixel data.
+// The range spans every frame and depends only on the pixel data, so scanning
+// once serves every frame pipeline instead of rescanning all frames per frame.
+// The caller must hold img.mu.
+func (img *DicomImage) windowRangeFromPixels() (float64, float64, error) {
+	if !img.windowRangeComputed {
+		img.windowRangeScanCount++
+		pd := img.pixelData.Load()
+		if pd == nil || pd.Info == nil {
+			img.windowRange[0], img.windowRange[1], img.windowRangeErr = 0, 0, fmt.Errorf("image has no pixel data")
+		} else {
+			img.windowRange[0], img.windowRange[1], img.windowRangeErr = pd.MinMax(true)
+		}
+		img.windowRangeComputed = true
+	}
+	return img.windowRange[0], img.windowRange[1], img.windowRangeErr
 }
 
 // applyIdentityWindow applies the identity VOI transformation that PS3.3
@@ -507,12 +552,23 @@ func (img *DicomImage) WindowWidth() float64 {
 
 // SetWindowWidth sets the window width for the current frame
 func (img *DicomImage) SetWindowWidth(width float64) {
+	width = clampRequestedWindowWidth(width)
 	from, to := img.lutFrameRange()
 	for frame := from; frame <= to; frame++ {
 		if gp, ok := img.GetOrCreatePipeline(frame).(*render.GrayscalePipeline); ok {
 			gp.SetWindowWidth(width)
 		}
 	}
+}
+
+// clampRequestedWindowWidth enforces the PS3.3 C.11.2.1.2 LINEAR rule that
+// Window Width is at least 1 on caller-supplied values; a smaller width inverts
+// the display mapping. The dataset path is validated separately.
+func clampRequestedWindowWidth(width float64) float64 {
+	if math.IsNaN(width) || width < 1 {
+		return 1
+	}
+	return width
 }
 
 // WindowCenter returns the window center for the current frame
@@ -536,6 +592,7 @@ func (img *DicomImage) SetWindowCenter(center float64) {
 
 // SetWindow sets both window center and width for the current frame
 func (img *DicomImage) SetWindow(center, width float64) {
+	width = clampRequestedWindowWidth(width)
 	from, to := img.lutFrameRange()
 	for frame := from; frame <= to; frame++ {
 		if gp, ok := img.GetOrCreatePipeline(frame).(*render.GrayscalePipeline); ok {
@@ -669,6 +726,11 @@ func transformRect(bounds image.Rectangle) math3d.Rect {
 }
 
 func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLegacyScale bool) (rendered image.Image, err error) {
+	// A DicomImage built without pixel data has nothing to render; report that
+	// instead of dereferencing a nil snapshot below.
+	if pd := img.pixelData.Load(); pd == nil || pd.Info == nil {
+		return nil, fmt.Errorf("image has no pixel data")
+	}
 	// Snapshot the pixel data once: a concurrent DecodeIfNeeded may replace it
 	// between loads, and mixing frame bytes with post-decode metadata produces
 	// misleading size errors or corrupt pixels.
@@ -719,7 +781,12 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 		if frame < 0 || frame >= pd.Info.NumberOfFrames {
 			return nil, fmt.Errorf("frame index out of range: %d", frame)
 		}
-		frameData, err = pd.Frame(ctx, frame)
+		// Rendering only reads the frame, so borrow the snapshot's buffer
+		// instead of copying it; pd stays alive for the whole render.
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		frameData, err = pd.FrameView(frame)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get frame data: %w", err)
 		}
@@ -753,6 +820,9 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 			pd.Info.PixelRepresentation == pixel.SignedPixels,
 			photometric,
 		)
+		if err == nil {
+			rendered = maskGrayscalePadding(rendered, pd, frame)
+		}
 		if err == nil && img.supplementalPaletteEligible(pd) {
 			rendered, err = img.applySupplementalPalette(rendered, frame, pd)
 		}
@@ -803,6 +873,36 @@ func (img *DicomImage) renderFrameImage(ctx context.Context, frame int, applyLeg
 	return rendered, nil
 }
 
+// maskGrayscalePadding forces Pixel Padding samples to display black after the
+// grayscale pipeline. PS3.3 C.7.5.1.1.2 says padding is not image data, and
+// applying the mask after windowing keeps MONOCHROME1 inversion and the
+// pipeline LUT from mapping padding to a visible gray.
+func maskGrayscalePadding(rendered image.Image, pd *pixeldata.Data, frame int) image.Image {
+	gray, ok := rendered.(*image.Gray)
+	if !ok || pd.Info.PixelPaddingValue == nil || pd.Info.SamplesPerPixel != 1 {
+		return rendered
+	}
+	mask, err := pd.PaddingMask(frame)
+	if err != nil {
+		return rendered
+	}
+	width, height := gray.Bounds().Dx(), gray.Bounds().Dy()
+	if width <= 0 || height <= 0 {
+		return rendered
+	}
+	for index, padded := range mask {
+		if !padded {
+			continue
+		}
+		x, y := index%width, index/width
+		if x >= width || y >= height {
+			break
+		}
+		gray.Pix[y*gray.Stride+x] = 0
+	}
+	return gray
+}
+
 func (img *DicomImage) supplementalPaletteEligible(pd *pixeldata.Data) bool {
 	if img.dataset == nil || pd.Info.SamplesPerPixel != 1 {
 		return false
@@ -830,28 +930,50 @@ func (img *DicomImage) applySupplementalPalette(grayscale image.Image, frame int
 	if err != nil {
 		return nil, fmt.Errorf("build Supplemental Palette Color LUT: %w", err)
 	}
+	bounds := grayscale.Bounds()
 	width := int(pd.Info.Width)
-	pixelCount := width * int(pd.Info.Height)
-	result := image.NewNRGBA(grayscale.Bounds())
-	for index := 0; index < pixelCount; index++ {
-		x := index % width
-		y := index / width
-		gray := color.GrayModel.Convert(grayscale.At(x, y)).(color.Gray)
-		result.SetNRGBA(x, y, color.NRGBA{R: gray.Y, G: gray.Y, B: gray.Y, A: 255})
+	height := int(pd.Info.Height)
+	result := image.NewNRGBA(bounds)
 
-		value, sampleErr := pd.Sample(frame, x, y, 0)
-		if sampleErr != nil {
-			return nil, sampleErr
+	// Read the rendered gray value directly for the pipeline's common outputs so
+	// the per-pixel color model conversion is not repeated 4 bytes at a time.
+	var grayAt func(x, y int) uint8
+	switch source := grayscale.(type) {
+	case *image.Gray:
+		grayAt = func(x, y int) uint8 { return source.Pix[source.PixOffset(x, y)] }
+	case *image.Gray16:
+		// Gray16.RGBA reports the 16-bit value and color.GrayModel keeps its high
+		// byte, which is the first byte of the big-endian pixel.
+		grayAt = func(x, y int) uint8 { return source.Pix[source.PixOffset(x, y)] }
+	default:
+		grayAt = func(x, y int) uint8 {
+			return color.GrayModel.Convert(grayscale.At(x, y)).(color.Gray).Y
 		}
-		if value < int64(first) {
-			continue
+	}
+
+	for y := 0; y < height; y++ {
+		rowOffset := result.PixOffset(bounds.Min.X, bounds.Min.Y+y)
+		for x := 0; x < width; x++ {
+			gray := grayAt(bounds.Min.X+x, bounds.Min.Y+y)
+			red, green, blue, alpha := gray, gray, gray, uint8(255)
+			value, sampleErr := pd.Sample(frame, x, y, 0)
+			if sampleErr != nil {
+				return nil, sampleErr
+			}
+			if value >= int64(first) {
+				paletteIndex := int(value - int64(first))
+				if paletteIndex >= len(entries) {
+					paletteIndex = len(entries) - 1
+				}
+				entry := entries[paletteIndex]
+				red, green, blue, alpha = entry.R, entry.G, entry.B, entry.A
+			}
+			offset := rowOffset + x*4
+			result.Pix[offset] = red
+			result.Pix[offset+1] = green
+			result.Pix[offset+2] = blue
+			result.Pix[offset+3] = alpha
 		}
-		paletteIndex := int(value - int64(first))
-		if paletteIndex >= len(entries) {
-			paletteIndex = len(entries) - 1
-		}
-		entry := entries[paletteIndex]
-		result.SetNRGBA(x, y, color.NRGBA{R: entry.R, G: entry.G, B: entry.B, A: entry.A})
 	}
 	return result, nil
 }
@@ -874,6 +996,13 @@ func (img *DicomImage) scaleImage(source image.Image, pd *pixeldata.Data) image.
 			golangdraw.BiLinear.Scale(gray, destinationBounds, source, source.Bounds(), golangdraw.Src, nil)
 		}
 		return gray
+	}
+	if pd.Info.BitsStored == 1 {
+		// An overlay can composite a 1-bit image into RGBA; interpolation would
+		// invent gray levels between the two stored values, so scale nearest.
+		rgba := image.NewRGBA(destinationBounds)
+		golangdraw.NearestNeighbor.Scale(rgba, destinationBounds, source, source.Bounds(), golangdraw.Src, nil)
+		return rgba
 	}
 	rgba := image.NewRGBA(destinationBounds)
 	golangdraw.BiLinear.Scale(rgba, destinationBounds, source, source.Bounds(), golangdraw.Src, nil)
@@ -955,8 +1084,11 @@ func (img *DicomImage) DecodeIfNeededContext(ctx context.Context, c codec.Codec,
 
 	img.mu.Lock()
 	img.pixelData.Store(decoded)
-	// Clear cached pipelines as pixel data has changed
+	// Clear cached pipelines as pixel data has changed. The derived window
+	// range comes from the same samples and must be rescanned as well.
 	img.pipelines = make(map[int]render.Pipeline)
+	img.windowRangeComputed = false
+	img.windowRangeErr = nil
 	img.mu.Unlock()
 
 	return nil

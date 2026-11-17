@@ -1837,12 +1837,9 @@ func TestApplyVOILUTReadsEightBitEntriesFromWordData(t *testing.T) {
 				t.Fatalf("NewFromBytes() error = %v", err)
 			}
 
-			got, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil)
-			if err != nil {
-				t.Fatalf("applyVOILUTWithModality() error = %v", err)
-			}
+			got := applyVOILUTForTest(t, pd, ds)
 			if want := []byte{10, 20, 30}; !bytes.Equal(got[0], want) {
-				t.Fatalf("applyVOILUTWithModality() = %v, want %v", got[0], want)
+				t.Fatalf("VOI LUT mapping = %v, want %v", got[0], want)
 			}
 		})
 	}
@@ -1863,13 +1860,21 @@ func TestApplyVOILUTKeepsUnsignedFirstMappedValue(t *testing.T) {
 		t.Fatalf("NewFromBytes() error = %v", err)
 	}
 
-	got, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil)
-	if err != nil {
-		t.Fatalf("applyVOILUTWithModality() error = %v", err)
-	}
+	got := applyVOILUTForTest(t, pd, ds)
 	if want := []byte{10, 20}; !bytes.Equal(got[0], want) {
-		t.Fatalf("applyVOILUTWithModality() = %v, want %v", got[0], want)
+		t.Fatalf("VOI LUT mapping = %v, want %v", got[0], want)
 	}
+}
+
+// applyVOILUTForTest maps all frames through the dataset's VOI LUT Sequence,
+// mirroring WindowOrLUTTo8bit for a dataset without a modality transform.
+func applyVOILUTForTest(t *testing.T, pd *Data, ds *dataset.Dataset) [][]byte {
+	t.Helper()
+	transform, err := voiLUTTransform(pd, ds, nil)
+	if err != nil {
+		t.Fatalf("voiLUTTransform() error = %v", err)
+	}
+	return mapSamplesTo8bit(pd, transform, false)
 }
 
 func TestApplyVOILUTRejectsShortData(t *testing.T) {
@@ -1887,8 +1892,8 @@ func TestApplyVOILUTRejectsShortData(t *testing.T) {
 		t.Fatalf("NewFromBytes() error = %v", err)
 	}
 
-	if _, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil); err == nil {
-		t.Fatal("applyVOILUTWithModality() accepted LUT Data shorter than the descriptor")
+	if _, err := voiLUTTransform(pd, ds, nil); err == nil {
+		t.Fatal("voiLUTTransform() accepted LUT Data shorter than the descriptor")
 	}
 }
 
@@ -2012,8 +2017,8 @@ func TestApplyVOILUTRejectsInvalidBitsPerEntry(t *testing.T) {
 				t.Fatalf("NewFromBytes() error = %v", err)
 			}
 
-			if _, err := applyVOILUTWithModality(pd, ds, 0, 0, false, nil); err == nil {
-				t.Fatalf("applyVOILUTWithModality() accepted bitsPerEntry=%d", bitsPerEntry)
+			if _, err := voiLUTTransform(pd, ds, nil); err == nil {
+				t.Fatalf("voiLUTTransform() accepted bitsPerEntry=%d", bitsPerEntry)
 			}
 		})
 	}
@@ -2254,6 +2259,83 @@ func TestDataNormalizesReversedPixelPaddingRange(t *testing.T) {
 	}
 	if got, want := windowed[0][1:], []byte{0, 0, 0}; !bytes.Equal(got, want) {
 		t.Fatalf("WindowTo8bit() padding = %v, want %v", got, want)
+	}
+}
+
+func TestDataFrameViewAliasesTheStoredFrame(t *testing.T) {
+	info := &Info{
+		Width: 2, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+	}
+	pd, err := NewFromBytes(info, []byte{7, 9})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+
+	view, err := pd.FrameView(0)
+	if err != nil {
+		t.Fatalf("FrameView(0) error = %v", err)
+	}
+	if !bytes.Equal(view, []byte{7, 9}) {
+		t.Fatalf("FrameView(0) = %v, want [7 9]", view)
+	}
+	if &view[0] != &pd.frames[0][0] {
+		t.Fatal("FrameView returned a copy, want a view of the stored frame")
+	}
+
+	copied, err := pd.Frame(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("Frame(0) error = %v", err)
+	}
+	if &copied[0] == &pd.frames[0][0] {
+		t.Fatal("Frame returned a view, want an independently owned copy")
+	}
+
+	if _, err := pd.FrameView(1); err == nil {
+		t.Fatal("FrameView(1) = nil error, want an out-of-range error")
+	}
+}
+
+func TestDataPaddingMaskUsesInclusiveUnorderedRange(t *testing.T) {
+	padding := int32(20)
+	rangeLimit := int32(10)
+	info := &Info{
+		Width: 4, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+		PixelPaddingValue:         &padding, PixelPaddingRangeLimit: &rangeLimit,
+	}
+	pd, err := NewFromBytes(info, []byte{5, 10, 15, 20})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+
+	mask, err := pd.PaddingMask(0)
+	if err != nil {
+		t.Fatalf("PaddingMask(0) error = %v", err)
+	}
+	if want := []bool{false, true, true, true}; !slices.Equal(mask, want) {
+		t.Fatalf("PaddingMask(0) = %v, want %v", mask, want)
+	}
+
+	if _, err := pd.PaddingMask(1); err == nil {
+		t.Fatal("PaddingMask(1) = nil error, want an out-of-range error")
+	}
+	withoutPadding := &Info{
+		Width: 1, Height: 1, NumberOfFrames: 1,
+		BitsAllocated: 8, BitsStored: 8, HighBit: 7,
+		SamplesPerPixel: 1, PixelRepresentation: pixel.UnsignedPixels,
+		PhotometricInterpretation: pixel.Monochrome2,
+	}
+	noPadding, err := NewFromBytes(withoutPadding, []byte{0})
+	if err != nil {
+		t.Fatalf("NewFromBytes() error = %v", err)
+	}
+	if _, err := noPadding.PaddingMask(0); err == nil {
+		t.Fatal("PaddingMask() without a Pixel Padding Value = nil error, want an error")
 	}
 }
 
@@ -2995,5 +3077,107 @@ func TestConvertPaletteToRGBClearsPixelPadding(t *testing.T) {
 	if pd.Info.PixelPaddingValue != nil || pd.Info.PixelPaddingRangeLimit != nil {
 		t.Fatalf("converted RGB image kept pixel padding: value=%v range=%v",
 			pd.Info.PixelPaddingValue, pd.Info.PixelPaddingRangeLimit)
+	}
+}
+
+// TestWindowOrLUTTo8bitMapsMultipleFramesWithSharedVOILUT verifies that frames
+// without functional groups are all mapped through the shared VOI LUT chain
+// (PS3.3 C.7.6.16) without leaking mapped bytes between frames.
+func TestWindowOrLUTTo8bitMapsMultipleFramesWithSharedVOILUT(t *testing.T) {
+	frames := [][]byte{{0, 1, 2}, {3, 0, 1}, {2, 3, 0}}
+	ds := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{1}),
+		element.NewUnsignedShort(tag.Columns, []uint16{3}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewString(tag.NumberOfFrames, vr.IS, []string{fmt.Sprint(len(frames))}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			t.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+	// 4-entry VOI LUT: 0, 1, 2, 3 -> 0, 85, 170, 255.
+	lutItem := dataset.New()
+	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{4, 0, 8}))
+	lutData := make([]byte, 8)
+	for index, value := range []uint16{0, 85, 170, 255} {
+		binary.LittleEndian.PutUint16(lutData[index*2:], value)
+	}
+	_ = lutItem.Add(element.NewOtherWord(tag.LUTData, lutData))
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
+	var pixelData []byte
+	for _, frame := range frames {
+		pixelData = append(pixelData, frame...)
+	}
+	_ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+
+	pd, err := FromDataset(ds)
+	if err != nil {
+		t.Fatalf("FromDataset() error = %v", err)
+	}
+	out, err := pd.WindowOrLUTTo8bit(ds, 0, 0, false)
+	if err != nil {
+		t.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+	}
+	want := [][]byte{{0, 85, 170}, {255, 0, 85}, {170, 255, 0}}
+	if len(out) != len(want) {
+		t.Fatalf("WindowOrLUTTo8bit() returned %d frames, want %d", len(out), len(want))
+	}
+	for index := range want {
+		if !bytes.Equal(out[index], want[index]) {
+			t.Fatalf("frame %d = %v, want %v", index, out[index], want[index])
+		}
+	}
+}
+
+// BenchmarkWindowOrLUTTo8bitMultiFrame exercises the shared-transform path: a
+// 16-bit VOI LUT with 65536 entries would otherwise be rebuilt once per frame.
+func BenchmarkWindowOrLUTTo8bitMultiFrame(b *testing.B) {
+	const frameCount = 16
+	frame := make([]byte, 64*64)
+	for index := range frame {
+		frame[index] = byte(index)
+	}
+	lutData := make([]byte, 65536*2)
+	ds := dataset.New()
+	for _, elem := range []element.Element{
+		element.NewUnsignedShort(tag.Rows, []uint16{64}),
+		element.NewUnsignedShort(tag.Columns, []uint16{64}),
+		element.NewUnsignedShort(tag.BitsAllocated, []uint16{8}),
+		element.NewUnsignedShort(tag.BitsStored, []uint16{8}),
+		element.NewUnsignedShort(tag.HighBit, []uint16{7}),
+		element.NewUnsignedShort(tag.SamplesPerPixel, []uint16{1}),
+		element.NewUnsignedShort(tag.PixelRepresentation, []uint16{0}),
+		element.NewString(tag.PhotometricInterpretation, vr.CS, []string{pixel.Monochrome2.Value}),
+		element.NewString(tag.NumberOfFrames, vr.IS, []string{fmt.Sprint(frameCount)}),
+	} {
+		if err := ds.Add(elem); err != nil {
+			b.Fatalf("add %s: %v", elem.Tag(), err)
+		}
+	}
+	lutItem := dataset.New()
+	_ = lutItem.Add(element.NewUnsignedShort(tag.LUTDescriptor, []uint16{0, 0, 16}))
+	_ = lutItem.Add(element.NewOtherWord(tag.LUTData, lutData))
+	_ = ds.Add(dataset.NewSequenceWithItems(tag.VOILUTSequence, []*dataset.Dataset{lutItem}))
+	pixelData := make([]byte, 0, frameCount*len(frame))
+	for index := 0; index < frameCount; index++ {
+		pixelData = append(pixelData, frame...)
+	}
+	_ = ds.Add(element.NewOtherByte(tag.PixelData, pixelData))
+
+	pd, err := FromDataset(ds)
+	if err != nil {
+		b.Fatalf("FromDataset() error = %v", err)
+	}
+	b.ResetTimer()
+	for index := 0; index < b.N; index++ {
+		if _, err := pd.WindowOrLUTTo8bit(ds, 0, 0, false); err != nil {
+			b.Fatalf("WindowOrLUTTo8bit() error = %v", err)
+		}
 	}
 }

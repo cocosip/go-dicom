@@ -138,12 +138,18 @@ func (img *DicomImage) applyOverlays(source image.Image, frame int) image.Image 
 	overlays := append([]*DicomOverlayData(nil), img.overlays...)
 	overlayColor := img.overlayColor
 	img.mu.RUnlock()
-	if !show || len(overlays) == 0 {
+	if !show || len(overlays) == 0 || overlayColor.A == 0 {
 		return source
 	}
 
-	destination := image.NewRGBA(source.Bounds())
-	draw.Draw(destination, destination.Bounds(), source, source.Bounds().Min, draw.Src)
+	// Resolve the frames that actually draw before allocating the RGBA copy: an
+	// out-of-range frame or an all-zero overlay must leave the image (and its
+	// concrete type) untouched.
+	type visibleOverlay struct {
+		overlay *DicomOverlayData
+		data    []byte
+	}
+	visible := make([]visibleOverlay, 0, len(overlays))
 	for _, overlay := range overlays {
 		overlayFrame := frame + 1 - overlay.ImageFrameOrigin
 		if !overlay.MultiFrameOverlay {
@@ -155,9 +161,19 @@ func (img *DicomImage) applyOverlays(source image.Image, frame int) image.Image 
 			continue
 		}
 		data, err := overlay.GetFrame(overlayFrame)
-		if err != nil {
+		if err != nil || !overlayHasMarkedPixel(data) {
 			continue
 		}
+		visible = append(visible, visibleOverlay{overlay: overlay, data: data})
+	}
+	if len(visible) == 0 {
+		return source
+	}
+
+	destination := image.NewRGBA(source.Bounds())
+	draw.Draw(destination, destination.Bounds(), source, source.Bounds().Min, draw.Src)
+	for _, item := range visible {
+		overlay, data := item.overlay, item.data
 		for row := 0; row < overlay.Rows; row++ {
 			for column := 0; column < overlay.Columns; column++ {
 				if data[row*overlay.Columns+column] == 0 {
@@ -178,6 +194,17 @@ func (img *DicomImage) applyOverlays(source image.Image, frame int) image.Image 
 		}
 	}
 	return destination
+}
+
+// overlayHasMarkedPixel reports whether an unpacked overlay frame has at least
+// one set bit, so a blank overlay does not force an RGBA copy.
+func overlayHasMarkedPixel(data []byte) bool {
+	for _, value := range data {
+		if value != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ShowOverlays reports whether Dataset overlays are rendered.

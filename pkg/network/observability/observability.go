@@ -301,6 +301,16 @@ type Metric struct {
 }
 
 // EventObserver accepts structured lifecycle events.
+//
+// DIMSE request lifecycle events are delivered asynchronously by a drainer
+// goroutine, in the order the library produced them, so a slow implementation
+// delays its own telemetry instead of PDU processing; those events may arrive
+// after the API call that produced them has returned. Association and
+// connection events are delivered synchronously by the producing goroutine.
+// Implementations must be safe for concurrent use and must not be used to
+// sequence application work. A panicking implementation is recovered and the
+// event is dropped (see EmitEvent), so a failure cannot take the association
+// down.
 type EventObserver interface {
 	ObserveEvent(context.Context, Event)
 }
@@ -318,6 +328,11 @@ type NopEventObserver struct{}
 func (NopEventObserver) ObserveEvent(context.Context, Event) {}
 
 // MetricsObserver accepts vendor-neutral network metrics.
+//
+// Request lifecycle metrics share the asynchronous, ordered delivery of
+// EventObserver.ObserveEvent; per-PDU byte metrics are delivered synchronously
+// by the producing goroutine. Implementations must be safe for concurrent use;
+// a panicking implementation is recovered and the metric is dropped.
 type MetricsObserver interface {
 	ObserveMetric(context.Context, Metric)
 }

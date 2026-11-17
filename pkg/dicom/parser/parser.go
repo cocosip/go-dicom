@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -190,7 +191,17 @@ type parseContext struct {
 	lazyReadMu     sync.Mutex    // Serializes seek/read operations for lazy loaders on shared readers
 	datasetCloser  io.Closer     // Closes any wrapper reader created for the dataset stream
 	boundedReaders []*io.LimitedReader
+
+	// bufferedReader buffers the sequential read path. Seekable streams are
+	// buffered too (rather than left unbuffered) because DICOM parsing issues
+	// small reads for every tag, VR and length; lazy loading seeks the
+	// underlying reader directly and re-syncs this buffer. It is nil for
+	// non-seekable streams, which already read through a bufio.Reader.
+	bufferedReader *bufio.Reader
 }
+
+// parseReadBufferSize is the read buffer used for the sequential parse path.
+const parseReadBufferSize = 64 * 1024
 
 type privateCreatorScope map[uint32]*tag.PrivateCreator
 
@@ -377,29 +388,6 @@ func (r *positionReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-type positionReadSeeker struct {
-	rs       io.ReadSeeker
-	position *readerPosition
-}
-
-func (r *positionReadSeeker) Read(p []byte) (int, error) {
-	n, err := r.rs.Read(p)
-	r.position.offset += uint64(n) // #nosec G115 -- Read never returns a negative count
-	return n, err
-}
-
-func (r *positionReadSeeker) Seek(offset int64, whence int) (int64, error) {
-	position, err := r.rs.Seek(offset, whence)
-	if err != nil {
-		return 0, err
-	}
-	if position < 0 {
-		return 0, fmt.Errorf("reader returned negative position %d", position)
-	}
-	r.position.offset = uint64(position)
-	return position, nil
-}
-
 func (c *ctxReadSeeker) Read(p []byte) (int, error) {
 	if err := c.ctx.Err(); err != nil {
 		return 0, err
@@ -467,13 +455,28 @@ func Parse(r io.Reader, opts ...Option) (result *ParseResult, err error) {
 
 // parse is the internal parsing implementation.
 func (p *parseContext) parse(r io.Reader) (*ParseResult, error) {
-	// Wrap reader with context cancellation support so every Read checks ctx.Err().
-	p.reader = p.contextAwareReader(r)
 	p.detectedFormat = FormatUnknown
 
-	// Check if reader supports seeking (for lazy loading)
+	// Set up the read path. Seekable readers get a buffered wrapper so the
+	// per-tag/per-VR/per-length reads do not each become a syscall; lazy
+	// skipping below re-synchronizes that buffer with the underlying reader.
+	// Partial-read options expose the underlying stream position, so those
+	// paths stay unbuffered to avoid prefetching past the stop point.
 	if rs, ok := r.(io.ReadSeeker); ok {
 		p.seekableReader = p.contextAwareReadSeeker(rs)
+		if p.stopBeforePixelData || p.stopAtTag != nil {
+			p.reader = p.seekableReader
+		} else {
+			p.bufferedReader = bufio.NewReaderSize(p.seekableReader, parseReadBufferSize)
+			p.reader = p.bufferedReader
+			// Leave a caller-supplied seekable reader at the logical end of the
+			// parsed data rather than up to one buffer ahead.
+			defer p.rewindBuffered()
+		}
+	} else {
+		// Wrap reader with context cancellation support so every Read checks
+		// ctx.Err(). Buffer non-seekable readers to cut per-field Read syscalls.
+		p.reader = bufio.NewReaderSize(&ctxReader{ctx: p.ctx, r: r}, parseReadBufferSize)
 	}
 
 	// Check if reader is an *os.File (for FileByteBuffer)
@@ -532,13 +535,9 @@ func (p *parseContext) startPositionTracking() {
 		position.offset = 132
 	}
 
-	if p.seekableReader != nil {
-		tracked := &positionReadSeeker{rs: p.seekableReader, position: position}
-		p.seekableReader = tracked
-		p.reader = tracked
-	} else {
-		p.reader = &positionReader{r: p.reader, position: position}
-	}
+	// Track positions above the buffered reader: it reports how many bytes the
+	// parser has consumed, not how far the underlying file has been read ahead.
+	p.reader = &positionReader{r: p.reader, position: position}
 	p.position = position
 }
 
@@ -612,6 +611,15 @@ func (p *parseContext) detectFormatAndPrepareReader() error {
 // For seekable readers we seek back, otherwise we prepend the consumed bytes.
 func (p *parseContext) restoreReaderToStart(consumed []byte) error {
 	if p.seekableReader != nil {
+		if p.bufferedReader != nil {
+			// The probe read through the buffered reader; drop whatever it
+			// prefetched so the buffer matches the rewound position.
+			if _, err := p.seekableReader.Seek(0, io.SeekStart); err != nil {
+				return fmt.Errorf("failed to seek reader back to start: %w", err)
+			}
+			p.bufferedReader.Reset(p.seekableReader)
+			return nil
+		}
 		if _, err := p.seekableReader.Seek(0, io.SeekStart); err != nil {
 			return fmt.Errorf("failed to seek reader back to start: %w", err)
 		}
@@ -620,6 +628,67 @@ func (p *parseContext) restoreReaderToStart(consumed []byte) error {
 	}
 
 	p.reader = io.MultiReader(bytes.NewReader(consumed), p.reader)
+	return nil
+}
+
+// rewindBuffered returns prefetched bytes to a seekable source so a
+// caller-supplied reader is left at the logical end of the parsed data.
+func (p *parseContext) rewindBuffered() {
+	if p.bufferedReader == nil || p.seekableReader == nil {
+		return
+	}
+	if buffered := p.bufferedReader.Buffered(); buffered > 0 {
+		if _, err := p.seekableReader.Seek(-int64(buffered), io.SeekCurrent); err != nil {
+			return
+		}
+		p.bufferedReader.Reset(p.seekableReader)
+	}
+}
+
+// logicalPosition returns the offset of the next byte the parser will consume,
+// compensating for bytes the buffered reader has prefetched from a seekable
+// source.
+func (p *parseContext) logicalPosition() (int64, error) {
+	position, err := p.seekableReader.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return 0, err
+	}
+	if p.bufferedReader != nil {
+		position -= int64(p.bufferedReader.Buffered())
+	}
+	return position, nil
+}
+
+// skipRead advances the reader past length bytes without returning them. Lazy
+// element loading uses it so the buffered reader and the underlying seekable
+// reader stay in sync (a raw Seek on the underlying stream would leave prefetched
+// bytes to be read twice).
+func (p *parseContext) skipRead(length uint32) error {
+	if p.bufferedReader != nil {
+		n := int64(length)
+		buffered := int64(p.bufferedReader.Buffered())
+		if n <= buffered {
+			if _, err := p.bufferedReader.Discard(int(n)); err != nil {
+				return err
+			}
+		} else {
+			if _, err := p.bufferedReader.Discard(int(buffered)); err != nil {
+				return err
+			}
+			if _, err := p.seekableReader.Seek(n-buffered, io.SeekCurrent); err != nil {
+				return err
+			}
+			p.bufferedReader.Reset(p.seekableReader)
+		}
+		// The discard/seek bypasses the position-tracking reader, so account
+		// for the skipped bytes explicitly.
+		if p.position != nil {
+			p.position.offset += uint64(length) // #nosec G115 -- length is non-negative
+		}
+	} else if _, err := io.CopyN(io.Discard, p.reader, int64(length)); err != nil {
+		return err
+	}
+	p.consumeBounded(length)
 	return nil
 }
 
@@ -650,35 +719,24 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 	ds.SetAutoValidate(false)
 	defer ds.SetAutoValidate(true)
 
-	// metaRemaining tracks how many more bytes of Group 0002 must be read once
-	// FileMetaInformationGroupLength (0002,0000) is known. It bounds meta parsing
-	// so a deflated dataset whose compressed bytes happen to decode as a Group
-	// 0002 tag is never mis-read as File Meta Information (PS3.5 §7.1).
-	var metaRemaining int64 = -1
+	// metaBound tracks how many more bytes of Group 0002 the declared
+	// FileMetaInformationGroupLength (0002,0000) says remain, or -1 when the
+	// length is unknown. A valid bound keeps a deflated dataset from being
+	// mis-read as Group 0002 elements (PS3.5 §7.1), but a wrong bound must not
+	// truncate the meta group: see readMetaTag.
+	var metaBound int64 = -1
+	metaDeflated := false
 
-	// Read elements until we leave Group 0002. When the group length is known,
-	// metaRemaining reaches 0 exactly at the end of the meta group.
-	for metaRemaining != 0 {
-		// Peek at the tag first to check if we're still in Group 0002.
-		// Keep raw bytes so the first dataset tag can be re-decoded with dataset byte order.
-		t, rawTag, err := p.readTagWithRaw()
-		if err == io.EOF {
-			break
-		}
+	// Read elements until we leave Group 0002.
+	for {
+		t, nextBound, done, err := p.readMetaTag(metaBound, metaDeflated, ds.Count())
 		if err != nil {
 			return nil, err
 		}
-
-		// Stop when we leave Group 0002
-		if t.Group() != 0x0002 {
-			// Save raw bytes and parse this tag later with the dataset byte order.
-			p.firstDatasetTagRaw = rawTag
-			p.hasFirstDatasetTag = true
-			if ds.Count() == 0 && (p.detectedFormat == FormatDICOM3 || p.detectedFormat == FormatDICOM3NoPreamble || p.detectedFormat == FormatUnknown) {
-				p.detectedFormat = FormatDICOM3NoFileMetaInfo
-			}
+		if done {
 			break
 		}
+		metaBound = nextBound
 
 		// Now read the VR, length, and value
 		// We inline the readElement logic here to avoid re-reading the tag
@@ -708,9 +766,9 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 			return nil, fmt.Errorf("failed to read value data for tag %s: %w", t, err)
 		}
 
-		// Account for this element's bytes against the meta group length. The
-		// GroupLength element itself declares the count of following bytes, so
-		// it is not subtracted.
+		// Account for this element's bytes against the declared meta group
+		// length. The GroupLength element itself declares the count of
+		// following bytes, so it is not subtracted.
 		elemBytes := int64(4 + 2) // tag + VR
 		if vrValue.Is16bitLength() {
 			elemBytes += 2
@@ -719,12 +777,21 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 		}
 		elemBytes += int64(length)
 		if t.Group() == 0x0002 && t.Element() == 0x0000 && len(data) == 4 {
-			metaRemaining = int64(binary.LittleEndian.Uint32(data))
-		} else if metaRemaining > 0 {
-			metaRemaining -= elemBytes
-			if metaRemaining < 0 {
-				metaRemaining = 0
+			if declared := int64(binary.LittleEndian.Uint32(data)); declared > 0 {
+				metaBound = declared
+			} else {
+				metaBound = -1
 			}
+		} else if metaBound > 0 {
+			metaBound -= elemBytes
+			if metaBound < 0 {
+				metaBound = 0
+			}
+		}
+		// Track whether the declared transfer syntax compresses the dataset, so
+		// the end of the meta group can be trusted without peeking.
+		if t.Group() == 0x0002 && t.Element() == 0x0010 {
+			metaDeflated = strings.TrimRight(string(data), "\x00 ") == transfer.DeflatedExplicitVRLittleEndian.UID().UID()
 		}
 
 		// Create element based on VR
@@ -740,6 +807,62 @@ func (p *parseContext) readFileMetaInformation() (*dataset.Dataset, error) {
 		p.updateTextEncoding(elem)
 	}
 	return ds, nil
+}
+
+// readMetaTag reads the tag of the next File Meta Information element.
+//
+// bound is the remaining byte count declared by (0002,0000), or -1 when it is
+// unknown. A zero or understated bound must not truncate the meta group: when
+// it is exhausted the next tag is validated, and if it is still (0002,xxxx) the
+// meta group is scanned by tag group instead. A zero bound carries no
+// information at all, so scanning starts immediately. done reports that the
+// group has ended; the first dataset tag, if any, is recorded so the dataset
+// parser can re-decode it with the dataset byte order.
+func (p *parseContext) readMetaTag(bound int64, deflated bool, metaElements int) (next *tag.Tag, nextBound int64, done bool, err error) {
+	if bound > 0 {
+		next, raw, readErr := p.readTagWithRaw()
+		if readErr == io.EOF {
+			return nil, 0, true, nil
+		}
+		if readErr != nil {
+			return nil, 0, false, readErr
+		}
+		if next.Group() != 0x0002 {
+			p.saveFirstDatasetTag(raw, metaElements)
+			return nil, 0, true, nil
+		}
+		return next, bound, false, nil
+	}
+
+	// A deflated stream starts immediately after the meta group (PS3.5 §7.1),
+	// so it is not safe to decode its first bytes as a tag: stop at the end of
+	// the meta group even though the declared length was exhausted.
+	if bound == 0 && deflated {
+		return nil, 0, true, nil
+	}
+	next, raw, readErr := p.readTagWithRaw()
+	if readErr == io.EOF {
+		return nil, 0, true, nil
+	}
+	if readErr != nil {
+		return nil, 0, false, readErr
+	}
+	if next.Group() != 0x0002 {
+		p.saveFirstDatasetTag(raw, metaElements)
+		return nil, 0, true, nil
+	}
+	// The declared length was wrong (zero or understated); scan by group.
+	return next, -1, false, nil
+}
+
+// saveFirstDatasetTag records the first non-meta tag so the dataset parser can
+// re-decode it with the dataset byte order.
+func (p *parseContext) saveFirstDatasetTag(raw [4]byte, metaElements int) {
+	p.firstDatasetTagRaw = raw
+	p.hasFirstDatasetTag = true
+	if metaElements == 0 && (p.detectedFormat == FormatDICOM3 || p.detectedFormat == FormatDICOM3NoPreamble || p.detectedFormat == FormatUnknown) {
+		p.detectedFormat = FormatDICOM3NoFileMetaInfo
+	}
 }
 
 // normalizeImplicitVR resolves dictionary entries whose US/SS choice depends
@@ -1173,11 +1296,11 @@ func decodeTag(raw [4]byte, order binary.ByteOrder) *tag.Tag {
 func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 	if p.isExplicitVR {
 		// Read 2-byte VR code
-		vrBytes := make([]byte, 2)
-		if _, err := io.ReadFull(p.reader, vrBytes); err != nil {
+		var vrBytes [2]byte
+		if _, err := io.ReadFull(p.reader, vrBytes[:]); err != nil {
 			return nil, err
 		}
-		v, err := vr.ParseBytes(vrBytes)
+		v, err := vr.ParseBytes(vrBytes[:])
 		if err != nil {
 			if p.strictVR {
 				return nil, err
@@ -1223,38 +1346,47 @@ func (p *parseContext) readVR(t *tag.Tag) (*vr.VR, error) {
 	return vr.UN, nil
 }
 
+// readUint16 reads a 2-byte value in the current byte order without allocating.
+func (p *parseContext) readUint16() (uint16, error) {
+	var raw [2]byte
+	if _, err := io.ReadFull(p.reader, raw[:]); err != nil {
+		return 0, err
+	}
+	return p.byteOrder.Uint16(raw[:]), nil
+}
+
+// readUint32 reads a 4-byte value in the current byte order without allocating.
+func (p *parseContext) readUint32() (uint32, error) {
+	var raw [4]byte
+	if _, err := io.ReadFull(p.reader, raw[:]); err != nil {
+		return 0, err
+	}
+	return p.byteOrder.Uint32(raw[:]), nil
+}
+
 // readLength reads the value length field.
 func (p *parseContext) readLength(v *vr.VR) (uint32, error) {
 	if p.isExplicitVR {
 		// Check if VR has 16-bit or 32-bit length
 		if v.Is16bitLength() {
-			// 16-bit length
-			var length uint16
-			if err := binary.Read(p.reader, p.byteOrder, &length); err != nil {
+			length, err := p.readUint16()
+			if err != nil {
 				return 0, err
 			}
 			return uint32(length), nil
 		}
 
 		// 32-bit length: skip 2 reserved bytes first
-		reserved := make([]byte, 2)
-		if _, err := io.ReadFull(p.reader, reserved); err != nil {
+		var reserved [2]byte
+		if _, err := io.ReadFull(p.reader, reserved[:]); err != nil {
 			return 0, err
 		}
 
-		var length uint32
-		if err := binary.Read(p.reader, p.byteOrder, &length); err != nil {
-			return 0, err
-		}
-		return length, nil
+		return p.readUint32()
 	}
 
 	// Implicit VR: always 32-bit length
-	var length uint32
-	if err := binary.Read(p.reader, p.byteOrder, &length); err != nil {
-		return 0, err
-	}
-	return length, nil
+	return p.readUint32()
 }
 
 // readSequence reads a sequence element (VR=SQ).
@@ -1676,8 +1808,9 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 			return nil, err
 		}
 
-		// Get current position in file
-		currentPos, err := p.file.Seek(0, io.SeekCurrent)
+		// Get the logical position; the buffered reader may have prefetched
+		// bytes beyond it.
+		currentPos, err := p.logicalPosition()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get current file position: %w", err)
 		}
@@ -1688,16 +1821,10 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 			return nil, fmt.Errorf("failed to create file buffer: %w", err)
 		}
 
-		// Skip past this data in the stream
-		if _, err := p.file.Seek(int64(length), io.SeekCurrent); err != nil {
+		// Skip past this data in the stream.
+		if err := p.skipRead(length); err != nil {
 			return nil, fmt.Errorf("failed to skip data: %w", err)
 		}
-		// The seek bypasses the position-tracking reader, so advance the
-		// tracked offset explicitly to keep observer offsets absolute.
-		if p.position != nil {
-			p.position.offset += uint64(length)
-		}
-		p.consumeBounded(length)
 
 		return fb, nil
 	}
@@ -1708,8 +1835,9 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 			return nil, err
 		}
 
-		// Get current position
-		currentPos, err := p.seekableReader.Seek(0, io.SeekCurrent)
+		// Get the logical position of the value; the buffered reader may have
+		// prefetched past it.
+		currentPos, err := p.logicalPosition()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get current position: %w", err)
 		}
@@ -1755,11 +1883,10 @@ func (p *parseContext) createLazyBuffer(length uint32) (buffer.ByteBuffer, error
 			return nil, fmt.Errorf("failed to create lazy buffer: %w", err)
 		}
 
-		// Skip past this data in the stream
-		if _, err := p.seekableReader.Seek(int64(length), io.SeekCurrent); err != nil {
+		// Skip past this data in the stream.
+		if err := p.skipRead(length); err != nil {
 			return nil, fmt.Errorf("failed to skip data: %w", err)
 		}
-		p.consumeBounded(length)
 
 		return lb, nil
 	}

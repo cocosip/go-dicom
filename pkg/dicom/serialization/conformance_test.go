@@ -25,7 +25,7 @@ func TestFromJSONDeclaresUTF8ForUnicodeText(t *testing.T) {
 		t.Fatalf("FromJSON() error = %v", err)
 	}
 	charset := ds.SpecificCharacterSet()
-	if len(charset) != 1 || charset[0] != "ISO_IR 192" {
+	if len(charset) != 1 || charset[0] != testSpecificCharacterSetUTF8 {
 		t.Fatalf("SpecificCharacterSet = %v, want [ISO_IR 192]", charset)
 	}
 	value, ok := ds.GetString(tag.PatientName)
@@ -61,7 +61,7 @@ func TestFromXMLDeclaresUTF8ForUnicodeText(t *testing.T) {
 		t.Fatalf("FromXML() error = %v", err)
 	}
 	charset := ds.SpecificCharacterSet()
-	if len(charset) != 1 || charset[0] != "ISO_IR 192" {
+	if len(charset) != 1 || charset[0] != testSpecificCharacterSetUTF8 {
 		t.Fatalf("SpecificCharacterSet = %v, want [ISO_IR 192]", charset)
 	}
 	if value, _ := ds.GetString(tag.PatientName); !strings.Contains(value, "山田") {

@@ -28,7 +28,7 @@ This document contains performance benchmark results for the go-dicom library. B
 | DatasetAdd | 12.85 | 0 | 0 |
 | DatasetAddOrUpdate | 14.01 | 0 | 0 |
 | DatasetGet | 2.141 | 0 | 0 |
-| DatasetGetString | 74.40 | 48 | 4 |
+| DatasetGetString | 32.12 | 8 | 1 |
 | DatasetContains | 2.351 | 0 | 0 |
 | DatasetElements (100 elements) | 5,453 | 2,264 | 4 |
 | DatasetClone (50 elements) | 2,574 | 3,208 | 7 |
@@ -37,23 +37,24 @@ This document contains performance benchmark results for the go-dicom library. B
 
 **Key Insights:**
 - Core operations (Add, Get, Contains) are extremely fast with zero allocations
-- GetString has some overhead due to type assertion and string conversion
+- GetString decodes the value once into a single allocation (no intermediate value slice for single-valued text)
 - Clone and Merge operations are efficient even with moderate dataset sizes
 
 ## Parser Operations
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|-------|------|-----------|
-| ParseSmallDataset (10 elements) | 1,382 | 1,249 | 43 |
-| ParseMediumDataset (100 elements) | 1,383 | 1,249 | 43 |
-| ParseLargeDataset (500 elements) | 1,408 | 1,249 | 43 |
-| ReadTag | 106.7 | 212 | 5 |
-| ReadElement | 206.4 | 304 | 11 |
+| ParseSmallDataset (10 elements) | 47,758 | 76,553 | 175 |
+| ParseMediumDataset (100 elements) | 113,236 | 149,123 | 1,261 |
+| ParseLargeDataset (500 elements) | 445,234 | 491,484 | 6,068 |
+| ReadTag | 378.1 | 552 | 9 |
+| ReadElement | 890.0 | 1,272 | 19 |
 
 **Key Insights:**
-- Parsing performance is consistent regardless of dataset size
-- Fixed allocation count (43) indicates efficient memory management
-- Most overhead is in initialization rather than data processing
+- Parsing scales linearly with the number of elements; the per-benchmark overhead is dominated by per-element element and buffer construction (about 12 allocations per element)
+- The read path is buffered (64 KiB) for seekable sources, so file parsing does not pay a syscall per tag/VR/length field; streaming (non-seekable) sources are buffered as well
+- The 10-element benchmark is dominated by parser context setup, so its per-element average is higher than the larger datasets
+- LRU/lazy element loading is disabled in these benchmarks because the input is an in-memory reader; disk-backed parsing uses lazy buffers for large elements
 
 ## Writer Operations
 
@@ -132,7 +133,7 @@ on this snapshot.
 
 ### Areas for Potential Optimization
 1. **Parser Initialization**: Fixed 43 allocations could potentially be reduced
-2. **String Conversions**: GetString has 4 allocations that could be optimized
+2. **String Conversions**: GetString decodes with one allocation; padding is trimmed before the character-set decode
 
 ## Running Benchmarks
 

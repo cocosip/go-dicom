@@ -121,8 +121,10 @@ func (e *EvenLengthBuffer) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// Write the padding byte
-	if _, err := w.Write([]byte{0}); err != nil {
+	if written, err := w.Write([]byte{0}); err != nil {
 		return n, err
+	} else if written != 1 {
+		return n, io.ErrShortWrite
 	}
 
 	return n + 1, nil

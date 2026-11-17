@@ -259,6 +259,22 @@ func (pd *Data) Frame(ctx context.Context, frameIndex int) ([]byte, error) {
 	return frame, nil
 }
 
+// FrameView returns a read-only view of the specified frame (0-indexed).
+//
+// The returned slice aliases the Data's own frame buffer and stays valid only
+// while the caller holds the Data it came from; rendering relies on that to
+// avoid copying every frame it reads. Callers must not modify the bytes. Use
+// Frame for an independently owned copy.
+func (pd *Data) FrameView(frameIndex int) ([]byte, error) {
+	if pd == nil {
+		return nil, fmt.Errorf("pixel data is nil")
+	}
+	if frameIndex < 0 || frameIndex >= len(pd.frames) {
+		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(pd.frames))
+	}
+	return pd.frames[frameIndex], nil
+}
+
 // Sample returns one decoded native pixel sample. Coordinates and frame and
 // sample indexes are zero-based. Encapsulated data must be decoded first.
 func (pd *Data) Sample(frame, x, y, sample int) (int64, error) {
@@ -308,6 +324,41 @@ func (pd *Data) IsPaddingSample(value int64) bool {
 		return false
 	}
 	return value >= minimum && value <= maximum
+}
+
+// PaddingMask returns one entry per pixel of the frame, true when the stored
+// sample lies inside the inclusive Pixel Padding range. Encapsulated data must
+// be decoded first and the Data must carry a Pixel Padding Value.
+func (pd *Data) PaddingMask(frameIndex int) ([]bool, error) {
+	if pd == nil || pd.Info == nil {
+		return nil, fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return nil, fmt.Errorf("cannot read a padding mask from encapsulated pixel data")
+	}
+	minimum, maximum, ok := pixelPaddingRange(pd.Info)
+	if !ok {
+		return nil, fmt.Errorf("no Pixel Padding Value present")
+	}
+	if frameIndex < 0 || frameIndex >= len(pd.frames) {
+		return nil, fmt.Errorf("frame index %d out of range [0, %d)", frameIndex, len(pd.frames))
+	}
+
+	frame := pd.frames[frameIndex]
+	bytesPerSample := pd.Info.BytesAllocated()
+	mask := make([]bool, frameSampleCount(frame, pd.Info))
+	for index := range mask {
+		offset := sampleOffset(index, pd.Info)
+		if pd.Info.BitsAllocated != 1 && offset+bytesPerSample > len(frame) {
+			break
+		}
+		value, decoded := decodePixelSampleLE(frame, offset, pd.Info)
+		if !decoded {
+			continue
+		}
+		mask[index] = value >= minimum && value <= maximum
+	}
+	return mask, nil
 }
 
 // CalculateOptimalWindow computes optimal window center/width from pixel data
@@ -688,28 +739,69 @@ func (pd *Data) MaskPadding() (frames [][]byte, masks [][]bool, err error) {
 }
 
 // WindowOrLUTTo8bit applies VOI LUT if present, otherwise window.
+//
+// The mapping chain depends only on the frame's functional group attributes and
+// on the datasets, so frames that carry no functional group attributes share
+// one chain: without a per-frame group the top-level attributes apply to every
+// frame (PS3.3 C.7.6.16), and rebuilding the VOI LUT per frame would repeat the
+// same table construction and dataset walk for each frame.
 func (pd *Data) WindowOrLUTTo8bit(ds *dataset.Dataset, center, width float64, ignorePadding bool) ([][]byte, error) {
 	result := make([][]byte, len(pd.frames))
+	var (
+		sharedTransform lut.LUT
+		sharedErr       error
+		sharedBuilt     bool
+	)
 	for frameIndex, frame := range pd.frames {
 		functional := dicomlut.FunctionalGroupValues(ds, frameIndex)
-		modality, err := modalityTransformForDatasets(functional, ds, pd)
-		if err != nil {
-			return nil, fmt.Errorf("frame %d: %w", frameIndex, err)
-		}
 		frameData := &Data{Info: pd.Info, frames: [][]byte{frame}}
-		var converted [][]byte
-		if voiSource := DatasetContaining(functional, ds, tag.VOILUTSequence); voiSource != nil {
-			converted, err = applyVOILUTWithModality(frameData, voiSource, center, width, ignorePadding, modality)
-		} else {
-			function := windowFunctionForDatasets(functional, ds)
-			converted, err = applyWindowTo8bitWithModality(frameData, center, width, ignorePadding, modality, function)
+		if !functionalGroupAffectsTransform(functional) {
+			if !sharedBuilt {
+				sharedBuilt = true
+				sharedTransform, sharedErr = pd.windowOrLUTTransform(ds, nil, center, width)
+			}
+			if sharedErr != nil {
+				return nil, fmt.Errorf("frame %d: %w", frameIndex, sharedErr)
+			}
+			result[frameIndex] = mapSamplesTo8bit(frameData, sharedTransform, ignorePadding)[0]
+			continue
 		}
+		transform, err := pd.windowOrLUTTransform(ds, functional, center, width)
 		if err != nil {
 			return nil, fmt.Errorf("frame %d: %w", frameIndex, err)
 		}
-		result[frameIndex] = converted[0]
+		result[frameIndex] = mapSamplesTo8bit(frameData, transform, ignorePadding)[0]
 	}
 	return result, nil
+}
+
+// functionalGroupAffectsTransform reports whether a flattened functional group
+// can change the stored-value → 8-bit chain. It checks the attributes the chain
+// reads; other functional-group values (pixel measures, geometry, ...) do not
+// affect the mapping, so frames carrying only those can share one chain.
+func functionalGroupAffectsTransform(functional *dataset.Dataset) bool {
+	if functional == nil || functional.Count() == 0 {
+		return false
+	}
+	return functional.Contains(tag.ModalityLUTSequence) ||
+		functional.Contains(tag.RescaleSlope) ||
+		functional.Contains(tag.RescaleIntercept) ||
+		functional.Contains(tag.VOILUTSequence) ||
+		functional.Contains(tag.VOILUTFunction)
+}
+
+// windowOrLUTTransform builds one frame's stored-value → 8-bit mapping chain,
+// preferring the functional group dataset over the top-level one (PS3.3
+// C.7.6.16).
+func (pd *Data) windowOrLUTTransform(ds, functional *dataset.Dataset, center, width float64) (lut.LUT, error) {
+	modality, err := modalityTransformForDatasets(functional, ds, pd)
+	if err != nil {
+		return nil, err
+	}
+	if voiSource := DatasetContaining(functional, ds, tag.VOILUTSequence); voiSource != nil {
+		return voiLUTTransform(pd, voiSource, modality)
+	}
+	return windowTransform(pd, center, width, windowFunctionForDatasets(functional, ds), modality)
 }
 
 // windowFunctionForDatasets reads VOI LUT Function (0028,1056) for the frame,

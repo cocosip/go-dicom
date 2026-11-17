@@ -167,15 +167,35 @@ func readLUTData(ds *dataset.Dataset, dataTag *tag.Tag, descriptor dicomlut.Desc
 	return dicomlut.ReadData(ds, dataTag, descriptor, byteOrder)
 }
 
-// applyVOILUTWithModality applies the VOI LUT Sequence and maps its declared
-// output range to 8-bit, then through the modality LUT when one is supplied.
-func applyVOILUTWithModality(pd *Data, ds *dataset.Dataset, _, _ float64, ignorePadding bool, modality lut.LUT) ([][]byte, error) {
-	signed := pd != nil && pd.Info != nil && pd.Info.PixelRepresentation == pixel.SignedPixels
-	table, err := VOILUT(ds, signed)
+// voiLUTTransform validates the pixel data and builds the stored-value → 8-bit
+// mapping chain for a VOI LUT Sequence (PS3.4 C.11.1), with an optional modality
+// LUT applied first. Building it separately from mapping lets a caller reuse the
+// chain for every frame that shares the attributes.
+func voiLUTTransform(pd *Data, ds *dataset.Dataset, modality lut.LUT) (lut.LUT, error) {
+	if pd == nil || pd.Info == nil {
+		return nil, fmt.Errorf("pixel data info is nil")
+	}
+	if pd.Info.Encapsulated {
+		return nil, fmt.Errorf("cannot apply LUT on encapsulated data; decode first")
+	}
+	bytesPerSample := pd.Info.BytesAllocated()
+	if bytesPerSample != 1 && bytesPerSample != 2 {
+		return nil, fmt.Errorf("unsupported BytesAllocated=%d for LUT mapping", bytesPerSample)
+	}
+
+	table, err := VOILUT(ds, pd.Info.PixelRepresentation == pixel.SignedPixels)
 	if err != nil {
 		return nil, err
 	}
-	return mapThroughLUTWithModality(pd, table, ignorePadding, modality)
+	if modality == nil {
+		return table, nil
+	}
+	// The modality LUT maps stored values first, then the VOI/table chain
+	// scales them into the 0..255 output range (PS3.4 C.11.1).
+	composite := lut.NewCompositeLUT()
+	composite.Add(modality)
+	composite.Add(table)
+	return composite, nil
 }
 
 // voiTableLUT adapts VOI LUT Data to the shared LUT interface.
@@ -276,30 +296,4 @@ func scaledVOITable(table *voiTableLUT, minimum, maximum float64) lut.LUT {
 	composite.Add(table)
 	composite.Add(newVOIOutputScaleLUT(minimum, maximum))
 	return composite
-}
-
-func mapThroughLUTWithModality(pd *Data, table lut.LUT, ignorePadding bool, modality lut.LUT) ([][]byte, error) {
-	if pd.Info == nil {
-		return nil, fmt.Errorf("pixel data info is nil")
-	}
-	if pd.Info.Encapsulated {
-		return nil, fmt.Errorf("cannot apply LUT on encapsulated data; decode first")
-	}
-
-	bytesPerSample := pd.Info.BytesAllocated()
-	if bytesPerSample != 1 && bytesPerSample != 2 {
-		return nil, fmt.Errorf("unsupported BytesAllocated=%d for LUT mapping", bytesPerSample)
-	}
-
-	transform := table
-	if modality != nil {
-		// The modality LUT maps stored values first, then the VOI/table chain
-		// scales them into the 0..255 output range (PS3.4 C.11.1).
-		composite := lut.NewCompositeLUT()
-		composite.Add(modality)
-		composite.Add(table)
-		transform = composite
-	}
-
-	return mapSamplesTo8bit(pd, transform, ignorePadding), nil
 }

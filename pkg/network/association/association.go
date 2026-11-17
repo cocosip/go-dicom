@@ -1305,9 +1305,19 @@ func ToAAssociateACWithMaxPDULength(assoc *Association, maxPDULength uint32) *pd
 			}
 		}
 
+		// A context the negotiator never accepted or rejected still has to be
+		// encoded: PS3.8 Table 9-18 only allows result values 0..4, so
+		// ResultNotNegotiated (0xFF) is a local sentinel that must not reach the
+		// wire. Report a provider rejection ("no reason") instead of letting the
+		// AC encoder fail and the connection drop without an A-ASSOCIATE-RJ.
+		result := pc.Result
+		if result == ResultNotNegotiated {
+			result = pdu.ResultNoReason
+		}
+
 		ac.PresentationContexts = append(ac.PresentationContexts, pdu.PresentationContextAC{
 			ID:             pc.ID,
-			Result:         pc.Result,
+			Result:         result,
 			TransferSyntax: transferSyntaxUID,
 		})
 	}

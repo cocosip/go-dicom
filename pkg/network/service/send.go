@@ -5,15 +5,19 @@ package service
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transcode"
+	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
+	"github.com/cocosip/go-dicom/pkg/dicom/writer"
 	"github.com/cocosip/go-dicom/pkg/network/association"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
 	"github.com/cocosip/go-dicom/pkg/network/observability"
+	"github.com/cocosip/go-dicom/pkg/network/pdu"
 )
 
 type dataDatasetMessage struct {
@@ -172,53 +176,228 @@ func (s *Service) sendMessage(req *sendRequest) error {
 	}
 	message.SetPresentationContextID(pc.ID)
 
-	// Encode message
-	commandData, datasetData, err := EncodeDIMSEMessage(message, transferSyntax)
+	// Encode the message. A C-STORE data set is streamed into PDUs while it is
+	// serialized, so a large data set is never held as a second, full-size copy
+	// before being fragmented; other messages are encoded and fragmented whole.
+	dataDS := message.DataDataset()
+	streamCStore := dimse.CommandField(message.CommandField()) == dimse.CommandCStoreRQ &&
+		dataDS != nil && len(dataDS.Elements()) > 0
+	var commandData, datasetData []byte
+	var err error
+	if streamCStore {
+		commandData, err = encodeCommandSetForStreaming(message)
+	} else {
+		commandData, datasetData, err = EncodeDIMSEMessage(message, transferSyntax)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to encode message: %w", err)
 	}
 
 	// Use presentation context ID from association negotiation
 	contextID := pc.ID
-
-	// Fragment command data
 	maxPDULength := s.outgoingMaxPDULength()
-	commandPDVs := FragmentData(commandData, contextID, true, maxPDULength)
-	if len(commandPDVs) == 0 {
-		return fmt.Errorf("maximum PDU length %d is too small to hold a command PDV", maxPDULength)
-	}
 
-	// Fragment dataset data (if present)
-	var datasetPDVs []*PDV
-	if len(datasetData) > 0 {
-		datasetPDVs = FragmentData(datasetData, contextID, false, maxPDULength)
-		if len(datasetPDVs) == 0 {
-			return fmt.Errorf("maximum PDU length %d is too small to hold a dataset PDV", maxPDULength)
+	return s.writeCommandAndDataSet(req.ctx, message, transferSyntax, contextID,
+		maxPDULength, commandData, datasetData, streamCStore)
+}
+
+// writeCommandAndDataSet writes the command set and then the data set, either
+// streamed from the data-set encoder (C-STORE) or fragmented from its buffered
+// encoding.
+func (s *Service) writeCommandAndDataSet(
+	ctx context.Context,
+	message dimse.Message,
+	transferSyntax *transfer.Syntax,
+	contextID byte,
+	maxPDULength uint32,
+	commandData, datasetData []byte,
+	streamCStore bool,
+) error {
+	if err := s.writePDVFragment(ctx, commandData, contextID, true, maxPDULength); err != nil {
+		return err
+	}
+	if !streamCStore {
+		return s.writePDVFragment(ctx, datasetData, contextID, false, maxPDULength)
+	}
+	if err := s.streamDataSet(ctx, message.DataDataset(), transferSyntax, contextID, maxPDULength); err != nil {
+		// The command set is already on the wire, so the peer cannot reassemble
+		// this message: terminate the association instead of leaving it waiting
+		// for data fragments that never arrive.
+		_ = s.abort(ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, err, false)
+		return fmt.Errorf("failed to send data set: %w", err)
+	}
+	return nil
+}
+
+// writePDVFragment fragments one encoded DIMSE message part into PDVs and
+// writes them. Empty parts are not sent at all (PS3.8 E.1).
+func (s *Service) writePDVFragment(ctx context.Context, data []byte, contextID byte, isCommand bool, maxPDULength uint32) error {
+	if len(data) == 0 {
+		return nil
+	}
+	pdvs := FragmentData(data, contextID, isCommand, maxPDULength)
+	if len(pdvs) == 0 {
+		part := "dataset"
+		if isCommand {
+			part = "command"
 		}
+		return fmt.Errorf("maximum PDU length %d is too small to hold a %s PDV", maxPDULength, part)
 	}
+	return s.writePDVGroups(ctx, pdvs)
+}
 
-	// Combine all PDVs
-	allPDVs := append(commandPDVs, datasetPDVs...)
-
-	// Group PDVs into P-DATA-TF PDUs
-	// Pack multiple PDVs into one PDU when possible to reduce overhead
-	pdvGroups := s.groupPDVsIntoPDUs(allPDVs)
-
-	// Write each PDU to the connection
-	for _, pdvGroup := range pdvGroups {
+// writePDVGroups packs PDVs into P-DATA-TF PDUs and writes them in order.
+func (s *Service) writePDVGroups(ctx context.Context, pdvs []*PDV) error {
+	for _, pdvGroup := range s.groupPDVsIntoPDUs(pdvs) {
 		pduData, err := CreatePDataTFPDU(pdvGroup)
 		if err != nil {
 			return fmt.Errorf("failed to create P-DATA-TF PDU: %w", err)
 		}
 
 		// Write PDU to connection (serialized against release/abort writers)
-		err = s.writePDU(req.ctx, pduData)
-		if err != nil {
+		if err := s.writePDU(ctx, pduData); err != nil {
 			return fmt.Errorf("failed to write PDU: %w", err)
 		}
-		s.emitPDUBytes(req.ctx, observability.DirectionOutbound, pduData)
+		s.emitPDUBytes(ctx, observability.DirectionOutbound, pduData)
+	}
+	return nil
+}
+
+// streamDataSet serializes a data set directly into one-PDV P-DATA-TF PDUs.
+func (s *Service) streamDataSet(
+	ctx context.Context,
+	dataDS *dataset.Dataset,
+	transferSyntax *transfer.Syntax,
+	contextID byte,
+	maxPDULength uint32,
+) error {
+	if transferSyntax == nil {
+		transferSyntax = transfer.ExplicitVRLittleEndian
+	}
+	stream, err := newDatasetPDUWriter(ctx, s, contextID, maxPDULength)
+	if err != nil {
+		return err
+	}
+	if err := writer.Write(stream, dataDS,
+		writer.WithTransferSyntax(transferSyntax),
+		writer.WithoutPreamble()); err != nil {
+		return fmt.Errorf("failed to encode data dataset: %w", err)
+	}
+	return stream.Finish()
+}
+
+// datasetPDUWriter streams an encoded data set into P-DATA-TF PDUs. Each PDU
+// carries exactly one data PDV whose payload is written straight into the PDU
+// buffer that goes to the connection, so the encoded bytes are copied once
+// instead of once into a whole-data-set buffer and again into a PDU buffer
+// (PS3.8 E.2). A full fragment is flushed by the next Write or by Finish so the
+// final fragment can be marked as the last one.
+type datasetPDUWriter struct {
+	service   *Service
+	ctx       context.Context
+	contextID byte
+	maxData   int // payload bytes per fragment; 0 means unbounded
+	buf       []byte
+	filled    int
+}
+
+const (
+	// pdvHeaderSize is the presentation context ID plus the message control
+	// header that precede every PDV payload (PS3.8 E.2).
+	pdvHeaderSize = 6
+	// pdvUnboundedInitialCapacity sizes the single-PDV buffer used when no
+	// maximum PDU length was negotiated.
+	pdvUnboundedInitialCapacity = 64 * 1024
+)
+
+// newDatasetPDUWriter returns a writer for maxPDULength, or an error when that
+// length cannot hold a single data PDV (PS3.8 E.1).
+func newDatasetPDUWriter(ctx context.Context, service *Service, contextID byte, maxPDULength uint32) (*datasetPDUWriter, error) {
+	if maxPDULength == 0 {
+		// No negotiated limit: buffer the whole data set into one PDV.
+		return &datasetPDUWriter{
+			service:   service,
+			ctx:       ctx,
+			contextID: contextID,
+			buf:       make([]byte, pdvHeaderSize, pdvHeaderSize+pdvUnboundedInitialCapacity),
+		}, nil
+	}
+	// The PDV header is part of the negotiated PDU length, and every fragment
+	// holds an even number of bytes (PS3.8 E.1).
+	if maxPDULength < pdvHeaderSize+2 {
+		return nil, fmt.Errorf("maximum PDU length %d is too small to hold a dataset PDV", maxPDULength)
+	}
+	maxData := (maxPDULength - pdvHeaderSize) &^ 1
+	return &datasetPDUWriter{
+		service:   service,
+		ctx:       ctx,
+		contextID: contextID,
+		maxData:   int(maxData),
+		buf:       make([]byte, int(uint32(pdvHeaderSize)+maxData)),
+	}, nil
+}
+
+// Write appends p to the current fragment, flushing it when it is full.
+func (w *datasetPDUWriter) Write(p []byte) (int, error) {
+	written := 0
+	for len(p) > 0 {
+		if w.maxData > 0 && w.filled == w.maxData {
+			if err := w.flush(false); err != nil {
+				return written, err
+			}
+		}
+		take := len(p)
+		if w.maxData > 0 {
+			if space := w.maxData - w.filled; take > space {
+				take = space
+			}
+			copy(w.buf[pdvHeaderSize+w.filled:], p[:take])
+		} else {
+			w.buf = append(w.buf, p...)
+		}
+		w.filled += take
+		written += take
+		p = p[take:]
+	}
+	return written, nil
+}
+
+// Finish writes the last fragment, padded to an even length per PS3.8 E.1.
+func (w *datasetPDUWriter) Finish() error {
+	if w.filled == 0 {
+		return nil
+	}
+	if w.filled%2 != 0 {
+		if len(w.buf) > pdvHeaderSize+w.filled {
+			w.buf[pdvHeaderSize+w.filled] = 0
+		} else {
+			w.buf = append(w.buf, 0)
+		}
+		w.filled++
+	}
+	return w.flush(true)
+}
+
+func (w *datasetPDUWriter) flush(last bool) error {
+	payloadLength := w.filled
+	// PDV header: length (context ID + control header + payload), context ID,
+	// control header with the last-fragment bit (PS3.8 E.2).
+	binary.BigEndian.PutUint32(w.buf[0:4], uint32(1+1+payloadLength)) // #nosec G115 -- bounded by the negotiated PDU length
+	w.buf[4] = w.contextID
+	if last {
+		w.buf[5] = 0x02
+	} else {
+		w.buf[5] = 0
 	}
 
+	// The PDU header is added by pdu.RawPDU.Write, so Data holds the PDV header
+	// followed by the payload that was written straight into this buffer.
+	raw := &pdu.RawPDU{Type: pdu.TypePDataTF, Data: w.buf[:pdvHeaderSize+payloadLength]}
+	if err := w.service.writePDU(w.ctx, raw); err != nil {
+		return fmt.Errorf("failed to write PDU: %w", err)
+	}
+	w.service.emitPDUBytes(w.ctx, observability.DirectionOutbound, raw)
+	w.filled = 0
 	return nil
 }
 

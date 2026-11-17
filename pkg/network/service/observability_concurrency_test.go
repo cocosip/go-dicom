@@ -48,7 +48,7 @@ func TestRequestLifecycleConcurrentTerminalExactlyOnce(t *testing.T) {
 		close(start)
 		wg.Wait()
 
-		events := requestEvents(recorder, dimse.CommandCEchoRQ)
+		events := waitForRequestEventCount(t, recorder, dimse.CommandCEchoRQ, 2)
 		if len(events) != 2 || events[0].Kind != observability.EventRequestSent || !isTerminalRequestEvent(events[1].Kind) {
 			t.Fatalf("iteration %d events = %#v, want sent plus one terminal", iteration, events)
 		}
@@ -86,6 +86,15 @@ func TestObservabilityCloseFinalizesPendingAndInboundOnce(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
+	recorder.waitForSnapshot(t, "terminal events for the pending and inbound requests",
+		func(events []observability.Event, _ []observability.Metric, _ []observability.LogRecord) bool {
+			counts := make(map[uint16]int, 2)
+			for _, event := range events {
+				counts[event.MessageID]++
+			}
+			return counts[11] == 2 && counts[12] == 2
+		})
+
 	for _, messageID := range []uint16{11, 12} {
 		events, _, _ := recorder.snapshot()
 		var requestEventsForID []observability.Event
@@ -98,6 +107,42 @@ func TestObservabilityCloseFinalizesPendingAndInboundOnce(t *testing.T) {
 			t.Errorf("message %d events = %#v, want initial plus one terminal", messageID, requestEventsForID)
 		}
 	}
+}
+
+// TestSlowEventObserverDoesNotBlockRequestLifecycle pins the delivery contract:
+// lifecycle calls hand events to the drainer goroutine, so an observer that
+// blocks (a slow log sink, for example) cannot stall the caller or the receive
+// loop that reported the event.
+func TestSlowEventObserverDoesNotBlockRequestLifecycle(t *testing.T) {
+	release := make(chan struct{})
+	recorder := &observationRecorder{}
+	service := NewService(&mockConn{}, createTestAssociation(),
+		WithEventObserver(observability.EventObserverFunc(func(ctx context.Context, event observability.Event) {
+			if event.Kind == observability.EventRequestSent {
+				<-release
+			}
+			recorder.observeEvent(ctx, event)
+		})),
+	)
+	t.Cleanup(func() { _ = service.Close() })
+
+	req := dimse.NewCEchoRequest()
+	if err := req.SetMessageID(21); err != nil {
+		t.Fatalf("SetMessageID() error = %v", err)
+	}
+	lifecycle := newRequestLifecycle(service, observability.DirectionOutbound, req)
+	done := make(chan struct{})
+	go func() {
+		lifecycle.sent(context.Background())
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("sent() blocked on a slow event observer")
+	}
+	close(release)
+	waitForRequestEventCount(t, recorder, dimse.CommandCEchoRQ, 1)
 }
 
 func TestRegisterInboundRequestRejectsDuplicateMessageID(t *testing.T) {

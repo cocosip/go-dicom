@@ -275,6 +275,9 @@ func (ds *Dataset) Elements() []element.Element {
 }
 
 // Tags returns all tags in the dataset, sorted.
+//
+// Every returned tag is a snapshot: callers may retain or modify it without
+// affecting the dataset. Use Elements when the elements are needed as well.
 func (ds *Dataset) Tags() []*tag.Tag {
 	if ds == nil || len(ds.items) == 0 {
 		return nil

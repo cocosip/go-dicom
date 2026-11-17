@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -287,12 +286,48 @@ func rangesFromFrameEndMarkers(fragments []buffer.ByteBuffer, frameCount int, sy
 var frameEndMarker = [2]byte{0xff, 0xd9}
 
 // usesFrameEndMarker reports whether the transfer syntax carries a codestream
-// that ends with FF D9.
+// that ends with FF D9. Only JPEG, JPEG-LS, JPEG 2000 and HTJ2K codestreams do;
+// MPEG, JPEG XL, JPIP reference and deflated payloads must use another
+// boundary mechanism (PS3.5 A.4).
 func usesFrameEndMarker(syntax *transfer.Syntax) bool {
 	if syntax == nil {
 		return false
 	}
-	return strings.HasPrefix(syntax.UID().UID(), "1.2.840.10008.1.2.4.")
+	_, ok := frameEndMarkerSyntaxes[syntax.UID().UID()]
+	return ok
+}
+
+// frameEndMarkerSyntaxes lists the encapsulated transfer syntaxes whose
+// codestream ends with an EOI/EOC marker (FF D9). Inside these codestreams an
+// unescaped FF D9 can only be a marker, so it identifies a frame boundary.
+var frameEndMarkerSyntaxes = map[string]struct{}{
+	"1.2.840.10008.1.2.4.50":  {}, // JPEG Baseline (Process 1)
+	"1.2.840.10008.1.2.4.51":  {}, // JPEG Extended (Process 2 & 4)
+	"1.2.840.10008.1.2.4.52":  {}, // JPEG Extended (Process 3 & 5), retired
+	"1.2.840.10008.1.2.4.53":  {}, // JPEG Spectral Selection, Non-Hierarchical 6 & 8, retired
+	"1.2.840.10008.1.2.4.54":  {}, // JPEG Spectral Selection, Non-Hierarchical 7 & 9, retired
+	"1.2.840.10008.1.2.4.55":  {}, // JPEG Full Progression, Non-Hierarchical 10 & 12, retired
+	"1.2.840.10008.1.2.4.56":  {}, // JPEG Full Progression, Non-Hierarchical 11 & 13, retired
+	"1.2.840.10008.1.2.4.57":  {}, // JPEG Lossless (Process 14)
+	"1.2.840.10008.1.2.4.58":  {}, // JPEG Lossless (Process 15), retired
+	"1.2.840.10008.1.2.4.59":  {}, // JPEG Extended, Hierarchical 16 & 18, retired
+	"1.2.840.10008.1.2.4.60":  {}, // JPEG Extended, Hierarchical 17 & 19, retired
+	"1.2.840.10008.1.2.4.61":  {}, // JPEG Spectral Selection, Hierarchical 20 & 22, retired
+	"1.2.840.10008.1.2.4.62":  {}, // JPEG Spectral Selection, Hierarchical 21 & 23, retired
+	"1.2.840.10008.1.2.4.63":  {}, // JPEG Full Progression, Hierarchical 24 & 26, retired
+	"1.2.840.10008.1.2.4.64":  {}, // JPEG Full Progression, Hierarchical 25 & 27, retired
+	"1.2.840.10008.1.2.4.65":  {}, // JPEG Lossless, Hierarchical 28, retired
+	"1.2.840.10008.1.2.4.66":  {}, // JPEG Lossless, Hierarchical 29, retired
+	"1.2.840.10008.1.2.4.70":  {}, // JPEG Lossless, SV1 (Process 14)
+	"1.2.840.10008.1.2.4.80":  {}, // JPEG-LS Lossless
+	"1.2.840.10008.1.2.4.81":  {}, // JPEG-LS Near-Lossless
+	"1.2.840.10008.1.2.4.90":  {}, // JPEG 2000 Lossless
+	"1.2.840.10008.1.2.4.91":  {}, // JPEG 2000
+	"1.2.840.10008.1.2.4.92":  {}, // JPEG 2000 Part 2 Multi-component Lossless
+	"1.2.840.10008.1.2.4.93":  {}, // JPEG 2000 Part 2 Multi-component
+	"1.2.840.10008.1.2.4.201": {}, // HTJ2K Lossless
+	"1.2.840.10008.1.2.4.202": {}, // HTJ2K Lossless with RPCL Options
+	"1.2.840.10008.1.2.4.203": {}, // HTJ2K
 }
 
 func (p *PixelData) assembleFrame(frameRange fragmentRange, frameIndex int) ([]byte, error) {

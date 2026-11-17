@@ -26,10 +26,17 @@ var (
 `, dictionary.Version)
 
 	keywords := make(map[string]struct{}, len(dictionary.UIDs))
+	uidValues := make(map[string]string, len(dictionary.UIDs))
 	for _, dictionaryUID := range dictionary.UIDs {
 		if dictionaryUID.Keyword == "" {
 			return nil, fmt.Errorf("UID %q has no keyword", dictionaryUID.Value)
 		}
+		if previous, exists := uidValues[dictionaryUID.Value]; exists {
+			// A repeated value would emit a duplicate key in
+			// generatedStandardUIDIndex, which does not compile.
+			return nil, fmt.Errorf("duplicate UID value %q (%s and %s)", dictionaryUID.Value, previous, dictionaryUID.Keyword)
+		}
+		uidValues[dictionaryUID.Value] = dictionaryUID.Keyword
 		identifier := generatedIdentifier(dictionaryUID.Keyword, dictionaryUID.Retired)
 		if _, exists := keywords[identifier]; exists {
 			return nil, fmt.Errorf("duplicate UID identifier %q", identifier)

@@ -139,10 +139,12 @@ type FilmBox struct {
 	// Enumerated Values: REPLICATE, BILINEAR, CUBIC, NONE
 	MagnificationType MagnificationType
 
-	// MaxDensity specifies the maximum density (0-255, or 0 for printer default)
+	// MaxDensity specifies the maximum density (0 = omit the element and use
+	// the printer default; otherwise 0-255)
 	MaxDensity uint16
 
-	// MinDensity specifies the minimum density (0-255, or 0 for printer default)
+	// MinDensity specifies the minimum density (0 = omit the element and use
+	// the printer default; otherwise 0-255)
 	MinDensity uint16
 
 	// Trim specifies whether to trim the film
@@ -165,9 +167,11 @@ type FilmBox struct {
 	SmoothingType string
 
 	// Illumination is the film illumination in candelas per square meter.
+	// 0 omits the element and uses the printer default.
 	Illumination uint16
 
 	// ReflectedAmbientLight is the reflected ambient light contribution.
+	// 0 omits the element and uses the printer default.
 	ReflectedAmbientLight uint16
 
 	// RequestedResolutionID identifies the requested printer resolution.
@@ -200,8 +204,8 @@ func NewFilmBox(sopInstanceUID string, imageDisplayFormat string) *FilmBox {
 		FilmOrientation:          FilmOrientationPortrait,
 		FilmSizeID:               FilmSize14INX17IN,
 		MagnificationType:        MagnificationReplicate,
-		MaxDensity:               0, // Printer default
-		MinDensity:               0, // Printer default
+		MaxDensity:               0, // Omitted; printer default
+		MinDensity:               0, // Omitted; printer default
 		Trim:                     TrimNo,
 		BorderDensity:            BorderDensityBlack,
 		EmptyImageDensity:        EmptyImageDensityBlack,
@@ -213,23 +217,25 @@ func NewFilmBox(sopInstanceUID string, imageDisplayFormat string) *FilmBox {
 }
 
 // ParseImageDisplayFormat parses the image display format string and returns
-// the total number of image boxes required
+// the total number of image boxes required.
+//
+// SLIDE, SUPERSLIDE, and CUSTOM\i do not define a fixed count: PS3.3 C.13.3
+// leaves it configuration dependent, so no number can be derived from the
+// format string. Those formats return an error; the caller must create the
+// image boxes explicitly with AddImageBox.
 func ParseImageDisplayFormat(format string) (int, error) {
-	// SLIDE and SUPERSLIDE are single-token defined terms (PS3.3 C.13.3); the
-	// image-box count is configuration dependent.
-	switch format {
-	case slideImageDisplayFormat:
-		return 20, nil // Typical 35mm slide count
-	case "SUPERSLIDE":
-		return 15, nil // Typical 40mm superslide count
+	parts := strings.Split(format, "\\")
+	formatType := parts[0]
+
+	switch formatType {
+	case slideImageDisplayFormat, "SUPERSLIDE", "CUSTOM":
+		return 0, fmt.Errorf("image display format %q has a configuration-dependent image box count (PS3.3 C.13.3); create the image boxes explicitly with AddImageBox", format)
 	}
 
-	parts := strings.Split(format, "\\")
 	if len(parts) < 2 {
 		return 0, fmt.Errorf("invalid image display format: %s", format)
 	}
 
-	formatType := parts[0]
 	params := parts[1]
 
 	switch formatType {
@@ -290,18 +296,6 @@ func ParseImageDisplayFormat(format string) (int, error) {
 			boxes += count
 		}
 		return boxes, nil
-
-	case slideImageDisplayFormat, "SUPERSLIDE":
-		// Configuration dependent, assume standard counts
-		if formatType == slideImageDisplayFormat {
-			return 20, nil // Typical 35mm slide count
-		}
-		return 15, nil // Typical 40mm superslide count
-
-	case "CUSTOM":
-		// CUSTOM\i - implementation specific
-		// Return a default value or require additional configuration
-		return 1, nil
 
 	default:
 		return 0, fmt.Errorf("unsupported format type: %s", formatType)

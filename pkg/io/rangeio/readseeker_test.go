@@ -183,3 +183,31 @@ func equalFetchRequests(got, want []FetchRequest) bool {
 	}
 	return true
 }
+
+func TestReadSeekerEvictsLeastRecentlyUsedBlock(t *testing.T) {
+	fetcher := &recordingFetcher{data: []byte("abcd")}
+	rs := NewReadSeeker(fetcher, WithBlockSize(1), WithMaxCachedBlocks(2))
+
+	readAt := func(offset int64) {
+		t.Helper()
+		if _, err := rs.Seek(offset, io.SeekStart); err != nil {
+			t.Fatalf("Seek(%d) error = %v", offset, err)
+		}
+		buf := make([]byte, 1)
+		if _, err := rs.Read(buf); err != nil {
+			t.Fatalf("Read() at %d error = %v", offset, err)
+		}
+	}
+
+	readAt(0) // fetch block 0
+	readAt(1) // fetch block 1
+	readAt(0) // cache hit: block 0 becomes most recently used
+	readAt(2) // fetch block 2: block 1 is now the least recently used
+	if got := len(fetcher.calls); got != 3 {
+		t.Fatalf("Fetch calls = %d, want 3: %+v", got, fetcher.calls)
+	}
+	readAt(0) // must still be cached: eviction dropped block 1, not block 0
+	if got := len(fetcher.calls); got != 3 {
+		t.Fatalf("block 0 was evicted; Fetch calls = %+v", fetcher.calls)
+	}
+}

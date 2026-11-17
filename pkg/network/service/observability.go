@@ -304,7 +304,9 @@ func (l *requestLifecycle) enqueueLocked(
 }
 
 // startDrainerLocked transfers ownership of queued event delivery to one
-// goroutine. User hooks run after the lifecycle lock has been released.
+// goroutine. User hooks run after the lifecycle lock has been released and, for
+// messages received from the peer, off the association's receive loop: a slow
+// observer delays its own events, not PDU processing for the whole association.
 func (l *requestLifecycle) startDrainerLocked() {
 	if l.emitting {
 		l.mu.Unlock()
@@ -312,7 +314,7 @@ func (l *requestLifecycle) startDrainerLocked() {
 	}
 	l.emitting = true
 	l.mu.Unlock()
-	l.drain()
+	go l.drain()
 }
 
 func (l *requestLifecycle) drain() {

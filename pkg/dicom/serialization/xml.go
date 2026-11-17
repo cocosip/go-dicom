@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
@@ -250,6 +251,9 @@ func (w *xmlWriter) writePersonNameValue(elem element.Element) error {
 			w.writeIndentedLine(fmt.Sprintf(`<PersonName number="%d"></PersonName>`, i+1))
 			continue
 		}
+		if err := validateXMLText([]string{value}); err != nil {
+			return fmt.Errorf("write %s PersonName value %d: %w", elem.Tag(), i+1, err)
+		}
 
 		// Parse PersonName components (Alphabetic=Ideographic=Phonetic)
 		components := strings.Split(value, "=")
@@ -337,6 +341,9 @@ func (w *xmlWriter) writeStringValues(elem element.Element) error {
 
 	// Write values. Every DICOM value is emitted with its 1-based number, even
 	// when the value is empty (PS3.19 A.1.5).
+	if err := validateXMLText(values); err != nil {
+		return fmt.Errorf("write %s value: %w", elem.Tag(), err)
+	}
 	for i, value := range values {
 		w.writeIndent()
 		w.buf.WriteString(`<Value`)
@@ -583,6 +590,27 @@ func escapeXML(s string) string {
 	return s
 }
 
+// validateXMLText rejects values XML 1.0 cannot represent. The Char production
+// allows #x9, #xA, #xD, [#x20-#xD7FF], [#xE000-#xFFFD] and [#x10000-#x10FFFF];
+// control characters such as NUL cannot be written even as character
+// references, so emitting them would produce ill-formed XML.
+func validateXMLText(values []string) error {
+	for _, value := range values {
+		if !utf8.ValidString(value) {
+			return fmt.Errorf("value is not valid UTF-8 and cannot be represented in XML")
+		}
+		for _, r := range value {
+			if r == '\t' || r == '\n' || r == '\r' {
+				continue
+			}
+			if r < 0x20 || (r >= 0xD800 && r <= 0xDFFF) || r == 0xFFFE || r == 0xFFFF {
+				return fmt.Errorf("value contains character U+%04X, which XML 1.0 cannot represent", r)
+			}
+		}
+	}
+	return nil
+}
+
 // FromXML deserializes a DICOM dataset from XML format (NativeDicomModel)
 // according to DICOM Part 19: Native DICOM Model
 func FromXML(xmlData []byte, opts ...XMLOption) (*dataset.Dataset, error) {
@@ -629,7 +657,15 @@ func (r *xmlReader) readDataset(xmlData []byte) (*dataset.Dataset, error) {
 		return nil, err
 	}
 	if err := ds.EnsureUTF8CharacterSet(); err != nil {
-		return nil, fmt.Errorf("set Specific Character Set: %w", err)
+		// XML text is Unicode, and the reader stores it as ASCII or UTF-8 bytes.
+		// A declared Specific Character Set therefore cannot describe those
+		// values (PS3.19 XML has no per-value byte encoding), so replace the
+		// declaration instead of reinterpreting the values, matching the JSON
+		// reader (PS3.18 F.2.3).
+		ds.Remove(tag.SpecificCharacterSet)
+		if err := ds.EnsureUTF8CharacterSet(); err != nil {
+			return nil, fmt.Errorf("set Specific Character Set: %w", err)
+		}
 	}
 
 	return ds, nil

@@ -86,7 +86,46 @@ func (r *jsonReader) readDataset(data []byte) (*dataset.Dataset, error) {
 		}
 	}
 
+	// The JSON model conveys Private Creators as ordinary (gggg,00xx) elements
+	// (PS3.19 A.1.5); reattach them to the tags they describe so private
+	// dictionaries, anonymization rules and XML export keep working.
+	relinkPrivateCreators(ds)
+
 	return ds, nil
+}
+
+// relinkPrivateCreators attaches the Private Creator of every block to the
+// private elements that use it, including inside sequence items.
+func relinkPrivateCreators(ds *dataset.Dataset) {
+	creators := make(map[uint32]*tag.PrivateCreator)
+	for _, elem := range ds.Elements() {
+		t := elem.Tag()
+		if !t.IsPrivate() || t.Element() > 0x00FF {
+			continue
+		}
+		str, ok := elem.(*element.String)
+		if !ok {
+			continue
+		}
+		if creator := strings.TrimRight(str.GetString(), " \x00"); creator != "" {
+			creators[uint32(t.Group())<<16|uint32(t.Element())] = tag.NewPrivateCreator(creator)
+		}
+	}
+	for _, elem := range ds.Elements() {
+		t := elem.Tag()
+		if t.IsPrivate() && t.Element() >= 0x1000 {
+			if creator, ok := creators[uint32(t.Group())<<16|uint32(t.Element()>>8)]; ok {
+				t.SetPrivateCreator(creator)
+			}
+		}
+		if sequence, ok := elem.(*dataset.Sequence); ok {
+			for i := 0; i < sequence.Count(); i++ {
+				if item := sequence.GetItem(i); item != nil {
+					relinkPrivateCreators(item)
+				}
+			}
+		}
+	}
 }
 
 // parseTag parses a tag from string (either "GGGGEEEE" or keyword)

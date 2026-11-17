@@ -153,6 +153,30 @@ func TestEndianByteBuffer(t *testing.T) {
 	})
 }
 
+// TestEndianByteBufferDataRejectsPartialUnit verifies Data and GetByteRange use
+// the same rule: a trailing partial unit cannot be byte-swapped, so both report
+// the failure instead of mixing byte orders.
+func TestEndianByteBufferDataRejectsPartialUnit(t *testing.T) {
+	// Choose an endianness opposite the native one so a wrapper is created.
+	other := endian.Big
+	if endian.Native() == endian.Big {
+		other = endian.Little
+	}
+	wrapped := buffer.NewEndian(buffer.NewMemory([]byte{1, 2, 3, 4, 5, 6}), other, 4)
+
+	if got := wrapped.Data(); got != nil {
+		t.Errorf("Data() = %v, want nil for a 6-byte value with unit size 4", got)
+	}
+	if err := wrapped.GetByteRange(0, 6, make([]byte, 6)); err == nil {
+		t.Error("GetByteRange(0, 6) with unit size 4: want error, got nil")
+	}
+
+	complete := buffer.NewEndian(buffer.NewMemory([]byte{1, 2, 3, 4}), other, 4)
+	if got, want := complete.Data(), []byte{4, 3, 2, 1}; !bytes.Equal(got, want) {
+		t.Errorf("Data() = %v, want %v for a complete unit", got, want)
+	}
+}
+
 // TestEvenLengthBuffer tests the even length buffer
 func TestEvenLengthBuffer(t *testing.T) {
 	t.Run("Odd length buffer", func(t *testing.T) {
@@ -378,19 +402,10 @@ func TestCompositeByteBuffer_SizeOverflow(t *testing.T) {
 		t.Fatalf("expected ErrCompositeSizeOverflow, got %v", err)
 	}
 
-	defer func() {
-		recovered := recover()
-		if !errors.Is(asError(recovered), buffer.ErrCompositeSizeOverflow) {
-			t.Fatalf("expected panic with ErrCompositeSizeOverflow, got %v", recovered)
-		}
-	}()
-
-	_ = composite.Data()
-}
-
-func asError(v any) error {
-	err, _ := v.(error)
-	return err
+	// Data reports the same failure by returning nil; it must not panic.
+	if got := composite.Data(); got != nil {
+		t.Fatalf("Data() = %v, want nil when the composite size overflows", got)
+	}
 }
 
 type overflowByteBuffer struct {

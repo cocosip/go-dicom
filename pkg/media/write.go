@@ -115,10 +115,20 @@ func (d *Directory) Save(path string, options ...WriteOption) error {
 	removeTemp := func() { _ = os.Remove(tempPath) }
 
 	writeErr := d.Write(file, options...)
+	var syncErr error
+	if writeErr == nil {
+		// Persist the contents before the rename so a crash cannot leave a
+		// renamed DICOMDIR whose data blocks were never flushed.
+		syncErr = file.Sync()
+	}
 	closeErr := file.Close()
 	if writeErr != nil {
 		removeTemp()
 		return errors.Join(writeErr, closeErr)
+	}
+	if syncErr != nil {
+		removeTemp()
+		return errors.Join(fmt.Errorf("sync DICOMDIR %s: %w", cleanPath, syncErr), closeErr)
 	}
 	if closeErr != nil {
 		removeTemp()

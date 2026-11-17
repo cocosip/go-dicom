@@ -96,7 +96,6 @@ var recordRequiredTags = map[RecordType][]*tag.Tag{
 		tag.ConceptNameCodeSequence,
 	},
 	RecordPresentation: {
-		tag.InstanceNumber,
 		tag.ContentLabel,
 		tag.PresentationCreationDate,
 		tag.PresentationCreationTime,
@@ -128,5 +127,9 @@ var recordType2Tags = map[RecordType][]type2Attribute{
 	},
 	RecordPresentation: {
 		{tag.ContentDescription, vr.LO},
+		// PS3.3 F.5.23 does not make Instance Number part of the record key,
+		// but it is a Type 2 attribute of the record, so it is written with
+		// zero length when the source instance does not provide it.
+		{tag.InstanceNumber, vr.IS},
 	},
 }

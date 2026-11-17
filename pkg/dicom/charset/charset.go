@@ -299,21 +299,45 @@ func decodeString(data []byte, encodings []encoding.Encoding, strict bool) (stri
 	return string(decoded), nil
 }
 
+// initialISO2022State returns the ISO 2022 state that is active at the start of
+// a value: Value 1 of Specific Character Set, or the default repertoire when
+// Value 1 is missing (PS3.5 6.1.2.5.3, 6.1.2.5.4). Value 1 is not limited to
+// ISO 2022 IR 13; any single-byte set can be Value 1 when code extensions are
+// used, and its bytes may appear before the first escape sequence.
+func initialISO2022State(encodings []encoding.Encoding) string {
+	if len(encodings) == 0 || encodings[0] == nil {
+		return iso2022ASCII
+	}
+	switch enc := encodings[0].(type) {
+	case *dicomIR13Encoding:
+		return iso2022IR13
+	case *dicomISO2022Encoding:
+		if len(enc.designation) == 3 && enc.designation[0] == 0x1b &&
+			(enc.designation[1] == '-' || enc.designation[1] == '.') {
+			if _, ok := iso2022SingleByte[enc.designation[2]]; ok {
+				return "sb" + string(enc.designation[2])
+			}
+		}
+	default:
+		for letter, single := range iso2022SingleByte {
+			if enc == single {
+				return "sb" + string(letter)
+			}
+		}
+	}
+	return iso2022ASCII
+}
+
 func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, error) {
-	current := iso2022ASCII
-	initial := Default
-	if len(encodings) > 0 && encodings[0] != nil {
-		initial = encodings[0]
-	}
-	if initial == Default && len(encodings) > 1 && encodings[1] != nil {
-		initial = encodings[1]
-	}
-	if _, ok := initial.(*dicomIR13Encoding); ok {
-		current = iso2022IR13
-	}
+	initial := initialISO2022State(encodings)
+	current := initial
 	var designation []byte
 	var segment []byte
 	var result bytes.Buffer
+	reset := func() {
+		current = initial
+		designation = nil
+	}
 	flush := func() error {
 		if len(segment) == 0 {
 			return nil
@@ -373,8 +397,20 @@ func decodeDICOMISO2022(data []byte, encodings []encoding.Encoding) (string, err
 				return "", err
 			}
 			result.WriteByte(data[index])
-			current = iso2022ASCII
-			designation = nil
+			// The next value starts with Value 1 of Specific Character Set
+			// active again (PS3.5 6.1.2.5.3).
+			reset()
+			index++
+			continue
+		}
+		if data[index] == '\r' || data[index] == '\n' || data[index] == '\f' {
+			if err := flush(); err != nil {
+				return "", err
+			}
+			result.WriteByte(data[index])
+			// Value 1 (or the default repertoire) is active at the beginning of
+			// each line and page (PS3.5 6.1.2.5.3).
+			reset()
 			index++
 			continue
 		}

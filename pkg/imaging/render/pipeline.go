@@ -4,6 +4,7 @@
 package render
 
 import (
+	"math"
 	"sync"
 
 	"github.com/cocosip/go-dicom/pkg/imaging/lut"
@@ -56,7 +57,7 @@ type GrayscalePipeline struct {
 // NewGrayscalePipeline creates a new grayscale rendering pipeline
 func NewGrayscalePipeline(rescaleSlope, rescaleIntercept, windowCenter, windowWidth, minInput, maxInput float64, invert bool) *GrayscalePipeline {
 	p := &GrayscalePipeline{
-		windowWidth:      windowWidth,
+		windowWidth:      clampWindowWidth(windowWidth),
 		windowCenter:     windowCenter,
 		invert:           invert,
 		minInputValue:    minInput,
@@ -67,6 +68,16 @@ func NewGrayscalePipeline(rescaleSlope, rescaleIntercept, windowCenter, windowWi
 	}
 	p.buildPipeline()
 	return p
+}
+
+// clampWindowWidth enforces the PS3.3 C.11.2.1.2 LINEAR rule that Window Width
+// is at least 1. A smaller width inverts the display mapping, and NaN would
+// propagate into the LUT, so both are replaced by the smallest valid width.
+func clampWindowWidth(width float64) float64 {
+	if math.IsNaN(width) || width < 1 {
+		return 1
+	}
+	return width
 }
 
 // ClonePipeline copies pipeline configuration without sharing mutable cache state.
@@ -164,6 +175,7 @@ func (p *GrayscalePipeline) WindowWidth() float64 {
 
 // SetWindowWidth updates the window width and rebuilds the pipeline
 func (p *GrayscalePipeline) SetWindowWidth(width float64) {
+	width = clampWindowWidth(width)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.windowWidth != width {
@@ -191,6 +203,7 @@ func (p *GrayscalePipeline) SetWindowCenter(center float64) {
 
 // SetWindow updates both window center and width
 func (p *GrayscalePipeline) SetWindow(center, width float64) {
+	width = clampWindowWidth(width)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.windowCenter != center || p.windowWidth != width {

@@ -197,11 +197,20 @@ func (fs *FilmSession) ToDataset() (*dataset.Dataset, error) {
 			return nil, err
 		}
 	}
-	if err := addElement(ds, element.NewIntegerStringFromInt(tag.MemoryAllocation, []int{fs.MemoryAllocation})); err != nil {
-		return nil, err
+	// Memory Allocation is retired. A non-zero value is still written for
+	// compatibility, but the default (0) is omitted rather than sent.
+	if fs.MemoryAllocation != 0 {
+		if err := addElement(ds, element.NewIntegerStringFromInt(tag.MemoryAllocation, []int{fs.MemoryAllocation})); err != nil {
+			return nil, err
+		}
 	}
 	if err := addElement(ds, element.NewIntegerStringFromInt(tag.NumberOfCopies, []int{fs.NumberOfCopies})); err != nil {
 		return nil, err
+	}
+	// Text values that fall back to UTF-8 bytes must declare ISO_IR 192
+	// (PS3.3 C.12.1.1.2, PS3.5 6.1.2), e.g. a non-ASCII Film Session Label.
+	if err := ds.EnsureUTF8CharacterSet(); err != nil {
+		return nil, fmt.Errorf("printing: set Specific Character Set: %w", err)
 	}
 	return ds, nil
 }
@@ -283,17 +292,30 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 			return nil, err
 		}
 	}
-	if err := addElement(ds, element.NewUnsignedShort(tag.MaxDensity, []uint16{fb.MaxDensity})); err != nil {
-		return nil, err
+	// PS3.3 C.13.3 defines only clamping above the printer's maximum density and
+	// below its minimum density; it does not define 0 as "printer default". Use
+	// the printer default by omitting the element rather than sending a value
+	// the printer has to clamp. Illumination and Reflected Ambient Light follow
+	// the same rule: 0 cd/m^2 is out of range, so it is omitted.
+	if fb.MaxDensity != 0 {
+		if err := addElement(ds, element.NewUnsignedShort(tag.MaxDensity, []uint16{fb.MaxDensity})); err != nil {
+			return nil, err
+		}
 	}
-	if err := addElement(ds, element.NewUnsignedShort(tag.MinDensity, []uint16{fb.MinDensity})); err != nil {
-		return nil, err
+	if fb.MinDensity != 0 {
+		if err := addElement(ds, element.NewUnsignedShort(tag.MinDensity, []uint16{fb.MinDensity})); err != nil {
+			return nil, err
+		}
 	}
-	if err := addElement(ds, element.NewUnsignedShort(tag.Illumination, []uint16{fb.Illumination})); err != nil {
-		return nil, err
+	if fb.Illumination != 0 {
+		if err := addElement(ds, element.NewUnsignedShort(tag.Illumination, []uint16{fb.Illumination})); err != nil {
+			return nil, err
+		}
 	}
-	if err := addElement(ds, element.NewUnsignedShort(tag.ReflectedAmbientLight, []uint16{fb.ReflectedAmbientLight})); err != nil {
-		return nil, err
+	if fb.ReflectedAmbientLight != 0 {
+		if err := addElement(ds, element.NewUnsignedShort(tag.ReflectedAmbientLight, []uint16{fb.ReflectedAmbientLight})); err != nil {
+			return nil, err
+		}
 	}
 	sessionReference := fb.sessionReference()
 	if sessionReference != (SOPReference{}) {
@@ -320,6 +342,11 @@ func (fb *FilmBox) ToDataset() (*dataset.Dataset, error) {
 		if err := addReferenceSequence(ds, tag.ReferencedPresentationLUTSequence, []SOPReference{reference}); err != nil {
 			return nil, err
 		}
+	}
+	// Text values that fall back to UTF-8 bytes must declare ISO_IR 192
+	// (PS3.3 C.12.1.1.2, PS3.5 6.1.2), e.g. Configuration Information.
+	if err := ds.EnsureUTF8CharacterSet(); err != nil {
+		return nil, fmt.Errorf("printing: set Specific Character Set: %w", err)
 	}
 	return ds, nil
 }

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/logging"
 	"github.com/cocosip/go-dicom/pkg/network/dimse"
@@ -28,15 +29,23 @@ func TestServiceWritesLifecycleToGoDicomLogger(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	records := handler.snapshot()
-	if len(records) != 2 {
-		t.Fatalf("slog records = %d, want 2", len(records))
+	records := waitForSlogMessages(t, handler,
+		string(observability.EventConnectionOpened), string(observability.EventConnectionClosed))
+	var lifecycle []slog.Record
+	for _, record := range records {
+		if record.Message == string(observability.EventConnectionOpened) ||
+			record.Message == string(observability.EventConnectionClosed) {
+			lifecycle = append(lifecycle, record)
+		}
+	}
+	if len(lifecycle) != 2 {
+		t.Fatalf("slog records = %d, want 2", len(lifecycle))
 	}
 	for index, wantEvent := range []observability.EventKind{
 		observability.EventConnectionOpened,
 		observability.EventConnectionClosed,
 	} {
-		record := records[index]
+		record := lifecycle[index]
 		if record.Message != string(wantEvent) {
 			t.Errorf("record %d message = %q, want %q", index, record.Message, wantEvent)
 		}
@@ -67,8 +76,11 @@ func TestGlobalLoggerCreatesDIMSERequestLifecycle(t *testing.T) {
 	lifecycle.sent(context.Background())
 	lifecycle.finishError(context.Background(), errors.New("test failure"))
 
-	records := handler.snapshot()
-	if len(records) < 2 || records[len(records)-2].Message != string(observability.EventRequestSent) || records[len(records)-1].Message != string(observability.EventRequestFailed) {
+	records := waitForSlogMessages(t, handler,
+		string(observability.EventRequestSent), string(observability.EventRequestFailed))
+	sent := findSlogRecord(records, string(observability.EventRequestSent))
+	failed := findSlogRecord(records, string(observability.EventRequestFailed))
+	if sent == nil || failed == nil {
 		t.Fatalf("request records = %#v, want request_sent and request_failed", records)
 	}
 }
@@ -89,8 +101,9 @@ func TestErrorOnlyGlobalLoggerReceivesTerminalDIMSEFailure(t *testing.T) {
 	lifecycle.sent(context.Background())
 	lifecycle.finishError(context.Background(), errors.New("test failure"))
 
-	records := handler.snapshot()
-	if len(records) != 1 || records[0].Message != string(observability.EventRequestFailed) || records[0].Level != slog.LevelError {
+	records := waitForSlogMessages(t, &handler.serviceSlogHandler, string(observability.EventRequestFailed))
+	failed := findSlogRecord(records, string(observability.EventRequestFailed))
+	if failed == nil || failed.Level != slog.LevelError {
 		t.Fatalf("Error-only records = %#v, want one request_failed Error record", records)
 	}
 }
@@ -113,7 +126,8 @@ func TestDIMSEProgressLogsUseDebugLevel(t *testing.T) {
 	lifecycle.response(context.Background(), dimse.NewCFindResponseFromRequest(req, status.Pending, nil))
 	lifecycle.response(context.Background(), dimse.NewCFindResponseFromRequest(req, status.Success, nil))
 
-	records := handler.snapshot()
+	records := waitForSlogMessages(t, handler,
+		string(observability.EventRequestPending), string(observability.EventRequestCompleted))
 	var pending, completed *slog.Record
 	for i := range records {
 		switch records[i].Message {
@@ -148,7 +162,7 @@ func TestRequestLifecycleCapturesQueryRetrieveMetadata(t *testing.T) {
 	}
 	lifecycle.sent(context.Background())
 
-	events, _, _ := recorder.snapshot()
+	events := waitForRequestEventCount(t, recorder, dimse.CommandCMoveRQ, 1)
 	var event observability.Event
 	for _, candidate := range events {
 		if candidate.Kind == observability.EventRequestSent {
@@ -188,6 +202,44 @@ func (h *serviceSlogHandler) snapshot() []slog.Record {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return append([]slog.Record(nil), h.records...)
+}
+
+// waitForSlogMessages waits until every message has been written, in order, so
+// tests do not depend on the asynchronous drainer's timing or on records that a
+// previous test's drainer may still be writing through the global logger.
+func waitForSlogMessages(t *testing.T, handler *serviceSlogHandler, messages ...string) []slog.Record {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		records := handler.snapshot()
+		if containsSlogMessages(records, messages) {
+			return records
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("slog messages %v not found in %#v", messages, records)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func containsSlogMessages(records []slog.Record, messages []string) bool {
+	next := 0
+	for _, record := range records {
+		if next < len(messages) && record.Message == messages[next] {
+			next++
+		}
+	}
+	return next == len(messages)
+}
+
+// findSlogRecord returns the last record whose message matches.
+func findSlogRecord(records []slog.Record, message string) *slog.Record {
+	for index := len(records) - 1; index >= 0; index-- {
+		if records[index].Message == message {
+			return &records[index]
+		}
+	}
+	return nil
 }
 
 type serviceErrorHandler struct {

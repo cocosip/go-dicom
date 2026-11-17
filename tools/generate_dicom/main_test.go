@@ -148,6 +148,36 @@ func TestRunCommandUsesFODicomRetiredIdentifierConvention(t *testing.T) {
 	}
 }
 
+// TestRunCommandRejectsDuplicateUIDValues verifies a repeated UID value fails
+// generation before any file is written: the emitted index would otherwise
+// contain a duplicate map key and not compile.
+func TestRunCommandRejectsDuplicateUIDValues(t *testing.T) {
+	inputDir := t.TempDir()
+	standard := filepath.Join(inputDir, "DICOM Dictionary.xml")
+	private := filepath.Join(inputDir, "Private Dictionary.xml")
+	root := t.TempDir()
+
+	const standardXML = `<dictionary version="2026b">
+  <uid uid="1.2.840.10008.1.1" keyword="Verification" type="SOP Class">Verification SOP Class</uid>
+  <uid uid="1.2.840.10008.1.1" keyword="VerificationDuplicate" type="SOP Class">Verification Duplicate</uid>
+</dictionary>`
+	writeTestFile(t, standard, standardXML)
+	writeTestFile(t, private, `<dictionaries></dictionaries>`)
+
+	err := runCommand(
+		[]string{standardFlag, standard, privateFlag, private, rootFlag, root},
+		io.Discard,
+	)
+	if err == nil || !strings.Contains(err.Error(), "duplicate UID value") {
+		t.Fatalf("runCommand() error = %v, want duplicate UID value error", err)
+	}
+	for _, output := range []string{tagsOutput, uidsOutput, dictionaryOutput, privateDictionaryOutput} {
+		if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(output))); !os.IsNotExist(statErr) {
+			t.Errorf("%s was written despite the generation error", output)
+		}
+	}
+}
+
 func TestBundled2026bGenerationIsDeterministic(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join("..", ".."))
 	standard := filepath.Join(repositoryRoot, "tools", "data", "2026b", "DICOM Dictionary.xml")

@@ -4,8 +4,9 @@
 package charset_test
 
 const (
-	testCharsetLatin1 = "ISO_IR 100"
-	testCharsetUTF8   = "ISO_IR 192"
-	testEncodingUTF8  = "UTF-8"
-	testHelloWorld    = "Hello World"
+	testCharsetLatin1       = "ISO_IR 100"
+	testCharsetISO2022IR100 = "ISO 2022 IR 100"
+	testCharsetUTF8         = "ISO_IR 192"
+	testEncodingUTF8        = "UTF-8"
+	testHelloWorld          = "Hello World"
 )

@@ -37,6 +37,11 @@ var (
 	// receive a response within its configured response idle timeout.
 	ErrRequestTimeout = errors.New("DIMSE request timeout")
 
+	// ErrResponseQueueOverflow indicates that a peer streamed more pending
+	// responses for one request than the local queue accepts. Only that request
+	// failed; the association remains usable.
+	ErrResponseQueueOverflow = errors.New("per-request response queue overflow")
+
 	// ErrMessageTooLarge indicates a message exceeds the maximum PDU length.
 	ErrMessageTooLarge = errors.New("message exceeds maximum PDU length")
 

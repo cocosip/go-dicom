@@ -184,3 +184,31 @@ func (h *recordingHandler) snapshot() []slog.Record {
 	defer h.mu.Unlock()
 	return append([]slog.Record(nil), h.records...)
 }
+
+type panickingHandler struct{}
+
+func (panickingHandler) Enabled(context.Context, slog.Level) bool { panic("handler.Enabled panic") }
+
+func (panickingHandler) Handle(context.Context, slog.Record) error { panic("handler.Handle panic") }
+
+func (panickingHandler) WithAttrs([]slog.Attr) slog.Handler { return panickingHandler{} }
+
+func (panickingHandler) WithGroup(string) slog.Handler { return panickingHandler{} }
+
+func TestPanickingHandlerIsCountedAndCannotFailCaller(t *testing.T) {
+	if err := Configure(Config{Handler: panickingHandler{}}); err != nil {
+		t.Fatalf("Configure() error = %v", err)
+	}
+	t.Cleanup(Disable)
+	before := HandlerPanics()
+
+	if Enabled(context.Background(), slog.LevelInfo) {
+		t.Fatal("Enabled() = true with a panicking handler")
+	}
+	// The panic must be recovered instead of unwinding into the caller.
+	Emit(context.Background(), Record{Level: slog.LevelInfo, Component: testComponent, Message: "panic"})
+
+	if got := HandlerPanics() - before; got != 2 {
+		t.Fatalf("HandlerPanics() increase = %d, want 2", got)
+	}
+}

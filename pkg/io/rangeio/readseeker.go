@@ -163,6 +163,7 @@ func (r *ReadSeeker) Seek(offset int64, whence int) (int64, error) {
 
 func (r *ReadSeeker) block(index int64) ([]byte, error) {
 	if data, ok := r.cache[index]; ok {
+		r.markCacheUsed(index)
 		return data, nil
 	}
 
@@ -195,5 +196,18 @@ func (r *ReadSeeker) evictCache() {
 		copy(r.cacheOrder, r.cacheOrder[1:])
 		r.cacheOrder = r.cacheOrder[:len(r.cacheOrder)-1]
 		delete(r.cache, oldest)
+	}
+}
+
+// markCacheUsed promotes a cache hit to most recently used so eviction drops
+// the block that has gone unused longest instead of the oldest insertion.
+func (r *ReadSeeker) markCacheUsed(index int64) {
+	for position, candidate := range r.cacheOrder {
+		if candidate != index {
+			continue
+		}
+		copy(r.cacheOrder[position:], r.cacheOrder[position+1:])
+		r.cacheOrder[len(r.cacheOrder)-1] = index
+		return
 	}
 }

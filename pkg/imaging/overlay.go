@@ -214,6 +214,17 @@ func (o *DicomOverlayData) ApplyToImage(imageData []byte, width, height int, sam
 		return nil, fmt.Errorf("image dimensions (%dx%d) don't match overlay dimensions (%dx%d)",
 			width, height, o.Columns, o.Rows)
 	}
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("image dimensions must be positive, got %dx%d", width, height)
+	}
+	if samplesPerPixel != 1 && samplesPerPixel != 3 {
+		return nil, fmt.Errorf("unsupported samples per pixel: %d", samplesPerPixel)
+	}
+	required := int64(width) * int64(height) * int64(samplesPerPixel)
+	if int64(len(imageData)) < required {
+		return nil, fmt.Errorf("image data too short: got %d bytes, need %d for %dx%d with %d sample(s) per pixel",
+			len(imageData), required, width, height, samplesPerPixel)
+	}
 
 	unpacked, err := o.GetFrame(0)
 	if err != nil {

@@ -661,10 +661,10 @@ func synchronizeFileMetaSOPUIDs(fileMetaInfo, ds *dataset.Dataset) error {
 		}
 	}
 	if !hasSOPClassUID || sopClassUID == "" {
-		return fmt.Errorf("dataset is missing SOPClassUID required for Part 10 File Meta Information (use writer.WithFileMetaInfo when rewriting a parsed file)")
+		return fmt.Errorf("dataset is missing SOPClassUID (0008,0016) required for a Part 10 file; writer.WithFileMetaInfo supplies only Group 0002 and cannot substitute for a dataset attribute")
 	}
 	if !hasSOPInstanceUID || sopInstanceUID == "" {
-		return fmt.Errorf("dataset is missing SOPInstanceUID required for Part 10 File Meta Information")
+		return fmt.Errorf("dataset is missing SOPInstanceUID (0008,0018) required for a Part 10 file; writer.WithFileMetaInfo supplies only Group 0002 and cannot substitute for a dataset attribute")
 	}
 
 	for _, item := range []struct {

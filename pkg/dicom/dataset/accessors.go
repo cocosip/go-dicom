@@ -5,7 +5,6 @@ package dataset
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/element"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -13,6 +12,8 @@ import (
 
 // GetString retrieves a string value from the dataset.
 // Returns the string value and true if found, empty string and false otherwise.
+// A false result also covers an element whose value cannot be decoded, so call
+// GetStringWithError to distinguish a missing element from a decoding failure.
 func (ds *Dataset) GetString(t *tag.Tag) (string, bool) {
 	value, err := ds.GetStringWithError(t)
 	return value, err == nil
@@ -20,14 +21,16 @@ func (ds *Dataset) GetString(t *tag.Tag) (string, bool) {
 
 // GetStringWithError retrieves a string value and reports decoding errors.
 func (ds *Dataset) GetStringWithError(t *tag.Tag) (string, error) {
-	values, err := ds.GetStringsWithError(t)
-	if err != nil {
-		return "", err
+	elem, exists := ds.Get(t)
+	if !exists {
+		return "", fmt.Errorf("element %s not found", t)
 	}
-	return strings.Join(values, "\\"), nil
+	return element.CanonicalString(elem)
 }
 
 // GetStrings retrieves all string values from the dataset.
+// A false result also covers an element whose value cannot be decoded; use
+// GetStringsWithError to distinguish that from a missing element.
 func (ds *Dataset) GetStrings(t *tag.Tag) ([]string, bool) {
 	values, err := ds.GetStringsWithError(t)
 	return values, err == nil

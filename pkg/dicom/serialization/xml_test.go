@@ -515,3 +515,64 @@ func TestToXML_ComplexDataset(t *testing.T) {
 		t.Error("Sequence item missing")
 	}
 }
+
+func TestXMLRoundTripKeepsLegacyCharacterSetValues(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.Add(element.NewString(tag.SpecificCharacterSet, vr.CS, []string{testSpecificCharacterSetLatin1})); err != nil {
+		t.Fatalf("add Specific Character Set: %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.PatientName, vr.PN, []string{"M\u00fcller^Hans"})); err != nil {
+		t.Fatalf("add PatientName: %v", err)
+	}
+	if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"P-1"})); err != nil {
+		t.Fatalf("add PatientID: %v", err)
+	}
+
+	data, err := ToXML(ds)
+	if err != nil {
+		t.Fatalf("ToXML() error = %v", err)
+	}
+	back, err := FromXML(data)
+	if err != nil {
+		t.Fatalf("FromXML() error = %v", err)
+	}
+	if got, ok := back.GetString(tag.PatientName); !ok || got != "M\u00fcller^Hans" {
+		t.Fatalf("PatientName = %q, ok = %v", got, ok)
+	}
+	// XML text is Unicode, so the value is stored as UTF-8 and the declaration
+	// must describe it (PS3.3 C.12.1).
+	scs, ok := back.GetStrings(tag.SpecificCharacterSet)
+	if !ok {
+		t.Fatal("Specific Character Set missing")
+	}
+	if len(scs) != 1 || scs[0] != testSpecificCharacterSetUTF8 {
+		t.Fatalf("Specific Character Set = %v, want [ISO_IR 192]", scs)
+	}
+	// An ASCII-only legacy dataset must keep its declaration.
+	ascii := dataset.New()
+	_ = ascii.Add(element.NewString(tag.SpecificCharacterSet, vr.CS, []string{testSpecificCharacterSetLatin1}))
+	_ = ascii.Add(element.NewString(tag.PatientID, vr.LO, []string{"P-1"}))
+	asciiXML, err := ToXML(ascii)
+	if err != nil {
+		t.Fatalf("ToXML() error = %v", err)
+	}
+	asciiBack, err := FromXML(asciiXML)
+	if err != nil {
+		t.Fatalf("FromXML() error = %v", err)
+	}
+	asciiSCS, _ := asciiBack.GetStrings(tag.SpecificCharacterSet)
+	if len(asciiSCS) != 1 || asciiSCS[0] != testSpecificCharacterSetLatin1 {
+		t.Fatalf("ASCII Specific Character Set = %v, want [ISO_IR 100]", asciiSCS)
+	}
+}
+
+func TestToXMLRejectsCharactersXMLCannotRepresent(t *testing.T) {
+	ds := dataset.New()
+	ds.SetAutoValidate(false)
+	if err := ds.Add(element.NewString(tag.PatientID, vr.LO, []string{"A\x00B"})); err != nil {
+		t.Fatalf("add PatientID: %v", err)
+	}
+	if _, err := ToXML(ds); err == nil {
+		t.Fatal("ToXML() accepted a NUL character, which XML 1.0 cannot represent")
+	}
+}

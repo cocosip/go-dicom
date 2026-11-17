@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -76,5 +77,78 @@ func TestHandleResponseDoesNotBlockOnSlowConsumer(t *testing.T) {
 	}
 	if _, ok := <-events; ok {
 		t.Fatal("event channel remained open after the final response")
+	}
+}
+
+// TestResponseQueueOverflowFailsRequestOnly verifies that a stalled consumer and
+// a peer streaming more pending responses than maxQueuedResponses fail only that
+// request (ErrResponseQueueOverflow) while the association stays usable.
+func TestResponseQueueOverflowFailsRequestOnly(t *testing.T) {
+	service := NewService(nil, createTestAssociation())
+	t.Cleanup(func() { _ = service.Close() })
+	if err := service.setState(StateAssociationAccepted); err != nil {
+		t.Fatalf("setState() error = %v", err)
+	}
+	// Answer C-ECHOs so the post-overflow health check can complete; other sends
+	// are just acknowledged.
+	go func() {
+		for {
+			select {
+			case send := <-service.sendQueue:
+				echo, isEcho := send.message.(*dimse.CEchoRequest)
+				send.resultCh <- nil
+				if isEcho {
+					_ = service.handleResponse(dimse.NewCEchoResponse(echo.MessageID(), status.Success))
+				}
+			case <-service.closeCh:
+				return
+			}
+		}
+	}()
+
+	request := dimse.NewCFindRequest(dimse.QueryRetrieveLevelStudy, dataset.New())
+	events, err := service.SendCFind(context.Background(), request)
+	if err != nil {
+		t.Fatalf("SendCFind() error = %v", err)
+	}
+
+	// Do not read events: the per-request queue fills up and must fail the
+	// request instead of growing without bound. The slack on top of the bound
+	// covers the responses already buffered in responseCh/eventCh.
+	const overflowSlack = 128
+	for i := 0; i < maxQueuedResponses+overflowSlack; i++ {
+		resp := dimse.NewCFindResponseFromRequest(request, status.CFindPending, dataset.New())
+		if err := service.handleResponse(resp); err != nil {
+			t.Fatalf("handleResponse(%d) error = %v, want nil (overflow fails only the request)", i, err)
+		}
+	}
+	service.pendingRequestsMu.Lock()
+	_, stillPending := service.pendingRequests[request.MessageID()]
+	service.pendingRequestsMu.Unlock()
+	if stillPending {
+		t.Fatal("request is still pending after exceeding the response queue bound")
+	}
+
+	var terminal error
+	for terminal == nil {
+		terminal = receiveResponseEvent(t, events).Err
+	}
+	if !errors.Is(terminal, ErrResponseQueueOverflow) {
+		t.Fatalf("terminal event error = %v, want ErrResponseQueueOverflow", terminal)
+	}
+	if _, ok := <-events; ok {
+		t.Fatal("event channel remained open after the overflow error")
+	}
+
+	// The association itself must remain usable.
+	resp, err := service.SendCEcho(context.Background(), dimse.NewCEchoRequest())
+	if err != nil {
+		t.Fatalf("SendCEcho() after overflow error = %v", err)
+	}
+	if !resp.Status().IsSuccess() {
+		t.Fatalf("SendCEcho() status = %s, want Success", resp.Status())
+	}
+	if state := service.GetState(); state != StateAssociationAccepted {
+		t.Fatalf("state = %s, want %s (overflow must not abort the association)", state, StateAssociationAccepted)
 	}
 }

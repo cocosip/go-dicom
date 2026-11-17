@@ -306,3 +306,29 @@ func openTestPixelDataWithFragments(
 	}
 	return pixelData
 }
+
+func TestUsesFrameEndMarkerIsLimitedToCodestreams(t *testing.T) {
+	tests := map[string]bool{
+		"1.2.840.10008.1.2.4.50":  true,  // JPEG Baseline
+		"1.2.840.10008.1.2.4.70":  true,  // JPEG Lossless SV1
+		"1.2.840.10008.1.2.4.80":  true,  // JPEG-LS Lossless
+		"1.2.840.10008.1.2.4.90":  true,  // JPEG 2000 Lossless
+		"1.2.840.10008.1.2.4.203": true,  // HTJ2K
+		"1.2.840.10008.1.2.4.100": false, // MPEG2 MP@ML
+		"1.2.840.10008.1.2.4.110": false, // JPEG XL Lossless
+		"1.2.840.10008.1.2.4.94":  false, // JPIP Referenced
+		"1.2.840.10008.1.2.4.99":  false, // Deflated Explicit VR Little Endian
+	}
+	for uidString, want := range tests {
+		syntax, err := transfer.Parse(uidString)
+		if err != nil {
+			t.Fatalf("transfer.Parse(%q) error = %v", uidString, err)
+		}
+		if got := usesFrameEndMarker(syntax); got != want {
+			t.Errorf("usesFrameEndMarker(%s) = %v, want %v", uidString, got, want)
+		}
+	}
+	if usesFrameEndMarker(nil) {
+		t.Error("usesFrameEndMarker(nil) = true, want false")
+	}
+}

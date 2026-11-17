@@ -3,11 +3,13 @@ package rangehttp
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/io/rangeio"
 )
@@ -261,5 +263,71 @@ func TestFetcherBoundsOversizedRangeProbeRead(t *testing.T) {
 	}
 	if body.read > 2 {
 		t.Fatalf("range probe read %d bytes, want at most expected length plus one", body.read)
+	}
+}
+
+// TestFetcherAppliesRequestTimeout verifies that a server which accepts the
+// connection and then stalls cannot block a range read until the context ends.
+func TestFetcherAppliesRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.Header().Set("Content-Length", "6")
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+		w.Header().Set("Content-Range", "bytes 0-2/6")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("abc"))
+	}))
+	defer server.Close()
+
+	fetcher, err := NewFetcher(context.Background(), server.URL, WithTimeout(50*time.Millisecond))
+	if err != nil {
+		t.Fatalf("NewFetcher() error = %v", err)
+	}
+	start := time.Now()
+	_, err = fetcher.Fetch(context.Background(), rangeio.FetchRequest{Offset: 0, Length: 3})
+	if err == nil {
+		t.Fatal("Fetch() error = nil, want a timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Fetch() error = %v, want context.DeadlineExceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("Fetch() took %v, want the configured 50ms timeout to fire", elapsed)
+	}
+}
+
+// TestFetcherDrainsNonPartialResponseBody verifies an error response body is
+// read (a bounded prefix) before it is closed, so the connection can be reused.
+func TestFetcherDrainsNonPartialResponseBody(t *testing.T) {
+	body := &countingReadCloser{reader: bytes.NewReader(bytes.Repeat([]byte{'x'}, 100))}
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method == http.MethodHead {
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				ContentLength: 100,
+				Header:        make(http.Header),
+				Body:          io.NopCloser(bytes.NewReader(nil)),
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     make(http.Header),
+			Body:       body,
+		}, nil
+	})}
+	fetcher, err := NewFetcher(context.Background(), "http://example.test/object", WithClient(client))
+	if err != nil {
+		t.Fatalf("NewFetcher() error = %v", err)
+	}
+
+	if _, err := fetcher.Fetch(context.Background(), rangeio.FetchRequest{Offset: 0, Length: 4}); err == nil {
+		t.Fatal("Fetch() error = nil, want error for a non-206 response")
+	}
+	if body.read == 0 {
+		t.Fatal("Fetch() closed the error body without reading it; the connection cannot be reused")
 	}
 }

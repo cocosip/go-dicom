@@ -62,8 +62,14 @@ type CEchoResponse struct {
 // PS3.7 9.3.5.2 (Table 9.3-13) requires the C-ECHO-RSP Status to be Success. A
 // non-Success status is accepted here only so that a non-conformant peer's
 // response can be represented for diagnostics; EncodeDIMSEMessage rejects such
-// a message, so it can never be sent over the wire.
+// a message, so it can never be sent over the wire. A nil status means Success.
 func NewCEchoResponse(messageIDBeingRespondedTo uint16, s *status.Status) *CEchoResponse {
+	// PS3.7 9.3.5.2: a C-ECHO-RSP can only report Success, so a nil status can
+	// only sensibly mean Success. resolveStatus(nil) would otherwise pick the
+	// generic 0x0110 failure, which the encoder rejects as unsendable.
+	if s == nil {
+		s = status.Success
+	}
 	s = resolveStatus(s)
 	// Create command dataset
 	command := CreateCommandDataset(uint16(CommandCEchoRSP), 0) // Response doesn't have its own MessageID

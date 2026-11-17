@@ -16,9 +16,9 @@ import (
 
 var (
 	outputFile      = flag.String("o", "", "Output file (default: stdout)")
-	useKeywords     = flag.Bool("keywords", true, "Use tag keywords as JSON keys")
+	useKeywords     = flag.Bool("keywords", false, "Use tag keywords as JSON keys instead of PS3.18 8-character tags")
 	compactOutput   = flag.Bool("compact", false, "Compact output (no indentation)")
-	includeMetaInfo = flag.Bool("meta", false, "Include file meta information")
+	includeMetaInfo = flag.Bool("meta", false, "Merge file meta information (Group 0002) into the instance object")
 )
 
 func main() {
@@ -52,14 +52,7 @@ func run() error {
 	// Convert to JSON
 	var jsonData []byte
 	if *includeMetaInfo && result.FileMetaInformation != nil {
-		// Create combined dataset with both meta info and main dataset
-		combinedDS := result.FileMetaInformation.Dataset().Clone()
-		for _, elem := range result.Dataset.Elements() {
-			if err := combinedDS.AddOrUpdate(elem); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to add element %s: %v\n", elem.Tag(), err)
-			}
-		}
-		jsonData, err = serialization.ToJSON(combinedDS, opts...)
+		jsonData, err = toJSONWithMetaInfo(result, opts)
 	} else {
 		jsonData, err = serialization.ToJSON(result.Dataset, opts...)
 	}
@@ -79,4 +72,19 @@ func run() error {
 		fmt.Println(string(jsonData))
 	}
 	return nil
+}
+
+// toJSONWithMetaInfo merges the Group 0002 elements into the main dataset
+// object and serializes the result. Note that PS3.18 DICOM JSON has no
+// representation for the file meta information, so the merged output is a
+// non-standard extension. A failed merge is returned as an error instead of
+// emitting a partial document.
+func toJSONWithMetaInfo(result *parser.ParseResult, opts []serialization.JSONOption) ([]byte, error) {
+	combined := result.FileMetaInformation.Dataset().Clone()
+	for _, elem := range result.Dataset.Elements() {
+		if err := combined.AddOrUpdate(elem); err != nil {
+			return nil, fmt.Errorf("merge element %s: %w", elem.Tag(), err)
+		}
+	}
+	return serialization.ToJSON(combined, opts...)
 }

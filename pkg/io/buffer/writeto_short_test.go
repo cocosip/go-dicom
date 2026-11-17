@@ -59,3 +59,27 @@ func TestChunkedWriteToReportsShortWrite(t *testing.T) {
 		})
 	}
 }
+
+// padRefusingWriter accepts every write except the one-byte zero padding that
+// EvenLengthBuffer appends, reporting (0, nil) for it.
+type padRefusingWriter struct{ written int }
+
+func (w *padRefusingWriter) Write(p []byte) (int, error) {
+	if len(p) == 1 && p[0] == 0 {
+		return 0, nil
+	}
+	w.written += len(p)
+	return len(p), nil
+}
+
+func TestEvenLengthBufferWriteToReportsShortPaddingWrite(t *testing.T) {
+	even := buffer.NewEvenLength(buffer.NewMemory([]byte{1, 2, 3}))
+	w := &padRefusingWriter{}
+	n, err := even.WriteTo(w)
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("WriteTo() error = %v, want io.ErrShortWrite", err)
+	}
+	if n != 3 {
+		t.Fatalf("WriteTo() n = %d, want 3 (internal data only)", n)
+	}
+}

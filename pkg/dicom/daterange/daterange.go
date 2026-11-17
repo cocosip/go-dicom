@@ -200,6 +200,11 @@ func (dr *DateRange) Join(date time.Time) {
 // TimeRange represents a DICOM time range used in query/retrieve operations.
 type TimeRange struct {
 	*Range[time.Time]
+
+	// minDigits and maxDigits record the significant TM digits of the parsed
+	// bounds (2, 4, 6, or 6 plus fractional digits); 0 means full precision.
+	// Keeping them preserves reduced-precision query values across String.
+	minDigits, maxDigits int
 }
 
 // NewTimeRange creates a new TimeRange with the given minimum and maximum times.
@@ -215,15 +220,19 @@ func ParseTimeRange(s string) (*TimeRange, error) {
 
 	minVal := time.Time{}
 	maxVal := time.Time{}
+	minDigits := 0
+	maxDigits := 0
 
 	dashIdx := strings.IndexByte(s, '-')
 
 	if dashIdx == -1 {
-		t, err := parseDicomTime(s)
+		t, digits, err := parseDicomTime(s)
 		if err != nil {
 			return nil, err
 		}
-		return NewTimeRange(t, t), nil
+		r := NewTimeRange(t, t)
+		r.minDigits, r.maxDigits = digits, digits
+		return r, nil
 	}
 
 	startPart := s[:dashIdx]
@@ -231,7 +240,7 @@ func ParseTimeRange(s string) (*TimeRange, error) {
 
 	if startPart != "" {
 		var err error
-		minVal, err = parseDicomTime(startPart)
+		minVal, minDigits, err = parseDicomTime(startPart)
 		if err != nil {
 			return nil, err
 		}
@@ -239,13 +248,15 @@ func ParseTimeRange(s string) (*TimeRange, error) {
 
 	if endPart != "" {
 		var err error
-		maxVal, err = parseDicomTime(endPart)
+		maxVal, maxDigits, err = parseDicomTime(endPart)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return NewTimeRange(minVal, maxVal), nil
+	r := NewTimeRange(minVal, maxVal)
+	r.minDigits, r.maxDigits = minDigits, maxDigits
+	return r, nil
 }
 
 // NormalizeTimeFraction expands a fractional-seconds component of 1-6 digits
@@ -268,8 +279,11 @@ func NormalizeTimeFraction(value string) string {
 	return value[:dot+1] + value[dot+1:end] + strings.Repeat("0", 6-digits) + value[end:]
 }
 
-// parseDicomTime parses a DICOM time string (TM format).
-func parseDicomTime(s string) (time.Time, error) {
+// parseDicomTime parses a DICOM time string (TM format) and reports how many
+// significant digits it carried (2, 4, 6, or 6 plus fractional digits).
+func parseDicomTime(s string) (time.Time, int, error) {
+	s = strings.TrimRight(s, " \x00")
+	digits := len(s)
 	// PS3.5 Table 6.2-1 permits 1 to 6 fractional-second digits, but the layouts
 	// below use the fixed six-digit form. Normalize the fraction first so e.g.
 	// "120000.5" is 12:00:00.5 instead of silently truncating the fraction.
@@ -286,24 +300,26 @@ func parseDicomTime(s string) (time.Time, error) {
 	for _, format := range formats {
 		if len(normalized) == len(format) {
 			if t, err := time.Parse(format, normalized[:len(format)]); err == nil {
-				return t, nil
+				return t, digits, nil
 			}
 		}
 	}
 
-	return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidTimeFormat, s)
+	return time.Time{}, 0, fmt.Errorf("%w: %q", ErrInvalidTimeFormat, s)
 }
 
-// String returns the DICOM time range string representation (TM format).
+// String returns the DICOM time range string representation (TM format). A
+// reduced-precision bound (e.g. "1200") keeps its precision so it keeps its
+// standard matching semantics (PS3.4 C.2.2.2.5.2).
 func (tr *TimeRange) String() string {
 	minStr := ""
 	maxStr := ""
 
 	if !tr.Minimum.IsZero() {
-		minStr = formatDicomTime(tr.Minimum)
+		minStr = formatDicomTimeWithDigits(tr.Minimum, tr.minDigits)
 	}
 	if !tr.Maximum.IsZero() {
-		maxStr = formatDicomTime(tr.Maximum)
+		maxStr = formatDicomTimeWithDigits(tr.Maximum, tr.maxDigits)
 	}
 
 	if minStr == "" && maxStr == "" {
@@ -317,6 +333,40 @@ func (tr *TimeRange) String() string {
 // seconds component is emitted only when the value has one (up to six digits).
 func formatDicomTime(t time.Time) string {
 	return t.Format("150405") + formatDicomFraction(t)
+}
+
+// formatDicomTimeWithDigits formats a time with the precision it was parsed
+// with. Zero means full precision.
+func formatDicomTimeWithDigits(t time.Time, digits int) string {
+	switch {
+	case digits == 2:
+		return t.Format("15")
+	case digits == 4:
+		return t.Format("1504")
+	case digits == 6:
+		return t.Format("150405")
+	case digits > 6:
+		return t.Format("150405") + formatDicomFractionDigits(t, digits-7)
+	default:
+		return formatDicomTime(t)
+	}
+}
+
+// formatDicomFractionDigits returns the fractional-seconds suffix truncated to
+// the given number of digits (PS3.5 permits at most six).
+func formatDicomFractionDigits(t time.Time, digits int) string {
+	if digits <= 0 {
+		return ""
+	}
+	if digits > 6 {
+		digits = 6
+	}
+	fmtSeconds := fmt.Sprintf("%06d", t.Nanosecond()/1000)[:digits]
+	fmtSeconds = strings.TrimRight(fmtSeconds, "0")
+	if fmtSeconds == "" {
+		return ""
+	}
+	return "." + fmtSeconds
 }
 
 // formatDicomFraction returns the fractional-seconds suffix for a time,
@@ -367,6 +417,12 @@ func (tr *TimeRange) Contains(t time.Time) bool {
 // DateTimeRange represents a DICOM datetime range used in query/retrieve operations.
 type DateTimeRange struct {
 	*Range[time.Time]
+
+	// minDigits/maxDigits and minFrac/maxFrac record the precision the bounds
+	// were parsed with (date/time digits and fractional digits); zero means
+	// full precision. String uses them to keep reduced-precision values.
+	minDigits, maxDigits int
+	minFrac, maxFrac     int
 }
 
 // NewDateTimeRange creates a new DateTimeRange with the given minimum and maximum datetimes.
@@ -383,15 +439,20 @@ func ParseDateTimeRange(s string) (*DateTimeRange, error) {
 
 	minVal := time.Time{}
 	maxVal := time.Time{}
+	minDigits, maxDigits := 0, 0
+	minFrac, maxFrac := 0, 0
 
 	dashIdx := findRangeDash(s)
 
 	if dashIdx == -1 {
-		dt, err := parseDicomDateTime(s)
+		dt, digits, frac, err := parseDicomDateTime(s)
 		if err != nil {
 			return nil, err
 		}
-		return NewDateTimeRange(dt, dt), nil
+		r := NewDateTimeRange(dt, dt)
+		r.minDigits, r.maxDigits = digits, digits
+		r.minFrac, r.maxFrac = frac, frac
+		return r, nil
 	}
 
 	startPart := s[:dashIdx]
@@ -399,7 +460,7 @@ func ParseDateTimeRange(s string) (*DateTimeRange, error) {
 
 	if startPart != "" {
 		var err error
-		minVal, err = parseDicomDateTime(startPart)
+		minVal, minDigits, minFrac, err = parseDicomDateTime(startPart)
 		if err != nil {
 			return nil, err
 		}
@@ -407,22 +468,26 @@ func ParseDateTimeRange(s string) (*DateTimeRange, error) {
 
 	if endPart != "" {
 		var err error
-		maxVal, err = parseDicomDateTime(endPart)
+		maxVal, maxDigits, maxFrac, err = parseDicomDateTime(endPart)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return NewDateTimeRange(minVal, maxVal), nil
+	r := NewDateTimeRange(minVal, maxVal)
+	r.minDigits, r.maxDigits = minDigits, maxDigits
+	r.minFrac, r.maxFrac = minFrac, maxFrac
+	return r, nil
 }
 
 // parseDicomDateTime parses a DICOM datetime string (DT format), honouring an
 // optional fractional-second part (1-6 digits) and an optional &ZZXX timezone
-// offset such as "+0800". A missing offset is treated as UTC.
-func parseDicomDateTime(s string) (time.Time, error) {
+// offset such as "+0800". A missing offset is treated as UTC. It also reports
+// the number of date/time digits and fractional digits for round-tripping.
+func parseDicomDateTime(s string) (time.Time, int, int, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return time.Time{}, fmt.Errorf("%w: empty value", ErrInvalidDateTimeFormat)
+		return time.Time{}, 0, 0, fmt.Errorf("%w: empty value", ErrInvalidDateTimeFormat)
 	}
 
 	loc := time.UTC
@@ -430,7 +495,7 @@ func parseDicomDateTime(s string) (time.Time, error) {
 		off := s[i:]
 		s = s[:i]
 		if len(off) != 5 {
-			return time.Time{}, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
+			return time.Time{}, 0, 0, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
 		}
 		sign := 1
 		switch off[0] {
@@ -438,7 +503,7 @@ func parseDicomDateTime(s string) (time.Time, error) {
 			sign = -1
 		case '+':
 		default:
-			return time.Time{}, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
+			return time.Time{}, 0, 0, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
 		}
 		hh, err1 := strconv.Atoi(off[1:3])
 		mm, err2 := strconv.Atoi(off[3:5])
@@ -446,7 +511,7 @@ func parseDicomDateTime(s string) (time.Time, error) {
 		// is not permitted. Keep this in step with vr.ValidateDT.
 		if err1 != nil || err2 != nil || off == "-0000" ||
 			hh > 14 || mm > 59 || (hh == 14 && mm != 0) || (sign < 0 && hh > 12) {
-			return time.Time{}, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
+			return time.Time{}, 0, 0, fmt.Errorf("%w: invalid timezone offset %q", ErrInvalidDateTimeFormat, off)
 		}
 		loc = time.FixedZone("", sign*(hh*3600+mm*60))
 	}
@@ -456,6 +521,7 @@ func parseDicomDateTime(s string) (time.Time, error) {
 		frac = s[dot+1:]
 		s = s[:dot]
 	}
+	digits := len(s)
 
 	layouts := map[int]string{
 		4:  "2006",
@@ -465,22 +531,27 @@ func parseDicomDateTime(s string) (time.Time, error) {
 		12: "200601021504",
 		14: "20060102150405",
 	}
-	layout, ok := layouts[len(s)]
+	layout, ok := layouts[digits]
 	if !ok {
-		return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateTimeFormat, s)
+		return time.Time{}, 0, 0, fmt.Errorf("%w: %q", ErrInvalidDateTimeFormat, s)
 	}
 	t, err := time.ParseInLocation(layout, s, loc)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("%w: %q", ErrInvalidDateTimeFormat, s)
+		return time.Time{}, 0, 0, fmt.Errorf("%w: %q", ErrInvalidDateTimeFormat, s)
 	}
 
+	fracDigits := 0
 	if frac != "" {
 		if len(frac) > 9 {
 			frac = frac[:9]
 		}
+		fracDigits = len(frac)
+		if fracDigits > 6 {
+			fracDigits = 6
+		}
 		ns, err := strconv.Atoi(frac)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("%w: invalid fraction %q", ErrInvalidDateTimeFormat, frac)
+			return time.Time{}, 0, 0, fmt.Errorf("%w: invalid fraction %q", ErrInvalidDateTimeFormat, frac)
 		}
 		for i := len(frac); i < 9; i++ {
 			ns *= 10
@@ -488,19 +559,21 @@ func parseDicomDateTime(s string) (time.Time, error) {
 		t = t.Add(time.Duration(ns))
 	}
 
-	return t, nil
+	return t, digits, fracDigits, nil
 }
 
-// String returns the DICOM datetime range string representation (DT format).
+// String returns the DICOM datetime range string representation (DT format). A
+// reduced-precision bound (e.g. "202401") keeps its precision so it keeps its
+// standard matching semantics (PS3.4 C.2.2.2.5.3).
 func (dtr *DateTimeRange) String() string {
 	minStr := ""
 	maxStr := ""
 
 	if !dtr.Minimum.IsZero() {
-		minStr = formatDicomDateTime(dtr.Minimum)
+		minStr = formatDicomDateTimeWithDigits(dtr.Minimum, dtr.minDigits, dtr.minFrac)
 	}
 	if !dtr.Maximum.IsZero() {
-		maxStr = formatDicomDateTime(dtr.Maximum)
+		maxStr = formatDicomDateTimeWithDigits(dtr.Maximum, dtr.maxDigits, dtr.maxFrac)
 	}
 
 	if minStr == "" && maxStr == "" {
@@ -510,12 +583,26 @@ func (dtr *DateTimeRange) String() string {
 	return minStr + "-" + maxStr
 }
 
-// formatDicomDateTime formats a datetime as PS3.5 DT:
-// YYYYMMDDHHMMSS[.FFFFFF][&ZZXX]. The fractional seconds and UTC offset are
-// emitted only when the value has them, so a parse/format/parse cycle keeps the
-// same instant.
-func formatDicomDateTime(t time.Time) string {
-	return t.Format("20060102150405") + formatDicomFraction(t) + formatDicomUTCOffset(t)
+// formatDicomDateTimeWithDigits formats a datetime as PS3.5 DT:
+// YYYYMMDDHHMMSS[.FFFFFF][&ZZXX] using the precision it was parsed with;
+// digits == 0 means full precision.
+func formatDicomDateTimeWithDigits(t time.Time, digits, fracDigits int) string {
+	var layout string
+	switch digits {
+	case 4:
+		layout = "2006"
+	case 6:
+		layout = "200601"
+	case 8:
+		layout = "20060102"
+	case 10:
+		layout = "2006010215"
+	case 12:
+		layout = "200601021504"
+	default:
+		layout = "20060102150405"
+	}
+	return t.Format(layout) + formatDicomFractionDigits(t, fracDigits) + formatDicomUTCOffset(t)
 }
 
 // Contains checks if the given datetime is within the range.

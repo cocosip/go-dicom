@@ -71,14 +71,10 @@ func TestParseImageDisplayFormat(t *testing.T) {
 		{"COL\\3", 3, false},
 		{"COL\\x", 0, true}, // Invalid number
 
-		// SLIDE format
-		{"SLIDE\\1", 20, false},
-
-		// SUPERSLIDE format
-		{"SUPERSLIDE\\1", 15, false},
-
-		// CUSTOM format
-		{"CUSTOM\\1", 1, false},
+		// SLIDE, SUPERSLIDE, and CUSTOM have no fixed count (PS3.3 C.13.3).
+		{"SLIDE\\1", 0, true},
+		{"SUPERSLIDE\\1", 0, true},
+		{"CUSTOM\\1", 0, true},
 
 		// Invalid formats
 		{"INVALID", 0, true},
@@ -117,6 +113,9 @@ func TestFilmBox_InitializeImageBoxes(t *testing.T) {
 		{"3x3 grid", "STANDARD\\3,3", 9, false},
 		{"row format", "ROW\\1,2,1", 4, false},
 		{"invalid format", "INVALID", 0, true},
+		{"slide format", "SLIDE", 0, true},
+		{"superslide format", "SUPERSLIDE", 0, true},
+		{"custom format", "CUSTOM\\7", 0, true},
 	}
 
 	for _, tc := range testCases {

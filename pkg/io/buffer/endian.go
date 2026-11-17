@@ -74,11 +74,18 @@ func (e *EndianByteBuffer) Size() uint32 {
 }
 
 // Data returns the data with endian conversion applied.
+//
+// A trailing partial unit cannot be swapped. GetByteRange rejects such a range,
+// so Data reports the same failure by returning nil instead of mixing byte
+// orders in one result.
 func (e *EndianByteBuffer) Data() []byte {
 	data := e.internal.Data()
 	if data == nil && e.internal.Size() > 0 {
 		// Propagate the internal read failure instead of reporting empty data,
 		// matching the File, Stream, and Range buffer convention.
+		return nil
+	}
+	if e.unitSize > 1 && len(data)%e.unitSize != 0 {
 		return nil
 	}
 

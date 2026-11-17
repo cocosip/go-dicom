@@ -148,7 +148,15 @@ func (c *Client) printFilmBox(ctx context.Context, filmBox *FilmBox) error {
 	if err := requireSuccessfulResponse("N-CREATE Film Box", filmBox.SOPInstanceUID, createResponse); err != nil {
 		return err
 	}
-	remoteReferences, err := imageBoxReferences(createResponse, len(filmBox.BasicImageBoxes))
+	// PS3.3 C.13.3 leaves the image-box count of SLIDE, SUPERSLIDE and CUSTOM
+	// to the printer's configuration, so the SCP's response is authoritative:
+	// the SCU fills the boxes it supplied, in the order the SCP created them.
+	expectedImageBoxes := len(filmBox.BasicImageBoxes)
+	if formatType, _, _ := strings.Cut(filmBox.ImageDisplayFormat, "\\"); formatType == slideImageDisplayFormat ||
+		formatType == "SUPERSLIDE" || formatType == "CUSTOM" {
+		expectedImageBoxes = -1
+	}
+	remoteReferences, err := imageBoxReferences(createResponse, expectedImageBoxes)
 	if err != nil {
 		return fmt.Errorf("printing: N-CREATE Film Box %q: %w", filmBox.SOPInstanceUID, err)
 	}
@@ -160,6 +168,10 @@ func (c *Client) printFilmBox(ctx context.Context, filmBox *FilmBox) error {
 	for index, imageBox := range localImageBoxes {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if index >= len(remoteReferences) {
+			return fmt.Errorf("printing: N-CREATE Film Box %q returned %d Image Boxes but %d were supplied",
+				filmBox.SOPInstanceUID, len(remoteReferences), len(localImageBoxes))
 		}
 		remoteReference := remoteReferences[index]
 		if remoteReference.SOPClassUID != imageBox.SOPClassUID {
@@ -214,6 +226,9 @@ func (c *Client) actionFilmSession(ctx context.Context, session *FilmSession) er
 	return requireSuccessfulResponse("N-ACTION Film Session", session.SOPInstanceUID, actionResponse)
 }
 
+// imageBoxReferences reads the Referenced Image Box Sequence from an N-CREATE
+// Film Box response. expected < 0 means the count is printer-configuration
+// dependent (SLIDE, SUPERSLIDE, CUSTOM) and must not be checked.
 func imageBoxReferences(response *dimse.NCreateResponse, expected int) ([]SOPReference, error) {
 	if response == nil || response.DataDataset() == nil {
 		return nil, fmt.Errorf("referenced Image Box Sequence is missing from the response Attribute List")
@@ -222,7 +237,7 @@ func imageBoxReferences(response *dimse.NCreateResponse, expected int) ([]SOPRef
 	if err != nil {
 		return nil, fmt.Errorf("read referenced Image Box Sequence: %w", err)
 	}
-	if len(references) != expected {
+	if expected >= 0 && len(references) != expected {
 		return nil, fmt.Errorf("referenced Image Box Sequence has %d items, want %d", len(references), expected)
 	}
 	seen := make(map[string]struct{}, len(references))
@@ -294,6 +309,14 @@ func validatePrintSession(session *FilmSession) error {
 	for _, filmBox := range session.BasicFilmBoxes {
 		if err := registerUID("FilmBox", filmBox.SOPInstanceUID); err != nil {
 			return err
+		}
+		// PS3.4 H.4.2.2.1.1: the N-CREATE Film Box request includes the
+		// Referenced Film Session Sequence. A box appended to the slice without
+		// AddFilmBox has no session reference, so the request would be
+		// non-conformant.
+		if filmBox.sessionReference() == (SOPReference{}) {
+			return fmt.Errorf("printing: FilmBox %q is not attached to Film Session %q; use FilmSession.AddFilmBox (PS3.4 H.4.2.2.1.1 requires Referenced Film Session Sequence)",
+				filmBox.SOPInstanceUID, session.SOPInstanceUID)
 		}
 		formatType, _, _ := strings.Cut(filmBox.ImageDisplayFormat, "\\")
 		if formatType == standardImageDisplayFormat || formatType == "ROW" || formatType == "COL" {

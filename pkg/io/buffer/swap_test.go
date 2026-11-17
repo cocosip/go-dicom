@@ -26,6 +26,7 @@ func TestNewSwap(t *testing.T) {
 		{"nil buffer", nil, 2, true},
 		{"invalid unitSize 0", base, 0, true},
 		{"invalid unitSize -1", base, -1, true},
+		{"invalid unitSize above chunk limit", base, 1<<20 + 1, true},
 	}
 
 	for _, tt := range tests {

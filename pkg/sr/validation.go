@@ -267,6 +267,11 @@ func validateContentItem(item *ContentItem, root bool, path string) error {
 	if err != nil {
 		return validationPathError(path, err)
 	}
+	// PS3.3 C.18.8: Continuity of Content belongs to the CONTAINER content item
+	// (Table C.18-5); it must not appear on any other value type.
+	if valueType != ValueTypeContainer && item.dataset.Contains(tag.ContinuityOfContent) {
+		return validationPathError(path, NewErrorf("%s content item must not have Continuity of Content", valueType))
+	}
 	allowed, recognized := allowedValueTags[valueType]
 	if !recognized {
 		return validationPathError(path, NewErrorf("unknown value type %q", valueType))
@@ -357,6 +362,11 @@ func validateByReferenceContentItem(item *ContentItem, root bool, path string) e
 	}
 	if len(identifier) == 0 {
 		return validationPathError(path, NewError("Referenced Content Item Identifier is empty"))
+	}
+	// PS3.3 C.17.3.2.5: a by-reference path starts at the root content item,
+	// which has identifier 1. A path that starts elsewhere cannot be resolved.
+	if identifier[0] != 1 {
+		return validationPathError(path, NewErrorf("Referenced Content Item Identifier must start at the root item 1, got %d", identifier[0]))
 	}
 	for _, component := range identifier {
 		if component == 0 {

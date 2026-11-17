@@ -5,6 +5,7 @@ package dataset_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
@@ -274,5 +275,52 @@ func TestDatasetTryGetters(t *testing.T) {
 	val32 := ds.TryGetUInt32(tag.FileMetaInformationGroupLength, 0)
 	if val32 != 100 {
 		t.Errorf("TryGetUInt32() = %d, want 100", val32)
+	}
+}
+
+// TestGetStringMatchesJoinedCanonicalValues guards the single-value fast path:
+// GetString must always equal the backslash-joined canonical values, including
+// insignificant trailing spaces inside a multi-valued string.
+func TestGetStringMatchesJoinedCanonicalValues(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		vr     *vr.VR
+		values []string
+	}{
+		{name: "single value", vr: vr.LO, values: []string{"Case 1"}},
+		{name: "single value padded", vr: vr.LO, values: []string{"Case 1  "}},
+		{name: "multiple values", vr: vr.LO, values: []string{"A", "B"}},
+		{name: "multiple values with trailing spaces", vr: vr.LO, values: []string{"A  ", "B "}},
+		{name: "literal backslash VR", vr: vr.ST, values: []string{"A\\B  "}},
+		{name: "empty value", vr: vr.LO, values: []string{""}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ds := dataset.New()
+			// The accessor contract, not tag/VR validation, is under test here.
+			ds.SetAutoValidate(false)
+			elem := element.NewString(tag.PatientName, test.vr, test.values)
+			if err := ds.Add(elem); err != nil {
+				t.Fatalf("Add() error = %v", err)
+			}
+			canonical, err := element.CanonicalStrings(elem)
+			if err != nil {
+				t.Fatalf("CanonicalStrings() error = %v", err)
+			}
+			want := strings.Join(canonical, "\\")
+			got, exists := ds.GetString(tag.PatientName)
+			if !exists {
+				t.Fatal("GetString() did not find the element")
+			}
+			if got != want {
+				t.Fatalf("GetString() = %q, want canonical %q", got, want)
+			}
+			gotWithError, err := ds.GetStringWithError(tag.PatientName)
+			if err != nil {
+				t.Fatalf("GetStringWithError() error = %v", err)
+			}
+			if gotWithError != want {
+				t.Fatalf("GetStringWithError() = %q, want canonical %q", gotWithError, want)
+			}
+		})
 	}
 }

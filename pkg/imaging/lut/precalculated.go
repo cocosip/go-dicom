@@ -12,6 +12,11 @@ import "math"
 // this calculates all possible outputs once and stores them in a table.
 // Subsequent lookups are O(1) array accesses.
 //
+// The table stores 8-bit display values: it is built for the render pipeline,
+// whose output is clamped to 0..255. A source LUT that maps outside that range
+// has its table entries clamped. For 16-bit input this keeps the table at
+// 64 KiB instead of 512 KiB.
+//
 // This is particularly useful when:
 // - Applying complex LUT pipelines to large images
 // - The input value range is known and limited (e.g., 12-bit or 16-bit)
@@ -23,7 +28,7 @@ type PrecalculatedLUT struct {
 	minValue    int
 	maxValue    int
 	offset      int
-	table       []int
+	table       []uint8
 	initialized bool
 }
 
@@ -42,7 +47,7 @@ func NewPrecalculatedLUT(sourceLUT LUT, minValue, maxValue int) *PrecalculatedLU
 		minValue:  minValue,
 		maxValue:  maxValue,
 		offset:    -minValue,
-		table:     make([]int, maxValue-minValue+1),
+		table:     make([]uint8, maxValue-minValue+1),
 	}
 
 	// Pre-calculate all values immediately
@@ -113,9 +118,21 @@ func (p *PrecalculatedLUT) Recalculate() {
 	// Pre-calculate all values in range
 	for i := p.minValue; i <= p.maxValue; i++ {
 		tableIndex := i + p.offset
-		p.table[tableIndex] = int(math.Round(p.sourceLUT.Transform(float64(i))))
+		p.table[tableIndex] = clampTableValue(p.sourceLUT.Transform(float64(i)))
 	}
 	p.initialized = true
+}
+
+// clampTableValue rounds a source LUT output to the 8-bit table domain.
+func clampTableValue(value float64) uint8 {
+	rounded := math.Round(value)
+	if math.IsNaN(rounded) || rounded <= 0 {
+		return 0
+	}
+	if rounded >= 255 {
+		return 255
+	}
+	return uint8(rounded)
 }
 
 // TableSize returns the size of the precalculated table

@@ -14,6 +14,8 @@ import (
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
 	"github.com/cocosip/go-dicom/pkg/dicom/transfer"
 	"github.com/cocosip/go-dicom/pkg/imaging/colorconv"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixel"
+	"github.com/cocosip/go-dicom/pkg/imaging/pixeldata"
 )
 
 // TestOverlayDataOtherWordBytesAreSwappedForBigEndian verifies IMG-14: Overlay
@@ -511,5 +513,133 @@ func TestApplyOverlaysSingleFrameOverlayCoversEveryFrame(t *testing.T) {
 		if got := color.NRGBAModel.Convert(result.At(0, 0)).(color.NRGBA); got != want {
 			t.Errorf("frame %d marked pixel = %#v, want %#v", frame, got, want)
 		}
+	}
+}
+
+// TestApplyOverlaysKeepsSourceWhenNothingDraws verifies an overlay that cannot
+// contribute pixels (no set bits, frame out of range, transparent color) does
+// not force an RGBA copy of the image.
+func TestApplyOverlaysKeepsSourceWhenNothingDraws(t *testing.T) {
+	blank := NewDicomOverlayData(0x6000)
+	blank.Rows, blank.Columns = 2, 2
+	blank.OriginRow, blank.OriginColumn = 1, 1
+	blank.ImageFrameOrigin = 1
+	blank.Data = []byte{0}
+
+	outOfRange := NewDicomOverlayData(0x6002)
+	outOfRange.Rows, outOfRange.Columns = 2, 2
+	outOfRange.OriginRow, outOfRange.OriginColumn = 1, 1
+	outOfRange.ImageFrameOrigin = 5
+	outOfRange.MultiFrameOverlay = true
+	if err := outOfRange.PackData([]byte{255, 255, 255, 255}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+
+	marked := NewDicomOverlayData(0x6004)
+	marked.Rows, marked.Columns = 2, 2
+	marked.OriginRow, marked.OriginColumn = 1, 1
+	marked.ImageFrameOrigin = 1
+	if err := marked.PackData([]byte{255, 0, 0, 0}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		overlays []*DicomOverlayData
+		color    colorconv.Color32
+	}{
+		{"blank overlay", []*DicomOverlayData{blank}, colorconv.NewColor32(255, 255, 255, 255)},
+		{"overlay frame out of range", []*DicomOverlayData{outOfRange}, colorconv.NewColor32(255, 255, 255, 255)},
+		{"transparent overlay color", []*DicomOverlayData{marked}, colorconv.NewColor32(0, 255, 255, 255)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			source := image.NewGray(image.Rect(0, 0, 2, 2))
+			img := &DicomImage{
+				showOverlays: true,
+				overlays:     test.overlays,
+				overlayColor: test.color,
+			}
+			result := img.applyOverlays(source, 0)
+			gray, ok := result.(*image.Gray)
+			if !ok || gray != source {
+				t.Fatalf("applyOverlays() = %T, want the original *image.Gray", result)
+			}
+		})
+	}
+}
+
+// TestOneBitImageWithOverlayScalesNearestNeighbor verifies that an overlay
+// composited into RGBA on a 1-bit image does not make the scaler interpolate
+// gray levels between the two stored values.
+func TestOneBitImageWithOverlayScalesNearestNeighbor(t *testing.T) {
+	const width, height = 8, 8
+	pixelData, err := pixeldata.NewFromBytes(&pixeldata.Info{
+		Width: width, Height: height, NumberOfFrames: 1,
+		BitsAllocated: 1, BitsStored: 1, HighBit: 0, SamplesPerPixel: 1,
+		PixelRepresentation: pixel.UnsignedPixels, PhotometricInterpretation: pixel.Monochrome2,
+	}, []byte{0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA})
+	if err != nil {
+		t.Fatalf("pixeldata.NewFromBytes() error = %v", err)
+	}
+
+	overlay := NewDicomOverlayData(0x6000)
+	overlay.Rows, overlay.Columns = height, width
+	overlay.OriginRow, overlay.OriginColumn = 1, 1
+	overlay.ImageFrameOrigin = 1
+	marked := make([]byte, width*height)
+	marked[0] = 255
+	if err := overlay.PackData(marked); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+
+	dicomImage := NewDicomImage(pixelData)
+	dicomImage.overlays = []*DicomOverlayData{overlay}
+	dicomImage.overlayColor = colorconv.NewColor32(255, 255, 0, 0)
+	dicomImage.SetScale(2)
+
+	rendered, err := dicomImage.RenderFrameImage(0)
+	if err != nil {
+		t.Fatalf("RenderFrameImage(0) error = %v", err)
+	}
+	if got, want := rendered.Bounds(), image.Rect(0, 0, 2*width, 2*height); got != want {
+		t.Fatalf("bounds = %v, want %v", got, want)
+	}
+	overlayColor := color.RGBA{R: 255, A: 255}
+	for y := rendered.Bounds().Min.Y; y < rendered.Bounds().Max.Y; y++ {
+		for x := rendered.Bounds().Min.X; x < rendered.Bounds().Max.X; x++ {
+			value := color.RGBAModel.Convert(rendered.At(x, y)).(color.RGBA)
+			if value == overlayColor {
+				continue
+			}
+			if value.R != value.G || value.G != value.B {
+				t.Fatalf("pixel (%d,%d) = %#v, want a gray or the overlay color", x, y, value)
+			}
+			if value.R != 0 && value.R != 255 {
+				t.Fatalf("pixel (%d,%d) gray = %d, want 0 or 255 (interpolated scaling)", x, y, value.R)
+			}
+		}
+	}
+}
+
+// TestApplyToImageRejectsShortBuffers verifies the composited buffer is checked
+// against the whole image instead of panicking on the first marked pixel.
+func TestApplyToImageRejectsShortBuffers(t *testing.T) {
+	grayOverlay := NewDicomOverlayData(0x6000)
+	grayOverlay.Rows, grayOverlay.Columns = 2, 2
+	if err := grayOverlay.PackData([]byte{255, 0, 0, 255}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+	if _, err := grayOverlay.ApplyToImage(make([]byte, 3), 2, 2, 1, colorconv.NewColor32(0, 255, 255, 255)); err == nil {
+		t.Fatal("ApplyToImage() with a short gray buffer = nil error, want a length error")
+	}
+
+	rgbOverlay := NewDicomOverlayData(0x6002)
+	rgbOverlay.Rows, rgbOverlay.Columns = 1, 1
+	if err := rgbOverlay.PackData([]byte{255}); err != nil {
+		t.Fatalf("PackData() error = %v", err)
+	}
+	if _, err := rgbOverlay.ApplyToImage(make([]byte, 2), 1, 1, 3, colorconv.NewColor32(0, 255, 255, 255)); err == nil {
+		t.Fatal("ApplyToImage() with a short RGB buffer = nil error, want a length error")
 	}
 }

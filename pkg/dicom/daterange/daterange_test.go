@@ -20,7 +20,10 @@ const (
 	testRangeEndDate      = "20241231"
 	testInvalidRangeInput = "invalid"
 	testOpenEndedDateTime = "20240101080000-"
-	testTimeFraction      = "120000.5"
+
+	testDateTimeWithFraction      = "20240115120000.5"
+	testDateTimePartialWithOffset = "202401-0500"
+	testTimeFraction              = "120000.5"
 )
 
 func TestDateRange_Parse(t *testing.T) {
@@ -325,7 +328,7 @@ func TestFindRangeDash(t *testing.T) {
 		{"", -1},
 		{"-", 0},
 		// A trailing -ZZXX is a UTC offset, not a range separator.
-		{"202401-0500", -1},
+		{testDateTimePartialWithOffset, -1},
 		{"2024-0500", -1},
 		{"2007-0500", -1},
 		{"20240101-0500", -1},
@@ -373,7 +376,7 @@ func TestParseDateTimeRangeTreatsTrailingUTCOffsetAsOffset(t *testing.T) {
 		wantYear int
 		wantOpen bool
 	}{
-		{"202401-0500", -5 * 3600, 2024, false},
+		{testDateTimePartialWithOffset, -5 * 3600, 2024, false},
 		{"2024-0500", -5 * 3600, 2024, false},
 		{"20240101+0800", 8 * 3600, 2024, false},
 		{"20240101-0500-", -5 * 3600, 2024, true},
@@ -529,7 +532,7 @@ func TestDateTimeRangeStringOmitsAbsentComponents(t *testing.T) {
 		want  string
 	}{
 		{"20240115120000", "20240115120000-20240115120000"},
-		{"20240115120000.5", "20240115120000.5-20240115120000.5"},
+		{testDateTimeWithFraction, "20240115120000.5-20240115120000.5"},
 		{"20240115120000.123456+0800", "20240115120000.123456+0800-20240115120000.123456+0800"},
 		{"20240115120000-0500", "20240115120000-0500-20240115120000-0500"},
 	}
@@ -559,5 +562,53 @@ func TestTimeRangeStringEmitsFraction(t *testing.T) {
 		if got := r.String(); got != want {
 			t.Errorf("ParseTimeRange(%q).String() = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestTimeRangeStringPreservesReducedPrecision(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"12", "12-12"},
+		{"1200", "1200-1200"},
+		{"1200-1800", "1200-1800"},
+		{"120000.5", "120000.5-120000.5"},
+		{"120000-180000", "120000-180000"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, err := ParseTimeRange(tt.input)
+			if err != nil {
+				t.Fatalf("ParseTimeRange(%q) error = %v", tt.input, err)
+			}
+			if got := r.String(); got != tt.want {
+				t.Fatalf("String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDateTimeRangeStringPreservesReducedPrecision(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"2024", "2024-2024"},
+		{"202401", "202401-202401"},
+		{"2024011512", "2024011512-2024011512"},
+		{testDateTimeWithFraction, "20240115120000.5-20240115120000.5"},
+		{testDateTimePartialWithOffset, "202401-0500-202401-0500"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			r, err := ParseDateTimeRange(tt.input)
+			if err != nil {
+				t.Fatalf("ParseDateTimeRange(%q) error = %v", tt.input, err)
+			}
+			if got := r.String(); got != tt.want {
+				t.Fatalf("String() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

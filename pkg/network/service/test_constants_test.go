@@ -11,4 +11,5 @@ const (
 	testNSetOperation      = "N-SET"
 	testNActionOperation   = "N-ACTION"
 	testMoveDestinationAE  = "DEST_AE"
+	testMonochrome2        = "MONOCHROME2"
 )

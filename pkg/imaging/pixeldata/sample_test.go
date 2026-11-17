@@ -148,6 +148,22 @@ func TestSwapPixelDataBytesReversesThirtyTwoBitSamples(t *testing.T) {
 	}
 }
 
+// TestSwapPixelDataBytesReversesTwentyFourBitSamples verifies that a 24-bit
+// sample is reversed as a whole: swapping OW word pairs would scramble its
+// three bytes instead of converting the sample value.
+func TestSwapPixelDataBytesReversesTwentyFourBitSamples(t *testing.T) {
+	info := grayscaleSampleInfo(24, 24, 23, pixel.UnsignedPixels)
+	original := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06}
+	got := swapPixelDataBytes(original, &info)
+	want := []byte{0x03, 0x02, 0x01, 0x06, 0x05, 0x04}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("swapPixelDataBytes() = %x, want %x", got, want)
+	}
+	if back := swapPixelDataBytes(got, &info); !bytes.Equal(back, original) {
+		t.Fatalf("swapping twice = %x, want the original %x", back, original)
+	}
+}
+
 // TestSwapPixelDataBytesSwapsWordsRegardlessOfBitDepth verifies PS3.5 6.2: OW is
 // a stream of 16-bit words even when the samples inside them are 8-bit.
 func TestSwapPixelDataBytesSwapsWordsRegardlessOfBitDepth(t *testing.T) {

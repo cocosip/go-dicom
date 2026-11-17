@@ -59,10 +59,14 @@ func (c *CompositeByteBuffer) Size() uint32 {
 
 // Data returns all data concatenated into a single byte slice.
 // This will allocate memory for the entire composite buffer.
+//
+// When the combined size exceeds uint32 capacity the data cannot be
+// represented: Size saturates and GetByteRange returns ErrCompositeSizeOverflow,
+// so Data reports the failure by returning nil rather than panicking.
 func (c *CompositeByteBuffer) Data() []byte {
 	size, overflow := c.totalSize()
 	if overflow {
-		panic(ErrCompositeSizeOverflow)
+		return nil
 	}
 	if size == 0 {
 		return []byte{}

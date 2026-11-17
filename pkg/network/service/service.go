@@ -140,6 +140,14 @@ type pendingRequest struct {
 	lifecycle      *requestLifecycle
 	timeoutTimer   *time.Timer
 	timeoutVersion uint64
+	// expectedResponseCommand is the Command Field of the response that answers
+	// this request (request command | 0x8000, PS3.7 9.3). A response carrying a
+	// different Command Field under the same Message ID is a protocol violation.
+	expectedResponseCommand uint16
+	// sentContextID is the presentation context the request was written on; zero
+	// until a successful send reports it. Responses must use the same context
+	// (PS3.7 9.3).
+	sentContextID byte
 	// finalDelivered is set once a non-pending response has been handed to the
 	// caller, so a duplicate/late final response is dropped instead of blocking
 	// the receive loop on a full response channel.
@@ -148,12 +156,16 @@ type pendingRequest struct {
 	// timeout and a context cancellation race each other.
 	cancelSent sync.Once
 	// queueMu guards the response hand-off queue. The receive loop must never
-	// block on a slow application, so responses queue here (unbounded, like
-	// fo-dicom's per-request channel) and a single drainer forwards them in
-	// order to responseCh.
-	queueMu  sync.Mutex
-	queue    []dimse.Response
-	draining bool
+	// block on a slow application, so responses queue here and a single drainer
+	// forwards them in order to responseCh. The queue is bounded by
+	// maxQueuedResponses so a peer streaming pending responses forever cannot
+	// grow memory without limit; overflowing it fails only this request.
+	queueMu sync.Mutex
+	queue   []dimse.Response
+	// queueOverflowed is set by enqueueResponse when the queue bound is hit; all
+	// further responses for this request are dropped.
+	queueOverflowed bool
+	draining        bool
 }
 
 // activeOperation tracks an incoming operation that can be cancelled by C-CANCEL-RQ.

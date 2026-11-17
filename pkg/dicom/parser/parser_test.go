@@ -1307,6 +1307,39 @@ func TestSequenceReading(t *testing.T) {
 	})
 }
 
+// TestParseToleratesWrongFileMetaGroupLength verifies that a wrong
+// FileMetaInformationGroupLength does not truncate the meta group. PS3.10
+// requires the correct byte count, but files produced by converters and
+// anonymizers are known to contain 0 or an understated value, and aborting the
+// parse would lose the whole file (the transfer syntax is read from Group 0002).
+func TestParseToleratesWrongFileMetaGroupLength(t *testing.T) {
+	tests := []struct {
+		name   string
+		length uint32
+	}{
+		{name: "zero", length: 0},
+		{name: "understated", length: 12},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := createMiniDICOM().Bytes()
+			// (0002,0000) value starts at 132 (preamble+DICM) + 8 (tag+VR+length).
+			binary.LittleEndian.PutUint32(data[140:144], tt.length)
+
+			result, err := Parse(bytes.NewReader(data))
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			if got := result.TransferSyntax.UID().UID(); got != testExplicitVRLittleLE {
+				t.Fatalf("TransferSyntax = %q, want %q", got, testExplicitVRLittleLE)
+			}
+			if got, ok := result.Dataset.GetString(tag.PatientName); !ok || got != testPatientName {
+				t.Fatalf("PatientName = %q, ok = %v, want %q", got, ok, testPatientName)
+			}
+		})
+	}
+}
+
 // Benchmark tests for Parser
 
 // createBenchmarkDICOMData creates test DICOM data for benchmarking
@@ -1317,25 +1350,34 @@ func createBenchmarkDICOMData(numElements int) []byte {
 	buf.Write(make([]byte, 128))
 	buf.WriteString("DICM")
 
+	// Encode the Transfer Syntax UID element (0002,0010) first so the File Meta
+	// Information Group Length can be the exact count of following bytes.
+	tsUID := testExplicitVRLittleLE
+	tsValueLength := len(tsUID)
+	if tsValueLength%2 != 0 {
+		tsValueLength++
+	}
+	var meta bytes.Buffer
+	_ = binary.Write(&meta, binary.LittleEndian, uint16(0x0002))
+	_ = binary.Write(&meta, binary.LittleEndian, uint16(0x0010))
+	meta.WriteString("UI")
+	_ = binary.Write(&meta, binary.LittleEndian, uint16(tsValueLength))
+	meta.WriteString(tsUID)
+	if len(tsUID)%2 != 0 {
+		meta.WriteByte(0)
+	}
+
 	// Write File Meta Information Group Length (0002,0000)
 	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
 	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0000))
 	buf.WriteString("UL")
 	_ = binary.Write(buf, binary.LittleEndian, uint16(4))
-	_ = binary.Write(buf, binary.LittleEndian, uint32(0))
+	_ = binary.Write(buf, binary.LittleEndian, uint32(meta.Len()))
+	buf.Write(meta.Bytes())
 
-	// Write Transfer Syntax UID (0002,0010) - Explicit VR Little Endian
-	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0002))
-	_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
-	buf.WriteString("UI")
-	tsUID := testExplicitVRLittleLE
-	_ = binary.Write(buf, binary.LittleEndian, uint16(len(tsUID)))
-	buf.WriteString(tsUID)
-	if len(tsUID)%2 != 0 {
-		buf.WriteByte(0)
-	}
-
-	// Write some test elements
+	// Write some test elements. The value is even length so no pad byte is left
+	// outside the declared length (PS3.5 6.2).
+	value := "TestValue!"
 	for i := 0; i < numElements; i++ {
 		// Write tag
 		_ = binary.Write(buf, binary.LittleEndian, uint16(0x0010))
@@ -1345,12 +1387,8 @@ func createBenchmarkDICOMData(numElements int) []byte {
 		buf.WriteString("LO")
 
 		// Write value
-		value := "TestValue"
 		_ = binary.Write(buf, binary.LittleEndian, uint16(len(value)))
 		buf.WriteString(value)
-		if len(value)%2 != 0 {
-			buf.WriteByte(0)
-		}
 	}
 
 	return buf.Bytes()
@@ -1362,7 +1400,9 @@ func BenchmarkParseSmallDataset(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		reader := bytes.NewReader(data)
-		_, _ = Parse(reader)
+		if _, err := Parse(reader); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -1372,7 +1412,9 @@ func BenchmarkParseMediumDataset(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		reader := bytes.NewReader(data)
-		_, _ = Parse(reader)
+		if _, err := Parse(reader); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -1382,7 +1424,9 @@ func BenchmarkParseLargeDataset(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		reader := bytes.NewReader(data)
-		_, _ = Parse(reader)
+		if _, err := Parse(reader); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

@@ -16,6 +16,17 @@ func applyWindowTo8bit(pd *Data, center, width float64, ignorePadding bool) ([][
 }
 
 func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePadding bool, modality lut.LUT, function lut.VOILUTFunction) ([][]byte, error) {
+	transform, err := windowTransform(pd, center, width, function, modality)
+	if err != nil {
+		return nil, err
+	}
+	return mapSamplesTo8bit(pd, transform, ignorePadding), nil
+}
+
+// windowTransform validates the pixel data and builds the stored-value → 8-bit
+// mapping chain (the modality LUT, then the VOI window). It is separate from
+// mapping so a caller can build the chain once for frames that share it.
+func windowTransform(pd *Data, center, width float64, function lut.VOILUTFunction, modality lut.LUT) (lut.LUT, error) {
 	if pd.Info == nil {
 		return nil, fmt.Errorf("pixel data info is nil")
 	}
@@ -46,15 +57,15 @@ func applyWindowTo8bitWithModality(pd *Data, center, width float64, ignorePaddin
 		composite := lut.NewCompositeLUT()
 		composite.Add(modality)
 		composite.Add(voiLUT)
-		transform = composite
-	} else if minimum, maximum, ok := storedValueTableRange(pd.Info); ok {
+		return composite, nil
+	}
+	if minimum, maximum, ok := storedValueTableRange(pd.Info); ok {
 		// Precalculate over the stored-value range for faster mapping, but only
 		// when the range fits a table: clamping a larger range would mis-map the
 		// upper part (e.g. BitsStored > 16).
 		transform = lut.NewPrecalculatedLUT(voiLUT, minimum, maximum)
 	}
-
-	return mapSamplesTo8bit(pd, transform, ignorePadding), nil
+	return transform, nil
 }
 
 // storedValueTableRange returns the stored-value domain and reports whether it

@@ -6,4 +6,7 @@ package serialization
 const (
 	testPatientNameJohn = "Doe^John"
 	testPatientNameJane = "Doe^Jane"
+
+	testSpecificCharacterSetUTF8   = "ISO_IR 192"
+	testSpecificCharacterSetLatin1 = "ISO_IR 100"
 )

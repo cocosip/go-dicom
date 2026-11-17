@@ -174,6 +174,38 @@ func TestContentItemValidateAcceptsByReferenceItem(t *testing.T) {
 	}
 }
 
+func TestContentItemValidateRejectsByReferenceIdentifierNotRootedAtOne(t *testing.T) {
+	ds := dataset.New()
+	if err := ds.AddOrUpdate(element.NewString(tag.RelationshipType, vr.CS, []string{string(RelationshipSelectedFrom)})); err != nil {
+		t.Fatalf("set relationship: %v", err)
+	}
+	if err := ds.AddOrUpdate(element.NewUnsignedLong(tag.ReferencedContentItemIdentifier, []uint32{2, 1})); err != nil {
+		t.Fatalf("set Referenced Content Item Identifier: %v", err)
+	}
+
+	err := NewContentItemFromDataset(ds).Validate()
+	if err == nil || !strings.Contains(err.Error(), "must start at the root item 1") {
+		t.Fatalf("Validate() error = %v, want a root identifier error", err)
+	}
+}
+
+// TestContentItemValidateRejectsContinuityOnNonContainer verifies PS3.3 C.18.8:
+// Continuity of Content belongs only to CONTAINER content items.
+func TestContentItemValidateRejectsContinuityOnNonContainer(t *testing.T) {
+	item, err := NewContentItemText(NewCodeItem("121071", "DCM", "Finding"), RelationshipContains, testFindingText)
+	if err != nil {
+		t.Fatalf("NewContentItemText() error = %v", err)
+	}
+	if err := item.Dataset().AddOrUpdate(element.NewString(tag.ContinuityOfContent, vr.CS, []string{string(ContinuitySeparate)})); err != nil {
+		t.Fatalf("add Continuity of Content: %v", err)
+	}
+
+	err = item.Validate()
+	if err == nil || !strings.Contains(err.Error(), "must not have Continuity of Content") {
+		t.Fatalf("Validate() error = %v, want a Continuity of Content error", err)
+	}
+}
+
 func TestStructuredReportAddPreservesMalformedContentSequence(t *testing.T) {
 	report, err := NewStructuredReport(NewCodeItem("113704", "DCM", "SR Document"))
 	if err != nil {

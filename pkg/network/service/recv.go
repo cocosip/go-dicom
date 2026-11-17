@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cocosip/go-dicom/pkg/dicom/dataset"
 	"github.com/cocosip/go-dicom/pkg/dicom/tag"
@@ -222,8 +223,11 @@ func (s *Service) processReceivedMessage(commandData, datasetData []byte, transf
 		// If handling failed (e.g., couldn't send response due to missing presentation context),
 		// send A-ABORT to notify the peer instead of silently failing. Do not
 		// send a second abort when the handler already terminated the association.
+		// The handling error is recorded as the close error so pending callers
+		// and CloseError report the actual protocol violation instead of a
+		// generic "service closed".
 		if !s.GetState().IsTerminal() {
-			_ = s.Abort(s.ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified)
+			_ = s.abort(s.ctx, pdu.AbortSourceServiceProvider, pdu.AbortReasonServiceProviderNotSpecified, err, true)
 		}
 		return fmt.Errorf("failed to handle received message: %w", err)
 	}
@@ -383,11 +387,46 @@ func (s *Service) handleReleaseRequest(ctx context.Context) error {
 		return s.handleReleaseCollision(ctx)
 	}
 
+	// Give in-flight request handlers the chance to write their final responses
+	// before the A-RELEASE-RP closes the association (PS3.8 7.2.2 puts the "no
+	// outstanding operations" duty on the requestor, but a non-conformant peer
+	// can release early). The RP must be the last PDU on the wire (PS3.8 9.3.5),
+	// so waiting here keeps a response from being dropped.
+	s.waitForInboundRequestHandlers(ctx)
+
 	if err := s.SendReleaseResponse(ctx); err != nil {
 		return fmt.Errorf("failed to send A-RELEASE-RP: %w", err)
 	}
 
 	return s.initiateClose(StateClosed, nil)
+}
+
+// waitForInboundRequestHandlers waits until no inbound request handler is
+// running, bounded by the configured handler shutdown timeout so one stuck
+// handler cannot block the release forever. It is only called from the receive
+// loop, which is also the only source of new handlers, so no handler can start
+// while the wait is in progress. requestWg.Wait also runs in the shutdown
+// finalizer; concurrent Wait calls are safe, and a handler that calls Close
+// still finishes because the finalizer bounds its own wait too.
+func (s *Service) waitForInboundRequestHandlers(ctx context.Context) {
+	done := make(chan struct{})
+	go func() {
+		s.requestWg.Wait()
+		close(done)
+	}()
+
+	timeout := s.config.handlerShutdownTimeout
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+	case <-timer.C:
+	case <-ctx.Done():
+	}
 }
 
 // handleReleaseCollision handles an A-RELEASE-RQ received while the local AE is

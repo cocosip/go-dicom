@@ -143,7 +143,15 @@ func swapPixelDataBytes(data []byte, info *Info) []byte {
 		}
 		return out
 	}
-	// 1, 2 and 3 byte samples all live in OW words, so every word is swapped.
+	if info.BytesAllocated() == 3 {
+		// A 24-bit sample spans one and a half OW words, so swapping word pairs
+		// would scramble it; reverse each 3-byte sample instead.
+		for offset := 0; offset+2 < len(out); offset += 3 {
+			out[offset], out[offset+2] = out[offset+2], out[offset]
+		}
+		return out
+	}
+	// 1 and 2 byte samples live in OW words, so every word is swapped.
 	for offset := 0; offset+1 < len(out); offset += 2 {
 		out[offset], out[offset+1] = out[offset+1], out[offset]
 	}

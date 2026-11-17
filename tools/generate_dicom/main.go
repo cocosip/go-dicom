@@ -113,11 +113,36 @@ func runCommand(args []string, stdout io.Writer) error {
 
 func writeGeneratedFile(root string, file generatedFile) error {
 	path := filepath.Join(root, filepath.FromSlash(file.path))
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create generated output directory for %q: %w", path, err)
 	}
-	if err := os.WriteFile(path, file.data, 0o644); err != nil { // #nosec G306 -- generated source is repository-readable.
+	// Write through a temporary file in the same directory and rename on
+	// success, so an interrupted run cannot leave a truncated generated source.
+	temp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp*")
+	if err != nil {
+		return fmt.Errorf("create temporary file for %q: %w", path, err)
+	}
+	tempPath := temp.Name()
+	removeTemp := func() { _ = os.Remove(tempPath) }
+
+	if _, err := temp.Write(file.data); err != nil {
+		_ = temp.Close()
+		removeTemp()
 		return fmt.Errorf("write generated file %q: %w", path, err)
+	}
+	if err := temp.Chmod(0o644); err != nil { // #nosec G302 -- generated source is repository-readable.
+		_ = temp.Close()
+		removeTemp()
+		return fmt.Errorf("set generated file permissions %q: %w", path, err)
+	}
+	if err := temp.Close(); err != nil {
+		removeTemp()
+		return fmt.Errorf("close generated file %q: %w", path, err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		removeTemp()
+		return fmt.Errorf("replace generated file %q: %w", path, err)
 	}
 	return nil
 }
